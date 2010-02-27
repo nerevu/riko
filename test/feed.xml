@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>Write to Reply</title>
+	<atom:link href="http://writetoreply.org/feed/" rel="self" type="application/rss+xml" />
+	<link>http://writetoreply.org</link>
+	<description>The right to reply... paragraph by paragraph.</description>
+	<lastBuildDate>Fri, 06 Nov 2009 12:13:07 +0000</lastBuildDate>
+	<generator>http://wordpress.org/?v=2.9.1</generator>
+	<language>en</language>
+	<sy:updatePeriod>hourly</sy:updatePeriod>
+	<sy:updateFrequency>1</sy:updateFrequency>
+			<item>
+		<title>Donations</title>
+		<link>http://writetoreply.org/donations/</link>
+		<comments>http://writetoreply.org/donations/#comments</comments>
+		<pubDate>Mon, 11 May 2009 22:10:01 +0000</pubDate>
+		<dc:creator>WriteToReply</dc:creator>
+				<category><![CDATA[Uncategorized]]></category>
+
+		<guid isPermaLink="false">http://writetoreply.org/?page_id=111</guid>
+		<description><![CDATA[WriteToReply is run as a not for profit website on a voluntary basis. As of June 2009, Joss Winn and Tony Hirst have established Public Platforms Limited, a not-for-profit company limited by guarantee to operate the site and its interests. Any donations made to 'Public Platforms' will be used to cover the operating costs and [...]]]></description>
+			<content:encoded><![CDATA[<blockquote><p>WriteToReply is run as a not for profit website on a voluntary basis. As of June 2009, Joss Winn and Tony Hirst have established <strong>Public Platforms Limited</strong>, a not-for-profit company limited by guarantee to operate the site and its interests. Any donations made to 'Public Platforms' will be used to cover the operating costs and further development of the website, including but not limited to: hosting costs and domain registration fees. All financial transactions (income and outgoings) are summarised on <a title="WriteToReply Finance" href="http://spreadsheets.google.com/pub?key=p2onmuBWiOJ5kmz21sc8ZKw">this spreadsheet</a>.</p>
+<p>To donate, please email us. Thank you.</p></blockquote>
+]]></content:encoded>
+			<wfw:commentRss>http://writetoreply.org/donations/feed/</wfw:commentRss>
+		<slash:comments>0</slash:comments>
+		</item>
+		<item>
+		<title>Notice &amp; Takedown Policy</title>
+		<link>http://writetoreply.org/notice-takedown-policy/</link>
+		<comments>http://writetoreply.org/notice-takedown-policy/#comments</comments>
+		<pubDate>Wed, 04 Feb 2009 10:01:14 +0000</pubDate>
+		<dc:creator>WriteToReply</dc:creator>
+				<category><![CDATA[Uncategorized]]></category>
+
+		<guid isPermaLink="false">http://writetoreply.org/?page_id=76</guid>
+		<description><![CDATA[If you have found material which you consider illegally held or published on our website, please contact us stating the following:
+
+Your contact details.
+The full details of the material.
+The website address where you found the material.
+A statement that, under penalty of perjury, you are the rights owner or are authorised to act for the rights owner.
+
+mail@writetoreply.org
+The [...]]]></description>
+			<content:encoded><![CDATA[<p>If you have found material which you consider illegally held or published on our website, please <a title="Contact Write to Reply" href="mailto:mail@writetoreply.org">contact</a> us stating the following:</p>
+<ol>
+<li>Your contact details.</li>
+<li>The full details of the material.</li>
+<li>The website address where you found the material.</li>
+<li>A statement that, under penalty of perjury, you are the rights owner or are authorised to act for the rights owner.</li>
+</ol>
+<p><a title="Contact Write to Reply" href="mailto:mail@writetoreply.org"><strong>mail@writetoreply.org</strong></a></p>
+<p>The 'Notice and Takedown' procedure is then invoked as follows:</p>
+<ol>
+<li>Write to Reply will acknowledge receipt of your complaint by email or letter and will make an initial assessment of the validity and plausibility of the complaint.</li>
+<li>If plausible, the material will be immediately removed from the Write to Reply website pending further investigation.</li>
+<li>Write to Reply will endeavour to contact the individual responsible for the publication of the material. The individual will be notified that the material is subject to a complaint, under what allegations, and will be encouraged to assuage the complaints concerned.</li>
+<li>Write to Reply aims to resolve any issue swiftly and amicably with the complainant and to the satisfaction of both parties, with the following possible outcomes:
+<ol>
+<li>The material is replaced on the Write to Reply website unchanged.</li>
+<li>The material is replaced on the Write to Reply website with changes.</li>
+<li>The material is permanently removed from the Write to Reply website.</li>
+</ol>
+</li>
+<li>If Write to Reply and the complainant are unable to agree a solution, the material will remain unavailable through Write to Reply until a time when a resolution has been reached.</li>
+</ol>
+]]></content:encoded>
+			<wfw:commentRss>http://writetoreply.org/notice-takedown-policy/feed/</wfw:commentRss>
+		<slash:comments>0</slash:comments>
+		</item>
+		<item>
+		<title>FAQ</title>
+		<link>http://writetoreply.org/faq/</link>
+		<comments>http://writetoreply.org/faq/#comments</comments>
+		<pubDate>Wed, 04 Feb 2009 07:26:46 +0000</pubDate>
+		<dc:creator>WriteToReply</dc:creator>
+				<category><![CDATA[Uncategorized]]></category>
+
+		<guid isPermaLink="false">http://writetoreply.org/?page_id=18</guid>
+		<description><![CDATA[
+Who runs Write to Reply? @josswinn and @psychemedia set it up.  It started as an exchange on Twitter and ended up here.
+Why did you start Write to Reply? We saw the Digital Britain - Interim Report and thought people might like a way to respond to it in detail.
+How do you select documents? We're interested [...]]]></description>
+			<content:encoded><![CDATA[<ol>
+<li><strong>Who runs Write to Reply?</strong> <a title="Joss on Twitter" href="http://twitter.com/josswinn">@josswinn</a> and <a title="Tony on Twitter" href="http://twitter.com/psychemedia">@psychemedia</a> set it up.  It started as an exchange on Twitter and ended up here.</li>
+<li><strong>Why did you start Write to Reply?</strong> We saw the <a title="Digital Britain - Right to Reply" href="http://writetoreply.org/digitalbritain">Digital Britain - Interim Report</a> and thought people might like a way to respond to it in detail.</li>
+<li><strong>How do you select documents?</strong> We're interested in documents written for public review. These are often government reports that can be freely republished.</li>
+<li><strong>I have a document that I think should be available for comment. Can you help?</strong> Yes. We hope other people will get involved. <a title="Contact us" href="mailto:hello@writetoreply.org">Contact us</a>, tell us what document you have in mind and we'll give you a site. Please play by the rules.</li>
+<li><strong>What are the rules?</strong> We're still making them up. Basically, don't ask to host documents that you don't have the right to republish. Unfortunately if authors don't want their document posted here, there's not much we can do about it except complain LOUDLY.</li>
+<li><strong>Do all the sites have to look the same?</strong> No. There's a choice of two themes. We use <a title="CommentPress" href="http://www.futureofthebook.org/commentpress/">CommentPress</a> on this site. You can also choose to use <a title="Commentariat" href="http://sandbox.dius.gov.uk/code/">Commentariat</a>, a theme used on the commendable <a title="Power of Information Report" href="http://poit.cabinetoffice.gov.uk/poit/">Power of Information Taskforce Report</a>. With CommentPress, readers can comment paragraph-by-paragraph. With Commentariat, readers comment on chunks/sections of text. It's your choice.</li>
+<li><strong>I've spotted an error in the formatting of a document.</strong> Oh dear. We do spend time trying to make sure the texts<strong> </strong>are copied over as accurately as possible. We don't remove any content from the texts in any way. When we can't accurately reproduce something from a document, such as a table or image, then we'll most likely take a screen shot of the document section and <span>reproduce it in the corresponding part of the post</span>. If you're working on a document here, you should do the same (and if you find a better solution, let us know how you did it).  <span>If you replace text by an image from the original PDF, please comment out the replaced text in case we find a way to lay it out appropriately in the future. </span>Also, keep a record of any changes you have to make. Transparency is important. WordPress has in-built revision control, so that helps.</li>
+<li><strong>What about Copyright? <span>Do we need to get permission to upload a document?</span></strong> Yes and No. Government documents are usually Crown Copyright and allow re-publishing. This is usually subject to the material being reproduced accurately and not in a misleading context along with appropriate acknowledgements. Many public documents are also available under a <a title="Creative Commons" href="http://creativecommons.org">Creative Commons</a> license. We don't want to get into a legal tangle. If you're thinking of republishing a document here, you should be very sure you have the right to do so.</li>
+<li><strong>Are you a bunch of radicals out to bring down the government?</strong> No. We just think that it should be easier for people to comment on public documents in detail. This is one way of doing it. There's another good example of it happening on the <a title="Power of Information Report" href="http://poit.cabinetoffice.gov.uk/poit/">Power of Information Taskforce</a> site. We really hope that the authors of the documents find it a convenient and effective way of getting detailed feedback.</li>
+<li><strong>Are documents open for comment forever?</strong> If there is a given consultation period for the document, we'll note it on the front page of the site. We imagine that the older a document gets, the fewer comments it will receive. Authors of the documents can choose to view the comments or subscribe to the RSS feed of the comments for as long as they choose.</li>
+<li><strong>How long did it take to get this site up and running?</strong> About two days from our first Twitter exchange to going live (evenings and lunchtimes). It's not difficult if you know how to use a <a title="WordPress" href="http://wordpress.org">WordPress</a> blog. All the tools are freely available.</li>
+<li><strong>The site is a bit slow!</strong> Sorry. <span style="font-family: Georgia,'Times New Roman',Times,serif; font-size: 13px; line-height: 17px;">It's running on a resource limited host  (currently funded by <a title="Eduserv" href="http://www.eduserv.org.uk/">Eduserv</a> - thank you!). We are looking at alternative  hosting arrangements to provide more robust hosting.</span></li>
+<li><strong>How can we support you?</strong> see #12 :-)</li>
+<li><strong>I have a question/suggestion.</strong> Great! Contact us via Email or Twitter.</li>
+</ol>
+]]></content:encoded>
+			<wfw:commentRss>http://writetoreply.org/faq/feed/</wfw:commentRss>
+		<slash:comments>1</slash:comments>
+		</item>
+		<item>
+		<title>Comments By Section</title>
+		<link>http://writetoreply.org/comments-by-section/</link>
+		<comments>http://writetoreply.org/comments-by-section/#comments</comments>
+		<pubDate>Tue, 03 Feb 2009 05:01:20 +0000</pubDate>
+		<dc:creator>WriteToReply</dc:creator>
+				<category><![CDATA[Uncategorized]]></category>
+
+		<guid isPermaLink="false">http://writetoreply.org/comments-by-section/</guid>
+		<description><![CDATA[
+]]></description>
+			<content:encoded><![CDATA[<p><!-- reserved page for Comments By Section --></p>
+]]></content:encoded>
+			<wfw:commentRss>http://writetoreply.org/comments-by-section/feed/</wfw:commentRss>
+		<slash:comments>0</slash:comments>
+		</item>
+		<item>
+		<title>Comments By User</title>
+		<link>http://writetoreply.org/comments-by-user/</link>
+		<comments>http://writetoreply.org/comments-by-user/#comments</comments>
+		<pubDate>Tue, 03 Feb 2009 05:01:20 +0000</pubDate>
+		<dc:creator>WriteToReply</dc:creator>
+				<category><![CDATA[Uncategorized]]></category>
+
+		<guid isPermaLink="false">http://writetoreply.org/comments-by-user/</guid>
+		<description><![CDATA[
+]]></description>
+			<content:encoded><![CDATA[<p><!-- reserved page for Comments By User --></p>
+]]></content:encoded>
+			<wfw:commentRss>http://writetoreply.org/comments-by-user/feed/</wfw:commentRss>
+		<slash:comments>0</slash:comments>
+		</item>
+		<item>
+		<title>General Comments</title>
+		<link>http://writetoreply.org/general-comments/</link>
+		<comments>http://writetoreply.org/general-comments/#comments</comments>
+		<pubDate>Tue, 03 Feb 2009 05:01:20 +0000</pubDate>
+		<dc:creator>WriteToReply</dc:creator>
+				<category><![CDATA[Uncategorized]]></category>
+
+		<guid isPermaLink="false">http://writetoreply.org/general-comments/</guid>
+		<description><![CDATA[
+]]></description>
+			<content:encoded><![CDATA[<p><!-- reserved page for General Comments --></p>
+]]></content:encoded>
+			<wfw:commentRss>http://writetoreply.org/general-comments/feed/</wfw:commentRss>
+		<slash:comments>0</slash:comments>
+		</item>
+		<item>
+		<title>What&#8217;s it all about?</title>
+		<link>http://writetoreply.org/about/</link>
+		<comments>http://writetoreply.org/about/#comments</comments>
+		<pubDate>Tue, 03 Feb 2009 12:58:14 +0000</pubDate>
+		<dc:creator>WriteToReply</dc:creator>
+				<category><![CDATA[Uncategorized]]></category>
+
+		<guid isPermaLink="false"></guid>
+		<description><![CDATA[A site for commenting on public reports in considerable detail.  Texts are broken down into their respective sections for easier consumption. Rather than comment on the text as a whole, you are encouraged to direct comments to specific paragraphs.  The full texts for comment are listed on the right under 'Texts'.
+The copyright of the original [...]]]></description>
+			<content:encoded><![CDATA[<p>A site for commenting on public reports in considerable detail.  Texts are broken down into their respective sections for easier consumption. Rather than comment on the text as a whole, you are encouraged to direct comments to specific paragraphs.  The full texts for comment are listed on the right under 'Texts'.</p>
+<p>The copyright of the original texts and the copyright of all comments remain with their respective authors. However, by commenting on this site, you explicitly agree to license your comments under a <a title="Read the CC BY License" href="http://creativecommons.org/licenses/by/2.0/uk/">Creative Commons Attribution 2.0 UK: England &amp; Wales License</a>.</p>
+<h3>Questions? Comments?</h3>
+<p>If you want to suggest a text for inclusion on Write to Reply, let us know. Likewise, if you want to help out or host a document, definitely get in touch. Join us on the <a title="Write to Reply wiki" href="http://wiki.writetoreply.org">Write to Reply wiki</a>.</p>
+<p>If you think that the re-formatting of the text has distorted the meaning/message of the document, please tell us and we'll look at how it can be resolved. It's our intention to ensure that the texts are presented clearly and in their entirety.</p>
+<p>You can contact us at <strong>hello AT writetoreply DOT org </strong>or on Twitter<strong> <a title="Twitter" href="http://twitter.com/writetoreply">@writetoreply</a> </strong>and while you're here, why not read the <a title="Write to Reply blog" href="http://writetoreply.org/actually">Write to Reply blog</a>?<strong><br />
+</strong></p>
+<p>p.s. We do this in our spare time. Please be patient with us.</p>
+<h3>Acknowledgements</h3>
+<p>Write to Reply web hosting is currently funded by <a title="Eduserv" href="http://www.eduserv.org.uk">Eduserv</a>.</p>
+]]></content:encoded>
+			<wfw:commentRss>http://writetoreply.org/about/feed/</wfw:commentRss>
+		<slash:comments>0</slash:comments>
+		</item>
+	</channel>
+</rss>
+
+<!-- Dynamic page generated in 0.464 seconds. -->
+<!-- Cached page generated by WP-Super-Cache on 2010-01-28 08:54:39 -->
