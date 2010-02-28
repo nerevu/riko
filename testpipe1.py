@@ -7,17 +7,13 @@ except:
 
 from sourcefetchfeed import *
 from opfilter import *
-from sinkoutput import *
 
-def op_union(sources):
-    for source in sources:
-        for item in source:
-            yield item
-
-
-#e.g. package
-def testpipe1():
-    """derived manually from:
+def pipe_88ac07fd0ecb8975034ab9ed44e88945():
+    """A simple pipe
+    
+    Yields (_OUTPUT)
+    
+    derived manually from:
     {"layout":[{"id":"_OUTPUT","xy":[230,366]},{"id":"sw-90","xy":[25,25]},{"id":"sw-102","xy":[77,148]}],
     
      "modules":[
@@ -38,17 +34,18 @@ def testpipe1():
        {"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-90"},"tgt":{"id":"_INPUT","moduleid":"sw-102"}},
        {"id":"_w3","src":{"id":"_OUTPUT","moduleid":"sw-102"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}
     """
-
     
     ##sw_90 = source_fetchfeed(["http://writetoreply.org/feed"])
     sw_90 = source_fetchfeed(["test/feed.xml"])
     sw_102 = op_filter(sw_90, "permit", "and", [("title", "contains", "By")])  #_w1
-    
-    
-    return sw_102
+    _OUTPUT = sw_102  #_w3
+
+    return _OUTPUT
 
 if __name__=='__main__':
-    p = testpipe1()
+    p = pipe_88ac07fd0ecb8975034ab9ed44e88945()
     
-    _OUTPUT = sink_output(p)  #_w3
+    for r in p:
+        print r
+    
     
