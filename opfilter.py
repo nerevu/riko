@@ -1,6 +1,8 @@
 # opfilter.py
 #
 
+COMBINE_BOOLEAN = {"and": all, "or": any}
+
 def op_filter(_INPUT, MODE, COMBINE, RULE):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules. 
 
@@ -12,22 +14,10 @@ def op_filter(_INPUT, MODE, COMBINE, RULE):
     
     Yields (_OUTPUT):
     source items that match the rules
-    """
+    """   
     for item in _INPUT:
-        res = False
-
-        #todo rewrite using any/all
-        if COMBINE == "and":
-            for rule in RULE:
-                if not _rulepass(rule, item):
-                    break
-            else:
-                res = True
-        elif COMBINE == "or":
-            for rule in rules:
-                if _rulepass(rule, item):
-                    res = True
-                    break
+        if COMBINE in COMBINE_BOOLEAN: 
+            res = COMBINE_BOOLEAN[COMBINE](_rulepass(rule, item) for rule in RULE)
         else:
             raise Exception("Invalid combine %s (expecting and or or)" % COMBINE)
 
