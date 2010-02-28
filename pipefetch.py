@@ -1,9 +1,9 @@
-# sourcefetchfeed.py
+# pipefetch.py
 #
 
 import feedparser
 
-def source_fetchfeed(URL):
+def pipe_fetch(URL):
     """This source fetches and parses one or more feeds to yield the feed entries.
     
     Keyword arguments:
@@ -21,7 +21,7 @@ def source_fetchfeed(URL):
 # Example use
 
 if __name__ == '__main__':
-    feeds = source_fetchfeed(["test/feed.xml"])
+    feeds = pipe_fetch(["test/feed.xml"])
     for f in feeds:
         print f
         print f.keys()

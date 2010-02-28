@@ -1,9 +1,9 @@
-# opfilter.py
+# pipefilter.py
 #
 
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
-def op_filter(_INPUT, MODE, COMBINE, RULE):
+def pipe_filter(_INPUT, MODE, COMBINE, RULE):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules. 
 
     Keyword arguments:
@@ -35,6 +35,6 @@ def _rulepass(rule, item):
 
 # Example use
 if __name__ == '__main__':
-    items = op_filter([{title:"one"}, {title:"two"}, {title:"three"}], "permit", "and", [("title", "contains", "t")])
+    items = pipe_filter([{title:"one"}, {title:"two"}, {title:"three"}], "permit", "and", [("title", "contains", "t")])
     for item in items:
         print item
