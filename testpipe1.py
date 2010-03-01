@@ -7,6 +7,7 @@ except:
 
 from pipefetch import *
 from pipefilter import *
+from pipeoutput import *
 
 def pipe_88ac07fd0ecb8975034ab9ed44e88945():
     """A simple pipe
@@ -38,7 +39,7 @@ def pipe_88ac07fd0ecb8975034ab9ed44e88945():
     ##sw_90 = source_fetchfeed(["http://writetoreply.org/feed"])
     sw_90 = pipe_fetch(["test/feed.xml"])
     sw_102 = pipe_filter(sw_90, "permit", "and", [("title", "contains", "By")])  #_w1
-    _OUTPUT = sw_102  #_w3
+    _OUTPUT = pipe_output(sw_102)  #_w3
 
     return _OUTPUT
 
