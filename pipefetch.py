@@ -25,7 +25,7 @@ def pipe_fetch(_INPUT, conf):
 # Example use
 
 if __name__ == '__main__':
-    feeds = pipe_fetch(conf={"URL":{"value":"test/feed.xml"}})
+    feeds = pipe_fetch(None, conf={"URL":{"value":"test/feed.xml"}})
     for f in feeds:
         print f
         print f.keys()

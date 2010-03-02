@@ -1,5 +1,9 @@
 """Translate Yahoo Pipe into Python
 
+   Author: Greg Gaughan
+   Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
+   Inspired by: David Beazely (http://www.dabeaz.com/generators-uk)
+
    Converts a JSON representation of a pipe into either:
    
      a) a Python script containing a function using generators to build the pipeline
