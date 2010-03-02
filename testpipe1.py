@@ -37,8 +37,9 @@ def pipe_88ac07fd0ecb8975034ab9ed44e88945():
     """
     
     ##sw_90 = source_fetchfeed(["http://writetoreply.org/feed"])
-    sw_90 = pipe_fetch(["test/feed.xml"])
-    sw_102 = pipe_filter(sw_90, "permit", "and", [("title", "contains", "By")])  #_w1
+    sw_90 = pipe_fetch(conf={"URL":{"value":"test/feed.xml"}})
+    sw_102 = pipe_filter(sw_90, conf={"MODE":{"value":"permit"}, "COMBINE":{"value":"and"},
+                                      "RULE":[{"field":{"value":"title"},"op":{"value":"contains"},"value":{"value":"By"}}]})  #_w1
     _OUTPUT = pipe_output(sw_102)  #_w3
 
     return _OUTPUT

@@ -3,16 +3,20 @@
 
 import feedparser
 
-def pipe_fetch(URL):
+def pipe_fetch(_INPUT, conf):
     """This source fetches and parses one or more feeds to yield the feed entries.
     
     Keyword arguments:
-    URL -- url generator
+    _INPUT -- not used
+    conf:
+        URL -- url
     
     Yields (_OUTPUT):
     feed entries
     """
-    for item in URL:
+    url = conf['URL']['value']
+    
+    for item in [url]:
         d = feedparser.parse(item)
         
         for entry in d['entries']:
@@ -21,7 +25,7 @@ def pipe_fetch(URL):
 # Example use
 
 if __name__ == '__main__':
-    feeds = pipe_fetch(["test/feed.xml"])
+    feeds = pipe_fetch(conf={"URL":{"value":"test/feed.xml"}})
     for f in feeds:
         print f
         print f.keys()

@@ -44,24 +44,17 @@ def run_pipe(modules, graph):
     for module_id in module_sequence:
         module = modules[module_id]
         
+        module_ref = eval("pipe_" + module['type'])
         
         args = []
         if prev_module:
             args.append(steps[prev_module])
-            
-        kwargs = {}
-        #Note: could be made more dynamic with eval and dictionary recursion and consistent mapping of JSON -> Python parameters
-        if module['type'] == 'fetch':
-            module_ref = pipe_fetch
-            kwargs['URL'] = [module['conf']['URL']['value']]  #todo who adds []?
-        elif module['type'] == 'filter':
-            module_ref = pipe_filter
-            kwargs['MODE'] = module['conf']['MODE']['value']
-            kwargs['COMBINE'] = module['conf']['COMBINE']['value']
-            kwargs['RULE'] = [(rule['field']['value'], rule['op']['value'], rule['value']['value']) for rule in module['conf']['RULE']]
-        elif module['type'] == 'output':
-            module_ref = pipe_output
-
+        else:
+            args.append(None)
+        
+        kwargs = {'conf':module['conf']}
+       
+        
         steps[module_id] = module_ref(*args, **kwargs)
 
         prev_module = module_id
@@ -83,15 +76,26 @@ def write_pipe(modules, graph):
     prev_module = None
     for module_id in module_sequence:
         module = modules[module_id]
-        pipe += "    %(module_id)s = pipe_%(module_type)s(%(input_module)s)\n" % {'module_id':module_id, 'module_type':module['type'], 'input_module':prev_module or ''}
+        pipe += "    %(module_id)s = pipe_%(module_type)s(%(input_module)s, conf=%(conf)s)\n" % {'module_id':module_id, 'module_type':module['type'], 'input_module':prev_module or 'None', 'conf':module['conf']}
         prev_module = module_id
     
     pipe += "    return _OUTPUT\n"
         
     return pipe
-    
+
+def parse_and_write_pipe(json_pipe):
+    modules, graph = parse_pipe(json_pipe)
+    pw = write_pipe(modules, graph)
+    print pw   #TODO print ok?
+
+def parse_and_run_pipe(json_pipe):
+    modules, graph = parse_pipe(json_pipe)
+    pe = run_pipe(modules, graph)
+    for i in pe:
+        print i   #TODO print ok?
+
 if __name__ == '__main__':
-    modules, graph = parse_pipe("""{"layout":[{"id":"_OUTPUT","xy":[230,366]},{"id":"sw-90","xy":[25,25]},{"id":"sw-102","xy":[77,148]}],
+    pjson = """{"layout":[{"id":"_OUTPUT","xy":[230,366]},{"id":"sw-90","xy":[25,25]},{"id":"sw-102","xy":[77,148]}],
      "modules":[
        {"type":"output","id":"_OUTPUT","conf":[]},
        {"type":"fetch","id":"sw-90","conf":{"URL":{"value":"test/feed.xml","type":"url"}}},
@@ -112,14 +116,7 @@ if __name__ == '__main__':
      "wires":[
        {"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-90"},"tgt":{"id":"_INPUT","moduleid":"sw-102"}},
        {"id":"_w3","src":{"id":"_OUTPUT","moduleid":"sw-102"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}"""
-    )
     
-    p = write_pipe(modules, graph)
-    
-    print p
-    
-    pe = run_pipe(modules, graph)
-    print pe
-    for i in pe:
-        print i
-    
+
+    parse_and_write_pipe(pjson)
+    parse_and_run_pipe(pjson)

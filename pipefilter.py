@@ -3,25 +3,30 @@
 
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
-def pipe_filter(_INPUT, MODE, COMBINE, RULE):
+def pipe_filter(_INPUT, conf):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules. 
 
     Keyword arguments:
     _INPUT -- source generator
-    MODE -- filter mode, either "permit" or "block"
-    COMBINE -- filter boolean combination, either "and" or "or"
-    RULE -- rule generator - each rules comprising (field, op, value)
+    conf:
+        MODE -- filter mode, either "permit" or "block"
+        COMBINE -- filter boolean combination, either "and" or "or"
+        RULE -- rules - each rule comprising (field, op, value)
     
     Yields (_OUTPUT):
     source items that match the rules
-    """   
+    """
+    mode = conf['MODE']['value']
+    combine = conf['COMBINE']['value']
+    rules = [(rule['field']['value'], rule['op']['value'], rule['value']['value']) for rule in conf['RULE']]
+    
     for item in _INPUT:
-        if COMBINE in COMBINE_BOOLEAN: 
-            res = COMBINE_BOOLEAN[COMBINE](_rulepass(rule, item) for rule in RULE)
+        if combine in COMBINE_BOOLEAN: 
+            res = COMBINE_BOOLEAN[combine](_rulepass(rule, item) for rule in rules)
         else:
-            raise Exception("Invalid combine %s (expecting and or or)" % COMBINE)
+            raise Exception("Invalid combine %s (expecting and or or)" % combine)
 
-        if (res and MODE == "permit") or (not res and MODE == "block"):
+        if (res and mode == "permit") or (not res and mode == "block"):
             yield item
 
 #todo precompile these?
@@ -35,6 +40,6 @@ def _rulepass(rule, item):
 
 # Example use
 if __name__ == '__main__':
-    items = pipe_filter([{title:"one"}, {title:"two"}, {title:"three"}], "permit", "and", [("title", "contains", "t")])
+    items = pipe_filter([{"title":"one"}, {"title":"By two"}, {"title":"three"}], conf={"MODE":{"value":"permit"}, "COMBINE":{"value":"and"}, "RULE":[{"field":{"value":"title"},"op":{"value":"contains"},"value":{"value":"By"}}]})
     for item in items:
         print item
