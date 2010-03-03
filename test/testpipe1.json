@@ -5,7 +5,7 @@
        {"type":"filter","id":"sw-102","conf":{
          "MODE":{"type":"text","value":"permit"},
          "COMBINE":{"type":"text","value":"and"},
-         "RULE":[{"field":{"value":"title","type":"text"},"op":{"type":"text","value":"contains"},"value":{"value":"By","type":"text"}}]
+         "RULE":[{"field":{"value":"description","type":"text"},"op":{"type":"text","value":"contains"},"value":{"value":"the","type":"text"}}]
          }
          }
      ],
