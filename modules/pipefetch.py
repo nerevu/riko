@@ -14,18 +14,17 @@ def pipe_fetch(_INPUT, conf):
     Yields (_OUTPUT):
     feed entries
     """
-    url = conf['URL']['value']
+    url = conf['URL']
     
-    for item in [url]:
-        d = feedparser.parse(item)
+    for item in url:
+        d = feedparser.parse(item['value'])
         
         for entry in d['entries']:
             yield entry
 
 # Example use
-
 if __name__ == '__main__':
-    feeds = pipe_fetch(None, conf={"URL":{"value":"test/feed.xml"}})
+    feeds = pipe_fetch(None, conf={"URL":[{"value":"../test/feed.xml"}]})
     for f in feeds:
         print f
         print f.keys()

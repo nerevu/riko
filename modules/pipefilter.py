@@ -32,8 +32,16 @@ def pipe_filter(_INPUT, conf):
 #todo precompile these?
 def _rulepass(rule, item):
     field, op, value = rule
+
+    #TODO: is this ok?
+    if field not in item:
+        return True
+    
     if op == "contains":
         if value in item[field]:  #todo case insensitive? use regex?
+            return True
+    if op == "doesnotcontain":
+        if value not in item[field]:  #todo case insensitive? use regex?
             return True
     #TODO etc.
         
