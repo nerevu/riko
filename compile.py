@@ -9,20 +9,24 @@
      b) compile it as a pipeline of generators which can be executed in-process
      
    Usage:
-     a) python compile.py pipe1.json > pipe1.py
+     a) python compile.py -f pipe1.json > pipe1.py
         python pipe1.py
         
      b) import compile
         p = compile.parse_and_build_pipe("JSON pipe representation")
         for i in p:
             print i
+            
+   Instead of passing a filename (-f) a pipe id can be passed (-p) to fetch the JSON from Yahoo.
      
    Author: Greg Gaughan
    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
    Python generator pipelines inspired by: David Beazely (http://www.dabeaz.com/generators-uk)
 """
 
+from optparse import OptionParser
 import fileinput
+import urllib
 
 try:
     import json
@@ -45,19 +49,17 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     
     Returns:
     pipe -- an internal representation of a pipe
-    """
-    pipe_def = json.loads(json_pipe)
-    
+    """   
     pipe = {'name': pipe_name}
     
     pipe['modules'] = {}
     pipe['graph'] = {}
-    for module in pipe_def['modules']:
+    for module in json_pipe['modules']:
         pipe['modules'][module['id']] = module
         pipe['graph'][module['id']] = []
 
     #todo assumes 1 to 1 for now
-    for wire in pipe_def['wires']:
+    for wire in json_pipe['wires']:
         pipe['graph'][wire['src']['moduleid']].append(wire['tgt']['moduleid'])
         
     return pipe
@@ -139,12 +141,37 @@ def parse_and_build_pipe(json_pipe, pipe_name="anonymous"):
     pb = build_pipe(pipe)   
     return pb
 
-if __name__ == '__main__':
+if __name__ == '__main__':  
     pjson = []
     
-    for line in fileinput.input():
-        pjson.append(line)
+    parser = OptionParser()
+    parser.add_option("-f", "--file", dest="filename",
+                      help="read pipe JSON from FILE", metavar="FILE")    
+    parser.add_option("-p", "--pipe", dest="pipeid",
+                      help="read pipe JSON from Yahoo", metavar="PIPEID")   
+    (options, args) = parser.parse_args()
     
-    pjson = "".join(pjson)
+    if options.pipeid:
+        url = ("""http://query.yahooapis.com/v1/public/yql"""
+               """?q=select%20PIPE.working%20from%20json%20"""
+               """where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D"""
+               + options.pipeid + 
+               """%22&format=json""")
+        print url
+        pjson = urllib.urlopen(url).readlines()
+        pjson = "".join(pjson)
+        pipe_def = json.loads(pjson)
+        pipe_def = pipe_def['query']['results']['json']['PIPE']['working']
         
-    print parse_and_write_pipe(pjson)     #TODO print stdout ok?
+    elif options.filename:
+        for line in fileinput.input(options.filename):
+            pjson.append(line)    
+        pjson = "".join(pjson)
+        pipe_def = json.loads(pjson)
+    else:
+        for line in fileinput.input():
+            pjson.append(line)    
+        pjson = "".join(pjson)
+        pipe_def = json.loads(pjson)
+        
+    print parse_and_write_pipe(pipe_def)     #TODO print stdout ok?

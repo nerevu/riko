@@ -35,7 +35,8 @@ def _rulepass(rule, item):
     if op == "contains":
         if value in item[field]:  #todo case insensitive? use regex?
             return True
-
+    #TODO etc.
+        
     return False
 
 # Example use
