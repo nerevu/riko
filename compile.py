@@ -151,6 +151,7 @@ if __name__ == '__main__':
                       help="read pipe JSON from Yahoo", metavar="PIPEID")   
     (options, args) = parser.parse_args()
     
+    name = "anonymous"
     if options.pipeid:
         url = ("""http://query.yahooapis.com/v1/public/yql"""
                """?q=select%20PIPE.working%20from%20json%20"""
@@ -161,7 +162,7 @@ if __name__ == '__main__':
         pjson = "".join(pjson)
         pipe_def = json.loads(pjson)
         pipe_def = pipe_def['query']['results']['json']['PIPE']['working']
-        
+        name = options.pipeid
     elif options.filename:
         for line in fileinput.input(options.filename):
             pjson.append(line)    
@@ -173,4 +174,4 @@ if __name__ == '__main__':
         pjson = "".join(pjson)
         pipe_def = json.loads(pjson)
         
-    print parse_and_write_pipe(pipe_def)     #TODO print stdout ok?
+    print parse_and_write_pipe(pipe_def, name)     #TODO print stdout ok?
