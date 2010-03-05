@@ -16,6 +16,9 @@ def pipe_fetch(_INPUT, conf):
     """
     url = conf['URL']
     
+    if not isinstance(url, list):
+        url = [url]
+    
     for item in url:
         d = feedparser.parse(item['value'])
         

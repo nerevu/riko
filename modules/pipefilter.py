@@ -1,7 +1,13 @@
 # pipefilter.py
 #
 
+import datetime
+
+
+DATE_FORMAT = "%m/%d/%Y %H:%M:%S"
 COMBINE_BOOLEAN = {"and": all, "or": any}
+FIELD_MAP = {'pubDate': 'date_parsed',
+             }
 
 def pipe_filter(_INPUT, conf):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules. 
@@ -18,7 +24,7 @@ def pipe_filter(_INPUT, conf):
     """
     mode = conf['MODE']['value']
     combine = conf['COMBINE']['value']
-    rules = [(rule['field']['value'], rule['op']['value'], rule['value']['value']) for rule in conf['RULE']]
+    rules = [(rule['field']['value'], rule['op']['value'], rule['value']) for rule in conf['RULE']]
     
     for item in _INPUT:
         if combine in COMBINE_BOOLEAN: 
@@ -29,21 +35,45 @@ def pipe_filter(_INPUT, conf):
         if (res and mode == "permit") or (not res and mode == "block"):
             yield item
 
-#todo precompile these?
+#todo precompile these into lambdas for speed
 def _rulepass(rule, item):
     field, op, value = rule
+    
+    if 'value' in value:
+        value = value['value']  #simple value
+    else:
+        pass
+        #todo map module/wire to get value = {u'terminal': u'RULE_2_value', u'type': u'text', u'subkey': u'utime'}    
 
     #TODO: is this ok?
+    if field in FIELD_MAP:
+        field = FIELD_MAP[field]  #map to universal feedparser's normalised names
+    
     if field not in item:
         return True
     
+    #todo check which of these should be case insensitive
     if op == "contains":
-        if value in item[field]:  #todo case insensitive? use regex?
+        if value.lower() in item[field].lower():  #todo use regex?
             return True
     if op == "doesnotcontain":
-        if value not in item[field]:  #todo case insensitive? use regex?
+        if value.lower() not in item[field].lower():  #todo use regex?
             return True
-    #TODO etc.
+    if op == "is":
+        if value == item[field]:
+            return True
+    if op == "greater":
+        if value > item[field]:
+            return True
+    if op == "less":
+        if value < item[field]:
+            return True
+    if op == "after":
+        if datetime.datetime.strptime(value, DATE_FORMAT) > datetime.datetime(*item[field][:7]):
+            return True
+    if op == "before":
+        if datetime.datetime.strptime(value, DATE_FORMAT) < datetime.datetime(*item[field][:7]):
+            return True
         
     return False
 

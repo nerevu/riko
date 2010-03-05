@@ -38,6 +38,7 @@ from topsort import topological_sort
 #needed for build_pipe - ensure modules/__init__.py.__all__ lists all available modules
 from pipe2py.modules import *
 
+
 def _parse_pipe(json_pipe, pipe_name="anonymous"):
     """Parse pipe JSON into internal structures
     
