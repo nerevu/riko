@@ -4,7 +4,8 @@
 import datetime
 import re
 
-DATE_FORMAT = "%m/%d/%Y %H:%M:%S"
+DATE_FORMAT = "%m/%d/%Y"
+DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 COMBINE_BOOLEAN = {"and": all, "or": any}
 FIELD_MAP = {'pubDate': 'date_parsed',
              }
@@ -66,7 +67,7 @@ def _rulepass(rule, item):
         if value.lower() not in item[field].lower():  #todo use regex?
             return True
     if op == "matches":
-        if re.search(value, item[field].search):
+        if re.search(value, item[field]):
             return True
     if op == "is":
         if item[field] == value:
@@ -79,7 +80,7 @@ def _rulepass(rule, item):
             return True
     if op == "after":
         #todo handle partial datetime values
-        if  datetime.datetime(*item[field][:7]) > datetime.datetime.strptime(value, DATE_FORMAT):
+        if datetime.datetime(*item[field][:7]) > datetime.datetime.strptime(value, DATE_FORMAT):
             return True
     if op == "before":
         #todo handle partial datetime values
