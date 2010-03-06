@@ -53,14 +53,19 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     
     pipe['modules'] = {}
     pipe['graph'] = {}
+    pipe['secondary_graph'] = {}
     for module in json_pipe['modules']:
         pipe['modules'][module['id']] = module
         pipe['graph'][module['id']] = []
+        pipe['secondary_graph'][module['id']] = []
 
-    #todo assumes 1 to 1 for now
+    #todo refine: for now, graph = input->outputs and secondary_graph = everything else
     for wire in json_pipe['wires']:
-        pipe['graph'][wire['src']['moduleid']].append(wire['tgt']['moduleid'])
-        
+        if wire['tgt']['id'] == '_INPUT' and wire['src']['id'] == '_OUTPUT':
+            pipe['graph'][wire['src']['moduleid']].append(wire['tgt']['moduleid'])
+        else:
+            pipe['secondary_graph'][wire['tgt']['moduleid']].append((wire['src']['moduleid'], wire['tgt']['id']))
+
     return pipe
 
 def build_pipe(pipe):
@@ -85,7 +90,10 @@ def build_pipe(pipe):
             args.append(None)
         
         kwargs = {'conf':module['conf']}
-       
+        
+        if module_id in pipe['secondary_graph']:
+            for secondary in pipe['secondary_graph'][module_id]:
+                kwargs["%(id)s" % {'id':secondary[1]}] = "%(secondary_module)s" % {'secondary_module':pythonise(secondary[0])}
         
         steps[module_id] = module_ref(*args, **kwargs)
 
@@ -113,13 +121,20 @@ def write_pipe(pipe):
              )
 
     module_sequence = topological_sort(pipe['graph'])
-
+    
     prev_module = None
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
         if prev_module and module_id not in pipe['graph'][prev_module]:
             prev_module = None  #e.g. handle islands
-        pypipe += """    %(module_id)s = pipe%(module_type)s.pipe_%(module_type)s(%(input_module)s, conf=%(conf)s)\n""" % {'module_id':pythonise(module_id), 'module_type':module['type'], 'input_module':pythonise(prev_module) or 'None', 'conf':module['conf']}
+        pargs = ["%(input_module)s" % {'input_module':pythonise(prev_module) or 'None'}, 
+                 "conf=%(conf)s" % {'conf':module['conf']}]
+        
+        if module_id in pipe['secondary_graph']:
+            for secondary in pipe['secondary_graph'][module_id]:
+                pargs.append("%(id)s = %(secondary_module)s" % {'id':secondary[1], 'secondary_module':pythonise(secondary[0])})
+        
+        pypipe += """    %(module_id)s = pipe%(module_type)s.pipe_%(module_type)s(%(pargs)s)\n""" % {'module_id':pythonise(module_id), 'module_type':module['type'], 'pargs':", ".join(pargs)}
         prev_module = module_id
     
     pypipe += """    return _OUTPUT\n"""
