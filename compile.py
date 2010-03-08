@@ -56,8 +56,6 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     pipe['modules'] = {}
     pipe['graph'] = {}
     pipe['wires'] = {}
-    #TODO here: instead of building graph and secondary_graph, just build graph = creation order
-    # and build wires and use them to plumb I/O and terminals via kwargs
     for module in json_pipe['modules']:
         pipe['modules'][util.pythonise(module['id'])] = module
         pipe['graph'][util.pythonise(module['id'])] = []
@@ -76,34 +74,25 @@ def build_pipe(pipe):
     module_sequence = topological_sort(pipe['graph'])
     
     steps = {}
-    prev_module = None
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
         
+        #Plumb I/O
+        input_module = None
+        for wire in pipe['wires']:
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+                input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
+        
+        pargs = {"conf":module['conf']}
+            
+        for wire in pipe['wires']:
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+                pargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = "%(secondary_module)s" % {'secondary_module':steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]}
+                
         module_ref = eval("pipe" + module['type'] + ".pipe_" + module['type'])
+        steps[module_id] = module_ref(input_module, **pargs)
 
-        if prev_module and module_id not in pipe['graph'][prev_module]:
-            prev_module = None  #e.g. handle islands
-        
-        args = []
-        if prev_module:
-            args.append(steps[prev_module])
-        else:
-            args.append(None)
-        
-        kwargs = {'conf':module['conf']}
-        
-        #todo as per new write plumbing logic
-        
-        if module_id in pipe['secondary_graph']:
-            for secondary in pipe['secondary_graph'][module_id]:
-                kwargs["%(id)s" % {'id':secondary[1]}] = "%(secondary_module)s" % {'secondary_module':secondary[0]}
-        
-        steps[module_id] = module_ref(*args, **kwargs)
-
-        prev_module = module_id
-    
-    return steps[prev_module]
+    return steps[module_id]
     
     
 def write_pipe(pipe):
@@ -120,16 +109,11 @@ def write_pipe(pipe):
              )
 
     module_sequence = topological_sort(pipe['graph'])
-    
-    print pipe['graph']
-    print pipe['wires']
-    print module_sequence 
-               
-    
+       
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
 
-        #TODO i/o plumb: 
+        #Plumb I/O
         input_module = None
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
@@ -138,9 +122,9 @@ def write_pipe(pipe):
         pargs = ["%(input_module)s" % {'input_module':input_module}, 
                  "conf=%(conf)s" % {'conf':module['conf']}]
         
-        if wire in pipe['wires']:
+        for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
-                pargs.append("%(id)s = %(secondary_module)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id']), 'secondary_module':util.pythonise(pipe['wires'][wire]['src']['id'])})
+                pargs.append("%(id)s = %(secondary_module)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id']), 'secondary_module':util.pythonise(pipe['wires'][wire]['src']['moduleid'])})
         
         pypipe += """    %(module_id)s = pipe%(module_type)s.pipe_%(module_type)s(%(pargs)s)\n""" % {'module_id':module_id, 'module_type':module['type'], 'pargs':", ".join(pargs)}
         prev_module = module_id
@@ -160,7 +144,7 @@ def parse_and_write_pipe(json_pipe, pipe_name="anonymous"):
     pw = write_pipe(pipe)
     return pw
 
-def parse_and_build_pipe(json_pipe, pipe_name="anonymous"):
+def parse_and_build_pipe(json_pipe):
     pipe = _parse_pipe(json_pipe, pipe_name)
     pb = build_pipe(pipe)   
     return pb
@@ -199,3 +183,10 @@ if __name__ == '__main__':
         pipe_def = json.loads(pjson)
         
     print parse_and_write_pipe(pipe_def, name)     #TODO print stdout ok?
+    
+    #test build
+    #88ac07fd0ecb8975034ab9ed44e88945
+    #a13ff0f791b207d80880bf45a3733794
+    #b = parse_and_build_pipe(pipe_def)
+    #for i in b:
+    #    print i

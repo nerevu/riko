@@ -21,7 +21,7 @@ def pipe_fetch(_INPUT, conf, **kwargs):
         url = [url]
     
     for item in url:
-        value = get_value(item, kwargs)
+        value = util.get_value(item, kwargs)
         
         d = feedparser.parse(value)
         

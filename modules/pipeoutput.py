@@ -10,7 +10,8 @@ def pipe_output(_INPUT, conf=None, **kwargs):
     Yields (_OUTPUT):
     source items
     """   
-    return _INPUT
+    for item in _INPUT:
+        yield item
 
 # Example use
 if __name__ == '__main__':
