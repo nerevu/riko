@@ -2,8 +2,9 @@
 #
 
 import feedparser
+from pipe2py import util
 
-def pipe_fetch(_INPUT, conf):
+def pipe_fetch(_INPUT, conf, **kwargs):
     """This source fetches and parses one or more feeds to yield the feed entries.
     
     Keyword arguments:
@@ -20,7 +21,9 @@ def pipe_fetch(_INPUT, conf):
         url = [url]
     
     for item in url:
-        d = feedparser.parse(item['value'])
+        value = get_value(item, kwargs)
+        
+        d = feedparser.parse(value)
         
         for entry in d['entries']:
             yield entry

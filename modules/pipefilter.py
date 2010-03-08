@@ -3,6 +3,7 @@
 
 import datetime
 import re
+from pipe2py import util
 
 DATE_FORMAT = "%m/%d/%Y"
 DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
@@ -29,12 +30,7 @@ def pipe_filter(_INPUT, conf, **kwargs):
     rules = []
        
     for rule in conf['RULE']:
-        value = rule['value']
-        if 'value' in value:
-            value = value['value']  #simple value
-        elif 'terminal' in value:
-            value = kwargs[value['terminal']].next()
-            #todo use subkey?
+        value = get_value(rule['value'], kwargs) #todo use subkey?
 
         rules.append((rule['field']['value'], rule['op']['value'], value))
         

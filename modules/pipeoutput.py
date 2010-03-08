@@ -1,7 +1,7 @@
 # pipeoutput.py
 #
 
-def pipe_output(_INPUT, conf=None):
+def pipe_output(_INPUT, conf=None, **kwargs):
     """This operator outputs the input source, i.e. does nothing.
 
     Keyword arguments:

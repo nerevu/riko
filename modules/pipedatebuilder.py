@@ -1,7 +1,7 @@
 # pipedatebuilder.py
 #
 
-def pipe_datebuilder(_INPUT, conf):
+def pipe_datebuilder(_INPUT, conf, **kwargs):
     """This source builds a date and yields it forever.
     
     Keyword arguments:
