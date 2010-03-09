@@ -1,3 +1,27 @@
+This is a proof-of-concept and so far can handle very basic 
+fetch/filter/output pipelines.
+
+Design
+------
+The Yahoo pipelines are translated into pipelines of Python generators which 
+should give a close match to the original data flow. Each call to the final
+generator will ripple through the pipeline issuing .next() calls until the 
+source is exhausted.
+
+The modules are topologically sorted to give their creation order. 
+The main output and inputs are connected via the yielded values and the 
+first parameter. Other inputs are passed as named parameters referencing the 
+input module.
+
+The JSON representation of the configuration parameters maps closely onto 
+Python dictionaries and so is left as-is and passed and parsed as-and-when 
+needed.
+
+Each Yahoo module is coded as a separate Python module. This might help in
+future if the generators are made to run on separate processors/machines and 
+we could use queues to plumb them together.
+
+
 Install the dependencies
 ------------------------
 Universal feedparser (http://www.feedparser.org/):
@@ -26,8 +50,8 @@ script which wraps the pipeline in a function and can then be imported and
 run from another Python program. The other interprets the pipeline on-the-fly 
 and executes it within the current process.
 
-1. Compiling a pipeline to Python
----------------------------------
+1. Compiling a pipeline to a Python script
+------------------------------------------
   * python compile.py -p pipelineid
   
   or
@@ -36,7 +60,7 @@ and executes it within the current process.
   
 2. Interpreting a pipeline and executing in-process
 ---------------------------------------------------
-from pipe2py import compile
+from pipe2py.compile import parse_and_build_pipe
 
 pipe_def = """json representation of the pipe"""
 
