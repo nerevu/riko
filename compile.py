@@ -145,7 +145,7 @@ def parse_and_write_pipe(json_pipe, pipe_name="anonymous"):
     return pw
 
 def parse_and_build_pipe(json_pipe):
-    pipe = _parse_pipe(json_pipe, pipe_name)
+    pipe = _parse_pipe(json_pipe, "anonymous")
     pb = build_pipe(pipe)   
     return pb
 
