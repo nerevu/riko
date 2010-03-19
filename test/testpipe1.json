@@ -1,7 +1,7 @@
 {"layout":[{"id":"_OUTPUT","xy":[230,366]},{"id":"sw-90","xy":[25,25]},{"id":"sw-102","xy":[77,148]}],
      "modules":[
        {"type":"output","id":"_OUTPUT","conf":[]},
-       {"type":"fetch","id":"sw-90","conf":{"URL":{"value":"test/feed.xml","type":"url"}}},
+       {"type":"fetch","id":"sw-90","conf":{"URL":{"value":"feed.xml","type":"url"}}},
        {"type":"filter","id":"sw-102","conf":{
          "MODE":{"type":"text","value":"permit"},
          "COMBINE":{"type":"text","value":"and"},
