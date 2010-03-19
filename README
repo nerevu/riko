@@ -42,6 +42,13 @@ Make the package available to Python, e.g.
 
   export PYTHONPATH=pipeline
 
+
+Unit tests
+----------
+Run in the test directory:
+
+  python testbasics.py
+
   
 Usage
 -----
