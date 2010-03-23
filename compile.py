@@ -89,6 +89,9 @@ def build_pipe(pipe):
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 pargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = "%(secondary_module)s" % {'secondary_module':steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]}
                 
+        #todo use pymodule_name logic from write_pipe
+        #and (re)import dynamically
+                
         module_ref = eval("pipe" + module['type'] + ".pipe_" + module['type'])
         steps[module_id] = module_ref(input_module, **pargs)
 
@@ -103,7 +106,7 @@ def write_pipe(pipe):
               """\n"""
               """from pipe2py.modules import *\n"""
               """\n"""
-              """def pipe_%s():\n"""
+              """def %s():\n"""
               """    #demo\n"""
               """\n""" % (pipe['name'])
              )
@@ -126,7 +129,16 @@ def write_pipe(pipe):
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 pargs.append("%(id)s = %(secondary_module)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id']), 'secondary_module':util.pythonise(pipe['wires'][wire]['src']['moduleid'])})
         
-        pypipe += """    %(module_id)s = pipe%(module_type)s.pipe_%(module_type)s(%(pargs)s)\n""" % {'module_id':module_id, 'module_type':module['type'], 'pargs':", ".join(pargs)}
+        pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
+        pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
+        if module['type'].startswith('pipe:'):
+            pymodule_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}
+            pymodule_generator_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}            
+                
+        pypipe += """    %(module_id)s = %(pymodule_name)s.%(pymodule_generator_name)s(%(pargs)s)\n""" % {'module_id':module_id, 
+                                                                                                          'pymodule_name':pymodule_name, 
+                                                                                                          'pymodule_generator_name':pymodule_generator_name, 
+                                                                                                          'pargs':", ".join(pargs)}
         prev_module = module_id
     
     pypipe += """    return _OUTPUT\n"""
@@ -170,7 +182,7 @@ if __name__ == '__main__':
         pjson = "".join(pjson)
         pipe_def = json.loads(pjson)
         pipe_def = pipe_def['query']['results']['json']['PIPE']['working']
-        name = options.pipeid
+        name = "pipe_%s" % options.pipeid
     elif options.filename:
         for line in fileinput.input(options.filename):
             pjson.append(line)    
@@ -184,9 +196,4 @@ if __name__ == '__main__':
         
     print parse_and_write_pipe(pipe_def, name)     #TODO print stdout ok?
     
-    #test build
-    #88ac07fd0ecb8975034ab9ed44e88945
-    #a13ff0f791b207d80880bf45a3733794
-    #b = parse_and_build_pipe(pipe_def)
-    #for i in b:
-    #    print i
+    #for build example - see test/testbasics.py

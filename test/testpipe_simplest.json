@@ -1,0 +1,200 @@
+{
+      "layout": [
+       {
+        "id": "sw-478",
+        "xy": [
+         361,
+         126
+        ]
+       },
+       {
+        "id": "_OUTPUT",
+        "xy": [
+         423,
+         276
+        ]
+       }
+      ],
+      "modules": [
+       {
+        "type": "fetch",
+        "id": "sw-478",
+        "conf": {
+         "URL": {
+          "value": "http://feeds.feedburner.com/ouseful",
+          "type": "url"
+         }
+        }
+       },
+       {
+        "type": "output",
+        "id": "_OUTPUT",
+        "conf": {}
+       }
+      ],
+      "terminaldata": [
+       {
+        "id": "_OUTPUT",
+        "moduleid": "sw-478",
+        "data": {
+         "_type": "item",
+         "_attr": {
+          "link": {
+           "_type": "url",
+           "_count": "9"
+          },
+          "y:id": {
+           "_type": "",
+           "_attr": {
+            "value": {
+             "_type": "url",
+             "_count": "9"
+            },
+            "permalink": {
+             "_type": "text",
+             "_count": "9"
+            }
+           }
+          },
+          "feedburner:origLink": {
+           "_type": "url",
+           "_count": "9"
+          },
+          "slash:comments": {
+           "_type": "number",
+           "_count": "7"
+          },
+          "wfw:commentRss": {
+           "_type": "url",
+           "_count": "7"
+          },
+          "description": {
+           "_type": "text",
+           "_count": "9"
+          },
+          "comments": {
+           "_type": "url",
+           "_count": "7"
+          },
+          "dc:creator": {
+           "_type": "text",
+           "_count": "7"
+          },
+          "y:title": {
+           "_type": "text",
+           "_count": "9"
+          },
+          "content:encoded": {
+           "_type": "text",
+           "_count": "7"
+          },
+          "media:content": {
+           "_type": "",
+           "_attr": {
+            "url": {
+             "_type": "url",
+             "_count": "28"
+            },
+            "medium": {
+             "_type": "text",
+             "_count": "35"
+            },
+            "media:title": {
+             "_type": "",
+             "_attr": {
+              "content": {
+               "_type": "text",
+               "_count": "10"
+              },
+              "type": {
+               "_type": "text",
+               "_count": "10"
+              }
+             }
+            }
+           }
+          },
+          "title": {
+           "_type": "text",
+           "_count": "9"
+          },
+          "category": {
+           "_type": "text",
+           "_count": "29"
+          },
+          "guid": {
+           "_type": "",
+           "_attr": {
+            "isPermaLink": {
+             "_type": "text",
+             "_count": "9"
+            },
+            "content": {
+             "_type": "url",
+             "_count": "9"
+            }
+           }
+          },
+          "pubDate": {
+           "_type": "datetime",
+           "_count": "9"
+          },
+          "y:published": {
+           "_type": "datetime",
+           "_attr": {
+            "hour": {
+             "_type": "number",
+             "_count": "9"
+            },
+            "timezone": {
+             "_type": "text",
+             "_count": "9"
+            },
+            "second": {
+             "_type": "number",
+             "_count": "9"
+            },
+            "month": {
+             "_type": "number",
+             "_count": "9"
+            },
+            "minute": {
+             "_type": "number",
+             "_count": "9"
+            },
+            "utime": {
+             "_type": "number",
+             "_count": "9"
+            },
+            "day_of_week": {
+             "_type": "number",
+             "_count": "9"
+            },
+            "day": {
+             "_type": "number",
+             "_count": "9"
+            },
+            "year": {
+             "_type": "number",
+             "_count": "9"
+            }
+           }
+          }
+         }
+        }
+       }
+      ],
+      "wires": [
+       {
+        "id": "_w1",
+        "src": {
+         "id": "_OUTPUT",
+         "moduleid": "sw-478"
+        },
+        "tgt": {
+         "id": "_INPUT",
+         "moduleid": "_OUTPUT"
+        }
+       }
+      ]
+     }

@@ -5,7 +5,7 @@ import string
 def pythonise(id):
     """Return a Python-friendly id"""
     if id:
-        id = id.replace("-", "_")
+        id = id.replace("-", "_").replace(":", "_")
         
         if id[0] in string.digits:
             id = "_" + id

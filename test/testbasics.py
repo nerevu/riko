@@ -43,6 +43,31 @@ class TestBasics(unittest.TestCase):
             self.assertTrue("the" in i.get('description'))
             
         self.assertEqual(count, 4)
+
+    def test_simplest(self):
+        """Loads the RTW simple test pipeline and compiles and executes it to check the results
+        """
+        pipe_def = self._get_pipe_def("testpipe_simplest.json")
+        p = pipe2py.compile.parse_and_build_pipe(pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            
+        self.assertTrue(count > 0)
+        
+    def test_simpletagger(self):
+        """Loads the RTW simple tagger pipeline and compiles and executes it to check the results
+        """
+        pipe_def = self._get_pipe_def("testpipe_simpletagger.json")
+        p = pipe2py.compile.parse_and_build_pipe(pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            
+        self.assertTrue(count > 0)
+        
         
     #todo test malformed pipeline syntax too
 
