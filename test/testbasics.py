@@ -35,9 +35,10 @@ class TestBasics(unittest.TestCase):
            TODO: have these tests iterate over a number of test pipelines
         """
         pipe_def = self._get_pipe_def("testpipe1.json")
-        p = pipe2py.compile.parse_and_build_pipe(pipe_def)
+        p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
         
         count = 0
+        self.assertTrue(count > 0)
         for i in p:
             count += 1
             self.assertTrue("the" in i.get('description'))
@@ -48,7 +49,7 @@ class TestBasics(unittest.TestCase):
         """Loads the RTW simple test pipeline and compiles and executes it to check the results
         """
         pipe_def = self._get_pipe_def("testpipe_simplest.json")
-        p = pipe2py.compile.parse_and_build_pipe(pipe_def)
+        p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
         
         count = 0
         for i in p:
@@ -60,7 +61,7 @@ class TestBasics(unittest.TestCase):
         """Loads the RTW simple tagger pipeline and compiles and executes it to check the results
         """
         pipe_def = self._get_pipe_def("testpipe_simpletagger.json")
-        p = pipe2py.compile.parse_and_build_pipe(pipe_def)
+        p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
         
         count = 0
         for i in p:

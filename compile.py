@@ -41,6 +41,7 @@ from topsort import topological_sort
 from pipe2py.modules import *
 
 
+
 def _parse_pipe(json_pipe, pipe_name="anonymous"):
     """Parse pipe JSON into internal structures
     
@@ -68,7 +69,7 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
             
     return pipe
 
-def build_pipe(pipe):
+def build_pipe(pipe, verbose=False):
     """Convert a pipe into an executable Python pipeline
     """
     module_sequence = topological_sort(pipe['graph'])
@@ -83,17 +84,26 @@ def build_pipe(pipe):
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
         
-        pargs = {"conf":module['conf']}
+        pargs = ["%(input_module)s" % {'input_module':input_module}, 
+                 "conf=%(conf)s" % {'conf':module['conf']}]
             
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 pargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = "%(secondary_module)s" % {'secondary_module':steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]}
                 
-        #todo use pymodule_name logic from write_pipe
-        #and (re)import dynamically
+        #todo (re)import other pipes dynamically
+        pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
+        pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
+        if module['type'].startswith('pipe:'):
+            pymodule_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}
+            pymodule_generator_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}            
                 
-        module_ref = eval("pipe" + module['type'] + ".pipe_" + module['type'])
-        steps[module_id] = module_ref(input_module, **pargs)
+        module_ref = eval("%(pymodule_name)s.%(pymodule_generator_name)s" % {'pymodule_name':pymodule_name, 
+                                                                             'pymodule_generator_name':pymodule_generator_name,})
+        steps[module_id] = module_ref(*pargs)
+
+        if verbose:
+            print "%s (%s) = %s(%s)" %(steps[module_id], module_id, module_ref, str(pargs))
 
     return steps[module_id]
     
@@ -106,9 +116,9 @@ def write_pipe(pipe):
               """\n"""
               """from pipe2py.modules import *\n"""
               """\n"""
-              """def %s():\n"""
+              """def %(pipename)s():\n"""
               """    #demo\n"""
-              """\n""" % (pipe['name'])
+              """\n""" % {'pipename':pipe['name']}
              )
 
     module_sequence = topological_sort(pipe['graph'])
@@ -144,9 +154,9 @@ def write_pipe(pipe):
     pypipe += """    return _OUTPUT\n"""
     pypipe += ("""\n"""
                """if __name__ == "__main__":\n"""
-               """    p = pipe_%s()\n"""
+               """    p = %(pipename)s()\n"""
                """    for i in p:\n"""
-               """        print i\n""" % (pipe['name'])
+               """        print i\n""" % {'pipename':pipe['name']}
               )
         
     return pypipe
@@ -156,9 +166,9 @@ def parse_and_write_pipe(json_pipe, pipe_name="anonymous"):
     pw = write_pipe(pipe)
     return pw
 
-def parse_and_build_pipe(json_pipe):
+def parse_and_build_pipe(json_pipe, verbose=False):
     pipe = _parse_pipe(json_pipe, "anonymous")
-    pb = build_pipe(pipe)   
+    pb = build_pipe(pipe, verbose)   
     return pb
 
 if __name__ == '__main__':  
@@ -169,6 +179,8 @@ if __name__ == '__main__':
                       help="read pipe JSON from FILE", metavar="FILE")    
     parser.add_option("-p", "--pipe", dest="pipeid",
                       help="read pipe JSON from Yahoo", metavar="PIPEID")   
+    parser.add_option("-v", dest="verbose",
+                      help="set verbose debug", action="store_true")    
     (options, args) = parser.parse_args()
     
     name = "anonymous"
