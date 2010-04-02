@@ -9,7 +9,7 @@
      b) compile it as a pipeline of generators which can be executed in-process
      
    Usage:
-     a) python compile.py -f pipe1.json > pipe1.py
+     a) python compile.py -f pipe1.json
         python pipe1.py
         
      b) import compile
