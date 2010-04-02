@@ -3,6 +3,7 @@
 
 __all__ = ['pipefetch',
            'pipedatebuilder',
+           'pipetextinput',
 
            'pipefilter',
            
