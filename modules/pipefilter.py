@@ -11,7 +11,7 @@ COMBINE_BOOLEAN = {"and": all, "or": any}
 FIELD_MAP = {'pubDate': 'date_parsed',
              }
 
-def pipe_filter(_INPUT, conf, **kwargs):
+def pipe_filter(_INPUT, conf, verbose=False, **kwargs):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules. 
 
     Keyword arguments:
@@ -43,7 +43,7 @@ def pipe_filter(_INPUT, conf, **kwargs):
 
         if (res and mode == "permit") or (not res and mode == "block"):
             yield item
-
+            
 #todo precompile these into lambdas for speed
 def _rulepass(rule, item):
     field, op, value = rule

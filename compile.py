@@ -84,8 +84,9 @@ def build_pipe(pipe, verbose=False):
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
         
-        pargs = ["%(input_module)s" % {'input_module':input_module}, 
-                 "conf=%(conf)s" % {'conf':module['conf']}]
+        pargs = [input_module]
+        kargs = {"conf":module['conf'],
+                 "verbose":verbose}
             
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
@@ -100,7 +101,7 @@ def build_pipe(pipe, verbose=False):
                 
         module_ref = eval("%(pymodule_name)s.%(pymodule_generator_name)s" % {'pymodule_name':pymodule_name, 
                                                                              'pymodule_generator_name':pymodule_generator_name,})
-        steps[module_id] = module_ref(*pargs)
+        steps[module_id] = module_ref(*pargs, **kargs)
 
         if verbose:
             print "%s (%s) = %s(%s)" %(steps[module_id], module_id, module_ref, str(pargs))
@@ -108,7 +109,7 @@ def build_pipe(pipe, verbose=False):
     return steps[module_id]
     
     
-def write_pipe(pipe):
+def write_pipe(pipe, verbose=False):
     """Convert a pipe into Python script
     """
     
@@ -133,7 +134,8 @@ def write_pipe(pipe):
                 input_module = util.pythonise(pipe['wires'][wire]['src']['moduleid'])
         
         pargs = ["%(input_module)s" % {'input_module':input_module}, 
-                 "conf=%(conf)s" % {'conf':module['conf']}]
+                 "conf=%(conf)s" % {'conf':module['conf']},
+                 "verbose=%(verbose)s" % {'verbose':verbose}]
         
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
@@ -161,9 +163,9 @@ def write_pipe(pipe):
         
     return pypipe
 
-def parse_and_write_pipe(json_pipe, pipe_name="anonymous"):
+def parse_and_write_pipe(json_pipe, pipe_name="anonymous", verbose=False):
     pipe = _parse_pipe(json_pipe, pipe_name)
-    pw = write_pipe(pipe)
+    pw = write_pipe(pipe, verbose)
     return pw
 
 def parse_and_build_pipe(json_pipe, verbose=False):

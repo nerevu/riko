@@ -1,7 +1,7 @@
 # pipeoutput.py
 #
 
-def pipe_output(_INPUT, conf=None, **kwargs):
+def pipe_output(_INPUT, conf=None, verbose=False, **kwargs):
     """This operator outputs the input source, i.e. does nothing.
 
     Keyword arguments:
@@ -11,6 +11,7 @@ def pipe_output(_INPUT, conf=None, **kwargs):
     source items
     """   
     for item in _INPUT:
+        #todo convert back to XML or JSON
         yield item
 
 # Example use

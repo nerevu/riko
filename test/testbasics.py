@@ -9,8 +9,8 @@ try:
     import json
 except ImportError:
     import simplejson as json
-
-
+    
+    
 class TestBasics(unittest.TestCase):
 
     def setUp(self):
@@ -38,7 +38,6 @@ class TestBasics(unittest.TestCase):
         p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
         
         count = 0
-        self.assertTrue(count > 0)
         for i in p:
             count += 1
             self.assertTrue("the" in i.get('description'))
