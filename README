@@ -59,11 +59,23 @@ and executes it within the current process.
 
 1. Compiling a pipeline to a Python script
 ------------------------------------------
+Both of the following will create a python file named after the input argument 
+with a .py extension. This can then be run directly or imported into other
+pipelines:
+
   * python compile.py -p pipelineid
   
   or
   
   * python compile.py -f pipelinefile
+  
+Subpiplines are expected to be contained in python files named pipe_PIPEID.py,
+where PIPEID is the Yahoo ID for the pipeline, e.g.
+  pipe_2de0e4517ed76082dcddf66f7b218057.py
+So if you do use the -f option you should store your pipeline definitions in 
+files named the same way, e.g.
+  pipe_2de0e4517ed76082dcddf66f7b218057.json
+then compile.py will output files with the expected naming convention.
   
 2. Interpreting a pipeline and executing in-process
 ---------------------------------------------------
