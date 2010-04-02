@@ -47,7 +47,7 @@ class TestBasics(unittest.TestCase):
     def test_simplest(self):
         """Loads the RTW simple test pipeline and compiles and executes it to check the results
         """
-        pipe_def = self._get_pipe_def("testpipe_simplest.json")
+        pipe_def = self._get_pipe_def("pipe_2de0e4517ed76082dcddf66f7b218057.json")
         p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
         
         count = 0
@@ -59,7 +59,7 @@ class TestBasics(unittest.TestCase):
     def test_simpletagger(self):
         """Loads the RTW simple tagger pipeline and compiles and executes it to check the results
         """
-        pipe_def = self._get_pipe_def("testpipe_simpletagger.json")
+        pipe_def = self._get_pipe_def("pipe_93abb8500bd41d56a37e8885094c8d10.json")
         p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
         
         count = 0
