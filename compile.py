@@ -205,6 +205,8 @@ if __name__ == '__main__':
                       help="read pipe JSON from FILE", metavar="FILE")    
     parser.add_option("-p", "--pipe", dest="pipeid",
                       help="read pipe JSON from Yahoo", metavar="PIPEID")   
+    parser.add_option("-s", dest="savejson",
+                      help="save pipe JSON to file", action="store_true")    
     parser.add_option("-v", dest="verbose",
                       help="set verbose debug", action="store_true")    
     (options, args) = parser.parse_args()
@@ -219,6 +221,10 @@ if __name__ == '__main__':
         pjson = urllib.urlopen(url).readlines()
         pjson = "".join(pjson)
         pipe_def = json.loads(pjson)
+        if not pipe_def['query']['results']:
+            print "Pipe not found"
+            sys.exit(1)
+        pjson = json.dumps(pipe_def['query']['results']['json']['PIPE']['working'])
         pipe_def = pipe_def['query']['results']['json']['PIPE']['working']
         name = "pipe_%s" % options.pipeid
     elif options.filename:
@@ -232,8 +238,13 @@ if __name__ == '__main__':
             pjson.append(line)    
         pjson = "".join(pjson)
         pipe_def = json.loads(pjson)
+        
+    if options.savejson:
+        fj = open("%s.json" % name, "w")   #todo confirm file overwrite
+        print >>fj, pjson
+        
     
-    f = open("%s.py" % name, "w")   #todo confirm file overwrite
-    print >>f, parse_and_write_pipe(pipe_def, name)
+    fp = open("%s.py" % name, "w")   #todo confirm file overwrite
+    print >>fp, parse_and_write_pipe(pipe_def, name)
     
     #for build example - see test/testbasics.py
