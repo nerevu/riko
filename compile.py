@@ -28,6 +28,7 @@ from optparse import OptionParser
 import fileinput
 import urllib
 import os
+import sys
 
 from pipe2py import util
 
@@ -76,8 +77,17 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
 
 def build_pipe(pipe, verbose=False):
     """Convert a pipe into an executable Python pipeline
+    
+       Note: any subpipes must be available to import as .py files
     """
     module_sequence = topological_sort(pipe['graph'])
+
+    #First pass to find and import any required subpipelines
+    #Note: assumes they have already been compiled to accessible .py files
+    for module_id in module_sequence:
+        module = pipe['modules'][module_id]
+        if module['type'].startswith('pipe:'):
+            __import__(util.pythonise(module['type']))
     
     steps = {}
     for module_id in module_sequence:
@@ -101,7 +111,7 @@ def build_pipe(pipe, verbose=False):
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
         pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
         if module['type'].startswith('pipe:'):
-            pymodule_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}
+            pymodule_name = "sys.modules['%(module_type)s']" % {'module_type':util.pythonise(module['type'])}
             pymodule_generator_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}            
                 
         module_ref = eval("%(pymodule_name)s.%(pymodule_generator_name)s" % {'pymodule_name':pymodule_name, 
@@ -111,8 +121,6 @@ def build_pipe(pipe, verbose=False):
         if verbose:
             print "%s (%s) = %s(%s)" %(steps[module_id], module_id, module_ref, str(pargs))
 
-    #todo needs some thought about namespace for this steps[] pipeline and how it can refer to other pipelines: 
-    # perhaps by dynamic import, i.e. insist any subpipes have been compiled to .py files
     return steps[module_id]
     
     
