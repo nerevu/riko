@@ -105,7 +105,7 @@ def build_pipe(pipe, verbose=False):
             
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
-                pargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = "%(secondary_module)s" % {'secondary_module':steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]}
+                kargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = "%(secondary_module)s" % {'secondary_module':steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]}
                 
         #todo (re)import other pipes dynamically
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
