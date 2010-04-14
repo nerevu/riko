@@ -10,7 +10,7 @@ def pythonise(id):
         if id[0] in string.digits:
             id = "_" + id
         
-        return id
+        return id.encode('ascii')
 
 def get_value(item, kwargs):
     """Return either a literal value or a value via a terminal"""
