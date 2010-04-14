@@ -55,18 +55,23 @@ class TestBasics(unittest.TestCase):
             count += 1
             
         self.assertTrue(count > 0)
+
+    #Note: this test will be skipped for now
+    # - it requires a TermExtractor module which isn't top of the list
+    #   and it needs a neat way for tests to auto-compile/load subpipes
+    #def test_simpletagger(self):
+        #"""Loads the RTW simple tagger pipeline and compiles and executes it to check the results
+        #"""
+        ##Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
+        ##      so this must be compiled into a module before this pipe will work
+        #pipe_def = self._get_pipe_def("pipe_93abb8500bd41d56a37e8885094c8d10.json")
+        #p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
         
-    def test_simpletagger(self):
-        """Loads the RTW simple tagger pipeline and compiles and executes it to check the results
-        """
-        pipe_def = self._get_pipe_def("pipe_93abb8500bd41d56a37e8885094c8d10.json")
-        p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
-        
-        count = 0
-        for i in p:
-            count += 1
+        #count = 0
+        #for i in p:
+            #count += 1
             
-        self.assertTrue(count > 0)
+        #self.assertTrue(count > 0)
         
         
     #todo test malformed pipeline syntax too
