@@ -224,8 +224,8 @@ if __name__ == '__main__':
         if not pipe_def['query']['results']:
             print "Pipe not found"
             sys.exit(1)
-        pjson = json.dumps(pipe_def['query']['results']['json']['PIPE']['working'])
-        pipe_def = pipe_def['query']['results']['json']['PIPE']['working']
+        pjson = pipe_def['query']['results']['json']['PIPE']['working'] #todo note: I'm sure this needed wrapping in json.dumps() before
+        pipe_def = json.loads(pjson)
         name = "pipe_%s" % options.pipeid
     elif options.filename:
         for line in fileinput.input(options.filename):

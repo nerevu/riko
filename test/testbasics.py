@@ -73,6 +73,21 @@ class TestBasics(unittest.TestCase):
             
         #self.assertTrue(count > 0)
         
+    #Note: this test will be skipped for now
+    # - it needs a neat way for tests to skip user interaction prompts
+    #def test_urlbuilder(self):
+        #"""Loads the RTW URL Builder test pipeline and compiles and executes it to check the results
+        #"""
+        #pipe_def = self._get_pipe_def("pipe_e519dd393f943315f7e4128d19db2eac.json")
+        #p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
+        
+        #count = 0
+        #for i in p:
+            #count += 1
+            
+        #self.assertTrue(count > 0)
+        
+        
         
     #todo test malformed pipeline syntax too
 
