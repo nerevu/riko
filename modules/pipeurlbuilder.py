@@ -27,9 +27,9 @@ def pipe_urlbuilder(_INPUT, conf, verbose=False, **kwargs):
     
     url += "/".join(path)
     
-    params = dict([(util.get_value(p['key'], kwargs), util.get_value(p['value'], kwargs)) for p in conf['PARAM']]) #todo use subkey?
-    
-    url += "?" + urllib.urlencode(params)
+    params = dict([(util.get_value(p['key'], kwargs), util.get_value(p['value'], kwargs)) for p in conf['PARAM']]) #todo use subkey?   
+    if params:
+        url += "?" + urllib.urlencode(params)
     
     while True:
         yield url
