@@ -7,6 +7,7 @@ __all__ = ['pipefetch',
            'pipetextinput',
 
            'pipefilter',
+           'pipeunion',
            
            'pipeoutput',
           ]

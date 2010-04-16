@@ -73,6 +73,9 @@ class TestBasics(unittest.TestCase):
             
         #self.assertTrue(count > 0)
         
+    #todo test pipe_c1cfa58f96243cea6ff50a12fc50c984 (but again needs subpipe to be pre-compiled)
+    #- perhaps we should just pre-compile pipe_2de0e4517ed76082dcddf66f7b218057 in test setup?
+        
     #Note: this test will be skipped for now
     # - it needs a neat way for tests to skip user interaction prompts
     #def test_urlbuilder(self):
