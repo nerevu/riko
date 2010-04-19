@@ -2,6 +2,7 @@
 #Author: Greg Gaughan
 
 __all__ = ['pipefetch',
+           'pipefetchdata',
            'pipedatebuilder',
            'pipeurlbuilder',
            'pipetextinput',

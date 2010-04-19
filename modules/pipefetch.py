@@ -24,7 +24,7 @@ def pipe_fetch(_INPUT, conf, verbose=False, **kwargs):
         value = util.get_value(item, kwargs)
         
         if verbose:
-            print "pipefetch loading:", value
+            print "pipe_fetch loading:", value
         d = feedparser.parse(value)
         
         for entry in d['entries']:
