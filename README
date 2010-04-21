@@ -1,5 +1,5 @@
-This is a proof-of-concept and so far can handle very basic 
-fetch/filter/output pipelines.
+This is a proof-of-concept and so far can handle pipelines using a limited 
+number of modules.
 
 Design
 ------
