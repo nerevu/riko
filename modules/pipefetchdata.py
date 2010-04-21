@@ -20,13 +20,13 @@ def pipe_fetchdata(_INPUT, conf, verbose=False, **kwargs):
     _INPUT -- not used
     conf:
         URL -- url
-        PATH -- path to list
+        path -- path to list
     
     Yields (_OUTPUT):
     elements
     """
     url = util.get_value(conf['URL'], kwargs) #todo use subkey?
-    path = util.get_value(conf['PATH'], kwargs) #todo use subkey?
+    path = util.get_value(conf['path'], kwargs) #todo use subkey?
     match = None
     
     f = urllib2.urlopen(url)
@@ -43,6 +43,8 @@ def pipe_fetchdata(_INPUT, conf, verbose=False, **kwargs):
             namespace = root.tag[1:].split("}")[0]
             for i in path.split(".")[:-1]:
                 root = root.find("{%s}%s" % (namespace, i))
+                if root is None:
+                    return
             match = "{%s}%s" % (namespace, path.split(".")[-1])
         #Convert xml into generation of dicts
         for element in root.findall(match):
