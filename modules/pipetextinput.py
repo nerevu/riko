@@ -11,7 +11,7 @@ def pipe_textinput(_INPUT, conf, verbose=False, **kwargs):
         prompt -- prompt
     
     Yields (_OUTPUT):
-    date
+    text
     """
     default = conf['default']['value']   
     prompt = conf['prompt']['value']
