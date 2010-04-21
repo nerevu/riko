@@ -6,6 +6,7 @@ __all__ = ['pipefetch',
            'pipedatebuilder',
            'pipeurlbuilder',
            'pipetextinput',
+           'pipeurlinput',
 
            'pipefilter',
            'pipeunion',
