@@ -12,6 +12,7 @@ __all__ = ['pipefetch',
 
            'pipefilter',
            'piperename',
+           'piperegex',
            'pipeunion',
            
            'pipeoutput',
