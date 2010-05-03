@@ -11,7 +11,7 @@ def pipe_rename(_INPUT, conf, verbose=False, **kwargs):
     _INPUT -- source generator
     kwargs -- other inputs, e.g. to feed terminals for rule values
     conf:
-        RULE -- rules - each rule comprising (field, op, newval)
+        RULE -- rules - each rule comprising (op, field, newval)
     
     Yields (_OUTPUT):
     source items after copying/renaming
