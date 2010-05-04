@@ -4,10 +4,11 @@
 import urllib
 from pipe2py import util
 
-def pipe_urlbuilder(_INPUT, conf, verbose=False, **kwargs):
+def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
     """This source builds a url and yields it forever.
     
     Keyword arguments:
+    context -- pipeline context
     _INPUT -- not used
     conf:
         BASE -- base

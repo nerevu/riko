@@ -11,10 +11,11 @@ COMBINE_BOOLEAN = {"and": all, "or": any}
 FIELD_MAP = {'pubDate': 'date_parsed',
              }
 
-def pipe_filter(_INPUT, conf, verbose=False, **kwargs):
+def pipe_filter(context, _INPUT, conf, **kwargs):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules. 
 
     Keyword arguments:
+    context -- pipeline context        
     _INPUT -- source generator
     kwargs -- other inputs, e.g. to feed terminals for rule values
     conf:
@@ -85,8 +86,3 @@ def _rulepass(rule, item):
         
     return False
 
-# Example use
-if __name__ == '__main__':
-    items = pipe_filter([{"title":"one"}, {"title":"By two"}, {"title":"three"}], conf={"MODE":{"value":"permit"}, "COMBINE":{"value":"and"}, "RULE":[{"field":{"value":"title"},"op":{"value":"contains"},"value":{"value":"By"}}]})
-    for item in items:
-        print item

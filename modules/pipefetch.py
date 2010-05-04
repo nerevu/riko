@@ -4,10 +4,11 @@
 import feedparser
 from pipe2py import util
 
-def pipe_fetch(_INPUT, conf, verbose=False, **kwargs):
+def pipe_fetch(context, _INPUT, conf, **kwargs):
     """This source fetches and parses one or more feeds to yield the feed entries.
     
     Keyword arguments:
+    context -- pipeline context       
     _INPUT -- not used
     conf:
         URL -- url
@@ -23,16 +24,10 @@ def pipe_fetch(_INPUT, conf, verbose=False, **kwargs):
     for item in url:
         value = util.get_value(item, kwargs)
         
-        if verbose:
+        if context.verbose:
             print "pipe_fetch loading:", value
         d = feedparser.parse(value)
         
         for entry in d['entries']:
             yield entry
 
-# Example use
-if __name__ == '__main__':
-    feeds = pipe_fetch(None, conf={"URL":[{"value":"../test/feed.xml"}]})
-    for f in feeds:
-        print f
-        print f.keys()

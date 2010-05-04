@@ -3,10 +3,11 @@
 
 from pipe2py import util
 
-def pipe_union(_INPUT, conf, verbose=False, **kwargs):
+def pipe_union(context, _INPUT, conf, **kwargs):
     """This operator merges up to 5 source together.
 
     Keyword arguments:
+    context -- pipeline context
     _INPUT -- source generator
     kwargs -- _OTHER1 - another source generator
               _OTHER2 etc.
@@ -28,8 +29,3 @@ def pipe_union(_INPUT, conf, verbose=False, **kwargs):
         if other.startswith('_OTHER'):
             for item in kwargs[other]:
                 yield item
-           
-            
-# Example use
-if __name__ == '__main__':
-    pass #todo

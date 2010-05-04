@@ -4,10 +4,11 @@
 from pipe2py import util
 
 
-def pipe_rename(_INPUT, conf, verbose=False, **kwargs):
+def pipe_rename(context, _INPUT, conf, **kwargs):
     """This operator renames or copies fields in the input source. 
 
     Keyword arguments:
+    context -- pipeline context
     _INPUT -- source generator
     kwargs -- other inputs, e.g. to feed terminals for rule values
     conf:
@@ -31,9 +32,3 @@ def pipe_rename(_INPUT, conf, verbose=False, **kwargs):
                 del item[rule[1]]
         yield item
             
-
-# Example use
-if __name__ == '__main__':
-    items = pipe_rename([{"title":"one"}, {"title":"By two"}, {"title":"three"}], conf={"RULE":[{"field":{"value":"title"},"op":{"value":"copy"},"newval":{"value":"content"}}]})
-    for item in items:
-        print item

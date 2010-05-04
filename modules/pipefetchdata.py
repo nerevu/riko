@@ -13,10 +13,11 @@ except ImportError:
 
 from pipe2py import util
 
-def pipe_fetchdata(_INPUT, conf, verbose=False, **kwargs):
+def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
     """This source fetches and parses any XML or JSON file (todo iCal or KML) to yield a list of elements.
     
     Keyword arguments:
+    context -- pipeline context
     _INPUT -- not used
     conf:
         URL -- url
@@ -34,7 +35,7 @@ def pipe_fetchdata(_INPUT, conf, verbose=False, **kwargs):
     #Parse the file into a dictionary
     try:
         ft = ElementTree.parse(f)
-        if verbose:
+        if context.verbose:
             print "pipe_fetchdata loading xml:", url
         root = ft.getroot()
         #Move to the point referenced by the path
@@ -56,7 +57,7 @@ def pipe_fetchdata(_INPUT, conf, verbose=False, **kwargs):
         try:
             d = json.load(f)
             #todo test:-
-            if verbose:
+            if context.verbose:
                 print "pipe_fetchdata loading json:", url
             if path:
                 for i in path.split(".")[:-1]:
@@ -70,11 +71,3 @@ def pipe_fetchdata(_INPUT, conf, verbose=False, **kwargs):
             #todo try KML and yield
             raise
     
-
-# Example use
-if __name__ == '__main__':
-    #data = pipe_fetchdata(None, conf={"URL":{"value":"file://../test/feed.xml"}, "PATH":[]})
-    data = pipe_fetchdata(None, conf={"URL":{"value":"http://www.rsc-ne-scotland.org.uk/mashe/ititle/xml/jisc10bean.xml"}, "PATH":{"value":"body.div.p"}})
-    
-    for f in data:
-        print f

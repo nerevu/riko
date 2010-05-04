@@ -80,10 +80,12 @@ then compile.py will output files with the expected naming convention.
 2. Interpreting a pipeline and executing in-process
 ---------------------------------------------------
 from pipe2py.compile import parse_and_build_pipe
+from pipe2py import Context
 
+context = Context()
 pipe_def = """json representation of the pipe"""
 
-p = parse_and_build_pipe(pipe_def)
+p = parse_and_build_pipe(context, pipe_def)
 
 for i in p:
     print i

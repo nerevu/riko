@@ -5,10 +5,11 @@ import re
 from pipe2py import util
 
 
-def pipe_regex(_INPUT, conf, verbose=False, **kwargs):
+def pipe_regex(context, _INPUT, conf, **kwargs):
     """This operator replaces values using regexes. 
 
     Keyword arguments:
+    context -- pipeline context
     _INPUT -- source generator
     kwargs -- other inputs, e.g. to feed terminals for rule values
     conf:
@@ -35,9 +36,3 @@ def pipe_regex(_INPUT, conf, verbose=False, **kwargs):
             
         yield item
 
-
-# Example use
-if __name__ == '__main__':
-    items = pipe_rename([{"title":"one"}, {"title":"By two"}, {"title":"three"}], conf={"RULE":[{"field":{"value":"title"},"match":{"value":"(.*)"},"replace":{"value":"test=$1"}}]})
-    for item in items:
-        print item

@@ -1,10 +1,11 @@
 # pipeurlinput.py
 #
 
-def pipe_urlinput(_INPUT, conf, verbose=False, **kwargs):
+def pipe_urlinput(context, _INPUT, conf, **kwargs):
     """This source prompts the user for a url and yields it forever.
     
     Keyword arguments:
+    context -- pipeline context
     _INPUT -- not used
     conf:
         default -- default

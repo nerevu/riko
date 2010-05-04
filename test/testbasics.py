@@ -2,6 +2,7 @@
 
 import unittest
 
+from pipe2py import Context
 import pipe2py.compile
 
 import fileinput
@@ -15,10 +16,11 @@ class TestBasics(unittest.TestCase):
 
     def setUp(self):
         """Compile common subpipe"""
+        self.context = Context(test=True)
         name = "pipe_2de0e4517ed76082dcddf66f7b218057"
         pipe_def = self._get_pipe_def("%s.json" % name)
         fp = open("%s.py" % name, "w")   #todo confirm file overwrite
-        print >>fp, pipe2py.compile.parse_and_write_pipe(pipe_def, pipe_name=name, verbose=True)
+        print >>fp, pipe2py.compile.parse_and_write_pipe(self.context, pipe_def, pipe_name=name)
     
     def tearDown(self):
         #todo remove pipe_2de0e4517ed76082dcddf66f7b218057.py
@@ -40,7 +42,7 @@ class TestBasics(unittest.TestCase):
            TODO: have these tests iterate over a number of test pipelines
         """
         pipe_def = self._get_pipe_def("testpipe1.json")
-        p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
         count = 0
         for i in p:
@@ -53,7 +55,7 @@ class TestBasics(unittest.TestCase):
         """Loads the RTW simple test pipeline and compiles and executes it to check the results
         """
         pipe_def = self._get_pipe_def("pipe_2de0e4517ed76082dcddf66f7b218057.json")
-        p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
         count = 0
         for i in p:
@@ -68,7 +70,7 @@ class TestBasics(unittest.TestCase):
         #"""Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057 (assumes its been compiled to a .py file - see test setUp)
         #"""
         #pipe_def = self._get_pipe_def("pipe_93abb8500bd41d56a37e8885094c8d10.json")
-        #p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
+        #p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
         ##todo: check the data!
         #count = 0
@@ -82,7 +84,7 @@ class TestBasics(unittest.TestCase):
            Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057 (assumes its been compiled to a .py file - see test setUp)
         """
         pipe_def = self._get_pipe_def("pipe_c1cfa58f96243cea6ff50a12fc50c984.json")
-        p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
         #todo: check the data!
         count = 0
@@ -97,7 +99,7 @@ class TestBasics(unittest.TestCase):
         #"""Loads the RTW URL Builder test pipeline and compiles and executes it to check the results
         #"""
         #pipe_def = self._get_pipe_def("pipe_e519dd393f943315f7e4128d19db2eac.json")
-        #p = pipe2py.compile.parse_and_build_pipe(pipe_def, verbose=True)
+        #p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
         ##todo: check the data!
         #count = 0
