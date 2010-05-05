@@ -9,7 +9,7 @@
      b) compile it as a pipeline of generators which can be executed in-process
      
    Usage:
-     a) python compile.py -f pipe1.json
+     a) python compile.py pipe1.json
         python pipe1.py
         
      b) from pipe2py import compile
@@ -19,7 +19,8 @@
         for i in p:
             print i
             
-   Instead of passing a filename (-f) a pipe id can be passed (-p) to fetch the JSON from Yahoo.
+   Instead of passing a filename, a pipe id can be passed (-p) to fetch the JSON from Yahoo, e.g.
+       python compile.py -p 2de0e4517ed76082dcddf66f7b218057
      
    Author: Greg Gaughan
    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
@@ -214,9 +215,8 @@ if __name__ == '__main__':
     
     pjson = []
     
-    parser = OptionParser()
-    parser.add_option("-f", "--file", dest="filename",
-                      help="read pipe JSON from FILE", metavar="FILE")    
+    usage = "usage: %prog [options] [filename]"
+    parser = OptionParser(usage=usage)
     parser.add_option("-p", "--pipe", dest="pipeid",
                       help="read pipe JSON from Yahoo", metavar="PIPEID")   
     parser.add_option("-s", dest="savejson",
@@ -226,6 +226,9 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
     
     name = "anonymous"
+    filename = None
+    if len(args):
+        filename = args[0]
     context.verbose = options.verbose
     if options.pipeid:
         url = ("""http://query.yahooapis.com/v1/public/yql"""
@@ -242,12 +245,12 @@ if __name__ == '__main__':
         pjson = pipe_def['query']['results']['json']['PIPE']['working'] #todo note: I'm sure this needed wrapping in json.dumps() before
         pipe_def = json.loads(pjson)
         name = "pipe_%s" % options.pipeid
-    elif options.filename:
-        for line in fileinput.input(options.filename):
+    elif filename:
+        for line in fileinput.input(filename):
             pjson.append(line)    
         pjson = "".join(pjson)
         pipe_def = json.loads(pjson)
-        name = os.path.splitext(os.path.split(options.filename)[-1])[0]
+        name = os.path.splitext(os.path.split(filename)[-1])[0]
     else:
         for line in fileinput.input():
             pjson.append(line)    
