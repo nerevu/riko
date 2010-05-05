@@ -61,15 +61,22 @@ if __name__ == '__main__':
         ojson = "".join(ojson)
         pipe_output = json.loads(ojson)
         if not pipe_output['count']:
-            print "Pipe results found"
+            print "Pipe results not found"
             sys.exit(1)
         ojson = pipe_output
-        pipe_output = json.loads(ojson)
         
         fjo = open(os.path.join("pipelines", "%s_output.json" % name), "w")   #todo confirm file overwrite
-        print >>fj, ojson
+        print >>fjo, ojson
+        
+        #todo: to create stable, repeatable test cases we should:
+        #  build the pipeline to find the external data sources
+        #  download and save any fetchdata/fetch source data
+        #  replace the fetchdata/fetch references with the local copy
+        #    (so would need to save the pipeline python but that would make it hard to test changes, so
+        #     we could declare a list of live->local-test file mappings and pass them in with the test context)
+        #  (also needs to handle any subpipelines and their external sources)
 
-    #todo optional:
-    #fp = open(os.path.join("pipelines", "%s.py" % name), "w")   #todo confirm file overwrite
-    #print >>fp, parse_and_write_pipe(context, pipe_def, name)
+        #todo optional:
+        #fp = open(os.path.join("pipelines", "%s.py" % name), "w")   #todo confirm file overwrite
+        #print >>fp, parse_and_write_pipe(context, pipe_def, name)
     
