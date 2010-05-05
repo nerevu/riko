@@ -17,7 +17,10 @@ def pipe_urlinput(context, _INPUT, conf, **kwargs):
     default = conf['default']['value']   
     prompt = conf['prompt']['value']
     
-    value = raw_input(prompt + (" (default=%s) " % default))
+    if context.test:
+        value = ""  #we skip user interaction during tests
+    else:
+        value = raw_input(prompt + (" (default=%s) " % default))
     if value == "":
         value = default
         
