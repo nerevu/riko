@@ -114,6 +114,18 @@ class TestBasics(unittest.TestCase):
             
         #self.assertTrue(count > 0)
         
+    def test_twitter_caption_search(self):
+        """Loads the Twitter Caption Search pipeline and compiles and executes it to check the results
+        """
+        pipe_def = self._get_pipe_def("pipe_eb3e27f8f1841835fdfd279cd96ff9d8.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        #todo: check the data!
+        count = 0
+        for i in p:
+            count += 1
+            
+        self.assertTrue(count > 0)
         
         
     #todo test malformed pipeline syntax too
