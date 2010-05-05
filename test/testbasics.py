@@ -5,6 +5,7 @@ import unittest
 from pipe2py import Context
 import pipe2py.compile
 
+import os.path
 import fileinput
 try:
     import json
@@ -13,7 +14,14 @@ except ImportError:
     
     
 class TestBasics(unittest.TestCase):
-
+    """Test a few sample pipelines
+    
+       Note: asserting post-conditions for these is almost impossible because
+             many use live sources.
+             
+             See createtest.py for an attempt at creating a stable test-suite.
+    """
+    
     def setUp(self):
         """Compile common subpipe"""
         self.context = Context(test=True)
@@ -23,8 +31,8 @@ class TestBasics(unittest.TestCase):
         print >>fp, pipe2py.compile.parse_and_write_pipe(self.context, pipe_def, pipe_name=name)
     
     def tearDown(self):
-        #todo remove pipe_2de0e4517ed76082dcddf66f7b218057.py
-        pass
+        name = "pipe_2de0e4517ed76082dcddf66f7b218057"
+        os.remove("%s.py" % name)
     
     def _get_pipe_def(self, filename):
         pjson = []
@@ -93,18 +101,16 @@ class TestBasics(unittest.TestCase):
             
         self.assertTrue(count > 0)
         
-    #Note: this test will be skipped for now
-    # - it needs a neat way for tests to skip user interaction prompts
-    #def test_urlbuilder(self):
-        #"""Loads the RTW URL Builder test pipeline and compiles and executes it to check the results
-        #"""
-        #pipe_def = self._get_pipe_def("pipe_e519dd393f943315f7e4128d19db2eac.json")
-        #p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+    def test_urlbuilder(self):
+        """Loads the RTW URL Builder test pipeline and compiles and executes it to check the results
+        """
+        pipe_def = self._get_pipe_def("pipe_e519dd393f943315f7e4128d19db2eac.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
-        ##todo: check the data!
-        #count = 0
-        #for i in p:
-            #count += 1
+        #todo: check the data!
+        count = 0
+        for i in p:
+            count += 1
             
         #self.assertTrue(count > 0)
         
