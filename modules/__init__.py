@@ -9,11 +9,13 @@ __all__ = ['pipefetch',
            'pipeurlbuilder',
            'pipetextinput',
            'pipeurlinput',
+           'pipestrconcat',
 
            'pipefilter',
            'piperename',
            'piperegex',
            'pipeunion',
+           'pipeloop',
            
            'pipeoutput',
           ]

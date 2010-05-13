@@ -49,8 +49,14 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
             match = "{%s}%s" % (namespace, path.split(".")[-1])
         #Convert xml into generation of dicts
         for element in root.findall(match):
-            i = dict(element.items())
-            i['content'] = element.text
+            if element.getchildren():
+                i = {}
+                for c in element.getchildren():
+                    tag = c.tag.split('}', 1)[-1]
+                    i[tag] = c.text
+            else:
+                i = dict(element.items())
+                i['content'] = element.text
             yield i
             
     except Exception, e:

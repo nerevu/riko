@@ -70,6 +70,12 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     for module in json_pipe['modules']:
         pipe['modules'][util.pythonise(module['id'])] = module
         pipe['graph'][util.pythonise(module['id'])] = []
+        if module['type'] == 'loop':
+            embed = module['conf']['embed']['value']
+            pipe['modules'][util.pythonise(embed['id'])] = embed
+            pipe['graph'][util.pythonise(embed['id'])] = []
+            #make the loop dependent on it's embedded module
+            pipe['graph'][util.pythonise(embed['id'])].append(util.pythonise(module['id']))
 
     for wire in json_pipe['wires']:
         pipe['graph'][util.pythonise(wire['src']['moduleid'])].append(util.pythonise(wire['tgt']['moduleid']))
@@ -112,6 +118,10 @@ def build_pipe(context, pipe):
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 kargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
+                
+        if module['type'] == 'loop':
+            #todo need to hook up any inputs here
+            kargs["embed"] = steps[util.pythonise(module['conf']['embed']['value']['id'])]
                 
         #todo (re)import other pipes dynamically
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
@@ -173,6 +183,10 @@ def write_pipe(context, pipe):
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 pargs.append("%(id)s = %(secondary_module)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id']), 'secondary_module':util.pythonise(pipe['wires'][wire]['src']['moduleid'])})
+                
+        if module['type'] == 'loop':
+            #todo need to hook up any inputs here
+            pargs.append("embed = %(embed_module)s" % {'embed_module':util.pythonise(module['conf']['embed']['value']['id'])})
         
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
         pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
