@@ -5,11 +5,13 @@
 
 __all__ = ['pipefetch',
            'pipefetchdata',
+           
            'pipedatebuilder',
            'pipeurlbuilder',
            'pipetextinput',
            'pipeurlinput',
            'pipestrconcat',
+           'pipestrregex',
 
            'pipefilter',
            'piperename',

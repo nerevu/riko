@@ -65,6 +65,7 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     pipe = {'name': util.pythonise(pipe_name)}
     
     pipe['modules'] = {}
+    pipe['embed'] = {}
     pipe['graph'] = {}
     pipe['wires'] = {}
     for module in json_pipe['modules']:
@@ -74,7 +75,8 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
             embed = module['conf']['embed']['value']
             pipe['modules'][util.pythonise(embed['id'])] = embed
             pipe['graph'][util.pythonise(embed['id'])] = []
-            #make the loop dependent on it's embedded module
+            pipe['embed'][util.pythonise(embed['id'])] = embed
+            #make the loop dependent on its embedded module
             pipe['graph'][util.pythonise(embed['id'])].append(util.pythonise(module['id']))
 
     for wire in json_pipe['wires']:
@@ -175,6 +177,10 @@ def write_pipe(context, pipe):
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 input_module = util.pythonise(pipe['wires'][wire]['src']['moduleid'])
+
+        if module_id in pipe['embed']:
+            assert input_module is None, "input_module of an embedded module was already set"
+            input_module = "_INPUT"
         
         pargs = ["%(input_module)s" % {'input_module':input_module}, 
                  "conf=%(conf)s" % {'conf':module['conf']},
@@ -186,18 +192,33 @@ def write_pipe(context, pipe):
                 
         if module['type'] == 'loop':
             #todo need to hook up any inputs here
-            pargs.append("embed = %(embed_module)s" % {'embed_module':util.pythonise(module['conf']['embed']['value']['id'])})
+            pargs.append("embed = pipe_%(embed_module)s" % {'embed_module':util.pythonise(module['conf']['embed']['value']['id'])})
         
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
         pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
         if module['type'].startswith('pipe:'):
             pymodule_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}
             pymodule_generator_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}            
-                
-        pypipe += """    %(module_id)s = %(pymodule_name)s.%(pymodule_generator_name)s(context, %(pargs)s)\n""" % {'module_id':module_id, 
-                                                                                                          'pymodule_name':pymodule_name, 
-                                                                                                          'pymodule_generator_name':pymodule_generator_name, 
-                                                                                                          'pargs':", ".join(pargs)}
+
+        indent = ""
+        if module_id in pipe['embed']:
+            # todo do all this in build too
+            pypipe += ("""    def pipe_%(module_id)s(context, _INPUT, conf=None, **kwargs):\n"""
+                       """        "Submodule"\n"""     #todo insert submodule description here
+                       % {'module_id':module_id}
+                       )
+            indent = "    "
+            
+            
+        pypipe += """%(indent)s    %(module_id)s = %(pymodule_name)s.%(pymodule_generator_name)s(context, %(pargs)s)\n""" % {
+                                                 'indent':indent,
+                                                 'module_id':module_id,
+                                                 'pymodule_name':pymodule_name,
+                                                 'pymodule_generator_name':pymodule_generator_name,
+                                                 'pargs':", ".join(pargs)}
+        if module_id in pipe['embed']:
+            pypipe += """        return %(module_id)s\n""" % {'module_id':module_id}
+
         prev_module = module_id
         
         #todo? if context.verbose:
