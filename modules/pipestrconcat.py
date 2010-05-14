@@ -18,7 +18,7 @@ def pipe_strconcat(context, _INPUT, conf, **kwargs):
     s = ""
     for part in conf['part']:
         if "subkey" in part:
-            pass   #todo get from _INPUT e.g {u'type': u'text', u'subkey': u'severity'}
+            s += _INPUT[part['subkey']]
         else:
             s += util.get_value(part, kwargs)
 
