@@ -31,7 +31,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         else:
             inp = item
             
-        p = embed(context, [inp])  #prepare the submodule
+        p = embed(context, inp)  #prepare the submodule
         
         i = None
         for i in p:
