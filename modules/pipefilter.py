@@ -31,9 +31,14 @@ def pipe_filter(context, _INPUT, conf, **kwargs):
     rules = []
        
     for rule in conf['RULE']:
+        field = rule['field']['value']
         value = util.get_value(rule['value'], kwargs) #todo use subkey?
+        
+        #TODO: is this ok?
+        if field in FIELD_MAP:
+            field = FIELD_MAP[field]  #map to universal feedparser's normalised names
 
-        rules.append((rule['field']['value'], rule['op']['value'], value))
+        rules.append((field, rule['op']['value'], value))
         
     
     for item in _INPUT:
@@ -48,10 +53,6 @@ def pipe_filter(context, _INPUT, conf, **kwargs):
 #todo precompile these into lambdas for speed
 def _rulepass(rule, item):
     field, op, value = rule
-    
-    #TODO: is this ok?
-    if field in FIELD_MAP:
-        field = FIELD_MAP[field]  #map to universal feedparser's normalised names
     
     if field not in item:
         return True

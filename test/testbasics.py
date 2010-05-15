@@ -141,6 +141,20 @@ class TestBasics(unittest.TestCase):
         self.assertTrue(count == 1)
         self.assertEqual(i['title'], " THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY\n             (Severe)")
         
+    def test_european_performance_cars(self):
+        """Loads a pipeline containing a sort
+        """
+        pipe_def = self._get_pipe_def("pipe_8NMkiTW32xGvMbDKruymrA.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        #todo: check the data! e.g. pubdate etc.
+        count = 0
+        for i in p:
+            count += 1
+            
+        self.assertTrue(count > 0)
+        
+        
     #todo test malformed pipeline syntax too
 
 if __name__ == '__main__':
