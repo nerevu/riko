@@ -127,20 +127,19 @@ class TestBasics(unittest.TestCase):
             
         self.assertTrue(count > 0)
 
-    #todo waiting for build version of loop
-    #def test_loop_example(self):
-        #"""Loads the loop example pipeline and compiles and executes it to check the results
-        #"""
-        #pipe_def = self._get_pipe_def("pipe_dAI_R_FS3BG6fTKsAsqenA.json")
-        #p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+    def test_loop_example(self):
+        """Loads the loop example pipeline and compiles and executes it to check the results
+        """
+        pipe_def = self._get_pipe_def("pipe_dAI_R_FS3BG6fTKsAsqenA.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
-        ##todo: check the data! e.g. pubdate etc.
-        #count = 0
-        #for i in p:
-            #count += 1
+        #todo: check the data! e.g. pubdate etc.
+        count = 0
+        for i in p:
+            count += 1
             
-        #self.assertTrue(count == 1)
-        #self.assertEqual(i['title'], " THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY\n             (Severe)")
+        self.assertTrue(count == 1)
+        self.assertEqual(i['title'], " THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY\n             (Severe)")
         
     #todo test malformed pipeline syntax too
 

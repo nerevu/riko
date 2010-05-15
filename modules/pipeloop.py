@@ -14,13 +14,11 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         mode -- how to affect output - either assign or EMIT
         assign_to -- if mode is assign, which field to assign to (new or existing)
         loop_with -- pass a particular field into the submodule rather than the whole item
-    
     embed -- embedded submodule
     
     Yields (_OUTPUT):
     source items after passing through the submodule and adding/replacing values
     """
-    #todo hook up any input parameters to the embedded submodule
     mode = conf['mode']['value']
     assign_to = conf['assign_to']['value']
     loop_with = conf['with']['value']
@@ -31,7 +29,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         else:
             inp = item
             
-        p = embed(context, inp)  #prepare the submodule
+        p = embed(context, [inp])  #prepare the submodule
         
         i = None
         for i in p:

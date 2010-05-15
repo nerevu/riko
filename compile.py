@@ -91,6 +91,7 @@ def build_pipe(context, pipe):
     """Convert a pipe into an executable Python pipeline
     
        Note: any subpipes must be available to import as .py files
+             current namespace can become polluted by submodule wrapper definitions
     """
     module_sequence = topological_sort(pipe['graph'])
 
@@ -110,7 +111,11 @@ def build_pipe(context, pipe):
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
-        
+
+        if module_id in pipe['embed']:
+            assert input_module is None, "input_module of an embedded module was already set"
+            input_module = "_INPUT"
+                
         pargs = [context,
                  input_module,
                 ]
@@ -131,10 +136,24 @@ def build_pipe(context, pipe):
         if module['type'].startswith('pipe:'):
             pymodule_name = "sys.modules['%(module_type)s']" % {'module_type':util.pythonise(module['type'])}
             pymodule_generator_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}            
-                
-        module_ref = eval("%(pymodule_name)s.%(pymodule_generator_name)s" % {'pymodule_name':pymodule_name, 
-                                                                             'pymodule_generator_name':pymodule_generator_name,})
-        steps[module_id] = module_ref(*pargs, **kargs)
+            
+        if module_id in pipe['embed']:
+            #We need to wrap submodules (used by loops) so we can pass the input at runtime (as we can to subpipelines)
+            pypipe = ("""def pipe_%(module_id)s(context, _INPUT, conf=None, **kwargs):\n"""
+                      """    return %(pymodule_name)s.%(pymodule_generator_name)s(context, _INPUT, conf=%(conf)s, **kwargs)\n"""
+                       % {'module_id':module_id,
+                          'pymodule_name':pymodule_name, 
+                          'pymodule_generator_name':pymodule_generator_name,
+                          'conf':module['conf'], 
+                          #Note: no embed (so no subloops) or wire kargs are passed and outer kwargs are passed in
+                         }
+                     )
+            exec pypipe   #Note: evaluated in current namespace - todo ok?
+            steps[module_id] = eval("pipe_%(module_id)s" % {'module_id':module_id})
+        else:
+            module_ref = eval("%(pymodule_name)s.%(pymodule_generator_name)s" % {'pymodule_name':pymodule_name, 
+                                                                                 'pymodule_generator_name':pymodule_generator_name,})
+            steps[module_id] = module_ref(*pargs, **kargs)
 
         if context.verbose:
             print "%s (%s) = %s(%s)" %(steps[module_id], module_id, module_ref, str(pargs))
@@ -191,7 +210,6 @@ def write_pipe(context, pipe):
                 pargs.append("%(id)s = %(secondary_module)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id']), 'secondary_module':util.pythonise(pipe['wires'][wire]['src']['moduleid'])})
                 
         if module['type'] == 'loop':
-            #todo need to hook up any inputs here
             pargs.append("embed = pipe_%(embed_module)s" % {'embed_module':util.pythonise(module['conf']['embed']['value']['id'])})
         
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
@@ -202,13 +220,12 @@ def write_pipe(context, pipe):
 
         indent = ""
         if module_id in pipe['embed']:
-            # todo do all this in build too
+            #We need to wrap submodules (used by loops) so we can pass the input at runtime (as we can to subpipelines)
             pypipe += ("""    def pipe_%(module_id)s(context, _INPUT, conf=None, **kwargs):\n"""
                        """        "Submodule"\n"""     #todo insert submodule description here
                        % {'module_id':module_id}
                        )
             indent = "    "
-            
             
         pypipe += """%(indent)s    %(module_id)s = %(pymodule_name)s.%(pymodule_generator_name)s(context, %(pargs)s)\n""" % {
                                                  'indent':indent,

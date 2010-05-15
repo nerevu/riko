@@ -15,13 +15,14 @@ def pipe_strconcat(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     string
     """
-    s = ""
-    for part in conf['part']:
-        if "subkey" in part:
-            s += _INPUT[part['subkey']]
-        else:
-            s += util.get_value(part, kwargs)
-
-    while True:
+    
+    for item in _INPUT:
+        s = ""
+        for part in conf['part']:
+            if "subkey" in part:
+                s += item[part['subkey']]   #todo: use this subkey check anywhere we can embed a module
+            else:
+                s += util.get_value(part, kwargs)
+    
         yield s
 
