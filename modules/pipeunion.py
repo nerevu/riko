@@ -20,7 +20,7 @@ def pipe_union(context, _INPUT, conf, **kwargs):
     #TODO the multiple sources should be pulled in parallel
     # check David Beazely for suggestions (co-routines with queues?)
     # or maybe use multiprocessing and Queues (perhaps over multiple servers too)
-    #Single thread and sequentail pulling will do for now...
+    #Single thread and sequential pulling will do for now...
     
     for item in _INPUT:
         yield item
