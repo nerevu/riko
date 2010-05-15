@@ -1,6 +1,3 @@
-This is a proof-of-concept and so far can handle pipelines using a limited 
-number of modules.
-
 Design
 ------
 The Yahoo pipelines are translated into pipelines of Python generators which 
@@ -52,10 +49,11 @@ Run in the test directory:
   
 Usage
 -----
-There are two ways to compile a Yahoo pipe into Python. One outputs a Python 
-script which wraps the pipeline in a function and can then be imported and 
-run from another Python program. The other interprets the pipeline on-the-fly 
-and executes it within the current process.
+There are two ways to translate a Yahoo pipe into Python. One outputs a Python 
+script which wraps the pipeline in a function which can then be imported and 
+run from another Python program (i.e. compiled). The other interprets the 
+pipeline on-the-fly and executes it within the current process 
+(i.e. interpreted).
 
 1. Compiling a pipeline to a Python script
 ------------------------------------------
