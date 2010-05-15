@@ -1,7 +1,5 @@
 """Compile/Translate Yahoo Pipe into Python
 
-   (initial proof of concept)
-
    Takes a JSON representation of a Yahoo pipe and either:
    
      a) translates it into a Python script containing a function (using generators to build the pipeline)
@@ -12,10 +10,8 @@
      a) python compile.py pipe1.json
         python pipe1.py
         
-     b) from pipe2py import compile
-        from pipe2py import Context
-        context = Context()
-        p = compile.parse_and_build_pipe(context, "JSON pipe representation")
+     b) from pipe2py import compile, Context
+        p = compile.parse_and_build_pipe(Context(), "JSON pipe representation")
         for i in p:
             print i
             
