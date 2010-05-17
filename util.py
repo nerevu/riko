@@ -19,3 +19,7 @@ def get_value(item, kwargs):
     elif 'terminal' in item:
         return kwargs[pythonise(item['terminal'])].next()
 
+def yield_forever():
+    """Yield True forever"""
+    while True:
+        yield True

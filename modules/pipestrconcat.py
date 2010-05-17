@@ -4,17 +4,20 @@
 from pipe2py import util
 
 def pipe_strconcat(context, _INPUT, conf, **kwargs):
-    """This source builds a string and yields it forever.
+    """This source builds a string.
     
     Keyword arguments:
     context -- pipeline context
-    _INPUT -- not used
+    _INPUT -- source generator
     conf:
         part -- parts
     
     Yields (_OUTPUT):
     string
     """
+    #todo put this everywhere we can have no source pipe but can be called upon for input values
+    if _INPUT is None:
+        _INPUT = util.yield_forever()
     
     for item in _INPUT:
         s = ""
