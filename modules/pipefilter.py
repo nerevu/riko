@@ -8,8 +8,6 @@ from pipe2py import util
 DATE_FORMAT = "%m/%d/%Y"
 DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 COMBINE_BOOLEAN = {"and": all, "or": any}
-FIELD_MAP = {'pubDate': 'date_parsed',
-             }
 
 def pipe_filter(context, _INPUT, conf, **kwargs):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules. 
@@ -33,13 +31,7 @@ def pipe_filter(context, _INPUT, conf, **kwargs):
     for rule in conf['RULE']:
         field = rule['field']['value']
         value = util.get_value(rule['value'], kwargs) #todo use subkey?
-        
-        #TODO: is this ok?
-        if field in FIELD_MAP:
-            field = FIELD_MAP[field]  #map to universal feedparser's normalised names
-
         rules.append((field, rule['op']['value'], value))
-        
     
     for item in _INPUT:
         if combine in COMBINE_BOOLEAN: 

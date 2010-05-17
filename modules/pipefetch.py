@@ -29,5 +29,6 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
         d = feedparser.parse(value)
         
         for entry in d['entries']:
+            entry['pubDate'] = entry['date_parsed']  #map from universal feedparser's normalised names
             yield entry
 

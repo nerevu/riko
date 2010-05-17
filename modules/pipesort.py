@@ -4,9 +4,6 @@
 from pipe2py import util
 from operator import itemgetter
 
-FIELD_MAP = {'pubDate': 'date_parsed',
-             }
-
 def pipe_sort(context, _INPUT, conf, **kwargs):
     """This operator sorts the input source according to the specified key. 
 
@@ -25,11 +22,6 @@ def pipe_sort(context, _INPUT, conf, **kwargs):
     for key in conf['KEY']:
         field = util.get_value(key['field'], kwargs)
         sort_dir = util.get_value(key['dir'], kwargs)
-
-        #TODO: is this ok? share common routine with pipefilter
-        if field in FIELD_MAP:
-            field = FIELD_MAP[field]  #map to universal feedparser's normalised names
-    
         order.append('%s%s' % (sort_dir=='DESC' and '-' or '', field))
 
     #read all and sort
