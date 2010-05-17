@@ -4,7 +4,6 @@
 import re
 from pipe2py import util
 
-
 def pipe_regex(context, _INPUT, conf, **kwargs):
     """This operator replaces values using regexes. 
 
@@ -31,8 +30,14 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
         rules.append((rule['field']['value'], match, replace))
             
     for item in _INPUT:
+        def sub_fields(matchobj):
+            if matchobj.group(1) in item:
+                return item[matchobj.group(1)]
+            
         for rule in rules:
             item[rule[0]] = re.sub(rule[1], rule[2], item[rule[0]])
+
+            item[rule[0]] = re.sub('\$\{(.+)\}', sub_fields, item[rule[0]])
             
         yield item
 

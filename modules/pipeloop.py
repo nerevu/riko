@@ -22,7 +22,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     mode = conf['mode']['value']
     assign_to = conf['assign_to']['value']
     loop_with = conf['with']['value']
-
+    
     for item in _INPUT:        
         if loop_with:
             inp = item[loop_with]
