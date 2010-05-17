@@ -153,6 +153,18 @@ class TestBasics(unittest.TestCase):
             count += 1
             
         self.assertTrue(count > 0)
+    
+    def test_twitter(self):
+        """Loads a pipeline containing a loop, complex regex etc. for twitter
+        """
+        pipe_def = self._get_pipe_def("pipe_ac45e9eb9b0174a4e53f23c4c9903c3f.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        #todo: check the data! e.g. pubdate etc.
+        count = 0
+        for i in p:
+            count += 1
+            
         
         
     #todo test malformed pipeline syntax too
