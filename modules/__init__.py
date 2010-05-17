@@ -11,6 +11,7 @@ __all__ = ['pipefetch',
            'pipetextinput',
            'pipeurlinput',
            'pipestrconcat',
+           'pipedateformat',
            'pipestrregex',
 
            'pipefilter',
