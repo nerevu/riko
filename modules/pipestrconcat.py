@@ -15,10 +15,6 @@ def pipe_strconcat(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     string
     """
-    #todo put this everywhere we can have no source pipe but can be called upon for input values
-    if _INPUT is None:
-        _INPUT = util.yield_forever()
-    
     for item in _INPUT:
         s = ""
         for part in conf['part']:

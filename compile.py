@@ -99,17 +99,18 @@ def build_pipe(context, pipe):
             __import__(util.pythonise(module['type']))
     
     steps = {}
+    steps["forever"] = pipeforever.pipe_forever(context, None, conf=None)
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
         
         #Plumb I/O
-        input_module = None
+        input_module = steps["forever"]
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
 
         if module_id in pipe['embed']:
-            assert input_module is None, "input_module of an embedded module was already set"
+            assert input_module == steps["forever"], "input_module of an embedded module was already set"
             input_module = "_INPUT"
                 
         pargs = [context,
@@ -181,6 +182,8 @@ def write_pipe(context, pipe):
                """    "Pipeline"\n"""     #todo insert pipeline description here
                """    if conf is None:\n"""
                """        conf = {}\n"""
+               """\n"""
+               """    forever = pipeforever.pipe_forever(context, None, conf=None)\n"""
                """\n""" % {'pipename':pipe['name']}
               )
 
@@ -188,13 +191,13 @@ def write_pipe(context, pipe):
         module = pipe['modules'][module_id]
 
         #Plumb I/O
-        input_module = None
+        input_module = "forever"
         for wire in pipe['wires']:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
                 input_module = util.pythonise(pipe['wires'][wire]['src']['moduleid'])
 
         if module_id in pipe['embed']:
-            assert input_module is None, "input_module of an embedded module was already set"
+            assert input_module == "forever", "input_module of an embedded module was already set"
             input_module = "_INPUT"
         
         pargs = ["%(input_module)s" % {'input_module':input_module}, 

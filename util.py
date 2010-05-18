@@ -18,8 +18,3 @@ def get_value(item, kwargs):
         return item['value']  #simple value
     elif 'terminal' in item:
         return kwargs[pythonise(item['terminal'])].next()
-
-def yield_forever():
-    """Yield True forever"""
-    while True:
-        yield True

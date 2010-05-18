@@ -3,7 +3,9 @@
 
 #Note: each module name must match the name used internally by Yahoo, preceded by pipe
 
-__all__ = ['pipefetch',
+__all__ = ['pipeforever',
+    
+           'pipefetch',
            'pipefetchdata',
            
            'pipedatebuilder',
