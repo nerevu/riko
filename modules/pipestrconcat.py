@@ -15,6 +15,9 @@ def pipe_strconcat(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     string
     """
+    if not isinstance(conf['part'], list):    #todo do we need to do this anywhere else?
+        conf['part'] = [conf['part']]
+
     for item in _INPUT:
         s = ""
         for part in conf['part']:
