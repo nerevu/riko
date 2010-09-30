@@ -4,7 +4,10 @@
 import urllib2
 from xml.etree import cElementTree as ElementTree
 
-import wingdbstub
+try:
+    import wingdbstub
+except:
+    pass
 
 try:
     import json
