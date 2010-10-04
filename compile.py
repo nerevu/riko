@@ -19,6 +19,7 @@
        python compile.py -p 2de0e4517ed76082dcddf66f7b218057
      
    Author: Greg Gaughan
+           with modules added by: Tony Hirst
    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
    Python generator pipelines inspired by: David Beazely (http://www.dabeaz.com/generators-uk)
 """
