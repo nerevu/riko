@@ -22,6 +22,9 @@ __all__ = ['pipeforever',
            'pipeunion',
            'pipeloop',
            'pipesort',
+           'pipecount',
+           'pipetruncate',
+           'pipereverse',
            
            'pipeoutput',
           ]
