@@ -165,7 +165,34 @@ class TestBasics(unittest.TestCase):
         for i in p:
             count += 1
             
+    def test_reverse_truncate(self):
+        """Loads a pipeline containing a reverse and truncate
+        """
+        pipe_def = self._get_pipe_def("pipe_58a53262da5a095fe7a0d6d905cc4db6.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
+        #todo: check the data! e.g. pubdate etc.
+        count = 0
+        prev_title = None
+        for i in p:
+            self.assertTrue(not prev_title or i['title'] < prev_title)
+            prev_title = i['title']
+            count += 1
+            
+        self.assertTrue(count == 3)
+        
+    def test_count_truncate(self):
+        """Loads a pipeline containing a count and truncate
+        """
+        pipe_def = self._get_pipe_def("pipe_58a53262da5a095fe7a0d6d905cc4db6.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        #todo: check the data! e.g. pubdate etc.
+        count = 0
+        for i in p:
+            count += 1
+            
+        self.assertTrue(count == 3)
         
     #todo test malformed pipeline syntax too
 
