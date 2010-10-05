@@ -5,11 +5,6 @@ import urllib2
 from xml.etree import cElementTree as ElementTree
 
 try:
-    import wingdbstub
-except:
-    pass
-
-try:
     import json
 except ImportError:
     import simplejson as json
