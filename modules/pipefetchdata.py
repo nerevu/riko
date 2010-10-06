@@ -46,6 +46,7 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                     return
             match = "{%s}%s" % (namespace, path.split(".")[-1])
         #Convert xml into generation of dicts
+        #todo look at using util.xml_to_dict here...
         for element in root.findall(match):
             if element.getchildren():
                 i = {}
