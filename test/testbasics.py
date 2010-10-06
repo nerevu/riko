@@ -204,7 +204,7 @@ class TestBasics(unittest.TestCase):
         count = 0
         for i in p:
             count += 1
-            self.assertTrue(i['title'] == i['content'])
+            self.assertTrue(i['title'] == i['a']['content'])
             
         self.assertTrue(count > 0)
         

@@ -4,10 +4,7 @@
 import urllib
 import urllib2
 
-try:
-    import json
-except ImportError:
-    import simplejson as json
+from xml.etree import cElementTree as ElementTree
 
 from pipe2py import util
 
@@ -29,17 +26,23 @@ def pipe_yql(context, _INPUT, conf,  **kwargs):
     yql = util.get_value(conf['yqlquery'], kwargs)
     
     query = urllib.urlencode({'q':yql,
-                              'format':'json', #todo do we need to handle xml?
+                              #note: we use the default format of xml since json loses some structure
                               #todo diagnostics=true e.g. if context.test
+                              #todo consider paging for large result sets
                              })
     req = urllib2.Request(url, query)    
     response = urllib2.urlopen(req)    
     
     #Parse the response
-    d = json.load(response)
+    ft = ElementTree.parse(response)
     if context.verbose:
-        print "pipe_yql loading json:", yql
+        print "pipe_yql loading xml:", yql
+    root = ft.getroot()
     #note: query also has row count
-    for item in d['query']['results']['a']:
-        yield item
+    results = root.find('results')
+    #Convert xml into generation of dicts
+    for element in results.getchildren():
+        i = util.xml_to_dict(element)
+        yield i
+    
     
