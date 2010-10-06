@@ -27,8 +27,11 @@ def pipe_rename(context, _INPUT, conf, **kwargs):
     
     for item in _INPUT:
         for rule in rules:
-            item[rule[2]] = item[rule[1]]
+            #Map names with dot notation onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
+            #todo: optimise by pre-calculating splits
+            #      and if this logic is stable, wrap in util functions and use everywhere items are accessed
+            reduce(lambda i,k:i.get(k), [item] + rule[2].split('.')[:-1])[rule[2].split('.')[-1]] = reduce(lambda i,k:i.get(k), [item] + rule[1].split('.'))
             if rule[0] == 'rename':
-                del item[rule[1]]
+                del reduce(lambda i,k:i.get(k), [item] + rule[1].split('.')[:-1])[rule[1].split('.')[-1]]
         yield item
             
