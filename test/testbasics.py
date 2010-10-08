@@ -216,14 +216,9 @@ class TestBasics(unittest.TestCase):
         match = 0
         for i in p:
             count += 1
-            if ('attrpath' in i and 'attr2' in i['attrpath'] and i['attrpath']['attr2'] == 'VAL2' 
-                and 'ATTR1' in i and i['ATTR1'] == 'VAL1'):
+            if i == {u'attrpath': {u'attr2': u'VAL2'}, u'ATTR1': u'VAL1'}:
                 match +=1
-            if ('longpath' in i and 'attrpath' in i['longpath'] and 'attr3' in i['longpath']['attrpath'] 
-                and i['longpath']['attrpath']['attr3'] == 'val3' and 'attrpath' in i 
-                and 'attr2' in i['attrpath'] and i['attrpath']['attr2'] == 'val2' 
-                and 'attr3' in i['attrpath'] and i['attrpath']['attr3'] == 'extVal'
-                and 'attr1' in i and i['attr1'] == 'val1'):
+            if i == {u'longpath': {u'attrpath': {u'attr3': u'val3'}}, u'attrpath': {u'attr2': u'val2', u'attr3': u'extVal'}, u'attr1': u'val1'}:
                 match +=1
             
         self.assertTrue(count == 2)
