@@ -5,7 +5,7 @@ import urllib
 from pipe2py import util
 
 def pipe_itembuilder(context, _INPUT, conf, **kwargs):
-    """This source builds an item and yields it forever.
+    """This source builds an item.
     
     Keyword arguments:
     context -- pipeline context
