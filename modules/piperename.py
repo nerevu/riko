@@ -30,8 +30,16 @@ def pipe_rename(context, _INPUT, conf, **kwargs):
             #Map names with dot notation onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
             #todo: optimise by pre-calculating splits
             #      and if this logic is stable, wrap in util functions and use everywhere items are accessed
-            reduce(lambda i,k:i.get(k), [item] + rule[2].split('.')[:-1])[rule[2].split('.')[-1]] = reduce(lambda i,k:i.get(k), [item] + rule[1].split('.'))
-            if rule[0] == 'rename':
-                del reduce(lambda i,k:i.get(k), [item] + rule[1].split('.')[:-1])[rule[1].split('.')[-1]]
+            #reduce(lambda i,k:i.get(k), [item] + rule[2].split('.')[:-1])[rule[2].split('.')[-1]] = reduce(lambda i,k:i.get(k), [item] + rule[1].split('.'))
+            try:
+                value = reduce(lambda i,k:i.get(k), [item] + rule[1].split('.')) #forces an exception if any part is not found
+                reduce(lambda i,k:i.setdefault(k, {}), [item] + rule[2].split('.')[:-1])[rule[2].split('.')[-1]] = value
+                if rule[0] == 'rename':
+                    try:
+                        del reduce(lambda i,k:i.get(k), [item] + rule[1].split('.')[:-1])[rule[1].split('.')[-1]]
+                    except KeyError:
+                        pass  #ignore if the target doesn't have our field (todo: issue a warning if debugging?)
+            except AttributeError:
+                pass  #ignore if the source doesn't have our field (todo: issue a warning if debugging?)
         yield item
             
