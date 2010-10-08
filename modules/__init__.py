@@ -11,6 +11,7 @@ __all__ = ['pipeforever',
            
            'pipedatebuilder',
            'pipeurlbuilder',
+           'pipeitembuilder',
            'pipetextinput',
            'pipeurlinput',
            'pipestrconcat',

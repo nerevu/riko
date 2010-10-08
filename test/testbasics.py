@@ -171,7 +171,6 @@ class TestBasics(unittest.TestCase):
         pipe_def = self._get_pipe_def("pipe_58a53262da5a095fe7a0d6d905cc4db6.json")
         p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
-        #todo: check the data! e.g. pubdate etc.
         count = 0
         prev_title = None
         for i in p:
@@ -200,13 +199,35 @@ class TestBasics(unittest.TestCase):
         pipe_def = self._get_pipe_def("pipe_80fb3dfc08abfa7e27befe9306fc3ded.json")
         p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
-        #todo: check the data! e.g. pubdate etc.
         count = 0
         for i in p:
             count += 1
             self.assertTrue(i['title'] == i['a']['content'])
             
         self.assertTrue(count > 0)
+
+    def test_itembuilder(self):
+        """Loads a pipeline containing an test_itembuilder
+        """
+        pipe_def = self._get_pipe_def("pipe_b96287458de001ad62a637095df33ad5.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        match = 0
+        for i in p:
+            count += 1
+            if ('attrpath' in i and 'attr2' in i['attrpath'] and i['attrpath']['attr2'] == 'VAL2' 
+                and 'ATTR1' in i and i['ATTR1'] == 'VAL1'):
+                match +=1
+            if ('longpath' in i and 'attrpath' in i['longpath'] and 'attr3' in i['longpath']['attrpath'] 
+                and i['longpath']['attrpath']['attr3'] == 'val3' and 'attrpath' in i 
+                and 'attr2' in i['attrpath'] and i['attrpath']['attr2'] == 'val2' 
+                and 'attr3' in i['attrpath'] and i['attrpath']['attr3'] == 'extVal'
+                and 'attr1' in i and i['attr1'] == 'val1'):
+                match +=1
+            
+        self.assertTrue(count == 2)
+        self.assertTrue(match == 2)
         
     #todo test malformed pipeline syntax too
 
