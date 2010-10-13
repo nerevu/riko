@@ -26,9 +26,9 @@ def pipe_rssitembuilder(context, _INPUT, conf, **kwargs):
         
         for key in conf:
             try:
-                if "subkey" in key:
+                if "subkey" in conf[key]:
                     #todo really dereference item? (sample pipe seems to suggest so: surprising)
-                    value = reduce(lambda i,k:i.get(k), [item] + key['subkey'].split('.')) #forces an exception if any part is not found
+                    value = reduce(lambda i,k:i.get(k), [item] + conf[key]['subkey'].split('.')) #forces an exception if any part is not found
                     #todo trap and ignore AttributeError here?
                 else:
                     value = util.get_value(conf[key], kwargs)
