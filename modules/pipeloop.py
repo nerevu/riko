@@ -38,7 +38,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         if mode == 'assign':
             item[assign_to] = i
         elif mode == 'EMIT':
-            item = {"content":i}
+            item = i
         else:
             raise Exception("Invalid mode %s (expecting assign or EMIT)" % mode)
 

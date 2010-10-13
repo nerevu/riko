@@ -207,7 +207,7 @@ class TestBasics(unittest.TestCase):
         self.assertTrue(count > 0)
 
     def test_itembuilder(self):
-        """Loads a pipeline containing an test_itembuilder
+        """Loads a pipeline containing an itembuilder
         """
         pipe_def = self._get_pipe_def("pipe_b96287458de001ad62a637095df33ad5.json")
         p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
@@ -223,6 +223,26 @@ class TestBasics(unittest.TestCase):
             
         self.assertTrue(count == 2)
         self.assertTrue(match == 2)
+
+    def test_rssitembuilder(self):
+        """Loads a pipeline containing an rssitembuilder
+        """
+        pipe_def = self._get_pipe_def("pipe_1166de33b0ea6936d96808717355beaa.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        match = 0
+        for i in p:
+            count += 1
+            if i == {'media:thumbnail': {'url': u'http://example.com/a.jpg'}, u'link': u'http://example.com/test.php?this=that', u'description': u'b', u'y:title': u'a', u'title': u'a'}:
+                match +=1
+            if i == {u'newtitle': u'NEWTITLE', u'loop:itembuilder': {u'description': {u'content': u'DESCRIPTION'}, u'title': u'NEWTITLE'}, u'title': u'TITLE1'}:
+                match +=1
+            if i == {u'newtitle': u'NEWTITLE', u'loop:itembuilder': {u'description': {u'content': u'DESCRIPTION'}, u'title': u'NEWTITLE'}, u'title': u'TITLE2'}:
+                match +=1
+            
+        self.assertTrue(count == 3)
+        self.assertTrue(match == 3)
         
     #todo test malformed pipeline syntax too
 
