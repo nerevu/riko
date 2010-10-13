@@ -40,6 +40,7 @@ def pipe_rssitembuilder(context, _INPUT, conf, **kwargs):
             if value:
                 if key == 'title':
                     d['y:%s' % key] = value
+                #todo also for guid -> y:id (is guid the only one?)
 
                 try:
                     reduce(lambda i,k:i.setdefault(k, {}), [d] + key.split('.')[:-1])[key.split('.')[-1]] = value
