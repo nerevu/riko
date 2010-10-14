@@ -241,7 +241,7 @@ def write_pipe(context, pipe):
         #todo? if context.verbose:
         #    print "%s = %s.%s(%s)" %(module_id, pymodule_name, pymodule_generator_name, str(pargs))
     
-    pypipe += """    return _OUTPUT\n"""
+    pypipe += """    return %(module_id)s\n""" % {'module_id':prev_module}
     pypipe += ("""\n"""
                """if __name__ == "__main__":\n"""
                """    context = Context()\n"""

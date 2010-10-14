@@ -245,6 +245,8 @@ class TestBasics(unittest.TestCase):
         self.assertTrue(match == 3)
         
     #todo test malformed pipeline syntax too
+    
+    #todo test pipe compilation too, i.e. compare output against an expected .py file
 
 if __name__ == '__main__':
     unittest.main()
