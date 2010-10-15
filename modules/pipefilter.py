@@ -30,7 +30,7 @@ def pipe_filter(context, _INPUT, conf, **kwargs):
        
     for rule in conf['RULE']:
         field = rule['field']['value']
-        value = util.get_value(rule['value'], kwargs) #todo use subkey?
+        value = util.get_value(rule['value'], None, **kwargs) #todo use subkey?
         rules.append((field, rule['op']['value'], value))
     
     for item in _INPUT:

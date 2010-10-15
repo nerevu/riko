@@ -22,7 +22,7 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
         url = [url]
     
     for item in url:
-        value = util.get_value(item, kwargs)
+        value = util.get_value(item, item, **kwargs)
         
         if context.verbose:
             print "pipe_fetch loading:", value

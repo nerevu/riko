@@ -36,7 +36,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
             break  #todo ok to always limit inner loop to 1 call (if more then what?)
         
         if mode == 'assign':
-            item[assign_to] = i
+            util.set_value(item, assign_to, i)
         elif mode == 'EMIT':
             item = i
         else:

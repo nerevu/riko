@@ -26,12 +26,7 @@ def pipe_rssitembuilder(context, _INPUT, conf, **kwargs):
         
         for key in conf:
             try:
-                if "subkey" in conf[key]:
-                    #todo really dereference item? (sample pipe seems to suggest so: surprising)
-                    value = reduce(lambda i,k:i.get(k), [item] + conf[key]['subkey'].split('.')) #forces an exception if any part is not found
-                    #todo trap and ignore AttributeError here?
-                else:
-                    value = util.get_value(conf[key], kwargs)
+                value = util.get_value(conf[key], item, **kwargs)  #todo really dereference item? (sample pipe seems to suggest so: surprising)
             except KeyError:
                 continue  #ignore if the source doesn't have our source field (todo: issue a warning if debugging?)
             
@@ -39,13 +34,11 @@ def pipe_rssitembuilder(context, _INPUT, conf, **kwargs):
             
             if value:
                 if key == 'title':
-                    d['y:%s' % key] = value
+                    util.set_value(d, 'y:%s' % key, value)
                 #todo also for guid -> y:id (is guid the only one?)
 
-                try:
-                    reduce(lambda i,k:i.setdefault(k, {}), [d] + key.split('.')[:-1])[key.split('.')[-1]] = value
-                except AttributeError:
-                    continue  #ignore if the source doesn't have our (dereferenced) target field (todo: issue a warning if debugging?)
+                #todo try/except?
+                util.set_value(d, key, value)
         
         yield d
         

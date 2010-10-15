@@ -22,8 +22,8 @@ def pipe_strregex(context, _INPUT, conf, **kwargs):
     
     for rule in conf['RULE']:
         #TODO compile regex here: c = re.compile(match)
-        match = util.get_value(rule['match'], kwargs) #todo use subkey?
-        replace = util.get_value(rule['replace'], kwargs) #todo use subkey?
+        match = util.get_value(rule['match'], None, **kwargs) #todo use subkey?
+        replace = util.get_value(rule['replace'], None, **kwargs) #todo use subkey?
         
         #convert regex to Python format: todo use a common routine for this
         replace = re.sub('\$(\d+)', r'\\\1', replace)   #map $1 to \1 etc.   #todo: also need to escape any existing \1 etc.

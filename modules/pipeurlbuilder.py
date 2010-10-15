@@ -18,17 +18,17 @@ def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     url
     """
-    url = util.get_value(conf['BASE'], kwargs)
+    url = util.get_value(conf['BASE'], None, **kwargs)
     if not url.endswith('/'):
         url += '/'
     
-    path = util.get_value(conf['PATH'], kwargs)
+    path = util.get_value(conf['PATH'], None, **kwargs)
     if not isinstance(path, list):
         path = [path]
     
     url += "/".join(path)
     
-    params = dict([(util.get_value(p['key'], kwargs), util.get_value(p['value'], kwargs)) for p in conf['PARAM']]) #todo use subkey?   
+    params = dict([(util.get_value(p['key'], None, **kwargs), util.get_value(p['value'], None, **kwargs)) for p in conf['PARAM']]) #todo use subkey?   
     if params:
         url += "?" + urllib.urlencode(params)
     

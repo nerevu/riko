@@ -24,8 +24,8 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
     Yields (_OUTPUT):
     elements
     """
-    url = util.get_value(conf['URL'], kwargs) #todo use subkey?
-    path = util.get_value(conf['path'], kwargs) #todo use subkey?
+    url = util.get_value(conf['URL'], None, **kwargs) #todo use subkey?
+    path = util.get_value(conf['path'], None, **kwargs) #todo use subkey?
     match = None
     
     f = urllib2.urlopen(url)

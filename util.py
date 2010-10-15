@@ -32,9 +32,29 @@ def xml_to_dict(element):
     return i
 
     
-def get_value(item, kwargs):
-    """Return either a literal value or a value via a terminal"""
-    if 'value' in item:
-        return item['value']  #simple value
-    elif 'terminal' in item:
-        return kwargs[pythonise(item['terminal'])].next()
+def get_value(_item, _loop_item=None, **kwargs):
+    """Return either:
+           a literal value 
+           a value via a terminal (then kwargs must contain the terminals)
+           a value via a subkey reference (then _loop_item must be passed)
+       Note: subkey values use dot notation and we map onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
+    """
+    if 'value' in _item:  #simple value
+        return _item['value']
+    elif 'terminal' in _item:  #value fed in from another module
+        return kwargs[pythonise(_item['terminal'])].next()
+    elif 'subkey' in _item:  #reference to current loop item
+        return reduce(lambda i,k:i.get(k), _item['subkey'].split('.'), _loop_item) #raises an exception if any part is not found
+
+def set_value(item, key, value):
+    """Set a key's value in the item
+       Note: keys use dot notation and we map onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
+    """
+    reduce(lambda i,k:i.setdefault(k, {}), key.split('.')[:-1], item)[key.split('.')[-1]] = value
+
+def del_value(item, key):
+    """Remove a value (and its key) from the item
+       Note: keys use dot notation and we map onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
+    """
+    del reduce(lambda i,k:i.get(k), [item] + key.split('.')[:-1])[key.split('.')[-1]]
+    

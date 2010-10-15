@@ -18,7 +18,7 @@ def pipe_truncate(context, _INPUT, conf, **kwargs):
     """
 
     count = conf['count']
-    limit = int(util.get_value(count, kwargs))
+    limit = int(util.get_value(count, None, **kwargs))
     for i in xrange(0, limit):
         yield _INPUT.next()
     

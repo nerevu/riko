@@ -17,7 +17,7 @@ def pipe_dateformat(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     formatted date
     """
-    date_format = util.get_value(conf['format'], kwargs)
+    date_format = util.get_value(conf['format'], None, **kwargs)
 
     for item in _INPUT:
         s = time.strftime(date_format, item)   #todo check all PHP formats are covered by Python

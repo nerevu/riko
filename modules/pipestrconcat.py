@@ -21,10 +21,10 @@ def pipe_strconcat(context, _INPUT, conf, **kwargs):
     for item in _INPUT:
         s = ""
         for part in conf['part']:
-            if "subkey" in part:
-                s += item[part['subkey']]   #todo: use this subkey check anywhere we can embed a module
-            else:
-                s += util.get_value(part, kwargs)
+            try:
+                s += util.get_value(part, item, **kwargs)
+            except AttributeError:
+                continue  #ignore if the item is referenced but doesn't have our source field (todo: issue a warning if debugging?)
     
         yield s
 

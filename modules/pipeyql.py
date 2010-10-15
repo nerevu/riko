@@ -24,10 +24,7 @@ def pipe_yql(context, _INPUT, conf,  **kwargs):
     url = "http://query.yahooapis.com/v1/public/yql" #todo get from a config/env file
     
     for item in _INPUT:
-        if "subkey" in conf['yqlquery']:
-            yql = item[conf['yqlquery']['subkey']]
-        else:
-            yql = util.get_value(conf['yqlquery'], kwargs)
+        yql = util.get_value(conf['yqlquery'], item, **kwargs)
         
         query = urllib.urlencode({'q':yql,
                                   #note: we use the default format of xml since json loses some structure
