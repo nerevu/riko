@@ -34,11 +34,6 @@ import sys
 from pipe2py import Context
 from pipe2py import util
 
-try:
-    import json
-except ImportError:
-    import simplejson as json
-   
 from topsort import topological_sort
 
 #needed for build_pipe - ensure modules/__init__.py.__all__ lists all available modules
@@ -264,6 +259,11 @@ def parse_and_build_pipe(context, json_pipe, pipe_name="anonymous"):
     return pb
 
 if __name__ == '__main__':
+    try:
+        import json
+    except ImportError:
+        import simplejson as json
+   
     context = Context()
     
     pjson = []
