@@ -21,11 +21,6 @@ we could use queues to plumb them together.
 
 Install the dependencies
 ------------------------
-Universal feedparser (http://www.feedparser.org/):
-  
-  * sudo aptitude install python-feedparser 
-    (or build from source: http://code.google.com/p/feedparser/downloads)
-  
 If using a Python version before 2.6 then simplejson is needed:
   
   * http://pypi.python.org/pypi/simplejson
