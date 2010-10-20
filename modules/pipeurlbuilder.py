@@ -30,6 +30,7 @@ def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
             path = [path]
         
         url += "/".join(path)
+        url = url.rstrip("/")
         
         params = dict([(util.get_value(p['key'], item, **kwargs), util.get_value(p['value'], item, **kwargs)) for p in conf['PARAM']])
         if params:
