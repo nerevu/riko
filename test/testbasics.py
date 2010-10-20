@@ -114,6 +114,19 @@ class TestBasics(unittest.TestCase):
             
         #self.assertTrue(count > 0)
         
+    def test_urlbuilder_loop(self):
+        """Loads a pipeline containing a URL builder in a loop
+        """
+        pipe_def = self._get_pipe_def("pipe_e65397e116d7754da0dd23425f1f0af1.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        #todo: check the data!
+        count = 0
+        for i in p:
+            count += 1
+            
+        self.assertTrue(count > 0)
+        
     def test_twitter_caption_search(self):
         """Loads the Twitter Caption Search pipeline and compiles and executes it to check the results
         """
