@@ -26,7 +26,7 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
         
         if context.verbose:
             print "pipe_fetch loading:", value
-        d = feedparser.parse(value)
+        d = feedparser.parse(value.encode('utf-8'))
         
         for entry in d['entries']:
             entry['pubDate'] = entry['date_parsed']  #map from universal feedparser's normalised names
