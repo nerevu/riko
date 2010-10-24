@@ -25,9 +25,10 @@ def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
         if not url.endswith('/'):
             url += '/'
         
-        path = util.get_value(conf['PATH'], item, **kwargs)
+        path = conf['PATH']
         if not isinstance(path, list):
             path = [path]
+        path = [util.get_value(p, item, **kwargs) for p in path]
         
         url += "/".join(path)
         url = url.rstrip("/")
