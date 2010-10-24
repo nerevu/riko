@@ -28,10 +28,9 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
     path = util.get_value(conf['path'], None, **kwargs) #todo use subkey?
     match = None
     
-    f = urllib2.urlopen(url)
-    
     #Parse the file into a dictionary
     try:
+        f = urllib2.urlopen(url)
         ft = ElementTree.parse(f)
         if context.verbose:
             print "pipe_fetchdata loading xml:", url
@@ -60,6 +59,7 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
             
     except Exception, e:
         try:
+            f = urllib2.urlopen(url)
             d = json.load(f)
             #todo test:-
             if context.verbose:
