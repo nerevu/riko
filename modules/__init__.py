@@ -8,6 +8,7 @@ __all__ = ['pipeforever',
            'pipefetch',
            'pipefetchdata',
            'pipeyql',
+           'pipecsv',
            
            'pipedatebuilder',
            'pipeurlbuilder',

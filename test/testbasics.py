@@ -257,6 +257,32 @@ class TestBasics(unittest.TestCase):
         self.assertTrue(count == 3)
         self.assertTrue(match == 3)
         
+    def test_csv(self):
+        """Loads a pipeline containing a csv source
+        """
+        pipe_def = self._get_pipe_def("pipe_UuvYtuMe3hGDsmRgPm7D0g.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            self.assertTrue(i == {u'FamilyNumOfJourneys': u'0', u'Member': u'Lancaster', u'MPOtherEuropean': u'0', 
+                                  u'FamilyTotal': u'0', u'OfficeRunningCosts': u'19848', u'MPOtherRail': u'233', 
+                                  u'CostofStayingAwayFromMainHome': u'22541', u'StationeryAssocdPostageCosts': u'3471', 
+                                  u'CommsAllowance': u'9767', u'Mileage': u'3358', u'MPMisc': u'20', 
+                                  u'title': u'Mr Mark Lancaster', 
+                                  u'description': u'Total allowances claimed, inc travel: 151619<br>Total basic allowances claimed, ex travel: 146282<br>Total Travel claimed: 5337<br>MP Mileage: 3358<br>MP Rail Travel: 1473<br>MP Air Travel: 0<br>Cost of staying away from main home: 22541<br>London Supplement: 0<br>Office Running Costs: 19848<br>Staffing Costs: 88283', 
+                                  u'TotalAllowancesClaimedIncTravel': u'151619', u'SpouseTotal': u'31', 
+                                  u'EmployeeTotal': u'222', u'MPRail': u'1473', u'LondonSupplement': u'0', 
+                                  u'StaffingCosts': u'88283', u'EmployeeNumOfJourneys': u'21', 
+                                  u'CentrallyPurchasedStationery': u'1149', u'TotalBasicAllowancesExcTravel': u'146282', 
+                                  u'CentralITProvision': u'1223', u'StaffCoverAndOtherCosts': u'0', 
+                                  u'firstName': u'Mr Mark', u'MPOtherAir': u'0', u'MPOtherMileage': u'0', 
+                                  u'TotalTravelClaimed': u'5337', u'MPAir': u'0', u'SpouseNumOfJourneys': u'1'})
+            
+        self.assertTrue(count > 0)
+        
+        
     #todo test malformed pipeline syntax too
     
     #todo test pipe compilation too, i.e. compare output against an expected .py file
