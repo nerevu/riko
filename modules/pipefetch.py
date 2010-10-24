@@ -38,5 +38,9 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
                 if 'name' in entry['author_detail']:
                     entry['author.name'] = entry['author_detail']['name']
             #todo more!?
+            if 'title' in entry:
+                entry['y:title'] = entry['title']  #yahoo's own versions
+            entry['y:published'] = entry['date_parsed']  #yahoo's own versions
+            #todo more!?
             yield entry
 
