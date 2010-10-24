@@ -1,6 +1,7 @@
 """Utility functions"""
 
 import string
+from operator import itemgetter
 
 def pythonise(id):
     """Return a Python-friendly id"""
@@ -58,3 +59,18 @@ def del_value(item, key):
     """
     del reduce(lambda i,k:i.get(k), [item] + key.split('.')[:-1])[key.split('.')[-1]]
     
+    
+def multikeysort(items, columns):
+    """Sorts a list of items by the columns
+       
+       (columns precedeed with a '-' will sort descending)
+    """
+    comparers = [ ((itemgetter(col[1:].strip()), -1) if col.startswith('-') else (itemgetter(col.strip()), 1)) for col in columns]  
+    def comparer(left, right):
+        for fn, mult in comparers:
+            result = cmp(fn(left), fn(right))
+            if result:
+                return mult * result
+        else:
+            return 0
+    return sorted(items, cmp=comparer)

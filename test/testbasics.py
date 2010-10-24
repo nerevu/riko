@@ -281,6 +281,20 @@ class TestBasics(unittest.TestCase):
                                   u'TotalTravelClaimed': u'5337', u'MPAir': u'0', u'SpouseNumOfJourneys': u'1'})
             
         self.assertTrue(count > 0)
+
+    def test_unique(self):
+        """Loads a pipeline containing a unique
+        """
+        pipe_def = self._get_pipe_def("pipe_1I75yiUv3BGhgVWjjUnRlg.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        #todo: check the data! e.g. pubdate etc.
+        count = 0
+        for i in p:
+            count += 1
+            
+        self.assertTrue(count == 1)
+        
         
         
     #todo test malformed pipeline syntax too

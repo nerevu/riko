@@ -30,10 +30,13 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
         
         for entry in d['entries']:
             entry['pubDate'] = entry['date_parsed']  #map from universal feedparser's normalised names
+            if 'author' in entry:
+                entry['dc:creator'] = entry['author']
             if 'author_detail' in entry:
                 if 'href' in entry['author_detail']:
                     entry['author.uri'] = entry['author_detail']['href']
                 if 'name' in entry['author_detail']:
                     entry['author.name'] = entry['author_detail']['name']
+            #todo more!?
             yield entry
 
