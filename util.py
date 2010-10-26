@@ -68,7 +68,11 @@ def multikeysort(items, columns):
     comparers = [ ((itemgetter(col[1:].strip()), -1) if col.startswith('-') else (itemgetter(col.strip()), 1)) for col in columns]  
     def comparer(left, right):
         for fn, mult in comparers:
-            result = cmp(fn(left), fn(right))
+            try:
+                result = cmp(fn(left), fn(right))
+            except KeyError:
+                #todo perhaps care more if only one side has the missing key
+                result = 0
             if result:
                 return mult * result
         else:

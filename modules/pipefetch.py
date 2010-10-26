@@ -29,7 +29,9 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
         d = feedparser.parse(value.encode('utf-8'))
         
         for entry in d['entries']:
-            entry['pubDate'] = entry['date_parsed']  #map from universal feedparser's normalised names
+            if 'updated_parsed' in entry:
+                entry['pubDate'] = entry['updated_parsed']  #map from universal feedparser's normalised names
+                entry['y:published'] = entry['updated_parsed']  #yahoo's own version
             if 'author' in entry:
                 entry['dc:creator'] = entry['author']
             if 'author_detail' in entry:
@@ -40,7 +42,8 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
             #todo more!?
             if 'title' in entry:
                 entry['y:title'] = entry['title']  #yahoo's own versions
-            entry['y:published'] = entry['date_parsed']  #yahoo's own versions
+            if 'id' in entry:
+                entry['y:id'] = entry['id']  #yahoo's own versions
             #todo more!?
             yield entry
 
