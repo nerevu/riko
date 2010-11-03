@@ -1,5 +1,5 @@
 Design
-------
+======
 The Yahoo pipelines are translated into pipelines of Python generators which 
 should give a close match to the original data flow. Each call to the final
 generator will ripple through the pipeline issuing .next() calls until the 
@@ -20,14 +20,14 @@ we could use queues to plumb them together.
 
 
 Install the dependencies
-------------------------
+========================
 If using a Python version before 2.6 then simplejson is needed:
   
   * http://pypi.python.org/pypi/simplejson
 
 
 Setting up the environment
---------------------------
+==========================
 Put the source code in a directory, say, pipeline/pipe2py.
 
 Make the package available to Python, e.g.
@@ -36,14 +36,17 @@ Make the package available to Python, e.g.
 
 
 Unit tests
-----------
+==========
 Run in the test directory:
 
   python testbasics.py
 
-  
+In test-mode, modules needing user input use the default values rather than 
+prompting the user. This is done by setting context.test==True.
+
+
 Usage
------
+=====
 There are two ways to translate a Yahoo pipe into Python. One outputs a Python 
 script which wraps the pipeline in a function which can then be imported and 
 run from another Python program (i.e. compiled). The other interprets the 
@@ -85,3 +88,44 @@ p = parse_and_build_pipe(Context(), pipe_def)
 for i in p:
     print i
 
+
+Inputs
+======
+Some pipelines need to prompt the user for input values. When running a
+compiled pipe, it defaults to prompting the user via the console, but in other
+situations this may not be appropriate, e.g. when integrating with a website. 
+In such cases, the input values can instead be read from the pipe's context (a 
+set of values passed into every pipe). The context.inputs dictionary can be 
+pre-populated with user input before the pipe is executed. 
+
+To determine which prompts are needed, the pipeline can be called initially 
+with context.describe_input==True, and this will return a list tuples 
+defining the inputs needed (it will not execute the pipe), e.g.:
+
+    context = Context(describe_input=True)
+    p = pipe_ac45e9eb9b0174a4e53f23c4c9903c3f(context, None)
+    need_inputs = p
+    print need_inputs
+
+    >>> [(u'0', u'username', u'Twitter username', u'text', u''), 
+    ...  (u'1', u'statustitle', u'Status title [string] or [logo] means twitter icon', u'text', u'logo')]
+
+Each tuple is of the form:
+
+  (position,
+   name,
+   prompt,
+   type,
+   default)
+
+The list of tuples is sorted by position, i.e. the order in which they should 
+be presented to the user. The name should be used as a key in the 
+context.inputs dictionary. The prompt is the prompt for the user. Type is the 
+data type, e.g. text, number. And default is the default value (used if no 
+value is given), e.g. to run the above pipe with pre-defined inputs, and so no
+console prompting:
+
+    context = Context(inputs={'username':'greg', 'statustitle':'logo'})
+    p = pipe_ac45e9eb9b0174a4e53f23c4c9903c3f(context, None)
+    for i in p:
+        print i

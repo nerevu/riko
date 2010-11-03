@@ -1,6 +1,8 @@
 # pipeurlinput.py
 #
 
+import urllib2
+
 def pipe_urlinput(context, _INPUT, conf, **kwargs):
     """This source prompts the user for a url and yields it forever.
     
@@ -14,15 +16,22 @@ def pipe_urlinput(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     url
     """
+    name = conf['name']['value']
     default = conf['default']['value']   
     prompt = conf['prompt']['value']
+    debug = conf['debug']['value']
     
     if context.test:
-        value = ""  #we skip user interaction during tests
-    else:
+        value = default  #we skip user interaction during tests  #Note: docs say debug is used, but doesn't seem to be
+    elif context.console:
         value = raw_input(prompt + (" (default=%s) " % default))
-    if value == "":
-        value = default
+        if value == "":
+            value = default
+    else:
+        value = context.inputs.get(name, default)
+        
+    #Ensure url is valid
+    value = urllib2.quote(value, safe="%/:=&?~#+!$,;'@()*[]")
         
     while True:
         yield value

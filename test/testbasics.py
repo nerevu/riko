@@ -295,7 +295,21 @@ class TestBasics(unittest.TestCase):
             
         self.assertTrue(count == 1)
         
+    def test_describe_input(self):
+        """Loads a pipeline but just gets the input requirements
+        """
+        pipe_def = self._get_pipe_def("pipe_5fabfc509a8e44342941060c7c7d0340.json")
+        self.context.describe_input = True
+        inputs = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
+        self.assertTrue(inputs, [(u'', u'dateinput1', u'dateinput1', u'datetime', u'10/14/2010'), 
+                                 (u'', u'locationinput1', u'locationinput1', u'location', u'isle of wight, uk'), 
+                                 (u'', u'numberinput1', u'numberinput1', u'number', u'12121'), 
+                                 (u'', u'privateinput1', u'privateinput1', u'text', u''), 
+                                 (u'', u'textinput1', u'textinput1', u'text', u'This is default text - is there debug text too?'), 
+                                 (u'', u'urlinput1', u'urlinput1', u'url', u'http://example.com')])
+        
+
         
     #todo test malformed pipeline syntax too
     

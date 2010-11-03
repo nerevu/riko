@@ -14,15 +14,19 @@ def pipe_textinput(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     text
     """
-    default = conf['default']['value']   
+    name = conf['name']['value']
+    default = conf['default']['value']
     prompt = conf['prompt']['value']
+    debug = conf['debug']['value']
     
     if context.test:
-        value = ""  #we skip user interaction during tests
-    else:
+        value = default  #we skip user interaction during tests  #Note: docs say debug is used, but doesn't seem to be
+    elif context.console:
         value = raw_input(prompt + (" (default=%s) " % default))
-    if value == "":
-        value = default
+        if value == "":
+            value = default
+    else:
+        value = context.inputs.get(name, default)
         
     while True:
         yield value
