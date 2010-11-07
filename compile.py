@@ -104,7 +104,7 @@ def build_pipe(context, pipe):
                             module['conf']['prompt']['value'],
                             module['conf']['default']['type'],
                             module['conf']['default']['value']))
-            #todo add code to recursively collate inputs from subpipelines
+            #Note: there seems to be no need to recursively collate inputs from subpipelines
             
     if context.describe_input:
         return sorted(pyinput)
@@ -135,7 +135,6 @@ def build_pipe(context, pipe):
                 kargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
                 
         if module['type'] == 'loop':
-            #todo need to hook up any inputs here
             kargs["embed"] = steps[util.pythonise(module['conf']['embed']['value']['id'])]
                 
         #todo (re)import other pipes dynamically
@@ -196,7 +195,7 @@ def write_pipe(context, pipe):
                             module['conf']['prompt']['value'],
                             module['conf']['default']['type'],
                             module['conf']['default']['value']))
-            #todo add code to recursively collate inputs from subpipelines
+            #Note: there seems to be no need to recursively collate inputs from subpipelines
             
     pypipe += ("""\n"""
                """def %(pipename)s(context, _INPUT, conf=None, **kwargs):\n"""
@@ -323,7 +322,7 @@ if __name__ == '__main__':
         if not pipe_def['query']['results']:
             print "Pipe not found"
             sys.exit(1)
-        pjson = pipe_def['query']['results']['json']['PIPE']['working'] #todo note: I'm sure this needed wrapping in json.dumps() before
+        pjson = pipe_def['query']['results']['json']['PIPE']['working']
         pipe_def = json.loads(pjson)
         name = "pipe_%s" % options.pipeid
     elif filename:
