@@ -19,6 +19,8 @@ __all__ = ['pipeforever',
            'pipestrconcat',
            'pipedateformat',
            'pipestrregex',
+           'pipenumberinput',
+           'pipeprivateinput',
 
            'pipefilter',
            'piperename',
