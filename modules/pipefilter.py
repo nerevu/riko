@@ -51,11 +51,17 @@ def _rulepass(rule, item):
     
     #todo check which of these should be case insensitive
     if op == "contains":
-        if value.lower() in item[field].lower():  #todo use regex?
-            return True
+        try:
+            if value.lower() in item[field].lower():  #todo use regex?
+                return True
+        except UnicodeDecodeError:
+            pass
     if op == "doesnotcontain":
-        if value.lower() not in item[field].lower():  #todo use regex?
-            return True
+        try:
+            if value.lower() not in item[field].lower():  #todo use regex?
+                return True
+        except UnicodeDecodeError:
+            pass
     if op == "matches":
         if re.search(value, item[field]):
             return True
