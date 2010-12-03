@@ -25,6 +25,8 @@
    Universal Feed Parser module by: Mark Pilgrim (http://feedparser.org)
 """
 
+__version__ = "0.9.0"
+
 from optparse import OptionParser
 import fileinput
 import urllib
