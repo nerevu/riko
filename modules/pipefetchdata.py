@@ -48,8 +48,12 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
             else:
                 match = "%s" % (path.split(".")[-1])
         #Convert xml into generation of dicts
-        for element in root.findall(match):
-            i = util.xml_to_dict(element)           
+        if match:
+            for element in root.findall(match):
+                i = util.xml_to_dict(element)           
+                yield i
+        else:
+            i = util.xml_to_dict(root)
             yield i
             
     except Exception, e:
