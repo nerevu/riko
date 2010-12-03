@@ -37,8 +37,8 @@ def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
         #Ensure url is valid
         url = urllib2.quote(url, safe="%/:=&?~#+!$,;'@()*[]")
         
-        params = dict([(util.get_value(p['key'], item, **kwargs), util.get_value(p['value'], item, **kwargs)) for p in conf['PARAM']])
-        if params:
+        params = dict([(util.get_value(p['key'], item, **kwargs), util.get_value(p['value'], item, **kwargs)) for p in conf['PARAM'] if p])
+        if params and params.keys() != [u'']:
             url += "?" + urllib.urlencode(params)
         
         yield url
