@@ -326,15 +326,15 @@ class TestBasics(unittest.TestCase):
                 match +=1
             if t == 'Ravenscar to Hull':
                 match +=1
-            if t == 'East Coast - Smugglers, Alum and Scarborough Bay':
-                match +=1
+            #if t == 'East Coast - Smugglers, Alum and Scarborough Bay':
+                #match +=1
             if t == "Swanage to Land's End":
                 match +=1
             if t == 'Heart of the British Isles - A Grand Tour':
                 match +=1
 
-        self.assertTrue(count == 6)
-        self.assertTrue(match == 6)
+        self.assertTrue(count == 5)
+        self.assertTrue(match == 5)
         
     #todo test malformed pipeline syntax too
     
