@@ -38,23 +38,18 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
         #Move to the point referenced by the path
         #todo lxml would simplify and speed up this
         if path:
-            namespace = root.tag[1:].split("}")[0]
-            for i in path.split(".")[:-1]:
-                root = root.find("{%s}%s" % (namespace, i))
-                if root is None:
-                    return
-            match = "{%s}%s" % (namespace, path.split(".")[-1])
-        #Convert xml into generation of dicts
-        #todo look at using util.xml_to_dict here...
-        for element in root.findall(match):
-            if element.getchildren():
-                i = {}
-                for c in element.getchildren():
-                    tag = c.tag.split('}', 1)[-1]
-                    i[tag] = c.text
+            if root.tag[0] == '{':
+                namespace = root.tag[1:].split("}")[0]
+                for i in path.split(".")[:-1]:
+                    root = root.find("{%s}%s" % (namespace, i))
+                    if root is None:
+                        return
+                match = "{%s}%s" % (namespace, path.split(".")[-1])
             else:
-                i = dict(element.items())
-                i['content'] = element.text
+                match = "%s" % (path.split(".")[-1])
+        #Convert xml into generation of dicts
+        for element in root.findall(match):
+            i = util.xml_to_dict(element)           
             yield i
             
     except Exception, e:
