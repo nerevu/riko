@@ -24,7 +24,7 @@ def pipe_urlinput(context, _INPUT, conf, **kwargs):
     if context.test:
         value = default  #we skip user interaction during tests  #Note: docs say debug is used, but doesn't seem to be
     elif context.console:
-        value = raw_input(prompt + (" (default=%s) " % default))
+        value = raw_input(prompt.encode('utf-8') + (" (default=%s) " % default.encode('utf-8')))
         if value == "":
             value = default
     else:
