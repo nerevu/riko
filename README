@@ -99,7 +99,7 @@ set of values passed into every pipe). The context.inputs dictionary can be
 pre-populated with user input before the pipe is executed. 
 
 To determine which prompts are needed, the pipeline can be called initially 
-with context.describe_input==True, and this will return a list tuples 
+with context.describe_input==True, and this will return a list of tuples 
 defining the inputs needed (it will not execute the pipe), e.g.:
 
     context = Context(describe_input=True)
