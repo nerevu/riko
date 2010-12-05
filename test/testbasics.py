@@ -308,33 +308,34 @@ class TestBasics(unittest.TestCase):
                                  (u'', u'privateinput1', u'privateinput1', u'text', u''), 
                                  (u'', u'textinput1', u'textinput1', u'text', u'This is default text - is there debug text too?'), 
                                  (u'', u'urlinput1', u'urlinput1', u'url', u'http://example.com')])
-        
-    def test_namespaceless_xml_input(self):
-        """Loads a pipeline containing deep xml source with no namespace
-        """
-        pipe_def = self._get_pipe_def("pipe_402e244d09a4146cd80421c6628eb6d9.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        
-        count = 0
-        match = 0
-        for i in p:
-            count += 1
-            t = i['title']
-            if t == 'Lands End to Porthcawl':
-                match +=1
-            if t == 'Brittany':
-                match +=1
-            if t == 'Ravenscar to Hull':
-                match +=1
-            #if t == 'East Coast - Smugglers, Alum and Scarborough Bay':
-                #match +=1
-            if t == "Swanage to Land's End":
-                match +=1
-            if t == 'Heart of the British Isles - A Grand Tour':
-                match +=1
 
-        self.assertTrue(count == 5)
-        self.assertTrue(match == 5)
+    #removed: data too unstable: get a local copy
+    #def test_namespaceless_xml_input(self):
+        #"""Loads a pipeline containing deep xml source with no namespace
+        #"""
+        #pipe_def = self._get_pipe_def("pipe_402e244d09a4146cd80421c6628eb6d9.json")
+        #p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        #count = 0
+        #match = 0
+        #for i in p:
+            #count += 1
+            #t = i['title']
+            #if t == 'Lands End to Porthcawl':
+                #match +=1
+            #if t == 'Brittany':
+                #match +=1
+            #if t == 'Ravenscar to Hull':
+                #match +=1
+            ##if t == 'East Coast - Smugglers, Alum and Scarborough Bay':
+                ##match +=1
+            #if t == "Swanage to Land's End":
+                #match +=1
+            #if t == 'Heart of the British Isles - A Grand Tour':
+                #match +=1
+
+        #self.assertTrue(count == 5)
+        #self.assertTrue(match == 5)
         
     #todo test malformed pipeline syntax too
     
