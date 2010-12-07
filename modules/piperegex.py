@@ -35,7 +35,7 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
                 return item[matchobj.group(1)]
             
         for rule in rules:
-            if rule[0] in item:
+            if rule[0] in item and item[rule[0]]:
                 util.set_value(item, rule[0], re.sub(rule[1], rule[2], item[rule[0]]))
     
                 util.set_value(item, rule[0], re.sub('\$\{(.+)\}', sub_fields, item[rule[0]]))
