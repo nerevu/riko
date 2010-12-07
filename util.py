@@ -45,7 +45,10 @@ def get_value(_item, _loop_item=None, **kwargs):
     elif 'terminal' in _item:  #value fed in from another module
         return kwargs[pythonise(_item['terminal'])].next()
     elif 'subkey' in _item:  #reference to current loop item
-        return reduce(lambda i,k:hasattr(i, 'get') and i.get(k) or None, _item['subkey'].split('.'), _loop_item) #silently returns None if any part is not found
+        return reduce(lambda i,k:hasattr(i, 'get') and i.get(k) or (k=='value' and i or None),
+                                 _item['subkey'].split('.'), _loop_item) #silently returns None if any part is not found
+                                                                         #unless 'value' is the part in which case we return the parent 
+                                                                         #(to cope with y:id.value -> y:id)
 
 def set_value(item, key, value):
     """Set a key's value in the item
