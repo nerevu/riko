@@ -23,6 +23,9 @@ def pipe_union(context, _INPUT, conf, **kwargs):
     #Single thread and sequential pulling will do for now...
     
     for item in _INPUT:
+        if item == True: #i.e. this is being fed forever, i.e. not a real source so just use _OTHERs
+            break
+
         yield item
     
     for other in kwargs:

@@ -337,6 +337,23 @@ class TestBasics(unittest.TestCase):
         #self.assertTrue(count == 5)
         #self.assertTrue(match == 5)
         
+    def test_union_just_other(self):
+        """Loads a pipeline containing a union with the first input unconnected
+           (also tests for re with empty source string
+            and reference to 'y:id.value')
+        """
+        pipe_def = self._get_pipe_def("pipe_6e30c269a69baf92cd420900b0645f88.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            #todo: check the data!
+            
+        self.assertTrue(count > 0)
+        
+        
+        
     #todo test malformed pipeline syntax too
     
     #todo test pipe compilation too, i.e. compare output against an expected .py file
