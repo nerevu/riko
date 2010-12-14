@@ -50,6 +50,7 @@ def _rulepass(rule, item):
         return True
     
     #todo check which of these should be case insensitive
+    #todo check whether we need to use get_value instead of item[] here?
     if op == "contains":
         try:
             if value.lower() in item[field].lower():  #todo use regex?

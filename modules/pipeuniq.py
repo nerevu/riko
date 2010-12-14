@@ -28,6 +28,7 @@ def pipe_uniq(context, _INPUT, conf, **kwargs):
             
     seen = None
     for item in sorted_input:
+        #todo: do we ever need get_value here instead of item[]?
         if seen != item[field]:
             yield item
             seen = item[field]

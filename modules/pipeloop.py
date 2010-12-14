@@ -2,6 +2,7 @@
 #
 
 from pipe2py import util
+import copy
 
 def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     """This operator loops over the input performing the embedded submodule. 
@@ -21,24 +22,42 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     """
     mode = conf['mode']['value']
     assign_to = conf['assign_to']['value']
+    assign_part = conf['assign_part']['value']
+    emit_part = conf['emit_part']['value']
     loop_with = conf['with']['value']
+    embed_conf = conf['embed']['value']['conf']
+    
+    #Prepare the submodule to take parameters from the loop instead of from the user
+    embed_context = copy.copy(context)
+    embed_context.submodule = True
     
     for item in _INPUT:        
         if loop_with:
-            inp = item[loop_with]
+            inp = item[loop_with]  #todo: get_value here?
         else:
             inp = item
             
-        p = embed(context, [inp])  #prepare the submodule
+        #Pass any input parameters into the submodule
+        embed_context.inputs = {}
+        for k in embed_conf:
+            embed_context.inputs[k] = unicode(util.get_value(embed_conf[k], item))
+        p = embed(embed_context, [inp], embed_conf)  #prepare the submodule
         
-        i = None
+        results = None
         for i in p:
-            break  #todo ok to always limit inner loop to 1 call (if more then what?)
+            if mode == 'assign' and assign_part == 'first' or mode == 'EMIT' and emit_part == 'all':
+                results = i
+                break
+            else:
+                if results:
+                    results += i  #is ok here, i.e. for assign/emit_part=all?
+                else:
+                    results = i
         
         if mode == 'assign':
-            util.set_value(item, assign_to, i)
+            util.set_value(item, assign_to, results)
         elif mode == 'EMIT':
-            item = i
+            item = results
         else:
             raise Exception("Invalid mode %s (expecting assign or EMIT)" % mode)
 

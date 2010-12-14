@@ -11,10 +11,11 @@ class Context(object):
 
        test = use debug values for input prompts, i.e. for unit tests
        console = console is available for keyboard input
-       inputs = a dictionary of input values to be used when console and test are False 
+       inputs = a dictionary of input values to be used when console and test are False (or submodule is True)
                 e.g. {'name one': 'test value1'}
+       submodule = take input from inputs because this is a submodule
     """
-    def __init__(self, verbose=False, describe_input=False, test=False, console=True, inputs=None):
+    def __init__(self, verbose=False, describe_input=False, test=False, console=True, inputs=None, submodule=False):
         if inputs is None:
             inputs = {}
         self.verbose = verbose
@@ -22,3 +23,4 @@ class Context(object):
         self.console = console
         self.describe_input = describe_input
         self.inputs = inputs
+        self.submodule = submodule

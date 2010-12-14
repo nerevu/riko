@@ -19,7 +19,9 @@ def pipe_numberinput(context, _INPUT, conf, **kwargs):
     prompt = conf['prompt']['value']
     debug = conf['debug']['value']
     
-    if context.test:
+    if context.submodule:
+        value = context.inputs.get(name, default)
+    elif context.test:
         value = default  #we skip user interaction during tests  #Note: docs say debug is used, but doesn't seem to be
     elif context.console:
         value = raw_input(prompt.encode('utf-8') + (" (default=%s) " % default.encode('utf-8')))
