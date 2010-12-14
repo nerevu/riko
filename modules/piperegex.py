@@ -31,10 +31,10 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
             
     for item in _INPUT:
         def sub_fields(matchobj):
-            if matchobj.group(1) in item:
-                return item[matchobj.group(1)]
+            return util.get_value({'subkey':matchobj.group(1)}, item)
             
         for rule in rules:
+            #todo: do we ever need get_value here instead of item[]?
             if rule[0] in item and item[rule[0]]:
                 util.set_value(item, rule[0], re.sub(rule[1], rule[2], item[rule[0]]))
     
