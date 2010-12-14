@@ -69,7 +69,11 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                 match = path.split(".")[-1]
             for item in d:
                 if not match or item == match:
-                    yield d[item]
+                    if isinstance(d[item], list):
+                        for nested_item in d[item]:
+                            yield nested_item
+                    else:
+                        yield d[item]
         except Exception, e:
             #todo try iCal and yield
             #todo try KML and yield
