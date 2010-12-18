@@ -81,3 +81,27 @@ def multikeysort(items, columns):
         else:
             return 0
     return sorted(items, cmp=comparer)
+
+def get_input(context, conf):
+    """Gets a user parameter, either from the console or from an outer submodule/system
+    
+       Assumes conf has name, default, prompt and debug
+    """
+    name = conf['name']['value']
+    default = conf['default']['value']
+    prompt = conf['prompt']['value']
+    debug = conf['debug']['value']
+    
+    value = None
+    if context.submodule:
+        value = context.inputs.get(name, default)
+    elif context.test:
+        value = default  #we skip user interaction during tests  #Note: docs say debug is used, but doesn't seem to be
+    elif context.console:
+        value = raw_input(prompt.encode('utf-8') + (" (default=%s) " % default.encode('utf-8')))
+        if value == "":
+            value = default
+    else:
+        value = context.inputs.get(name, default)
+        
+    return value

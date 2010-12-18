@@ -4,7 +4,7 @@
    
      a) translates it into a Python script containing a function (using generators to build the pipeline)
      or
-     b) compile it as a pipeline of generators which can be executed in-process
+     b) compiles it as a pipeline of generators which can be executed in-process
      
    Usage:
      a) python compile.py pipe1.json
