@@ -77,6 +77,12 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     for wire in json_pipe['wires']:
         pipe['graph'][util.pythonise(wire['src']['moduleid'])].append(util.pythonise(wire['tgt']['moduleid']))
 
+    #Remove any orphan nodes
+    for node in pipe['graph'].keys():
+        targetted = [node in pipe['graph'][k] for k in pipe['graph']]
+        if not pipe['graph'][node] and not any(targetted):
+            del pipe['graph'][node]
+        
     for wire in json_pipe['wires']:
         pipe['wires'][util.pythonise(wire['id'])] = wire
             
@@ -213,6 +219,7 @@ def write_pipe(context, pipe):
                            'inputs':unicode(sorted(pyinput))}  #todo pprint this
               )
 
+    prev_module = []
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
 
