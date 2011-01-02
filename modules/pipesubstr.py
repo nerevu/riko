@@ -14,7 +14,7 @@ def pipe_substr(context, _INPUT, conf, **kwargs):
         length -- number of characters to return
     
     Yields (_OUTPUT):
-    string
+    portion of source string
     """
     sfrom = int(util.get_value(conf['from'], None, **kwargs))
     length = int(util.get_value(conf['length'], None, **kwargs))
