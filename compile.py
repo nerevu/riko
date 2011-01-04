@@ -349,7 +349,7 @@ if __name__ == '__main__':
         
     if options.savejson:
         fj = open("%s.json" % name, "w")   #todo confirm file overwrite
-        print >>fj, pjson
+        print >>fj, pjson.encode("utf-8")
         
     
     fp = open("%s.py" % name, "w")   #todo confirm file overwrite
