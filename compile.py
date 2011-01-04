@@ -297,7 +297,8 @@ def parse_and_build_pipe(context, json_pipe, pipe_name="anonymous"):
 if __name__ == '__main__':
     try:
         import json
-    except ImportError:
+        json.loads # test access to the attributes of the right json module
+    except (ImportError, AttributeError):
         import simplejson as json
    
     context = Context()

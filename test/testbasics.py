@@ -9,7 +9,8 @@ import os.path
 import fileinput
 try:
     import json
-except ImportError:
+    json.loads # test access to the attributes of the right json module
+except (ImportError, AttributeError):
     import simplejson as json
     
     
