@@ -155,6 +155,8 @@ class TestBasics(unittest.TestCase):
             
         self.assertTrue(count == 1)
         self.assertEqual(i['title'], " THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY\n             (Severe)")
+        #todo: Yahoo actually returns white space like in the following:
+        # self.assertEqual(i['title'], "THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ WASHINGTON/ OREGON AND CALIFORNIA ONLY (Severe)")
         
     def test_european_performance_cars(self):
         """Loads a pipeline containing a sort

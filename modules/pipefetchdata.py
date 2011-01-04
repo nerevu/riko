@@ -51,10 +51,10 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
         #Convert xml into generation of dicts
         if match:
             for element in root.findall(match):
-                i = util.xml_to_dict(element)           
+                i = util.etree_to_pipes(element)           
                 yield i
         else:
-            i = util.xml_to_dict(root)
+            i = util.etree_to_pipes(root)
             yield i
             
     except Exception, e:
@@ -78,5 +78,8 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
         except Exception, e:
             #todo try iCal and yield
             #todo try KML and yield
+            if context.verbose:
+                print "xml and json both failed:"
+
             raise
     

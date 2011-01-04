@@ -32,6 +32,52 @@ def xml_to_dict(element):
             
     return i
 
+def etree_to_pipes(element):
+    """Convert ETree xml into dict imitating how Yahoo Pipes does it.
+
+    todo: further investigate white space and multivalue handling
+    """
+    # start as a dict of attributes
+    i = dict(element.items())
+    if len(element): # if element has child elements
+        if element.text and element.text.strip(): # if element has text
+            i['content'] = element.text
+            
+        for child in element:
+            tag = child.tag.split('}', 1)[-1]
+
+            # process child recursively and append it to parent dict
+            subtree = etree_to_pipes(child)
+            content = i.get(tag)
+            if content is None:
+                content = subtree
+            elif isinstance(content, list):
+                content = content + [subtree]
+            else:
+                content = [content, subtree]
+            i[tag] = content
+
+            if child.tail and child.tail.strip(): # if text after child
+                # append to text content of parent
+                text = child.tail
+                content = i.get('content')
+                if content is None:
+                    content = text
+                elif isinstance(content, list):
+                    content = content + [text]
+                else:
+                    content = [content, text]
+                i['content'] = content
+    else: # element is leaf node
+        if not i.keys(): # if element doesn't have attributes
+            if element.text and element.text.strip(): # if element has text
+                i = element.text
+        else: # element has attributes
+            if element.text and element.text.strip(): # if element has text
+                i['content'] = element.text
+            
+    return i
+
     
 def get_value(_item, _loop_item=None, **kwargs):
     """Return either:
