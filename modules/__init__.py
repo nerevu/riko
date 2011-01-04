@@ -35,4 +35,6 @@ __all__ = ['pipeforever',
            'pipesubstr',
            
            'pipeoutput',
+
+           'pipestringtokenizer',
           ]
