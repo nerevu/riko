@@ -3,6 +3,12 @@
 import string
 from operator import itemgetter
 
+DATE_FORMAT = "%m/%d/%Y"
+DATE_FORMAT2 = "%m-%d-%Y"
+DATE_FORMAT3 = "%m/%d/%y"
+DATE_FORMAT4 = "%m-%d-%y"
+DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
+
 def pythonise(id):
     """Return a Python-friendly id"""
     if id:

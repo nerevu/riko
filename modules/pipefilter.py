@@ -5,8 +5,6 @@ import datetime
 import re
 from pipe2py import util
 
-DATE_FORMAT = "%m/%d/%Y"
-DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
 def pipe_filter(context, _INPUT, conf, **kwargs):
@@ -77,11 +75,11 @@ def _rulepass(rule, item):
             return True
     if op == "after":
         #todo handle partial datetime values
-        if datetime.datetime(*item[field][:7]) > datetime.datetime.strptime(value, DATE_FORMAT):
+        if datetime.datetime(*item[field][:7]) > datetime.datetime.strptime(value, util.DATE_FORMAT):
             return True
     if op == "before":
         #todo handle partial datetime values
-        if datetime.datetime(*item[field][:7]) < datetime.datetime.strptime(value, DATE_FORMAT):
+        if datetime.datetime(*item[field][:7]) < datetime.datetime.strptime(value, util.DATE_FORMAT):
             return True
         
     return False

@@ -20,14 +20,14 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
     rules = []
        
     for rule in conf['RULE']:
-        #TODO compile regex here: c = re.compile(match)
         match = util.get_value(rule['match'], None, **kwargs) #todo use subkey?
+        matchc = re.compile(match, re.DOTALL)  #compile for speed and we need to pass flags
         replace = util.get_value(rule['replace'], None, **kwargs) #todo use subkey?
         
         #convert regex to Python format: todo use a common routine for this
         replace = re.sub('\$(\d+)', r'\\\1', replace)   #map $1 to \1 etc.   #todo: also need to escape any existing \1 etc.
 
-        rules.append((rule['field']['value'], match, replace))
+        rules.append((rule['field']['value'], matchc, replace))
             
     for item in _INPUT:
         def sub_fields(matchobj):
