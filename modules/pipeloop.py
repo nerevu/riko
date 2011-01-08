@@ -3,6 +3,7 @@
 
 from pipe2py import util
 import copy
+from urllib2 import HTTPError
 
 def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     """This operator loops over the input performing the embedded submodule. 
@@ -44,15 +45,20 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         p = embed(embed_context, [inp], embed_conf)  #prepare the submodule
         
         results = None
-        for i in p:
-            if mode == 'assign' and assign_part == 'first' or mode == 'EMIT' and emit_part == 'all':
-                results = i
-                break
-            else:
-                if results:
-                    results += i  #is ok here, i.e. for assign/emit_part=all?
-                else:
+        try:
+            for i in p:
+                if mode == 'assign' and assign_part == 'first' or mode == 'EMIT' and emit_part == 'all':
                     results = i
+                    break
+                else:
+                    if results:
+                        results += i  #is ok here, i.e. for assign/emit_part=all?
+                    else:
+                        results = i
+        except HTTPError:  #todo any other errors we want to continue looping after?
+            if context.verbose:
+                print "Submodule gave HTTPError - continuing the loop"
+            continue
         
         if mode == 'assign':
             util.set_value(item, assign_to, results)
