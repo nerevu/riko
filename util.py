@@ -99,14 +99,14 @@ def get_subkey(subkey, item):
         elif (key.isdigit() and isinstance(subtree, list) and
               int(key)<len(subtree)):
             subtree = subtree[int(key)]
-        elif key=='value' or key=='content':
+        elif key=='value' or key=='content' or key=='utime':
             subtree = subtree
         else:
             subtree = None
 
         #silently returns None if any part is not found
-        #unless 'value' is the part in which case we return the parent 
-        #(to cope with y:id.value -> y:id)
+        #unless 'value' or 'utime' is the part in which case we return the parent 
+        #(to cope with y:id.value -> y:id and item.endtime.utime -> item.endtime)
     return subtree   
     
 def get_value(_item, _loop_item=None, **kwargs):
