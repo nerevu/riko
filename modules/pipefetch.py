@@ -24,6 +24,9 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
     for item in url:
         value = util.get_value(item, item, **kwargs)
         
+        if not value.lower().startswith('http'):
+            value = 'http://' + value
+        
         if context.verbose:
             print "pipe_fetch loading:", value
         d = feedparser.parse(value.encode('utf-8'))
