@@ -20,6 +20,8 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
     rules = []
        
     for rule in conf['RULE']:
+        #todo use the undocumented g,s,m,i flags here: rule['singlelinematch']['value'] == 2 indicates re.DOTALL
+        # so use that to pass to re.compile: see here for more http://livedocs.adobe.com/flex/3/html/help.html?content=12_Using_Regular_Expressions_10.html
         match = util.get_value(rule['match'], None, **kwargs) #todo use subkey?
         matchc = re.compile(match, re.DOTALL)  #compile for speed and we need to pass flags
         replace = util.get_value(rule['replace'], None, **kwargs) #todo use subkey?
