@@ -19,7 +19,7 @@ def pipe_datebuilder(context, _INPUT, conf, **kwargs):
     """
     for item in _INPUT:
         date = util.get_value(conf['DATE'], item, **kwargs).lower()
-        
+    
         if date.endswith(' day') or date.endswith(' days'):
             count = int(date.split(' ')[0])
             date = (datetime.today() + timedelta(days=count)).timetuple()
@@ -35,19 +35,14 @@ def pipe_datebuilder(context, _INPUT, conf, **kwargs):
         elif date == 'now':  #todo is this allowed by Yahoo?
             date = datetime.now().timetuple()  #better to use utcnow?
         else:
-            #todo improve this parsing - make more flexible - see what Yahoo accepts
-            try:
-                date = datetime.strptime(date, util.DATE_FORMAT).timetuple()
-            except:
+            for df in util.ALTERNATIVE_DATE_FORMATS:
                 try:
-                    date = datetime.strptime(date, util.DATE_FORMAT2).timetuple()
+                    date = datetime.strptime(date, df).timetuple()
+                    break
                 except:
-                    try:
-                        date = datetime.strptime(date, util.DATE_FORMAT3).timetuple()
-                    except:
-                        date = datetime.strptime(date, util.DATE_FORMAT4).timetuple()
+                    pass
+            else:
+                #todo: raise an exception: unexpected date format
+                pass
             
         yield date
-
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
-            break

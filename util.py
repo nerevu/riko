@@ -4,9 +4,13 @@ import string
 from operator import itemgetter
 
 DATE_FORMAT = "%m/%d/%Y"
-DATE_FORMAT2 = "%m-%d-%Y"
-DATE_FORMAT3 = "%m/%d/%y"
-DATE_FORMAT4 = "%m-%d-%y"
+ALTERNATIVE_DATE_FORMATS = ("%m-%d-%Y", 
+                            "%m/%d/%y", 
+                            "%m/%d/%Y", 
+                            "%m-%d-%y", 
+                            "%Y-%m-%dt%H:%M:%Sz",
+                            #todo more: whatever Yahoo can accept
+                            )
 DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 
 def pythonise(id):
@@ -84,6 +88,26 @@ def etree_to_pipes(element):
             
     return i
 
+def get_subkey(subkey, item):
+    """Return a value via a subkey reference
+       Note: subkey values use dot notation and we map onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
+    """
+    subtree = item
+    for key in subkey.split('.'):
+        if hasattr(subtree, 'get') and key in subtree:
+            subtree = subtree.get(key)
+        elif (key.isdigit() and isinstance(subtree, list) and
+              int(key)<len(subtree)):
+            subtree = subtree[int(key)]
+        elif key=='value' or key=='content':
+            subtree = subtree
+        else:
+            subtree = None
+
+        #silently returns None if any part is not found
+        #unless 'value' is the part in which case we return the parent 
+        #(to cope with y:id.value -> y:id)
+    return subtree   
     
 def get_value(_item, _loop_item=None, **kwargs):
     """Return either:
@@ -97,22 +121,7 @@ def get_value(_item, _loop_item=None, **kwargs):
     elif 'terminal' in _item:  #value fed in from another module
         return kwargs[pythonise(_item['terminal'])].next()
     elif 'subkey' in _item:  #reference to current loop item
-        subtree = _loop_item
-        for key in _item['subkey'].split('.'):
-            if hasattr(subtree, 'get') and key in subtree:
-                subtree = subtree.get(key)
-            elif (key.isdigit() and isinstance(subtree, list) and
-                  int(key)<len(subtree)):
-                subtree = subtree[int(key)]
-            elif key=='value' or key=='content':
-                subtree = subtree
-            else:
-                subtree = None
-
-            #silently returns None if any part is not found
-            #unless 'value' is the part in which case we return the parent 
-            #(to cope with y:id.value -> y:id)
-        return subtree
+        return get_subkey(_item['subkey'], _loop_item)
 
 def set_value(item, key, value):
     """Set a key's value in the item
@@ -169,3 +178,7 @@ def get_input(context, conf):
         value = context.inputs.get(name, default)
         
     return value
+
+def rreplace(s, find, replace, count=None):
+    li = s.rsplit(find, count)
+    return replace.join(li)

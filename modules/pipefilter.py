@@ -44,42 +44,47 @@ def pipe_filter(context, _INPUT, conf, **kwargs):
 def _rulepass(rule, item):
     field, op, value = rule
     
-    if field not in item:
+    data = util.get_subkey(field, item)
+    
+    if data is None:
         return True
     
     #todo check which of these should be case insensitive
-    #todo check whether we need to use get_value instead of item[] here?
     if op == "contains":
         try:
-            if value.lower() in item[field].lower():  #todo use regex?
+            if value.lower() and value.lower() in data.lower():  #todo use regex?
                 return True
         except UnicodeDecodeError:
             pass
     if op == "doesnotcontain":
         try:
-            if value.lower() not in item[field].lower():  #todo use regex?
+            if value.lower() and value.lower() not in data.lower():  #todo use regex?
                 return True
         except UnicodeDecodeError:
             pass
     if op == "matches":
-        if re.search(value, item[field]):
+        if re.search(value, data):
             return True
     if op == "is":
-        if item[field] == value:
+        if data == value:
             return True
     if op == "greater":
-        if item[field] > value:
+        if data > value:
             return True
     if op == "less":
-        if item[field] < value:
+        if data < value:
             return True
     if op == "after":
         #todo handle partial datetime values
-        if datetime.datetime(*item[field][:7]) > datetime.datetime.strptime(value, util.DATE_FORMAT):
+        if isinstance(value, basestring):
+            value = datetime.datetime.strptime(value, util.DATE_FORMAT).timetuple()
+        if data > value:
             return True
     if op == "before":
         #todo handle partial datetime values
-        if datetime.datetime(*item[field][:7]) < datetime.datetime.strptime(value, util.DATE_FORMAT):
+        if isinstance(value, basestring):
+            value = datetime.datetime.strptime(value, util.DATE_FORMAT).timetuple()
+        if data < value:
             return True
         
     return False

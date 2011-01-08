@@ -2,6 +2,7 @@
 #
 
 import time
+from datetime import datetime
 
 from pipe2py import util
 
@@ -20,7 +21,18 @@ def pipe_dateformat(context, _INPUT, conf, **kwargs):
     date_format = util.get_value(conf['format'], None, **kwargs)
 
     for item in _INPUT:
-        s = time.strftime(date_format, item)   #todo check all PHP formats are covered by Python
+        s = item
+        if isinstance(s, basestring):
+            for df in util.ALTERNATIVE_DATE_FORMATS:
+                try:
+                    s = datetime.strptime(s, df).timetuple()
+                    break
+                except:
+                    pass
+            else:
+                #todo: raise an exception: unexpected date format
+                pass
+        s = time.strftime(date_format, s)   #todo check all PHP formats are covered by Python
         #todo silent error handling? e.g. if item is not a date
         
         yield s
