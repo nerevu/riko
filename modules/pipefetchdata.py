@@ -26,6 +26,8 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
     elements
     """
     url = util.get_value(conf['URL'], None, **kwargs) #todo use subkey?
+    if not url.lower().startswith('http'):
+        url = 'http://' + url
     path = util.get_value(conf['path'], None, **kwargs) #todo use subkey?
     match = None
     
@@ -68,13 +70,16 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                 for i in path.split(".")[:-1]:
                     d = d.get(i)
                 match = path.split(".")[-1]
-            for item in d:
-                if not match or item == match:
-                    if isinstance(d[item], list):
-                        for nested_item in d[item]:
-                            yield nested_item
-                    else:
-                        yield d[item]
+            if match:
+                for item in d:
+                    if not match or item == match:
+                        if isinstance(d[item], list):
+                            for nested_item in d[item]:
+                                yield nested_item
+                        else:
+                            yield d[item]
+            else:
+                yield d
         except Exception, e:
             #todo try iCal and yield
             #todo try KML and yield
