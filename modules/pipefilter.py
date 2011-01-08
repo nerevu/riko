@@ -47,7 +47,7 @@ def _rulepass(rule, item):
     data = util.get_subkey(field, item)
     
     if data is None:
-        return True
+        return False
     
     #todo check which of these should be case insensitive
     if op == "contains":
