@@ -24,7 +24,7 @@ def pipe_fetch(context, _INPUT, conf, **kwargs):
     for item in url:
         value = util.get_value(item, item, **kwargs)
         
-        if not value.lower().startswith('http'):
+        if not '://' in value:
             value = 'http://' + value
         
         if context.verbose:

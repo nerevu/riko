@@ -26,7 +26,7 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
     elements
     """
     url = util.get_value(conf['URL'], None, **kwargs) #todo use subkey?
-    if not url.lower().startswith('http'):
+    if not '://' in url:
         url = 'http://' + url
     path = util.get_value(conf['path'], None, **kwargs) #todo use subkey?
     match = None
