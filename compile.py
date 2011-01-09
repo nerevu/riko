@@ -125,7 +125,7 @@ def build_pipe(context, pipe):
         #Plumb I/O
         input_module = steps["forever"]
         for wire in pipe['wires']:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
                 input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
 
         if module_id in pipe['embed']:
@@ -139,7 +139,7 @@ def build_pipe(context, pipe):
                 }
             
         for wire in pipe['wires']:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
                 kargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
                 
         if module['type'] == 'loop':
@@ -226,7 +226,7 @@ def write_pipe(context, pipe):
         #Plumb I/O
         input_module = "forever"
         for wire in pipe['wires']:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
                 input_module = util.pythonise(pipe['wires'][wire]['src']['moduleid'])
 
         if module_id in pipe['embed']:
@@ -238,7 +238,7 @@ def write_pipe(context, pipe):
                 ]
         
         for wire in pipe['wires']:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
                 pargs.append("%(id)s = %(secondary_module)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id']), 'secondary_module':util.pythonise(pipe['wires'][wire]['src']['moduleid'])})
                 
         if module['type'] == 'loop':
