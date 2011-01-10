@@ -35,6 +35,7 @@ import sys
 
 from pipe2py import Context
 from pipe2py import util
+from pipe2py.pprint import Id, repr_args, repr_arg, str_args, str_arg
 
 from topsort import topological_sort
 
@@ -123,8 +124,11 @@ def build_pipe(context, pipe):
         module = pipe['modules'][module_id]
         
         #Plumb I/O
+
+        # find the default input of this module
         input_module = steps["forever"]
         for wire in pipe['wires']:
+            # if the wire is to this module and it's the default input and it's the default output:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
                 input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
 
@@ -138,10 +142,13 @@ def build_pipe(context, pipe):
         kargs = {"conf":module['conf'],
                 }
             
+        # set the extra inputs of this module as kargs of this module
         for wire in pipe['wires']:
+            # if the wire is to this module and it's *not* the default input and it's the default output:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
                 kargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
                 
+        # set the embedded module in the kargs if this is loop module
         if module['type'] == 'loop':
             kargs["embed"] = steps[util.pythonise(module['conf']['embed']['value']['id'])]
                 
@@ -152,6 +159,7 @@ def build_pipe(context, pipe):
             pymodule_name = "sys.modules['%(module_type)s']" % {'module_type':util.pythonise(module['type'])}
             pymodule_generator_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}            
             
+        # if this module is an embedded module:
         if module_id in pipe['embed']:
             #We need to wrap submodules (used by loops) so we can pass the input at runtime (as we can to subpipelines)
             pypipe = ("""def pipe_%(module_id)s(context, _INPUT, conf=None, **kwargs):\n"""
@@ -165,7 +173,7 @@ def build_pipe(context, pipe):
                      )
             exec pypipe   #Note: evaluated in current namespace - todo ok?
             steps[module_id] = eval("pipe_%(module_id)s" % {'module_id':module_id})
-        else:
+        else: # else this module is not an embedded module:
             module_ref = eval("%(pymodule_name)s.%(pymodule_generator_name)s" % {'pymodule_name':pymodule_name, 
                                                                                  'pymodule_generator_name':pymodule_generator_name,})
             steps[module_id] = module_ref(*pargs, **kargs)
@@ -224,8 +232,11 @@ def write_pipe(context, pipe):
         module = pipe['modules'][module_id]
 
         #Plumb I/O
+
+        # find the default input of this module
         input_module = "forever"
         for wire in pipe['wires']:
+            # if the wire is to this module and it's the default input and it's the default output:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
                 input_module = util.pythonise(pipe['wires'][wire]['src']['moduleid'])
 
@@ -233,16 +244,18 @@ def write_pipe(context, pipe):
             assert input_module == "forever", "input_module of an embedded module was already set"
             input_module = "_INPUT"
         
-        pargs = ["%(input_module)s" % {'input_module':input_module}, 
-                 "conf=%(conf)s" % {'conf':module['conf']},  #todo pprint this
-                ]
-        
+        mod_args = [Id('context'), Id(input_module)]
+        mod_kwargs = [('conf', module['conf'])]
+
+        # set the extra inputs of this module as kwargs of this module
         for wire in pipe['wires']:
+            # if the wire is to this module and it's *not* the default input and it's the default output:
             if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
-                pargs.append("%(id)s = %(secondary_module)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id']), 'secondary_module':util.pythonise(pipe['wires'][wire]['src']['moduleid'])})
-                
+                mod_kwargs += [(util.pythonise(pipe['wires'][wire]['tgt']['id']), Id(util.pythonise(pipe['wires'][wire]['src']['moduleid'])))]
+
+        # set the embedded module in the kwargs if this is loop module
         if module['type'] == 'loop':
-            pargs.append("embed = pipe_%(embed_module)s" % {'embed_module':util.pythonise(module['conf']['embed']['value']['id'])})
+            mod_kwargs += [("embed", Id("pipe_%s" % util.pythonise(module['conf']['embed']['value']['id'])))]
         
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
         pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
@@ -259,20 +272,24 @@ def write_pipe(context, pipe):
                        )
             indent = "    "
             
-        pypipe += """%(indent)s    %(module_id)s = %(pymodule_name)s.%(pymodule_generator_name)s(context, %(pargs)s)\n""" % {
+        pypipe += """%(indent)s    %(module_id)s = %(pymodule_name)s.%(pymodule_generator_name)s(%(pargs)s)\n""" % {
                                                  'indent':indent,
                                                  'module_id':module_id,
                                                  'pymodule_name':pymodule_name,
                                                  'pymodule_generator_name':pymodule_generator_name,
-                                                 'pargs':", ".join(pargs)}
+                                                 'pargs':repr_args(mod_args+mod_kwargs)}
         if module_id in pipe['embed']:
             pypipe += """        return %(module_id)s\n""" % {'module_id':module_id}
 
         prev_module = module_id
         
-        #todo? if context.verbose:
-        #    print "%s = %s.%s(%s)" %(module_id, pymodule_name, pymodule_generator_name, str(pargs))
-    
+        if context.verbose:
+            print ("%s = %s(%s)" % (module_id, pymodule_generator_name,
+                                    str_args([arg for arg in mod_args if arg != Id('context')]+
+                                             [(key, value) for key, value in mod_kwargs if key != 'conf']+
+                                             [(key, value) for key, value in mod_kwargs if key == 'conf']))
+                   ).encode("utf-8")
+            
     pypipe += """    return %(module_id)s\n""" % {'module_id':prev_module}
     pypipe += ("""\n"""
                """if __name__ == "__main__":\n"""
@@ -293,6 +310,14 @@ def parse_and_build_pipe(context, json_pipe, pipe_name="anonymous"):
     pipe = _parse_pipe(json_pipe, pipe_name)
     pb = build_pipe(context, pipe)
     return pb
+
+def parse_and_analyze_pipe(context, json_pipe, pipe_name="anonymous"):
+    pipe = _parse_pipe(json_pipe, pipe_name)
+    moduletypes = sorted(list(set([module['type'] for module in pipe['modules'].values()])))
+    if context.verbose:
+        print
+        print "Modules used:", ', '.join(name for name in moduletypes if not name.startswith("pipe:")) or None
+        print "Other pipes used:", ', '.join(name[5:] for name in moduletypes if name.startswith("pipe:")) or None
 
 if __name__ == '__main__':
     try:
@@ -354,5 +379,7 @@ if __name__ == '__main__':
     
     fp = open("%s.py" % name, "w")   #todo confirm file overwrite
     print >>fp, parse_and_write_pipe(context, pipe_def, name)
+
+    parse_and_analyze_pipe(context, pipe_def, name)
     
     #for build example - see test/testbasics.py
