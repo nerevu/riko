@@ -33,7 +33,7 @@ def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
             path = [util.get_value(p, item, **kwargs) for p in path if p]
 
             url += "/".join(p for p in path if p)
-            url = url.rstrip("/")
+        url = url.rstrip("/")
         
         #Ensure url is valid
         url = urllib2.quote(url, safe="%/:=&?~#+!$,;'@()*[]")
