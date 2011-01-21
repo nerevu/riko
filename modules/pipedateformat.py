@@ -32,7 +32,10 @@ def pipe_dateformat(context, _INPUT, conf, **kwargs):
             else:
                 #todo: raise an exception: unexpected date format
                 pass
-        s = time.strftime(date_format, s)   #todo check all PHP formats are covered by Python
-        #todo silent error handling? e.g. if item is not a date
+        try:
+            s = time.strftime(date_format, s)   #todo check all PHP formats are covered by Python
+        except TypeError:
+            #silent error handling e.g. if item is not a date
+            continue
         
         yield s
