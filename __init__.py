@@ -1,6 +1,8 @@
 #pipe2py package
 #Author: Greg Gaughan
 
+#See LICENCE file for licence details
+
 class Context(object):
     """The context of a pipeline
     
