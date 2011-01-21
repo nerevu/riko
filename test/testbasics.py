@@ -399,6 +399,21 @@ class TestBasics(unittest.TestCase):
             #todo: check the data!
             
         self.assertTrue(count > 0)
+
+    def test_loops_1(self):
+        """Loads a pipeline containing a loops
+        """
+        pipe_def = self._get_pipe_def("pipe_125e9fe8bb5f84526d21bebfec3ad116.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            self.assertEqual(i, {u'description': u'de', u'language': [u'de'], 
+                                 u'language-url': 'http://ajax.googleapis.com/ajax/services/language/detect?q=Guten+Tag&v=1.0', 
+                                 u'title': u'Guten Tag'})
+            
+        self.assertTrue(count == 1)
         
         
     #todo test malformed pipeline syntax too
