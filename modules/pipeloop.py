@@ -52,7 +52,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
                     break
                 else:
                     if results:
-                        results += i  #is ok here, i.e. for assign/emit_part=all?
+                        results += i
                     else:
                         results = i
         except HTTPError:  #todo any other errors we want to continue looping after?
