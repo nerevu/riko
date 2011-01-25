@@ -2,6 +2,7 @@
 
 import string
 from operator import itemgetter
+import urllib2
 
 DATE_FORMAT = "%m/%d/%Y"
 ALTERNATIVE_DATE_FORMATS = ("%m-%d-%Y", 
@@ -12,6 +13,8 @@ ALTERNATIVE_DATE_FORMATS = ("%m-%d-%Y",
                             #todo more: whatever Yahoo can accept
                             )
 DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
+
+URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
 def pythonise(id):
     """Return a Python-friendly id"""
@@ -182,3 +185,12 @@ def get_input(context, conf):
 def rreplace(s, find, replace, count=None):
     li = s.rsplit(find, count)
     return replace.join(li)
+
+def url_quote(url):
+    """Ensure url is valid"""
+    try:
+        return urllib2.quote(url, safe=URL_SAFE)
+    except KeyError:
+        return urllib2.quote(url.encode('utf-8'), safe=URL_SAFE)
+        
+    

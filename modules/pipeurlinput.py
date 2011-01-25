@@ -2,7 +2,6 @@
 #
 
 from pipe2py import util
-import urllib2
 
 def pipe_urlinput(context, _INPUT, conf, **kwargs):
     """This source prompts the user for a url and yields it forever.
@@ -21,7 +20,7 @@ def pipe_urlinput(context, _INPUT, conf, **kwargs):
     value = util.get_input(context, conf)
         
     #Ensure url is valid
-    value = urllib2.quote(value, safe="%/:=&?~#+!$,;'@()*[]")
+    value = util.url_quote(value)
         
     while True:
         yield value

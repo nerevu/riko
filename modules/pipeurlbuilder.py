@@ -2,7 +2,6 @@
 #
 
 import urllib
-import urllib2
 from pipe2py import util
 
 def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
@@ -36,7 +35,7 @@ def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
         url = url.rstrip("/")
         
         #Ensure url is valid
-        url = urllib2.quote(url, safe="%/:=&?~#+!$,;'@()*[]")
+        url = util.url_quote(url)
         
         params = dict([(util.get_value(p['key'], item, **kwargs), util.get_value(p['value'], item, **kwargs)) for p in conf['PARAM'] if p])
         if params and params.keys() != [u'']:
