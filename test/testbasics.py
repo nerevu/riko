@@ -1,4 +1,8 @@
-"""Unit tests using basic pipeline modules"""
+"""Unit tests using basic pipeline modules
+
+   Note: many of these tests simply make sure the module compiles and runs
+         - we need more extensive tests with stable data feeds!
+"""
 
 import unittest
 
@@ -210,6 +214,19 @@ class TestBasics(unittest.TestCase):
             
         self.assertTrue(count == 3)
 
+    def test_tail(self):
+        """Loads a pipeline containing a tail
+        """
+        pipe_def = self._get_pipe_def("pipe_06c4c44316efb0f5f16e4e7fa4589ba2.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        #todo: check the data!
+        count = 0
+        for i in p:
+            count += 1
+            
+        self.assertTrue(count > 0)
+        
     def test_yql(self):
         """Loads a pipeline containing a yql query
         """
