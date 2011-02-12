@@ -25,70 +25,75 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
     Yields (_OUTPUT):
     elements
     """
+    urls = conf['URL']
+    if not isinstance(urls, list):
+        urls = [urls]
     
     for item in _INPUT:
-        url = util.get_value(conf['URL'], item, **kwargs)
-        if not '://' in url:
-            url = 'http://' + url
-        path = util.get_value(conf['path'], item, **kwargs)
-        match = None
+        for item_url in urls:
+            url = util.get_value(item_url, item, **kwargs)
         
-        #Parse the file into a dictionary
-        try:
-            f = urllib2.urlopen(url)
-            ft = ElementTree.parse(f)
-            if context.verbose:
-                print "pipe_fetchdata loading xml:", url
-            root = ft.getroot()
-            #Move to the point referenced by the path
-            #todo lxml would simplify and speed up this
-            if path:
-                if root.tag[0] == '{':
-                    namespace = root.tag[1:].split("}")[0]
-                    for i in path.split(".")[:-1]:
-                        root = root.find("{%s}%s" % (namespace, i))
-                        if root is None:
-                            return
-                    match = "{%s}%s" % (namespace, path.split(".")[-1])
-                else:
-                    match = "%s" % (path.split(".")[-1])
-            #Convert xml into generation of dicts
-            if match:
-                for element in root.findall(match):
-                    i = util.etree_to_pipes(element)           
-                    yield i
-            else:
-                i = util.etree_to_pipes(root)
-                yield i
-                
-        except Exception, e:
+            if not '://' in url:
+                url = 'http://' + url
+            path = util.get_value(conf['path'], item, **kwargs)
+            match = None
+            
+            #Parse the file into a dictionary
             try:
                 f = urllib2.urlopen(url)
-                d = json.load(f)
-                #todo test:-
+                ft = ElementTree.parse(f)
                 if context.verbose:
-                    print "pipe_fetchdata loading json:", url
+                    print "pipe_fetchdata loading xml:", url
+                root = ft.getroot()
+                #Move to the point referenced by the path
+                #todo lxml would simplify and speed up this
                 if path:
-                    for i in path.split(".")[:-1]:
-                        d = d.get(i)
-                    match = path.split(".")[-1]
+                    if root.tag[0] == '{':
+                        namespace = root.tag[1:].split("}")[0]
+                        for i in path.split(".")[:-1]:
+                            root = root.find("{%s}%s" % (namespace, i))
+                            if root is None:
+                                return
+                        match = "{%s}%s" % (namespace, path.split(".")[-1])
+                    else:
+                        match = "%s" % (path.split(".")[-1])
+                #Convert xml into generation of dicts
                 if match:
-                    for item in d:
-                        if not match or item == match:
-                            if isinstance(d[item], list):
-                                for nested_item in d[item]:
-                                    yield nested_item
-                            else:
-                                yield [d[item]]
+                    for element in root.findall(match):
+                        i = util.etree_to_pipes(element)           
+                        yield i
                 else:
-                    yield d
+                    i = util.etree_to_pipes(root)
+                    yield i
+                    
             except Exception, e:
-                #todo try iCal and yield
-                #todo try KML and yield
-                if context.verbose:
-                    print "xml and json both failed:"
-    
-                raise
+                try:
+                    f = urllib2.urlopen(url)
+                    d = json.load(f)
+                    #todo test:-
+                    if context.verbose:
+                        print "pipe_fetchdata loading json:", url
+                    if path:
+                        for i in path.split(".")[:-1]:
+                            d = d.get(i)
+                        match = path.split(".")[-1]
+                    if match:
+                        for item in d:
+                            if not match or item == match:
+                                if isinstance(d[item], list):
+                                    for nested_item in d[item]:
+                                        yield nested_item
+                                else:
+                                    yield [d[item]]
+                    else:
+                        yield d
+                except Exception, e:
+                    #todo try iCal and yield
+                    #todo try KML and yield
+                    if context.verbose:
+                        print "xml and json both failed:"
+        
+                    raise
         
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
             break
