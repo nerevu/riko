@@ -468,6 +468,19 @@ class TestBasics(unittest.TestCase):
         self.assertTrue(count == 2)
         self.assertTrue(match == 2)
         
+    def test_fetchsitefeed(self):
+        """Loads a pipeline containing a fetchsitefeed module
+        """
+        pipe_def = self._get_pipe_def("pipe_551507461cbcb19a828165daad5fe007.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            #todo: check the data!
+            
+        self.assertTrue(count > 0)
+
         
     #todo test malformed pipeline syntax too
     

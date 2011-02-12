@@ -10,6 +10,7 @@ __all__ = ['pipeforever',
            'pipeyql',
            'pipecsv',
            'pipefeedautodiscovery',
+           'pipefetchsitefeed',
            
            'pipedatebuilder',
            'pipeurlbuilder',
