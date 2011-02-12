@@ -436,6 +436,19 @@ class TestBasics(unittest.TestCase):
                                  u'title': u'Guten Tag'})
             
         self.assertTrue(count == 1)
+
+    def test_feeddiscovery(self):
+        """Loads a pipeline containing a feed auto-discovery module plus fetch-feed in a loop with emit all
+        """
+        pipe_def = self._get_pipe_def("pipe_HrX5bjkv3BGEp9eSy6ky6g.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            #todo: check the data!
+            
+        self.assertTrue(count > 0)
         
         
     #todo test malformed pipeline syntax too

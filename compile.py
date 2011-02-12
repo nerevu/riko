@@ -21,7 +21,7 @@
    Author: Greg Gaughan
    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
    Python generator pipelines inspired by: David Beazely (http://www.dabeaz.com/generators-uk)
-   Universal Feed Parser module by: Mark Pilgrim (http://feedparser.org)
+   Universal Feed Parser and autorss modules by: Mark Pilgrim (http://feedparser.org)
 
    Licence: see LICENCE file
 """
