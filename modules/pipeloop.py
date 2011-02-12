@@ -46,26 +46,34 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         
         results = None
         try:
+            #loop over the submodule, emitting as we go or collecting results for later assignment
             for i in p:
-                if mode == 'assign' and assign_part == 'first' or mode == 'EMIT' and emit_part == 'all':
-                    results = i
-                    break
-                else:
-                    if results:
-                        results += i
+                if assign_part == 'first':
+                    if mode == 'EMIT':
+                        yield i
                     else:
                         results = i
+                    break
+                else:  #all
+                    if mode == 'EMIT':
+                        yield i
+                    else:
+                        if results:
+                            results.append(i)
+                        else:
+                            results = [i]
         except HTTPError:  #todo any other errors we want to continue looping after?
             if context.verbose:
                 print "Submodule gave HTTPError - continuing the loop"
             continue
         
         if mode == 'assign':
+            if results and len(results) == 1:
+                results = results[0]           
             util.set_value(item, assign_to, results)
+            yield item
         elif mode == 'EMIT':
-            item = results
+            pass  #already yielded
         else:
             raise Exception("Invalid mode %s (expecting assign or EMIT)" % mode)
 
-        yield item
-            
