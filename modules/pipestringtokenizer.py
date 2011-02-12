@@ -19,7 +19,8 @@ def pipe_stringtokenizer(context, _INPUT, conf, **kwargs):
 
     for item in _INPUT:
         if item is not None:
-            yield item.split(delim)
+            for chunk in item.split(delim):
+                yield {'content':chunk}
 
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
             break        

@@ -449,6 +449,24 @@ class TestBasics(unittest.TestCase):
             #todo: check the data!
             
         self.assertTrue(count > 0)
+
+    def test_stringtokeniser(self):
+        """Loads a pipeline containing a stringtokeniser
+        """
+        pipe_def = self._get_pipe_def("pipe_975789b47f17690a21e89b10a702bcbd.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        match = 0
+        for i in p:
+            count += 1
+            if i == {u'title': u'#hashtags'}:
+                match += 1
+            if i == {u'title': u'#with'}:
+                match += 1
+            
+        self.assertTrue(count == 2)
+        self.assertTrue(match == 2)
         
         
     #todo test malformed pipeline syntax too
