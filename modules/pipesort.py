@@ -18,7 +18,10 @@ def pipe_sort(context, _INPUT, conf, **kwargs):
     """
     order = []
        
-    for key in conf['KEY']:
+    keys = conf['KEY']
+    if not isinstance(keys, list):
+        keys = [keys]
+    for key in keys:
         field = util.get_value(key['field'], None, **kwargs)
         sort_dir = util.get_value(key['dir'], None, **kwargs)
         order.append('%s%s' % (sort_dir=='DESC' and '-' or '', field))
