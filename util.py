@@ -152,6 +152,9 @@ def multikeysort(items, columns):
             except KeyError:
                 #todo perhaps care more if only one side has the missing key
                 result = 0
+            except TypeError:  #todo handle bool better?
+                #todo perhaps care more if only one side has the missing key
+                result = 0
             if result:
                 return mult * result
         else:
