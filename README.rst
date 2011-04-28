@@ -127,10 +127,11 @@ The list of tuples is sorted by position, i.e. the order in which they should
 be presented to the user. The name should be used as a key in the 
 `context.inputs` dictionary. The prompt is the prompt for the user. Type is 
 the data type, e.g. text, number. And default is the default value (used if no 
-value is given), e.g. to run the above pipe with pre-defined inputs, and so no
+value is given), e.g. to run the above pipe with pre-defined inputs, and no
 console prompting::
 
-    context = Context(inputs={'username':'greg', 'statustitle':'logo'})
+    context = Context(inputs={'username':'greg', 'statustitle':'logo'}, 
+                      console=False)
     p = pipe_ac45e9eb9b0174a4e53f23c4c9903c3f(context, None)
     for i in p:
         print i
