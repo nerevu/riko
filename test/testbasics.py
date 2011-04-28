@@ -312,11 +312,11 @@ class TestBasics(unittest.TestCase):
         p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         
         #todo: check the data! e.g. pubdate etc.
-        count = 0
+        creators = set()
         for i in p:
-            count += 1
-            
-        self.assertTrue(count == 1)
+            if i.get('dc:creator') in creators:
+                self.fail()
+            creators.add(i.get('dc:creator'))
         
     def test_describe_input(self):
         """Loads a pipeline but just gets the input requirements
