@@ -4,14 +4,15 @@
 #Note: each module name must match the name used internally by Yahoo, preceded by pipe
 
 __all__ = ['pipeforever',
-    
+
            'pipefetch',
            'pipefetchdata',
+           'pipefetchpage',
            'pipeyql',
            'pipecsv',
            'pipefeedautodiscovery',
            'pipefetchsitefeed',
-           
+
            'pipedatebuilder',
            'pipeurlbuilder',
            'pipeitembuilder',
@@ -38,7 +39,7 @@ __all__ = ['pipeforever',
            'pipestrreplace',
            'pipesubelement',
            'pipetail',
-           
+
            'pipeoutput',
 
            'pipestringtokenizer',
