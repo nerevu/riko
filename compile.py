@@ -26,7 +26,7 @@
    Licence: see LICENCE file
 """
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 from optparse import OptionParser
 import fileinput
@@ -198,7 +198,7 @@ def write_pipe(context, pipe):
         module = pipe['modules'][module_id]
         if module['type'].startswith('pipe:'):
             pypipe += """import %(module_type)s\n""" % {'module_type':util.pythonise(module['type'])}
-        if 'prompt' in module['conf']:
+        if module['conf'] and 'prompt' in module['conf']:
             pyinput.append((module['conf']['position']['value'],
                             module['conf']['name']['value'],
                             module['conf']['prompt']['value'],
@@ -334,7 +334,8 @@ if __name__ == '__main__':
             print "Pipe not found"
             sys.exit(1)
         pjson = pipe_def['query']['results']['json']['PIPE']['working']
-        pipe_def = json.loads(pjson)
+        pipe_def = pjson  #was json.loads(pjson) until April 2011 - changes at Yahoo! Pipes/YQL?
+        pjson = json.dumps(pjson)  #was not needed until April 2011 - changes at Yahoo! Pipes/YQL?
         name = "pipe_%s" % options.pipeid
     elif filename:
         for line in fileinput.input(filename):
