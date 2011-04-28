@@ -20,7 +20,11 @@ def pipe_strregex(context, _INPUT, conf, **kwargs):
     """
     rules = []
     
-    for rule in conf['RULE']:
+    rule_defs = conf['RULE']
+    if not isinstance(rule_defs, list):
+        rule_defs = [rule_defs]
+    
+    for rule in rule_defs:
         #TODO compile regex here: c = re.compile(match)
         match = util.get_value(rule['match'], None, **kwargs) #todo use subkey?
         replace = util.get_value(rule['replace'], None, **kwargs) #todo use subkey?

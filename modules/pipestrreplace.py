@@ -20,7 +20,11 @@ def pipe_strreplace(context, _INPUT, conf, **kwargs):
     """
     rules = []
        
-    for rule in conf['RULE']:
+    rule_defs = conf['RULE']
+    if not isinstance(rule_defs, list):
+        rule_defs = [rule_defs]
+    
+    for rule in rule_defs:
         find = util.get_value(rule['find'], None, **kwargs)
         param = util.get_value(rule['param'], None, **kwargs)
         replace = util.get_value(rule['replace'], None, **kwargs)

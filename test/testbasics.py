@@ -174,6 +174,8 @@ class TestBasics(unittest.TestCase):
             count += 1
             
         self.assertTrue(count > 0)
+        
+    #todo: need tests with single and mult-part key
     
     def test_twitter(self):
         """Loads a pipeline containing a loop, complex regex etc. for twitter

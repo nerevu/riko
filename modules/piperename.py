@@ -18,8 +18,12 @@ def pipe_rename(context, _INPUT, conf, **kwargs):
     source items after copying/renaming
     """
     rules = []
+    
+    rule_defs = conf['RULE']
+    if not isinstance(rule_defs, list):
+        rule_defs = [rule_defs]
        
-    for rule in conf['RULE']:
+    for rule in rule_defs:
         newval = util.get_value(rule['newval'], None, **kwargs) #todo use subkey?
         newfield = rule['field']
         #trick the get_value in the loop to mapping value onto an item key (rather than taking it literally, i.e. make it a LHS reference, not a RHS value)        

@@ -18,8 +18,12 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
     source items after replacing values matching regexes
     """
     rules = []
-       
-    for rule in conf['RULE']:
+
+    rule_defs = conf['RULE']
+    if not isinstance(rule_defs, list):
+        rule_defs = [rule_defs]
+    
+    for rule in rule_defs:
         #todo use the undocumented g,s,m,i flags here: rule['singlelinematch']['value'] == 2 indicates re.DOTALL
         # so use that to pass to re.compile: see here for more http://livedocs.adobe.com/flex/3/html/help.html?content=12_Using_Regular_Expressions_10.html
         match = util.get_value(rule['match'], None, **kwargs) #todo use subkey?

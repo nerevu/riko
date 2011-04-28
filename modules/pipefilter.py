@@ -25,8 +25,12 @@ def pipe_filter(context, _INPUT, conf, **kwargs):
     mode = conf['MODE']['value']
     combine = conf['COMBINE']['value']
     rules = []
-       
-    for rule in conf['RULE']:
+
+    rule_defs = conf['RULE']
+    if not isinstance(rule_defs, list):
+        rule_defs = [rule_defs]
+    
+    for rule in rule_defs:
         field = rule['field']['value']
         value = util.get_value(rule['value'], None, **kwargs) #todo use subkey?
         rules.append((field, rule['op']['value'], value))
