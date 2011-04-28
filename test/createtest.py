@@ -24,13 +24,13 @@ except:
 
 if __name__ == '__main__':
     pjson = []
-    
+
     usage = "usage: %prog [options] pipeid"
     parser = OptionParser(usage=usage)
     parser.add_option("-v", dest="verbose",
-                      help="set verbose debug", action="store_true")    
+                      help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()
-    
+
     pipeid = None
     if len(args):
         pipeid = args[0]
@@ -40,7 +40,7 @@ if __name__ == '__main__':
         url = ("""http://query.yahooapis.com/v1/public/yql"""
                """?q=select%20PIPE.working%20from%20json%20"""
                """where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D"""
-               + pipeid + 
+               + pipeid +
                """%22&format=json""")
         pjson = urllib.urlopen(url).readlines()
         pjson = "".join(pjson)
@@ -49,9 +49,10 @@ if __name__ == '__main__':
             print "Pipe not found"
             sys.exit(1)
         pjson = pipe_def['query']['results']['json']['PIPE']['working']
-        pipe_def = json.loads(pjson)
+        pipe_def = pjson # json.loads(pjson)
+        pjson = json.dumps(pjson)
         name = "pipe_%s" % pipeid
-        
+
         fj = open(os.path.join("pipelines", "%s.json" % name), "w")   #todo confirm file overwrite
         print >>fj, pjson
 
@@ -65,10 +66,10 @@ if __name__ == '__main__':
             print "Pipe results not found"
             sys.exit(1)
         ojson = pipe_output
-        
+
         fjo = open(os.path.join("pipelines", "%s_output.json" % name), "w")   #todo confirm file overwrite
         print >>fjo, ojson
-        
+
         #todo: to create stable, repeatable test cases we should:
         #  build the pipeline to find the external data sources
         #  download and save any fetchdata/fetch source data
@@ -80,4 +81,4 @@ if __name__ == '__main__':
         #todo optional:
         #fp = open(os.path.join("pipelines", "%s.py" % name), "w")   #todo confirm file overwrite
         #print >>fp, parse_and_write_pipe(context, pipe_def, name)
-    
+
