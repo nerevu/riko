@@ -94,9 +94,10 @@ def etree_to_pipes(element):
 def get_subkey(subkey, item):
     """Return a value via a subkey reference
        Note: subkey values use dot notation and we map onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
+       Note: we first remove any trailing . (i.e. 'item.loop:stringtokenizer.1.content.' should just match 'item.loop:stringtokenizer.1.content')
     """
     subtree = item
-    for key in subkey.split('.'):
+    for key in subkey.rstrip('.').split('.'):
         if hasattr(subtree, 'get') and key in subtree:
             subtree = subtree.get(key)
         elif (key.isdigit() and isinstance(subtree, list) and
