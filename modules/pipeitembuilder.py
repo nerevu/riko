@@ -17,6 +17,8 @@ def pipe_itembuilder(context, _INPUT, conf, **kwargs):
     item
     """
     attrs = conf['attrs']
+    if not isinstance(attrs, list):
+        attrs = [attrs]
     
     for item in _INPUT:
         d = {}
