@@ -107,7 +107,7 @@ def build_pipe(context, pipe):
         module = pipe['modules'][module_id]
         if module['type'].startswith('pipe:'):
             __import__(util.pythonise(module['type']))
-        if 'prompt' in module['conf'] and context.describe_input:
+        if module['conf'] and 'prompt' in module['conf'] and context.describe_input:
             pyinput.append((module['conf']['position']['value'],
                             module['conf']['name']['value'],
                             module['conf']['prompt']['value'],
