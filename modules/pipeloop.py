@@ -34,7 +34,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     
     for item in _INPUT:        
         if loop_with:
-            inp = item[loop_with]  #todo: get_value here?
+            inp = util.get_subkey(loop_with, item)
         else:
             inp = item
             
