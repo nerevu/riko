@@ -4,6 +4,7 @@
 import datetime
 import re
 from pipe2py import util
+from decimal import Decimal
 
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
@@ -73,11 +74,19 @@ def _rulepass(rule, item):
         if data == value:
             return True
     if op == "greater":
-        if data > value:
-            return True
+        try:
+            if Decimal(data) > Decimal(value):
+                return True
+        except:
+            if data > value:
+                return True
     if op == "less":
-        if data < value:
-            return True
+        try:
+            if Decimal(data) < Decimal(value):
+                return True
+        except:
+            if data < value:
+                return True
     if op == "after":
         #todo handle partial datetime values
         if isinstance(value, basestring):
