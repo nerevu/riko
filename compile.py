@@ -64,7 +64,10 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     pipe['embed'] = {}
     pipe['graph'] = {}
     pipe['wires'] = {}
-    for module in json_pipe['modules']:
+    modules = json_pipe['modules']
+    if not isinstance(modules, list):
+        modules = [modules]
+    for module in modules:
         pipe['modules'][util.pythonise(module['id'])] = module
         pipe['graph'][util.pythonise(module['id'])] = []
         if module['type'] == 'loop':
@@ -75,7 +78,10 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
             #make the loop dependent on its embedded module
             pipe['graph'][util.pythonise(embed['id'])].append(util.pythonise(module['id']))
 
-    for wire in json_pipe['wires']:
+    wires = json_pipe['wires']
+    if not isinstance(wires, list):
+        wires = [wires]
+    for wire in wires:
         pipe['graph'][util.pythonise(wire['src']['moduleid'])].append(util.pythonise(wire['tgt']['moduleid']))
 
     #Remove any orphan nodes
@@ -84,7 +90,7 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
         if not pipe['graph'][node] and not any(targetted):
             del pipe['graph'][node]
         
-    for wire in json_pipe['wires']:
+    for wire in wires:
         pipe['wires'][util.pythonise(wire['id'])] = wire
             
     return pipe
