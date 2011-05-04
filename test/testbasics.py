@@ -483,6 +483,31 @@ class TestBasics(unittest.TestCase):
             
         self.assertTrue(count > 0)
 
+    def test_fetchpage(self):
+        """Loads a pipeline containing a fetchpage module
+        """
+        pipe_def = self._get_pipe_def("pipe_9420a757a49ddf11d8b98349abb5bcf4.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            #todo: check the data!
+            
+        self.assertTrue(count > 0)
+
+    def test_fetchpage_loop(self):
+        """Loads a pipeline containing a fetchpage module within a loop
+        """
+        pipe_def = self._get_pipe_def("pipe_188eca77fd28c96c559f71f5729d91ec.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            #todo: check the data!
+            
+        self.assertTrue(count > 0)
         
     #todo test malformed pipeline syntax too
     
