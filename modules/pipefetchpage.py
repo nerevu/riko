@@ -92,7 +92,7 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
                         print "--------------item data --------------------"
                         print res_item
                         print "--------------EOF item data ----------------"
-                    yield dict( { "content" : res_item } )
+                    yield [{ "content" : res_item }]
         
             except Exception, e:
                 if context.verbose:
