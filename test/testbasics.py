@@ -272,9 +272,9 @@ class TestBasics(unittest.TestCase):
             count += 1
             if i == {'media:thumbnail': {'url': u'http://example.com/a.jpg'}, u'link': u'http://example.com/test.php?this=that', u'description': u'b', u'y:title': u'a', u'title': u'a'}:
                 match +=1
-            if i == {u'newtitle': u'NEWTITLE', u'loop:itembuilder': {u'description': {u'content': u'DESCRIPTION'}, u'title': u'NEWTITLE'}, u'title': u'TITLE1'}:
+            if i == {u'newtitle': u'NEWTITLE', u'loop:itembuilder': [{u'description': {u'content': u'DESCRIPTION'}, u'title': u'NEWTITLE'}], u'title': u'TITLE1'}:
                 match +=1
-            if i == {u'newtitle': u'NEWTITLE', u'loop:itembuilder': {u'description': {u'content': u'DESCRIPTION'}, u'title': u'NEWTITLE'}, u'title': u'TITLE2'}:
+            if i == {u'newtitle': u'NEWTITLE', u'loop:itembuilder': [{u'description': {u'content': u'DESCRIPTION'}, u'title': u'NEWTITLE'}], u'title': u'TITLE2'}:
                 match +=1
             
         self.assertTrue(count == 3)

@@ -62,13 +62,18 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
                             results.append(i)
                         else:
                             results = [i]
+            if results and mode == 'assign':
+                #this is a hack to make sure fetchpage works in an out of a loop while not disturbing strconcat in a loop etc.
+                #(goes with the comment below about checking the delivery capability of the source)
+                if len(results) == 1 and isinstance(results[0], dict):
+                    results = [results]
         except HTTPError:  #todo any other errors we want to continue looping after?
             if context.verbose:
                 print "Submodule gave HTTPError - continuing the loop"
             continue
         
         if mode == 'assign':
-            if results and len(results) == 1:
+            if results and len(results) == 1:  #note: i suspect this needs to be more discerning and only happen if the source can only ever deliver 1 result, e.g. strconcat vs. fetchpage
                 results = results[0]           
             util.set_value(item, assign_to, results)
             yield item
