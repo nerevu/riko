@@ -39,6 +39,7 @@ __all__ = ['pipeforever',
            'pipestrreplace',
            'pipesubelement',
            'pipetail',
+           'pipecreaterss',
 
            'pipeoutput',
 
