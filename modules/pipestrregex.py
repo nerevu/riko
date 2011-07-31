@@ -31,6 +31,8 @@ def pipe_strregex(context, _INPUT, conf, **kwargs):
         
         #convert regex to Python format: todo use a common routine for this
         replace = re.sub('\$(\d+)', r'\\\1', replace)   #map $1 to \1 etc.   #todo: also need to escape any existing \1 etc.
+        if replace is None:
+            replace = ''
         
         rules.append((match, replace))
     

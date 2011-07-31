@@ -29,6 +29,8 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
         match = util.get_value(rule['match'], None, **kwargs) #todo use subkey?
         matchc = re.compile(match, re.DOTALL)  #compile for speed and we need to pass flags
         replace = util.get_value(rule['replace'], None, **kwargs) #todo use subkey?
+        if replace is None:
+            replace = ''
         
         #convert regex to Python format: todo use a common routine for this
         replace = re.sub('\$(\d+)', r'\\\1', replace)   #map $1 to \1 etc.   #todo: also need to escape any existing \1 etc.
