@@ -8,7 +8,7 @@ setup(name='pipe2py',
       author='Greg Gaughan',
       author_email='gjgaughan@gmail.com',
       url='https://github.com/ggaughan/pipe2py',
-      packages=['pipe2py',],
-      package_dir = {'pipe2py': ''}
+      package_dir={'pipe2py': '', 'pipe2py.modules':'modules'},
+      packages=['pipe2py', 'pipe2py.modules'],
      )
 
