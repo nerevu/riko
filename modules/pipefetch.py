@@ -2,6 +2,8 @@
 #
 
 import feedparser
+feedparser.USER_AGENT = "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" % feedparser.__version__
+
 from pipe2py import util
 
 def pipe_fetch(context, _INPUT, conf, **kwargs):
