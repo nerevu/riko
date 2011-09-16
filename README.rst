@@ -1,3 +1,6 @@
+A project to compile Yahoo! Pipes into Python 
+(see it hosted on Google App Engine: http://pipes-engine.appspot.com)
+
 Design
 ======
 The Yahoo pipelines are translated into pipelines of Python generators which 
