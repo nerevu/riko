@@ -133,19 +133,6 @@ class TestBasics(unittest.TestCase):
             
         self.assertTrue(count > 0)
         
-    def test_twitter_caption_search(self):
-        """Loads the Twitter Caption Search pipeline and compiles and executes it to check the results
-        """
-        pipe_def = self._get_pipe_def("pipe_eb3e27f8f1841835fdfd279cd96ff9d8.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        
-        #todo: check the data!
-        count = 0
-        for i in p:
-            count += 1
-            
-        self.assertTrue(count > 0)
-
     def test_loop_example(self):
         """Loads the loop example pipeline and compiles and executes it to check the results
         """
@@ -411,19 +398,6 @@ class TestBasics(unittest.TestCase):
             finally:
                 os.remove("%s.py" % name)
         
-    def test_complex_datebuilding(self):
-        """Loads a pipeline containing a datebuilder with complex inputs
-        """
-        pipe_def = self._get_pipe_def("pipe_bd9c0c9793ccaec7582b19f45e24f2e6.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        
-        count = 0
-        for i in p:
-            count += 1
-            #todo: check the data!
-            
-        self.assertTrue(count > 0)
-
     def test_loops_1(self):
         """Loads a pipeline containing a loops
         """
@@ -508,6 +482,20 @@ class TestBasics(unittest.TestCase):
             #todo: check the data!
             
         self.assertTrue(count > 0)
+
+    def test_split(self):
+        """Loads an example pipeline containing a split module
+        """
+        pipe_def = self._get_pipe_def("pipe_QMrlL_FS3BGlpwryODY80A.json")
+        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        
+        count = 0
+        for i in p:
+            count += 1
+            #todo: check the data!
+            
+        #todo? self.assertTrue(count > 0)
+        
         
     #todo test malformed pipeline syntax too
     
