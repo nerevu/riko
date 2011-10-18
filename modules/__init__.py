@@ -40,6 +40,7 @@ __all__ = ['pipeforever',
            'pipesubelement',
            'pipetail',
            'pipecreaterss',
+           'pipesplit',
 
            'pipeoutput',
 

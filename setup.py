@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 setup(name='pipe2py',
-      version='0.9.2',
+      version='0.9.3',
       description='A project to compile Yahoo! Pipes into Python',
       author='Greg Gaughan',
       author_email='gjgaughan@gmail.com',

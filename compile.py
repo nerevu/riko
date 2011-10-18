@@ -132,7 +132,7 @@ def build_pipe(context, pipe):
         #Plumb I/O
         input_module = steps["forever"]
         for wire in pipe['wires']:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'):
                 input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
 
         if module_id in pipe['embed']:
@@ -146,12 +146,15 @@ def build_pipe(context, pipe):
                 }
             
         for wire in pipe['wires']:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'):
                 kargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
                 
         if module['type'] == 'loop':
             kargs["embed"] = steps[util.pythonise(module['conf']['embed']['value']['id'])]
-                
+
+        if module['type'] == 'split':
+            kargs["splits"] = len([1 for w in pipe['wires'] if util.pythonise(pipe['wires'][w]['src']['moduleid']) == module_id])
+            
         #todo (re)import other pipes dynamically
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
         pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
@@ -233,7 +236,7 @@ def write_pipe(context, pipe):
         #Plumb I/O
         input_module = "forever"
         for wire in pipe['wires']:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'):
                 input_module = util.pythonise(pipe['wires'][wire]['src']['moduleid'])
 
         if module_id in pipe['embed']:
@@ -245,12 +248,15 @@ def write_pipe(context, pipe):
                 ]
         
         for wire in pipe['wires']:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'] == '_OUTPUT':
+            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'):
                 pargs.append("%(id)s = %(secondary_module)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id']), 'secondary_module':util.pythonise(pipe['wires'][wire]['src']['moduleid'])})
                 
         if module['type'] == 'loop':
             pargs.append("embed = pipe_%(embed_module)s" % {'embed_module':util.pythonise(module['conf']['embed']['value']['id'])})
-        
+
+        if module['type'] == 'split':
+            pargs.append("splits = %(splits)s" % {'splits':len([1 for w in pipe['wires'] if util.pythonise(pipe['wires'][w]['src']['moduleid']) == module_id])})
+            
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
         pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
         if module['type'].startswith('pipe:'):
