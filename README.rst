@@ -24,16 +24,17 @@ we could use queues to plumb them together.
 
 Setting up the environment
 ==========================
-If using a Python version before 2.6 then simplejson is needed:
-  
-  * http://pypi.python.org/pypi/simplejson
+Put the source code in a package directory named `pipe2py`, say, `pipeline/pipe2py`.
 
-Put the source code in a directory, say, `pipeline/pipe2py`.
-
-Make the package available to Python, e.g.
+Make the package directory available to Python, e.g.
 
   export PYTHONPATH=pipeline
 
+Dependencies
+------------
+If using a Python version before 2.6 then simplejson is needed:
+  
+  * http://pypi.python.org/pypi/simplejson
 
 Unit tests
 ==========
