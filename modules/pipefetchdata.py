@@ -78,13 +78,13 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                             d = d.get(i)
                         match = path.split(".")[-1]
                     if match:
-                        for item in d:
-                            if not match or item == match:
-                                if isinstance(d[item], list):
-                                    for nested_item in d[item]:
+                        for itemd in d:
+                            if not match or itemd == match:
+                                if isinstance(d[itemd], list):
+                                    for nested_item in d[itemd]:
                                         yield nested_item
                                 else:
-                                    yield [d[item]]
+                                    yield [d[itemd]]
                     else:
                         yield d
                 except Exception, e:
