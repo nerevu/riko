@@ -40,7 +40,7 @@ def pipe_rename(context, _INPUT, conf, **kwargs):
                 if rule[0] == 'rename':
                     try:
                         util.del_value(item, rule[1]['subkey'])
-                    except KeyError:
+                    except (KeyError, TypeError):  #TypeError catches pseudo subkeys, e.g. summary.content
                         pass  #ignore if the target doesn't have our field (todo: issue a warning if debugging?)
             except AttributeError:
                 pass  #ignore if the source doesn't have our field (todo: issue a warning if debugging?)
