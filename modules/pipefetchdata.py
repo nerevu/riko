@@ -77,7 +77,7 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                         for i in path.split(".")[:-1]:
                             d = d.get(i)
                         match = path.split(".")[-1]
-                    if match:
+                    if match and d is not None:
                         for itemd in d:
                             if not match or itemd == match:
                                 if isinstance(d[itemd], list):
