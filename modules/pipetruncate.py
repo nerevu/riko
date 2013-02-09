@@ -19,6 +19,9 @@ def pipe_truncate(context, _INPUT, conf, **kwargs):
 
     count = conf['count']
     limit = int(util.get_value(count, None, **kwargs))
-    for i in xrange(0, limit):
-        yield _INPUT.next()
-    
+    i = 0
+    for item in _INPUT:
+        if i >= limit:
+            break
+        yield item
+        i += 1
