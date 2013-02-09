@@ -4,7 +4,7 @@
 from pipe2py import util
 
 def pipe_count(context, _INPUT, conf, **kwargs):
-    """Count the number of items in a feed.
+    """Count the number of items in a feed and yields it forever.
 
     Keyword arguments:
     context -- pipeline context
@@ -16,4 +16,7 @@ def pipe_count(context, _INPUT, conf, **kwargs):
     a count on the number of items in the feed
     """
     
-    yield sum(1 for item in _INPUT)
+    count = sum(1 for item in _INPUT)
+    while True:  #TODO: check all operators (not placeable in loops) read _INPUT once only & then serve - in case they serve multiple further steps
+        yield count
+    
