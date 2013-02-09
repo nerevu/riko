@@ -42,7 +42,7 @@ html5lib (http://code.google.com/p/html5lib/) is also required, e.g.::
   pip install html5lib
 
 
-If using a Python version before 2.6 then simplejson is needed::
+If using a Python version before 2.6 then simplejson is needed:
   
   * http://pypi.python.org/pypi/simplejson
 
