@@ -24,15 +24,25 @@ we could use queues to plumb them together.
 
 Setting up the environment
 ==========================
-Put the source code in a package directory named `pipe2py`, say, `pipeline/pipe2py`.
+Install the package::
 
-Make the package directory available to Python, e.g.
+  python setup.py install
 
-  export PYTHONPATH=pipeline
 
 Dependencies
 ------------
-If using a Python version before 2.6 then simplejson is needed:
+If you need the 'XPath Fetch Page' module, lxml (http://lxml.de/) is 
+required, e.g.::
+  
+  pip install lxml
+
+If you use the html5 parser option for the 'XPath Fetch Page' module, 
+html5lib (http://code.google.com/p/html5lib/) is also required, e.g.::
+  
+  pip install html5lib
+
+
+If using a Python version before 2.6 then simplejson is needed::
   
   * http://pypi.python.org/pypi/simplejson
 

@@ -20,10 +20,10 @@ def pythonise(id):
     """Return a Python-friendly id"""
     if id:
         id = id.replace("-", "_").replace(":", "_")
-        
+
         if id[0] in string.digits:
             id = "_" + id
-        
+
         return id.encode('ascii')
 
 def xml_to_dict(element):
@@ -42,7 +42,7 @@ def xml_to_dict(element):
         else:
             if element.text and element.text.strip():
                 i['content'] = element.text
-            
+
     return i
 
 def etree_to_pipes(element):
@@ -55,7 +55,7 @@ def etree_to_pipes(element):
     if len(element): # if element has child elements
         if element.text and element.text.strip(): # if element has text
             i['content'] = element.text
-            
+
         for child in element:
             tag = child.tag.split('}', 1)[-1]
 
@@ -88,7 +88,7 @@ def etree_to_pipes(element):
         else: # element has attributes
             if element.text and element.text.strip(): # if element has text
                 i['content'] = element.text
-            
+
     return i
 
 def get_subkey(subkey, item):
@@ -112,7 +112,7 @@ def get_subkey(subkey, item):
         #unless 'value' or 'utime' is the part in which case we return the parent 
         #(to cope with y:id.value -> y:id and item.endtime.utime -> item.endtime)
     return subtree   
-    
+
 def get_value(_item, _loop_item=None, **kwargs):
     """Return either:
            a literal value 
@@ -138,11 +138,11 @@ def del_value(item, key):
        Note: keys use dot notation and we map onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
     """
     del reduce(lambda i,k:i.get(k), [item] + key.split('.')[:-1])[key.split('.')[-1]]
-    
-    
+
+
 def multikeysort(items, columns):
     """Sorts a list of items by the columns
-       
+
        (columns precedeed with a '-' will sort descending)
     """
     comparers = [ ((itemgetter(col[1:].strip()), -1) if col.startswith('-') else (itemgetter(col.strip()), 1)) for col in columns]  
@@ -164,14 +164,14 @@ def multikeysort(items, columns):
 
 def get_input(context, conf):
     """Gets a user parameter, either from the console or from an outer submodule/system
-    
+
        Assumes conf has name, default, prompt and debug
     """
     name = conf['name']['value']
     default = conf['default']['value']
     prompt = conf['prompt']['value']
     debug = conf['debug']['value']
-    
+
     value = None
     if context.submodule:
         value = context.inputs.get(name, default)
@@ -183,7 +183,7 @@ def get_input(context, conf):
             value = default
     else:
         value = context.inputs.get(name, default)
-        
+
     return value
 
 def rreplace(s, find, replace, count=None):
@@ -196,5 +196,6 @@ def url_quote(url):
         return urllib2.quote(url, safe=URL_SAFE)
     except KeyError:
         return urllib2.quote(url.encode('utf-8'), safe=URL_SAFE)
-        
-    
+
+def recursive_dict(element):
+    return element.tag, dict(map(recursive_dict, element)) or element.text
