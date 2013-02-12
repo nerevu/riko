@@ -26,7 +26,7 @@
    Licence: see LICENCE file
 """
 
-__version__ = "0.9.3"
+__version__ = "0.9.5"
 
 from optparse import OptionParser
 import fileinput
