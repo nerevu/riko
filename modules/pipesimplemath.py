@@ -31,4 +31,4 @@ def pipe_simplemath(context, _INPUT, conf, **kwargs):
     op = util.get_value(conf['OP'], None, **kwargs)
 
     for item in _INPUT:
-        yield OPS[op](item, value)
+        yield OPS[op](float(item), value)
