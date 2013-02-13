@@ -54,8 +54,10 @@ def pipe_xpathfetchpage(context, _INPUT, conf, **kwargs):
                 
                 
                 if html5:
-                    from lxml.html import html5parser
-                    root = html5parser.fromstring(content)
+                    #from lxml.html import html5parser
+                    #root = html5parser.fromstring(content)
+                    from html5lib import parse
+                    root = parse(content, treebuilder='lxml', namespaceHTMLElements=False)
                 else:
                     from lxml import etree
                     root = etree.HTML(content)
