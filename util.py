@@ -142,7 +142,19 @@ def del_value(item, key):
     """Remove a value (and its key) from the item
        Note: keys use dot notation and we map onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
     """
-    del reduce(lambda i,k:i.get(k), [item] + key.split('.')[:-1])[key.split('.')[-1]]
+    ks = key.split('.')
+    if ks[-1].isdigit():
+        # if the sub-index looks like a number, then we're indexing into a list
+        # so convert it to an integer
+        #todo this most likely only works for the last element of the subkey
+        #todo should make this more robust for the different subkey types, 
+        #todo like get_subkey above is
+        ks[-1] = int(ks[-1])
+    try:
+        del reduce(lambda i,k:i.get(k), [item] + ks[:-1])[ks[-1]]
+    except:
+        # if an error occurs, don't delete anything
+        pass
 
 
 def multikeysort(items, columns):
