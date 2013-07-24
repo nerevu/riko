@@ -1,14 +1,15 @@
 """Utility functions"""
+# vim: sw=4:ts=4:expandtab
 
 import string
 from operator import itemgetter
 import urllib2
 
 DATE_FORMAT = "%m/%d/%Y"
-ALTERNATIVE_DATE_FORMATS = ("%m-%d-%Y", 
-                            "%m/%d/%y", 
-                            "%m/%d/%Y", 
-                            "%m-%d-%y", 
+ALTERNATIVE_DATE_FORMATS = ("%m-%d-%Y",
+                            "%m/%d/%y",
+                            "%m/%d/%Y",
+                            "%m-%d-%y",
                             "%Y-%m-%dt%H:%M:%Sz",
                             #todo more: whatever Yahoo can accept
                             )
@@ -33,6 +34,8 @@ def xml_to_dict(element):
         if element.text and element.text.strip():
             i['content'] = element.text
         for child in element.getchildren():
+            if str(child)[:4] == '<!--':
+                continue
             tag = child.tag.split('}', 1)[-1]
             i[tag] = xml_to_dict(child)
     else:
@@ -57,6 +60,8 @@ def etree_to_pipes(element):
             i['content'] = element.text
 
         for child in element:
+            if str(child)[:4] == '<!--':
+                continue
             tag = child.tag.split('}', 1)[-1]
 
             # process child recursively and append it to parent dict
@@ -109,13 +114,13 @@ def get_subkey(subkey, item):
             subtree = None
 
         #silently returns None if any part is not found
-        #unless 'value' or 'utime' is the part in which case we return the parent 
+        #unless 'value' or 'utime' is the part in which case we return the parent
         #(to cope with y:id.value -> y:id and item.endtime.utime -> item.endtime)
-    return subtree   
+    return subtree
 
 def get_value(_item, _loop_item=None, **kwargs):
     """Return either:
-           a literal value 
+           a literal value
            a value via a terminal (then kwargs must contain the terminals)
            a value via a subkey reference (then _loop_item must be passed)
        Note: subkey values use dot notation and we map onto nested dictionaries, e.g. 'a.content' -> ['a']['content']
@@ -145,7 +150,7 @@ def multikeysort(items, columns):
 
        (columns precedeed with a '-' will sort descending)
     """
-    comparers = [ ((itemgetter(col[1:].strip()), -1) if col.startswith('-') else (itemgetter(col.strip()), 1)) for col in columns]  
+    comparers = [ ((itemgetter(col[1:].strip()), -1) if col.startswith('-') else (itemgetter(col.strip()), 1)) for col in columns]
     def comparer(left, right):
         for fn, mult in comparers:
             try:
