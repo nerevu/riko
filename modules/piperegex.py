@@ -24,10 +24,19 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
         rule_defs = [rule_defs]
 
     for rule in rule_defs:
-        #todo use the undocumented g,s,m,i flags here: rule['singlelinematch']['value'] == 2 indicates re.DOTALL
-        # so use that to pass to re.compile: see here for more http://livedocs.adobe.com/flex/3/html/help.html?content=12_Using_Regular_Expressions_10.html
+        #flags = re.DOTALL # DOTALL was the default for pipe2py previously
+        flags = 0
+        if 'multilinematch' in rule: # flag 'm'
+            flags |= re.MULTILINE
+        if 'casematch' in rule: # flag 'i'; this name is reversed from its meaning
+            flags |= re.IGNORECASE
+        if 'singlelinematch' in rule: # flag 's'
+            flags |= re.DOTALL
+        #todo 'globalmatch' is the default in python
+        #todo if set, re.sub() below would get count=0 and by default would get count=1
+
         match = util.get_value(rule['match'], None, **kwargs) #todo use subkey?
-        matchc = re.compile(match, re.DOTALL)  #compile for speed and we need to pass flags
+        matchc = re.compile(match, flags)  #compile for speed and we need to pass flags
         replace = util.get_value(rule['replace'], None, **kwargs) #todo use subkey?
         if replace is None:
             replace = ''
