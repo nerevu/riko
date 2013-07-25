@@ -58,10 +58,18 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
             #todo: to the literal; as an HTML element node, it may have attributes
             #todo: which then appear in the literal.  It should be only matching on
             #todo: (and replacing the value of) the .content subelement
+            #todo: I'm not confident that what is below will work across the board
+            #todo: nor if this is the right way to detect that we're looking at
+            #todo: an HTML node and not a plain string
             if rule[0] in item and item[rule[0]]:
-                util.set_value(item, rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]])))
-
-                util.set_value(item, rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
-
+                if isinstance(item[rule[0]], dict) and 'content' in item[rule[0]]:
+                    # this looks like an HTML node, so only do substitution on the content of the node
+                    # possible gotcha: the content might be a subtree, in which case we revert 
+                    # to modifying the literal of the subtree dict
+                    util.set_value(item, rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]]['content'])))
+                    util.set_value(item, rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
+                else:
+                    util.set_value(item, rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]])))
+                    util.set_value(item, rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
         yield item
 
