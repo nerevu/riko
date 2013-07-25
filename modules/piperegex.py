@@ -52,6 +52,12 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
 
         for rule in rules:
             #todo: do we ever need get_value here instead of item[]?
+            #todo: when the subject being examined is an HTML node, not a string
+            #todo: then the unicode() converts the dict representing the node
+            #todo: to a dict literal, and then attempts to apply the pattern
+            #todo: to the literal; as an HTML element node, it may have attributes
+            #todo: which then appear in the literal.  It should be only matching on
+            #todo: (and replacing the value of) the .content subelement
             if rule[0] in item and item[rule[0]]:
                 util.set_value(item, rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]])))
 
