@@ -61,7 +61,7 @@ def pipe_regex(context, _INPUT, conf, **kwargs):
             if rule[0] in item and item[rule[0]]:
                 util.set_value(item, rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]])))
 
-                util.set_value(item, rule[0], re.sub('\$\{(.+)\}', sub_fields, unicode(item[rule[0]])))
+                util.set_value(item, rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
 
         yield item
 
