@@ -346,7 +346,9 @@ if __name__ == '__main__':
             print "Pipe not found"
             sys.exit(1)
         pjson = pipe_def['query']['results']['json']['PIPE']['working']
-        pipe_def = pjson  #was json.loads(pjson) until April 2011 - changes at Yahoo! Pipes/YQL?
+        if isinstance(pjson, str) or isinstance(pjson, unicode):
+            pjson = json.loads(pjson)
+        pipe_def = pjson
         pjson = json.dumps(pjson)  #was not needed until April 2011 - changes at Yahoo! Pipes/YQL?
         name = "pipe_%s" % options.pipeid
     elif filename:
