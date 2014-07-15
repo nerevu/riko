@@ -86,7 +86,7 @@ def robust_topological_sort(graph):
         for successor in graph[node]:
             successor_c = node_component[successor]
             if node_c != successor_c:
-                component_graph[node_c].append(successor_c) 
+                component_graph[node_c].append(successor_c)
 
     return topological_sort(component_graph)
 
