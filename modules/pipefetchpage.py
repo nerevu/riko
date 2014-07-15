@@ -4,6 +4,7 @@
 
 import urllib2
 import re
+from pipe2py import util
 
 def pipe_fetchpage(context, _INPUT, conf, **kwargs):
     """Fetch Page module
@@ -15,23 +16,46 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
        from -- string from where to start the input
        to -- string to limit the input
        token -- if present, split the input on this token to generate items
+
+       Description: http://pipes.yahoo.com/pipes/docs?doc=sources#FetchPage
+
+       TODOS:
+        - don't retrieve pages larger than 200k
+        - don't retrieve if page is not indexable.
+        - item delimiter removes the closing tag if using a HTML tag
+          (not documented but happens)
     """
-    url = conf['URL']["value"]
+    url = util.get_value(conf['URL'], _INPUT, **kwargs)
     if context.verbose:
         print "FetchPage: Preparing to download:",url
 
     try:
-        content = urllib2.urlopen(url).read()
+        request = urllib2.Request(url)
+        request.add_header('User-Agent','Yahoo Pipes 1.0')
+        request = urllib2.build_opener().open(request)
+        content = unicode(request.read(),
+                          request.headers['content-type'].split('charset=')[-1])
 
-        from_delimiter, to_delimiter = conf["from"]["value"],conf["to"]["value"]
-        split_token = conf["token"]["value"]
+        # TODO it seems that Yahoo! converts relative links to absolute
+        # TODO this needs to be done on the content but seems to be a non-trival
+        # TODO task python?
+
+        if context.verbose:
+            print "............FetchPage: content ................."
+            print content.encode("utf-8")
+            print "............FetchPage: EOF     ................."
+
+        from_delimiter = util.get_value(conf["from"], _INPUT, **kwargs)
+        to_delimiter = util.get_value(conf["to"], _INPUT, **kwargs)
+        split_token = util.get_value(conf["token"], _INPUT, **kwargs)
 
         # determine from location, i.e. from where to start reading content
         from_location = 0
         if from_delimiter != "":
             from_location = content.find(from_delimiter)
-            if from_location > 0:
-                from_location += len(from_delimiter)
+            # Yahoo! does not strip off the from_delimiter.
+            #if from_location > 0:
+            #    from_location += len(from_delimiter)
 
         # determine to location, i.e. where to stop reading content
         to_location = 0
@@ -57,11 +81,18 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
             print "FetchPage: found count items:",len(items)
 
         for item in items:
+            if context.verbose:
+                print "--------------item data --------------------"
+                print item
+                print "--------------EOF item data ----------------"
             yield dict( { "content" : item } )
 
     except Exception, e:
         if context.verbose:
             print "FetchPage: failed to retrieve from:", url
+
+            print "----------------- FetchPage -----------------"
             import traceback
             traceback.print_exc()
+            print "----------------- FetchPage -----------------"
         raise
