@@ -42,7 +42,7 @@ __all__ = ['pipeforever',
            'pipetail',
            'pipecreaterss',
            'pipesplit',
-           
+
            'pipesimplemath',
 
            'pipeoutput',
