@@ -23,7 +23,7 @@
    Python generator pipelines inspired by: David Beazely (http://www.dabeaz.com/generators-uk)
    Universal Feed Parser and autorss modules by: Mark Pilgrim (http://feedparser.org)
 
-   Licence: see LICENCE file
+   License: see LICENSE file
 """
 
 __version__ = "0.9.5"
