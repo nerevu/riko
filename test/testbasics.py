@@ -32,8 +32,9 @@ class TestBasics(unittest.TestCase):
         self.context = Context(test=True)
         name = "pipe_2de0e4517ed76082dcddf66f7b218057"
         pipe_def = self._get_pipe_def("%s.json" % name)
-        fp = open("%s.py" % name, "w")   #todo confirm file overwrite
-        print >>fp, pipe2py.compile.parse_and_write_pipe(self.context, pipe_def, pipe_name=name)
+        fp = open("%s.py" % name, "w")   # todo: confirm file overwrite
+        print >>fp, pipe2py.compile.parse_and_write_pipe(
+            self.context, pipe_def, pipe_name=name)
         fp.close()
 
     def tearDown(self):
@@ -55,9 +56,10 @@ class TestBasics(unittest.TestCase):
 
 
     def test_feed(self):
-        """Loads a simple test pipeline and compiles and executes it to check the results
+        """Loads a simple test pipeline and compiles and executes it to check
+            the results
 
-           TODO: have these tests iterate over a number of test pipelines
+            TODO: have these tests iterate over a number of test pipelines
         """
         pipe_def = self._get_pipe_def("testpipe1.json")
         pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
@@ -67,10 +69,12 @@ class TestBasics(unittest.TestCase):
             count += 1
             self.assertTrue("the" in i.get('description'))
 
-        self.assertEqual(count, 0)  #note: changed to 0 since feedparser fails to open file:// resources
+        # note: changed to 0 since feedparser fails to open file:// resources
+        self.assertEqual(count, 0)
 
     def test_simplest(self):
-        """Loads the RTW simple test pipeline and compiles and executes it to check the results
+        """Loads the RTW simple test pipeline and compiles and executes it to
+            check the results
         """
         pipe_def = self._get_pipe_def("pipe_2de0e4517ed76082dcddf66f7b218057.json")
         p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
@@ -98,8 +102,10 @@ class TestBasics(unittest.TestCase):
         #self.assertTrue(count > 0)
 
     def test_filtered_multiple_sources(self):
-        """Loads the filter multiple sources pipeline and compiles and executes it to check the results
-           Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057 (assumes its been compiled to a .py file - see test setUp)
+        """Loads the filter multiple sources pipeline and compiles and executes
+            it to check the results
+           Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
+            (assumes its been compiled to a .py file - see test setUp)
         """
         pipe_def = self._get_pipe_def("pipe_c1cfa58f96243cea6ff50a12fc50c984.json")
         p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
@@ -112,7 +118,8 @@ class TestBasics(unittest.TestCase):
         self.assertTrue(count > 0)
 
     def test_urlbuilder(self):
-        """Loads the RTW URL Builder test pipeline and compiles and executes it to check the results
+        """Loads the RTW URL Builder test pipeline and compiles and executes it
+            to check the results
         """
         pipe_def = self._get_pipe_def("pipe_e519dd393f943315f7e4128d19db2eac.json")
         p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
@@ -214,7 +221,7 @@ class TestBasics(unittest.TestCase):
         pipe_file = 'pipe_58a53262da5a095fe7a0d6d905cc4db6.json'
         pipe_def = self._get_pipe_def(pipe_file)
         pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        #todo: check the data! e.g. pubdate etc.
+        # todo: check the data! e.g. pubdate etc.
         self.assertTrue(len(list(pipe)) == 3)
 
     def test_tail(self):
@@ -223,7 +230,7 @@ class TestBasics(unittest.TestCase):
         pipe_file = 'pipe_06c4c44316efb0f5f16e4e7fa4589ba2.json'
         pipe_def = self._get_pipe_def(pipe_file)
         pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        #todo: check the data!
+        # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
     def test_yql(self):
@@ -253,7 +260,11 @@ class TestBasics(unittest.TestCase):
             count += 1
             if i == {u'attrpath': {u'attr2': u'VAL2'}, u'ATTR1': u'VAL1'}:
                 match +=1
-            if i == {u'longpath': {u'attrpath': {u'attr3': u'val3'}}, u'attrpath': {u'attr2': u'val2', u'attr3': u'extVal'}, u'attr1': u'val1'}:
+            if i == {
+                u'longpath': {u'attrpath': {u'attr3': u'val3'}},
+                u'attrpath': {u'attr2': u'val2', u'attr3': u'extVal'},
+                u'attr1': u'val1'
+            }:
                 match +=1
 
         self.assertTrue(count == 2)
@@ -270,11 +281,33 @@ class TestBasics(unittest.TestCase):
         match = 0
         for i in pipe:
             count += 1
-            if i == {'media:thumbnail': {'url': u'http://example.com/a.jpg'}, u'link': u'http://example.com/test.php?this=that', u'description': u'b', u'y:title': u'a', u'title': u'a'}:
+            if i == {
+                'media:thumbnail': {'url': u'http://example.com/a.jpg'},
+                u'link': u'http://example.com/test.php?this=that',
+                u'description': u'b', u'y:title': u'a', u'title': u'a'
+            }:
                 match +=1
-            if i == {u'newtitle': u'NEWTITLE', u'loop:itembuilder': [{u'description': {u'content': u'DESCRIPTION'}, u'title': u'NEWTITLE'}], u'title': u'TITLE1'}:
+            if i == {
+                u'newtitle': u'NEWTITLE',
+                u'loop:itembuilder': [
+                    {
+                        u'description': {u'content': u'DESCRIPTION'},
+                        u'title': u'NEWTITLE',
+                    }
+                ],
+                u'title': u'TITLE1',
+            }:
                 match +=1
-            if i == {u'newtitle': u'NEWTITLE', u'loop:itembuilder': [{u'description': {u'content': u'DESCRIPTION'}, u'title': u'NEWTITLE'}], u'title': u'TITLE2'}:
+            if i == {
+                u'newtitle': u'NEWTITLE',
+                u'loop:itembuilder': [
+                    {
+                        u'description': {u'content': u'DESCRIPTION'},
+                        u'title': u'NEWTITLE',
+                    }
+                ],
+                u'title': u'TITLE2',
+            }:
                 match +=1
 
         self.assertTrue(count == 3)
@@ -370,11 +403,12 @@ class TestBasics(unittest.TestCase):
         pipe_file = 'pipe_6e30c269a69baf92cd420900b0645f88.json'
         pipe_def = self._get_pipe_def(pipe_file)
         pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        #todo: check the data!
+        # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
     def test_submodule_loop(self):
-        """Loads a pipeline containing a sub-module in a loop and passing input parameters
+        """Loads a pipeline containing a sub-module in a loop and passing input
+            parameters
 
            (also tests: json fetch with nested list
                         assign part of loop result
@@ -384,7 +418,9 @@ class TestBasics(unittest.TestCase):
            Note: can be slow
         """
         if True:
-            return  #too slow, recently at least: todo: use small, fixed data set to restrict duration
+            return
+            # too slow, recently at least:
+            # todo: use small, fixed data set to restrict duration
         else:
             #Compile submodule to disk
             self.context = Context(test=True)
@@ -451,12 +487,13 @@ class TestBasics(unittest.TestCase):
         self.assertTrue(count == 1)
 
     def test_feeddiscovery(self):
-        """Loads a pipeline containing a feed auto-discovery module plus fetch-feed in a loop with emit all
+        """Loads a pipeline containing a feed auto-discovery module plus
+            fetch-feed in a loop with emit all
         """
         pipe_file = 'pipe_HrX5bjkv3BGEp9eSy6ky6g.json'
         pipe_def = self._get_pipe_def(pipe_file)
         pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        #todo: check the data!
+        # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
     def test_stringtokeniser(self):
@@ -484,7 +521,7 @@ class TestBasics(unittest.TestCase):
         pipe_file = 'pipe_551507461cbcb19a828165daad5fe007.json'
         pipe_def = self._get_pipe_def(pipe_file)
         pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        #todo: check the data!
+        # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
     def test_fetchpage(self):
@@ -502,7 +539,7 @@ class TestBasics(unittest.TestCase):
         pipe_file = 'pipe_188eca77fd28c96c559f71f5729d91ec.json'
         pipe_def = self._get_pipe_def(pipe_file)
         pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        #todo: check the data!
+        # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
     def test_split(self):
