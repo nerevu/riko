@@ -11,6 +11,7 @@ import pipe2py.compile
 
 import os.path
 import fileinput
+
 try:
     import json
     json.loads # test access to the attributes of the right json module
@@ -348,7 +349,8 @@ class TestBasics(unittest.TestCase):
 
                 pipe_file = 'pipe_b3d43c00f9e1145ff522fb71ea743e99.json'
                 pipe_def = self._get_pipe_def(pipe_file)
-                pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+                pipe = pipe2py.compile.parse_and_build_pipe(
+                    self.context, pipe_def)
 
                 # todo: check the data!
                 count = 0
