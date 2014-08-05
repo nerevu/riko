@@ -23,8 +23,8 @@ if __name__ == '__main__':
 
     usage = "usage: %prog [options] pipeid"
     parser = OptionParser(usage=usage)
-    parser.add_option("-v", dest="verbose",
-                      help="set verbose debug", action="store_true")
+    parser.add_option(
+        "-v", dest="verbose", help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()
 
     pipeid = None
