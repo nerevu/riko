@@ -158,9 +158,18 @@ def build_pipe(context, pipe):
         # find the default input of this module
         input_module = steps["forever"]
         for wire in pipe['wires']:
-            # if the wire is to this module and it's the default input and it's the default output:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
-                input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
+            # if the wire is to this module and it's the default input and it's
+            # the default output:
+            pipe_wire = pipe['wires'][wire]
+
+            if (
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id and
+                pipe_wire['tgt']['id'] == '_INPUT' and
+                pipe_wire['src']['id'].startswith('_OUTPUT')
+            ):
+                # todo? this equates the outputs
+                input_module = steps[
+                    util.pythonise(pipe_wire['src']['moduleid'])]
 
         if module_id in pipe['embed']:
             assert input_module == (
@@ -174,9 +183,18 @@ def build_pipe(context, pipe):
 
         # set the extra inputs of this module as kargs of this module
         for wire in pipe['wires']:
-            # if the wire is to this module and it's *not* the default input and it's the default output:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
-                kargs["%(id)s" % {'id':util.pythonise(pipe['wires'][wire]['tgt']['id'])}] = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
+            # if the wire is to this module and it's *not* the default input
+            # and it's the default output:
+            pipe_wire = pipe['wires'][wire]
+
+            if (
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id and
+                pipe_wire['tgt']['id'] != '_INPUT' and
+                pipe_wire['src']['id'].startswith('_OUTPUT')
+            ):  # todo? this equates the outputs
+                pipe_id = util.pythonise(pipe_wire['tgt']['id'])
+                kargs["%(id)s" % {'id': pipe_id}] = steps[
+                    util.pythonise(pipe_wire['src']['moduleid'])]
 
         # set the embedded module in the kargs if this is loop module
         if module_type == 'loop':
@@ -278,9 +296,16 @@ def write_pipe(context, pipe):
         # find the default input of this module
         input_module = "forever"
         for wire in pipe['wires']:
-            # if the wire is to this module and it's the default input and it's the default output:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] == '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
-                input_module = util.pythonise(pipe['wires'][wire]['src']['moduleid'])
+            # if the wire is to this module and it's the default input and it's
+            # the default output:
+            pipe_wire = pipe['wires'][wire]
+
+            if (
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id and
+                pipe_wire['tgt']['id'] == '_INPUT' and
+                pipe_wire['src']['id'].startswith('_OUTPUT')
+            ):  # todo? this equates the outputs
+                input_module = util.pythonise(pipe_wire['src']['moduleid'])
 
         if module_id in pipe['embed']:
             assert input_module == (
@@ -294,20 +319,39 @@ def write_pipe(context, pipe):
 
         # set the extra inputs of this module as kwargs of this module
         for wire in pipe['wires']:
-            # if the wire is to this module and it's *not* the default input and it's the default output:
-            if util.pythonise(pipe['wires'][wire]['tgt']['moduleid']) == module_id and pipe['wires'][wire]['tgt']['id'] != '_INPUT' and pipe['wires'][wire]['src']['id'].startswith('_OUTPUT'): # todo? this equates the outputs
-                mod_kwargs += [(util.pythonise(pipe['wires'][wire]['tgt']['id']), Id(util.pythonise(pipe['wires'][wire]['src']['moduleid'])))]
+            # if the wire is to this module and it's *not* the default input
+            # and it's the default output:
+            pipe_wire = pipe['wires'][wire]
+
+            if (
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id and
+                pipe_wire['tgt']['id'] != '_INPUT' and
+                pipe_wire['src']['id'].startswith('_OUTPUT')
+            ):  # todo? this equates the outputs
+                mod_kwargs += [
+                    (
+                        util.pythonise(pipe_wire['tgt']['id']),
+                        Id(util.pythonise(pipe_wire['src']['moduleid']))
+                    )
+                ]
 
         # set the embedded module in the kwargs if this is loop module
         if module['type'] == 'loop':
-            mod_kwargs += [("embed", Id("pipe_%s" % util.pythonise(module['conf']['embed']['value']['id'])))]
+            pipe_id = util.pythonise(module['conf']['embed']['value']['id'])
+            mod_kwargs += [("embed", Id("pipe_%s" % pipe_id))]
 
         # set splits in the kwargs if this is split module
         if module['type'] == 'split':
-            mod_kwargs += [("splits", Id(len([1 for w in pipe['wires'] if util.pythonise(pipe['wires'][w]['src']['moduleid']) == module_id])))]
+            filtered = filter(
+                lambda x: module_id == util.pythonise(x['src']['moduleid']),
+                pipe['wires']
+            )
 
-        pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
-        pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
+            mod_kwargs += [("splits", Id(len(list(filtered))))]
+
+        pymodule_name = "pipe%s" % module['type']
+        pymodule_generator_name = "pipe_%s" % module['type']
+
         if module['type'].startswith('pipe:'):
             pymodule_name = "%s" % util.pythonise(module['type'])
             pymodule_generator_name = "%s" % util.pythonise(module['type'])
