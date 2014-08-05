@@ -20,6 +20,7 @@ import sys
 
 if __name__ == '__main__':
     pjson = []
+    pipeid = None
 
     usage = "usage: %prog [options] pipeid"
     parser = OptionParser(usage=usage)
@@ -27,7 +28,6 @@ if __name__ == '__main__':
         "-v", dest="verbose", help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()
 
-    pipeid = None
     if len(args):
         pipeid = args[0]
     if pipeid:
