@@ -76,14 +76,11 @@ class TestBasics(unittest.TestCase):
         """Loads the RTW simple test pipeline and compiles and executes it to
             check the results
         """
-        pipe_def = self._get_pipe_def("pipe_2de0e4517ed76082dcddf66f7b218057.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        count = 0
-        for i in p:
-            count += 1
-
-        self.assertTrue(count > 0)
+        pipe_file = 'pipe_2de0e4517ed76082dcddf66f7b218057.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        # todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_filtered_multiple_sources(self):
         """Loads the filter multiple sources pipeline and compiles and executes
@@ -91,49 +88,32 @@ class TestBasics(unittest.TestCase):
            Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
             (assumes its been compiled to a .py file - see test setUp)
         """
-        pipe_def = self._get_pipe_def("pipe_c1cfa58f96243cea6ff50a12fc50c984.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        #todo: check the data!
-        count = 0
-        for i in p:
-            count += 1
-
-        self.assertTrue(count > 0)
+        pipe_file = 'pipe_c1cfa58f96243cea6ff50a12fc50c984.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        # todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_urlbuilder(self):
         """Loads the RTW URL Builder test pipeline and compiles and executes it
             to check the results
         """
-        pipe_def = self._get_pipe_def("pipe_e519dd393f943315f7e4128d19db2eac.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        #todo: check the data!
-        count = 0
-        for i in p:
-            count += 1
-
-        #self.assertTrue(count > 0)
+        pipe_file = 'pipe_e519dd393f943315f7e4128d19db2eac.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        # todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_european_performance_cars(self):
         """Loads a pipeline containing a sort
         """
-        pipe_def = self._get_pipe_def("pipe_8NMkiTW32xGvMbDKruymrA.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe_file = 'pipe_8NMkiTW32xGvMbDKruymrA.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        # todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
-        #todo: check the data! e.g. pubdate etc.
-        count = 0
-        for i in p:
-            count += 1
-
-        self.assertTrue(count > 0)
-
-    #todo: need tests with single and mult-part key
-
-        #todo: check the data! e.g. pubdate etc.
-        count = 0
-        for i in p:
-            count += 1
+    # todo: need tests with single and mult-part key
 
     def test_reverse_truncate(self):
         """Loads a pipeline containing a reverse and truncate
@@ -422,26 +402,19 @@ class TestBasics(unittest.TestCase):
     def test_split(self):
         """Loads an example pipeline containing a split module
         """
-        pipe_def = self._get_pipe_def("pipe_QMrlL_FS3BGlpwryODY80A.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        count = 0
-        for i in p:
-            count += 1
-            #todo: check the data!
-
-        #todo? self.assertTrue(count > 0)
+        pipe_file = 'pipe_QMrlL_FS3BGlpwryODY80A.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        # todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_simplemath_1(self):
         """Loads a pipeline containing simplemath
         """
-        pipe_def = self._get_pipe_def("pipe_zKJifuNS3BGLRQK_GsevXg.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        count = 0
-        for i in p:
-            count += 1
-        self.assertTrue(count == 0)  #empty feed
+        pipe_file = 'pipe_zKJifuNS3BGLRQK_GsevXg.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        self.assertTrue(len(list(pipe)) == 0)  #empty feed
 
     #todo test simplemath divide by zero and check/implement yahoo handling
     #todo test malformed pipeline syntax too
