@@ -1,12 +1,12 @@
 """Compile/Translate Yahoo Pipe into Python
 
-   Takes a JSON representation of a Yahoo pipe and either:
+    Takes a JSON representation of a Yahoo pipe and either:
+     a) translates it into a Python script containing a function
+        (using generators to build the pipeline) or
+     b) compiles it as a pipeline of generators which can be executed
+        in-process
 
-     a) translates it into a Python script containing a function (using generators to build the pipeline)
-     or
-     b) compiles it as a pipeline of generators which can be executed in-process
-
-   Usage:
+    Usage:
      a) python compile.py pipe1.json
         python pipe1.py
 
@@ -15,13 +15,16 @@
         for i in p:
             print i
 
-   Instead of passing a filename, a pipe id can be passed (-p) to fetch the JSON from Yahoo, e.g.
+    Instead of passing a filename, a pipe id can be passed (-p) to fetch the
+    JSON from Yahoo, e.g.
        python compile.py -p 2de0e4517ed76082dcddf66f7b218057
 
-   Author: Greg Gaughan
-   Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
-   Python generator pipelines inspired by: David Beazely (http://www.dabeaz.com/generators-uk)
-   Universal Feed Parser and autorss modules by: Mark Pilgrim (http://feedparser.org)
+    Author: Greg Gaughan
+    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
+    Python generator pipelines inspired by:
+        David Beazely (http://www.dabeaz.com/generators-uk)
+    Universal Feed Parser and auto-rss modules by:
+        Mark Pilgrim (http://feedparser.org)
 
    License: see LICENSE file
 """
@@ -76,14 +79,17 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
             pipe['modules'][util.pythonise(embed['id'])] = embed
             pipe['graph'][util.pythonise(embed['id'])] = []
             pipe['embed'][util.pythonise(embed['id'])] = embed
-            #make the loop dependent on its embedded module
-            pipe['graph'][util.pythonise(embed['id'])].append(util.pythonise(module['id']))
+
+            # make the loop dependent on its embedded module
+            pipe['graph'][util.pythonise(embed['id'])].append(
+                util.pythonise(module['id']))
 
     wires = json_pipe['wires']
     if not isinstance(wires, list):
         wires = [wires]
     for wire in wires:
-        pipe['graph'][util.pythonise(wire['src']['moduleid'])].append(util.pythonise(wire['tgt']['moduleid']))
+        pipe['graph'][util.pythonise(wire['src']['moduleid'])].append(
+            util.pythonise(wire['tgt']['moduleid']))
 
     #Remove any orphan nodes
     for node in pipe['graph'].keys():
@@ -99,17 +105,18 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
 def build_pipe(context, pipe):
     """Convert a pipe into an executable Python pipeline
 
-       If context.describe_input then just return the input requirements instead of the pipeline
+        If context.describe_input then just return the input requirements
+        instead of the pipeline
 
-       Note: any subpipes must be available to import as .py files
-             current namespace can become polluted by submodule wrapper definitions
+        Note: any subpipes must be available to import as .py files current
+        namespace can become polluted by submodule wrapper definitions
     """
     pyinput = []
 
     module_sequence = topological_sort(pipe['graph'])
 
-    #First pass to find and import any required subpipelines and user inputs
-    #Note: assumes they have already been compiled to accessible .py files
+    # First pass to find and import any required sub-pipelines and user inputs
+    # Note: assumes they have already been compiled to accessible .py files
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
         if module['type'].startswith('pipe:'):
@@ -130,7 +137,7 @@ def build_pipe(context, pipe):
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
 
-        #Plumb I/O
+        # Plumb I/O
 
         # find the default input of this module
         input_module = steps["forever"]
@@ -140,7 +147,9 @@ def build_pipe(context, pipe):
                 input_module = steps[util.pythonise(pipe['wires'][wire]['src']['moduleid'])]
 
         if module_id in pipe['embed']:
-            assert input_module == steps["forever"], "input_module of an embedded module was already set"
+            assert input_module == (
+                steps["forever"],
+                "input_module of an embedded module was already set")
             input_module = "_INPUT"
 
         pargs = [context,
@@ -189,7 +198,8 @@ def build_pipe(context, pipe):
             steps[module_id] = module_ref(*pargs, **kargs)
 
         if context.verbose:
-            print "%s (%s) = %s(%s)" %(steps[module_id], module_id, module_ref, str(pargs))
+            print "%s (%s) = %s(%s)" % (
+                steps[module_id], module_id, module_ref, str(pargs))
 
     return steps[module_id]
 
@@ -197,7 +207,8 @@ def build_pipe(context, pipe):
 def write_pipe(context, pipe):
     """Convert a pipe into Python script
 
-       If context.describe_input is passed to the script then it just returns the input requirements instead of the pipeline
+       If context.describe_input is passed to the script then it just
+       returns the input requirements instead of the pipeline
     """
 
     pypipe = ("""#Pipe %(pipename)s generated by pipe2py\n"""
@@ -210,11 +221,11 @@ def write_pipe(context, pipe):
 
     module_sequence = topological_sort(pipe['graph'])
 
-    #First pass to find any required subpipelines and user inputs
+    # First pass to find any required subpipelines and user inputs
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
         if module['type'].startswith('pipe:'):
-            pypipe += """import %(module_type)s\n""" % {'module_type':util.pythonise(module['type'])}
+            pypipe += """import %s\n""" % util.pythonise(module['type'])
         if module['conf'] and 'prompt' in module['conf']:
             pyinput.append((module['conf']['position']['value'],
                             module['conf']['name']['value'],
@@ -241,7 +252,7 @@ def write_pipe(context, pipe):
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
 
-        #Plumb I/O
+        # Plumb I/O
 
         # find the default input of this module
         input_module = "forever"
@@ -251,7 +262,9 @@ def write_pipe(context, pipe):
                 input_module = util.pythonise(pipe['wires'][wire]['src']['moduleid'])
 
         if module_id in pipe['embed']:
-            assert input_module == "forever", "input_module of an embedded module was already set"
+            assert input_module == (
+                steps["forever"],
+                "input_module of an embedded module was already set")
             input_module = "_INPUT"
 
         mod_args = [Id('context'), Id(input_module)]
@@ -274,8 +287,8 @@ def write_pipe(context, pipe):
         pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
         pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
         if module['type'].startswith('pipe:'):
-            pymodule_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}
-            pymodule_generator_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}
+            pymodule_name = "%s" % util.pythonise(module['type'])
+            pymodule_generator_name = "%s" % util.pythonise(module['type'])
 
         indent = ""
         if module_id in pipe['embed']:
@@ -293,7 +306,7 @@ def write_pipe(context, pipe):
                                                  'pymodule_generator_name':pymodule_generator_name,
                                                  'pargs':repr_args(mod_args+mod_kwargs)}
         if module_id in pipe['embed']:
-            pypipe += """        return %(module_id)s\n""" % {'module_id':module_id}
+            pypipe += """        return %s\n""" % module_id
 
         prev_module = module_id
 
@@ -330,13 +343,18 @@ def parse_and_analyze_pipe(context, json_pipe, pipe_name="anonymous"):
     moduletypes = sorted(list(set([module['type'] for module in pipe['modules'].values()])))
     if context.verbose:
         print
-        print "Modules used:", ', '.join(name for name in moduletypes if not name.startswith("pipe:")) or None
-        print "Other pipes used:", ', '.join(name[5:] for name in moduletypes if name.startswith("pipe:")) or None
+        print "Modules used:", ', '.join(
+            name for name in moduletypes if not name.startswith("pipe:")
+        ) or None
+
+        print "Other pipes used:", ', '.join(
+            name[5:] for name in moduletypes if name.startswith("pipe:")
+        ) or None
 
 if __name__ == '__main__':
     try:
         import json
-        json.loads # test access to the attributes of the right json module
+        json.loads  # test access to the attributes of the right json module
     except (ImportError, AttributeError):
         import simplejson as json
 
@@ -399,4 +417,4 @@ if __name__ == '__main__':
 
     parse_and_analyze_pipe(context, pipe_def, name)
 
-    #for build example - see test/testbasics.py
+    # for build example - see test/testbasics.py

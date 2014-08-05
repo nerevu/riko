@@ -1,12 +1,13 @@
 """Test creator
 
-   Gets a pipeline definition from Yahoo and saves its json representation for testing.
+   Gets a pipeline definition from Yahoo and saves its json representation
+   for testing.
    Also gets the pipelines output as json and saves it for testing.
 """
 
 try:
     import json
-    json.loads # test access to the attributes of the right json module
+    json.loads  # test access to the attributes of the right json module
 except (ImportError, AttributeError):
     import simplejson as json
 
@@ -35,17 +36,21 @@ if __name__ == '__main__':
     if len(args):
         pipeid = args[0]
     if pipeid:
-        #todo refactor this url->json
-        #Get the pipeline definition
-        url = ("""http://query.yahooapis.com/v1/public/yql"""
-               """?q=select%20PIPE.working%20from%20json%20"""
-               """where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D"""
-               + pipeid +
-               """%22&format=json""")
-        pjson = urllib.urlopen(url).readlines()
-        pjson = "".join(pjson)
-        pipe_def = json.loads(pjson)
-        if not pipe_def['query']['results']:
+        # todo: refactor this url->json
+        # Get the pipeline definition
+        base = 'http://query.yahooapis.com/v1/public/yql?q='
+        select = """select%20PIPE.working%20from%20json%20"""
+        where = """where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com"""
+        pipe = """%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D"""
+        end = '%22&format=json'
+        url = base + select + where + pipe + pipeid + end
+
+        name = "pipe_%s" % pipeid
+        src = ''.join(urllib.urlopen(url).readlines())
+        pipe_def = json.loads(src)
+        results = pipe_def['query']['results']
+
+        if not results:
             print "Pipe not found"
             sys.exit(1)
         pjson = pipe_def['query']['results']['json']['PIPE']['working']
@@ -70,15 +75,16 @@ if __name__ == '__main__':
         fjo = open(os.path.join("pipelines", "%s_output.json" % name), "w")   #todo confirm file overwrite
         print >>fjo, ojson
 
-        #todo: to create stable, repeatable test cases we should:
+        # todo: to create stable, repeatable test cases we should:
         #  build the pipeline to find the external data sources
         #  download and save any fetchdata/fetch source data
         #  replace the fetchdata/fetch references with the local copy
-        #    (so would need to save the pipeline python but that would make it hard to test changes, so
-        #     we could declare a list of live->local-test file mappings and pass them in with the test context)
-        #  (also needs to handle any subpipelines and their external sources)
+        #  (so would need to save the pipeline python but that would make it
+        #  hard to test changes, so we could declare a list of live->local-test
+        #  file mappings and pass them in with the test context)
+        #  also needs to handle any sub-pipelines and their external sources
 
-        #todo optional:
-        #fp = open(os.path.join("pipelines", "%s.py" % name), "w")   #todo confirm file overwrite
-        #print >>fp, parse_and_write_pipe(context, pipe_def, name)
-
+        # optional:
+        # todo: confirm file overwrite
+        # fp = open(os.path.join('test', '%s.py' % name), 'w')
+        # print >>fp, parse_and_write_pipe(context, pipe_def, name)
