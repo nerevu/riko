@@ -32,10 +32,11 @@ class TestBasics(unittest.TestCase):
         self.context = Context(test=True)
         name = "pipe_2de0e4517ed76082dcddf66f7b218057"
         pipe_def = self._get_pipe_def("%s.json" % name)
-        fp = open("%s.py" % name, "w")   # todo: confirm file overwrite
-        print >>fp, pipe2py.compile.parse_and_write_pipe(
-            self.context, pipe_def, pipe_name=name)
-        fp.close()
+
+        with open("%s.py" % name, "w") as f:
+            f.write(
+                pipe2py.compile.parse_and_write_pipe(
+                    self.context, pipe_def, pipe_name=name))
 
     def tearDown(self):
         name = "pipe_2de0e4517ed76082dcddf66f7b218057"
@@ -340,10 +341,10 @@ class TestBasics(unittest.TestCase):
             pipe_def = self._get_pipe_def(pipe_file)
 
             try:
-                fp = open("%s.py" % name, "w")   # todo: confirm file overwrite
-                print >>fp, pipe2py.compile.parse_and_write_pipe(
-                  self.context, pipe_def, pipe_name=name)
-                fp.close()
+                with open("%s.py" % name, "w") as f:
+                    f.write(
+                        pipe2py.compile.parse_and_write_pipe(
+                            self.context, pipe_def, pipe_name=name))
 
                 pipe_file = 'pipe_b3d43c00f9e1145ff522fb71ea743e99.json'
                 pipe_def = self._get_pipe_def(pipe_file)
