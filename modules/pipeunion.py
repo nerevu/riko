@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_union(context, _INPUT, conf, **kwargs):
+def pipe_union(context, _INPUT, **kwargs):
     """This operator merges up to 5 source together.
 
     Keyword arguments:
@@ -11,7 +11,6 @@ def pipe_union(context, _INPUT, conf, **kwargs):
     _INPUT -- source generator
     kwargs -- _OTHER1 - another source generator
               _OTHER2 etc.
-    conf:
     
     Yields (_OUTPUT):
     union of all source items
