@@ -6,7 +6,6 @@
 
 class Context(object):
     """The context of a pipeline
-    
         verbose = debug printing during compilation and running
 
         describe_input = return pipe input requirements instead of running the
