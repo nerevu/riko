@@ -1,4 +1,4 @@
-# pprint.py
+# pprint2.py
 #
 
 
@@ -15,7 +15,7 @@ class Id(object):
             return cmp(self.name, other.name)
         else:
             return -1
-    
+
 def repr_args(args):
     """formats a list of function arguments prettily but as working code
 
@@ -50,7 +50,7 @@ def repr_arg(d):
             return repr(d.encode("ascii"))
         except UnicodeEncodeError:
             return repr(d)
-    
+
     return repr(d)
 
 def str_args(args):
@@ -67,7 +67,7 @@ def str_args(args):
         else:
             res += [str_arg(x)]
     return ', '.join(res)
-    
+
 def str_arg(d):
     """formats a function argument prettily not as code
 
@@ -89,6 +89,6 @@ def str_arg(d):
         return "[%s]" % ", ".join(str_arg(elem) for elem in d)
     if isinstance(d, unicode):
         return '"%s"' % d
-    
+
     return repr(d)
-    
+

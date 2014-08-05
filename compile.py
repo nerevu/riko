@@ -36,7 +36,7 @@ import sys
 
 from pipe2py import Context
 from pipe2py import util
-from pipe2py.pprint import Id, repr_args, repr_arg, str_args, str_arg
+from pipe2py.pprint2 import Id, repr_args, repr_arg, str_args, str_arg
 
 from topsort import topological_sort
 
