@@ -17,11 +17,6 @@ import os
 import os.path
 import sys
 
-try:
-    import wingdbstub
-except:
-    pass
-
 
 if __name__ == '__main__':
     pjson = []

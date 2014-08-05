@@ -39,18 +39,13 @@ import sys
 
 from pipe2py import Context
 from pipe2py import util
-from pipe2py.pprint2 import Id, repr_args, repr_arg, str_args, str_arg
+from pipe2py.pprint2 import Id, repr_args, str_args
 
 from topsort import topological_sort
 
 #needed for build_pipe - ensure modules/__init__.py.__all__ lists all available modules
 from pipe2py.modules import *
 
-
-try:
-    import wingdbstub
-except:
-    pass
 
 def _parse_pipe(json_pipe, pipe_name="anonymous"):
     """Parse pipe JSON into internal structures

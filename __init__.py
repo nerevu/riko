@@ -3,6 +3,7 @@
 
 #See LICENSE file for license details
 
+
 class Context(object):
     """The context of a pipeline
     
