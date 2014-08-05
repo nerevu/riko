@@ -125,14 +125,24 @@ def build_pipe(context, pipe):
 
         if module['type'].startswith('pipe:'):
             __import__(util.pythonise(module['type']))
-        if module['conf'] and 'prompt' in module['conf'] and context.describe_input:
-            pyinput.append((module['conf']['position']['value'],
-                            module['conf']['name']['value'],
-                            module['conf']['prompt']['value'],
-                            module['conf']['default']['type'],
-                            module['conf']['default']['value']))
-            #Note: there seems to be no need to recursively collate inputs from subpipelines
 
+        if (
+            module['conf'] and
+            'prompt' in module['conf'] and
+            context.describe_input
+        ):
+            pyinput.append(
+                (
+                    module['conf']['position']['value'],
+                    module['conf']['name']['value'],
+                    module['conf']['prompt']['value'],
+                    module['conf']['default']['type'],
+                    module['conf']['default']['value']
+                )
+            )
+
+            # Note: there seems to be no need to recursively collate inputs
+            # from subpipelines
 
     if context.describe_input:
         return sorted(pyinput)
@@ -305,11 +315,14 @@ def write_pipe(context, pipe):
         indent = ""
 
         if module_id in pipe['embed']:
-            #We need to wrap submodules (used by loops) so we can pass the input at runtime (as we can to subpipelines)
-            pypipe += ("""    def pipe_%(module_id)s(context, _INPUT, conf=None, **kwargs):\n"""
-                       """        "Submodule"\n"""     #todo insert submodule description here
-                       % {'module_id':module_id}
-                       )
+            # We need to wrap submodules (used by loops) so we can pass the
+            # input at runtime (as we can to subpipelines)
+            # todo: insert submodule description here
+            pypipe += (
+                """    def pipe_%s(context, _INPUT, """
+                """conf=None, **kwargs):\n"""
+                """        "Submodule"\n""" % module_id
+            )
 
             indent = "    "
 
@@ -350,14 +363,12 @@ def write_pipe(context, pipe):
 
 def parse_and_write_pipe(context, json_pipe, pipe_name="anonymous"):
     pipe = _parse_pipe(json_pipe, pipe_name)
-    pw = write_pipe(context, pipe)
-    return pw
+    return write_pipe(context, pipe)
 
 
 def parse_and_build_pipe(context, json_pipe, pipe_name="anonymous"):
     pipe = _parse_pipe(json_pipe, pipe_name)
-    pb = build_pipe(context, pipe)
-    return pb
+    return build_pipe(context, pipe)
 
 
 def parse_and_analyze_pipe(context, json_pipe, pipe_name="anonymous"):
