@@ -60,10 +60,10 @@ class TestBasics(unittest.TestCase):
            TODO: have these tests iterate over a number of test pipelines
         """
         pipe_def = self._get_pipe_def("testpipe1.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
-        for i in p:
+        for i in pipe:
             count += 1
             self.assertTrue("the" in i.get('description'))
 
@@ -195,12 +195,13 @@ class TestBasics(unittest.TestCase):
     def test_reverse_truncate(self):
         """Loads a pipeline containing a reverse and truncate
         """
-        pipe_def = self._get_pipe_def("pipe_58a53262da5a095fe7a0d6d905cc4db6.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe_file = 'pipe_58a53262da5a095fe7a0d6d905cc4db6.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         prev_title = None
-        for i in p:
+        for i in pipe:
             self.assertTrue(not prev_title or i['title'] < prev_title)
             prev_title = i['title']
             count += 1
@@ -210,37 +211,30 @@ class TestBasics(unittest.TestCase):
     def test_count_truncate(self):
         """Loads a pipeline containing a count and truncate
         """
-        pipe_def = self._get_pipe_def("pipe_58a53262da5a095fe7a0d6d905cc4db6.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
+        pipe_file = 'pipe_58a53262da5a095fe7a0d6d905cc4db6.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         #todo: check the data! e.g. pubdate etc.
-        count = 0
-        for i in p:
-            count += 1
-
-        self.assertTrue(count == 3)
+        self.assertTrue(len(list(pipe)) == 3)
 
     def test_tail(self):
         """Loads a pipeline containing a tail
         """
-        pipe_def = self._get_pipe_def("pipe_06c4c44316efb0f5f16e4e7fa4589ba2.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
+        pipe_file = 'pipe_06c4c44316efb0f5f16e4e7fa4589ba2.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
         #todo: check the data!
-        count = 0
-        for i in p:
-            count += 1
-
-        self.assertTrue(count > 0)
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_yql(self):
         """Loads a pipeline containing a yql query
         """
-        pipe_def = self._get_pipe_def("pipe_80fb3dfc08abfa7e27befe9306fc3ded.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe_file = 'pipe_80fb3dfc08abfa7e27befe9306fc3ded.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
-        for i in p:
+        for i in pipe:
             count += 1
             self.assertTrue(i['title'] == i['a']['content'])
 
@@ -249,12 +243,13 @@ class TestBasics(unittest.TestCase):
     def test_itembuilder(self):
         """Loads a pipeline containing an itembuilder
         """
-        pipe_def = self._get_pipe_def("pipe_b96287458de001ad62a637095df33ad5.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe_file = 'pipe_b96287458de001ad62a637095df33ad5.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         match = 0
-        for i in p:
+        for i in pipe:
             count += 1
             if i == {u'attrpath': {u'attr2': u'VAL2'}, u'ATTR1': u'VAL1'}:
                 match +=1
@@ -267,12 +262,13 @@ class TestBasics(unittest.TestCase):
     def test_rssitembuilder(self):
         """Loads a pipeline containing an rssitembuilder
         """
-        pipe_def = self._get_pipe_def("pipe_1166de33b0ea6936d96808717355beaa.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe_file = 'pipe_1166de33b0ea6936d96808717355beaa.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         match = 0
-        for i in p:
+        for i in pipe:
             count += 1
             if i == {'media:thumbnail': {'url': u'http://example.com/a.jpg'}, u'link': u'http://example.com/test.php?this=that', u'description': u'b', u'y:title': u'a', u'title': u'a'}:
                 match +=1
@@ -287,11 +283,12 @@ class TestBasics(unittest.TestCase):
     def test_csv(self):
         """Loads a pipeline containing a csv source
         """
-        pipe_def = self._get_pipe_def("pipe_UuvYtuMe3hGDsmRgPm7D0g.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe_file = 'pipe_UuvYtuMe3hGDsmRgPm7D0g.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
-        for i in p:
+        for i in pipe:
             count += 1
             self.assertTrue(i == {u'FamilyNumOfJourneys': u'0', u'Member': u'Lancaster', u'MPOtherEuropean': u'0',
                                   u'FamilyTotal': u'0', u'OfficeRunningCosts': u'19848', u'MPOtherRail': u'233',
@@ -325,7 +322,8 @@ class TestBasics(unittest.TestCase):
     def test_describe_input(self):
         """Loads a pipeline but just gets the input requirements
         """
-        pipe_def = self._get_pipe_def("pipe_5fabfc509a8e44342941060c7c7d0340.json")
+        pipe_file = 'pipe_5fabfc509a8e44342941060c7c7d0340.json'
+        pipe_def = self._get_pipe_def(pipe_file)
         self.context.describe_input = True
         inputs = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
@@ -369,15 +367,11 @@ class TestBasics(unittest.TestCase):
            (also tests for re with empty source string
             and reference to 'y:id.value')
         """
-        pipe_def = self._get_pipe_def("pipe_6e30c269a69baf92cd420900b0645f88.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        count = 0
-        for i in p:
-            count += 1
-            #todo: check the data!
-
-        self.assertTrue(count > 0)
+        pipe_file = 'pipe_6e30c269a69baf92cd420900b0645f88.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        #todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_submodule_loop(self):
         """Loads a pipeline containing a sub-module in a loop and passing input parameters
@@ -394,19 +388,21 @@ class TestBasics(unittest.TestCase):
         else:
             #Compile submodule to disk
             self.context = Context(test=True)
-            name = "pipe_bd0834cfe6cdacb0bea5569505d330b8"
-            pipe_def = self._get_pipe_def("%s.json" % name)
+            pipe_file = 'pipe_bd0834cfe6cdacb0bea5569505d330b8.json'
+            pipe_def = self._get_pipe_def(pipe_file)
+
             try:
                 fp = open("%s.py" % name, "w")   #todo confirm file overwrite
                 print >>fp, pipe2py.compile.parse_and_write_pipe(self.context, pipe_def, pipe_name=name)
                 fp.close()
 
-                pipe_def = self._get_pipe_def("pipe_b3d43c00f9e1145ff522fb71ea743e99.json")
-                p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+                pipe_file = 'pipe_b3d43c00f9e1145ff522fb71ea743e99.json'
+                pipe_def = self._get_pipe_def(pipe_file)
+                pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
                 #todo: check the data!
                 count = 0
-                for i in p:
+                for i in pipe:
                     count += 1
                     self.assertEqual(i['title'], u'Hywel Francis (University of Wales, Swansea (UWS))')
                     break  #lots of data - just make sure it compiles and runs
@@ -431,11 +427,12 @@ class TestBasics(unittest.TestCase):
     def test_loops_1(self):
         """Loads a pipeline containing a loop
         """
-        pipe_def = self._get_pipe_def("pipe_125e9fe8bb5f84526d21bebfec3ad116.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe_file = 'pipe_125e9fe8bb5f84526d21bebfec3ad116.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
-        for i in p:
+        for i in pipe:
             count += 1
             # 403:
             # self.assertEqual(
@@ -456,25 +453,22 @@ class TestBasics(unittest.TestCase):
     def test_feeddiscovery(self):
         """Loads a pipeline containing a feed auto-discovery module plus fetch-feed in a loop with emit all
         """
-        pipe_def = self._get_pipe_def("pipe_HrX5bjkv3BGEp9eSy6ky6g.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        count = 0
-        for i in p:
-            count += 1
-            #todo: check the data!
-
-        self.assertTrue(count > 0)
+        pipe_file = 'pipe_HrX5bjkv3BGEp9eSy6ky6g.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        #todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_stringtokeniser(self):
         """Loads a pipeline containing a stringtokeniser
         """
-        pipe_def = self._get_pipe_def("pipe_975789b47f17690a21e89b10a702bcbd.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe_file = 'pipe_975789b47f17690a21e89b10a702bcbd.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         match = 0
-        for i in p:
+        for i in pipe:
             count += 1
             if i == {u'title': u'#hashtags'}:
                 match += 1
@@ -487,41 +481,29 @@ class TestBasics(unittest.TestCase):
     def test_fetchsitefeed(self):
         """Loads a pipeline containing a fetchsitefeed module
         """
-        pipe_def = self._get_pipe_def("pipe_551507461cbcb19a828165daad5fe007.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        count = 0
-        for i in p:
-            count += 1
-            #todo: check the data!
-
-        self.assertTrue(count > 0)
+        pipe_file = 'pipe_551507461cbcb19a828165daad5fe007.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        #todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_fetchpage(self):
         """Loads a pipeline containing a fetchpage module
         """
-        pipe_def = self._get_pipe_def("pipe_9420a757a49ddf11d8b98349abb5bcf4.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        count = 0
-        for i in p:
-            count += 1
-            #todo: check the data!
-
-        self.assertTrue(count > 0)
+        pipe_file = 'pipe_9420a757a49ddf11d8b98349abb5bcf4.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        # todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_fetchpage_loop(self):
         """Loads a pipeline containing a fetchpage module within a loop
         """
-        pipe_def = self._get_pipe_def("pipe_188eca77fd28c96c559f71f5729d91ec.json")
-        p = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-
-        count = 0
-        for i in p:
-            count += 1
-            #todo: check the data!
-
-        self.assertTrue(count > 0)
+        pipe_file = 'pipe_188eca77fd28c96c559f71f5729d91ec.json'
+        pipe_def = self._get_pipe_def(pipe_file)
+        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        #todo: check the data!
+        self.assertTrue(len(list(pipe)) > 0)
 
     def test_split(self):
         """Loads an example pipeline containing a split module
