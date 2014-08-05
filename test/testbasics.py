@@ -45,8 +45,8 @@ class TestBasics(unittest.TestCase):
         try:
             for line in fileinput.input(filename):
                 pjson.append(line)
-        except:
-            for line in fileinput.input("pipelines/%s" % filename):
+        except IOError:
+            for line in fileinput.input("test/%s" % filename):
                 pjson.append(line)
         pjson = "".join(pjson)
         pipe_def = json.loads(pjson)
