@@ -37,6 +37,8 @@ import fileinput
 import urllib
 import sys
 
+from functools import partial, update_wrapper
+from importlib import import_module
 from optparse import OptionParser
 from os.path import splitext, split
 from pipe2py import Context
@@ -218,35 +220,22 @@ def build_pipe(context, pipe):
             pymodule_name = "sys.modules['%s']" % util.pythonise(module_type)
             pymodule_generator_name = "%s" % util.pythonise(module_type)
 
+        module_ref = import_module(pymodule_generator_name, pymodule_name)
+
         # if this module is an embedded module:
         if module_id in pipe['embed']:
             # We need to wrap submodules (used by loops) so we can pass the
-            # input at runtime (as we can to subpipelines)
+            # input at runtime (as we can to sub-pipelines)
+            # Note: no embed (so no subloops) or wire kargs are
+            # passed and outer kwargs are passed in
+            submodule = partial(
+                module_ref, context, _INPUT, conf=module['conf'], **kwargs)
 
-            pypipe = (
-                """def pipe_%(module_id)s"""
-                """(context, _INPUT, conf=None, **kwargs):\n"""
-                """    return %(pymodule_name)s.%(pymodule_generator_name)s"""
-                """(context, _INPUT, conf=%(conf)s, **kwargs)\n""" % {
-                    'module_id': module_id,
-                    'pymodule_name': pymodule_name,
-                    'pymodule_generator_name': pymodule_generator_name,
-                    'conf': module['conf'],
-                    # Note: no embed (so no subloops) or wire kargs are
-                    # passed and outer kwargs are passed in
-                }
-            )
-
-            exec pypipe  # Note: evaluated in current namespace - todo ok?
-            steps[module_id] = eval("pipe_%s" % module_id)
+            # add attributes from 'module_ref' to 'submodule'
+            update_wrapper(submodule, module_ref)
+            submodule.__name__ = 'pipe_%s' % module_id
+            steps[module_id] = submodule
         else:  # else this module is not an embedded module:
-            module_ref = eval(
-                "%(pymodule_name)s.%(pymodule_generator_name)s" % {
-                    'pymodule_name': pymodule_name,
-                    'pymodule_generator_name': pymodule_generator_name,
-                }
-            )
-
             steps[module_id] = module_ref(*pargs, **kargs)
 
         if context.verbose:
