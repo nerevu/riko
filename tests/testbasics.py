@@ -47,7 +47,7 @@ class TestBasics(unittest.TestCase):
         try:
             pjson = ''.join(line for line in open(pipe_file))
         except IOError:
-            pipe_file = path.join('test', filename)
+            pipe_file = path.join('tests', filename)
             pjson = ''.join(line for line in open(pipe_file))
 
         return json.loads(pjson)
