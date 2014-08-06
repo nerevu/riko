@@ -5,11 +5,11 @@
 """
 
 import unittest
+import os
+import os.path as path
 from pipe2py.compile import parse_and_build_pipe, parse_and_write_pipe
 
 from pipe2py import Context
-import os.path
-import fileinput
 
 try:
     import json
@@ -42,18 +42,15 @@ class TestBasics(unittest.TestCase):
         os.remove("%s.py" % name)
 
     def _get_pipe_def(self, filename):
-        pjson = []
+        pipe_file = filename
+
         try:
-            for line in fileinput.input(filename):
-                pjson.append(line)
+            pjson = ''.join(line for line in open(pipe_file))
         except IOError:
-            for line in fileinput.input("test/%s" % filename):
-                pjson.append(line)
-        pjson = "".join(pjson)
-        pipe_def = json.loads(pjson)
+            pipe_file = path.join('test', filename)
+            pjson = ''.join(line for line in open(pipe_file))
 
-        return pipe_def
-
+        return json.loads(pjson)
 
     def test_feed(self):
         """Loads a simple test pipeline and compiles and executes it to check
