@@ -33,12 +33,12 @@
 
 __version__ = "0.9.5"
 
-from optparse import OptionParser
 import fileinput
 import urllib
-import os
 import sys
 
+from optparse import OptionParser
+from os.path import splitext, split
 from pipe2py import Context
 from pipe2py import util
 from pipe2py.pprint2 import Id, repr_args, str_args
@@ -465,12 +465,9 @@ if __name__ == '__main__':
     except (ImportError, AttributeError):
         import simplejson as json
 
-    context = Context()
-
-    pjson = []
-
     usage = "usage: %prog [options] [filename]"
     parser = OptionParser(usage=usage)
+
     parser.add_option(
         "-p", "--pipe", dest="pipeid", help="read pipe JSON from Yahoo",
         metavar="PIPEID")
@@ -481,56 +478,42 @@ if __name__ == '__main__':
         "-v", dest="verbose", help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()
 
-    name = "anonymous"
-    filename = None
-
-    if len(args):
-        filename = args[0]
-
-    context.verbose = options.verbose
+    filename = args[0] if args else None
+    context = Context(verbose=options.verbose)
 
     if options.pipeid:
-        url = ("""http://query.yahooapis.com/v1/public/yql"""
-               """?q=select%20PIPE.working%20from%20json%20"""
-               """where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D"""
-               + options.pipeid +
-               """%22&format=json""")
-        pjson = urllib.urlopen(url).readlines()
-        pjson = "".join(pjson)
-        pipe_def = json.loads(pjson)
-        if not pipe_def['query']['results']:
+        base = 'http://query.yahooapis.com/v1/public/yql?q='
+        select = """select%20PIPE.working%20from%20json%20"""
+        where = """where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com"""
+        pipe = """%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D"""
+        end = '%22&format=json'
+        url = base + select + where + pipe + options.pipeid + end
+
+        src = ''.join(urllib.urlopen(url).readlines())
+        src_json = json.loads(src)
+        results = src_json['query']['results']
+
+        if not results:
             print "Pipe not found"
             sys.exit(1)
-        pjson = pipe_def['query']['results']['json']['PIPE']['working']
 
-        if isinstance(pjson, str) or isinstance(pjson, unicode):
-            pjson = json.loads(pjson)
-
-        pipe_def = pjson
-
-        # was not needed until April 2011 - changes at Yahoo! Pipes/YQL?
-        pjson = json.dumps(pjson)
+        pjson = results['json']['PIPE']['working']
         name = "pipe_%s" % options.pipeid
     elif filename:
-        for line in fileinput.input(filename):
-            pjson.append(line)
-
-        pjson = "".join(pjson)
-        pipe_def = json.loads(pjson)
-        name = os.path.splitext(os.path.split(filename)[-1])[0]
+        pjson = ''.join(line for line in open(filename))
+        name = splitext(split(filename)[-1])[0]
     else:
-        for line in fileinput.input():
-            pjson.append(line)
-        pjson = "".join(pjson)
-        pipe_def = json.loads(pjson)
+        pjson = ''.join(line for line in fileinput.input())
+        name = "anonymous"
+
+    pipe_def = json.loads(pjson)
 
     if options.savejson:
-        fj = open("%s.json" % name, "w")   #todo confirm file overwrite
-        print >>fj, pjson.encode("utf-8")
+        with open("%s.json" % name, "w") as f:
+            pprint(json.loads(pjson.encode("utf-8")), f)
 
-
-    fp = open("%s.py" % name, "w")   #todo confirm file overwrite
-    print >>fp, parse_and_write_pipe(context, pipe_def, name)
+    with open("%s.py" % name, "w") as f:
+        f.write(parse_and_write_pipe(context, pipe_def, name))
 
     parse_and_analyze_pipe(context, pipe_def, name)
 
