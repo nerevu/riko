@@ -11,7 +11,7 @@ def read(fname):
 
 setup(
     name='pipe2py',
-    version='0.10.0',
+    version='0.11.0',
     description=(
         'A project to compile Yahoo! Pipes into Python. '
         'The pipe2py package can compile a Yahoo! Pipe into pure Python source'
