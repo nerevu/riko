@@ -127,9 +127,9 @@ def build_pipe(context, pipe):
             __import__(util.pythonise(module['type']))
 
         if (
-            module['conf'] and
-            'prompt' in module['conf'] and
-            context.describe_input
+            module['conf']
+            and 'prompt' in module['conf']
+            and context.describe_input
         ):
             pyinput.append(
                 (
@@ -163,9 +163,9 @@ def build_pipe(context, pipe):
             pipe_wire = pipe['wires'][wire]
 
             if (
-                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id and
-                pipe_wire['tgt']['id'] == '_INPUT' and
-                pipe_wire['src']['id'].startswith('_OUTPUT')
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
+                and pipe_wire['tgt']['id'] == '_INPUT'
+                and pipe_wire['src']['id'].startswith('_OUTPUT')
             ):
                 # todo? this equates the outputs
                 input_module = steps[
@@ -188,9 +188,9 @@ def build_pipe(context, pipe):
             pipe_wire = pipe['wires'][wire]
 
             if (
-                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id and
-                pipe_wire['tgt']['id'] != '_INPUT' and
-                pipe_wire['src']['id'].startswith('_OUTPUT')
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
+                and pipe_wire['tgt']['id'] != '_INPUT'
+                and pipe_wire['src']['id'].startswith('_OUTPUT')
             ):  # todo? this equates the outputs
                 pipe_id = util.pythonise(pipe_wire['tgt']['id'])
                 kargs["%(id)s" % {'id': pipe_id}] = steps[
@@ -301,9 +301,9 @@ def write_pipe(context, pipe):
             pipe_wire = pipe['wires'][wire]
 
             if (
-                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id and
-                pipe_wire['tgt']['id'] == '_INPUT' and
-                pipe_wire['src']['id'].startswith('_OUTPUT')
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
+                and pipe_wire['tgt']['id'] == '_INPUT'
+                and pipe_wire['src']['id'].startswith('_OUTPUT')
             ):  # todo? this equates the outputs
                 input_module = util.pythonise(pipe_wire['src']['moduleid'])
 
@@ -324,9 +324,9 @@ def write_pipe(context, pipe):
             pipe_wire = pipe['wires'][wire]
 
             if (
-                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id and
-                pipe_wire['tgt']['id'] != '_INPUT' and
-                pipe_wire['src']['id'].startswith('_OUTPUT')
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
+                and pipe_wire['tgt']['id'] != '_INPUT'
+                and pipe_wire['src']['id'].startswith('_OUTPUT')
             ):  # todo? this equates the outputs
                 mod_kwargs += [
                     (
