@@ -62,12 +62,14 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     Returns:
     pipe -- an internal representation of a pipe
     """
-    pipe = {'name': util.pythonise(pipe_name)}
+    pipe = {
+        'name': util.pythonise(pipe_name),
+        'modules': {},
+        'embed': {},
+        'graph': {},
+        'wires': {},
+    }
 
-    pipe['modules'] = {}
-    pipe['embed'] = {}
-    pipe['graph'] = {}
-    pipe['wires'] = {}
     modules = json_pipe['modules']
 
     if not isinstance(modules, list):
