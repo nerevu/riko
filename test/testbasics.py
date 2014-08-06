@@ -14,7 +14,7 @@ import fileinput
 
 try:
     import json
-    json.loads # test access to the attributes of the right json module
+    json.loads  # test access to the attributes of the right json module
 except (ImportError, AttributeError):
     import simplejson as json
 
@@ -177,13 +177,13 @@ class TestBasics(unittest.TestCase):
         for i in pipe:
             count += 1
             if i == {u'attrpath': {u'attr2': u'VAL2'}, u'ATTR1': u'VAL1'}:
-                match +=1
+                match += 1
             if i == {
                 u'longpath': {u'attrpath': {u'attr3': u'val3'}},
                 u'attrpath': {u'attr2': u'val2', u'attr3': u'extVal'},
                 u'attr1': u'val1'
             }:
-                match +=1
+                match += 1
 
         self.assertTrue(count == 2)
         self.assertTrue(match == 2)
@@ -204,7 +204,7 @@ class TestBasics(unittest.TestCase):
                 u'link': u'http://example.com/test.php?this=that',
                 u'description': u'b', u'y:title': u'a', u'title': u'a'
             }:
-                match +=1
+                match += 1
             if i == {
                 u'newtitle': u'NEWTITLE',
                 u'loop:itembuilder': [
@@ -215,7 +215,7 @@ class TestBasics(unittest.TestCase):
                 ],
                 u'title': u'TITLE1',
             }:
-                match +=1
+                match += 1
             if i == {
                 u'newtitle': u'NEWTITLE',
                 u'loop:itembuilder': [
@@ -226,7 +226,7 @@ class TestBasics(unittest.TestCase):
                 ],
                 u'title': u'TITLE2',
             }:
-                match +=1
+                match += 1
 
         self.assertTrue(count == 3)
         self.assertTrue(match == 3)
@@ -241,6 +241,16 @@ class TestBasics(unittest.TestCase):
         count = 0
         for i in pipe:
             count += 1
+            description = (
+                u'Total allowances claimed, inc travel: '
+                '151619<br>Total basic allowances claimed, ex travel: '
+                '146282<br>Total Travel claimed: 5337<br>MP Mileage: '
+                '3358<br>MP Rail Travel: 1473<br>MP Air Travel: 0<br>'
+                'Cost of staying away from main home: 22541<br>London '
+                'Supplement: 0<br>Office Running Costs: 19848<br>'
+                'Staffing Costs: 88283'
+            )
+
             self.assertTrue(
                 i == {
                     u'FamilyNumOfJourneys': u'0',
@@ -255,13 +265,7 @@ class TestBasics(unittest.TestCase):
                     u'Mileage': u'3358',
                     u'MPMisc': u'20',
                     u'title': u'Mr Mark Lancaster',
-                    u'description': u'Total allowances claimed, inc travel: '
-                        '151619<br>Total basic allowances claimed, ex travel: '
-                        '146282<br>Total Travel claimed: 5337<br>MP Mileage: '
-                        '3358<br>MP Rail Travel: 1473<br>MP Air Travel: 0<br>'
-                        'Cost of staying away from main home: 22541<br>London '
-                        'Supplement: 0<br>Office Running Costs: 19848<br>'
-                        'Staffing Costs: 88283',
+                    u'description': description,
                     u'TotalAllowancesClaimedIncTravel': u'151619',
                     u'SpouseTotal': u'31',
                     u'EmployeeTotal': u'222',
@@ -294,7 +298,10 @@ class TestBasics(unittest.TestCase):
 
         self.assertTrue(
             inputs, [
-                (u'', u'dateinput1', u'dateinput1', u'datetime', u'10/14/2010'),
+                (
+                    u'', u'dateinput1', u'dateinput1', u'datetime',
+                    u'10/14/2010'
+                ),
                 (
                     u'', u'locationinput1', u'locationinput1', u'location',
                     u'isle of wight, uk'
@@ -305,7 +312,10 @@ class TestBasics(unittest.TestCase):
                     u'', u'textinput1', u'textinput1', u'text',
                     u'This is default text - is there debug text too?'
                 ),
-                (u'', u'urlinput1', u'urlinput1', u'url', u'http://example.com')
+                (
+                    u'', u'urlinput1', u'urlinput1', u'url',
+                    u'http://example.com'
+                )
             ]
         )
 
@@ -336,7 +346,7 @@ class TestBasics(unittest.TestCase):
             # too slow, recently at least:
             # todo: use small, fixed data set to restrict duration
         else:
-            #Compile submodule to disk
+            # Compile submodule to disk
             self.context = Context(test=True)
             pipe_file = 'pipe_bd0834cfe6cdacb0bea5569505d330b8.json'
             pipe_def = self._get_pipe_def(pipe_file)
@@ -360,7 +370,7 @@ class TestBasics(unittest.TestCase):
                         i['title'],
                         u'Hywel Francis (University of Wales, Swansea (UWS))'
                     )
-                    break  #lots of data - just make sure it compiles and runs
+                    break  # lots of data - just make sure it compiles and runs
 
                 self.assertTrue(count > 0)
             finally:
@@ -517,7 +527,7 @@ class TestBasics(unittest.TestCase):
     #     count = 0
     #     for i in pipe:
     #         count += 1
-    #
+
     #     self.assertTrue(count > 0)
 
     # # removed: dead link
@@ -540,8 +550,8 @@ class TestBasics(unittest.TestCase):
 
     # # removed: dead link
     # def test_twitter_caption_search(self):
-    #     """Loads the Twitter Caption Search pipeline and compiles and executes
-    #         it to check the results
+    #     """Loads the Twitter Caption Search pipeline and compiles and
+    #         executes it to check the results
     #     """
     #     pipe_def = self._get_pipe_def("pipe_eb3e27f8f1841835fdfd279cd96ff9d8.json")
     #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
@@ -550,7 +560,7 @@ class TestBasics(unittest.TestCase):
     #     count = 0
     #     for i in pipe:
     #         count += 1
-    #
+
     #     self.assertTrue(count > 0)
 
     # # removed: 'dc:creator' missing
@@ -579,7 +589,7 @@ class TestBasics(unittest.TestCase):
     #     count = 0
     #     for i in pipe:
     #         count += 1
-    #
+
     #     self.assertTrue(count == 1)
     #     self.assertEqual(
     #         i['title'],
@@ -601,18 +611,18 @@ class TestBasics(unittest.TestCase):
     #         count += 1
     #         t = i['title']
     #         if t == 'Lands End to Porthcawl':
-    #             match +=1
+    #             match += 1
     #         if t == 'Brittany':
-    #             match +=1
+    #             match += 1
     #         if t == 'Ravenscar to Hull':
-    #             match +=1
+    #             match += 1
     #         if t == 'East Coast - Smugglers, Alum and Scarborough Bay':
-    #             match +=1
+    #             match += 1
     #         if t == "Swanage to Land's End":
-    #             match +=1
+    #             match += 1
     #         if t == 'Heart of the British Isles - A Grand Tour':
-    #             match +=1
-    #
+    #             match += 1
+
     #     self.assertTrue(count == 5)
     #     self.assertTrue(match == 5)
 

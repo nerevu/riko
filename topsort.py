@@ -6,6 +6,7 @@
    Public domain, do with it as you will
 """
 
+
 def strongly_connected_components(graph):
     """ Find the strongly connected components in a graph using
         Tarjan's algorithm.
@@ -14,12 +15,13 @@ def strongly_connected_components(graph):
         lists of successor nodes.
         """
 
-    result = [ ]
-    stack = [ ]
-    low = { }
+    result = []
+    stack = []
+    low = {}
 
     def visit(node):
-        if node in low: return
+        if node in low:
+            return
 
         num = len(low)
         low[node] = num
@@ -44,16 +46,16 @@ def strongly_connected_components(graph):
 
 
 def topological_sort(graph):
-    count = { }
+    count = {}
     for node in graph:
         count[node] = 0
     for node in graph:
         for successor in graph[node]:
             count[successor] += 1
 
-    ready = [ node for node in graph if count[node] == 0 ]
+    ready = [node for node in graph if count[node] == 0]
 
-    result = [ ]
+    result = []
     while ready:
         node = ready.pop(-1)
         result.append(node)
@@ -72,14 +74,14 @@ def robust_topological_sort(graph):
 
     components = strongly_connected_components(graph)
 
-    node_component = { }
+    node_component = {}
     for component in components:
         for node in component:
             node_component[node] = component
 
-    component_graph = { }
+    component_graph = {}
     for component in components:
-        component_graph[component] = [ ]
+        component_graph[component] = []
 
     for node in graph:
         node_c = node_component[node]
@@ -93,8 +95,8 @@ def robust_topological_sort(graph):
 
 if __name__ == '__main__':
     print robust_topological_sort({
-        0 : [1],
-        1 : [2],
-        2 : [1,3],
-        3 : [3],
+        0: [1],
+        1: [2],
+        2: [1, 3],
+        3: [3],
     })
