@@ -152,6 +152,7 @@ def build_pipe(context, pipe):
 
     for module_id in module_sequence:
         module = pipe['modules'][module_id]
+        module_type = module['type']
 
         # Plumb I/O
 
@@ -201,15 +202,21 @@ def build_pipe(context, pipe):
             kargs["embed"] = steps[
                 util.pythonise(module['conf']['embed']['value']['id'])]
 
-        if module['type'] == 'split':
-            kargs["splits"] = len([1 for w in pipe['wires'] if util.pythonise(pipe['wires'][w]['src']['moduleid']) == module_id])
+        if module_type == 'split':
+            filtered = filter(
+                lambda x: module_id == util.pythonise(x['src']['moduleid']),
+                pipe['wires']
+            )
 
-        #todo (re)import other pipes dynamically
-        pymodule_name = "pipe%(module_type)s" % {'module_type':module['type']}
-        pymodule_generator_name = "pipe_%(module_type)s" % {'module_type':module['type']}
-        if module['type'].startswith('pipe:'):
-            pymodule_name = "sys.modules['%(module_type)s']" % {'module_type':util.pythonise(module['type'])}
-            pymodule_generator_name = "%(module_type)s" % {'module_type':util.pythonise(module['type'])}
+            kargs["splits"] = len(list(filtered))
+
+        # todo: (re)import other pipes dynamically
+        pymodule_name = "pipe%s" % module_type
+        pymodule_generator_name = "pipe_%s" % module_type
+
+        if module_type.startswith('pipe:'):
+            pymodule_name = "sys.modules['%s']" % util.pythonise(module_type)
+            pymodule_generator_name = "%s" % util.pythonise(module_type)
 
         # if this module is an embedded module:
         if module_id in pipe['embed']:
