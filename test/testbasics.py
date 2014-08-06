@@ -598,8 +598,8 @@ class TestBasics(unittest.TestCase):
     #     self.assertTrue(count == 1)
     #     self.assertEqual(
     #         i['title'],
-    #         'THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ WASHINGTON/'
-    #         "OREGON\nAND CALIFORNIA ONLY\n(Severe)"
+    #         'THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ '
+    #         "WASHINGTON/OREGON\nAND CALIFORNIA ONLY\n(Severe)"
     #     )
 
     # # removed: data too unstable: get a local copy
