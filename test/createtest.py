@@ -16,6 +16,7 @@ import urllib
 import os
 import os.path
 import sys
+from pprint import pprint
 
 
 if __name__ == '__main__':
@@ -42,33 +43,31 @@ if __name__ == '__main__':
 
         name = "pipe_%s" % pipeid
         src = ''.join(urllib.urlopen(url).readlines())
-        pipe_def = json.loads(src)
-        results = pipe_def['query']['results']
+        src_json = json.loads(src)
+        results = src_json['query']['results']
 
         if not results:
             print "Pipe not found"
             sys.exit(1)
-        pjson = pipe_def['query']['results']['json']['PIPE']['working']
-        pipe_def = pjson # json.loads(pjson)
-        pjson = json.dumps(pjson)
-        name = "pipe_%s" % pipeid
 
-        fj = open(os.path.join("pipelines", "%s.json" % name), "w")   #todo confirm file overwrite
-        print >>fj, pjson
+        pjson = results['json']['PIPE']['working']
 
-        #Get the pipeline output
-        url = ("""http://pipes.yahoo.com/pipes/pipe.run"""
-               """?_id=""" + pipeid + """&_render=json""")
-        ojson = urllib.urlopen(url).readlines()
-        ojson = "".join(ojson)
-        pipe_output = json.loads(ojson)
-        if not pipe_output['count']:
-            print "Pipe results not found"
+        with open(os.path.join('pipelines', '%s.json' % name), 'w') as f:
+            pprint(json.loads(pjson.encode("utf-8")), f)
+
+        # Get the pipeline output
+        base = 'http://pipes.yahoo.com/pipes/pipe.run'
+        url = '%s?_id=%s&_render=json' % (base, pipeid)
+        src = ''.join(urllib.urlopen(url).readlines())
+        ojson = json.loads(src)
+
+        if not ojson['count']:
+            print 'Pipe results not found'
             sys.exit(1)
-        ojson = pipe_output
 
-        fjo = open(os.path.join("pipelines", "%s_output.json" % name), "w")   #todo confirm file overwrite
-        print >>fjo, ojson
+        path = os.path.join('data', '%s_output.json' % name)
+        with open(path, 'w') as f:
+            pprint(ojson.encode("utf-8"), f)
 
         # todo: to create stable, repeatable test cases we should:
         #  build the pipeline to find the external data sources
