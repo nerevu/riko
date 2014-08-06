@@ -8,7 +8,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name='pipe2py',
-      version='0.9.5',
+      version='0.10.0',
       description=('A project to compile Yahoo! Pipes into Python. '
                    'The pipe2py package can compile a Yahoo! Pipe into pure Python source code, '
                    'or it can interpret the pipe on-the-fly. It supports embedded pipes too.'
