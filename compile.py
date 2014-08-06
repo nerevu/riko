@@ -94,7 +94,7 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
         pipe['graph'][util.pythonise(wire['src']['moduleid'])].append(
             util.pythonise(wire['tgt']['moduleid']))
 
-    #Remove any orphan nodes
+    # Remove any orphan nodes
     for node in pipe['graph'].keys():
         targetted = [node in pipe['graph'][k] for k in pipe['graph']]
         if not pipe['graph'][node] and not any(targetted):
