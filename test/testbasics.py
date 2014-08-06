@@ -5,10 +5,9 @@
 """
 
 import unittest
+from pipe2py.compile import parse_and_build_pipe, parse_and_write_pipe
 
 from pipe2py import Context
-import pipe2py.compile
-
 import os.path
 import fileinput
 
@@ -36,8 +35,7 @@ class TestBasics(unittest.TestCase):
 
         with open("%s.py" % name, "w") as f:
             f.write(
-                pipe2py.compile.parse_and_write_pipe(
-                    self.context, pipe_def, pipe_name=name))
+                parse_and_write_pipe(self.context, pipe_def, pipe_name=name))
 
     def tearDown(self):
         name = "pipe_2de0e4517ed76082dcddf66f7b218057"
@@ -64,7 +62,7 @@ class TestBasics(unittest.TestCase):
             TODO: have these tests iterate over a number of test pipelines
         """
         pipe_def = self._get_pipe_def("testpipe1.json")
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         for i in pipe:
@@ -80,7 +78,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_2de0e4517ed76082dcddf66f7b218057.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -92,7 +90,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_c1cfa58f96243cea6ff50a12fc50c984.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -102,7 +100,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_e519dd393f943315f7e4128d19db2eac.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -111,7 +109,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_8NMkiTW32xGvMbDKruymrA.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -122,7 +120,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_58a53262da5a095fe7a0d6d905cc4db6.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         prev_title = None
@@ -138,7 +136,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_58a53262da5a095fe7a0d6d905cc4db6.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data! e.g. pubdate etc.
         self.assertTrue(len(list(pipe)) == 3)
 
@@ -147,7 +145,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_06c4c44316efb0f5f16e4e7fa4589ba2.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -156,7 +154,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_80fb3dfc08abfa7e27befe9306fc3ded.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         for i in pipe:
@@ -170,7 +168,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_b96287458de001ad62a637095df33ad5.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         match = 0
@@ -193,7 +191,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_1166de33b0ea6936d96808717355beaa.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         match = 0
@@ -236,7 +234,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_UuvYtuMe3hGDsmRgPm7D0g.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         for i in pipe:
@@ -294,7 +292,7 @@ class TestBasics(unittest.TestCase):
         pipe_file = 'pipe_5fabfc509a8e44342941060c7c7d0340.json'
         pipe_def = self._get_pipe_def(pipe_file)
         self.context.describe_input = True
-        inputs = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        inputs = parse_and_build_pipe(self.context, pipe_def)
 
         self.assertTrue(
             inputs, [
@@ -326,7 +324,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_6e30c269a69baf92cd420900b0645f88.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -348,19 +346,18 @@ class TestBasics(unittest.TestCase):
         else:
             # Compile submodule to disk
             self.context = Context(test=True)
-            pipe_file = 'pipe_bd0834cfe6cdacb0bea5569505d330b8.json'
-            pipe_def = self._get_pipe_def(pipe_file)
+            pipe_name = 'pipe_bd0834cfe6cdacb0bea5569505d330b8'
+            pipe_def = self._get_pipe_def('%s.json' % pipe_name)
 
             try:
-                with open("%s.py" % name, "w") as f:
+                with open("%s.py" % pipe_name, "w") as f:
                     f.write(
-                        pipe2py.compile.parse_and_write_pipe(
-                            self.context, pipe_def, pipe_name=name))
+                        parse_and_write_pipe(
+                            self.context, pipe_def, pipe_name=pipe_name))
 
                 pipe_file = 'pipe_b3d43c00f9e1145ff522fb71ea743e99.json'
                 pipe_def = self._get_pipe_def(pipe_file)
-                pipe = pipe2py.compile.parse_and_build_pipe(
-                    self.context, pipe_def)
+                pipe = parse_and_build_pipe(self.context, pipe_def)
 
                 # todo: check the data!
                 count = 0
@@ -374,14 +371,14 @@ class TestBasics(unittest.TestCase):
 
                 self.assertTrue(count > 0)
             finally:
-                os.remove("%s.py" % name)
+                os.remove("%s.py" % pipe_name)
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop
         """
         pipe_file = 'pipe_125e9fe8bb5f84526d21bebfec3ad116.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         for i in pipe:
@@ -413,7 +410,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_HrX5bjkv3BGEp9eSy6ky6g.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -422,7 +419,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_975789b47f17690a21e89b10a702bcbd.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
 
         count = 0
         match = 0
@@ -441,7 +438,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_551507461cbcb19a828165daad5fe007.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -450,7 +447,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_9420a757a49ddf11d8b98349abb5bcf4.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -459,7 +456,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_188eca77fd28c96c559f71f5729d91ec.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -468,7 +465,7 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_QMrlL_FS3BGlpwryODY80A.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+        pipe = parse_and_build_pipe(self.context, pipe_def)
         # todo: check the data!
         self.assertTrue(len(list(pipe)) > 0)
 
@@ -477,8 +474,8 @@ class TestBasics(unittest.TestCase):
         """
         pipe_file = 'pipe_zKJifuNS3BGLRQK_GsevXg.json'
         pipe_def = self._get_pipe_def(pipe_file)
-        pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-        self.assertTrue(len(list(pipe)) == 0)  #empty feed
+        pipe = parse_and_build_pipe(self.context, pipe_def)
+        self.assertTrue(len(list(pipe)) == 0)  # empty feed
 
     # todo: test simplemath - divide by zero and check/implement yahoo handling
     # todo: test malformed pipeline syntax
@@ -491,8 +488,9 @@ class TestBasics(unittest.TestCase):
     # def test_twitter(self):
     #     """Loads a pipeline containing a loop, complex regex etc. for twitter
     #     """
-    #     pipe_def = self._get_pipe_def("pipe_ac45e9eb9b0174a4e53f23c4c9903c3f.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+    #     pipe_file = 'pipe_ac45e9eb9b0174a4e53f23c4c9903c3f.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
     #     # todo: check the data!
     #     self.assertTrue(len(list(pipe)) > 0)
 
@@ -500,8 +498,9 @@ class TestBasics(unittest.TestCase):
     # def test_xpathfetchpage_1(self):
     #     """Loads a pipeline containing xpathfetchpage
     #     """
-    #     pipe_def = self._get_pipe_def("pipe_a08134746e30a6dd3a7cb3c0cf098692.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+    #     pipe_file = 'pipe_a08134746e30a6dd3a7cb3c0cf098692.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
 
     #     try:
     #         self.assertTrue(len(list(pipe)) > 0)
@@ -520,9 +519,10 @@ class TestBasics(unittest.TestCase):
     #         Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
     #         (assumes its been compiled to a .py file - see test setUp)
     #     """
-    #     pipe_def = self._get_pipe_def("pipe_93abb8500bd41d56a37e8885094c8d10.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-    #
+    #     pipe_file = 'pipe_93abb8500bd41d56a37e8885094c8d10.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
+
     #     # todo: check the data!
     #     count = 0
     #     for i in pipe:
@@ -534,8 +534,9 @@ class TestBasics(unittest.TestCase):
     # def test_urlbuilder_loop(self):
     #     """Loads a pipeline containing a URL builder in a loop
     #     """
-    #     pipe_def = self._get_pipe_def("pipe_e65397e116d7754da0dd23425f1f0af1.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+    #     pipe_file = 'pipe_e65397e116d7754da0dd23425f1f0af1.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
     #     # todo: check the data!
     #     self.assertTrue(len(list(pipe)) > 0)
 
@@ -543,8 +544,9 @@ class TestBasics(unittest.TestCase):
     # def test_complex_datebuilding(self):
     #     """Loads a pipeline containing a datebuilder with complex inputs
     #     """
-    #     pipe_def = self._get_pipe_def("pipe_bd9c0c9793ccaec7582b19f45e24f2e6.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
+    #     pipe_file = 'pipe_bd9c0c9793ccaec7582b19f45e24f2e6.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
     #     # todo: check the data!
     #     self.assertTrue(len(list(pipe)) > 0)
 
@@ -553,9 +555,10 @@ class TestBasics(unittest.TestCase):
     #     """Loads the Twitter Caption Search pipeline and compiles and
     #         executes it to check the results
     #     """
-    #     pipe_def = self._get_pipe_def("pipe_eb3e27f8f1841835fdfd279cd96ff9d8.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-    #
+    #     pipe_file = 'pipe_eb3e27f8f1841835fdfd279cd96ff9d8.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
+
     #     # todo: check the data!
     #     count = 0
     #     for i in pipe:
@@ -567,9 +570,10 @@ class TestBasics(unittest.TestCase):
     # def test_unique(self):
     #     """Loads a pipeline containing a unique
     #     """
-    #     pipe_def = self._get_pipe_def("pipe_1I75yiUv3BGhgVWjjUnRlg.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-    #
+    #     pipe_file = 'pipe_1I75yiUv3BGhgVWjjUnRlg.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
+
     #     # todo: check the data! e.g. pubdate etc.
     #     creators = set()
     #     for i in pipe:
@@ -582,9 +586,10 @@ class TestBasics(unittest.TestCase):
     #     """Loads the loop example pipeline and compiles and executes it to
     #         check the results
     #     """
-    #     pipe_def = self._get_pipe_def("pipe_dAI_R_FS3BG6fTKsAsqenA.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-    #
+    #     pipe_file = 'pipe_dAI_R_FS3BG6fTKsAsqenA.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
+
     #     # todo: check the data! e.g. pubdate etc.
     #     count = 0
     #     for i in pipe:
@@ -601,10 +606,10 @@ class TestBasics(unittest.TestCase):
     # def test_namespaceless_xml_input(self):
     #     """Loads a pipeline containing deep xml source with no namespace
     #     """
+    #     pipe_file = 'pipe_402e244d09a4146cd80421c6628eb6d9.json'
+    #     pipe_def = self._get_pipe_def(pipe_file)
+    #     pipe = parse_and_build_pipe(self.context, pipe_def)
 
-    #     pipe_def = self._get_pipe_def("pipe_402e244d09a4146cd80421c6628eb6d9.json")
-    #     pipe = pipe2py.compile.parse_and_build_pipe(self.context, pipe_def)
-    #
     #     count = 0
     #     match = 0
     #     for i in pipe:
