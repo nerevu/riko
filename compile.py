@@ -220,21 +220,32 @@ def build_pipe(context, pipe):
 
         # if this module is an embedded module:
         if module_id in pipe['embed']:
-            #We need to wrap submodules (used by loops) so we can pass the input at runtime (as we can to subpipelines)
-            pypipe = ("""def pipe_%(module_id)s(context, _INPUT, conf=None, **kwargs):\n"""
-                      """    return %(pymodule_name)s.%(pymodule_generator_name)s(context, _INPUT, conf=%(conf)s, **kwargs)\n"""
-                       % {'module_id':module_id,
-                          'pymodule_name':pymodule_name,
-                          'pymodule_generator_name':pymodule_generator_name,
-                          'conf':module['conf'],
-                          #Note: no embed (so no subloops) or wire kargs are passed and outer kwargs are passed in
-                         }
-                     )
-            exec pypipe   #Note: evaluated in current namespace - todo ok?
-            steps[module_id] = eval("pipe_%(module_id)s" % {'module_id':module_id})
-        else: # else this module is not an embedded module:
-            module_ref = eval("%(pymodule_name)s.%(pymodule_generator_name)s" % {'pymodule_name':pymodule_name,
-                                                                                 'pymodule_generator_name':pymodule_generator_name,})
+            # We need to wrap submodules (used by loops) so we can pass the
+            # input at runtime (as we can to subpipelines)
+
+            pypipe = (
+                """def pipe_%(module_id)s"""
+                """(context, _INPUT, conf=None, **kwargs):\n"""
+                """    return %(pymodule_name)s.%(pymodule_generator_name)s"""
+                """(context, _INPUT, conf=%(conf)s, **kwargs)\n""" % {
+                    'module_id': module_id,
+                    'pymodule_name': pymodule_name,
+                    'pymodule_generator_name': pymodule_generator_name,
+                    'conf': module['conf'],
+                    # Note: no embed (so no subloops) or wire kargs are
+                    # passed and outer kwargs are passed in
+                }
+            )
+
+            exec pypipe  # Note: evaluated in current namespace - todo ok?
+            steps[module_id] = eval("pipe_%s" % module_id)
+        else:  # else this module is not an embedded module:
+            module_ref = eval(
+                "%(pymodule_name)s.%(pymodule_generator_name)s" % {
+                    'pymodule_name': pymodule_name,
+                    'pymodule_generator_name': pymodule_generator_name,
+                }
+            )
 
             steps[module_id] = module_ref(*pargs, **kargs)
 
