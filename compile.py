@@ -30,9 +30,6 @@
 
    License: see LICENSE file
 """
-
-__version__ = "0.9.5"
-
 import fileinput
 import urllib
 import sys
