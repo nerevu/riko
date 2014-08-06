@@ -272,26 +272,34 @@ def write_pipe(context, pipe):
             pypipe += """import %s\n""" % util.pythonise(module['type'])
 
         if module['conf'] and 'prompt' in module['conf']:
-            pyinput.append((module['conf']['position']['value'],
-                            module['conf']['name']['value'],
-                            module['conf']['prompt']['value'],
-                            module['conf']['default']['type'],
-                            module['conf']['default']['value']))
-            #Note: there seems to be no need to recursively collate inputs from subpipelines
+            pyinput.append(
+                (
+                    module['conf']['position']['value'],
+                    module['conf']['name']['value'],
+                    module['conf']['prompt']['value'],
+                    module['conf']['default']['type'],
+                    module['conf']['default']['value']
+                )
+            )
+            # Note: there seems to be no need to recursively collate inputs
+            # from subpipelines
 
-    pypipe += ("""\n"""
-               """def %(pipename)s(context, _INPUT, conf=None, **kwargs):\n"""
-               """    "Pipeline"\n"""     #todo insert pipeline description here
-               """    if conf is None:\n"""
-               """        conf = {}\n"""
-               """\n"""
-               """    if context.describe_input:\n"""
-               """        return %(inputs)s\n"""
-               """\n"""
-               """    forever = pipeforever.pipe_forever(context, None, conf=None)\n"""
-               """\n""" % {'pipename':pipe['name'],
-                           'inputs':unicode(sorted(pyinput))}  #todo pprint this
-              )
+    pypipe += (
+        """\n"""
+        """def %(pipename)s(context, _INPUT, conf=None, **kwargs):\n"""
+        """    "Pipeline"\n"""     # todo: insert pipeline description here
+        """    if conf is None:\n"""
+        """        conf = {}\n"""
+        """\n"""
+        """    if context.describe_input:\n"""
+        """        return %(inputs)s\n"""
+        """\n"""
+        "    forever = pipeforever.pipe_forever(context, None, conf=None)\n"
+        """\n""" % {
+            'pipename': pipe['name'],
+            'inputs': unicode(sorted(pyinput))
+        }  # todo: pprint this
+    )
 
     prev_module = []
 
@@ -394,20 +402,33 @@ def write_pipe(context, pipe):
         prev_module = module_id
 
         if context.verbose:
-            print ("%s = %s(%s)" % (module_id, pymodule_generator_name,
-                                    str_args([arg for arg in mod_args if arg != Id('context')]+
-                                             [(key, value) for key, value in mod_kwargs if key != 'conf']+
-                                             [(key, value) for key, value in mod_kwargs if key == 'conf']))
-                   ).encode("utf-8")
+            print (
+                "%s = %s(%s)" % (
+                    module_id,
+                    pymodule_generator_name,
+                    str_args(
+                        [arg for arg in mod_args if arg != Id('context')] +
+                        [
+                            (key, value) for key, value in mod_kwargs
+                            if key != 'conf'
+                        ] +
+                        [
+                            (key, value) for key, value in mod_kwargs
+                            if key == 'conf'
+                        ]
+                    )
+                )
+            ).encode("utf-8")
 
-    pypipe += """    return %(module_id)s\n""" % {'module_id':prev_module}
-    pypipe += ("""\n"""
-               """if __name__ == "__main__":\n"""
-               """    context = Context()\n"""
-               """    p = %(pipename)s(context, None)\n"""
-               """    for i in p:\n"""
-               """        print i\n""" % {'pipename':pipe['name']}
-              )
+    pypipe += """    return %(module_id)s\n""" % {'module_id': prev_module}
+    pypipe += (
+        """\n"""
+        """if __name__ == "__main__":\n"""
+        """    context = Context()\n"""
+        """    p = %(pipename)s(context, None)\n"""
+        """    for i in p:\n"""
+        """        print i\n""" % {'pipename': pipe['name']}
+    )
 
     return pypipe
 
