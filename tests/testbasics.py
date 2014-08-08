@@ -42,14 +42,8 @@ class TestBasics(unittest.TestCase):
         os.remove("%s.py" % name)
 
     def _get_pipe_def(self, filename):
-        pipe_file = filename
-
-        try:
-            pjson = ''.join(line for line in open(pipe_file))
-        except IOError:
-            pipe_file = path.join('tests', filename)
-            pjson = ''.join(line for line in open(pipe_file))
-
+        pipe_file = path.join('tests', 'pipelines', filename)
+        pjson = ''.join(line for line in open(pipe_file))
         return json.loads(pjson)
 
     def test_feed(self):
