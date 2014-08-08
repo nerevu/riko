@@ -6,7 +6,6 @@ import string
 from datetime import datetime
 from urllib2 import quote
 from os import path as p
-from operator import itemgetter
 from itertools import repeat
 from pipe2py import Context
 
@@ -100,36 +99,6 @@ def etree_to_dict(element):
         i = content
 
     return i
-
-
-def multikeysort(items, columns):
-    """Sorts a list of items by the columns
-
-       (columns precedeed with a '-' will sort descending)
-    """
-    comparers = [
-        (
-            (itemgetter(col[1:].strip()), -1) if col.startswith('-') else (
-                itemgetter(col.strip()), 1
-            )
-        ) for col in columns
-    ]
-
-    def comparer(left, right):
-        for fn, mult in comparers:
-            try:
-                result = cmp(fn(left), fn(right))
-            except KeyError:
-                # todo: perhaps care more if only one side has the missing key
-                result = 0
-            except TypeError:  # todo: handle bool better?
-                # todo: perhaps care more if only one side has the missing key
-                result = 0
-            if result:
-                return mult * result
-        else:
-            return 0
-    return sorted(items, cmp=comparer)
 
 
 def get_value(field, item=None, default=None, encode=False, func=False, **kwargs):

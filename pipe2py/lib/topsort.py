@@ -7,96 +7,80 @@
 """
 
 
-def strongly_connected_components(graph):
-    """ Find the strongly connected components in a graph using
+def _gen_result(graph, ready, count):
+    while ready:
+        node = ready.pop(-1)
+        yield node
+
+        for x in graph[node]:
+            count.update({x: count[x] - 1})
+            ready.append(x) if count[x] == 0 else None
+
+
+def _visit(node, graph, low=None, stack=None):
+    low = low or {}
+    stack = stack or []
+
+    if node not in low:
+        num = len(low)
+        low[node] = len(low)
+        position = len(stack)
+        stack.append(node)
+
+        for x in graph[node]:
+            _visit(x, graph, low, stack)
+            low[node] = min(low[node], low[x])
+
+        if num == low[node]:
+            component = tuple(stack[position:])
+            del stack[position:]
+            map(lambda x: low.update({x: len(graph)}), component)
+            return component
+
+
+def _gen_node_component(components):
+    for component in components:
+        for node in component:
+            yield (node, component)
+
+
+def _gen_graph_value(value, node, node_component):
+    for x in value:
+        if node_component[node] != node_component[x]:
+            yield node_component[x]
+
+
+def _gen_graph_component(graph, node_component, value_generator):
+    for node in graph:
+        value = list(value_generator(graph[node], node, node_component))
+        yield (node_component[node], value)
+
+
+def get_graph_component(graph):
+    """ Identify strongly connected components in a graph using
         Tarjan's algorithm.
 
         graph should be a dictionary mapping node names to
         lists of successor nodes.
-        """
+    """
+    components = map(lambda x: _visit(x, graph), graph)
+    node_component = dict(_gen_node_component(components))
+    graph_component = {component: [] for component in components}
+    graph_component.update(
+        dict(_gen_graph_component(graph, node_component, _gen_graph_value)))
 
-    result = []
-    stack = []
-    low = {}
-
-    def visit(node):
-        if node in low:
-            return
-
-        num = len(low)
-        low[node] = num
-        stack_pos = len(stack)
-        stack.append(node)
-
-        for successor in graph[node]:
-            visit(successor)
-            low[node] = min(low[node], low[successor])
-
-        if num == low[node]:
-            component = tuple(stack[stack_pos:])
-            del stack[stack_pos:]
-            result.append(component)
-            for item in component:
-                low[item] = len(graph)
-
-    for node in graph:
-        visit(node)
-
-    return result
+    return graph_component
 
 
 def topological_sort(graph):
-    count = {}
-    for node in graph:
-        count[node] = 0
-    for node in graph:
-        for successor in graph[node]:
-            count[successor] += 1
-
+    count = {node: 0 for node in graph}
+    set_count = lambda x: count.update({x: count[x] + 1})
+    map(lambda item: map(set_count, item[1]), graph.items())
     ready = [node for node in graph if count[node] == 0]
-
-    result = []
-    while ready:
-        node = ready.pop(-1)
-        result.append(node)
-
-        for successor in graph[node]:
-            count[successor] -= 1
-            if count[successor] == 0:
-                ready.append(successor)
-
-    return result
-
-
-def robust_topological_sort(graph):
-    """ First identify strongly connected components,
-        then perform a topological sort on these components. """
-
-    components = strongly_connected_components(graph)
-
-    node_component = {}
-    for component in components:
-        for node in component:
-            node_component[node] = component
-
-    component_graph = {}
-    for component in components:
-        component_graph[component] = []
-
-    for node in graph:
-        node_c = node_component[node]
-        for successor in graph[node]:
-            successor_c = node_component[successor]
-            if node_c != successor_c:
-                component_graph[node_c].append(successor_c)
-
-    return topological_sort(component_graph)
+    return list(_gen_result(graph, ready, count))
 
 
 if __name__ == '__main__':
-    print robust_topological_sort({
-        0: [1],
-        1: [2],
-        2: [1, 3],
-        3: [3],
-    })
+    graph = {0: [1], 1: [2], 2: [1, 3], 3: [3]}
+    graph_component = get_graph_component(graph)
+    print topological_sort(graph_component)
