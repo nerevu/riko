@@ -1,7 +1,7 @@
-#pipe2py modules package
-#Author: Greg Gaughan
+# pipe2py modules package
+# Author: Greg Gaughan
 
-#Note: each module name must match the name used internally by Yahoo, preceded by pipe
+# Note: each module name must match the name used internally by Yahoo, preceded by pipe
 
 __all__ = ['pipeforever',
 
@@ -44,8 +44,6 @@ __all__ = ['pipeforever',
            'pipesplit',
 
            'pipesimplemath',
-
            'pipeoutput',
-
            'pipestringtokenizer',
           ]

@@ -1,0 +1,3 @@
+recursive-include pipe2py/templates *.txt
+recursive-include tests *
+include README.rst
