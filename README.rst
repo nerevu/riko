@@ -132,11 +132,7 @@ defining the inputs needed (it will not execute the pipe), e.g.::
 
 Each tuple is of the form::
 
-  (position,
-   name,
-   prompt,
-   type,
-   default)
+  (position, name, prompt, type, default)
 
 The list of tuples is sorted by position, i.e. the order in which they should
 be presented to the user. The name should be used as a key in the
@@ -145,8 +141,8 @@ the data type, e.g. text, number. And default is the default value (used if no
 value is given), e.g. to run the above pipe with pre-defined inputs, and no
 console prompting::
 
-    context = Context(inputs={'username':'greg', 'statustitle':'logo'}, 
-                      console=False)
+    inputs = {'username':'greg', 'statustitle':'logo'}
+    context = Context(inputs=inputs, console=False)
     p = pipe_ac45e9eb9b0174a4e53f23c4c9903c3f(context, None)
     for i in p:
         print i

@@ -44,8 +44,6 @@ __all__ = ['pipeforever',
            'pipesplit',
 
            'pipesimplemath',
-
            'pipeoutput',
-
            'pipestringtokenizer',
           ]

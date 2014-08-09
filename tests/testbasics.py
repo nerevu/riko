@@ -266,8 +266,7 @@ class TestBasics(unittest.TestCase):
 
     def test_union_just_other(self):
         """Loads a pipeline containing a union with the first input unconnected
-           (also tests for re with empty source string
-            and reference to 'y:id.value')
+            Also tests for empty source string and reference to 'y:id.value'
         """
         pipe_name = 'pipe_6e30c269a69baf92cd420900b0645f88'
         pipe_def = self._get_pipe_def(pipe_name)
