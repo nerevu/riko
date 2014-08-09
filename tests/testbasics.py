@@ -272,43 +272,34 @@ class TestBasics(unittest.TestCase):
         pipe_def = self._get_pipe_def(pipe_name)
         self._load(pipe_def, pipe_name)
 
-    def test_submodule_loop(self):
-        """Loads a pipeline containing a sub-module in a loop and passing input
-            parameters
+    # def test_submodule_loop(self):
+    #     """Loads a pipeline containing a sub-module in a loop and passing input
+    #         parameters. Also tests json fetch with nested list, assigns part of
+    #         loop result, regexes multi-part reference
 
-           (also tests: json fetch with nested list
-                        assign part of loop result
-                        also regex multi-part reference
-           )
+    #        Note: too slow
+    #     """
+    #     # todo: use small, fixed data set to restrict duration
+    #     # Compile submodule to disk
+    #     self.context = Context(test=True)
+    #     pipe_name = 'pipe_bd0834cfe6cdacb0bea5569505d330b8'
+    #     pipe_def = self._get_pipe_def(pipe_name)
+    #     pipe = parse_pipe_def(pipe_def, pipe_name)
 
-           Note: can be slow
-        """
-        if True:
-            return
-            # too slow, recently at least:
-            # todo: use small, fixed data set to restrict duration
-        else:
-            # Compile submodule to disk
-            self.context = Context(test=True)
-            pipe_name = 'pipe_bd0834cfe6cdacb0bea5569505d330b8'
-            pipe_def = self._get_pipe_def(pipe_name)
-            pipe = parse_pipe_def(pipe_def, pipe_name)
+    #     try:
+    #         with open("%s.py" % pipe_name, "w") as f:
+    #             f.write(stringify_pipe(self.context, pipe))
 
-            try:
-                with open("%s.py" % pipe_name, "w") as f:
-                    f.write(stringify_pipe(self.context, pipe))
+    #         pipe_name = 'pipe_b3d43c00f9e1145ff522fb71ea743e99'
+    #         pipe_def = self._get_pipe_def(pipe_name)
+    #         pipeline = self._load(pipe_def, pipe_name)
 
-                pipe_name = 'pipe_b3d43c00f9e1145ff522fb71ea743e99'
-                pipe_def = self._get_pipe_def(pipe_name)
-                pipeline = self._load(pipe_def, pipe_name)
-
-                # todo: check the data!
-                contains = u'Hywel Francis (University of Wales, Swansea (UWS))'
-                # lots of data, so just check some of it
-                sliced = islice(pipeline, 3)
-                [self.assertEqual(item['title'], contains) for item in sliced]
-            finally:
-                remove("%s.py" % pipe_name)
+    #         contains = u'Hywel Francis (University of Wales, Swansea (UWS))'
+    #         # lots of data, so just check some of it
+    #         sliced = islice(pipeline, 3)
+    #         [self.assertEqual(item['title'], contains) for item in sliced]
+    #     finally:
+    #         remove("%s.py" % pipe_name)
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop
