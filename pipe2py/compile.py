@@ -38,15 +38,12 @@ from functools import partial, update_wrapper
 from importlib import import_module
 from optparse import OptionParser
 from os.path import splitext, split
-from pipe2py import Context
-from pipe2py import util
+from pipe2py import Context, util
 from pipe2py.pprint2 import Id, repr_args, str_args
+from pipe2py.topsort import topological_sort
+from pipe2py.modules import pipeforever
 
-from topsort import topological_sort
 
-# needed for build_pipe - ensure modules/__init__.py.__all__
-# lists all available modules
-from pipe2py.modules import *
 
 
 def _parse_pipe(json_pipe, pipe_name="anonymous"):
