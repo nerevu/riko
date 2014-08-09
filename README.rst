@@ -66,9 +66,10 @@ pipeline on-the-fly and executes it within the current process
 
 1. Compiling a pipeline to a Python script
 ------------------------------------------
-with a .py extension (using the `compile.parse_and_write_pipe` function). This 
-file can then be run directly or imported into other pipelines.
 Both of the following will create a python file named after the input argument
+with a .py extension (using the `compile.parse_pipe_def` and
+`compile.stringify_pipe` functions).
+This file can then be run directly or imported into other pipelines.
 
 The first pulls the pipeline definition directly from Yahoo. The second loads
 the pipeline definition from a file:
@@ -95,14 +96,14 @@ then compile.py will output files with the expected naming convention.
 ---------------------------------------------------
 Example::
 
-    from pipe2py.compile import parse_and_build_pipe
+    from pipe2py.compile import parse_pipe_def, build_pipeline
     from pipe2py import Context
 
-    pipe_def = """json representation of the pipe"""
+    pipe_def = json.loads(pjson)
+    pipe = parse_pipe_def(pipe_def, pipe_name)
+    pipeline = build_pipeline(self.context, pipe))
 
-    p = parse_and_build_pipe(Context(), pipe_def)
-
-    for i in p:
+    for i in pipeline:
         print i
 
 

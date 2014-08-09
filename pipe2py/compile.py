@@ -12,14 +12,17 @@
 
      b) from pipe2py import compile, Context
 
-        p = compile.parse_and_build_pipe(Context(), "JSON pipe representation")
-        for i in p:
+        pipe_def = json.loads(pjson)
+        pipe = parse_pipe_def(pipe_def, pipe_name)
+        pipeline = build_pipeline(self.context, pipe))
+
+        for i in pipeline:
             print i
 
     Instead of passing a filename, a pipe id can be passed (-p) to fetch the
     JSON from Yahoo, e.g.
 
-       python compile.py -p 2de0e4517ed76082dcddf66f7b218057
+        python compile.py -p 2de0e4517ed76082dcddf66f7b218057
 
     Author: Greg Gaughan
     Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
@@ -46,11 +49,11 @@ from pipe2py.modules import pipeforever
 
 
 
-def _parse_pipe(json_pipe, pipe_name="anonymous"):
+def parse_pipe_def(pipe_def, pipe_name='anonymous'):
     """Parse pipe JSON into internal structures
 
     Keyword arguments:
-    json_pipe -- JSON representation of the pipe
+    pipe_def -- JSON representation of the pipe
     pipe_name -- a name for the pipe (used for linking pipes)
 
     Returns:
@@ -64,7 +67,7 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
         'wires': {},
     }
 
-    modules = json_pipe['modules']
+    modules = pipe_def['modules']
 
     if not isinstance(modules, list):
         modules = [modules]
@@ -83,7 +86,7 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
             pipe['graph'][util.pythonise(embed['id'])].append(
                 util.pythonise(module['id']))
 
-    wires = json_pipe['wires']
+    wires = pipe_def['wires']
 
     if not isinstance(wires, list):
         wires = [wires]
@@ -104,7 +107,7 @@ def _parse_pipe(json_pipe, pipe_name="anonymous"):
     return pipe
 
 
-def build_pipe(context, pipe):
+def build_pipeline(context, pipe):
     """Convert a pipe into an executable Python pipeline
 
         If context.describe_input then just return the input requirements
@@ -241,7 +244,7 @@ def build_pipe(context, pipe):
     return steps[module_id]
 
 
-def write_pipe(context, pipe):
+def stringify_pipe(context, pipe):
     """Convert a pipe into Python script
 
        If context.describe_input is passed to the script then it just
@@ -429,29 +432,22 @@ def write_pipe(context, pipe):
     return pypipe
 
 
-def parse_and_write_pipe(context, json_pipe, pipe_name="anonymous"):
-    pipe = _parse_pipe(json_pipe, pipe_name)
-    return write_pipe(context, pipe)
 
 
-def parse_and_build_pipe(context, json_pipe, pipe_name="anonymous"):
-    pipe = _parse_pipe(json_pipe, pipe_name)
-    return build_pipe(context, pipe)
 
 
-def parse_and_analyze_pipe(context, json_pipe, pipe_name="anonymous"):
-    pipe = _parse_pipe(json_pipe, pipe_name)
+def analyze_pipe(context, pipe):
     modules = set(module['type'] for module in pipe['modules'].values())
     moduletypes = sorted(list(modules))
 
     if context.verbose:
         print
-        print "Modules used:", ', '.join(
-            name for name in moduletypes if not name.startswith("pipe:")
+        print 'Modules used:', ', '.join(
+            name for name in moduletypes if not name.startswith('pipe:')
         ) or None
 
-        print "Other pipes used:", ', '.join(
-            name[5:] for name in moduletypes if name.startswith("pipe:")
+        print 'Other pipes used:', ', '.join(
+            name[5:] for name in moduletypes if name.startswith('pipe:')
         ) or None
 
 if __name__ == '__main__':
@@ -461,7 +457,7 @@ if __name__ == '__main__':
     except (ImportError, AttributeError):
         import simplejson as json
 
-    usage = "usage: %prog [options] [filename]"
+    usage = 'usage: %prog [options] [filename]'
     parser = OptionParser(usage=usage)
 
     parser.add_option(
@@ -479,9 +475,9 @@ if __name__ == '__main__':
 
     if options.pipeid:
         base = 'http://query.yahooapis.com/v1/public/yql?q='
-        select = """select%20PIPE.working%20from%20json%20"""
-        where = """where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com"""
-        pipe = """%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D"""
+        select = 'select%20PIPE.working%20from%20json%20'
+        where = 'where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com'
+        pipe = '%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D'
         end = '%22&format=json'
         url = base + select + where + pipe + options.pipeid + end
 
@@ -490,27 +486,28 @@ if __name__ == '__main__':
         results = src_json['query']['results']
 
         if not results:
-            print "Pipe not found"
+            print 'Pipe not found'
             sys.exit(1)
 
         pjson = results['json']['PIPE']['working']
-        name = "pipe_%s" % options.pipeid
+        pipe_name = 'pipe_%s' % options.pipeid
     elif filename:
         pjson = ''.join(line for line in open(filename))
-        name = splitext(split(filename)[-1])[0]
+        pipe_name = splitext(split(filename)[-1])[0]
     else:
         pjson = ''.join(line for line in fileinput.input())
-        name = "anonymous"
+        pipe_name = 'anonymous'
 
     pipe_def = json.loads(pjson)
+    pipe = parse_pipe_def(pipe_def, pipe_name)
 
     if options.savejson:
-        with open("%s.json" % name, "w") as f:
-            pprint(json.loads(pjson.encode("utf-8")), f)
+        with open('%s.json' % pipe_name, 'w') as f:
+            pprint(json.loads(pjson.encode('utf-8')), f)
 
-    with open("%s.py" % name, "w") as f:
-        f.write(parse_and_write_pipe(context, pipe_def, name))
+    with open('%s.py' % pipe_name, 'w') as f:
+        f.write(stringify_pipe(context, pipe))
 
-    parse_and_analyze_pipe(context, pipe_def, name)
+    analyze_pipe(context, pipe)
 
     # for build example - see test/testbasics.py
