@@ -2,11 +2,33 @@
 
 from distutils.core import setup
 
-import os
+from os import path as p
 
 
-def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
+def read(filename, parent=None):
+    parent = (parent or __file__)
+
+    try:
+        with open(p.join(p.dirname(parent), filename)) as f:
+            return f.read()
+    except IOError:
+        return ''
+
+
+def parse_requirements(filename, parent=None):
+    parent = (parent or __file__)
+    filepath = p.join(p.dirname(parent), filename)
+    content = read(filename, parent)
+
+    for line_number, line in enumerate(content.splitlines(), 1):
+        candidate = line.strip()
+
+        if candidate.startswith('-r'):
+            for item in parse_requirements(candidate[2:].strip(), filepath):
+                yield item
+        else:
+            yield candidate
 
 
 setup(
@@ -25,4 +47,5 @@ setup(
     long_description=read('README.rst'),
     package_dir={'pipe2py': '', 'pipe2py.modules': 'modules'},
     packages=['pipe2py', 'pipe2py.modules'],
+    install_requires=parse_requirements('requirements.txt'),
 )
