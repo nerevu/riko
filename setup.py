@@ -40,12 +40,12 @@ setup(
         ' code, or it can interpret the pipe on-the-fly. It supports embedded '
         'pipes too.'
     ),
-    author='Greg Gaughan',
-    author_email='gjgaughan@gmail.com',
+    long_description=read('README.rst'),
     url='http://ggaughan.github.com/pipe2py/',
     license = 'GPL2',
-    long_description=read('README.rst'),
     package_dir={'pipe2py': '', 'pipe2py.modules': 'modules'},
     packages=['pipe2py', 'pipe2py.modules'],
+    author='Greg Gaughan',
+    author_email='gjgaughan@gmail.com',
     install_requires=parse_requirements('requirements.txt'),
 )
