@@ -21,10 +21,10 @@ except (ImportError, AttributeError):
 class TestBasics(unittest.TestCase):
     """Test a few sample pipelines
 
-       Note: asserting post-conditions for these is almost impossible because
-             many use live sources.
+        Note: asserting post-conditions for these is almost impossible because
+            many use live sources.
 
-             See createtest.py for an attempt at creating a stable test-suite.
+            See createtest.py for an attempt at creating a stable test-suite.
     """
 
     def setUp(self):
