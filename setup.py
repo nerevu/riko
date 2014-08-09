@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 
 from os import path as p
 
@@ -32,6 +33,9 @@ def parse_requirements(filename, parent=None):
                 yield item
         else:
             yield candidate
+
+# Avoid byte-compiling the shipped template
+sys.dont_write_bytecode = True
 
 
 setup(
