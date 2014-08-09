@@ -111,15 +111,6 @@ class TestBasics(unittest.TestCase):
             self.assertTrue(not prev_title or i['title'] < prev_title)
             prev_title = i['title']
 
-    def test_count_truncate(self):
-        """Loads a pipeline containing a count and truncate
-        """
-        pipe_file = 'pipe_58a53262da5a095fe7a0d6d905cc4db6.json'
-        pipe_def = self._get_pipe_def(pipe_file)
-        pipe = parse_and_build_pipe(self.context, pipe_def)
-        # todo: check the data! e.g. pubdate etc.
-        self.assertTrue(len(list(pipe)) == 3)
-
     def test_tail(self):
         """Loads a pipeline containing a tail
         """
