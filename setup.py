@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
 
 from os import path as p
 
+try:
+    from setuptools import setup, find_packages
+except ImportError:
+    from distutils.core import setup, find_packages
 
 
 def read(filename, parent=None):
@@ -43,9 +46,8 @@ setup(
     long_description=read('README.rst'),
     url='http://ggaughan.github.com/pipe2py/',
     license = 'GPL2',
-    package_dir={'pipe2py': '', 'pipe2py.modules': 'modules'},
-    packages=['pipe2py', 'pipe2py.modules'],
     author='Greg Gaughan',
     author_email='gjgaughan@gmail.com',
+    packages=find_packages(exclude=['tests']),
     install_requires=parse_requirements('requirements.txt'),
 )
