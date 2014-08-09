@@ -53,5 +53,7 @@ setup(
     author='Greg Gaughan',
     author_email='gjgaughan@gmail.com',
     packages=find_packages(exclude=['tests']),
+    package_data={'templates': 'templates/*.txt'},
+    include_package_data=True,
     install_requires=parse_requirements('requirements.txt'),
 )
