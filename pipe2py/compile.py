@@ -37,6 +37,12 @@ import fileinput
 import urllib
 import sys
 
+try:
+    from json import loads
+except (ImportError, AttributeError):
+    from simplejson import loads
+
+
 from itertools import chain
 from importlib import import_module
 from jinja2 import Environment, PackageLoader
@@ -338,13 +344,14 @@ def analyze_pipe(context, pipe):
             name[5:] for name in moduletypes if name.startswith('pipe:')
         ) or None
 
-if __name__ == '__main__':
-    try:
-        import json
-        json.loads  # test access to the attributes of the right json module
-    except (ImportError, AttributeError):
-        import simplejson as json
+def _write_file(data, path, pretty=False):
+    with open(path, 'w') as f:
+        pprint(data, f) if pretty else f.write(data)
 
+def _convert_json(json):
+    return loads(json.encode('utf-8'))
+
+if __name__ == '__main__':
     usage = 'usage: %prog [options] [filename]'
     parser = OptionParser(usage=usage)
 
@@ -355,47 +362,77 @@ if __name__ == '__main__':
         "-s", dest="savejson", help="save pipe JSON to file",
         action="store_true")
     parser.add_option(
+        "-o", dest="saveoutput", help="save pipe output to file",
+        action="store_true")
+    parser.add_option(
         "-v", dest="verbose", help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()
 
-    filename = args[0] if args else None
+    pipe_file_name = args[0] if args else None
     context = Context(verbose=options.verbose)
 
     if options.pipeid:
+        pipe_name = 'pipe_%s' % options.pipeid
+
+        # Get the pipeline definition
         base = 'http://query.yahooapis.com/v1/public/yql?q='
         select = 'select%20PIPE.working%20from%20json%20'
-        where = 'where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com'
-        pipe = '%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D'
+        where = 'where%20url=%22http%3A%2F%2Fpipes.yahoo.com'
+        pipe = '%2Fpipes%2Fpipe.info%3F_out=json%26_id=%s' % options.pipeid
         end = '%22&format=json'
-        url = base + select + where + pipe + options.pipeid + end
+        url = base + select + where + pipe + end
+        print url
+        # todo: refactor this url->json
 
-        src = ''.join(urllib.urlopen(url).readlines())
-        src_json = json.loads(src)
-        results = src_json['query']['results']
+        pjson = ''.join(urllib.urlopen(url).readlines())
+        pipe_raw = _convert_json(pjson)
+        results = pipe_raw['query']['results']
 
         if not results:
             print 'Pipe not found'
             sys.exit(1)
 
-        pjson = results['json']['PIPE']['working']
-        pipe_name = 'pipe_%s' % options.pipeid
-    elif filename:
-        pjson = ''.join(line for line in open(filename))
-        pipe_name = splitext(split(filename)[-1])[0]
+        pipe_def = results['json']['PIPE']['working']
+    elif pipe_file_name:
+        pipe_name = splitext(split(pipe_file_name)[-1])[0]
+        pjson = ''.join(line for line in open(pipe_file_name))
+        pipe_def = _convert_json(pjson)
     else:
-        pjson = ''.join(line for line in fileinput.input())
         pipe_name = 'anonymous'
+        pjson = ''.join(line for line in fileinput.input())
+        pipe_def = _convert_json(pjson)
 
-    pipe_def = json.loads(pjson)
     pipe = parse_pipe_def(pipe_def, pipe_name)
-
-    if options.savejson:
-        with open('%s.json' % pipe_name, 'w') as f:
-            pprint(json.loads(pjson.encode('utf-8')), f)
-
-    with open('%s.py' % pipe_name, 'w') as f:
-        f.write(stringify_pipe(context, pipe))
-
+    path = path.join('data', '%s.py' % pipe_name)
+    data = stringify_pipe(context, pipe)
+    _write_file(data, path)
     analyze_pipe(context, pipe)
 
+    if options.savejson:
+        path = path.join('data', '%s.json' % pipe_name)
+        _write_file(pipe_def, path, True)
+
+    if options.saveoutput:
+        base = 'http://pipes.yahoo.com/pipes/pipe.run'
+        url = '%s?_id=%s&_render=json' % (base, options.pipeid)
+        ojson = ''.join(urllib.urlopen(url).readlines())
+        pipe_output = _convert_json(ojson)
+        count = pipe_output['count']
+
+        if not count:
+            print 'Pipe results not found'
+            sys.exit(1)
+
+        path = path.join('data', '%s_output.json' % pipe_name)
+        _write_file(pipe_output, path, True)
+
     # for build example - see test/testbasics.py
+
+    # todo: to create stable, repeatable test cases we should:
+    #  build the pipeline to find the external data sources
+    #  download and save any fetchdata/fetch source data
+    #  replace the fetchdata/fetch references with the local copy
+    #  (so would need to save the pipeline python but that would make it
+    #  hard to test changes, so we could declare a list of live->local-test
+    #  file mappings and pass them in with the test context)
+    #  also needs to handle any sub-pipelines and their external sources
