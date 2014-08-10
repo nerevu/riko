@@ -265,9 +265,9 @@ class TestBasics(unittest.TestCase):
         self._load(pipe_def, pipe_name)
 
     # def test_submodule_loop(self):
-    #     """Loads a pipeline containing a sub-module in a loop and passing input
-    #         parameters. Also tests json fetch with nested list, assigns part of
-    #         loop result, regexes multi-part reference
+    #     """Loads a pipeline containing a sub-module in a loop and passes
+    #         input parameters. Also tests json fetch with nested list, assigns
+    #         part of loop result, and regexes multi-part reference.
 
     #        Note: too slow
     #     """
