@@ -27,8 +27,8 @@ class TestBasics(unittest.TestCase):
             See createtest.py for an attempt at creating a stable test-suite.
     """
     def _get_pipe_def(self, pipe_name):
-        pipe_file = path.join('tests', 'pipelines', '%s.json' % pipe_name)
-        pjson = ''.join(line for line in open(pipe_file))
+        pipe_file_name = path.join('tests', 'pipelines', '%s.json' % pipe_name)
+        pjson = ''.join(line for line in open(pipe_file_name))
         return json.loads(pjson)
 
     def _load(self, pipe_def, pipe_name, value=0, check=1):

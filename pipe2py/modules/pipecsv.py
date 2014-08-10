@@ -89,8 +89,8 @@ def pipe_csv(context, _INPUT, conf, **kwargs):
                 row = reader.next()
                 fieldnames.extend(row)
 
-        for row in reader:
-            d = dict(zip(fieldnames, row))
+        for rows in reader:
+            d = dict(zip(fieldnames, rows))
             yield d
             
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once

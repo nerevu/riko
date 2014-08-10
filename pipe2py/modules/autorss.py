@@ -34,10 +34,10 @@ class LinkParser(SGMLParser):
         self.setnomoretags()
     start_body = end_head
 
-def getRSSLinkFromHTMLSource(htmlSource):
+def getRSSLinkFromHTMLSource(html):
     try:
         parser = LinkParser()
-        parser.feed(htmlSource)
+        parser.feed(html)
         return parser.href
     except:
         return []

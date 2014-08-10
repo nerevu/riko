@@ -36,7 +36,7 @@ def {{ pipe_name }}(context, _INPUT, conf=None, **kwargs):
 
 if __name__ == "__main__":
     context = Context()
-    p = {{ pipe_name }}(context, None)
+    pipeline = {{ pipe_name }}(context, None)
 
-    for i in p:
+    for i in pipeline:
         print i
