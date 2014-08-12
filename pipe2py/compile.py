@@ -384,7 +384,7 @@ if __name__ == '__main__':
         print url
         # todo: refactor this url->json
 
-        pjson = ''.join(urllib.urlopen(url).readlines())
+        pjson = urllib.urlopen(url).read()
         pipe_raw = _convert_json(pjson)
         results = pipe_raw['query']['results']
 
@@ -395,7 +395,10 @@ if __name__ == '__main__':
         pipe_def = results['json']['PIPE']['working']
     elif pipe_file_name:
         pipe_name = p.splitext(p.split(pipe_file_name)[-1])[0]
-        pjson = ''.join(line for line in open(pipe_file_name))
+
+        with open(pipe_file_name) as f:
+            pjson = f.read()
+
         pipe_def = _convert_json(pjson)
     else:
         pipe_name = 'anonymous'
@@ -415,7 +418,7 @@ if __name__ == '__main__':
     if options.saveoutput:
         base = 'http://pipes.yahoo.com/pipes/pipe.run'
         url = '%s?_id=%s&_render=json' % (base, options.pipeid)
-        ojson = ''.join(urllib.urlopen(url).readlines())
+        ojson = urllib.urlopen(url).read()
         pipe_output = _convert_json(ojson)
         count = pipe_output['count']
 
