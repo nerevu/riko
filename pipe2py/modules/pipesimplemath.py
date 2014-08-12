@@ -2,6 +2,7 @@
 #
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 from math import pow
 
 OPS = {
@@ -28,8 +29,9 @@ def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     result
     """
-    value = float(util.get_value(conf['OTHER'], None, **kwargs))
-    op = util.get_value(conf['OP'], None, **kwargs)
+    conf = DotDict(conf)
+    value = conf.get('OTHER', func=float, **kwargs)
+    op = conf.get('OP', **kwargs)
 
     for item in _INPUT:
         yield OPS[op](float(item), value)

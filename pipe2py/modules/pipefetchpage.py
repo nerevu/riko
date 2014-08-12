@@ -6,6 +6,7 @@ import urllib2
 import re
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
@@ -28,13 +29,12 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
           (not documented but happens)
         - items should be cleaned, i.e. stripped of HTML tags
     """
+    conf = DotDict(conf)
     urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(item_url, item, **kwargs)
-            if context and context.verbose:
-                print "FetchPage: Preparing to download:",url
+            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
 
             try:
                 request = urllib2.Request(url)
@@ -52,9 +52,9 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                     print content.encode("utf-8")
                     print "............FetchPage: EOF     ................."
 
-                from_delimiter = util.get_value(conf["from"], _INPUT, **kwargs)
-                to_delimiter = util.get_value(conf["to"], _INPUT, **kwargs)
-                split_token = util.get_value(conf["token"], _INPUT, **kwargs)
+                from_delimiter = conf.get("from", **kwargs)
+                to_delimiter = conf.get("to", **kwargs)
+                split_token = conf.get("token", **kwargs)
 
                 # determine from location, i.e. from where to start reading
                 # content

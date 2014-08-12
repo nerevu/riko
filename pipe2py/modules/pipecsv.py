@@ -4,6 +4,7 @@ import csv, codecs
 
 from urllib2 import urlopen
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 class UTF8Recoder:
@@ -61,9 +62,11 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
       assumes every row has exactly the expected number of fields, as defined
       in the header
     """
+    conf = DotDict(conf)
     col_name = conf['col_name']
 
     for item in _INPUT:
+        item = DotDict(item)
         url = util.get_value(conf['URL'], item, **kwargs)
         sep = util.get_value(conf['separator'], item, **kwargs).encode('utf-8')
         skip = int(util.get_value(conf['skip'], item, **kwargs))
@@ -83,7 +86,7 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         fieldnames = []
 
         if col_mode == 'custom':
-            fieldnames = [util.get_value(x) for x in col_name]
+            fieldnames = [DotDict(x).get() for x in col_name]
         else:
             for row in xrange((row_end - row_start) +1):
                 row = reader.next()

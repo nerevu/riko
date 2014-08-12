@@ -2,6 +2,7 @@
 #
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
@@ -16,7 +17,8 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     tokens of the input string
     """
-    delim = util.get_value(conf['to-str'], None, **kwargs)
+    conf = DotDict(conf)
+    delim = conf.get('to-str', **kwargs)
 
     for item in _INPUT:
         if item is not None:

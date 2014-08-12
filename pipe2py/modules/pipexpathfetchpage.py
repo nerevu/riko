@@ -5,6 +5,7 @@ import urllib2
 import re
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
@@ -24,13 +25,12 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
         - don't retrieve pages larger than 1.5MB
         - don't retrieve if page is not indexable.
     """
+    conf = DotDict(conf)
     urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(item_url, item, **kwargs)
-            if context and context.verbose:
-                print "XPathFetchPage: Preparing to download:",url
+            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
 
             try:
                 request = urllib2.Request(url)
@@ -42,14 +42,19 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 # TODO it seems that Yahoo! converts relative links to absolute
                 # TODO this needs to be done on the content but seems to be a non-trival
                 # TODO task python?
+                xpath = conf.get('xpath', **kwargs)
 
-                xpath = util.get_value(conf["xpath"], _INPUT, **kwargs)
-                html5 = False
-                useAsString = False
-                if "html5" in conf:
-                    html5 = util.get_value(conf["html5"], _INPUT, **kwargs) == "true"
-                if "useAsString" in conf:
-                    useAsString = util.get_value(conf["useAsString"], _INPUT, **kwargs) == "true"
+                if 'html5' in conf:
+                    value = conf.get('html5', **kwargs)
+                    html5 = value == 'true'
+                else:
+                    html5 = False
+
+                if 'useAsString' in conf:
+                    value = conf.get('useAsString', **kwargs)
+                    useAsString = value == 'true'
+                else:
+                    useAsString = False
 
 
                 if html5:

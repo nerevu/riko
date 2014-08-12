@@ -2,6 +2,7 @@
 #
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_tail(context=None, _INPUT=None, conf=None, **kwargs):
@@ -17,9 +18,9 @@ def pipe_tail(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     tail-truncated list of source items
     """
+    conf = DotDict(conf)
+    limit = conf.get('count', func=int, **kwargs)
 
-    count = conf['count']
-    limit = int(util.get_value(count, None, **kwargs))
 
     try:
         # if python 2.6+ we can use a sliding window and save memory

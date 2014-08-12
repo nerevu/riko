@@ -1,6 +1,7 @@
 # pipestrreplace.py
 #
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 
@@ -20,12 +21,13 @@ def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
     source string with replacements
     """
     rules = []
-       
+
     rule_defs = conf['RULE']
     if not isinstance(rule_defs, list):
         rule_defs = [rule_defs]
-    
+
     for rule in rule_defs:
+        rule = DotDict(rule)
         find = util.get_value(rule['find'], None, **kwargs)
         param = util.get_value(rule['param'], None, **kwargs)
         replace = util.get_value(rule['replace'], None, **kwargs)
@@ -41,5 +43,5 @@ def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
             elif rule[1] == '3':
                 t = t.replace(rule[0], rule[2])
             #todo else assertion
-            
+
         yield t

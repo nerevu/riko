@@ -3,6 +3,7 @@
 
 import urllib
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
@@ -17,18 +18,22 @@ def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     item
     """
+    # conf = DotDict(conf)
     attrs = util.listize(conf['attrs'])
 
     for item in _INPUT:
-        d = {}
+        d = DotDict()
+
         for attr in attrs:
+            attr = DotDict(attr)
+
             try:
                 key = util.get_value(attr['key'], item, **kwargs)
                 value = util.get_value(attr['value'], item, **kwargs)
             except KeyError:
                 continue  #ignore if the item is referenced but doesn't have our source or target field (todo: issue a warning if debugging?)
 
-            util.set_value(d, key, value)
+            d.set(key, value)
 
         yield d
 

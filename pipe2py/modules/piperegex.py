@@ -16,6 +16,7 @@
 
 import re
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
@@ -47,6 +48,8 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
         rule_defs = [rule_defs]
 
     for rule in rule_defs:
+        rule = DotDict(rule)
+
         # flags = re.DOTALL # DOTALL was the default for pipe2py previously
         flags = 0
 
@@ -61,23 +64,32 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
         # flag 's'
         if 'singlelinematch' in rule:
             flags |= re.DOTALL
-        #todo 'globalmatch' is the default in python
-        #todo if set, re.sub() below would get count=0 and by default would get count=1
 
-        match = util.get_value(rule['match'], None, **kwargs) #todo use subkey?
-        matchc = re.compile(match, flags)  #compile for speed and we need to pass flags
-        replace = util.get_value(rule['replace'], None, **kwargs) #todo use subkey?
-        if replace is None:
-            replace = ''
+        # todo: 'globalmatch' is the default in python
+        # todo: if set, re.sub() below would get count=0 and by default would
+        # get count=1
 
-        #convert regex to Python format: todo use a common routine for this
-        replace = re.sub('\$(\d+)', r'\\\1', replace)   #map $1 to \1 etc.   #todo: also need to escape any existing \1 etc.
+        # todo: use subkey?
+        match = rule.get('match', **kwargs)
 
-        rules.append((rule['field']['value'], matchc, replace))
+        # compile for speed and we need to pass flags
+        matchc = re.compile(match, flags)
+
+        # todo: use subkey?
+        replace = rule.get('replace', **kwargs) or ''
+
+        # Convert regex to Python format
+        # todo: use a common routine for this
+        # map $1 to \1 etc.
+        # todo: also need to escape any existing \1 etc.
+        replace = re.sub('\$(\d+)', r'\\\1', replace)
+        rules.append((rule.get('field'), matchc, replace))
 
     for item in _INPUT:
+        item = DotDict(item)
+
         def sub_fields(matchobj):
-            return util.get_value({'subkey':matchobj.group(1)}, item)
+            return item.get(matchobj.group(1), **kwargs)
 
         for rule in rules:
             # todo: do we ever need get_value here instead of item[]?
@@ -99,10 +111,10 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
                     # the content of the node possible gotcha: the content
                     # might be a subtree, in which case we revert to modifying
                     # the literal of the subtree dict
-                    util.set_value(item, rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]]['content'])))
-                    util.set_value(item, rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
+                    item.set(rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]]['content'])))
+                    item.set(rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
                 else:
-                    util.set_value(item, rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]])))
-                    util.set_value(item, rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
+                    item.set(rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]])))
+                    item.set(rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
         yield item
 

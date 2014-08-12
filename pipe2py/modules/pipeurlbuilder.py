@@ -3,6 +3,7 @@
 
 import urllib
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
@@ -19,18 +20,20 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     url
     """
+    conf = DotDict(conf)
+    url = None
 
     for item in _INPUT:
+        item = DotDict(item)
         #note: we could cache get_value results if item==True
-        url = util.get_value(conf['BASE'], item, **kwargs)
-        if not url.endswith('/'):
-            url += '/'
+        url = conf.get('BASE', **kwargs)
+        url += '/' if not url.endswith('/') else url
 
-        if 'PATH' in conf: 
+        if 'PATH' in conf:
             path = conf['PATH']
             if not isinstance(path, list):
                 path = [path]
-            path = [util.get_value(p, item, **kwargs) for p in path if p]
+            path = [util.get_value(DotDict(p), item, **kwargs) for p in path if p]
 
             url += "/".join(str(p) for p in path if p)
         url = url.rstrip("/")
@@ -42,7 +45,7 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
         if not isinstance(param_defs, list):
             param_defs = [param_defs]
 
-        params = dict([(util.get_value(p['key'], item, **kwargs), util.get_value(p['value'], item, **kwargs)) for p in param_defs if p])
+        params = dict([(util.get_value(DotDict(p['key']), item, **kwargs), util.get_value(DotDict(p['value']), item, **kwargs)) for p in param_defs if p])
         if params and params.keys() != [u'']:
             url += "?" + urllib.urlencode(params)
 

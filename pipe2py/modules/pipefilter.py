@@ -14,6 +14,7 @@ import re
 
 from pipe2py import util
 from decimal import Decimal
+from pipe2py.dotdict import DotDict
 
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
@@ -66,18 +67,22 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     >>> list(pipe_filter(_INPUT=input, conf=conf))
     []
     """
-    mode = conf['MODE']['value']
-    combine = conf['COMBINE']['value']
+    conf = DotDict(conf)
+    mode = conf.get('MODE')
+    combine = conf.get('COMBINE')
     rules = []
 
     rule_defs = util.listize(conf['RULE'])
 
     for rule in rule_defs:
-        field = rule['field']['value']
-        value = util.get_value(rule['value'], None, **kwargs) #todo use subkey?
-        rules.append((field, rule['op']['value'], value))
+        rule = DotDict(rule)
+        field = rule.get('field', **kwargs)
+        op = rule.get('op', **kwargs)
+        value = rule.get('value', **kwargs)
+        rules.append((field, op, value))
 
     for item in _INPUT:
+        item = DotDict(item)
         if combine in COMBINE_BOOLEAN:
             res = COMBINE_BOOLEAN[combine](_rulepass(rule, item) for rule in rules)
         else:
@@ -90,8 +95,7 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
 #todo precompile these into lambdas for speed
 def _rulepass(rule, item):
     field, op, value = rule
-
-    data = util.get_subkey(field, item)
+    data = item.get(field)
 
     if data is None:
         return False

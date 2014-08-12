@@ -102,81 +102,6 @@ def etree_to_pipes(element):
     return i
 
 
-def get_subkey(subkey, item):
-    """Return a value via a subkey reference
-        Note: subkey values use dot notation and we map onto nested
-            dictionaries, e.g. 'a.content' -> ['a']['content']
-        Note: we first remove any trailing. (i.e.
-            'item.loop:stringtokenizer.1.content.' should just match 'item.
-            loop:stringtokenizer.1.content')
-    """
-    subtree = item
-    for key in subkey.rstrip('.').split('.'):
-        if hasattr(subtree, 'get') and key in subtree:
-            subtree = subtree.get(key)
-        elif (
-            key.isdigit()
-            and isinstance(subtree, list)
-            and int(key) < len(subtree)
-        ):
-            subtree = subtree[int(key)]
-        elif key == 'value' or key == 'content' or key == 'utime':
-            subtree = subtree
-        else:
-            subtree = None
-
-        # silently returns None if any part is not found
-        # unless 'value' or 'utime' is the part in which case we return the
-        # parent (to cope with y:id.value -> y:id and
-        # item.endtime.utime -> item.endtime)
-    return subtree
-
-
-def get_value(_item, _loop_item=None, **kwargs):
-    """Return either:
-           a literal value
-           a value via a terminal (then kwargs must contain the terminals)
-           a value via a subkey reference (then _loop_item must be passed)
-       Note: subkey values use dot notation and we map onto nested
-       dictionaries, e.g. 'a.content' -> ['a']['content']
-    """
-    if 'value' in _item:  # simple value
-        return _item['value']
-    elif 'terminal' in _item:  # value fed in from another module
-        return kwargs[pythonise(_item['terminal'])].next()
-    elif 'subkey' in _item:  # reference to current loop item
-        return get_subkey(_item['subkey'], _loop_item)
-
-
-def set_value(item, key, value):
-    """Set a key's value in the item
-       Note: keys use dot notation and we map onto nested dictionaries, e.g.
-       'a.content' -> ['a']['content']
-    """
-    reduce(lambda i, k: i.setdefault(k, {}), key.split('.')[:-1], item)[
-        key.split('.')[-1]] = value
-
-
-def del_value(item, key):
-    """Remove a value (and its key) from the item
-       Note: keys use dot notation and we map onto nested dictionaries, e.g. '
-       a.content' -> ['a']['content']
-    """
-    ks = key.split('.')
-    if ks[-1].isdigit():
-        # if the sub-index looks like a number, then we're indexing into a list
-        # so convert it to an integer
-        # todo: this most likely only works for the last element of the subkey
-        # todo: should make this more robust for the different subkey types,
-        # todo: like get_subkey above is
-        ks[-1] = int(ks[-1])
-    try:
-        del reduce(lambda i, k: i.get(k), [item] + ks[:-1])[ks[-1]]
-    except:
-        # if an error occurs, don't delete anything
-        pass
-
-
 def multikeysort(items, columns):
     """Sorts a list of items by the columns
 
@@ -205,6 +130,18 @@ def multikeysort(items, columns):
         else:
             return 0
     return sorted(items, cmp=comparer)
+
+
+def get_value(field, item=None, default=None, encode=False, func=False, **kwargs):
+    try:
+        if item and field.get('subkey'):
+            value = item.get(field['subkey'], default, encode, func, **kwargs)
+        else:
+            value = field.get(None, default, encode, func, **kwargs)
+    except AttributeError:
+        value = None
+
+    return value
 
 
 def get_input(context, conf):

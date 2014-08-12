@@ -2,6 +2,7 @@
 #
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
@@ -17,9 +18,9 @@ def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     truncated list of source items
     """
+    conf = DotDict(conf)
+    limit = conf.get('count', func=int, **kwargs)
 
-    count = conf['count']
-    limit = int(util.get_value(count, None, **kwargs))
     i = 0
     for item in _INPUT:
         if i >= limit:

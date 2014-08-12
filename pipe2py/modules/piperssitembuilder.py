@@ -3,6 +3,7 @@
 
 import urllib
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 # map frontend names to rss items (use dots for sub-levels)
 # todo: more?
@@ -20,8 +21,11 @@ def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     item
     """
+    conf = DotDict(conf)
+
     for item in _INPUT:
-        d = {}
+        item = DotDict(item)
+        d = DotDict()
 
         for key in conf:
             try:
@@ -33,11 +37,11 @@ def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
 
             if value:
                 if key == 'title':
-                    util.set_value(d, 'y:%s' % key, value)
+                    d.set('y:%s' % key, value)
                 #todo also for guid -> y:id (is guid the only one?)
 
                 #todo try/except?
-                util.set_value(d, key, value)
+                d.set(key, value)
 
         yield d
 

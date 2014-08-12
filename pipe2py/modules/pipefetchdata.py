@@ -17,6 +17,7 @@ except (ImportError, AttributeError):
     import simplejson as json
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
@@ -57,14 +58,13 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()
     ['reminder', 'appointment']
     """
+    conf = DotDict(conf)
     urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(item_url, item, **kwargs)
-
-            if not '://' in url:
-                url = 'http://' + url
+            item = DotDict(item)
+            url = util.get_value(DotDict(item_url), item, **kwargs)
             path = util.get_value(conf['path'], item, **kwargs)
             match = None
 

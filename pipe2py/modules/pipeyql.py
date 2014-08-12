@@ -6,6 +6,7 @@ import urllib2
 
 from xml.etree import cElementTree as ElementTree
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
@@ -23,9 +24,12 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
     """
     # todo: get from a config/env file
     url = "http://query.yahooapis.com/v1/public/yql"
+    conf = DotDict(conf)
+    query = conf['yqlquery']
 
     for item in _INPUT:
-        yql = util.get_value(conf['yqlquery'], item, **kwargs)
+        item = DotDict(item)
+        yql = util.get_value(query, item, **kwargs)
 
         query = urllib.urlencode({'q':yql,
                                   #note: we use the default format of xml since json loses some structure

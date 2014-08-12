@@ -2,6 +2,7 @@
 #
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
@@ -16,13 +17,16 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     string
     """
+    conf = DotDict(conf)
     parts = util.listize(conf['part'])
 
     for item in _INPUT:
+        item = DotDict(item)
+
         s = ""
         for part in parts:
             try:
-                s += util.get_value(part, item, **kwargs)
+                s += util.get_value(DotDict(part), item, **kwargs)
             except AttributeError:
                 continue  #ignore if the item is referenced but doesn't have our source field (todo: issue a warning if debugging?)
             except TypeError:

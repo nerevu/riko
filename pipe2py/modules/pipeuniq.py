@@ -1,6 +1,7 @@
 # pipeuniq.py
 #
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
@@ -16,7 +17,8 @@ def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     source items, one per unique field value
     """
-    field = util.get_value(conf['field'], None, **kwargs)
+    conf = DotDict(conf)
+    field = conf.get('field', **kwargs)
     order = ['%s%s' % ('', field)]
 
     # read all and sort

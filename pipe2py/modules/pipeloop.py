@@ -4,6 +4,13 @@
 from pipe2py import util
 import copy
 from urllib2 import HTTPError
+from pipe2py.dotdict import DotDict
+
+
+def _gen_inputs(item, conf):
+    # Pass any input parameters into the submodule
+    for key in conf:
+        yield (key, util.get_value(conf[key], item, func=unicode))
 
 
 def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
@@ -22,12 +29,13 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     Yields (_OUTPUT):
     source items after passing through the submodule and adding/replacing values
     """
-    mode = conf['mode']['value']
-    assign_to = conf['assign_to']['value']
-    assign_part = conf['assign_part']['value']
-    emit_part = conf['emit_part']['value']
-    loop_with = conf['with']['value']
-    embed_conf = conf['embed']['value']['conf']
+    conf = DotDict(conf)
+    mode = conf.get('mode')
+    assign_to = conf.get('assign_to')
+    assign_part = conf.get('assign_part')
+    emit_part = conf.get('emit_part')
+    loop_with = conf.get('with')
+    embed_conf = conf.get('embed')['conf']
 
     # Prepare the submodule to take parameters from the loop instead of from
     # the user
@@ -35,17 +43,19 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     embed_context.submodule = True
 
     for item in _INPUT:
+        item = DotDict(item)
+
         if loop_with:
-            inp = util.get_subkey(loop_with, item)
+            inp = item.get(loop_with, **kwargs)
         else:
             inp = item
 
         # Pass any input parameters into the submodule
         embed_context.inputs = {}
 
-        for k in embed_conf:
-            embed_context.inputs[k] = unicode(
-                util.get_value(embed_conf[k], item))
+        embed_context.inputs = {
+            key: util.get_value(DotDict(value), item, func=unicode)
+            for key, value in embed_conf.items()}
 
         # prepare the submodule
         submodule = embed(embed_context, [inp], embed_conf)
@@ -91,7 +101,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
             if results and len(results) == 1:
                 results = results[0]
 
-            util.set_value(item, assign_to, results)
+            item.set(assign_to, results)
             yield item
         elif mode == 'EMIT':
             pass  # already yielded

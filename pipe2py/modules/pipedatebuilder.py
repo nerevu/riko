@@ -2,6 +2,7 @@
 #
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 from datetime import datetime, timedelta
 
 
@@ -17,9 +18,11 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     date
     """
+    conf = DotDict(conf)
+
     for item in _INPUT:
-        date = util.get_value(conf['DATE'], item, **kwargs).lower()
-    
+        date = util.get_value(conf['DATE'], DotDict(item), **kwargs).lower()
+
         if date.endswith(' day') or date.endswith(' days'):
             count = int(date.split(' ')[0])
             date = (datetime.today() + timedelta(days=count)).timetuple()

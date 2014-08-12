@@ -11,7 +11,7 @@
 # (at your option) any later version.
 
 import sys
-from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 # note: for some reason the config needs to match pubdate but should output
 # pubDate
@@ -31,18 +31,13 @@ RSS_FIELDS = {
     u'mediaThumbWidth': u'mediaThumbWidth',
 }
 
-def transform_to_rss(item, conf):
-    new = dict()
-    for i in RSS_FIELDS:
-        try:
-            field_conf = conf[i]
-            if field_conf['value']:
-                new[RSS_FIELDS[i]] = util.get_subkey(field_conf['value'], item)
-        except KeyError:
-            continue
-    return new
 
 def pipe_createrss(context=None, _INPUT=None, conf=None, **kwargs):
+    conf = DotDict(conf)
+
     for item in _INPUT:
-        yield transform_to_rss(item, conf)
-        
+        item = DotDict(item)
+
+        yield {
+            value: item.get(conf.get(key, **kwargs))
+            for key, value in RSS_FIELDS.items()}

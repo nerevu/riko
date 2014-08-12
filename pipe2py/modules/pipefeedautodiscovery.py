@@ -2,6 +2,7 @@
 #
 import autorss
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
@@ -16,16 +17,13 @@ def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     feed entries
     """
-    urls = conf['URL']
-    if not isinstance(urls, list):
-        urls = [urls]
+    conf = DotDict(conf)
+    urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(item_url, item, **kwargs)
-
-            if not '://' in url:
-                url = 'http://' + url
+            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = url if '://' in url else 'http://' + url
 
             if context and context.verbose:
                 print "pipe_feedautodiscovery loading:", url

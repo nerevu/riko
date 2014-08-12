@@ -3,6 +3,7 @@
 
 import time
 from datetime import datetime
+from pipe2py.dotdict import DotDict
 from pipe2py import util
 
 
@@ -18,7 +19,8 @@ def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     formatted date
     """
-    date_format = util.get_value(conf['format'], None, **kwargs)
+    conf = DotDict(conf)
+    date_format = conf.get('format', **kwargs)
 
     for item in _INPUT:
         s = item

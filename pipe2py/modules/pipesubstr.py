@@ -2,6 +2,7 @@
 #
 
 from pipe2py import util
+from pipe2py.dotdict import DotDict
 
 
 def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
@@ -17,11 +18,12 @@ def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     portion of source string
     """
-    sfrom = int(util.get_value(conf['from'], None, **kwargs))
-    length = int(util.get_value(conf['length'], None, **kwargs))
+    conf = DotDict(conf)
+    start = conf.get('from', func=int, **kwargs)
+    length = conf.get('length', func=int, **kwargs)
 
     for item in _INPUT:
-        yield item[sfrom:sfrom+length]
+        yield item[start:start + length]
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,
