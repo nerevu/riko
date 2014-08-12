@@ -375,7 +375,6 @@ if __name__ == '__main__':
         pipe = '%2Fpipes%2Fpipe.info%3F_out=json%26_id=%s' % options.pipeid
         end = '%22&format=json'
         url = base + select + where + pipe + end
-        print url
         # todo: refactor this url->json
 
         pjson = urllib.urlopen(url).read()
