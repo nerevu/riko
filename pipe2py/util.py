@@ -253,3 +253,7 @@ def url_quote(url):
 
 def recursive_dict(element):
     return element.tag, dict(map(recursive_dict, element)) or element.text
+
+
+def listize(item):
+    return item if isinstance(item, list) else [item]

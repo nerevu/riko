@@ -14,30 +14,28 @@ from pipe2py import util
 
 def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
     """This source fetches and parses any XML or JSON file (todo iCal or KML) to yield a list of elements.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- not used
     conf:
         URL -- url
         path -- path to list
-    
+
     Yields (_OUTPUT):
     elements
     """
-    urls = conf['URL']
-    if not isinstance(urls, list):
-        urls = [urls]
-    
+    urls = util.listize(conf['URL'])
+
     for item in _INPUT:
         for item_url in urls:
             url = util.get_value(item_url, item, **kwargs)
-        
+
             if not '://' in url:
                 url = 'http://' + url
             path = util.get_value(conf['path'], item, **kwargs)
             match = None
-            
+
             #Parse the file into a dictionary
             try:
                 f = urllib2.urlopen(url)
@@ -60,12 +58,12 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                 #Convert xml into generation of dicts
                 if match:
                     for element in root.findall(match):
-                        i = util.etree_to_pipes(element)           
+                        i = util.etree_to_pipes(element)
                         yield i
                 else:
                     i = util.etree_to_pipes(root)
                     yield i
-                    
+
             except Exception, e:
                 try:
                     f = urllib2.urlopen(url)
@@ -92,9 +90,9 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                     #todo try KML and yield
                     if context.verbose:
                         print "xml and json both failed:"
-        
+
                     raise
-        
+
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
             break
-            
+

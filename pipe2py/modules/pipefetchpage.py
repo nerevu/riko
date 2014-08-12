@@ -26,9 +26,7 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
           (not documented but happens)
         - items should be cleaned, i.e. stripped of HTML tags
     """
-    urls = conf['URL']
-    if not isinstance(urls, list):
-        urls = [urls]
+    urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:

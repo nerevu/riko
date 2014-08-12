@@ -27,9 +27,7 @@ def pipe_filter(context, _INPUT, conf, **kwargs):
     combine = conf['COMBINE']['value']
     rules = []
 
-    rule_defs = conf['RULE']
-    if not isinstance(rule_defs, list):
-        rule_defs = [rule_defs]
+    rule_defs = util.listize(conf['RULE'])
 
     for rule in rule_defs:
         field = rule['field']['value']

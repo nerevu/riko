@@ -16,9 +16,7 @@ def pipe_itembuilder(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     item
     """
-    attrs = conf['attrs']
-    if not isinstance(attrs, list):
-        attrs = [attrs]
+    attrs = util.listize(conf['attrs'])
 
     for item in _INPUT:
         d = {}

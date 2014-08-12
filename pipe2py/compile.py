@@ -185,10 +185,7 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
         'wires': {},
     }
 
-    modules = pipe_def['modules']
-
-    if not isinstance(modules, list):
-        modules = [modules]
+    modules = util.listize(pipe_def['modules'])
 
     for module in modules:
         pipe['modules'][util.pythonise(module['id'])] = module
@@ -205,10 +202,7 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
             pipe['graph'][util.pythonise(embed['id'])].append(
                 util.pythonise(module['id']))
 
-    wires = pipe_def['wires']
-
-    if not isinstance(wires, list):
-        wires = [wires]
+    wires = util.listize(pipe_def['wires'])
 
     for wire in wires:
         pipe['wires'][util.pythonise(wire['id'])] = wire

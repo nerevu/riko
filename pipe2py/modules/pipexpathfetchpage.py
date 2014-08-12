@@ -23,9 +23,7 @@ def pipe_xpathfetchpage(context, _INPUT, conf, **kwargs):
         - don't retrieve pages larger than 1.5MB
         - don't retrieve if page is not indexable.
     """
-    urls = conf['URL']
-    if not isinstance(urls, list):
-        urls = [urls]
+    urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:

@@ -5,22 +5,21 @@ from pipe2py import util
 
 def pipe_strconcat(context, _INPUT, conf, **kwargs):
     """This source builds a string.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- source generator
     conf:
         part -- parts
-    
+
     Yields (_OUTPUT):
     string
     """
-    if not isinstance(conf['part'], list):    #todo do we need to do this anywhere else?
-        conf['part'] = [conf['part']]
+    parts = util.listize(conf['part'])
 
     for item in _INPUT:
         s = ""
-        for part in conf['part']:
+        for part in parts:
             try:
                 s += util.get_value(part, item, **kwargs)
             except AttributeError:
@@ -28,6 +27,6 @@ def pipe_strconcat(context, _INPUT, conf, **kwargs):
             except TypeError:
                 if context.verbose:
                     print "pipe_strconcat: TypeError"
-    
+
         yield s
 
