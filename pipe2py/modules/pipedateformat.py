@@ -3,18 +3,18 @@
 
 import time
 from datetime import datetime
-
 from pipe2py import util
+
 
 def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
     """This source formats a date.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- source generator
     conf:
         format -- date format
-    
+
     Yields (_OUTPUT):
     formatted date
     """
@@ -30,12 +30,12 @@ def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
                 except:
                     pass
             else:
-                #todo: raise an exception: unexpected date format
+                # todo: raise an exception: unexpected date format
                 pass
         try:
-            s = time.strftime(date_format, s)   #todo check all PHP formats are covered by Python
+            s = time.strftime(date_format, s)   # todo: check all PHP formats are covered by Python
         except TypeError:
             #silent error handling e.g. if item is not a date
             continue
-        
+
         yield s

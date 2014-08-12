@@ -67,6 +67,7 @@ PREFERRED_TIDY_INTERFACES = ["uTidy", "mxTidy"]
 
 # ---------- required modules (should come with any Python distribution) ----------
 import sgmllib, re, sys, copy, urlparse, time, rfc822, types, cgi, urllib, urllib2
+
 try:
     from cStringIO import StringIO as _StringIO
 except:
@@ -79,6 +80,7 @@ try:
     import gzip
 except:
     gzip = None
+
 try:
     import zlib
 except:
@@ -88,6 +90,7 @@ except:
 # been tested with the built-in SAX parser, PyXML, and libxml2.  On platforms where the
 # Python distribution does not come with an XML parser (such as Mac OS X 10.2 and some
 # versions of FreeBSD), feedparser will quietly fall back on regex-based parsing.
+
 try:
     import xml.sax
     xml.sax.make_parser(PREFERRED_XML_PARSERS) # test for valid parsers
@@ -95,6 +98,7 @@ try:
     _XML_AVAILABLE = 1
 except:
     _XML_AVAILABLE = 0
+
     def _xmlescape(data):
         data = data.replace('&', '&amp;')
         data = data.replace('>', '&gt;')
@@ -185,26 +189,33 @@ class FeedParserDict(UserDict):
               'copyright_detail': 'rights_detail',
               'tagline': 'subtitle',
               'tagline_detail': 'subtitle_detail'}
+
     def __getitem__(self, key):
         if key == 'category':
             return UserDict.__getitem__(self, 'tags')[0]['term']
         if key == 'categories':
             return [(tag['scheme'], tag['term']) for tag in UserDict.__getitem__(self, 'tags')]
+
         realkey = self.keymap.get(key, key)
+
         if type(realkey) == types.ListType:
             for k in realkey:
                 if UserDict.has_key(self, k):
                     return UserDict.__getitem__(self, k)
+
         if UserDict.has_key(self, key):
             return UserDict.__getitem__(self, key)
+
         return UserDict.__getitem__(self, realkey)
 
     def __setitem__(self, key, value):
         for k in self.keymap.keys():
             if key == k:
                 key = self.keymap[k]
+
                 if type(key) == types.ListType:
                     key = key[0]
+
         return UserDict.__setitem__(self, key, value)
 
     def get(self, key, default=None):
@@ -347,6 +358,7 @@ class _FeedParserMixin:
                   'http://www.w3.org/XML/1998/namespace':                 'xml',
                   'http://schemas.pocketsoap.com/rss/myDescModule/':      'szf'
 }
+
     _matchnamespaces = {}
 
     can_be_relative_uri = ['link', 'id', 'wfw_comment', 'wfw_commentrss', 'docs', 'url', 'href', 'comments', 'license', 'icon', 'logo']

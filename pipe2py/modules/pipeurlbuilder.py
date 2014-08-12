@@ -4,9 +4,10 @@
 import urllib
 from pipe2py import util
 
+
 def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a url and yields it forever.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- not used
@@ -14,7 +15,7 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
         BASE -- base
         PATH -- path elements
         PARAM -- query parameters
-    
+
     Yields (_OUTPUT):
     url
     """
@@ -34,7 +35,7 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
             url += "/".join(str(p) for p in path if p)
         url = url.rstrip("/")
 
-        #Ensure url is valid
+        # Ensure url is valid
         url = util.url_quote(url)
 
         param_defs = conf['PARAM']
@@ -46,4 +47,3 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
             url += "?" + urllib.urlencode(params)
 
         yield url
-

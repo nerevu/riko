@@ -4,7 +4,9 @@
 
 import urllib2
 import re
+
 from pipe2py import util
+
 
 def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     """Fetch Page module
@@ -54,16 +56,19 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 to_delimiter = util.get_value(conf["to"], _INPUT, **kwargs)
                 split_token = util.get_value(conf["token"], _INPUT, **kwargs)
 
-                # determine from location, i.e. from where to start reading content
+                # determine from location, i.e. from where to start reading
+                # content
                 from_location = 0
+
                 if from_delimiter != "":
                     from_location = content.find(from_delimiter)
                     # Yahoo! does not strip off the from_delimiter.
-                    #if from_location > 0:
-                    #    from_location += len(from_delimiter)
+                    # if from_location > 0:
+                    # from_location += len(from_delimiter)
 
                 # determine to location, i.e. where to stop reading content
                 to_location = 0
+
                 if to_delimiter != "":
                     to_location = content.find(to_delimiter, from_location)
 
@@ -83,15 +88,15 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                     items = [content]
 
                 if context and context.verbose:
-                    print "FetchPage: found count items:",len(items)
+                    print "FetchPage: found count items:", len(items)
 
                 for i in items:
                     if context and context.verbose:
                         print "--------------item data --------------------"
                         print i
                         print "--------------EOF item data ----------------"
-                    yield { "content" : i }
 
+                    yield {"content": i}
             except Exception, e:
                 if context and context.verbose:
                     print "FetchPage: failed to retrieve from:", url
@@ -102,6 +107,7 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                     print "----------------- FetchPage -----------------"
                 raise
 
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+        # i.e. this is being fed forever, i.e. not in a loop, so we just yield
+        # our item once
+        if item == True:
             break
-

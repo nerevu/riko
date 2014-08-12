@@ -5,6 +5,7 @@ from pipe2py import util
 import copy
 from urllib2 import HTTPError
 
+
 def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     """This operator loops over the input performing the embedded submodule.
 
@@ -28,7 +29,8 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     loop_with = conf['with']['value']
     embed_conf = conf['embed']['value']['conf']
 
-    #Prepare the submodule to take parameters from the loop instead of from the user
+    # Prepare the submodule to take parameters from the loop instead of from
+    # the user
     embed_context = copy.copy(context)
     embed_context.submodule = True
 
@@ -38,23 +40,28 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         else:
             inp = item
 
-        #Pass any input parameters into the submodule
+        # Pass any input parameters into the submodule
         embed_context.inputs = {}
-        for k in embed_conf:
-            embed_context.inputs[k] = unicode(util.get_value(embed_conf[k], item))
-        p = embed(embed_context, [inp], embed_conf)  #prepare the submodule
 
+        for k in embed_conf:
+            embed_context.inputs[k] = unicode(
+                util.get_value(embed_conf[k], item))
+
+        # prepare the submodule
+        submodule = embed(embed_context, [inp], embed_conf)
         results = None
+
         try:
-            #loop over the submodule, emitting as we go or collecting results for later assignment
-            for i in p:
+            # loop over the submodule, emitting as we go or collecting results
+            # for later assignment
+            for i in submodule:
                 if assign_part == 'first':
                     if mode == 'EMIT':
                         yield i
                     else:
                         results = i
                     break
-                else:  #all
+                else:
                     if mode == 'EMIT':
                         yield i
                     else:
@@ -62,23 +69,31 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
                             results.append(i)
                         else:
                             results = [i]
+
             if results and mode == 'assign':
-                #this is a hack to make sure fetchpage works in an out of a loop while not disturbing strconcat in a loop etc.
-                #(goes with the comment below about checking the delivery capability of the source)
+                # this is a hack to make sure fetchpage works in an out of a
+                # loop while not disturbing strconcat in a loop etc.
+                # goes with the comment below about checking the delivery capability of the source
                 if len(results) == 1 and isinstance(results[0], dict):
                     results = [results]
-        except HTTPError:  #todo any other errors we want to continue looping after?
+
+        # todo: any other errors we want to continue looping after?
+        except HTTPError:
             if context and context.verbose:
                 print "Submodule gave HTTPError - continuing the loop"
+
             continue
 
         if mode == 'assign':
-            if results and len(results) == 1:  #note: i suspect this needs to be more discerning and only happen if the source can only ever deliver 1 result, e.g. strconcat vs. fetchpage
+            # note: i suspect this needs to be more discerning and only happen
+            # if the source can only ever deliver 1 result, e.g. strconcat vs.
+            # fetchpage
+            if results and len(results) == 1:
                 results = results[0]
+
             util.set_value(item, assign_to, results)
             yield item
         elif mode == 'EMIT':
-            pass  #already yielded
+            pass  # already yielded
         else:
             raise Exception("Invalid mode %s (expecting assign or EMIT)" % mode)
-

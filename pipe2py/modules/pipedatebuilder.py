@@ -2,18 +2,18 @@
 #
 
 from pipe2py import util
-
 from datetime import datetime, timedelta
+
 
 def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a date and yields it forever.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- XXX
     conf:
         DATE -- date
-    
+
     Yields (_OUTPUT):
     date
     """
@@ -32,8 +32,8 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
             date = (datetime.today() + timedelta(days=1)).timetuple()
         elif date == 'yesterday':
             date = (datetime.today() + timedelta(days=-1)).timetuple()
-        elif date == 'now':  #todo is this allowed by Yahoo?
-            date = datetime.now().timetuple()  #better to use utcnow?
+        elif date == 'now':  # todo: is this allowed by Yahoo?
+            date = datetime.now().timetuple()  # better to use utcnow?
         else:
             for df in util.ALTERNATIVE_DATE_FORMATS:
                 try:
@@ -42,7 +42,7 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
                 except:
                     pass
             else:
-                #todo: raise an exception: unexpected date format
                 pass
-            
+
+            # todo: raise an exception: unexpected date format
         yield date

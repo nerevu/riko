@@ -42,7 +42,6 @@ try:
 except (ImportError, AttributeError):
     from simplejson import loads
 
-
 from itertools import chain
 from importlib import import_module
 from jinja2 import Environment, PackageLoader
@@ -188,19 +187,20 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
     modules = util.listize(pipe_def['modules'])
 
     for module in modules:
-        pipe['modules'][util.pythonise(module['id'])] = module
-        pipe['graph'][util.pythonise(module['id'])] = []
+        module_id = util.pythonise(module['id'])
+        pipe['modules'][module_id] = module
+        pipe['graph'][module_id] = []
         module_type = module['type']
 
         if module_type == 'loop':
             embed = module['conf']['embed']['value']
-            pipe['modules'][util.pythonise(embed['id'])] = embed
-            pipe['graph'][util.pythonise(embed['id'])] = []
-            pipe['embed'][util.pythonise(embed['id'])] = embed
+            embed_id = util.pythonise(embed['id'])
+            pipe['modules'][embed_id] = embed
+            pipe['graph'][embed_id] = []
+            pipe['embed'][embed_id] = embed
 
             # make the loop dependent on its embedded module
-            pipe['graph'][util.pythonise(embed['id'])].append(
-                util.pythonise(module['id']))
+            pipe['graph'][embed_id].append(module_id)
 
     wires = util.listize(pipe_def['wires'])
 
@@ -212,6 +212,7 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
     # Remove any orphan nodes
     for node in pipe['graph'].keys():
         targetted = [node in value for key, value in pipe['graph'].items()]
+
         if not pipe['graph'][node] and not any(targetted):
             del pipe['graph'][node]
 

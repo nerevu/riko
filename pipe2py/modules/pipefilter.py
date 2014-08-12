@@ -3,10 +3,12 @@
 
 import datetime
 import re
+
 from pipe2py import util
 from decimal import Decimal
 
 COMBINE_BOOLEAN = {"and": all, "or": any}
+
 
 def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules.
@@ -38,7 +40,8 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
         if combine in COMBINE_BOOLEAN:
             res = COMBINE_BOOLEAN[combine](_rulepass(rule, item) for rule in rules)
         else:
-            raise Exception("Invalid combine %s (expecting and or or)" % combine)
+            raise Exception(
+                "Invalid combine: %s (expecting 'and' or 'or')" % combine)
 
         if (res and mode == "permit") or (not res and mode == "block"):
             yield item
@@ -99,4 +102,3 @@ def _rulepass(rule, item):
             return True
 
     return False
-

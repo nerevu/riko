@@ -4,15 +4,16 @@
 import urllib
 from pipe2py import util
 
+
 def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds an item.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- source generator
     conf:
         attrs -- key, value pairs
-        
+
     Yields (_OUTPUT):
     item
     """
@@ -33,4 +34,3 @@ def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
 
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
             break
-

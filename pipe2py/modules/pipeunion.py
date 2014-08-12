@@ -3,6 +3,7 @@
 
 from pipe2py import util
 
+
 def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator merges up to 5 source together.
 

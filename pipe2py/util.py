@@ -219,11 +219,12 @@ def get_input(context, conf):
     # debug = conf['debug']['value']
 
     value = None
+
     if context.submodule:
         value = context.inputs.get(name, default)
     elif context.test:
-        # we skip user interaction during tests  #Note: docs say debug is used,
-        # but doesn't seem to be
+        # we skip user interaction during tests
+        # note: docs say debug is used, but doesn't seem to be
         value = default
     elif context.console:
         value = raw_input(

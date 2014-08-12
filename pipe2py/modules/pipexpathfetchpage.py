@@ -3,6 +3,7 @@
 
 import urllib2
 import re
+
 from pipe2py import util
 
 
@@ -52,29 +53,36 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
 
 
                 if html5:
-                    #from lxml.html import html5parser
-                    #root = html5parser.fromstring(content)
+                    # from lxml.html import html5parser
+                    # root = html5parser.fromstring(content)
                     from html5lib import parse
-                    root = parse(content, treebuilder='lxml', namespaceHTMLElements=False)
+
+                    root = parse(
+                        content,
+                        treebuilder='lxml',
+                        namespaceHTMLElements=False
+                    )
                 else:
                     from lxml import etree
                     root = etree.HTML(content)
+
                 res_items = root.xpath(xpath)
 
                 if context and context.verbose:
-                    print "XPathFetchPage: found count items:",len(res_items)
+                    print "XPathFetchPage: found count items:", len(res_items)
 
                 for res_item in res_items:
                     i = util.etree_to_pipes(res_item) #TODO xml_to_dict(res_item)
+
                     if context and context.verbose:
                         print "--------------item data --------------------"
                         print i
                         print "--------------EOF item data ----------------"
+
                     if useAsString:
-                        yield { "content" : unicode(i) }
+                        yield {"content": unicode(i)}
                     else:
                         yield i
-
             except Exception, e:
                 if context and context.verbose:
                     print "XPathFetchPage: failed to retrieve from:", url
@@ -87,4 +95,3 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
 
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
             break
-

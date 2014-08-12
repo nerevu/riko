@@ -1,8 +1,8 @@
 # pipefeedautodiscovery.py
 #
-
 import autorss
 from pipe2py import util
+
 
 def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
     """This source search for feed links in a page
@@ -32,8 +32,10 @@ def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
             d = autorss.getRSSLink(url.encode('utf-8'))
 
             for entry in d:
-                yield {'link':entry}
-                #todo add rel, type, title
+                yield {'link': entry}
+                # todo: add rel, type, title
 
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+        # i.e. this is being fed forever, i.e. not in a loop, so we just yield
+        # our item once
+        if item == True:
             break

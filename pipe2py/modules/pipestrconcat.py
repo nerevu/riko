@@ -3,6 +3,7 @@
 
 from pipe2py import util
 
+
 def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a string.
 

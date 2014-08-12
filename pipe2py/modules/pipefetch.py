@@ -6,8 +6,9 @@ feedparser.USER_AGENT = "pipe2py (feedparser/%s) +https://github.com/ggaughan/pi
 
 from pipe2py import util
 
+
 def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source fetches and parses one or more feeds to yield the feed entries.
+    """Fetches and parses one or more feeds to yield the feed entries.
 
     Keyword arguments:
     context -- pipeline context

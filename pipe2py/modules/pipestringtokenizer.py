@@ -3,15 +3,16 @@
 
 from pipe2py import util
 
+
 def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     """Splits a string into tokens delimited by separators.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- source generator
     conf:
         to-str -- separator string
-    
+
     Yields (_OUTPUT):
     tokens of the input string
     """
@@ -22,5 +23,7 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
             for chunk in item.split(delim):
                 yield {'content':chunk}
 
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
-            break        
+        # i.e. this is being fed forever, i.e. not in a loop,
+        # so we just yield our item once
+        if item == True:
+            break

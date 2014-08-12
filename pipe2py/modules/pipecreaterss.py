@@ -13,21 +13,22 @@
 import sys
 from pipe2py import util
 
-#note: for some reason the config needs to match pubdate but should output pubDate
+# note: for some reason the config needs to match pubdate but should output
+# pubDate
 RSS_FIELDS = {
-    u'mediaContentHeight':u'mediaContentHeight',
-    u'description':u'description',
-    u'pubdate':u'pubDate',
-    u'mediaThumbHeight':u'mediaThumbHeight',
-    u'link':u'link',
-    u'guid':u'guid',
-    u'mediaThumbURL':u'mediaThumbURL',
-    u'mediaContentType':u'mediaContentType',
-    u'author':u'author',
-    u'title':u'title',
-    u'mediaContentWidth':u'mediaContentWidth',
-    u'mediaContentURL':u'mediaContentURL',
-    u'mediaThumbWidth':u'mediaThumbWidth',
+    u'mediaContentHeight': u'mediaContentHeight',
+    u'description': u'description',
+    u'pubdate': u'pubDate',
+    u'mediaThumbHeight': u'mediaThumbHeight',
+    u'link': u'link',
+    u'guid': u'guid',
+    u'mediaThumbURL': u'mediaThumbURL',
+    u'mediaContentType': u'mediaContentType',
+    u'author': u'author',
+    u'title': u'title',
+    u'mediaContentWidth': u'mediaContentWidth',
+    u'mediaContentURL': u'mediaContentURL',
+    u'mediaThumbWidth': u'mediaThumbWidth',
 }
 
 def transform_to_rss(item, conf):

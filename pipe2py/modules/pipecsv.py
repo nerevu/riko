@@ -58,17 +58,18 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
     Note:
     Current restrictions:
       separator must be 1 character
-      assumes every row has exactly the expected number of fields, as defined in the header
+      assumes every row has exactly the expected number of fields, as defined
+      in the header
     """
     col_name = conf['col_name']
 
     for item in _INPUT:
         url = util.get_value(conf['URL'], item, **kwargs)
-        separator = util.get_value(conf['separator'], item, **kwargs).encode('utf-8')
+        sep = util.get_value(conf['separator'], item, **kwargs).encode('utf-8')
         skip = int(util.get_value(conf['skip'], item, **kwargs))
         col_mode = util.get_value(conf['col_mode'], item, **kwargs)
-        col_row_start = int(util.get_value(conf['col_row_start'], item, **kwargs))
-        col_row_end = int(util.get_value(conf['col_row_end'], item, **kwargs))
+        row_start = int(util.get_value(conf['col_row_start'], item, **kwargs))
+        row_end = int(util.get_value(conf['col_row_end'], item, **kwargs))
 
         f = urlopen(url)
 
@@ -78,13 +79,13 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         for i in xrange(skip):
             f.next()
 
-        reader = UnicodeReader(f, delimiter=separator)
-
+        reader = UnicodeReader(f, delimiter=sep)
         fieldnames = []
+
         if col_mode == 'custom':
             fieldnames = [util.get_value(x) for x in col_name]
         else:
-            for row in xrange((col_row_end - col_row_start) +1):
+            for row in xrange((row_end - row_start) +1):
                 row = reader.next()
                 fieldnames.extend(row)
 
@@ -92,5 +93,7 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
             d = dict(zip(fieldnames, rows))
             yield d
 
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+        if item == True:
+            # i.e. this is being fed forever, i.e. not in a loop, so we just
+            # yield our item once
             break

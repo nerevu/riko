@@ -3,16 +3,17 @@
 
 from pipe2py import util
 
+
 def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     """Returns a substring.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- source generator
     conf:
         from -- starting character
         length -- number of characters to return
-    
+
     Yields (_OUTPUT):
     portion of source string
     """
@@ -22,5 +23,7 @@ def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     for item in _INPUT:
         yield item[sfrom:sfrom+length]
 
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
-            break        
+        # i.e. this is being fed forever, i.e. not in a loop,
+        # so we just yield our item once
+        if item == True:
+            break

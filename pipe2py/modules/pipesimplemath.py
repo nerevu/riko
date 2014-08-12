@@ -4,13 +4,15 @@
 from pipe2py import util
 from math import pow
 
-OPS = {'add': lambda x,y:x+y,
-       'subtract': lambda x,y:x-y,
-       'multiply': lambda x,y:x*y,
-       'divide': lambda x,y:x/(y*1.0),
-       'modulo': lambda x,y:x%y,
-       'power': lambda x,y:pow(x,y)
-      }
+OPS = {
+    'add': lambda x, y: x+y,
+    'subtract': lambda x, y: x - y,
+    'multiply': lambda x, y: x * y,
+    'divide': lambda x, y: x / (y * 1.0),
+    'modulo': lambda x, y: x % y,
+    'power': lambda x, y: pow(x, y),
+}
+
 
 def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator performs basic arithmetic, such as addition and subtraction.
@@ -22,11 +24,10 @@ def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     conf:
         other -- input value
         op -- operator
-        
+
     Yields (_OUTPUT):
     result
     """
-
     value = float(util.get_value(conf['OTHER'], None, **kwargs))
     op = util.get_value(conf['OP'], None, **kwargs)
 

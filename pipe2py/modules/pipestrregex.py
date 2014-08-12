@@ -14,7 +14,7 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     kwargs -- other inputs, e.g. to feed terminals for rule values
     conf:
         RULE -- rules - each rule comprising (match, replace)
-    
+
     Yields (_OUTPUT):
     source item after replacing values matching regexes
     """
@@ -36,9 +36,9 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
         
         rules.append((match, replace))
     
+
     for item in _INPUT:
         for rule in rules:
             item = re.sub(match, replace, item)
-            
-        yield item
 
+        yield item

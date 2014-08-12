@@ -4,8 +4,8 @@
 
 from itertools import tee, imap
 from copy import deepcopy
-
 from pipe2py import util
+
 
 class Split(object):
     def __init__(self, context, _INPUT, conf, splits=2, **kwargs):
@@ -23,6 +23,7 @@ class Split(object):
         except IndexError:
             raise ValueError("split has 2 outputs, tried to activate third")
 
+
 def pipe_split(context, _INPUT, conf, splits, **kwargs):
     """This operator splits a source into two identical copies.
 
@@ -37,5 +38,3 @@ def pipe_split(context, _INPUT, conf, splits, **kwargs):
     """
 
     return Split(context, _INPUT, conf, splits, **kwargs)
-
-

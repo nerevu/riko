@@ -1,13 +1,13 @@
 # pipefetchsitefeed.py
 #
 
-#Note: this is really a macro module
+# note: this is really a macro module
 
 from pipefeedautodiscovery import pipe_feedautodiscovery
 from pipefetch import pipe_fetch
 from pipeforever import pipe_forever
-
 from pipe2py import util
+
 
 def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
     """This source fetches and parses the first feed found on one or more sites
@@ -38,8 +38,12 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
             if context and context.verbose:
                 print "pipe_fetchsitefeed loading:", url
 
-            for feed in pipe_feedautodiscovery(context, forever, {u'URL': {u'type': u'url', u'value': url}}):
-                for feed_item in pipe_fetch(context, forever, {u'URL': {u'type': u'url', u'value': feed['link']}}):
+            autodsc_conf = {u'URL': {u'type': u'url', u'value': url}}
+
+            for feed in pipe_feedautodiscovery(context, forever, autodsc_conf):
+                ftch_conf = {u'URL': {u'type': u'url', u'value': feed['link']}}
+
+                for feed_item in pipe_fetch(context, forever, ftch_conf):
                     yield feed_item
 
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once

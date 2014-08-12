@@ -1,11 +1,12 @@
 # pipestrreplace.py
 #
-
 from pipe2py import util
+
+
 
 def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
     """Replaces text with replacement text.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- source generator
@@ -14,7 +15,7 @@ def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
             find -- text to find
             param -- type of match: 1=first, 2=last, 3=every
             replace -- text to replace with
-    
+
     Yields (_OUTPUT):
     source string with replacements
     """
