@@ -15,7 +15,7 @@ def {{ pipe_name }}(context, _INPUT, conf=None, **kwargs):
     if context.describe_input:
         return {{ inputs }}
 
-    forever = pipeforever.pipe_forever(context, None, conf=None)
+    forever = pipeforever.pipe_forever()
 
 {% for module in modules %}
     {% if module.id in embedded_pipes %}

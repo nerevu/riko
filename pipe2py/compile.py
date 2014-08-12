@@ -228,7 +228,7 @@ def build_pipeline(context, pipe):
         namespace can become polluted by submodule wrapper definitions
     """
     pyinput = None
-    steps = {'forever': pipeforever.pipe_forever(context, None, conf=None)}
+    steps = {'forever': pipeforever.pipe_forever()}
 
     for module_id in topological_sort(pipe['graph']):
         commons = _pipe_commons(context, pipe, module_id, pyinput, steps)
