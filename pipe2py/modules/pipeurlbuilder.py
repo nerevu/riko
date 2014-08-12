@@ -4,7 +4,7 @@
 import urllib
 from pipe2py import util
 
-def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
+def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a url and yields it forever.
     
     Keyword arguments:

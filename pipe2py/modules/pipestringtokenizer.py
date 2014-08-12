@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_stringtokenizer(context, _INPUT, conf, **kwargs):
+def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     """Splits a string into tokens delimited by separators.
     
     Keyword arguments:

@@ -8,7 +8,7 @@ from xml.etree import cElementTree as ElementTree
 
 from pipe2py import util
 
-def pipe_yql(context, _INPUT, conf,  **kwargs):
+def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
     """This source issues YQL queries.
     
     Keyword arguments:

@@ -5,7 +5,7 @@ from pipe2py import util
 
 from datetime import datetime, timedelta
 
-def pipe_datebuilder(context, _INPUT, conf, **kwargs):
+def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a date and yields it forever.
     
     Keyword arguments:

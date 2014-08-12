@@ -4,7 +4,7 @@
 import urllib
 from pipe2py import util
 
-def pipe_itembuilder(context, _INPUT, conf, **kwargs):
+def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds an item.
     
     Keyword arguments:

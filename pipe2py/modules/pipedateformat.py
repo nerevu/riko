@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pipe2py import util
 
-def pipe_dateformat(context, _INPUT, conf, **kwargs):
+def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
     """This source formats a date.
     
     Keyword arguments:

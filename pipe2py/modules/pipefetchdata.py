@@ -12,8 +12,9 @@ except (ImportError, AttributeError):
 
 from pipe2py import util
 
-def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
-    """This source fetches and parses any XML or JSON file (todo iCal or KML) to yield a list of elements.
+
+def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
+    """Fetches and parses any XML or JSON file to yield a list of elements
 
     Keyword arguments:
     context -- pipeline context

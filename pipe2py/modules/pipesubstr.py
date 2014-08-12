@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_substr(context, _INPUT, conf, **kwargs):
+def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     """Returns a substring.
     
     Keyword arguments:

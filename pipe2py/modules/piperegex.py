@@ -4,7 +4,7 @@
 import re
 from pipe2py import util
 
-def pipe_regex(context, _INPUT, conf, **kwargs):
+def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator replaces values using regexes.
 
     Keyword arguments:

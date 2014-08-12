@@ -3,21 +3,21 @@
 
 from pipe2py import util
 
-def pipe_sort(context, _INPUT, conf, **kwargs):
-    """This operator sorts the input source according to the specified key. 
+def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):
+    """This operator sorts the input source according to the specified key.
 
     Keyword arguments:
-    context -- pipeline context        
+    context -- pipeline context
     _INPUT -- source generator
     kwargs -- other inputs, e.g. to feed terminals for rule values
     conf:
         KEY -- list of fields to sort by
-    
+
     Yields (_OUTPUT):
     source items sorted by key
     """
     order = []
-       
+
     keys = conf['KEY']
     if not isinstance(keys, list):
         keys = [keys]
@@ -31,7 +31,7 @@ def pipe_sort(context, _INPUT, conf, **kwargs):
     for item in _INPUT:
         sorted_input.append(item)
     sorted_input = util.multikeysort(sorted_input, order)
-            
+
     for item in sorted_input:
         yield item
-        
+

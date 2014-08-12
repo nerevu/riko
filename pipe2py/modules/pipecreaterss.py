@@ -41,7 +41,7 @@ def transform_to_rss(item, conf):
             continue
     return new
 
-def pipe_createrss(context, _INPUT, conf, **kwargs):
+def pipe_createrss(context=None, _INPUT=None, conf=None, **kwargs):
     for item in _INPUT:
         yield transform_to_rss(item, conf)
         

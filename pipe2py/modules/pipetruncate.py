@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_truncate(context, _INPUT, conf, **kwargs):
+def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator truncates the number of items in a feed.
 
     Keyword arguments:

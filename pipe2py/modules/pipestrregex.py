@@ -5,8 +5,8 @@ import re
 from pipe2py import util
 
 
-def pipe_strregex(context, _INPUT, conf, **kwargs):
-    """This operator replaces values using regexes. 
+def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
+    """This operator replaces values using regexes.
 
     Keyword arguments:
     context -- pipeline context

@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_privateinput(context, _INPUT, conf, **kwargs):
+def pipe_privateinput(context=None, _INPUT=None, conf=None, **kwargs):
     """This source prompts the user for some text and yields it forever.
     
     Keyword arguments:

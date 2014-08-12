@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_strreplace(context, _INPUT, conf, **kwargs):
+def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
     """Replaces text with replacement text.
     
     Keyword arguments:

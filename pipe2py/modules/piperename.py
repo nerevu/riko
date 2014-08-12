@@ -4,7 +4,7 @@
 from pipe2py import util
 
 
-def pipe_rename(context, _INPUT, conf, **kwargs):
+def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator renames or copies fields in the input source.
 
     Keyword arguments:

@@ -6,7 +6,7 @@ import urllib2
 import re
 from pipe2py import util
 
-def pipe_fetchpage(context, _INPUT, conf, **kwargs):
+def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     """Fetch Page module
 
     _INPUT -- not used since this does not have inputs.

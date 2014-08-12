@@ -12,7 +12,7 @@ OPS = {'add': lambda x,y:x+y,
        'power': lambda x,y:pow(x,y)
       }
 
-def pipe_simplemath(context, _INPUT, conf, **kwargs):
+def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator performs basic arithmetic, such as addition and subtraction.
 
     Keyword arguments:

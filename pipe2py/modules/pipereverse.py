@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_reverse(context, _INPUT, conf, **kwargs):
+def pipe_reverse(context=None, _INPUT=None, conf=None, **kwargs):
     """Reverse the order of items in a feed.
 
     Keyword arguments:

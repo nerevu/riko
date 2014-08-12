@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_subelement(context, _INPUT, conf, **kwargs):
+def pipe_subelement(context=None, _INPUT=None, conf=None, **kwargs):
     """Returns a subelement.
     
     Keyword arguments:

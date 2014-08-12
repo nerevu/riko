@@ -8,7 +8,7 @@ from decimal import Decimal
 
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
-def pipe_filter(context, _INPUT, conf, **kwargs):
+def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator filters the input source, including or excluding fields, that match a set of defined rules.
 
     Keyword arguments:

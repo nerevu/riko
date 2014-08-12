@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_count(context, _INPUT, conf, **kwargs):
+def pipe_count(context=None, _INPUT=None, conf=None, **kwargs):
     """Count the number of items in a feed and yields it forever.
 
     Keyword arguments:

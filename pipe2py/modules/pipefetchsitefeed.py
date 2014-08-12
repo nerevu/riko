@@ -9,7 +9,7 @@ from pipeforever import pipe_forever
 
 from pipe2py import util
 
-def pipe_fetchsitefeed(context, _INPUT, conf, **kwargs):
+def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
     """This source fetches and parses the first feed found on one or more sites
        to yield the feed entries.
 

@@ -9,7 +9,7 @@ map_key_to_rss = {'mediaThumbURL': 'media:thumbnail.url',
                   #todo more?
                  }
 
-def pipe_rssitembuilder(context, _INPUT, conf, **kwargs):
+def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds an rss item.
     
     Keyword arguments:

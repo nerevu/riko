@@ -37,7 +37,7 @@ class UnicodeReader:
         return self
 
 
-def pipe_csv(context, _INPUT, conf, **kwargs):
+def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
     """This source fetches and parses a csv file to yield items.
 
     Keyword arguments:

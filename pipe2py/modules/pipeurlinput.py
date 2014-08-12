@@ -3,7 +3,7 @@
 
 from pipe2py import util
 
-def pipe_urlinput(context, _INPUT, conf, **kwargs):
+def pipe_urlinput(context=None, _INPUT=None, conf=None, **kwargs):
     """This source prompts the user for a url and yields it forever.
     
     Keyword arguments:

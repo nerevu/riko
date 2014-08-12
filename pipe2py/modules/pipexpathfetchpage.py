@@ -6,7 +6,7 @@ import re
 from pipe2py import util
 
 
-def pipe_xpathfetchpage(context, _INPUT, conf, **kwargs):
+def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     """XPath Fetch Page module
 
     _INPUT -- not used since this does not have inputs.

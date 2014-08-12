@@ -4,7 +4,7 @@
 import autorss
 from pipe2py import util
 
-def pipe_feedautodiscovery(context, _INPUT, conf, **kwargs):
+def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
     """This source search for feed links in a page
 
     Keyword arguments:
