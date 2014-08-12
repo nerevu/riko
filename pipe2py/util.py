@@ -2,8 +2,9 @@
 # vim: sw=4:ts=4:expandtab
 
 import string
+
+from urllib2 import quote
 from operator import itemgetter
-import urllib2
 
 DATE_FORMAT = "%m/%d/%Y"
 ALTERNATIVE_DATE_FORMATS = (
@@ -246,13 +247,9 @@ def rreplace(s, find, replace, count=None):
 def url_quote(url):
     """Ensure url is valid"""
     try:
-        return urllib2.quote(url, safe=URL_SAFE)
+        return quote(url, safe=URL_SAFE)
     except KeyError:
-        return urllib2.quote(url.encode('utf-8'), safe=URL_SAFE)
-
-
-def recursive_dict(element):
-    return element.tag, dict(map(recursive_dict, element)) or element.text
+        return quote(url.encode('utf-8'), safe=URL_SAFE)
 
 
 def listize(item):

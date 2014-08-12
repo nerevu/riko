@@ -51,7 +51,7 @@ from os import path as p
 from pipe2py import Context, util
 from pipe2py.pprint2 import Id, repr_args, str_args
 from pipe2py.topsort import topological_sort
-from pipe2py.modules import pipeforever
+from pipe2py.modules.pipeforever import pipe_forever
 
 
 def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
@@ -228,7 +228,7 @@ def build_pipeline(context, pipe):
         namespace can become polluted by submodule wrapper definitions
     """
     pyinput = None
-    steps = {'forever': pipeforever.pipe_forever()}
+    steps = {'forever': pipe_forever()}
 
     for module_id in topological_sort(pipe['graph']):
         commons = _pipe_commons(context, pipe, module_id, pyinput, steps)

@@ -6,16 +6,15 @@
 
 import unittest
 
-from os import path, remove
+from os import path as p, remove
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
 from pipe2py import Context
 
 try:
-    import json
-    json.loads  # test access to the attributes of the right json module
+    from json import loads
 except (ImportError, AttributeError):
-    import simplejson as json
+    from simplejson import loads
 
 
 class TestBasics(unittest.TestCase):
@@ -27,9 +26,9 @@ class TestBasics(unittest.TestCase):
             See createtest.py for an attempt at creating a stable test-suite.
     """
     def _get_pipe_def(self, pipe_name):
-        pipe_file_name = path.join('tests', 'pipelines', '%s.json' % pipe_name)
+        pipe_file_name = p.join(p.dirname(__file__), 'pipelines', '%s.json' % pipe_name)
         pjson = ''.join(line for line in open(pipe_file_name))
-        return json.loads(pjson)
+        return loads(pjson)
 
     def _load(self, pipe_def, pipe_name, value=0, check=1):
         pipe = parse_pipe_def(pipe_def, pipe_name)

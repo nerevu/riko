@@ -1,11 +1,10 @@
 # pipecsv.py
 #
+import csv, codecs
 
-import csv
-import urllib2
+from urllib2 import urlopen
 from pipe2py import util
 
-import csv, codecs, cStringIO
 
 class UTF8Recoder:
     """
@@ -36,13 +35,13 @@ class UnicodeReader:
 
     def __iter__(self):
         return self
-    
-    
+
+
 def pipe_csv(context, _INPUT, conf, **kwargs):
     """This source fetches and parses a csv file to yield items.
-    
+
     Keyword arguments:
-    context -- pipeline context       
+    context -- pipeline context
     _INPUT -- not used
     conf:
         URL -- url
@@ -52,17 +51,17 @@ def pipe_csv(context, _INPUT, conf, **kwargs):
         col_row_start -- first column header row
         col_row_end -- last column header row
         separator -- column separator
-    
+
     Yields (_OUTPUT):
     file entries
-    
+
     Note:
     Current restrictions:
       separator must be 1 character
       assumes every row has exactly the expected number of fields, as defined in the header
     """
     col_name = conf['col_name']
-        
+
     for item in _INPUT:
         url = util.get_value(conf['URL'], item, **kwargs)
         separator = util.get_value(conf['separator'], item, **kwargs).encode('utf-8')
@@ -70,17 +69,17 @@ def pipe_csv(context, _INPUT, conf, **kwargs):
         col_mode = util.get_value(conf['col_mode'], item, **kwargs)
         col_row_start = int(util.get_value(conf['col_row_start'], item, **kwargs))
         col_row_end = int(util.get_value(conf['col_row_end'], item, **kwargs))
-        
-        f = urllib2.urlopen(url)
-        
+
+        f = urlopen(url)
+
         if context.verbose:
             print "pipe_csv loading:", url
-            
+
         for i in xrange(skip):
             f.next()
-        
+
         reader = UnicodeReader(f, delimiter=separator)
-            
+
         fieldnames = []
         if col_mode == 'custom':
             fieldnames = [util.get_value(x) for x in col_name]
@@ -92,6 +91,6 @@ def pipe_csv(context, _INPUT, conf, **kwargs):
         for rows in reader:
             d = dict(zip(fieldnames, rows))
             yield d
-            
+
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
             break
