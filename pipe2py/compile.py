@@ -47,7 +47,7 @@ from itertools import chain
 from importlib import import_module
 from jinja2 import Environment, PackageLoader
 from optparse import OptionParser
-from os.path import splitext, split
+from os import path as p
 from pipe2py import Context, util
 from pipe2py.pprint2 import Id, repr_args, str_args
 from pipe2py.topsort import topological_sort
@@ -394,7 +394,7 @@ if __name__ == '__main__':
 
         pipe_def = results['json']['PIPE']['working']
     elif pipe_file_name:
-        pipe_name = splitext(split(pipe_file_name)[-1])[0]
+        pipe_name = p.splitext(p.split(pipe_file_name)[-1])[0]
         pjson = ''.join(line for line in open(pipe_file_name))
         pipe_def = _convert_json(pjson)
     else:
@@ -403,13 +403,13 @@ if __name__ == '__main__':
         pipe_def = _convert_json(pjson)
 
     pipe = parse_pipe_def(pipe_def, pipe_name)
-    path = path.join('data', '%s.py' % pipe_name)
+    path = p.join('output', 'pipeline', '%s.py' % pipe_name)
     data = stringify_pipe(context, pipe)
     _write_file(data, path)
     analyze_pipe(context, pipe)
 
     if options.savejson:
-        path = path.join('data', '%s.json' % pipe_name)
+        path = p.join('output', 'pipeline', '%s.json' % pipe_name)
         _write_file(pipe_def, path, True)
 
     if options.saveoutput:
@@ -423,7 +423,7 @@ if __name__ == '__main__':
             print 'Pipe results not found'
             sys.exit(1)
 
-        path = path.join('data', '%s_output.json' % pipe_name)
+        path = p.join('output', 'data', '%s_output.json' % pipe_name)
         _write_file(pipe_output, path, True)
 
     # for build example - see test/testbasics.py

@@ -2,5 +2,5 @@
 *.pyc
 wingdbstub.py
 output/pipelines/*.json
+output/pipelines/*.py
 output/data/*.json
-output/pipes/*.py
