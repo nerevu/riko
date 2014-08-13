@@ -17,7 +17,7 @@ except (ImportError, AttributeError):
     import simplejson as json
 
 from pipe2py import util
-from pipe2py.dotdict import DotDict
+from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):

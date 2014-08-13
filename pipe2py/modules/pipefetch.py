@@ -4,7 +4,7 @@
 import feedparser
 feedparser.USER_AGENT = "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" % feedparser.__version__
 
-from pipe2py.dotdict import DotDict
+from pipe2py.lib.dotdict import DotDict
 from pipe2py import util
 
 

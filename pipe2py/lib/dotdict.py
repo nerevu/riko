@@ -16,6 +16,7 @@ class DotDict(FeedParserDict):
 	r = {'attr1': {'attr2': 'value'}}
 	e.g. r['a.content'] -> ['a']['content']
 
+	TODO: make DotDict(dict)['field'] return a DotDict instance
 	"""
 	def __init__(self, dict=None, **kwargs):
 		super(DotDict, self).__init__(self, **kwargs)

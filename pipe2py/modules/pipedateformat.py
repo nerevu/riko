@@ -3,7 +3,7 @@
 
 import time
 from datetime import datetime
-from pipe2py.dotdict import DotDict
+from pipe2py.lib.dotdict import DotDict
 from pipe2py import util
 
 

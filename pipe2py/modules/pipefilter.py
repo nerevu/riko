@@ -14,7 +14,7 @@ import re
 
 from pipe2py import util
 from decimal import Decimal
-from pipe2py.dotdict import DotDict
+from pipe2py.lib.dotdict import DotDict
 
 COMBINE_BOOLEAN = {"and": all, "or": any}
 

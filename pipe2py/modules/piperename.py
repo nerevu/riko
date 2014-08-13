@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 
 from pipe2py import util
-from pipe2py.dotdict import DotDict
+from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):

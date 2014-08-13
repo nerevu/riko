@@ -9,9 +9,10 @@ __license__ = "Python"
 
 try:
     import timeoutsocket # http://www.timo-tasi.org/python/timeoutsocket.py
-    timeoutsocket.setDefaultSocketTimeout(10)
 except ImportError:
     pass
+else:
+    timeoutsocket.setDefaultSocketTimeout(10)
 
 import urllib, urlparse
 

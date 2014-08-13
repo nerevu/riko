@@ -1,7 +1,7 @@
 # pipestrreplace.py
 #
 from pipe2py import util
-from pipe2py.dotdict import DotDict
+from pipe2py.lib.dotdict import DotDict
 
 
 

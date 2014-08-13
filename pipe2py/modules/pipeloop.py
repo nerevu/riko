@@ -4,7 +4,7 @@
 from pipe2py import util
 import copy
 from urllib2 import HTTPError
-from pipe2py.dotdict import DotDict
+from pipe2py.lib.dotdict import DotDict
 
 
 def _gen_inputs(item, conf):

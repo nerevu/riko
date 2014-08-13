@@ -7,7 +7,7 @@ from pipefeedautodiscovery import pipe_feedautodiscovery
 from pipefetch import pipe_fetch
 from pipeforever import pipe_forever
 from pipe2py import util
-from pipe2py.dotdict import DotDict
+from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):

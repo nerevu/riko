@@ -48,9 +48,9 @@ from jinja2 import Environment, PackageLoader
 from optparse import OptionParser
 from os import path as p
 from pipe2py import Context, util
-from pipe2py.pprint2 import Id, repr_args, str_args
-from pipe2py.topsort import topological_sort
 from pipe2py.modules.pipeforever import pipe_forever
+from pipe2py.lib.pprint2 import Id, repr_args, str_args
+from pipe2py.lib.topsort import topological_sort
 
 
 def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
