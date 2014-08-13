@@ -244,3 +244,10 @@ def gen_items(item, yield_if_none=False):
     elif yield_if_none:
         yield
 
+
+def gen_rules(rule_defs, fields, **kwargs):
+    for rule in rule_defs:
+        if not hasattr(rule, 'delete'):
+            raise TypeError('rule must be of type DotDict')
+
+        yield tuple(rule.get(field, **kwargs) for field in fields)

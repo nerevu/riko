@@ -92,6 +92,37 @@ def _load_json(json):
 
 
 
+def _gen_string_modules(context, pipe, pyinput):
+    for module_id in topological_sort(pipe['graph']):
+        commons = _pipe_commons(context, pipe, module_id, pyinput)
+        pyinput = commons['pyinput']
+        pipe_name = commons['pipe_name']
+        module_name = commons['module_name']
+        args = commons['args']
+        kwargs = commons['kwargs']
+
+        if context and context.verbose:
+            con_args = filter(lambda x: x != Id('context'), args)
+            nconf_kwargs = filter(lambda x: x[0] != 'conf', kwargs.items())
+            conf_kwargs = filter(lambda x: x[0] == 'conf', kwargs.items())
+            all_args = chain(con_args, nconf_kwargs, conf_kwargs)
+
+            print (
+                '%s = %s(%s)' % (
+                    module_id, pipe_name, str_args(all_args)
+                )
+            ).encode('utf-8')
+
+        yield {
+            'args': repr_args(chain(args, kwargs.items())),
+            'id': module_id,
+            'sub_pipe': module_name.startswith('pipe_'),
+            'name': module_name,
+            'pipe_name': pipe_name,
+            'pyinput': pyinput,
+        }
+
+
 def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
     pyinput = pyinput or []
     module = pipe['modules'][module_id]
@@ -325,47 +356,16 @@ def stringify_pipe(context, pipe):
        If context.describe_input or context.describe_dependencies is passed to
        the script then it just returns that instead of the pipeline
     """
-    modules = []
-    pyinput = None
-
-    for module_id in topological_sort(pipe['graph']):
-        module = {}
-
-        commons = _pipe_commons(context, pipe, module_id, pyinput)
-        pyinput = commons['pyinput']
-        module_name = commons['module_name']
-        pipe_name = commons['pipe_name']
-        args = commons['args']
-        kwargs = commons['kwargs']
-
-        module['args'] = repr_args(chain(args, kwargs.items()))
-        module['id'] = module_id
-        module['sub_pipe'] = module_name.startswith('pipe_')
-        module['name'] = module_name
-        module['pipe_name'] = pipe_name
-        modules.append(module)
-
-        if context and context.verbose:
-            con_args = filter(lambda x: x != Id('context'), args)
-            nconf_kwargs = filter(lambda x: x[0] != 'conf', kwargs.items())
-            conf_kwargs = filter(lambda x: x[0] == 'conf', kwargs.items())
-            all_args = chain(con_args, nconf_kwargs, conf_kwargs)
-
-            print(
-                '%s = %s(%s)' % (
-                    module_id, pipe_name, str_args(all_args)
-                )
-            ).encode('utf-8')
-
+    modules = list(_gen_string_modules(context, pipe, None))
     env = Environment(loader=PackageLoader('pipe2py'))
     template = env.get_template('pypipe.txt')
 
     tmpl_kwargs = {
         'modules': modules,
         'pipe_name': pipe['name'],
-        'inputs': unicode(sorted(pyinput)),
+        'inputs': unicode(sorted(modules[-1]['pyinput'])),
         'embedded_pipes': pipe['embed'],
-        'last_module': module_id,
+        'last_module': modules[-1]['id'],
     }
 
     return template.render(**tmpl_kwargs)
