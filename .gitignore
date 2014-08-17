@@ -1,6 +1,5 @@
 *.wpu
 *.pyc
 wingdbstub.py
-output/pipelines/*.json
-output/pipelines/*.py
-output/data/*.json
+pipe2py/pipelines/*.json
+pipe2py/pypipelines/*.py

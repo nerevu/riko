@@ -27,9 +27,12 @@ class TestBasics(unittest.TestCase):
             See createtest.py for an attempt at creating a stable test-suite.
     """
     def _get_pipe_def(self, pipe_name):
-        pipe_file_name = p.join(p.dirname(__file__), 'pipelines', '%s.json' % pipe_name)
-        pjson = ''.join(line for line in open(pipe_file_name))
-        return loads(pjson)
+
+        pipe_file_name = p.join(
+            p.dirname(__file__), 'pipelines', '%s.json' % pipe_name)
+
+        with open(pipe_file_name) as f:
+            return loads(f.read())
 
     def _load(self, pipe_def, pipe_name, value=0, check=1):
         pipe = parse_pipe_def(pipe_def, pipe_name)

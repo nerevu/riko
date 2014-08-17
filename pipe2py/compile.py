@@ -365,6 +365,7 @@ if __name__ == '__main__':
 
     pipe_file_name = args[0] if args else None
     context = Context(verbose=options.verbose)
+    parent = p.dirname(p.dirname(__file__))
 
     if options.pipeid:
         pipe_name = 'pipe_%s' % options.pipeid
@@ -406,7 +407,7 @@ if __name__ == '__main__':
     analyze_pipe(context, pipe)
 
     if options.savejson:
-        path = p.join('output', 'pipeline', '%s.json' % pipe_name)
+        path = p.join(parent, 'output', 'pipeline', '%s.json' % pipe_name)
         _write_file(pipe_def, path, True)
 
     if options.saveoutput:
@@ -420,7 +421,7 @@ if __name__ == '__main__':
             print 'Pipe results not found'
             sys.exit(1)
 
-        path = p.join('output', 'data', '%s_output.json' % pipe_name)
+        path = p.join(parent, 'output', 'data', '%s_output.json' % pipe_name)
         _write_file(pipe_output, path, True)
 
     # for build example - see test/testbasics.py
