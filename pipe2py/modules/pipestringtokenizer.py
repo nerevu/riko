@@ -21,9 +21,8 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     delim = conf.get('to-str', **kwargs)
 
     for item in _INPUT:
-        if item is not None:
-            for chunk in item.split(delim):
-                yield {'content':chunk}
+        for chunk in item.split(delim):
+            yield {'content': chunk}
 
         try:
             forever = item.get('forever')

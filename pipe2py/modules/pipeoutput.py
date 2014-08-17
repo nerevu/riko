@@ -12,10 +12,6 @@ def pipe_output(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     source items
     """
-    if conf is None:
-        conf = {}
-
-
     # todo: convert back to XML or JSON
     for item in _INPUT:
         yield item

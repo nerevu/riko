@@ -61,8 +61,7 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
                 fieldnames.extend(row)
 
         for rows in reader:
-            d = dict(zip(fieldnames, rows))
-            yield d
+            yield dict(zip(fieldnames, rows))
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

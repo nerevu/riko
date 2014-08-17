@@ -27,9 +27,8 @@ def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
 
             if context and context.verbose:
                 print "pipe_feedautodiscovery loading:", url
-            d = autorss.getRSSLink(url.encode('utf-8'))
 
-            for entry in d:
+            for entry in autorss.getRSSLink(url.encode('utf-8')):
                 yield {'link': entry}
                 # todo: add rel, type, title
 

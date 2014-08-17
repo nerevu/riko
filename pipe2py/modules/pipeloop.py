@@ -84,7 +84,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
                 # this is a hack to make sure fetchpage works in an out of a
                 # loop while not disturbing strconcat in a loop etc.
                 # goes with the comment below about checking the delivery capability of the source
-                if len(results) == 1 and isinstance(results[0], dict):
+                if len(results) == 1 and hasattr(results[0], 'keys'):
                     results = [results]
 
         # todo: any other errors we want to continue looping after?

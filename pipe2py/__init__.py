@@ -23,8 +23,7 @@ class Context(object):
         self, verbose=False, describe_input=False, test=False, console=True,
         inputs=None, submodule=False
     ):
-        if inputs is None:
-            inputs = {}
+        inputs = inputs or {}
         self.verbose = verbose
         self.test = test
         self.console = console
