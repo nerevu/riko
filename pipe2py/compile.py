@@ -261,7 +261,7 @@ def build_pipeline(context, pipe):
         else:  # else this module is not an embedded module:
             steps[module_id] = generator(*args, **kwargs)
 
-        if context.verbose:
+        if context and context.verbose:
             print '%s (%s) = %s(%s)' % (
                 steps[module_id], module_id, generator, str(args))
 
@@ -298,7 +298,7 @@ def stringify_pipe(context, pipe):
         module['pymodule_generator'] = pymodule_generator
         modules.append(module)
 
-        if context.verbose:
+        if context and context.verbose:
             con_args = filter(lambda x: x != Id('context'), args)
             nconf_kwargs = filter(lambda x: x[0] != 'conf', kwargs.items())
             conf_kwargs = filter(lambda x: x[0] == 'conf', kwargs.items())
@@ -328,7 +328,7 @@ def analyze_pipe(context, pipe):
     modules = set(module['type'] for module in pipe['modules'].values())
     moduletypes = sorted(list(modules))
 
-    if context.verbose:
+    if context and context.verbose:
         print
         print 'Modules used:', ', '.join(
             name for name in moduletypes if not name.startswith('pipe:')

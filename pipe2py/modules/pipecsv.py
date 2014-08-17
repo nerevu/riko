@@ -72,7 +72,7 @@ def pipe_csv(context, _INPUT, conf, **kwargs):
 
         f = urlopen(url)
 
-        if context.verbose:
+        if context and context.verbose:
             print "pipe_csv loading:", url
 
         for i in xrange(skip):

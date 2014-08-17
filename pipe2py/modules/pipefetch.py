@@ -8,31 +8,31 @@ from pipe2py import util
 
 def pipe_fetch(context, _INPUT, conf, **kwargs):
     """This source fetches and parses one or more feeds to yield the feed entries.
-    
+
     Keyword arguments:
-    context -- pipeline context       
+    context -- pipeline context
     _INPUT -- not used
     conf:
         URL -- url
-    
+
     Yields (_OUTPUT):
     feed entries
     """
     urls = conf['URL']
     if not isinstance(urls, list):
         urls = [urls]
-    
+
     for item in _INPUT:
         for item_url in urls:
             url = util.get_value(item_url, item, **kwargs)
-            
+
             if not '://' in url:
                 url = 'http://' + url
-            
-            if context.verbose:
+
+            if context and context.verbose:
                 print "pipe_fetch loading:", url
             d = feedparser.parse(url.encode('utf-8'))
-            
+
             for entry in d['entries']:
                 if 'updated_parsed' in entry:
                     entry['pubDate'] = entry['updated_parsed']  #map from universal feedparser's normalised names

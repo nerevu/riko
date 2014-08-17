@@ -36,7 +36,7 @@ def pipe_yql(context, _INPUT, conf,  **kwargs):
         
         #Parse the response
         ft = ElementTree.parse(response)
-        if context.verbose:
+        if context and context.verbose:
             print "pipe_yql loading xml:", yql
         root = ft.getroot()
         #note: query also has row count

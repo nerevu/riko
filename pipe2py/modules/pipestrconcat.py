@@ -25,7 +25,7 @@ def pipe_strconcat(context, _INPUT, conf, **kwargs):
             except AttributeError:
                 continue  #ignore if the item is referenced but doesn't have our source field (todo: issue a warning if debugging?)
             except TypeError:
-                if context.verbose:
+                if context and context.verbose:
                     print "pipe_strconcat: TypeError"
 
         yield s

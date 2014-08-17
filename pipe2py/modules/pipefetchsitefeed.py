@@ -35,7 +35,7 @@ def pipe_fetchsitefeed(context, _INPUT, conf, **kwargs):
             if not '://' in url:
                 url = 'http://' + url
 
-            if context.verbose:
+            if context and context.verbose:
                 print "pipe_fetchsitefeed loading:", url
 
             for feed in pipe_feedautodiscovery(context, forever, {u'URL': {u'type': u'url', u'value': url}}):

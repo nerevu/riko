@@ -31,7 +31,7 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
     for item in _INPUT:
         for item_url in urls:
             url = util.get_value(item_url, item, **kwargs)
-            if context.verbose:
+            if context and context.verbose:
                 print "FetchPage: Preparing to download:",url
 
             try:
@@ -45,7 +45,7 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
                 # TODO this needs to be done on the content but seems to be a non-trival
                 # TODO task python?
 
-                if context.verbose:
+                if context and context.verbose:
                     print "............FetchPage: content ................."
                     print content.encode("utf-8")
                     print "............FetchPage: EOF     ................."
@@ -82,18 +82,18 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
                 else:
                     items = [content]
 
-                if context.verbose:
+                if context and context.verbose:
                     print "FetchPage: found count items:",len(items)
 
                 for i in items:
-                    if context.verbose:
+                    if context and context.verbose:
                         print "--------------item data --------------------"
                         print i
                         print "--------------EOF item data ----------------"
                     yield { "content" : i }
 
             except Exception, e:
-                if context.verbose:
+                if context and context.verbose:
                     print "FetchPage: failed to retrieve from:", url
 
                     print "----------------- FetchPage -----------------"

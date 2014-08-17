@@ -40,7 +40,7 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
             try:
                 f = urllib2.urlopen(url)
                 ft = ElementTree.parse(f)
-                if context.verbose:
+                if context and context.verbose:
                     print "pipe_fetchdata loading xml:", url
                 root = ft.getroot()
                 #Move to the point referenced by the path
@@ -69,7 +69,7 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                     f = urllib2.urlopen(url)
                     d = json.load(f)
                     #todo test:-
-                    if context.verbose:
+                    if context and context.verbose:
                         print "pipe_fetchdata loading json:", url
                     if path:
                         for i in path.split(".")[:-1]:
@@ -88,7 +88,7 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                 except Exception, e:
                     #todo try iCal and yield
                     #todo try KML and yield
-                    if context.verbose:
+                    if context and context.verbose:
                         print "xml and json both failed:"
 
                     raise

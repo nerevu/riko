@@ -28,7 +28,7 @@ def pipe_xpathfetchpage(context, _INPUT, conf, **kwargs):
     for item in _INPUT:
         for item_url in urls:
             url = util.get_value(item_url, item, **kwargs)
-            if context.verbose:
+            if context and context.verbose:
                 print "XPathFetchPage: Preparing to download:",url
 
             try:
@@ -61,12 +61,12 @@ def pipe_xpathfetchpage(context, _INPUT, conf, **kwargs):
                     root = etree.HTML(content)
                 res_items = root.xpath(xpath)
 
-                if context.verbose:
+                if context and context.verbose:
                     print "XPathFetchPage: found count items:",len(res_items)
 
                 for res_item in res_items:
                     i = util.etree_to_pipes(res_item) #TODO xml_to_dict(res_item)
-                    if context.verbose:
+                    if context and context.verbose:
                         print "--------------item data --------------------"
                         print i
                         print "--------------EOF item data ----------------"
@@ -76,7 +76,7 @@ def pipe_xpathfetchpage(context, _INPUT, conf, **kwargs):
                         yield i
 
             except Exception, e:
-                if context.verbose:
+                if context and context.verbose:
                     print "XPathFetchPage: failed to retrieve from:", url
 
                     print "----------------- XPathFetchPage -----------------"
