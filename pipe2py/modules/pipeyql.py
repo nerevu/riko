@@ -49,8 +49,7 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
             i = util.xml_to_dict(element)
             yield i
 
-
-        # i.e. this is being fed forever, i.e. not in a loop, so we just yield
-        # our item once
-        if item == True:
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
             break

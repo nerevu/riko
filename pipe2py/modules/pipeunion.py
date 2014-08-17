@@ -24,7 +24,7 @@ def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
 
     for item in _INPUT:
         #this is being fed forever, i.e. not a real source so just use _OTHERs
-        if item == True:
+        if item.get('forever'):
             break
 
         yield item

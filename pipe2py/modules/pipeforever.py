@@ -9,4 +9,4 @@ def pipe_forever():
     True
     """
     while True:
-        yield True
+        yield {'forever': True}

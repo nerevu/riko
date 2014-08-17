@@ -46,5 +46,7 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
                 for feed_item in pipe_fetch(context, forever, ftch_conf):
                     yield feed_item
 
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
             break

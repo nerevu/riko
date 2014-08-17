@@ -23,7 +23,12 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
             for chunk in item.split(delim):
                 yield {'content':chunk}
 
-        # i.e. this is being fed forever, i.e. not in a loop,
-        # so we just yield our item once
-        if item == True:
+        try:
+            forever = item.get('forever')
+        except AttributeError:
+            forever = False
+
+        if forever:
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
             break
