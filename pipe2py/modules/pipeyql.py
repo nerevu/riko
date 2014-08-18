@@ -1,8 +1,7 @@
 # pipeyql.py
 #
 
-import urllib
-import urllib2
+import requests
 
 from xml.etree import cElementTree as ElementTree
 from pipe2py import util
@@ -35,12 +34,10 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
         # structure
         # todo: diagnostics=true e.g. if context.test
         # todo: consider paging for large result sets
-        query = urllib.urlencode({'q':yql,})
-        req = urllib2.Request(url, query)
-        response = urllib2.urlopen(req)
+        r = requests.get(url, params={'q': yql}, stream=True)
 
-        #Parse the response
-        ft = ElementTree.parse(response)
+        # Parse the response
+        ft = ElementTree.parse(r.raw)
         if context and context.verbose:
             print "pipe_yql loading xml:", yql
         root = ft.getroot()

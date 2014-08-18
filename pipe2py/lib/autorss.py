@@ -14,8 +14,9 @@ except ImportError:
 else:
     timeoutsocket.setDefaultSocketTimeout(10)
 
-import urllib, urlparse
+import requests
 
+from urlparse import urljoin
 from sgmllib import SGMLParser
 
 BUFFERSIZE = 1024
@@ -55,21 +56,16 @@ def getRSSLinkFromHTMLSource(html):
 
 def getRSSLink(url):
     try:
-        usock = urllib.urlopen(url)
+        r = requests.get(url, stream=True)
         parser = LinkParser()
 
-        while 1:
-            buffer = usock.read(BUFFERSIZE)
-            parser.feed(buffer)
+        for chunk in r.iter_content(BUFFERSIZE):
+            parser.feed(chunk)
 
             if parser.nomoretags:
                 break
 
-            if len(buffer) < BUFFERSIZE:
-                break
-
-        usock.close()
-        return [urlparse.urljoin(url, href) for href in parser.href]
+        return [urljoin(url, href) for href in parser.href]
     except:
         return []
 

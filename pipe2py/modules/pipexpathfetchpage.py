@@ -1,8 +1,8 @@
 # pipexpathfetchpage.py
 # vim: sw=4:ts=4:expandtab
 
-import urllib2
 import re
+import requests
 
 from html5lib import parse
 from lxml import etree
@@ -38,11 +38,7 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 # TODO: it seems that Yahoo! converts relative links to
                 # absolute. This needs to be done on the content but seems to
                 # be a non-trival task python?
-                request = urllib2.Request(url)
-                request.add_header('User-Agent','Yahoo Pipes 1.0')
-                request = urllib2.build_opener().open(request)
-                charset = request.headers['content-type'].split('charset=')
-                content = unicode(request.read(), charset[-1] if len(charset) > 1 else 'latin1')
+                content = requests.get(url).text
 
                 if context and context.verbose:
                     print '............Content .................'
@@ -93,14 +89,7 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                     else:
                         yield i
             except Exception, e:
-                if context and context.verbose:
-                    print "XPathFetchPage: failed to retrieve from:", url
-
-                    print "----------------- XPathFetchPage -----------------"
-                    import traceback
-                    traceback.print_exc()
-                    print "----------------- XPathFetchPage -----------------"
-                raise
+                pass
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

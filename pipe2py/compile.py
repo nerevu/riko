@@ -34,8 +34,8 @@
    License: see LICENSE file
 """
 import fileinput
-import urllib
 import sys
+import requests
 
 try:
     from json import loads
@@ -381,7 +381,7 @@ if __name__ == '__main__':
         url = base + select + where + pipe + end
         # todo: refactor this url->json
 
-        pjson = urllib.urlopen(url).read()
+        pjson = requests.get(url).text
         pipe_raw = _convert_json(pjson)
         results = pipe_raw['query']['results']
 
@@ -415,7 +415,7 @@ if __name__ == '__main__':
     if options.saveoutput:
         base = 'http://pipes.yahoo.com/pipes/pipe.run'
         url = '%s?_id=%s&_render=json' % (base, options.pipeid)
-        ojson = urllib.urlopen(url).read()
+        ojson = requests.get(url).text
         pipe_output = _convert_json(ojson)
         count = pipe_output['count']
 

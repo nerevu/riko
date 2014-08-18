@@ -2,8 +2,8 @@
 # Copyright (C) 2011 Gerrit Riessen
 # This code is licensed under the GNU Public License.
 
-import urllib2
 import re
+import requests
 
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
@@ -36,21 +36,17 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
         for item_url in urls:
             url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
 
-            try:
-                request = urllib2.Request(url)
-                request.add_header('User-Agent','Yahoo Pipes 1.0')
-                request = urllib2.build_opener().open(request)
-                content = unicode(request.read(),
-                                  request.headers['content-type'].split('charset=')[-1])
 
-                # TODO it seems that Yahoo! converts relative links to absolute
-                # TODO this needs to be done on the content but seems to be a non-trival
-                # TODO task python?
+            try:
+                # TODO: it seems that Yahoo! converts relative links to
+                # absolute. This needs to be done on the content but seems to
+                # be a non-trival task python?
+                content = requests.get(url).text
 
                 if context and context.verbose:
-                    print "............FetchPage: content ................."
-                    print content.encode("utf-8")
-                    print "............FetchPage: EOF     ................."
+                    print '............Content .................'
+                    print content
+                    print '...............EOF...................'
 
                 from_delimiter = conf.get("from", **kwargs)
                 to_delimiter = conf.get("to", **kwargs)
@@ -98,14 +94,7 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
 
                     yield {"content": i}
             except Exception, e:
-                if context and context.verbose:
-                    print "FetchPage: failed to retrieve from:", url
-
-                    print "----------------- FetchPage -----------------"
-                    import traceback
-                    traceback.print_exc()
-                    print "----------------- FetchPage -----------------"
-                raise
+                pass
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,
