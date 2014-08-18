@@ -35,6 +35,27 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     Yields
     ------
     _OUTPUT : pipe items fetched from source
+
+    Examples
+    --------
+    >>> from os import path as p
+    >>> from pipe2py.modules.pipeforever import pipe_forever
+    >>> parent = p.dirname(p.dirname(__file__))
+    >>> file_name = p.abspath(p.join(parent, 'data', 'gigs.json'))
+    >>> path = 'value.items'
+    >>> url = "file://%s" % file_name
+    >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
+    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()[:5]
+    [u'y:repeatcount', u'description', u'pubDate', u'title', u'y:published']
+    >>> file_name = p.abspath(p.join(parent, 'data', 'places.xml'))
+    >>> path = 'appointment'
+    >>> url = "file://%s" % file_name
+    >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
+    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()
+    ['begin', 'uid', 'places', 'alarmTime', 'duration', 'subject']
+    >>> conf = {'URL': {'value': url}, 'path': {'value': ''}}
+    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()
+    ['reminder', 'appointment']
     """
     urls = util.listize(conf['URL'])
 
