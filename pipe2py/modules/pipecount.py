@@ -1,20 +1,29 @@
-# pipecount.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipecount
+    ~~~~~~~~~~~~~~
 
+    Provides methods for counting the number of items in a feed.
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Count
+"""
 from pipe2py import util
 
 
 def pipe_count(context=None, _INPUT=None, conf=None, **kwargs):
-    """Count the number of items in a feed and yields it forever.
+    """Counts the number of _INPUT items and yields it forever.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : source generator of dicts
+    conf : not used
 
-    Yields (_OUTPUT):
-    a count on the number of items in the feed
+    Yields
+    ------
+    _OUTPUT : number of items in the feed
+
     """
 
     count = sum(1 for item in _INPUT)

@@ -1,22 +1,44 @@
-# piperegex.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.piperegex
+    ~~~~~~~~~~~~~~
+
+    Provides methods for modifing fields in a feed using regular
+    expressions, a powerful type of pattern matching.
+    Think of it as search-and-replace on steriods.
+    You can define multiple Regex rules.
+    Each has the general format: "In [field] replace [regex pattern] with
+    [text]".
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Regex
+"""
 
 import re
 from pipe2py import util
 
 
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator replaces values using regexes.
+    """Applies regex rules to _INPUT items.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
-        RULE -- rules - each rule comprising (field, match, replace)
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : source generator of dicts
+    conf: dict
+        {
+            'RULE': [
+                {
+                    'field': {'value': 'search field'},
+                    'match': {'value': 'regex'},
+                    'replace': {'value': 'replacement'}
+                }
+            ]
+        }
 
-    Yields (_OUTPUT):
-    source items after replacing values matching regexes
+    Yields
+    ------
+    _OUTPUT : source pipe items post regexes application
     """
     rules = []
 

@@ -1,5 +1,13 @@
-# pipefilter.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefilter
+    ~~~~~~~~~~~~~~
+
+    Provides methods for filtering (including or excluding) items from a feed.
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Filter
+"""
 
 import datetime
 import re
@@ -11,19 +19,30 @@ COMBINE_BOOLEAN = {"and": all, "or": any}
 
 
 def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator filters the input source, including or excluding fields, that match a set of defined rules.
+    """Filters for _INPUT items matching the given rules.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
-        MODE -- filter mode, either "permit" or "block"
-        COMBINE -- filter boolean combination, either "and" or "or"
-        RULE -- rules - each rule comprising (field, op, value)
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : source generator of dicts
+    conf : dict
+        {
+            'MODE': {'value': 'permit' or 'block'},
+            'COMBINE': {'value': 'and' or 'or'}
+            'RULE': [
+                {
+                    'field': {'value': 'search field'},
+                    'op': {'value': 'one of SWITCH above'},
+                    'value': {'value': 'search term'}
+                }
+            ]
+        }
 
-    Yields (_OUTPUT):
-    source items that match the rules
+    kwargs : other inputs, e.g., to feed terminals for rule values
+
+    Yields
+    ------
+    _OUTPUT : source pipe items matching the rules
     """
     mode = conf['MODE']['value']
     combine = conf['COMBINE']['value']

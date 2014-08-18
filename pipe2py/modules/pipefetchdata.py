@@ -1,6 +1,12 @@
-# pipefetchdata.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefetchdata
+    ~~~~~~~~~~~~~~
+    Provides methods for fetching XML and JSON data sources.
 
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchData
+"""
 import urllib2
 from xml.etree import cElementTree as ElementTree
 
@@ -14,17 +20,21 @@ from pipe2py import util
 
 
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
-    """Fetches and parses any XML or JSON file to yield a list of elements
+    """Fetches and parses an XML or JSON file.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        URL -- url
-        path -- path to list
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : source generator of dicts
+    conf : dict
+        {
+            'URL': {'value': url},
+            'path': {'value': dot separated path to data list}
+        }
 
-    Yields (_OUTPUT):
-    elements
+    Yields
+    ------
+    _OUTPUT : pipe items fetched from source
     """
     urls = util.listize(conf['URL'])
 
