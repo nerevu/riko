@@ -63,6 +63,8 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         for rows in reader:
             yield dict(zip(fieldnames, rows))
 
+        f.close()
+
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,
             # so we just yield our item once
