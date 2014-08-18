@@ -3,6 +3,7 @@
 
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
+from itertools import islice
 
 
 def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
@@ -21,9 +22,5 @@ def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
     conf = DotDict(conf)
     limit = conf.get('count', func=int, **kwargs)
 
-    i = 0
-    for item in _INPUT:
-        if i >= limit:
-            break
+    for item in islice(_INPUT, limit):
         yield item
-        i += 1
