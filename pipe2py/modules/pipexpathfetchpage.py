@@ -73,18 +73,18 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 res_items = root.xpath(xpath)
 
                 if context and context.verbose:
-                    print "XPathFetchPage: found count items:", len(res_items)
+                    print 'XPathFetchPage: found count items:', len(res_items)
 
                 for res_item in res_items:
                     i = util.etree_to_pipes(res_item) #TODO xml_to_dict(res_item)
 
                     if context and context.verbose:
-                        print "--------------item data --------------------"
+                        print '--------------item data --------------------'
                         print i
-                        print "--------------EOF item data ----------------"
+                        print '--------------EOF item data ----------------'
 
                     if useAsString:
-                        yield {"content": unicode(i)}
+                        yield {'content' : unicode(i)}
                     else:
                         yield i
             except Exception, e:

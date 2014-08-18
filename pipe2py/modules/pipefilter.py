@@ -89,7 +89,7 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
             raise Exception(
                 "Invalid combine: %s (expecting 'and' or 'or')" % combine)
 
-        if (res and mode == "permit") or (not res and mode == "block"):
+        if (res and mode == 'permit') or (not res and mode == 'block'):
             yield item
 
 #todo precompile these into lambdas for speed
