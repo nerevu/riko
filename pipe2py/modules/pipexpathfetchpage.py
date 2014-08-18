@@ -4,6 +4,8 @@
 import urllib2
 import re
 
+from html5lib import parse
+from lxml import etree
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
@@ -60,15 +62,12 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 if html5:
                     # from lxml.html import html5parser
                     # root = html5parser.fromstring(content)
-                    from html5lib import parse
-
                     root = parse(
                         content,
                         treebuilder='lxml',
                         namespaceHTMLElements=False
                     )
                 else:
-                    from lxml import etree
                     root = etree.HTML(content)
 
                 res_items = root.xpath(xpath)
