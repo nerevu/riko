@@ -3,7 +3,7 @@
 
 import requests
 
-from xml.etree import cElementTree as ElementTree
+from lxml.etree import parse
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
@@ -37,10 +37,12 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
         r = requests.get(url, params={'q': yql}, stream=True)
 
         # Parse the response
-        ft = ElementTree.parse(r.raw)
+        tree = parse(r.raw)
+
         if context and context.verbose:
             print "pipe_yql loading xml:", yql
-        root = ft.getroot()
+
+        root = tree.getroot()
 
         # note: query also has row count
         results = root.find('results')
