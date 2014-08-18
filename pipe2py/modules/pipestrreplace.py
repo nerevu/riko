@@ -3,6 +3,12 @@
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
+SWITCH = {
+    '1': lambda item, rule: item.replace(rule[0], rule[2], 1),
+    '2': lambda item, rule: util.rreplace(item, rule[0], rule[2], 1),
+    '3': lambda item, rule: item.replace(rule[0], rule[2]),
+    # todo: else assertion
+}
 
 
 def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
@@ -34,14 +40,8 @@ def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
         rules.append((find, param, replace))
 
     for item in _INPUT:
-        t = item
-        for rule in rules:
-            if rule[1] == '1':
-                t = t.replace(rule[0], rule[2], 1)
-            elif rule[1] == '2':
-                t = util.rreplace(t, rule[0], rule[2], 1)
-            elif rule[1] == '3':
-                t = t.replace(rule[0], rule[2])
-            #todo else assertion
-
-        yield t
+        yield reduce(
+            lambda x, y: x or y,
+            (SWITCH.get(rule[1])(item, rule) for rule in rules),
+            item
+        )

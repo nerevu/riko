@@ -5,7 +5,16 @@ from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 from datetime import datetime, timedelta
 
+SWITCH = {
+    'today': datetime.today(),
+    'tomorrow': datetime.today() + timedelta(days=1),
+    'yesterday': datetime.today() + timedelta(days=-1),
 
+    # better to use utcnow?
+    # todo: is this allowed by Yahoo?
+    'now':  datetime.now().timetuple(),
+
+}
 def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a date and yields it forever.
 
@@ -28,16 +37,12 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
             date = (datetime.today() + timedelta(days=count)).timetuple()
         elif date.endswith(' year') or date.endswith(' years'):
             count = int(date.split(' ')[0])
-            date = datetime.today().replace(year = datetime.today().year + count).timetuple()
-        elif date == 'today':
-            date = datetime.today().timetuple()
-        elif date == 'tomorrow':
-            date = (datetime.today() + timedelta(days=1)).timetuple()
-        elif date == 'yesterday':
-            date = (datetime.today() + timedelta(days=-1)).timetuple()
-        elif date == 'now':  # todo: is this allowed by Yahoo?
-            date = datetime.now().timetuple()  # better to use utcnow?
+            date = datetime.today().replace(
+                year = datetime.today().year + count).timetuple()
         else:
+            date = SWITCH.get(date).timetuple()
+
+        if not date:
             for df in util.ALTERNATIVE_DATE_FORMATS:
                 try:
                     date = datetime.strptime(date, df).timetuple()
