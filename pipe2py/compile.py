@@ -53,6 +53,11 @@ from pipe2py.lib.pprint2 import Id, repr_args, str_args
 from pipe2py.lib.topsort import topological_sort
 
 
+def _write_file(data, path, pretty=False):
+    with open(path, 'w') as f:
+        pprint(data, f) if pretty else f.write(data)
+
+
 def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
     pyinput = pyinput or []
     module = pipe['modules'][module_id]
@@ -339,9 +344,6 @@ def analyze_pipe(context, pipe):
             name[5:] for name in moduletypes if name.startswith('pipe:')
         ) or None
 
-def _write_file(data, path, pretty=False):
-    with open(path, 'w') as f:
-        pprint(data, f) if pretty else f.write(data)
 
 def _convert_json(json):
     return loads(json.encode('utf-8'))
