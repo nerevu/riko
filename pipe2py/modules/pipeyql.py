@@ -31,11 +31,11 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
         item = DotDict(item)
         yql = util.get_value(query, item, **kwargs)
 
-        query = urllib.urlencode({'q':yql,
-                                  #note: we use the default format of xml since json loses some structure
-                                  #todo diagnostics=true e.g. if context.test
-                                  #todo consider paging for large result sets
-                                 })
+        # note: we use the default format of xml since json loses some
+        # structure
+        # todo: diagnostics=true e.g. if context.test
+        # todo: consider paging for large result sets
+        query = urllib.urlencode({'q':yql,})
         req = urllib2.Request(url, query)
         response = urllib2.urlopen(req)
 
