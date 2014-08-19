@@ -59,9 +59,9 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
 
                 if 'useAsString' in conf:
                     value = conf.get('useAsString', **kwargs)
-                    useAsString = value == 'true'
+                    use_as_string = value == 'true'
                 else:
-                    useAsString = False
+                    use_as_string = False
 
 
                 if html5:
@@ -88,7 +88,7 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                         print i
                         print '--------------EOF item data ----------------'
 
-                    if useAsString:
+                    if use_as_string:
                         yield {'content' : unicode(i)}
                     else:
                         yield i
