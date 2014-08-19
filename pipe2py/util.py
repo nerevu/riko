@@ -217,4 +217,4 @@ def url_quote(url):
 
 
 def listize(item):
-    return item if isinstance(item, list) else [item]
+    return item if hasattr(item, 'append') else [item]
