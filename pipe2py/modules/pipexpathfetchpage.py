@@ -35,15 +35,15 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
             url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
 
             try:
+                # TODO: it seems that Yahoo! converts relative links to
+                # absolute. This needs to be done on the content but seems to
+                # be a non-trival task python?
                 request = urllib2.Request(url)
                 request.add_header('User-Agent','Yahoo Pipes 1.0')
                 request = urllib2.build_opener().open(request)
                 charset = request.headers['content-type'].split('charset=')
                 content = unicode(request.read(), charset[-1] if len(charset) > 1 else 'latin1')
 
-                # TODO it seems that Yahoo! converts relative links to absolute
-                # TODO this needs to be done on the content but seems to be a non-trival
-                # TODO task python?
                 xpath = conf.get('xpath', **kwargs)
 
                 if 'html5' in conf:

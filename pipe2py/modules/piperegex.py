@@ -104,7 +104,7 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
             # an HTML node and not a plain string
             if rule[0] in item and item[rule[0]]:
                 if (
-                    isinstance(item[rule[0]], dict)
+                    hasattr(item[rule[0]], 'keys')
                     and 'content' in item[rule[0]]
                 ):
                     # this looks like an HTML node, so only do substitution on
