@@ -38,7 +38,18 @@ class TestBasics(unittest.TestCase):
         pipe = parse_pipe_def(pipe_def, pipe_name)
         pipeline = list(build_pipeline(self.context, pipe))
         length = len(pipeline)
+        switch = {1: '>', -1: '<', 0: '=='}
+
+        # compare pipeline length to baseline value
+        # 1: length > value
+        # -1: length < value
+        # 0: length == value
         compared = cmp(length, value)
+
+        print 'pipeline length %s %i, but expected %s %i.' % (
+            switch.get(compared), value, switch.get(check), value)
+
+        # assert that pipeline length is as expected
         self.assertEqual(compared, check)
         print 'Modules used in pipe %s: %s' % (
             pipe_name, extract_modules(pipe_def=pipe_def))
