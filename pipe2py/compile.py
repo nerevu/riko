@@ -14,7 +14,7 @@
 
         pipe_def = json.loads(pjson)
         pipe = parse_pipe_def(pipe_def, pipe_name)
-        pipeline = build_pipeline(self.context, pipe))
+        pipeline = build_pipeline(Context(), pipe))
 
         for i in pipeline:
             print i
