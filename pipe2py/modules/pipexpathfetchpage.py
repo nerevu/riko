@@ -44,6 +44,11 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 charset = request.headers['content-type'].split('charset=')
                 content = unicode(request.read(), charset[-1] if len(charset) > 1 else 'latin1')
 
+                if context and context.verbose:
+                    print '............Content .................'
+                    print content
+                    print '...............EOF...................'
+
                 xpath = conf.get('xpath', **kwargs)
 
                 if 'html5' in conf:
