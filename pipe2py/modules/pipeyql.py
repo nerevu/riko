@@ -49,7 +49,7 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
 
         # Convert xml into generation of dicts
         for element in results.getchildren():
-            yield util.xml_to_dict(element)
+            yield util.etree_to_dict(element)
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

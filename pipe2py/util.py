@@ -63,73 +63,41 @@ def pythonise(id, encoding='ascii'):
     return id.encode(encoding)
 
 
-def xml_to_dict(element):
-    """Convert xml into dict"""
-    i = dict(element.items())
-    if element.getchildren():
-        if element.text and element.text.strip():
-            i['content'] = element.text
-        for child in element.getchildren():
-            if str(child)[:4] == '<!--':
-                continue
-            tag = child.tag.split('}', 1)[-1]
-            i[tag] = xml_to_dict(child)
-    else:
-        if not i.keys():
-            if element.text and element.text.strip():
-                i = element.text
-        else:
-            if element.text and element.text.strip():
-                i['content'] = element.text
+def _make_content(i, tag, new):
+    content = i.get(tag)
 
-    return i
+    if content and new:
+        content = content if hasattr(content, 'append') else [content]
+        content.append(new)
+    elif new:
+        content = new
+
+    return content
 
 
-def etree_to_pipes(element):
-    """Convert ETree xml into dict imitating how Yahoo Pipes does it.
+def etree_to_dict(element):
+    """Convert an eTree xml into dict imitating how Yahoo Pipes does it.
 
     todo: further investigate white space and multivalue handling
     """
-    # start as a dict of attributes
     i = dict(element.items())
-    if len(element):  # if element has child elements
-        if element.text and element.text.strip():  # if element has text
-            i['content'] = element.text
+    content = element.text.strip() if element.text else None
+    i.update({'content': content}) if content else None
 
-        for child in element:
-            if str(child)[:4] == '<!--':
-                continue
+    if len(element.getchildren()):
+        for child in element.iterchildren():
             tag = child.tag.split('}', 1)[-1]
+            new = etree_to_dict(child)
+            content = _make_content(i, tag, new)
+            i.update({tag: content}) if content else None
 
-            # process child recursively and append it to parent dict
-            subtree = etree_to_pipes(child)
-            content = i.get(tag)
-            if content is None:
-                content = subtree
-            elif isinstance(content, list):
-                content = content + [subtree]
-            else:
-                content = [content, subtree]
-            i[tag] = content
-
-            if child.tail and child.tail.strip():  # if text after child
-                # append to text content of parent
-                text = child.tail
-                content = i.get('content')
-                if content is None:
-                    content = text
-                elif isinstance(content, list):
-                    content = content + [text]
-                else:
-                    content = [content, text]
-                i['content'] = content
-    else:  # element is leaf node
-        if not i.keys():  # if element doesn't have attributes
-            if element.text and element.text.strip():  # if element has text
-                i = element.text
-        else:  # element has attributes
-            if element.text and element.text.strip():  # if element has text
-                i['content'] = element.text
+            tag = 'content'
+            new = child.tail.strip() if child.tail else None
+            content = _make_content(i, tag, new)
+            i.update({tag: content}) if content else None
+    elif content and not set(i.keys()).difference(['content']):
+        # element is leaf node and doesn't have attributes
+        i = content
 
     return i
 
@@ -265,3 +233,14 @@ def gen_entries(parsed):
         entry['y:id'] = entry.get('id')
         # TODO: more?
         yield entry
+
+
+def gen_items(item, yield_if_none=False):
+    if item and hasattr(item, 'append'):
+        for nested_item in item:
+            yield nested_item
+    elif item:
+        yield item
+    elif yield_if_none:
+        yield
+
