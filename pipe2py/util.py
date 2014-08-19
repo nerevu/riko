@@ -220,3 +220,58 @@ def gen_rules(rule_defs, fields, **kwargs):
             raise TypeError('rule must be of type DotDict')
 
         yield tuple(rule.get(field, **kwargs) for field in fields)
+
+
+def recursive_dict(element):
+    return element.tag, dict(map(recursive_dict, element)) or element.text
+
+
+###########################################################
+# Generator Tricks for Systems Programmers by David Beazley
+###########################################################
+def _gen_cat(sources):
+    """Feed a generated sequence into a queue
+    Concatenate multiple generators into a single sequence
+    """
+    for s in sources:
+        for item in s:
+            yield item
+
+
+def _send_to_queue(source, queue):
+    """Feed a generated sequence into a queue
+    """
+    for item in source:
+        queue.put(item)
+    queue.put(StopIteration)
+
+
+def _gen_from_queue(queue):
+    """Generate items received on a queue
+    """
+    while True:
+        item = queue.get()
+        if item is StopIteration: break
+        yield item
+
+
+def _gen_multiplex(sources, target, generator, queue, Thread):
+    """Generate threads to run the generator and send items to a shared queue
+    """
+    for src in sources:
+        thr = Thread(target=target, args=(src, queue))
+        thr.start()
+        yield generator(queue)
+
+
+def multiplex(sources):
+    """Consume several generators in parallel
+    """
+    from Queue import Queue
+    from threading import Thread
+
+    queue = Queue()
+    consumers = _gen_multiplex(
+        sources, _send_to_queue, _gen_from_queue, queue, Thread)
+
+    return _gen_cat(consumers)
