@@ -80,12 +80,7 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
             elif to_location > 0:
                 content = content[:to_location]
 
-            # determine items depended on the split_token
-            items = []
-            if split_token != "":
-                items = content.split(split_token)
-            else:
-                items = [content]
+            items = content.split(split_token) if split_token else [content]
 
             if context and context.verbose:
                 print "FetchPage: found count items:", len(items)
