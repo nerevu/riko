@@ -13,6 +13,7 @@ def _gen_key_value(attrs, item, **kwargs):
         try:
             key = util.get_value(attr['key'], item, **kwargs)
             value = util.get_value(attr['value'], item, **kwargs)
+
         # ignore if the item is referenced but doesn't have our source
         # or target field
         # todo: issue a warning if debugging?
