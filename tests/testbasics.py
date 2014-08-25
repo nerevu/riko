@@ -9,6 +9,7 @@ import unittest
 from os import path as p, remove
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
+from pipe2py.util import extract_modules
 from pipe2py import Context
 
 try:
@@ -36,6 +37,9 @@ class TestBasics(unittest.TestCase):
         length = len(pipeline)
         compared = cmp(length, value)
         self.assertEqual(compared, check)
+        print 'Modules used in pipe %s: %s' % (
+            pipe_name, extract_modules(pipe_def=pipe_def))
+
         return pipeline
 
     def setUp(self):

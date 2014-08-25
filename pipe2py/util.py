@@ -5,6 +5,12 @@ import string
 
 from urllib2 import quote
 from operator import itemgetter
+from itertools import repeat
+
+try:
+    from json import loads
+except (ImportError, AttributeError):
+    from simplejson import loads
 
 DATE_FORMAT = "%m/%d/%Y"
 ALTERNATIVE_DATE_FORMATS = (
@@ -18,6 +24,26 @@ ALTERNATIVE_DATE_FORMATS = (
 
 DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
+
+
+def extract_modules(pipe_file_name=None, pipe_def=None):
+    """Extract modules used by a pipe"""
+    if pipe_file_name:
+        with open(pipe_file_name) as f:
+            pjson = f.read()
+
+    pipe_def = pipe_def or loads(pjson)
+    num = len(pipe_def['modules'])
+    modules = map(dict.get, pipe_def['modules'], repeat('type', num))
+
+    for m in pipe_def['modules']:
+        try:
+            if m['conf'].get('embed'):
+                modules.append(m['conf']['embed']['value']['type'])
+        except AttributeError:
+            pass
+
+    return sorted(set(modules))
 
 
 def pythonise(id):
