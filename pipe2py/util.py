@@ -4,6 +4,7 @@
 import string
 
 from urllib2 import quote
+from os import path as p
 from operator import itemgetter
 from itertools import repeat
 
@@ -201,6 +202,21 @@ def get_input(context, conf):
         value = context.inputs.get(name, default)
 
     return value
+
+
+def get_abspath(url):
+    url = 'http://%s' % url if url and '://' not in url else url
+
+    if url.startswith('file:///'):
+        # already have an abspath
+        pass
+    elif url.startswith('file://'):
+        parent = p.dirname(__file__)
+        rel_path = url[7:]
+        abspath = p.abspath(p.join(parent, rel_path))
+        url = 'file://%s' % abspath
+
+    return url
 
 
 def rreplace(s, find, replace, count=None):

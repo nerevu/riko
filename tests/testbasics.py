@@ -75,10 +75,9 @@ class TestBasics(unittest.TestCase):
 
             TODO: have these tests iterate over a number of test pipelines
         """
-        # note: changed to 0 since feedparser fails to open file:// resources
         pipe_name = 'testpipe1'
         pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name, check=0)
+        pipeline = self._load(pipe_def, pipe_name)
         [self.assertIn('the', i.get('description')) for i in pipeline]
 
     def test_simplest(self):

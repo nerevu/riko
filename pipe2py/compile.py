@@ -431,8 +431,3 @@ if __name__ == '__main__':
     # todo: to create stable, repeatable test cases we should:
     #  build the pipeline to find the external data sources
     #  download and save any fetchdata/fetch source data
-    #  replace the fetchdata/fetch references with the local copy
-    #  (so would need to save the pipeline python but that would make it
-    #  hard to test changes, so we could declare a list of live->local-test
-    #  file mappings and pass them in with the test context)
-    #  also needs to handle any sub-pipelines and their external sources

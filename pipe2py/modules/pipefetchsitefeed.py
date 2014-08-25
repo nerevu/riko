@@ -30,7 +30,7 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
     for item in _INPUT:
         for item_url in urls:
             url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = url if '://' in url else 'http://' + url
+            url = util.get_abspath(url)
 
             if context and context.verbose:
                 print "pipe_fetchsitefeed loading:", url

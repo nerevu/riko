@@ -65,6 +65,7 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
         for item_url in urls:
             item = DotDict(item)
             url = util.get_value(DotDict(item_url), item, **kwargs)
+            url = util.get_abspath(url)
             path = util.get_value(conf['path'], item, **kwargs)
             match = None
 

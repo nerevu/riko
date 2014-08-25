@@ -1,1 +1,527 @@
-{"layout":[{"id":"sw-502","xy":[202,85]},{"id":"_OUTPUT","xy":[170,388]},{"id":"sw-561","xy":[579,117]},{"id":"sw-569","xy":[591,246]},{"id":"sw-583","xy":[214,298]}],"modules":[{"type":"fetch","id":"sw-502","conf":{"URL":{"value":"http://feeds.delicious.com/v2/rss/popular?count=15","type":"url"}}},{"type":"output","id":"_OUTPUT","conf":{}},{"type":"fetch","id":"sw-561","conf":{"URL":{"value":"http://feeds.delicious.com/v2/rss/popular?count=3","type":"url"}}},{"type":"count","id":"sw-569","conf":{}},{"type":"truncate","id":"sw-583","conf":{"count":{"type":"number","terminal":"count"}}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-502","data":{"_type":"item","_attr":{"source":{"_type":"","_attr":{"content":{"_type":"text","_count":"9"},"url":{"_type":"url","_count":"9"}}},"link":{"_type":"url","_count":"9"},"y:id":{"_type":"","_attr":{"value":{"_type":"url","_count":"9"},"permalink":{"_type":"text","_count":"9"}}},"wfw:commentRss":{"_type":"url","_count":"9"},"comments":{"_type":"url","_count":"9"},"dc:creator":{"_type":"text","_count":"9"},"y:title":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"},"category":{"_type":"","_attr":{"domain":{"_type":"url","_count":"85"},"content":{"_type":"text","_count":"85"}}},"guid":{"_type":"","_attr":{"isPermaLink":{"_type":"text","_count":"9"},"content":{"_type":"url","_count":"9"}}},"pubDate":{"_type":"datetime","_count":"9"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-561","data":{"_type":"item","_attr":{"source":{"_type":"","_attr":{"content":{"_type":"text","_count":"3"},"url":{"_type":"url","_count":"3"}}},"link":{"_type":"url","_count":"3"},"y:id":{"_type":"","_attr":{"value":{"_type":"url","_count":"3"},"permalink":{"_type":"text","_count":"3"}}},"wfw:commentRss":{"_type":"url","_count":"3"},"comments":{"_type":"url","_count":"3"},"dc:creator":{"_type":"text","_count":"3"},"y:title":{"_type":"text","_count":"3"},"title":{"_type":"text","_count":"3"},"category":{"_type":"","_attr":{"domain":{"_type":"url","_count":"25"},"content":{"_type":"text","_count":"25"}}},"guid":{"_type":"","_attr":{"isPermaLink":{"_type":"text","_count":"3"},"content":{"_type":"url","_count":"3"}}},"pubDate":{"_type":"datetime","_count":"3"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"3"},"timezone":{"_type":"text","_count":"3"},"second":{"_type":"number","_count":"3"},"month":{"_type":"number","_count":"3"},"minute":{"_type":"number","_count":"3"},"utime":{"_type":"number","_count":"3"},"day_of_week":{"_type":"number","_count":"3"},"day":{"_type":"number","_count":"3"},"year":{"_type":"number","_count":"3"}}}}}},{"id":"_OUTPUT","moduleid":"sw-569","data":{"_type":"number","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-583","data":{"_type":"item","_attr":{"source":{"_type":"","_attr":{"content":{"_type":"text","_count":"3"},"url":{"_type":"url","_count":"3"}}},"link":{"_type":"url","_count":"3"},"y:id":{"_type":"","_attr":{"value":{"_type":"url","_count":"3"},"permalink":{"_type":"text","_count":"3"}}},"wfw:commentRss":{"_type":"url","_count":"3"},"comments":{"_type":"url","_count":"3"},"dc:creator":{"_type":"text","_count":"3"},"y:title":{"_type":"text","_count":"3"},"title":{"_type":"text","_count":"3"},"category":{"_type":"","_attr":{"domain":{"_type":"url","_count":"25"},"content":{"_type":"text","_count":"25"}}},"guid":{"_type":"","_attr":{"isPermaLink":{"_type":"text","_count":"3"},"content":{"_type":"url","_count":"3"}}},"pubDate":{"_type":"datetime","_count":"3"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"3"},"timezone":{"_type":"text","_count":"3"},"second":{"_type":"number","_count":"3"},"month":{"_type":"number","_count":"3"},"minute":{"_type":"number","_count":"3"},"utime":{"_type":"number","_count":"3"},"day_of_week":{"_type":"number","_count":"3"},"day":{"_type":"number","_count":"3"},"year":{"_type":"number","_count":"3"}}}}}}],"wires":[{"id":"_w5","src":{"id":"_OUTPUT","moduleid":"sw-502"},"tgt":{"id":"_INPUT","moduleid":"sw-583"}},{"id":"_w2","src":{"id":"_OUTPUT","moduleid":"sw-561"},"tgt":{"id":"_INPUT","moduleid":"sw-569"}},{"id":"_w9","src":{"id":"_OUTPUT","moduleid":"sw-569"},"tgt":{"id":"count","moduleid":"sw-583"}},{"id":"_w7","src":{"id":"_OUTPUT","moduleid":"sw-583"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}
+{
+    "layout": [
+        {
+            "id": "sw-502",
+            "xy": [
+                202,
+                85
+            ]
+        },
+        {
+            "id": "_OUTPUT",
+            "xy": [
+                170,
+                388
+            ]
+        },
+        {
+            "id": "sw-561",
+            "xy": [
+                579,
+                117
+            ]
+        },
+        {
+            "id": "sw-569",
+            "xy": [
+                591,
+                246
+            ]
+        },
+        {
+            "id": "sw-583",
+            "xy": [
+                214,
+                298
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "conf": {
+                "URL": {
+                    "type": "url",
+                    "value": "file://data/feeds.delicious.com_v2_rss_popular?count=15.xml"
+                }
+            },
+            "id": "sw-502",
+            "type": "fetch"
+        },
+        {
+            "conf": {},
+            "id": "_OUTPUT",
+            "type": "output"
+        },
+        {
+            "conf": {
+                "URL": {
+                    "type": "url",
+                    "value": "file://data/feeds.delicious.com_v2_rss_popular?count=3.xml"
+                }
+            },
+            "id": "sw-561",
+            "type": "fetch"
+        },
+        {
+            "conf": {},
+            "id": "sw-569",
+            "type": "count"
+        },
+        {
+            "conf": {
+                "count": {
+                    "terminal": "count",
+                    "type": "number"
+                }
+            },
+            "id": "sw-583",
+            "type": "truncate"
+        }
+    ],
+    "terminaldata": [
+        {
+            "data": {
+                "_attr": {
+                    "category": {
+                        "_attr": {
+                            "content": {
+                                "_count": "85",
+                                "_type": "text"
+                            },
+                            "domain": {
+                                "_count": "85",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "comments": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "dc:creator": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "guid": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "url"
+                            },
+                            "isPermaLink": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "pubDate": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "source": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "url": {
+                                "_count": "9",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "wfw:commentRss": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "y:id": {
+                        "_attr": {
+                            "permalink": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "value": {
+                                "_count": "9",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "y:title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-502"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "category": {
+                        "_attr": {
+                            "content": {
+                                "_count": "25",
+                                "_type": "text"
+                            },
+                            "domain": {
+                                "_count": "25",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "comments": {
+                        "_count": "3",
+                        "_type": "url"
+                    },
+                    "dc:creator": {
+                        "_count": "3",
+                        "_type": "text"
+                    },
+                    "guid": {
+                        "_attr": {
+                            "content": {
+                                "_count": "3",
+                                "_type": "url"
+                            },
+                            "isPermaLink": {
+                                "_count": "3",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "3",
+                        "_type": "url"
+                    },
+                    "pubDate": {
+                        "_count": "3",
+                        "_type": "datetime"
+                    },
+                    "source": {
+                        "_attr": {
+                            "content": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "url": {
+                                "_count": "3",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "title": {
+                        "_count": "3",
+                        "_type": "text"
+                    },
+                    "wfw:commentRss": {
+                        "_count": "3",
+                        "_type": "url"
+                    },
+                    "y:id": {
+                        "_attr": {
+                            "permalink": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "value": {
+                                "_count": "3",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "3",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "y:title": {
+                        "_count": "3",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-561"
+        },
+        {
+            "data": {
+                "_count": "1",
+                "_type": "number"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-569"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "category": {
+                        "_attr": {
+                            "content": {
+                                "_count": "25",
+                                "_type": "text"
+                            },
+                            "domain": {
+                                "_count": "25",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "comments": {
+                        "_count": "3",
+                        "_type": "url"
+                    },
+                    "dc:creator": {
+                        "_count": "3",
+                        "_type": "text"
+                    },
+                    "guid": {
+                        "_attr": {
+                            "content": {
+                                "_count": "3",
+                                "_type": "url"
+                            },
+                            "isPermaLink": {
+                                "_count": "3",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "3",
+                        "_type": "url"
+                    },
+                    "pubDate": {
+                        "_count": "3",
+                        "_type": "datetime"
+                    },
+                    "source": {
+                        "_attr": {
+                            "content": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "url": {
+                                "_count": "3",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "title": {
+                        "_count": "3",
+                        "_type": "text"
+                    },
+                    "wfw:commentRss": {
+                        "_count": "3",
+                        "_type": "url"
+                    },
+                    "y:id": {
+                        "_attr": {
+                            "permalink": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "value": {
+                                "_count": "3",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "3",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "3",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "y:title": {
+                        "_count": "3",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-583"
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w5",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-502"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-583"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-561"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-569"
+            }
+        },
+        {
+            "id": "_w9",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-569"
+            },
+            "tgt": {
+                "id": "count",
+                "moduleid": "sw-583"
+            }
+        },
+        {
+            "id": "_w7",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-583"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

@@ -1,1 +1,1175 @@
-{"layout":[{"id":"sw-340","xy":[177,85]},{"id":"_OUTPUT","xy":[287,1042]},{"id":"sw-371","xy":[534,503]},{"id":"sw-375","xy":[223,737]},{"id":"sw-385","xy":[256,848]},{"id":"sw-400","xy":[647,80]},{"id":"sw-573","xy":[364,820]}],"modules":[{"type":"csv","id":"sw-340","conf":{"URL":{"value":"http://spreadsheets.google.com/pub?key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1:AB646","type":"url"},"separator":{"type":"text","value":","},"other_sep":{"value":"","type":"text"},"skip":{"value":"0","type":"number"},"col_row_start":{"value":"1","type":"number"},"col_row_end":{"value":"1","type":"number"},"col_mode":{"type":"text","value":"custom"},"col_name":[{"value":"Member","type":"text"},{"value":"firstName","type":"text"},{"value":"TotalAllowancesClaimedIncTravel","type":"text"},{"value":"TotalBasicAllowancesExcTravel","type":"text"},{"value":"TotalTravelClaimed","type":"text"},{"value":"CostofStayingAwayFromMainHome","type":"text"},{"value":"LondonSupplement","type":"text"},{"value":"OfficeRunningCosts","type":"text"},{"value":"StaffingCosts","type":"text"},{"value":"CentrallyPurchasedStationery","type":"text"},{"value":"StationeryAssocdPostageCosts","type":"text"},{"value":"CentralITProvision","type":"text"},{"value":"StaffCoverAndOtherCosts","type":"text"},{"value":"CommsAllowance","type":"text"},{"value":"Mileage","type":"text"},{"value":"MPRail","type":"text"},{"value":"MPAir","type":"text"},{"value":"MPMisc","type":"text"},{"value":"MPOtherMileage","type":"text"},{"value":"MPOtherRail","type":"text"},{"value":"MPOtherAir","type":"text"},{"value":"MPOtherEuropean","type":"text"},{"value":"SpouseTotal","type":"text"},{"value":"SpouseNumOfJourneys","type":"text"},{"value":"FamilyTotal","type":"text"},{"value":"FamilyNumOfJourneys","type":"text"},{"value":"EmployeeTotal","type":"text"},{"value":"EmployeeNumOfJourneys","type":"text"}]}},{"type":"output","id":"_OUTPUT","conf":{}},{"type":"textinput","id":"sw-371","conf":{"name":{"value":"name","type":"text"},"prompt":{"value":"Name","type":"text"},"position":{"value":"","type":"number"},"default":{"value":"Lancaster","type":"text"},"debug":{"value":"","type":"text"}}},{"type":"filter","id":"sw-375","conf":{"MODE":{"type":"text","value":"permit"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"Member","type":"text"},"op":{"type":"text","value":"contains"},"value":{"type":"text","terminal":"RULE_1_value"}}]}},{"type":"rename","id":"sw-385","conf":{"RULE":[{"field":{"value":"Member","type":"text"},"op":{"type":"text","value":"copy"},"newval":{"value":"title","type":"text"}}]}},{"type":"loop","id":"sw-400","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"strconcat","id":"sw-408","conf":{"part":[{"value":"Total allowances claimed, inc travel: ","type":"text"},{"subkey":"TotalAllowancesClaimedIncTravel","type":"text"},{"value":"<br>Total basic allowances claimed, ex travel: ","type":"text"},{"subkey":"TotalBasicAllowancesExcTravel","type":"text"},{"value":"<br>Total Travel claimed: ","type":"text"},{"subkey":"TotalTravelClaimed","type":"text"},{"value":"<br>MP Mileage: ","type":"text"},{"subkey":"Mileage","type":"text"},{"value":"<br>MP Rail Travel: ","type":"text"},{"subkey":"MPRail","type":"text"},{"value":"<br>MP Air Travel: ","type":"text"},{"subkey":"MPAir","type":"text"},{"value":"<br>Cost of staying away from main home: ","type":"text"},{"subkey":"CostofStayingAwayFromMainHome","type":"text"},{"value":"<br>London Supplement: ","type":"text"},{"subkey":"LondonSupplement","type":"text"},{"value":"<br>Office Running Costs: ","type":"text"},{"subkey":"OfficeRunningCosts","type":"text"},{"value":"<br>Staffing Costs: ","type":"text"},{"subkey":"StaffingCosts","type":"text"}]}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"description","type":"text"}}},{"type":"loop","id":"sw-573","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"strconcat","id":"sw-581","conf":{"part":[{"subkey":"firstName","type":"text"},{"value":" ","type":"text"},{"subkey":"Member","type":"text"}]}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"title","type":"text"}}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-340","data":{"_type":"item","_attr":{"TotalBasicAllowancesExcTravel":{"_type":"number","_count":"9"},"Member":{"_type":"text","_count":"9"},"MPOtherAir":{"_type":"number","_count":"9"},"StaffCoverAndOtherCosts":{"_type":"number","_count":"9"},"EmployeeNumOfJourneys":{"_type":"number","_count":"9"},"MPOtherRail":{"_type":"number","_count":"9"},"StationeryAssocdPostageCosts":{"_type":"number","_count":"9"},"SpouseNumOfJourneys":{"_type":"number","_count":"9"},"CostofStayingAwayFromMainHome":{"_type":"number","_count":"9"},"y:row":{"_type":"number","_count":"9"},"MPOtherEuropean":{"_type":"number","_count":"9"},"MPRail":{"_type":"number","_count":"9"},"LondonSupplement":{"_type":"number","_count":"9"},"FamilyNumOfJourneys":{"_type":"number","_count":"9"},"CommsAllowance":{"_type":"number","_count":"9"},"MPMisc":{"_type":"number","_count":"9"},"firstName":{"_type":"text","_count":"8"},"MPAir":{"_type":"number","_count":"9"},"CentralITProvision":{"_type":"number","_count":"9"},"OfficeRunningCosts":{"_type":"number","_count":"9"},"Mileage":{"_type":"number","_count":"9"},"StaffingCosts":{"_type":"number","_count":"9"},"EmployeeTotal":{"_type":"number","_count":"9"},"MPOtherMileage":{"_type":"number","_count":"9"},"SpouseTotal":{"_type":"number","_count":"9"},"CentrallyPurchasedStationery":{"_type":"number","_count":"9"},"TotalTravelClaimed":{"_type":"number","_count":"9"},"TotalAllowancesClaimedIncTravel":{"_type":"number","_count":"9"},"FamilyTotal":{"_type":"number","_count":"9"}}}},{"id":"_OUTPUT","moduleid":"sw-371","data":{"_type":"text","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-375","data":{"_type":"item","_attr":{"TotalBasicAllowancesExcTravel":{"_type":"number","_count":"1"},"Member":{"_type":"text","_count":"1"},"MPOtherAir":{"_type":"number","_count":"1"},"StaffCoverAndOtherCosts":{"_type":"number","_count":"1"},"EmployeeNumOfJourneys":{"_type":"number","_count":"1"},"MPOtherRail":{"_type":"number","_count":"1"},"StationeryAssocdPostageCosts":{"_type":"number","_count":"1"},"SpouseNumOfJourneys":{"_type":"number","_count":"1"},"CostofStayingAwayFromMainHome":{"_type":"number","_count":"1"},"y:row":{"_type":"number","_count":"1"},"MPOtherEuropean":{"_type":"number","_count":"1"},"MPRail":{"_type":"number","_count":"1"},"LondonSupplement":{"_type":"number","_count":"1"},"FamilyNumOfJourneys":{"_type":"number","_count":"1"},"CommsAllowance":{"_type":"number","_count":"1"},"MPMisc":{"_type":"number","_count":"1"},"firstName":{"_type":"text","_count":"1"},"MPAir":{"_type":"number","_count":"1"},"CentralITProvision":{"_type":"number","_count":"1"},"OfficeRunningCosts":{"_type":"number","_count":"1"},"Mileage":{"_type":"number","_count":"1"},"StaffingCosts":{"_type":"number","_count":"1"},"EmployeeTotal":{"_type":"number","_count":"1"},"MPOtherMileage":{"_type":"number","_count":"1"},"SpouseTotal":{"_type":"number","_count":"1"},"CentrallyPurchasedStationery":{"_type":"number","_count":"1"},"TotalTravelClaimed":{"_type":"number","_count":"1"},"TotalAllowancesClaimedIncTravel":{"_type":"number","_count":"1"},"FamilyTotal":{"_type":"number","_count":"1"}}}},{"id":"_OUTPUT","moduleid":"sw-385","data":{"_type":"item","_attr":{"TotalBasicAllowancesExcTravel":{"_type":"number","_count":"1"},"Member":{"_type":"text","_count":"1"},"MPOtherAir":{"_type":"number","_count":"1"},"StaffCoverAndOtherCosts":{"_type":"number","_count":"1"},"EmployeeNumOfJourneys":{"_type":"number","_count":"1"},"MPOtherRail":{"_type":"number","_count":"1"},"StationeryAssocdPostageCosts":{"_type":"number","_count":"1"},"SpouseNumOfJourneys":{"_type":"number","_count":"1"},"CostofStayingAwayFromMainHome":{"_type":"number","_count":"1"},"y:row":{"_type":"number","_count":"1"},"MPOtherEuropean":{"_type":"number","_count":"1"},"MPRail":{"_type":"number","_count":"1"},"LondonSupplement":{"_type":"number","_count":"1"},"FamilyNumOfJourneys":{"_type":"number","_count":"1"},"CommsAllowance":{"_type":"number","_count":"1"},"MPMisc":{"_type":"number","_count":"1"},"firstName":{"_type":"text","_count":"1"},"MPAir":{"_type":"number","_count":"1"},"CentralITProvision":{"_type":"number","_count":"1"},"OfficeRunningCosts":{"_type":"number","_count":"1"},"Mileage":{"_type":"number","_count":"1"},"StaffingCosts":{"_type":"number","_count":"1"},"EmployeeTotal":{"_type":"number","_count":"1"},"MPOtherMileage":{"_type":"number","_count":"1"},"SpouseTotal":{"_type":"number","_count":"1"},"CentrallyPurchasedStationery":{"_type":"number","_count":"1"},"TotalTravelClaimed":{"_type":"number","_count":"1"},"title":{"_type":"text","_count":"1"},"TotalAllowancesClaimedIncTravel":{"_type":"number","_count":"1"},"FamilyTotal":{"_type":"number","_count":"1"}}}},{"id":"_OUTPUT","moduleid":"sw-400","data":{"_type":"item","_attr":{"TotalBasicAllowancesExcTravel":{"_type":"number","_count":"1"},"Member":{"_type":"text","_count":"1"},"MPOtherAir":{"_type":"number","_count":"1"},"StaffCoverAndOtherCosts":{"_type":"number","_count":"1"},"EmployeeNumOfJourneys":{"_type":"number","_count":"1"},"MPOtherRail":{"_type":"number","_count":"1"},"StationeryAssocdPostageCosts":{"_type":"number","_count":"1"},"SpouseNumOfJourneys":{"_type":"number","_count":"1"},"CostofStayingAwayFromMainHome":{"_type":"number","_count":"1"},"y:row":{"_type":"number","_count":"1"},"MPOtherEuropean":{"_type":"number","_count":"1"},"MPRail":{"_type":"number","_count":"1"},"LondonSupplement":{"_type":"number","_count":"1"},"FamilyNumOfJourneys":{"_type":"number","_count":"1"},"CommsAllowance":{"_type":"number","_count":"1"},"MPMisc":{"_type":"number","_count":"1"},"firstName":{"_type":"text","_count":"1"},"MPAir":{"_type":"number","_count":"1"},"CentralITProvision":{"_type":"number","_count":"1"},"OfficeRunningCosts":{"_type":"number","_count":"1"},"Mileage":{"_type":"number","_count":"1"},"StaffingCosts":{"_type":"number","_count":"1"},"description":{"_type":"text","_count":"1"},"EmployeeTotal":{"_type":"number","_count":"1"},"MPOtherMileage":{"_type":"number","_count":"1"},"SpouseTotal":{"_type":"number","_count":"1"},"CentrallyPurchasedStationery":{"_type":"number","_count":"1"},"TotalTravelClaimed":{"_type":"number","_count":"1"},"title":{"_type":"text","_count":"1"},"TotalAllowancesClaimedIncTravel":{"_type":"number","_count":"1"},"FamilyTotal":{"_type":"number","_count":"1"}}}},{"id":"_OUTPUT","moduleid":"sw-573","data":{"_type":"item","_attr":{"TotalBasicAllowancesExcTravel":{"_type":"number","_count":"1"},"Member":{"_type":"text","_count":"1"},"MPOtherAir":{"_type":"number","_count":"1"},"StaffCoverAndOtherCosts":{"_type":"number","_count":"1"},"EmployeeNumOfJourneys":{"_type":"number","_count":"1"},"MPOtherRail":{"_type":"number","_count":"1"},"StationeryAssocdPostageCosts":{"_type":"number","_count":"1"},"SpouseNumOfJourneys":{"_type":"number","_count":"1"},"CostofStayingAwayFromMainHome":{"_type":"number","_count":"1"},"y:row":{"_type":"number","_count":"1"},"MPOtherEuropean":{"_type":"number","_count":"1"},"MPRail":{"_type":"number","_count":"1"},"LondonSupplement":{"_type":"number","_count":"1"},"FamilyNumOfJourneys":{"_type":"number","_count":"1"},"CommsAllowance":{"_type":"number","_count":"1"},"MPMisc":{"_type":"number","_count":"1"},"firstName":{"_type":"text","_count":"1"},"MPAir":{"_type":"number","_count":"1"},"CentralITProvision":{"_type":"number","_count":"1"},"OfficeRunningCosts":{"_type":"number","_count":"1"},"Mileage":{"_type":"number","_count":"1"},"StaffingCosts":{"_type":"number","_count":"1"},"description":{"_type":"text","_count":"1"},"EmployeeTotal":{"_type":"number","_count":"1"},"MPOtherMileage":{"_type":"number","_count":"1"},"SpouseTotal":{"_type":"number","_count":"1"},"CentrallyPurchasedStationery":{"_type":"number","_count":"1"},"TotalTravelClaimed":{"_type":"number","_count":"1"},"title":{"_type":"text","_count":"1"},"TotalAllowancesClaimedIncTravel":{"_type":"number","_count":"1"},"FamilyTotal":{"_type":"number","_count":"1"}}}}],"wires":[{"id":"_w0","src":{"id":"_OUTPUT","moduleid":"sw-340"},"tgt":{"id":"_INPUT","moduleid":"sw-375"}},{"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-371"},"tgt":{"id":"RULE_1_value","moduleid":"sw-375"}},{"id":"_w2","src":{"id":"_OUTPUT","moduleid":"sw-375"},"tgt":{"id":"_INPUT","moduleid":"sw-385"}},{"id":"_w3","src":{"id":"_OUTPUT","moduleid":"sw-385"},"tgt":{"id":"_INPUT","moduleid":"sw-400"}},{"id":"_w4","src":{"id":"_OUTPUT","moduleid":"sw-400"},"tgt":{"id":"_INPUT","moduleid":"sw-573"}},{"id":"_w5","src":{"id":"_OUTPUT","moduleid":"sw-573"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}
+{
+    "layout": [
+        {
+            "id": "sw-340",
+            "xy": [
+                177,
+                85
+            ]
+        },
+        {
+            "id": "_OUTPUT",
+            "xy": [
+                287,
+                1042
+            ]
+        },
+        {
+            "id": "sw-371",
+            "xy": [
+                534,
+                503
+            ]
+        },
+        {
+            "id": "sw-375",
+            "xy": [
+                223,
+                737
+            ]
+        },
+        {
+            "id": "sw-385",
+            "xy": [
+                256,
+                848
+            ]
+        },
+        {
+            "id": "sw-400",
+            "xy": [
+                647,
+                80
+            ]
+        },
+        {
+            "id": "sw-573",
+            "xy": [
+                364,
+                820
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "conf": {
+                "URL": {
+                    "type": "url",
+                    "value": "file://data/spreadsheets.google.com_pub?key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv"
+                },
+                "col_mode": {
+                    "type": "text",
+                    "value": "custom"
+                },
+                "col_name": [
+                    {
+                        "type": "text",
+                        "value": "Member"
+                    },
+                    {
+                        "type": "text",
+                        "value": "firstName"
+                    },
+                    {
+                        "type": "text",
+                        "value": "TotalAllowancesClaimedIncTravel"
+                    },
+                    {
+                        "type": "text",
+                        "value": "TotalBasicAllowancesExcTravel"
+                    },
+                    {
+                        "type": "text",
+                        "value": "TotalTravelClaimed"
+                    },
+                    {
+                        "type": "text",
+                        "value": "CostofStayingAwayFromMainHome"
+                    },
+                    {
+                        "type": "text",
+                        "value": "LondonSupplement"
+                    },
+                    {
+                        "type": "text",
+                        "value": "OfficeRunningCosts"
+                    },
+                    {
+                        "type": "text",
+                        "value": "StaffingCosts"
+                    },
+                    {
+                        "type": "text",
+                        "value": "CentrallyPurchasedStationery"
+                    },
+                    {
+                        "type": "text",
+                        "value": "StationeryAssocdPostageCosts"
+                    },
+                    {
+                        "type": "text",
+                        "value": "CentralITProvision"
+                    },
+                    {
+                        "type": "text",
+                        "value": "StaffCoverAndOtherCosts"
+                    },
+                    {
+                        "type": "text",
+                        "value": "CommsAllowance"
+                    },
+                    {
+                        "type": "text",
+                        "value": "Mileage"
+                    },
+                    {
+                        "type": "text",
+                        "value": "MPRail"
+                    },
+                    {
+                        "type": "text",
+                        "value": "MPAir"
+                    },
+                    {
+                        "type": "text",
+                        "value": "MPMisc"
+                    },
+                    {
+                        "type": "text",
+                        "value": "MPOtherMileage"
+                    },
+                    {
+                        "type": "text",
+                        "value": "MPOtherRail"
+                    },
+                    {
+                        "type": "text",
+                        "value": "MPOtherAir"
+                    },
+                    {
+                        "type": "text",
+                        "value": "MPOtherEuropean"
+                    },
+                    {
+                        "type": "text",
+                        "value": "SpouseTotal"
+                    },
+                    {
+                        "type": "text",
+                        "value": "SpouseNumOfJourneys"
+                    },
+                    {
+                        "type": "text",
+                        "value": "FamilyTotal"
+                    },
+                    {
+                        "type": "text",
+                        "value": "FamilyNumOfJourneys"
+                    },
+                    {
+                        "type": "text",
+                        "value": "EmployeeTotal"
+                    },
+                    {
+                        "type": "text",
+                        "value": "EmployeeNumOfJourneys"
+                    }
+                ],
+                "col_row_end": {
+                    "type": "number",
+                    "value": "1"
+                },
+                "col_row_start": {
+                    "type": "number",
+                    "value": "1"
+                },
+                "other_sep": {
+                    "type": "text",
+                    "value": ""
+                },
+                "separator": {
+                    "type": "text",
+                    "value": ","
+                },
+                "skip": {
+                    "type": "number",
+                    "value": "0"
+                }
+            },
+            "id": "sw-340",
+            "type": "csv"
+        },
+        {
+            "conf": {},
+            "id": "_OUTPUT",
+            "type": "output"
+        },
+        {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": ""
+                },
+                "default": {
+                    "type": "text",
+                    "value": "Lancaster"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "name"
+                },
+                "position": {
+                    "type": "number",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Name"
+                }
+            },
+            "id": "sw-371",
+            "type": "textinput"
+        },
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "MODE": {
+                    "type": "text",
+                    "value": "permit"
+                },
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "Member"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "terminal": "RULE_1_value",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-375",
+            "type": "filter"
+        },
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "Member"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "copy"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-385",
+            "type": "rename"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "description"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "part": [
+                                {
+                                    "type": "text",
+                                    "value": "Total allowances claimed, inc travel: "
+                                },
+                                {
+                                    "subkey": "TotalAllowancesClaimedIncTravel",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>Total basic allowances claimed, ex travel: "
+                                },
+                                {
+                                    "subkey": "TotalBasicAllowancesExcTravel",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>Total Travel claimed: "
+                                },
+                                {
+                                    "subkey": "TotalTravelClaimed",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>MP Mileage: "
+                                },
+                                {
+                                    "subkey": "Mileage",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>MP Rail Travel: "
+                                },
+                                {
+                                    "subkey": "MPRail",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>MP Air Travel: "
+                                },
+                                {
+                                    "subkey": "MPAir",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>Cost of staying away from main home: "
+                                },
+                                {
+                                    "subkey": "CostofStayingAwayFromMainHome",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>London Supplement: "
+                                },
+                                {
+                                    "subkey": "LondonSupplement",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>Office Running Costs: "
+                                },
+                                {
+                                    "subkey": "OfficeRunningCosts",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "<br>Staffing Costs: "
+                                },
+                                {
+                                    "subkey": "StaffingCosts",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "id": "sw-408",
+                        "type": "strconcat"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-400",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "title"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "part": [
+                                {
+                                    "subkey": "firstName",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": " "
+                                },
+                                {
+                                    "subkey": "Member",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "id": "sw-581",
+                        "type": "strconcat"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-573",
+            "type": "loop"
+        }
+    ],
+    "terminaldata": [
+        {
+            "data": {
+                "_attr": {
+                    "CentralITProvision": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "CentrallyPurchasedStationery": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "CommsAllowance": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "CostofStayingAwayFromMainHome": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "EmployeeNumOfJourneys": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "EmployeeTotal": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "FamilyNumOfJourneys": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "FamilyTotal": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "LondonSupplement": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "MPAir": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "MPMisc": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "MPOtherAir": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "MPOtherEuropean": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "MPOtherMileage": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "MPOtherRail": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "MPRail": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "Member": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "Mileage": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "OfficeRunningCosts": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "SpouseNumOfJourneys": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "SpouseTotal": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "StaffCoverAndOtherCosts": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "StaffingCosts": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "StationeryAssocdPostageCosts": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "TotalAllowancesClaimedIncTravel": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "TotalBasicAllowancesExcTravel": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "TotalTravelClaimed": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "firstName": {
+                        "_count": "8",
+                        "_type": "text"
+                    },
+                    "y:row": {
+                        "_count": "9",
+                        "_type": "number"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-340"
+        },
+        {
+            "data": {
+                "_count": "1",
+                "_type": "text"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-371"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "CentralITProvision": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CentrallyPurchasedStationery": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CommsAllowance": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CostofStayingAwayFromMainHome": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "EmployeeNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "EmployeeTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "FamilyNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "FamilyTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "LondonSupplement": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPAir": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPMisc": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherAir": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherEuropean": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherMileage": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherRail": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPRail": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "Member": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "Mileage": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "OfficeRunningCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "SpouseNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "SpouseTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StaffCoverAndOtherCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StaffingCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StationeryAssocdPostageCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalAllowancesClaimedIncTravel": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalBasicAllowancesExcTravel": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalTravelClaimed": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "firstName": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "y:row": {
+                        "_count": "1",
+                        "_type": "number"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-375"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "CentralITProvision": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CentrallyPurchasedStationery": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CommsAllowance": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CostofStayingAwayFromMainHome": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "EmployeeNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "EmployeeTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "FamilyNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "FamilyTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "LondonSupplement": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPAir": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPMisc": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherAir": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherEuropean": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherMileage": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherRail": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPRail": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "Member": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "Mileage": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "OfficeRunningCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "SpouseNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "SpouseTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StaffCoverAndOtherCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StaffingCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StationeryAssocdPostageCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalAllowancesClaimedIncTravel": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalBasicAllowancesExcTravel": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalTravelClaimed": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "firstName": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "y:row": {
+                        "_count": "1",
+                        "_type": "number"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-385"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "CentralITProvision": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CentrallyPurchasedStationery": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CommsAllowance": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CostofStayingAwayFromMainHome": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "EmployeeNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "EmployeeTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "FamilyNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "FamilyTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "LondonSupplement": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPAir": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPMisc": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherAir": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherEuropean": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherMileage": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherRail": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPRail": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "Member": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "Mileage": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "OfficeRunningCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "SpouseNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "SpouseTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StaffCoverAndOtherCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StaffingCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StationeryAssocdPostageCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalAllowancesClaimedIncTravel": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalBasicAllowancesExcTravel": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalTravelClaimed": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "description": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "firstName": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "y:row": {
+                        "_count": "1",
+                        "_type": "number"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-400"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "CentralITProvision": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CentrallyPurchasedStationery": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CommsAllowance": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "CostofStayingAwayFromMainHome": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "EmployeeNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "EmployeeTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "FamilyNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "FamilyTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "LondonSupplement": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPAir": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPMisc": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherAir": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherEuropean": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherMileage": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPOtherRail": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "MPRail": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "Member": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "Mileage": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "OfficeRunningCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "SpouseNumOfJourneys": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "SpouseTotal": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StaffCoverAndOtherCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StaffingCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "StationeryAssocdPostageCosts": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalAllowancesClaimedIncTravel": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalBasicAllowancesExcTravel": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "TotalTravelClaimed": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "description": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "firstName": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "y:row": {
+                        "_count": "1",
+                        "_type": "number"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-573"
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w0",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-340"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-375"
+            }
+        },
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-371"
+            },
+            "tgt": {
+                "id": "RULE_1_value",
+                "moduleid": "sw-375"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-375"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-385"
+            }
+        },
+        {
+            "id": "_w3",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-385"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-400"
+            }
+        },
+        {
+            "id": "_w4",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-400"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-573"
+            }
+        },
+        {
+            "id": "_w5",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-573"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

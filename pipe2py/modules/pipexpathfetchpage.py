@@ -2,8 +2,8 @@
 # vim: sw=4:ts=4:expandtab
 
 import re
-import requests
 
+from urllib2 import urlopen
 from html5lib import parse
 from lxml import etree
 from pipe2py import util
@@ -33,12 +33,14 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     for item in _INPUT:
         for item_url in urls:
             url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = util.get_abspath(url)
+            f = urlopen(url)
 
             try:
                 # TODO: it seems that Yahoo! converts relative links to
                 # absolute. This needs to be done on the content but seems to
                 # be a non-trival task python?
-                content = requests.get(url).text
+                content = unicode(f.read(), 'utf-8')
 
                 if context and context.verbose:
                     print '............Content .................'
