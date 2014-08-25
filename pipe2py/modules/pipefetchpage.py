@@ -36,6 +36,10 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
         for item_url in urls:
             url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
             url = util.get_abspath(url)
+
+            if not url:
+                continue
+
             f = urlopen(url)
 
             # TODO: it seems that Yahoo! converts relative links to
