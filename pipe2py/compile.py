@@ -14,7 +14,7 @@
 
         pipe_def = json.loads(pjson)
         pipe = parse_pipe_def(pipe_def, pipe_name)
-        pipeline = build_pipeline(self.context, pipe))
+        pipeline = build_pipeline(Context(), pipe))
 
         for i in pipeline:
             print i
@@ -34,18 +34,28 @@
    License: see LICENSE file
 """
 import fileinput
-import urllib
 import sys
+import requests
+
+try:
+    from json import loads
+except (ImportError, AttributeError):
+    from simplejson import loads
 
 from itertools import chain
 from importlib import import_module
 from jinja2 import Environment, PackageLoader
 from optparse import OptionParser
-from os.path import splitext, split
+from os import path as p
 from pipe2py import Context, util
-from pipe2py.pprint2 import Id, repr_args, str_args
-from pipe2py.topsort import topological_sort
-from pipe2py.modules import pipeforever
+from pipe2py.modules.pipeforever import pipe_forever
+from pipe2py.lib.pprint2 import Id, repr_args, str_args
+from pipe2py.lib.topsort import topological_sort
+
+
+def _write_file(data, path, pretty=False):
+    with open(path, 'w') as f:
+        pprint(data, f) if pretty else f.write(data)
 
 
 def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
@@ -179,30 +189,25 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
         'wires': {},
     }
 
-    modules = pipe_def['modules']
-
-    if not isinstance(modules, list):
-        modules = [modules]
+    modules = util.listize(pipe_def['modules'])
 
     for module in modules:
-        pipe['modules'][util.pythonise(module['id'])] = module
-        pipe['graph'][util.pythonise(module['id'])] = []
+        module_id = util.pythonise(module['id'])
+        pipe['modules'][module_id] = module
+        pipe['graph'][module_id] = []
         module_type = module['type']
 
         if module_type == 'loop':
             embed = module['conf']['embed']['value']
-            pipe['modules'][util.pythonise(embed['id'])] = embed
-            pipe['graph'][util.pythonise(embed['id'])] = []
-            pipe['embed'][util.pythonise(embed['id'])] = embed
+            embed_id = util.pythonise(embed['id'])
+            pipe['modules'][embed_id] = embed
+            pipe['graph'][embed_id] = []
+            pipe['embed'][embed_id] = embed
 
             # make the loop dependent on its embedded module
-            pipe['graph'][util.pythonise(embed['id'])].append(
-                util.pythonise(module['id']))
+            pipe['graph'][embed_id].append(module_id)
 
-    wires = pipe_def['wires']
-
-    if not isinstance(wires, list):
-        wires = [wires]
+    wires = util.listize(pipe_def['wires'])
 
     for wire in wires:
         pipe['wires'][util.pythonise(wire['id'])] = wire
@@ -212,6 +217,7 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
     # Remove any orphan nodes
     for node in pipe['graph'].keys():
         targetted = [node in value for key, value in pipe['graph'].items()]
+
         if not pipe['graph'][node] and not any(targetted):
             del pipe['graph'][node]
 
@@ -228,7 +234,7 @@ def build_pipeline(context, pipe):
         namespace can become polluted by submodule wrapper definitions
     """
     pyinput = None
-    steps = {'forever': pipeforever.pipe_forever(context, None, conf=None)}
+    steps = {'forever': pipe_forever()}
 
     for module_id in topological_sort(pipe['graph']):
         commons = _pipe_commons(context, pipe, module_id, pyinput, steps)
@@ -261,7 +267,7 @@ def build_pipeline(context, pipe):
         else:  # else this module is not an embedded module:
             steps[module_id] = generator(*args, **kwargs)
 
-        if context.verbose:
+        if context and context.verbose:
             print '%s (%s) = %s(%s)' % (
                 steps[module_id], module_id, generator, str(args))
 
@@ -298,7 +304,7 @@ def stringify_pipe(context, pipe):
         module['pymodule_generator'] = pymodule_generator
         modules.append(module)
 
-        if context.verbose:
+        if context and context.verbose:
             con_args = filter(lambda x: x != Id('context'), args)
             nconf_kwargs = filter(lambda x: x[0] != 'conf', kwargs.items())
             conf_kwargs = filter(lambda x: x[0] == 'conf', kwargs.items())
@@ -328,7 +334,7 @@ def analyze_pipe(context, pipe):
     modules = set(module['type'] for module in pipe['modules'].values())
     moduletypes = sorted(list(modules))
 
-    if context.verbose:
+    if context and context.verbose:
         print
         print 'Modules used:', ', '.join(
             name for name in moduletypes if not name.startswith('pipe:')
@@ -338,13 +344,11 @@ def analyze_pipe(context, pipe):
             name[5:] for name in moduletypes if name.startswith('pipe:')
         ) or None
 
-if __name__ == '__main__':
-    try:
-        import json
-        json.loads  # test access to the attributes of the right json module
-    except (ImportError, AttributeError):
-        import simplejson as json
 
+def _convert_json(json):
+    return loads(json.encode('utf-8'))
+
+if __name__ == '__main__':
     usage = 'usage: %prog [options] [filename]'
     parser = OptionParser(usage=usage)
 
@@ -355,47 +359,80 @@ if __name__ == '__main__':
         "-s", dest="savejson", help="save pipe JSON to file",
         action="store_true")
     parser.add_option(
+        "-o", dest="saveoutput", help="save pipe output to file",
+        action="store_true")
+    parser.add_option(
         "-v", dest="verbose", help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()
 
-    filename = args[0] if args else None
+    pipe_file_name = args[0] if args else None
     context = Context(verbose=options.verbose)
+    parent = p.dirname(p.dirname(__file__))
 
     if options.pipeid:
+        pipe_name = 'pipe_%s' % options.pipeid
+
+        # Get the pipeline definition
         base = 'http://query.yahooapis.com/v1/public/yql?q='
         select = 'select%20PIPE.working%20from%20json%20'
-        where = 'where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com'
-        pipe = '%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D'
+        where = 'where%20url=%22http%3A%2F%2Fpipes.yahoo.com'
+        pipe = '%2Fpipes%2Fpipe.info%3F_out=json%26_id=%s' % options.pipeid
         end = '%22&format=json'
-        url = base + select + where + pipe + options.pipeid + end
+        url = base + select + where + pipe + end
+        # todo: refactor this url->json
 
-        src = ''.join(urllib.urlopen(url).readlines())
-        src_json = json.loads(src)
-        results = src_json['query']['results']
+        pjson = requests.get(url).text
+        pipe_raw = _convert_json(pjson)
+        results = pipe_raw['query']['results']
 
         if not results:
             print 'Pipe not found'
             sys.exit(1)
 
-        pjson = results['json']['PIPE']['working']
-        pipe_name = 'pipe_%s' % options.pipeid
-    elif filename:
-        pjson = ''.join(line for line in open(filename))
-        pipe_name = splitext(split(filename)[-1])[0]
+        pipe_def = results['json']['PIPE']['working']
+    elif pipe_file_name:
+        pipe_name = p.splitext(p.split(pipe_file_name)[-1])[0]
+
+        with open(pipe_file_name) as f:
+            pjson = f.read()
+
+        pipe_def = _convert_json(pjson)
     else:
-        pjson = ''.join(line for line in fileinput.input())
         pipe_name = 'anonymous'
+        pjson = ''.join(line for line in fileinput.input())
+        pipe_def = _convert_json(pjson)
 
-    pipe_def = json.loads(pjson)
     pipe = parse_pipe_def(pipe_def, pipe_name)
-
-    if options.savejson:
-        with open('%s.json' % pipe_name, 'w') as f:
-            pprint(json.loads(pjson.encode('utf-8')), f)
-
-    with open('%s.py' % pipe_name, 'w') as f:
-        f.write(stringify_pipe(context, pipe))
-
+    path = p.join('output', 'pipeline', '%s.py' % pipe_name)
+    data = stringify_pipe(context, pipe)
+    _write_file(data, path)
     analyze_pipe(context, pipe)
 
+    if options.savejson:
+        path = p.join(parent, 'output', 'pipeline', '%s.json' % pipe_name)
+        _write_file(pipe_def, path, True)
+
+    if options.saveoutput:
+        base = 'http://pipes.yahoo.com/pipes/pipe.run'
+        url = '%s?_id=%s&_render=json' % (base, options.pipeid)
+        ojson = requests.get(url).text
+        pipe_output = _convert_json(ojson)
+        count = pipe_output['count']
+
+        if not count:
+            print 'Pipe results not found'
+            sys.exit(1)
+
+        path = p.join(parent, 'output', 'data', '%s_output.json' % pipe_name)
+        _write_file(pipe_output, path, True)
+
     # for build example - see test/testbasics.py
+
+    # todo: to create stable, repeatable test cases we should:
+    #  build the pipeline to find the external data sources
+    #  download and save any fetchdata/fetch source data
+    #  replace the fetchdata/fetch references with the local copy
+    #  (so would need to save the pipeline python but that would make it
+    #  hard to test changes, so we could declare a list of live->local-test
+    #  file mappings and pass them in with the test context)
+    #  also needs to handle any sub-pipelines and their external sources

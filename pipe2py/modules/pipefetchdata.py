@@ -1,6 +1,12 @@
-# pipefetchdata.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefetchdata
+    ~~~~~~~~~~~~~~
+    Provides methods for fetching XML and JSON data sources.
 
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchData
+"""
 import urllib2
 from xml.etree import cElementTree as ElementTree
 
@@ -11,38 +17,62 @@ except (ImportError, AttributeError):
     import simplejson as json
 
 from pipe2py import util
+from pipe2py.lib.dotdict import DotDict
 
-def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
-    """This source fetches and parses any XML or JSON file (todo iCal or KML) to yield a list of elements.
-    
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        URL -- url
-        path -- path to list
-    
-    Yields (_OUTPUT):
-    elements
+
+def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
+    """Fetches and parses an XML or JSON file.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : source generator of dicts
+    conf : dict
+        {
+            'URL': {'value': url},
+            'path': {'value': dot separated path to data list}
+        }
+
+    Yields
+    ------
+    _OUTPUT : pipe items fetched from source
+
+    Examples
+    --------
+    >>> from os import path as p
+    >>> from pipe2py.modules.pipeforever import pipe_forever
+    >>> parent = p.dirname(p.dirname(__file__))
+    >>> file_name = p.abspath(p.join(parent, 'data', 'gigs.json'))
+    >>> path = 'value.items'
+    >>> url = "file://%s" % file_name
+    >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
+    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()[:5]
+    [u'y:repeatcount', u'description', u'pubDate', u'title', u'y:published']
+    >>> file_name = p.abspath(p.join(parent, 'data', 'places.xml'))
+    >>> path = 'appointment'
+    >>> url = "file://%s" % file_name
+    >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
+    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()
+    ['begin', 'uid', 'places', 'alarmTime', 'duration', 'subject']
+    >>> conf = {'URL': {'value': url}, 'path': {'value': ''}}
+    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()
+    ['reminder', 'appointment']
     """
-    urls = conf['URL']
-    if not isinstance(urls, list):
-        urls = [urls]
-    
+    conf = DotDict(conf)
+    urls = util.listize(conf['URL'])
+
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(item_url, item, **kwargs)
-        
-            if not '://' in url:
-                url = 'http://' + url
+            item = DotDict(item)
+            url = util.get_value(DotDict(item_url), item, **kwargs)
             path = util.get_value(conf['path'], item, **kwargs)
             match = None
-            
+
             #Parse the file into a dictionary
             try:
                 f = urllib2.urlopen(url)
                 ft = ElementTree.parse(f)
-                if context.verbose:
+                if context and context.verbose:
                     print "pipe_fetchdata loading xml:", url
                 root = ft.getroot()
                 #Move to the point referenced by the path
@@ -60,18 +90,18 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                 #Convert xml into generation of dicts
                 if match:
                     for element in root.findall(match):
-                        i = util.etree_to_pipes(element)           
+                        i = util.etree_to_pipes(element)
                         yield i
                 else:
                     i = util.etree_to_pipes(root)
                     yield i
-                    
+
             except Exception, e:
                 try:
                     f = urllib2.urlopen(url)
                     d = json.load(f)
                     #todo test:-
-                    if context.verbose:
+                    if context and context.verbose:
                         print "pipe_fetchdata loading json:", url
                     if path:
                         for i in path.split(".")[:-1]:
@@ -90,11 +120,13 @@ def pipe_fetchdata(context, _INPUT, conf,  **kwargs):
                 except Exception, e:
                     #todo try iCal and yield
                     #todo try KML and yield
-                    if context.verbose:
+                    if context and context.verbose:
                         print "xml and json both failed:"
-        
+
                     raise
-        
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+
+
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
             break
-            

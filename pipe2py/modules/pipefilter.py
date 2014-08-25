@@ -1,55 +1,101 @@
-# pipefilter.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefilter
+    ~~~~~~~~~~~~~~
+
+    Provides methods for filtering (including or excluding) items from a feed.
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Filter
+"""
 
 import datetime
 import re
+
 from pipe2py import util
 from decimal import Decimal
+from pipe2py.lib.dotdict import DotDict
 
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
-def pipe_filter(context, _INPUT, conf, **kwargs):
-    """This operator filters the input source, including or excluding fields, that match a set of defined rules.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
-        MODE -- filter mode, either "permit" or "block"
-        COMBINE -- filter boolean combination, either "and" or "or"
-        RULE -- rules - each rule comprising (field, op, value)
+def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
+    """Filters for _INPUT items matching the given rules.
 
-    Yields (_OUTPUT):
-    source items that match the rules
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : source generator of dicts
+    conf : dict
+        {
+            'MODE': {'value': 'permit' or 'block'},
+            'COMBINE': {'value': 'and' or 'or'}
+            'RULE': [
+                {
+                    'field': {'value': 'search field'},
+                    'op': {'value': 'one of SWITCH above'},
+                    'value': {'value': 'search term'}
+                }
+            ]
+        }
+
+    kwargs : other inputs, e.g., to feed terminals for rule values
+
+    Yields
+    ------
+    _OUTPUT : source pipe items matching the rules
+
+    Examples
+    --------
+    >>> import os.path as p
+    >>> from pipe2py.modules.pipeforever import pipe_forever
+    >>> from pipe2py.modules.pipefetchdata import pipe_fetchdata
+    >>> parent = p.dirname(p.dirname(__file__))
+    >>> file_name = p.abspath(p.join(parent, 'data', 'gigs.json'))
+    >>> path = 'value.items'
+    >>> url = 'file://%s' % file_name
+    >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
+    >>> input = pipe_fetchdata(_INPUT=pipe_forever(), conf=conf)
+    >>> mode = {'value': 'permit'}
+    >>> combine = {'value': 'and'}
+    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, 'value': {'value': 'web'}}]
+    >>> conf = {'MODE': mode, 'COMBINE': combine, 'RULE': rule}
+    >>> pipe_filter(_INPUT=input, conf=conf).next()['title']
+    u'E-Commerce Website Developer | Elance Job'
+    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, 'value': {'value': 'kjhlked'}}]
+    >>> conf = {'MODE': mode, 'COMBINE': combine, 'RULE': rule}
+    >>> list(pipe_filter(_INPUT=input, conf=conf))
+    []
     """
-    mode = conf['MODE']['value']
-    combine = conf['COMBINE']['value']
+    conf = DotDict(conf)
+    mode = conf.get('MODE')
+    combine = conf.get('COMBINE')
     rules = []
 
-    rule_defs = conf['RULE']
-    if not isinstance(rule_defs, list):
-        rule_defs = [rule_defs]
+    rule_defs = util.listize(conf['RULE'])
 
     for rule in rule_defs:
-        field = rule['field']['value']
-        value = util.get_value(rule['value'], None, **kwargs) #todo use subkey?
-        rules.append((field, rule['op']['value'], value))
+        rule = DotDict(rule)
+        field = rule.get('field', **kwargs)
+        op = rule.get('op', **kwargs)
+        value = rule.get('value', **kwargs)
+        rules.append((field, op, value))
 
     for item in _INPUT:
+        item = DotDict(item)
         if combine in COMBINE_BOOLEAN:
             res = COMBINE_BOOLEAN[combine](_rulepass(rule, item) for rule in rules)
         else:
-            raise Exception("Invalid combine %s (expecting and or or)" % combine)
+            raise Exception(
+                "Invalid combine: %s (expecting 'and' or 'or')" % combine)
 
-        if (res and mode == "permit") or (not res and mode == "block"):
+        if (res and mode == 'permit') or (not res and mode == 'block'):
             yield item
 
 #todo precompile these into lambdas for speed
 def _rulepass(rule, item):
     field, op, value = rule
-
-    data = util.get_subkey(field, item)
+    data = item.get(field)
 
     if data is None:
         return False
@@ -101,4 +147,3 @@ def _rulepass(rule, item):
             return True
 
     return False
-

@@ -1,12 +1,16 @@
 # pipexpathfetchpage.py
 # vim: sw=4:ts=4:expandtab
 
-import urllib2
 import re
+import requests
+
+from html5lib import parse
+from lxml import etree
 from pipe2py import util
+from pipe2py.lib.dotdict import DotDict
 
 
-def pipe_xpathfetchpage(context, _INPUT, conf, **kwargs):
+def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     """XPath Fetch Page module
 
     _INPUT -- not used since this does not have inputs.
@@ -23,70 +27,71 @@ def pipe_xpathfetchpage(context, _INPUT, conf, **kwargs):
         - don't retrieve pages larger than 1.5MB
         - don't retrieve if page is not indexable.
     """
-    urls = conf['URL']
-    if not isinstance(urls, list):
-        urls = [urls]
+    conf = DotDict(conf)
+    urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(item_url, item, **kwargs)
-            if context.verbose:
-                print "XPathFetchPage: Preparing to download:",url
+            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
 
             try:
-                request = urllib2.Request(url)
-                request.add_header('User-Agent','Yahoo Pipes 1.0')
-                request = urllib2.build_opener().open(request)
-                charset = request.headers['content-type'].split('charset=')
-                content = unicode(request.read(), charset[-1] if len(charset) > 1 else 'latin1')
+                # TODO: it seems that Yahoo! converts relative links to
+                # absolute. This needs to be done on the content but seems to
+                # be a non-trival task python?
+                content = requests.get(url).text
 
-                # TODO it seems that Yahoo! converts relative links to absolute
-                # TODO this needs to be done on the content but seems to be a non-trival
-                # TODO task python?
+                if context and context.verbose:
+                    print '............Content .................'
+                    print content
+                    print '...............EOF...................'
 
-                xpath = util.get_value(conf["xpath"], _INPUT, **kwargs)
-                html5 = False
-                useAsString = False
-                if "html5" in conf:
-                    html5 = util.get_value(conf["html5"], _INPUT, **kwargs) == "true"
-                if "useAsString" in conf:
-                    useAsString = util.get_value(conf["useAsString"], _INPUT, **kwargs) == "true"
+                xpath = conf.get('xpath', **kwargs)
+
+                if 'html5' in conf:
+                    value = conf.get('html5', **kwargs)
+                    html5 = value == 'true'
+                else:
+                    html5 = False
+
+                if 'useAsString' in conf:
+                    value = conf.get('useAsString', **kwargs)
+                    use_as_string = value == 'true'
+                else:
+                    use_as_string = False
 
 
                 if html5:
-                    #from lxml.html import html5parser
-                    #root = html5parser.fromstring(content)
-                    from html5lib import parse
-                    root = parse(content, treebuilder='lxml', namespaceHTMLElements=False)
+                    # from lxml.html import html5parser
+                    # root = html5parser.fromstring(content)
+                    root = parse(
+                        content,
+                        treebuilder='lxml',
+                        namespaceHTMLElements=False
+                    )
                 else:
-                    from lxml import etree
                     root = etree.HTML(content)
+
                 res_items = root.xpath(xpath)
 
-                if context.verbose:
-                    print "XPathFetchPage: found count items:",len(res_items)
+                if context and context.verbose:
+                    print 'XPathFetchPage: found count items:', len(res_items)
 
                 for res_item in res_items:
                     i = util.etree_to_pipes(res_item) #TODO xml_to_dict(res_item)
-                    if context.verbose:
-                        print "--------------item data --------------------"
+
+                    if context and context.verbose:
+                        print '--------------item data --------------------'
                         print i
-                        print "--------------EOF item data ----------------"
-                    if useAsString:
-                        yield { "content" : unicode(i) }
+                        print '--------------EOF item data ----------------'
+
+                    if use_as_string:
+                        yield {'content' : unicode(i)}
                     else:
                         yield i
-
             except Exception, e:
-                if context.verbose:
-                    print "XPathFetchPage: failed to retrieve from:", url
+                pass
 
-                    print "----------------- XPathFetchPage -----------------"
-                    import traceback
-                    traceback.print_exc()
-                    print "----------------- XPathFetchPage -----------------"
-                raise
-
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
             break
-

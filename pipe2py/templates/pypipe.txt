@@ -7,21 +7,20 @@ from pipe2py.modules import pipeforever
 from pipe2py.modules import {{ module.pymodule_name }}
 {%- endfor %}
 
-def {{ pipe_name }}(context, _INPUT, conf=None, **kwargs):
+def {{ pipe_name }}(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
-    if conf is None:
-        conf = {}
+    conf = conf or {}
 
     if context.describe_input:
         return {{ inputs }}
 
-    forever = pipeforever.pipe_forever(context, None, conf=None)
+    forever = pipeforever.pipe_forever()
 
 {% for module in modules %}
     {% if module.id in embedded_pipes %}
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_{{ module.id }}(context, _INPUT, conf=None, **kwargs):
+    def pipe_{{ module.id }}(context=None, _INPUT=None, conf=None, **kwargs):
         # todo: insert submodule description here
     {% endif %}
     {%- if module.id in embedded_pipes %}        {{ else }}    {% endif -%}
@@ -36,7 +35,7 @@ def {{ pipe_name }}(context, _INPUT, conf=None, **kwargs):
 
 if __name__ == "__main__":
     context = Context()
-    p = {{ pipe_name }}(context, None)
+    pipeline = {{ pipe_name }}(context, None)
 
-    for i in p:
+    for i in pipeline:
         print i

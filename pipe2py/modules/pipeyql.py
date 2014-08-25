@@ -1,51 +1,57 @@
 # pipeyql.py
 #
 
-import urllib
-import urllib2
+import requests
 
-from xml.etree import cElementTree as ElementTree
-
+from lxml.etree import parse
 from pipe2py import util
+from pipe2py.lib.dotdict import DotDict
 
-def pipe_yql(context, _INPUT, conf,  **kwargs):
+
+def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
     """This source issues YQL queries.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- not used
     conf:
         yqlquery -- YQL query
-        #todo handle envURL
-    
+        # todo: handle envURL
+
     Yields (_OUTPUT):
     query results
     """
-    url = "http://query.yahooapis.com/v1/public/yql" #todo get from a config/env file
-    
+    # todo: get from a config/env file
+    url = "http://query.yahooapis.com/v1/public/yql"
+    conf = DotDict(conf)
+    query = conf['yqlquery']
+
     for item in _INPUT:
-        yql = util.get_value(conf['yqlquery'], item, **kwargs)
-        
-        query = urllib.urlencode({'q':yql,
-                                  #note: we use the default format of xml since json loses some structure
-                                  #todo diagnostics=true e.g. if context.test
-                                  #todo consider paging for large result sets
-                                 })
-        req = urllib2.Request(url, query)    
-        response = urllib2.urlopen(req)    
-        
-        #Parse the response
-        ft = ElementTree.parse(response)
-        if context.verbose:
+        item = DotDict(item)
+        yql = util.get_value(query, item, **kwargs)
+
+        # note: we use the default format of xml since json loses some
+        # structure
+        # todo: diagnostics=true e.g. if context.test
+        # todo: consider paging for large result sets
+        r = requests.get(url, params={'q': yql}, stream=True)
+
+        # Parse the response
+        tree = parse(r.raw)
+
+        if context and context.verbose:
             print "pipe_yql loading xml:", yql
-        root = ft.getroot()
-        #note: query also has row count
+
+        root = tree.getroot()
+
+        # note: query also has row count
         results = root.find('results')
-        #Convert xml into generation of dicts
+
+        # Convert xml into generation of dicts
         for element in results.getchildren():
-            i = util.xml_to_dict(element)
-            yield i
-    
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+            yield util.xml_to_dict(element)
+
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
             break
-    

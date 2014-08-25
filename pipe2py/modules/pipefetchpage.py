@@ -2,11 +2,14 @@
 # Copyright (C) 2011 Gerrit Riessen
 # This code is licensed under the GNU Public License.
 
-import urllib2
 import re
-from pipe2py import util
+import requests
 
-def pipe_fetchpage(context, _INPUT, conf, **kwargs):
+from pipe2py import util
+from pipe2py.lib.dotdict import DotDict
+
+
+def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     """Fetch Page module
 
     _INPUT -- not used since this does not have inputs.
@@ -26,46 +29,42 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
           (not documented but happens)
         - items should be cleaned, i.e. stripped of HTML tags
     """
-    urls = conf['URL']
-    if not isinstance(urls, list):
-        urls = [urls]
+    conf = DotDict(conf)
+    urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(item_url, item, **kwargs)
-            if context.verbose:
-                print "FetchPage: Preparing to download:",url
+            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
+
 
             try:
-                request = urllib2.Request(url)
-                request.add_header('User-Agent','Yahoo Pipes 1.0')
-                request = urllib2.build_opener().open(request)
-                content = unicode(request.read(),
-                                  request.headers['content-type'].split('charset=')[-1])
+                # TODO: it seems that Yahoo! converts relative links to
+                # absolute. This needs to be done on the content but seems to
+                # be a non-trival task python?
+                content = requests.get(url).text
 
-                # TODO it seems that Yahoo! converts relative links to absolute
-                # TODO this needs to be done on the content but seems to be a non-trival
-                # TODO task python?
+                if context and context.verbose:
+                    print '............Content .................'
+                    print content
+                    print '...............EOF...................'
 
-                if context.verbose:
-                    print "............FetchPage: content ................."
-                    print content.encode("utf-8")
-                    print "............FetchPage: EOF     ................."
+                from_delimiter = conf.get("from", **kwargs)
+                to_delimiter = conf.get("to", **kwargs)
+                split_token = conf.get("token", **kwargs)
 
-                from_delimiter = util.get_value(conf["from"], _INPUT, **kwargs)
-                to_delimiter = util.get_value(conf["to"], _INPUT, **kwargs)
-                split_token = util.get_value(conf["token"], _INPUT, **kwargs)
-
-                # determine from location, i.e. from where to start reading content
+                # determine from location, i.e. from where to start reading
+                # content
                 from_location = 0
+
                 if from_delimiter != "":
                     from_location = content.find(from_delimiter)
                     # Yahoo! does not strip off the from_delimiter.
-                    #if from_location > 0:
-                    #    from_location += len(from_delimiter)
+                    # if from_location > 0:
+                    # from_location += len(from_delimiter)
 
                 # determine to location, i.e. where to stop reading content
                 to_location = 0
+
                 if to_delimiter != "":
                     to_location = content.find(to_delimiter, from_location)
 
@@ -84,26 +83,20 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
                 else:
                     items = [content]
 
-                if context.verbose:
-                    print "FetchPage: found count items:",len(items)
+                if context and context.verbose:
+                    print "FetchPage: found count items:", len(items)
 
                 for i in items:
-                    if context.verbose:
+                    if context and context.verbose:
                         print "--------------item data --------------------"
                         print i
                         print "--------------EOF item data ----------------"
-                    yield { "content" : i }
 
+                    yield {"content": i}
             except Exception, e:
-                if context.verbose:
-                    print "FetchPage: failed to retrieve from:", url
+                pass
 
-                    print "----------------- FetchPage -----------------"
-                    import traceback
-                    traceback.print_exc()
-                    print "----------------- FetchPage -----------------"
-                raise
-
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
             break
-

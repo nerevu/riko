@@ -2,8 +2,15 @@
 # vim: sw=4:ts=4:expandtab
 
 import string
+
+from urllib2 import quote
 from operator import itemgetter
-import urllib2
+from itertools import repeat
+
+try:
+    from json import loads
+except (ImportError, AttributeError):
+    from simplejson import loads
 
 DATE_FORMAT = "%m/%d/%Y"
 ALTERNATIVE_DATE_FORMATS = (
@@ -17,6 +24,26 @@ ALTERNATIVE_DATE_FORMATS = (
 
 DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
+
+
+def extract_modules(pipe_file_name=None, pipe_def=None):
+    """Extract modules used by a pipe"""
+    if pipe_file_name:
+        with open(pipe_file_name) as f:
+            pjson = f.read()
+
+    pipe_def = pipe_def or loads(pjson)
+    num = len(pipe_def['modules'])
+    modules = map(dict.get, pipe_def['modules'], repeat('type', num))
+
+    for m in pipe_def['modules']:
+        try:
+            if m['conf'].get('embed'):
+                modules.append(m['conf']['embed']['value']['type'])
+        except AttributeError:
+            pass
+
+    return sorted(set(modules))
 
 
 def pythonise(id):
@@ -101,81 +128,6 @@ def etree_to_pipes(element):
     return i
 
 
-def get_subkey(subkey, item):
-    """Return a value via a subkey reference
-        Note: subkey values use dot notation and we map onto nested
-            dictionaries, e.g. 'a.content' -> ['a']['content']
-        Note: we first remove any trailing. (i.e.
-            'item.loop:stringtokenizer.1.content.' should just match 'item.
-            loop:stringtokenizer.1.content')
-    """
-    subtree = item
-    for key in subkey.rstrip('.').split('.'):
-        if hasattr(subtree, 'get') and key in subtree:
-            subtree = subtree.get(key)
-        elif (
-            key.isdigit()
-            and isinstance(subtree, list)
-            and int(key) < len(subtree)
-        ):
-            subtree = subtree[int(key)]
-        elif key == 'value' or key == 'content' or key == 'utime':
-            subtree = subtree
-        else:
-            subtree = None
-
-        # silently returns None if any part is not found
-        # unless 'value' or 'utime' is the part in which case we return the
-        # parent (to cope with y:id.value -> y:id and
-        # item.endtime.utime -> item.endtime)
-    return subtree
-
-
-def get_value(_item, _loop_item=None, **kwargs):
-    """Return either:
-           a literal value
-           a value via a terminal (then kwargs must contain the terminals)
-           a value via a subkey reference (then _loop_item must be passed)
-       Note: subkey values use dot notation and we map onto nested
-       dictionaries, e.g. 'a.content' -> ['a']['content']
-    """
-    if 'value' in _item:  # simple value
-        return _item['value']
-    elif 'terminal' in _item:  # value fed in from another module
-        return kwargs[pythonise(_item['terminal'])].next()
-    elif 'subkey' in _item:  # reference to current loop item
-        return get_subkey(_item['subkey'], _loop_item)
-
-
-def set_value(item, key, value):
-    """Set a key's value in the item
-       Note: keys use dot notation and we map onto nested dictionaries, e.g.
-       'a.content' -> ['a']['content']
-    """
-    reduce(lambda i, k: i.setdefault(k, {}), key.split('.')[:-1], item)[
-        key.split('.')[-1]] = value
-
-
-def del_value(item, key):
-    """Remove a value (and its key) from the item
-       Note: keys use dot notation and we map onto nested dictionaries, e.g. '
-       a.content' -> ['a']['content']
-    """
-    ks = key.split('.')
-    if ks[-1].isdigit():
-        # if the sub-index looks like a number, then we're indexing into a list
-        # so convert it to an integer
-        # todo: this most likely only works for the last element of the subkey
-        # todo: should make this more robust for the different subkey types,
-        # todo: like get_subkey above is
-        ks[-1] = int(ks[-1])
-    try:
-        del reduce(lambda i, k: i.get(k), [item] + ks[:-1])[ks[-1]]
-    except:
-        # if an error occurs, don't delete anything
-        pass
-
-
 def multikeysort(items, columns):
     """Sorts a list of items by the columns
 
@@ -206,6 +158,18 @@ def multikeysort(items, columns):
     return sorted(items, cmp=comparer)
 
 
+def get_value(field, item=None, default=None, encode=False, func=False, **kwargs):
+    try:
+        if item and field.get('subkey'):
+            value = item.get(field['subkey'], default, encode, func, **kwargs)
+        else:
+            value = field.get(None, default, encode, func, **kwargs)
+    except AttributeError:
+        value = None
+
+    return value
+
+
 def get_input(context, conf):
     """Gets a user parameter, either from the console or from an outer
         submodule/system
@@ -218,11 +182,12 @@ def get_input(context, conf):
     # debug = conf['debug']['value']
 
     value = None
+
     if context.submodule:
         value = context.inputs.get(name, default)
     elif context.test:
-        # we skip user interaction during tests  #Note: docs say debug is used,
-        # but doesn't seem to be
+        # we skip user interaction during tests
+        # note: docs say debug is used, but doesn't seem to be
         value = default
     elif context.console:
         value = raw_input(
@@ -246,10 +211,10 @@ def rreplace(s, find, replace, count=None):
 def url_quote(url):
     """Ensure url is valid"""
     try:
-        return urllib2.quote(url, safe=URL_SAFE)
+        return quote(url, safe=URL_SAFE)
     except KeyError:
-        return urllib2.quote(url.encode('utf-8'), safe=URL_SAFE)
+        return quote(url.encode('utf-8'), safe=URL_SAFE)
 
 
-def recursive_dict(element):
-    return element.tag, dict(map(recursive_dict, element)) or element.text
+def listize(item):
+    return item if hasattr(item, 'append') else [item]

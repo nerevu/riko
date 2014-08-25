@@ -3,7 +3,8 @@
 
 from pipe2py import util
 
-def pipe_reverse(context, _INPUT, conf, **kwargs):
+
+def pipe_reverse(context=None, _INPUT=None, conf=None, **kwargs):
     """Reverse the order of items in a feed.
 
     Keyword arguments:
@@ -11,15 +12,14 @@ def pipe_reverse(context, _INPUT, conf, **kwargs):
     _INPUT -- source generator
     kwargs --
     conf:
-        
+
     Yields (_OUTPUT):
     reversed order of _INPUT items
     """
-    
     input=[]
-    
+
     for item in _INPUT:
         input.append(item)
-    
+
     for item in reversed(input):
         yield item

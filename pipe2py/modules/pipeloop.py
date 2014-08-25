@@ -4,9 +4,17 @@
 from pipe2py import util
 import copy
 from urllib2 import HTTPError
+from pipe2py.lib.dotdict import DotDict
+
+
+def _gen_inputs(item, conf):
+    # Pass any input parameters into the submodule
+    for key in conf:
+        yield (key, util.get_value(conf[key], item, func=unicode))
+
 
 def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
-    """This operator loops over the input performing the embedded submodule. 
+    """This operator loops over the input performing the embedded submodule.
 
     Keyword arguments:
     context -- pipeline context
@@ -17,44 +25,53 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         assign_to -- if mode is assign, which field to assign to (new or existing)
         loop_with -- pass a particular field into the submodule rather than the whole item
     embed -- embedded submodule
-    
+
     Yields (_OUTPUT):
     source items after passing through the submodule and adding/replacing values
     """
-    mode = conf['mode']['value']
-    assign_to = conf['assign_to']['value']
-    assign_part = conf['assign_part']['value']
-    emit_part = conf['emit_part']['value']
-    loop_with = conf['with']['value']
-    embed_conf = conf['embed']['value']['conf']
-    
-    #Prepare the submodule to take parameters from the loop instead of from the user
+    conf = DotDict(conf)
+    mode = conf.get('mode')
+    assign_to = conf.get('assign_to')
+    assign_part = conf.get('assign_part')
+    emit_part = conf.get('emit_part')
+    loop_with = conf.get('with')
+    embed_conf = conf.get('embed')['conf']
+
+    # Prepare the submodule to take parameters from the loop instead of from
+    # the user
     embed_context = copy.copy(context)
     embed_context.submodule = True
-    
-    for item in _INPUT:        
+
+    for item in _INPUT:
+        item = DotDict(item)
+
         if loop_with:
-            inp = util.get_subkey(loop_with, item)
+            inp = item.get(loop_with, **kwargs)
         else:
             inp = item
-            
-        #Pass any input parameters into the submodule
+
+        # Pass any input parameters into the submodule
         embed_context.inputs = {}
-        for k in embed_conf:
-            embed_context.inputs[k] = unicode(util.get_value(embed_conf[k], item))
-        p = embed(embed_context, [inp], embed_conf)  #prepare the submodule
-        
+
+        embed_context.inputs = {
+            key: util.get_value(DotDict(value), item, func=unicode)
+            for key, value in embed_conf.items()}
+
+        # prepare the submodule
+        submodule = embed(embed_context, [inp], embed_conf)
         results = None
+
         try:
-            #loop over the submodule, emitting as we go or collecting results for later assignment
-            for i in p:
+            # loop over the submodule, emitting as we go or collecting results
+            # for later assignment
+            for i in submodule:
                 if assign_part == 'first':
                     if mode == 'EMIT':
                         yield i
                     else:
                         results = i
                     break
-                else:  #all
+                else:
                     if mode == 'EMIT':
                         yield i
                     else:
@@ -62,23 +79,31 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
                             results.append(i)
                         else:
                             results = [i]
+
             if results and mode == 'assign':
-                #this is a hack to make sure fetchpage works in an out of a loop while not disturbing strconcat in a loop etc.
-                #(goes with the comment below about checking the delivery capability of the source)
-                if len(results) == 1 and isinstance(results[0], dict):
+                # this is a hack to make sure fetchpage works in an out of a
+                # loop while not disturbing strconcat in a loop etc.
+                # goes with the comment below about checking the delivery capability of the source
+                if len(results) == 1 and hasattr(results[0], 'keys'):
                     results = [results]
-        except HTTPError:  #todo any other errors we want to continue looping after?
-            if context.verbose:
+
+        # todo: any other errors we want to continue looping after?
+        except HTTPError:
+            if context and context.verbose:
                 print "Submodule gave HTTPError - continuing the loop"
+
             continue
-        
+
         if mode == 'assign':
-            if results and len(results) == 1:  #note: i suspect this needs to be more discerning and only happen if the source can only ever deliver 1 result, e.g. strconcat vs. fetchpage
-                results = results[0]           
-            util.set_value(item, assign_to, results)
+            # note: i suspect this needs to be more discerning and only happen
+            # if the source can only ever deliver 1 result, e.g. strconcat vs.
+            # fetchpage
+            if results and len(results) == 1:
+                results = results[0]
+
+            item.set(assign_to, results)
             yield item
         elif mode == 'EMIT':
-            pass  #already yielded
+            pass  # already yielded
         else:
             raise Exception("Invalid mode %s (expecting assign or EMIT)" % mode)
-

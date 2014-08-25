@@ -3,7 +3,8 @@
 
 from pipe2py import util
 
-def pipe_union(context, _INPUT, **kwargs):
+
+def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator merges up to 5 source together.
 
     Keyword arguments:
@@ -23,7 +24,7 @@ def pipe_union(context, _INPUT, **kwargs):
 
     for item in _INPUT:
         #this is being fed forever, i.e. not a real source so just use _OTHERs
-        if item == True:
+        if item.get('forever'):
             break
 
         yield item

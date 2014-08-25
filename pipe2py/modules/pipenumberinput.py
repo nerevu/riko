@@ -3,9 +3,10 @@
 
 from pipe2py import util
 
-def pipe_numberinput(context, _INPUT, conf, **kwargs):
+
+def pipe_numberinput(context=None, _INPUT=None, conf=None, **kwargs):
     """This source prompts the user for a number and yields it forever.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- not used
@@ -26,4 +27,3 @@ def pipe_numberinput(context, _INPUT, conf, **kwargs):
 
     while True:
         yield value
-
