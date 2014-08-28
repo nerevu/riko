@@ -37,17 +37,7 @@ def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
 
             parsed = feedparser.parse(urlopen(url))
 
-            for entry in parsed['entries']:
-                entry['pubDate'] = entry.get('updated_parsed')
-                entry['y:published'] = entry.get('updated_parsed')
-                entry['dc:creator'] = entry.get('author')
-                entry['author.uri'] = entry.get('author_detail', {}).get(
-                    'href')
-                entry['author.name'] = entry.get('author_detail', {}).get(
-                    'name')
-                entry['y:title'] = entry.get('title')
-                entry['y:id'] = entry.get('id')
-                # TODO: more?
+            for entry in util.gen_entries(parsed):
                 yield entry
 
         if item.get('forever'):

@@ -1,11 +1,11 @@
 # pipefetchsitefeed.py
 #
 
-# note: this is really a macro module
+import feedparser
+feedparser.USER_AGENT = "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" % feedparser.__version__
 
-from pipefeedautodiscovery import pipe_feedautodiscovery
-from pipefetch import pipe_fetch
-from pipeforever import pipe_forever
+from urllib2 import urlopen
+from pipe2py.lib import autorss
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
@@ -23,7 +23,6 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     feed entries
     """
-    forever = pipe_forever()
     conf = DotDict(conf)
     urls = util.listize(conf['URL'])
 
@@ -37,11 +36,11 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
 
             autodsc_conf = {u'URL': {u'type': u'url', u'value': url}}
 
-            for feed in pipe_feedautodiscovery(context, forever, autodsc_conf):
-                ftch_conf = {u'URL': {u'type': u'url', u'value': feed['link']}}
+            for link in autorss.getRSSLink(url.encode('utf-8')):
+                parsed = feedparser.parse(urlopen(link))
 
-                for feed_item in pipe_fetch(context, forever, ftch_conf):
-                    yield feed_item
+                for entry in util.gen_entries(parsed):
+                    yield entry
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

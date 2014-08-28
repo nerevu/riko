@@ -234,3 +234,21 @@ def url_quote(url):
 
 def listize(item):
     return item if hasattr(item, 'append') else [item]
+
+
+############
+# Generators
+############
+def gen_entries(parsed):
+    for entry in parsed['entries']:
+        entry['pubDate'] = entry.get('updated_parsed')
+        entry['y:published'] = entry.get('updated_parsed')
+        entry['dc:creator'] = entry.get('author')
+        entry['author.uri'] = entry.get('author_detail', {}).get(
+            'href')
+        entry['author.name'] = entry.get('author_detail', {}).get(
+            'name')
+        entry['y:title'] = entry.get('title')
+        entry['y:id'] = entry.get('id')
+        # TODO: more?
+        yield entry
