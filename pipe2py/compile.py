@@ -81,6 +81,15 @@ def write_file(data, path, pretty=False):
             f.write(data)
 
 
+def _load_json(json):
+    try:
+        loaded = loads(json.encode('utf-8'))
+    except UnicodeDecodeError:
+        loaded = loads(json)
+
+    return loaded
+
+
 
 
 def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
@@ -367,9 +376,6 @@ def analyze_pipe(context, pipe):
         print('Other pipes used:', ', '.join(x[5:] for x in pipes) or None)
 
 
-def _convert_json(json):
-    return loads(json.encode('utf-8'))
-
 if __name__ == '__main__':
     usage = 'usage: %prog [options] [filename]'
     parser = OptionParser(usage=usage)
@@ -403,7 +409,7 @@ if __name__ == '__main__':
         # todo: refactor this url->json
 
         pjson = requests.get(url).text
-        pipe_raw = _convert_json(pjson)
+        pipe_raw = _load_json(pjson)
         results = pipe_raw['query']['results']
 
         if not results:
@@ -417,11 +423,11 @@ if __name__ == '__main__':
         with open(pipe_file_name) as f:
             pjson = f.read()
 
-        pipe_def = _convert_json(pjson)
+        pipe_def = _load_json(pjson)
     else:
         pipe_name = 'anonymous'
         pjson = ''.join(line for line in fileinput.input())
-        pipe_def = _convert_json(pjson)
+        pipe_def = _load_json(pjson)
 
     pipe = parse_pipe_def(pipe_def, pipe_name)
     path = p.join(PARENT, 'pypipelines', '%s.py' % pipe_name)
@@ -437,7 +443,7 @@ if __name__ == '__main__':
         base = 'http://pipes.yahoo.com/pipes/pipe.run'
         url = '%s?_id=%s&_render=json' % (base, options.pipeid)
         ojson = requests.get(url).text
-        pipe_output = _convert_json(ojson)
+        pipe_output = _load_json(ojson)
         count = pipe_output['count']
 
         if not count:
