@@ -41,12 +41,14 @@ import sys
 import requests
 
 try:
-    from json import loads
+    from json import loads, dumps
 except (ImportError, AttributeError):
-    from simplejson import loads
+    from simplejson import loads, dumps
 
+from codecs import open
 from itertools import chain
 from importlib import import_module
+from pprint import PrettyPrinter
 from jinja2 import Environment, PackageLoader
 from optparse import OptionParser
 from os import path as p
@@ -55,10 +57,30 @@ from pipe2py.modules.pipeforever import pipe_forever
 from pipe2py.lib.pprint2 import Id, repr_args, str_args
 from pipe2py.lib.topsort import topological_sort
 
+PARENT = p.dirname(__file__)
 
-def _write_file(data, path, pretty=False):
-    with open(path, 'w') as f:
-        pprint(data, f) if pretty else f.write(data)
+class MyPrettyPrinter(PrettyPrinter):
+    def format(self, object, context, maxlevels, level):
+        if isinstance(object, unicode):
+            return (object.encode('utf8'), True, False)
+        else:
+            return PrettyPrinter.format(
+                self, object, context, maxlevels, level)
+
+
+def write_file(data, path, pretty=False):
+    if data and path:
+        with open(path, 'w', encoding='utf-8') as f:
+            if hasattr(data, 'keys') and pretty:
+                data = dumps(data, sort_keys=True, indent=4, ensure_ascii=False)
+            elif hasattr(data, 'keys'):
+                data = dumps(data, ensure_ascii=False)
+            elif pretty:
+                data = unicode(MyPrettyPrinter().pformat(data), 'utf-8')
+
+            f.write(data)
+
+
 
 
 def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
@@ -367,7 +389,6 @@ if __name__ == '__main__':
 
     pipe_file_name = args[0] if args else None
     context = Context(verbose=options.verbose)
-    parent = p.dirname(p.dirname(__file__))
 
     if options.pipeid:
         pipe_name = 'pipe_%s' % options.pipeid
@@ -403,14 +424,14 @@ if __name__ == '__main__':
         pipe_def = _convert_json(pjson)
 
     pipe = parse_pipe_def(pipe_def, pipe_name)
-    path = p.join('output', 'pipeline', '%s.py' % pipe_name)
+    path = p.join(PARENT, 'pypipelines', '%s.py' % pipe_name)
     data = stringify_pipe(context, pipe)
-    _write_file(data, path)
+    write_file(data, path)
     analyze_pipe(context, pipe)
 
     if options.savejson:
-        path = p.join(parent, 'output', 'pipeline', '%s.json' % pipe_name)
-        _write_file(pipe_def, path, True)
+        path = p.join(PARENT, 'pipelines', '%s.json' % pipe_name)
+        write_file(pipe_def, path, True)
 
     if options.saveoutput:
         base = 'http://pipes.yahoo.com/pipes/pipe.run'
@@ -423,8 +444,8 @@ if __name__ == '__main__':
             print('Pipe results not found')
             sys.exit(1)
 
-        path = p.join(parent, 'output', 'data', '%s_output.json' % pipe_name)
-        _write_file(pipe_output, path, True)
+        path = p.join(PARENT, 'data', '%s_output.json' % pipe_name)
+        write_file(pipe_output, path, True)
 
     # for build example - see test/testbasics.py
 
