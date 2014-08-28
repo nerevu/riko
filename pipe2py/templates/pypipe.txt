@@ -4,7 +4,15 @@ from pipe2py import Context
 from pipe2py.modules.pipeforever import pipe_forever
 
 {%- for module in modules %}
+{%- if not module.sub_pipe %}
 from pipe2py.modules.{{ module.pymodule_name }} import {{ module.pymodule_generator }}
+{%- endif -%}
+{%- endfor -%}
+
+{%- for module in modules %}
+{%- if module.sub_pipe %}
+from pipe2py.pypipelines.{{ module.pymodule_name }} import {{ module.pymodule_generator }}
+{%- endif -%}
 {%- endfor %}
 
 def {{ pipe_name }}(context=None, _INPUT=None, conf=None, **kwargs):
