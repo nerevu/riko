@@ -336,13 +336,10 @@ def analyze_pipe(context, pipe):
 
     if context and context.verbose:
         print
-        print 'Modules used:', ', '.join(
-            name for name in moduletypes if not name.startswith('pipe:')
-        ) or None
-
-        print 'Other pipes used:', ', '.join(
-            name[5:] for name in moduletypes if name.startswith('pipe:')
-        ) or None
+        filtered = filter(lambda x: not x.startswith('pipe:'), moduletypes)
+        pipes = filter(lambda x: x.startswith('pipe:'), moduletypes)
+        print 'Modules used:', ', '.join(filtered) or None
+        print 'Other pipes used:', ', '.join(x[5:] for x in pipes) or None
 
 
 def _convert_json(json):
