@@ -47,15 +47,15 @@ def extract_modules(pipe_file_name=None, pipe_def=None):
     return sorted(set(modules))
 
 
-def pythonise(id):
+def pythonise(id, encoding='ascii'):
     """Return a Python-friendly id"""
-    if id:
-        id = id.replace("-", "_").replace(":", "_")
+    replace = {'-': '_', ':': '_', '/': '_'}
 
-        if id[0] in string.digits:
-            id = "_" + id
+    for key, value in replace.items():
+        id = id.replace(key, value)
 
-        return id.encode('ascii')
+    id = '_%s' % id if id[0] in string.digits else id
+    return id.encode(encoding)
 
 
 def xml_to_dict(element):
