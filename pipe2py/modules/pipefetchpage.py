@@ -38,65 +38,61 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
             url = util.get_abspath(url)
             f = urlopen(url)
 
+            # TODO: it seems that Yahoo! converts relative links to
+            # absolute. This needs to be done on the content but seems to
+            # be a non-trival task python?
+            content = unicode(f.read(), 'utf-8')
 
-            try:
-                # TODO: it seems that Yahoo! converts relative links to
-                # absolute. This needs to be done on the content but seems to
-                # be a non-trival task python?
-                content = unicode(f.read(), 'utf-8')
+            if context and context.verbose:
+                print '............Content .................'
+                print content
+                print '...............EOF...................'
 
+            from_delimiter = conf.get("from", **kwargs)
+            to_delimiter = conf.get("to", **kwargs)
+            split_token = conf.get("token", **kwargs)
+
+            # determine from location, i.e. from where to start reading
+            # content
+            from_location = 0
+
+            if from_delimiter != "":
+                from_location = content.find(from_delimiter)
+                # Yahoo! does not strip off the from_delimiter.
+                # if from_location > 0:
+                # from_location += len(from_delimiter)
+
+            # determine to location, i.e. where to stop reading content
+            to_location = 0
+
+            if to_delimiter != "":
+                to_location = content.find(to_delimiter, from_location)
+
+            # reduce the content depended on the to/from locations
+            if from_location > 0 and to_location > 0:
+                content = content[from_location:to_location]
+            elif from_location > 0:
+                content = content[from_location:]
+            elif to_location > 0:
+                content = content[:to_location]
+
+            # determine items depended on the split_token
+            items = []
+            if split_token != "":
+                items = content.split(split_token)
+            else:
+                items = [content]
+
+            if context and context.verbose:
+                print "FetchPage: found count items:", len(items)
+
+            for i in items:
                 if context and context.verbose:
-                    print '............Content .................'
-                    print content
-                    print '...............EOF...................'
+                    print "--------------item data --------------------"
+                    print i
+                    print "--------------EOF item data ----------------"
 
-                from_delimiter = conf.get("from", **kwargs)
-                to_delimiter = conf.get("to", **kwargs)
-                split_token = conf.get("token", **kwargs)
-
-                # determine from location, i.e. from where to start reading
-                # content
-                from_location = 0
-
-                if from_delimiter != "":
-                    from_location = content.find(from_delimiter)
-                    # Yahoo! does not strip off the from_delimiter.
-                    # if from_location > 0:
-                    # from_location += len(from_delimiter)
-
-                # determine to location, i.e. where to stop reading content
-                to_location = 0
-
-                if to_delimiter != "":
-                    to_location = content.find(to_delimiter, from_location)
-
-                # reduce the content depended on the to/from locations
-                if from_location > 0 and to_location > 0:
-                    content = content[from_location:to_location]
-                elif from_location > 0:
-                    content = content[from_location:]
-                elif to_location > 0:
-                    content = content[:to_location]
-
-                # determine items depended on the split_token
-                items = []
-                if split_token != "":
-                    items = content.split(split_token)
-                else:
-                    items = [content]
-
-                if context and context.verbose:
-                    print "FetchPage: found count items:", len(items)
-
-                for i in items:
-                    if context and context.verbose:
-                        print "--------------item data --------------------"
-                        print i
-                        print "--------------EOF item data ----------------"
-
-                    yield {"content": i}
-            except Exception, e:
-                pass
+                yield {"content": i}
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

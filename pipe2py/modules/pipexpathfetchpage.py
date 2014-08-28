@@ -36,62 +36,59 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
             url = util.get_abspath(url)
             f = urlopen(url)
 
-            try:
-                # TODO: it seems that Yahoo! converts relative links to
-                # absolute. This needs to be done on the content but seems to
-                # be a non-trival task python?
-                content = unicode(f.read(), 'utf-8')
+            # TODO: it seems that Yahoo! converts relative links to
+            # absolute. This needs to be done on the content but seems to
+            # be a non-trival task python?
+            content = unicode(f.read(), 'utf-8')
+
+            if context and context.verbose:
+                print '............Content .................'
+                print content
+                print '...............EOF...................'
+
+            xpath = conf.get('xpath', **kwargs)
+
+            if 'html5' in conf:
+                value = conf.get('html5', **kwargs)
+                html5 = value == 'true'
+            else:
+                html5 = False
+
+            if 'useAsString' in conf:
+                value = conf.get('useAsString', **kwargs)
+                use_as_string = value == 'true'
+            else:
+                use_as_string = False
+
+
+            if html5:
+                # from lxml.html import html5parser
+                # root = html5parser.fromstring(content)
+                root = parse(
+                    content,
+                    treebuilder='lxml',
+                    namespaceHTMLElements=False
+                )
+            else:
+                root = etree.HTML(content)
+
+            res_items = root.xpath(xpath)
+
+            if context and context.verbose:
+                print 'XPathFetchPage: found count items:', len(res_items)
+
+            for res_item in res_items:
+                i = util.etree_to_pipes(res_item) #TODO xml_to_dict(res_item)
 
                 if context and context.verbose:
-                    print '............Content .................'
-                    print content
-                    print '...............EOF...................'
+                    print '--------------item data --------------------'
+                    print i
+                    print '--------------EOF item data ----------------'
 
-                xpath = conf.get('xpath', **kwargs)
-
-                if 'html5' in conf:
-                    value = conf.get('html5', **kwargs)
-                    html5 = value == 'true'
+                if use_as_string:
+                    yield {'content' : unicode(i)}
                 else:
-                    html5 = False
-
-                if 'useAsString' in conf:
-                    value = conf.get('useAsString', **kwargs)
-                    use_as_string = value == 'true'
-                else:
-                    use_as_string = False
-
-
-                if html5:
-                    # from lxml.html import html5parser
-                    # root = html5parser.fromstring(content)
-                    root = parse(
-                        content,
-                        treebuilder='lxml',
-                        namespaceHTMLElements=False
-                    )
-                else:
-                    root = etree.HTML(content)
-
-                res_items = root.xpath(xpath)
-
-                if context and context.verbose:
-                    print 'XPathFetchPage: found count items:', len(res_items)
-
-                for res_item in res_items:
-                    i = util.etree_to_pipes(res_item) #TODO xml_to_dict(res_item)
-
-                    if context and context.verbose:
-                        print '--------------item data --------------------'
-                        print i
-                        print '--------------EOF item data ----------------'
-
-                    if use_as_string:
-                        yield {'content' : unicode(i)}
-                    else:
-                        yield i
-            except Exception, e:
-                pass
+                    yield i
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,
