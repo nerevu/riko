@@ -335,6 +335,7 @@ def stringify_pipe(context, pipe):
 
         module['args'] = repr_args(chain(args, kwargs.items()))
         module['id'] = module_id
+        module['sub_pipe'] = pymodule_name.startswith('pipe_')
         module['pymodule_name'] = pymodule_name
         module['pymodule_generator'] = pymodule_generator
         modules.append(module)
