@@ -30,14 +30,17 @@ def {{ pipe_name }}(context=None, _INPUT=None, conf=None, **kwargs):
     # input at runtime (as we can to subpipelines)
     def pipe_{{ module.id }}(context=None, _INPUT=None, conf=None, **kwargs):
         # todo: insert submodule description here
-    {% endif %}
-    {%- if module.id in embedded_pipes %}        {{ else }}    {% endif -%}
-    {{ module.id }} = {{ module.pymodule_generator }}(
+        return {{ module.pymodule_generator }}(
             {{ module.args }})
-    {%- if module.id in embedded_pipes %}
-        return {{ module.id }}
-    {% endif %}
-{% endfor %}
+    {% endif -%}
+{%- endfor %}
+
+{%- for module in modules -%}
+    {%- if not module.id in embedded_pipes %}
+    {{ module.id }} = {{ module.pymodule_generator }}(
+        {{ module.args }})
+    {% endif -%}
+{%- endfor %}
     return {{ last_module }}
 
 
