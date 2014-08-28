@@ -49,10 +49,11 @@ class TestBasics(unittest.TestCase):
         print 'pipeline length %s %i, but expected %s %i.' % (
             switch.get(compared), value, switch.get(check), value)
 
-        # assert that pipeline length is as expected
-        self.assertEqual(compared, check)
         print 'Modules used in pipe %s: %s' % (
             pipe_name, extract_modules(pipe_def=pipe_def))
+
+        # assert that pipeline length is as expected
+        self.assertEqual(compared, check)
 
         return pipeline
 
@@ -75,10 +76,9 @@ class TestBasics(unittest.TestCase):
 
             TODO: have these tests iterate over a number of test pipelines
         """
-        # note: changed to 0 since feedparser fails to open file:// resources
         pipe_name = 'testpipe1'
         pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name, check=0)
+        pipeline = self._load(pipe_def, pipe_name)
         [self.assertIn('the', i.get('description')) for i in pipeline]
 
     def test_simplest(self):
@@ -159,7 +159,6 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_1166de33b0ea6936d96808717355beaa'
         pipe_def = self._get_pipe_def(pipe_name)
         pipeline = self._load(pipe_def, pipe_name, 3, 0)
-        # print list(pipeline)
         contains = [
             {
                 'media:thumbnail': {'url': u'http://example.com/a.jpg'},

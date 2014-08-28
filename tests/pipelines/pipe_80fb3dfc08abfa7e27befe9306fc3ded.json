@@ -1,1 +1,172 @@
-{"layout":[{"id":"sw-551","xy":[177,85]},{"id":"_OUTPUT","xy":[452,507]},{"id":"sw-566","xy":[286,304]}],"modules":[{"type":"yql","id":"sw-551","conf":{"yqlquery":{"value":"select * from html where url=\"http://finance.yahoo.com/q?s=yhoo\" and xpath='//div[@id=\"yfi_headlines\"]/div[2]/ul/li'","type":"text"},"raw":{"type":"text","value":"results"},"envURL":{"value":"store://datatables.org/alltableswithkeys","type":"text"}}},{"type":"output","id":"_OUTPUT","conf":{}},{"type":"rename","id":"sw-566","conf":{"RULE":[{"field":{"value":"a.content","type":"text"},"op":{"type":"text","value":"copy"},"newval":{"value":"title","type":"text"}}]}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-551","data":{"_type":"item","_attr":{"a":{"_type":"","_attr":{"href":{"_type":"url","_count":"9"},"content":{"_type":"text","_count":"9"}}},"cite":{"_type":"","_attr":{"content":{"_type":"text","_count":"9"},"span":{"_type":"text","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-566","data":{"_type":"item","_attr":{"a":{"_type":"","_attr":{"href":{"_type":"url","_count":"9"},"content":{"_type":"text","_count":"9"}}},"title":{"_type":"text","_count":"9"},"cite":{"_type":"","_attr":{"content":{"_type":"text","_count":"9"},"span":{"_type":"text","_count":"9"}}}}}}],"wires":[{"id":"_w0","src":{"id":"_OUTPUT","moduleid":"sw-551"},"tgt":{"id":"_INPUT","moduleid":"sw-566"}},{"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-566"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}
+{
+    "layout": [
+        {
+            "id": "sw-551", 
+            "xy": [
+                177, 
+                85
+            ]
+        }, 
+        {
+            "id": "_OUTPUT", 
+            "xy": [
+                452, 
+                507
+            ]
+        }, 
+        {
+            "id": "sw-566", 
+            "xy": [
+                286, 
+                304
+            ]
+        }
+    ], 
+    "modules": [
+        {
+            "conf": {
+                "envURL": {
+                    "type": "text", 
+                    "value": "store://datatables.org/alltableswithkeys"
+                }, 
+                "raw": {
+                    "type": "text", 
+                    "value": "results"
+                }, 
+                "yqlquery": {
+                    "type": "text", 
+                    "value": "select * from html where url=\"http://finance.yahoo.com/q?s=yhoo\" and xpath='//div[@id=\"yfi_headlines\"]/div[2]/ul/li'"
+                }
+            }, 
+            "id": "sw-551", 
+            "type": "yql"
+        }, 
+        {
+            "conf": {}, 
+            "id": "_OUTPUT", 
+            "type": "output"
+        }, 
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text", 
+                            "value": "a.content"
+                        }, 
+                        "newval": {
+                            "type": "text", 
+                            "value": "title"
+                        }, 
+                        "op": {
+                            "type": "text", 
+                            "value": "copy"
+                        }
+                    }
+                ]
+            }, 
+            "id": "sw-566", 
+            "type": "rename"
+        }
+    ], 
+    "terminaldata": [
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9", 
+                                "_type": "text"
+                            }, 
+                            "href": {
+                                "_count": "9", 
+                                "_type": "url"
+                            }
+                        }, 
+                        "_type": ""
+                    }, 
+                    "cite": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9", 
+                                "_type": "text"
+                            }, 
+                            "span": {
+                                "_count": "9", 
+                                "_type": "text"
+                            }
+                        }, 
+                        "_type": ""
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-551"
+        }, 
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9", 
+                                "_type": "text"
+                            }, 
+                            "href": {
+                                "_count": "9", 
+                                "_type": "url"
+                            }
+                        }, 
+                        "_type": ""
+                    }, 
+                    "cite": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9", 
+                                "_type": "text"
+                            }, 
+                            "span": {
+                                "_count": "9", 
+                                "_type": "text"
+                            }
+                        }, 
+                        "_type": ""
+                    }, 
+                    "title": {
+                        "_count": "9", 
+                        "_type": "text"
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-566"
+        }
+    ], 
+    "wires": [
+        {
+            "id": "_w0", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-551"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "sw-566"
+            }
+        }, 
+        {
+            "id": "_w1", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-566"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

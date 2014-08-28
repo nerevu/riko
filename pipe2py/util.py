@@ -4,6 +4,7 @@
 import string
 
 from urllib2 import quote
+from os import path as p
 from operator import itemgetter
 from itertools import repeat
 
@@ -46,15 +47,15 @@ def extract_modules(pipe_file_name=None, pipe_def=None):
     return sorted(set(modules))
 
 
-def pythonise(id):
+def pythonise(id, encoding='ascii'):
     """Return a Python-friendly id"""
-    if id:
-        id = id.replace("-", "_").replace(":", "_")
+    replace = {'-': '_', ':': '_', '/': '_'}
 
-        if id[0] in string.digits:
-            id = "_" + id
+    for key, value in replace.items():
+        id = id.replace(key, value)
 
-        return id.encode('ascii')
+    id = '_%s' % id if id[0] in string.digits else id
+    return id.encode(encoding)
 
 
 def xml_to_dict(element):
@@ -203,6 +204,21 @@ def get_input(context, conf):
     return value
 
 
+def get_abspath(url):
+    url = 'http://%s' % url if url and '://' not in url else url
+
+    if url.startswith('file:///'):
+        # already have an abspath
+        pass
+    elif url.startswith('file://'):
+        parent = p.dirname(__file__)
+        rel_path = url[7:]
+        abspath = p.abspath(p.join(parent, rel_path))
+        url = 'file://%s' % abspath
+
+    return url
+
+
 def rreplace(s, find, replace, count=None):
     li = s.rsplit(find, count)
     return replace.join(li)
@@ -218,3 +234,21 @@ def url_quote(url):
 
 def listize(item):
     return item if hasattr(item, 'append') else [item]
+
+
+############
+# Generators
+############
+def gen_entries(parsed):
+    for entry in parsed['entries']:
+        entry['pubDate'] = entry.get('updated_parsed')
+        entry['y:published'] = entry.get('updated_parsed')
+        entry['dc:creator'] = entry.get('author')
+        entry['author.uri'] = entry.get('author_detail', {}).get(
+            'href')
+        entry['author.name'] = entry.get('author_detail', {}).get(
+            'name')
+        entry['y:title'] = entry.get('title')
+        entry['y:id'] = entry.get('id')
+        # TODO: more?
+        yield entry

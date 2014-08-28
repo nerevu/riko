@@ -7,7 +7,7 @@
 
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchData
 """
-import urllib2
+from urllib2 import urlopen
 from xml.etree import cElementTree as ElementTree
 
 try:
@@ -42,15 +42,15 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     >>> from os import path as p
     >>> from pipe2py.modules.pipeforever import pipe_forever
     >>> parent = p.dirname(p.dirname(__file__))
-    >>> file_name = p.abspath(p.join(parent, 'data', 'gigs.json'))
+    >>> abspath = p.abspath(p.join(parent, 'data', 'gigs.json'))
     >>> path = 'value.items'
-    >>> url = "file://%s" % file_name
+    >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
     >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()[:5]
     [u'y:repeatcount', u'description', u'pubDate', u'title', u'y:published']
-    >>> file_name = p.abspath(p.join(parent, 'data', 'places.xml'))
+    >>> abspath = p.abspath(p.join(parent, 'data', 'places.xml'))
     >>> path = 'appointment'
-    >>> url = "file://%s" % file_name
+    >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
     >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()
     ['begin', 'uid', 'places', 'alarmTime', 'duration', 'subject']
@@ -65,12 +65,13 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
         for item_url in urls:
             item = DotDict(item)
             url = util.get_value(DotDict(item_url), item, **kwargs)
+            url = util.get_abspath(url)
             path = util.get_value(conf['path'], item, **kwargs)
             match = None
 
             #Parse the file into a dictionary
             try:
-                f = urllib2.urlopen(url)
+                f = urlopen(url)
                 ft = ElementTree.parse(f)
                 if context and context.verbose:
                     print "pipe_fetchdata loading xml:", url
@@ -98,7 +99,7 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
 
             except Exception, e:
                 try:
-                    f = urllib2.urlopen(url)
+                    f = urlopen(url)
                     d = json.load(f)
                     #todo test:-
                     if context and context.verbose:

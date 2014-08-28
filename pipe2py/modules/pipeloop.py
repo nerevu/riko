@@ -2,7 +2,7 @@
 #
 
 from pipe2py import util
-import copy
+from copy import copy
 from urllib2 import HTTPError
 from pipe2py.lib.dotdict import DotDict
 
@@ -39,7 +39,7 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
 
     # Prepare the submodule to take parameters from the loop instead of from
     # the user
-    embed_context = copy.copy(context)
+    embed_context = copy(context)
     embed_context.submodule = True
 
     for item in _INPUT:

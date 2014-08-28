@@ -14,8 +14,7 @@ except ImportError:
 else:
     timeoutsocket.setDefaultSocketTimeout(10)
 
-import requests
-
+from urllib2 import urlopen
 from urlparse import urljoin
 from sgmllib import SGMLParser
 
@@ -56,13 +55,14 @@ def getRSSLinkFromHTMLSource(html):
 
 def getRSSLink(url):
     try:
-        r = requests.get(url, stream=True)
+        f = urlopen(url)
         parser = LinkParser()
 
-        for chunk in r.iter_content(BUFFERSIZE):
+        while True:
+            chunk = f.read(BUFFERSIZE)
             parser.feed(chunk)
 
-            if parser.nomoretags:
+            if parser.nomoretags or not chunk:
                 break
 
         return [urljoin(url, href) for href in parser.href]

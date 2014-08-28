@@ -41,6 +41,7 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         col_mode = util.get_value(conf['col_mode'], item, **kwargs)
         row_start = int(util.get_value(conf['col_row_start'], item, **kwargs))
         row_end = int(util.get_value(conf['col_row_end'], item, **kwargs))
+        url = util.get_abspath(url)
 
         f = urlopen(url)
 

@@ -1,1 +1,2007 @@
-{"layout":[{"id":"sw-580","xy":[313,-286]},{"id":"_OUTPUT","xy":[403,646]},{"id":"sw-595","xy":[245,-186]},{"id":"sw-619","xy":[655,167]},{"id":"sw-636","xy":[242,30]},{"id":"sw-655","xy":[280,390]},{"id":"sw-666","xy":[177,517]}],"modules":[{"type":"fetchdata","id":"sw-580","conf":{"URL":{"value":"http://www.guardian.co.uk/politics/api/general-election/2010/results/json","type":"url"},"path":{"value":"results.called-constituencies","type":"text"}}},{"type":"output","id":"_OUTPUT","conf":{}},{"type":"loop","id":"sw-595","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"pipe:bd0834cfe6cdacb0bea5569505d330b8","id":"sw-603","conf":{"gid":{"subkey":"result.winning-mp.aristotle-id","type":"text"}}},"type":"module"},"emit_part":{"type":"text","value":"first"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"first"},"assign_to":{"value":"mpdetails","type":"text"}}},{"type":"loop","id":"sw-619","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"locationbuilder","id":"sw-692","conf":{"LOCATION":{"subkey":"mpdetails.university","type":"text"}}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"first"},"assign_to":{"value":"y:location","type":"text"}}},{"type":"filter","id":"sw-636","conf":{"MODE":{"type":"text","value":"permit"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"mpdetails.university","type":"text"},"op":{"type":"text","value":"matches"},"value":{"value":" .+","type":"text"}}]}},{"type":"rename","id":"sw-655","conf":{"RULE":[{"field":{"value":"mpdetails.name","type":"text"},"op":{"type":"text","value":"copy"},"newval":{"value":"title","type":"text"}},{"field":{"value":"mpdetails.school","type":"text"},"op":{"type":"text","value":"copy"},"newval":{"value":"description","type":"text"}}]}},{"type":"regex","id":"sw-666","conf":{"RULE":[{"field":{"value":"title","type":"text"},"match":{"value":"(.*)","type":"text"},"replace":{"value":"$1 (${mpdetails.university})","type":"text"}}]}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-580","data":{"_type":"item","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"},"pa_code":{"_type":"number","_count":"9"},"result":{"_type":"","_attr":{"result-declared":{"_type":"datetime","_count":"9"},"turnout-as-percentage":{"_type":"number","_count":"9"},"winning-mp":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"9"},"votes-as-percentage":{"_type":"number","_count":"9"},"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"}}},"winning-majority-as-votes":{"_type":"number","_count":"9"},"previous-mp":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"turnout-as-quantity":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-595","data":{"_type":"item","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"mpdetails":{"_type":"item","_attr":{"university":{"_type":"text","_count":"6"},"name":{"_type":"text","_count":"9"},"candidacies":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"28"},"votes-as-percentage":{"_type":"number","_count":"28"},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"28"},"aristotle-url":{"_type":"url","_count":"28"},"json-url":{"_type":"url","_count":"28"},"aristotle-id":{"_type":"number","_count":"28"},"pa_code":{"_type":"number","_count":"27"}}},"position":{"_type":"number","_count":"28"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"28"},"abbreviation":{"_type":"text","_count":"28"},"json-url":{"_type":"url","_count":"28"},"web-url":{"_type":"url","_count":"28"},"aristotle-id":{"_type":"number","_count":"28"}}},"election":{"_type":"","_attr":{"polling-date":{"_type":"datetime","_count":"28"},"type":{"_type":"text","_count":"28"},"json-url":{"_type":"url","_count":"28"},"web-url":{"_type":"blank","_count":"7"},"year":{"_type":"number","_count":"28"}}}}},"is-incumbent":{"_type":"number","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"image":{"_type":"url","_count":"5"},"contact-details":{"_type":"","_attr":{"websites":{"_type":"","_attr":{"url":{"_type":"url","_count":"18"},"name":{"_type":"text","_count":"18"}}},"email-addresses":{"_type":"","_attr":{"email":{"_type":"text","_count":"8"},"type":{"_type":"text","_count":"8"}}}}},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"},"pa_code":{"_type":"number","_count":"9"}}},"aristotle-url":{"_type":"url","_count":"9"},"school":{"_type":"text","_count":"6"}}},"aristotle-id":{"_type":"number","_count":"9"},"pa_code":{"_type":"number","_count":"9"},"result":{"_type":"","_attr":{"result-declared":{"_type":"datetime","_count":"9"},"turnout-as-percentage":{"_type":"number","_count":"9"},"winning-mp":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"9"},"votes-as-percentage":{"_type":"number","_count":"9"},"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"}}},"winning-majority-as-votes":{"_type":"number","_count":"9"},"previous-mp":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"turnout-as-quantity":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-636","data":{"_type":"item","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"mpdetails":{"_type":"item","_attr":{"university":{"_type":"text","_count":"9"},"name":{"_type":"text","_count":"9"},"candidacies":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"38"},"votes-as-percentage":{"_type":"number","_count":"38"},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"38"},"aristotle-url":{"_type":"url","_count":"38"},"json-url":{"_type":"url","_count":"38"},"aristotle-id":{"_type":"number","_count":"38"},"pa_code":{"_type":"number","_count":"36"}}},"position":{"_type":"number","_count":"38"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"38"},"abbreviation":{"_type":"text","_count":"38"},"json-url":{"_type":"url","_count":"38"},"web-url":{"_type":"url","_count":"38"},"aristotle-id":{"_type":"number","_count":"38"}}},"election":{"_type":"","_attr":{"polling-date":{"_type":"datetime","_count":"38"},"type":{"_type":"text","_count":"38"},"json-url":{"_type":"url","_count":"38"},"web-url":{"_type":"blank","_count":"9"},"year":{"_type":"number","_count":"38"}}}}},"is-incumbent":{"_type":"number","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"image":{"_type":"url","_count":"7"},"contact-details":{"_type":"","_attr":{"websites":{"_type":"","_attr":{"url":{"_type":"url","_count":"19"},"name":{"_type":"text","_count":"19"}}},"email-addresses":{"_type":"","_attr":{"email":{"_type":"text","_count":"9"},"type":{"_type":"text","_count":"9"}}}}},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"},"pa_code":{"_type":"number","_count":"9"}}},"aristotle-url":{"_type":"url","_count":"9"},"school":{"_type":"text","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"aristotle-id":{"_type":"number","_count":"9"},"pa_code":{"_type":"number","_count":"9"},"result":{"_type":"","_attr":{"result-declared":{"_type":"datetime","_count":"9"},"turnout-as-percentage":{"_type":"number","_count":"9"},"winning-mp":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"9"},"name":{"_type":"text","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"votes-as-percentage":{"_type":"number","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"winning-majority-as-votes":{"_type":"number","_count":"9"},"previous-mp":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"turnout-as-quantity":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-655","data":{"_type":"item","_attr":{"name":{"_type":"text","_count":"9"},"description":{"_type":"text","_count":"9"},"mpdetails":{"_type":"item","_attr":{"university":{"_type":"text","_count":"9"},"name":{"_type":"text","_count":"9"},"candidacies":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"38"},"votes-as-percentage":{"_type":"number","_count":"38"},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"38"},"aristotle-url":{"_type":"url","_count":"38"},"json-url":{"_type":"url","_count":"38"},"aristotle-id":{"_type":"number","_count":"38"},"pa_code":{"_type":"number","_count":"36"}}},"position":{"_type":"number","_count":"38"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"38"},"abbreviation":{"_type":"text","_count":"38"},"json-url":{"_type":"url","_count":"38"},"web-url":{"_type":"url","_count":"38"},"aristotle-id":{"_type":"number","_count":"38"}}},"election":{"_type":"","_attr":{"polling-date":{"_type":"datetime","_count":"38"},"type":{"_type":"text","_count":"38"},"json-url":{"_type":"url","_count":"38"},"web-url":{"_type":"blank","_count":"9"},"year":{"_type":"number","_count":"38"}}}}},"is-incumbent":{"_type":"number","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"image":{"_type":"url","_count":"7"},"contact-details":{"_type":"","_attr":{"websites":{"_type":"","_attr":{"url":{"_type":"url","_count":"19"},"name":{"_type":"text","_count":"19"}}},"email-addresses":{"_type":"","_attr":{"email":{"_type":"text","_count":"9"},"type":{"_type":"text","_count":"9"}}}}},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"},"pa_code":{"_type":"number","_count":"9"}}},"aristotle-url":{"_type":"url","_count":"9"},"school":{"_type":"text","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"aristotle-id":{"_type":"number","_count":"9"},"y:location":{"_type":"location","_attr":{"country":{"_type":"text","_count":"9"},"city":{"_type":"text","_count":"9"},"street":{"_type":"blank","_count":"4"},"lat":{"_type":"number","_count":"9"},"postal":{"_type":"blank","_count":"5"},"lon":{"_type":"number","_count":"9"},"quality":{"_type":"number","_count":"9"},"state":{"_type":"text","_count":"8"}}},"pa_code":{"_type":"number","_count":"9"},"json-url":{"_type":"url","_count":"9"},"title":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"result":{"_type":"","_attr":{"result-declared":{"_type":"datetime","_count":"9"},"turnout-as-percentage":{"_type":"number","_count":"9"},"winning-mp":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"9"},"name":{"_type":"text","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"votes-as-percentage":{"_type":"number","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"winning-majority-as-votes":{"_type":"number","_count":"9"},"previous-mp":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"turnout-as-quantity":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-666","data":{"_type":"item","_attr":{"name":{"_type":"text","_count":"9"},"description":{"_type":"text","_count":"9"},"mpdetails":{"_type":"item","_attr":{"university":{"_type":"text","_count":"9"},"name":{"_type":"text","_count":"9"},"candidacies":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"38"},"votes-as-percentage":{"_type":"number","_count":"38"},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"38"},"aristotle-url":{"_type":"url","_count":"38"},"json-url":{"_type":"url","_count":"38"},"aristotle-id":{"_type":"number","_count":"38"},"pa_code":{"_type":"number","_count":"36"}}},"position":{"_type":"number","_count":"38"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"38"},"abbreviation":{"_type":"text","_count":"38"},"json-url":{"_type":"url","_count":"38"},"web-url":{"_type":"url","_count":"38"},"aristotle-id":{"_type":"number","_count":"38"}}},"election":{"_type":"","_attr":{"polling-date":{"_type":"datetime","_count":"38"},"type":{"_type":"text","_count":"38"},"json-url":{"_type":"url","_count":"38"},"web-url":{"_type":"blank","_count":"9"},"year":{"_type":"number","_count":"38"}}}}},"is-incumbent":{"_type":"number","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"image":{"_type":"url","_count":"7"},"contact-details":{"_type":"","_attr":{"websites":{"_type":"","_attr":{"url":{"_type":"url","_count":"19"},"name":{"_type":"text","_count":"19"}}},"email-addresses":{"_type":"","_attr":{"email":{"_type":"text","_count":"9"},"type":{"_type":"text","_count":"9"}}}}},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"},"pa_code":{"_type":"number","_count":"9"}}},"aristotle-url":{"_type":"url","_count":"9"},"school":{"_type":"text","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"aristotle-id":{"_type":"number","_count":"9"},"y:location":{"_type":"location","_attr":{"country":{"_type":"text","_count":"9"},"city":{"_type":"text","_count":"9"},"street":{"_type":"blank","_count":"4"},"lat":{"_type":"number","_count":"9"},"postal":{"_type":"blank","_count":"5"},"lon":{"_type":"number","_count":"9"},"quality":{"_type":"number","_count":"9"},"state":{"_type":"text","_count":"8"}}},"pa_code":{"_type":"number","_count":"9"},"json-url":{"_type":"url","_count":"9"},"title":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"result":{"_type":"","_attr":{"result-declared":{"_type":"datetime","_count":"9"},"turnout-as-percentage":{"_type":"number","_count":"9"},"winning-mp":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"9"},"name":{"_type":"text","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"votes-as-percentage":{"_type":"number","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"winning-majority-as-votes":{"_type":"number","_count":"9"},"previous-mp":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"aristotle-url":{"_type":"url","_count":"9"},"json-url":{"_type":"url","_count":"9"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"9"},"abbreviation":{"_type":"text","_count":"9"},"json-url":{"_type":"url","_count":"9"},"web-url":{"_type":"url","_count":"9"},"aristotle-id":{"_type":"number","_count":"9"}}},"aristotle-id":{"_type":"number","_count":"9"},"web-url":{"_type":"url","_count":"1"}}},"turnout-as-quantity":{"_type":"number","_count":"9"}}}}}}],"wires":[{"id":"_w0","src":{"id":"_OUTPUT","moduleid":"sw-580"},"tgt":{"id":"_INPUT","moduleid":"sw-595"}},{"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-595"},"tgt":{"id":"_INPUT","moduleid":"sw-636"}},{"id":"_w9","src":{"id":"_OUTPUT","moduleid":"sw-636"},"tgt":{"id":"_INPUT","moduleid":"sw-655"}},{"id":"_w4","src":{"id":"_OUTPUT","moduleid":"sw-655"},"tgt":{"id":"_INPUT","moduleid":"sw-666"}},{"id":"_w5","src":{"id":"_OUTPUT","moduleid":"sw-666"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}
+{
+    "layout": [
+        {
+            "id": "sw-580",
+            "xy": [
+                313,
+                -286
+            ]
+        },
+        {
+            "id": "_OUTPUT",
+            "xy": [
+                403,
+                646
+            ]
+        },
+        {
+            "id": "sw-595",
+            "xy": [
+                245,
+                -186
+            ]
+        },
+        {
+            "id": "sw-619",
+            "xy": [
+                655,
+                167
+            ]
+        },
+        {
+            "id": "sw-636",
+            "xy": [
+                242,
+                30
+            ]
+        },
+        {
+            "id": "sw-655",
+            "xy": [
+                280,
+                390
+            ]
+        },
+        {
+            "id": "sw-666",
+            "xy": [
+                177,
+                517
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "conf": {
+                "URL": {
+                    "type": "url",
+                    "value": "file://data/www.theguardian.com_politics_api_general_election_2010_results_json.json"
+                },
+                "path": {
+                    "type": "text",
+                    "value": "results.called-constituencies"
+                }
+            },
+            "id": "sw-580",
+            "type": "fetchdata"
+        },
+        {
+            "conf": {},
+            "id": "_OUTPUT",
+            "type": "output"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "first"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "mpdetails"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "gid": {
+                                "subkey": "result.winning-mp.aristotle-id",
+                                "type": "text"
+                            }
+                        },
+                        "id": "sw-603",
+                        "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "first"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-595",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "first"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "y:location"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "LOCATION": {
+                                "subkey": "mpdetails.university",
+                                "type": "text"
+                            }
+                        },
+                        "id": "sw-692",
+                        "type": "locationbuilder"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-619",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "MODE": {
+                    "type": "text",
+                    "value": "permit"
+                },
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "mpdetails.university"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "matches"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": " .+"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-636",
+            "type": "filter"
+        },
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "mpdetails.name"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "copy"
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "mpdetails.school"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "copy"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-655",
+            "type": "rename"
+        },
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "(.*)"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "$1 (${mpdetails.university})"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-666",
+            "type": "regex"
+        }
+    ],
+    "terminaldata": [
+        {
+            "data": {
+                "_attr": {
+                    "aristotle-id": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "aristotle-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "json-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "name": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "pa_code": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "result": {
+                        "_attr": {
+                            "previous-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "web-url": {
+                                        "_count": "1",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "result-declared": {
+                                "_count": "9",
+                                "_type": "datetime"
+                            },
+                            "turnout-as-percentage": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "turnout-as-quantity": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-majority-as-votes": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            }
+                        },
+                        "_type": ""
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-580"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "aristotle-id": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "aristotle-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "json-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "mpdetails": {
+                        "_attr": {
+                            "aristotle-id": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "aristotle-url": {
+                                "_count": "9",
+                                "_type": "url"
+                            },
+                            "candidacies": {
+                                "_attr": {
+                                    "constituency": {
+                                        "_attr": {
+                                            "aristotle-id": {
+                                                "_count": "28",
+                                                "_type": "number"
+                                            },
+                                            "aristotle-url": {
+                                                "_count": "28",
+                                                "_type": "url"
+                                            },
+                                            "json-url": {
+                                                "_count": "28",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "28",
+                                                "_type": "text"
+                                            },
+                                            "pa_code": {
+                                                "_count": "27",
+                                                "_type": "number"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "election": {
+                                        "_attr": {
+                                            "json-url": {
+                                                "_count": "28",
+                                                "_type": "url"
+                                            },
+                                            "polling-date": {
+                                                "_count": "28",
+                                                "_type": "datetime"
+                                            },
+                                            "type": {
+                                                "_count": "28",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "7",
+                                                "_type": "blank"
+                                            },
+                                            "year": {
+                                                "_count": "28",
+                                                "_type": "number"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "28",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "28",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "28",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "28",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "28",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "position": {
+                                        "_count": "28",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "28",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "28",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "constituency": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "pa_code": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "contact-details": {
+                                "_attr": {
+                                    "email-addresses": {
+                                        "_attr": {
+                                            "email": {
+                                                "_count": "8",
+                                                "_type": "text"
+                                            },
+                                            "type": {
+                                                "_count": "8",
+                                                "_type": "text"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "websites": {
+                                        "_attr": {
+                                            "name": {
+                                                "_count": "18",
+                                                "_type": "text"
+                                            },
+                                            "url": {
+                                                "_count": "18",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "image": {
+                                "_count": "5",
+                                "_type": "url"
+                            },
+                            "is-incumbent": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "name": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "party": {
+                                "_attr": {
+                                    "abbreviation": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "web-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "school": {
+                                "_count": "6",
+                                "_type": "text"
+                            },
+                            "university": {
+                                "_count": "6",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": "item"
+                    },
+                    "name": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "pa_code": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "result": {
+                        "_attr": {
+                            "previous-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "web-url": {
+                                        "_count": "1",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "result-declared": {
+                                "_count": "9",
+                                "_type": "datetime"
+                            },
+                            "turnout-as-percentage": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "turnout-as-quantity": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-majority-as-votes": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            }
+                        },
+                        "_type": ""
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-595"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "aristotle-id": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "aristotle-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "json-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "mpdetails": {
+                        "_attr": {
+                            "aristotle-id": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "aristotle-url": {
+                                "_count": "9",
+                                "_type": "url"
+                            },
+                            "candidacies": {
+                                "_attr": {
+                                    "constituency": {
+                                        "_attr": {
+                                            "aristotle-id": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            },
+                                            "aristotle-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "pa_code": {
+                                                "_count": "36",
+                                                "_type": "number"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "election": {
+                                        "_attr": {
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "polling-date": {
+                                                "_count": "38",
+                                                "_type": "datetime"
+                                            },
+                                            "type": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "blank"
+                                            },
+                                            "year": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "position": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "constituency": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "pa_code": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "contact-details": {
+                                "_attr": {
+                                    "email-addresses": {
+                                        "_attr": {
+                                            "email": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "type": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "websites": {
+                                        "_attr": {
+                                            "name": {
+                                                "_count": "19",
+                                                "_type": "text"
+                                            },
+                                            "url": {
+                                                "_count": "19",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "image": {
+                                "_count": "7",
+                                "_type": "url"
+                            },
+                            "is-incumbent": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "name": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "party": {
+                                "_attr": {
+                                    "abbreviation": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "web-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "school": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "university": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "web-url": {
+                                "_count": "1",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": "item"
+                    },
+                    "name": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "pa_code": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "result": {
+                        "_attr": {
+                            "previous-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "web-url": {
+                                        "_count": "1",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "result-declared": {
+                                "_count": "9",
+                                "_type": "datetime"
+                            },
+                            "turnout-as-percentage": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "turnout-as-quantity": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-majority-as-votes": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "web-url": {
+                                        "_count": "1",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            }
+                        },
+                        "_type": ""
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-636"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "aristotle-id": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "aristotle-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "description": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "json-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "mpdetails": {
+                        "_attr": {
+                            "aristotle-id": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "aristotle-url": {
+                                "_count": "9",
+                                "_type": "url"
+                            },
+                            "candidacies": {
+                                "_attr": {
+                                    "constituency": {
+                                        "_attr": {
+                                            "aristotle-id": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            },
+                                            "aristotle-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "pa_code": {
+                                                "_count": "36",
+                                                "_type": "number"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "election": {
+                                        "_attr": {
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "polling-date": {
+                                                "_count": "38",
+                                                "_type": "datetime"
+                                            },
+                                            "type": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "blank"
+                                            },
+                                            "year": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "position": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "constituency": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "pa_code": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "contact-details": {
+                                "_attr": {
+                                    "email-addresses": {
+                                        "_attr": {
+                                            "email": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "type": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "websites": {
+                                        "_attr": {
+                                            "name": {
+                                                "_count": "19",
+                                                "_type": "text"
+                                            },
+                                            "url": {
+                                                "_count": "19",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "image": {
+                                "_count": "7",
+                                "_type": "url"
+                            },
+                            "is-incumbent": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "name": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "party": {
+                                "_attr": {
+                                    "abbreviation": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "web-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "school": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "university": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "web-url": {
+                                "_count": "1",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": "item"
+                    },
+                    "name": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "pa_code": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "result": {
+                        "_attr": {
+                            "previous-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "web-url": {
+                                        "_count": "1",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "result-declared": {
+                                "_count": "9",
+                                "_type": "datetime"
+                            },
+                            "turnout-as-percentage": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "turnout-as-quantity": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-majority-as-votes": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "web-url": {
+                                        "_count": "1",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:location": {
+                        "_attr": {
+                            "city": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "country": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "lat": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "lon": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "postal": {
+                                "_count": "5",
+                                "_type": "blank"
+                            },
+                            "quality": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "state": {
+                                "_count": "8",
+                                "_type": "text"
+                            },
+                            "street": {
+                                "_count": "4",
+                                "_type": "blank"
+                            }
+                        },
+                        "_type": "location"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-655"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "aristotle-id": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "aristotle-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "description": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "json-url": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "mpdetails": {
+                        "_attr": {
+                            "aristotle-id": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "aristotle-url": {
+                                "_count": "9",
+                                "_type": "url"
+                            },
+                            "candidacies": {
+                                "_attr": {
+                                    "constituency": {
+                                        "_attr": {
+                                            "aristotle-id": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            },
+                                            "aristotle-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "pa_code": {
+                                                "_count": "36",
+                                                "_type": "number"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "election": {
+                                        "_attr": {
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "polling-date": {
+                                                "_count": "38",
+                                                "_type": "datetime"
+                                            },
+                                            "type": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "blank"
+                                            },
+                                            "year": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "38",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "38",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "38",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "position": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "38",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "constituency": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "pa_code": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "contact-details": {
+                                "_attr": {
+                                    "email-addresses": {
+                                        "_attr": {
+                                            "email": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "type": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "websites": {
+                                        "_attr": {
+                                            "name": {
+                                                "_count": "19",
+                                                "_type": "text"
+                                            },
+                                            "url": {
+                                                "_count": "19",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "image": {
+                                "_count": "7",
+                                "_type": "url"
+                            },
+                            "is-incumbent": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "name": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "party": {
+                                "_attr": {
+                                    "abbreviation": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "web-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "school": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "university": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "web-url": {
+                                "_count": "1",
+                                "_type": "url"
+                            }
+                        },
+                        "_type": "item"
+                    },
+                    "name": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "pa_code": {
+                        "_count": "9",
+                        "_type": "number"
+                    },
+                    "result": {
+                        "_attr": {
+                            "previous-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "web-url": {
+                                        "_count": "1",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "result-declared": {
+                                "_count": "9",
+                                "_type": "datetime"
+                            },
+                            "turnout-as-percentage": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "turnout-as-quantity": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-majority-as-votes": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "winning-mp": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "aristotle-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "json-url": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    },
+                                    "name": {
+                                        "_count": "9",
+                                        "_type": "text"
+                                    },
+                                    "party": {
+                                        "_attr": {
+                                            "abbreviation": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "aristotle-id": {
+                                                "_count": "9",
+                                                "_type": "number"
+                                            },
+                                            "json-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            },
+                                            "name": {
+                                                "_count": "9",
+                                                "_type": "text"
+                                            },
+                                            "web-url": {
+                                                "_count": "9",
+                                                "_type": "url"
+                                            }
+                                        },
+                                        "_type": ""
+                                    },
+                                    "votes-as-percentage": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "votes-as-quantity": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "web-url": {
+                                        "_count": "1",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:location": {
+                        "_attr": {
+                            "city": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "country": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "lat": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "lon": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "postal": {
+                                "_count": "5",
+                                "_type": "blank"
+                            },
+                            "quality": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "state": {
+                                "_count": "8",
+                                "_type": "text"
+                            },
+                            "street": {
+                                "_count": "4",
+                                "_type": "blank"
+                            }
+                        },
+                        "_type": "location"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-666"
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w0",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-580"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-595"
+            }
+        },
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-595"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-636"
+            }
+        },
+        {
+            "id": "_w9",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-636"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-655"
+            }
+        },
+        {
+            "id": "_w4",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-655"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-666"
+            }
+        },
+        {
+            "id": "_w5",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-666"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

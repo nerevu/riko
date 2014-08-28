@@ -1,1 +1,374 @@
-{"layout":[{"id":"sw-579","xy":[501,-83]},{"id":"_OUTPUT","xy":[555,386]},{"id":"sw-606","xy":[819,-39]},{"id":"sw-610","xy":[189,-2]}],"modules":[{"type":"urlbuilder","id":"sw-579","conf":{"BASE":{"value":"http://www.guardian.co.uk/politics/api/person","type":"text"},"PATH":[{"type":"text","terminal":"1_PATH"},{"value":"json","type":"text"}],"PARAM":[{"key":{"value":"","type":"text"},"value":{"value":"","type":"text"}}]}},{"type":"output","id":"_OUTPUT","conf":{}},{"type":"textinput","id":"sw-606","conf":{"name":{"value":"gid","type":"text"},"prompt":{"value":"MP Guardian ID","type":"text"},"position":{"value":"","type":"number"},"default":{"value":"1276","type":"text"},"debug":{"value":"","type":"text"}}},{"type":"fetchdata","id":"sw-610","conf":{"URL":{"type":"url","terminal":"URL"},"path":{"value":"person","type":"text"}}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-579","data":{"_type":"url","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-606","data":{"_type":"number","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-610","data":{"_type":"item","_attr":{"university":{"_type":"text","_count":"1"},"name":{"_type":"text","_count":"1"},"candidacies":{"_type":"","_attr":{"votes-as-quantity":{"_type":"number","_count":"4"},"votes-as-percentage":{"_type":"number","_count":"4"},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"4"},"aristotle-url":{"_type":"url","_count":"4"},"json-url":{"_type":"url","_count":"4"},"aristotle-id":{"_type":"number","_count":"4"},"pa_code":{"_type":"number","_count":"4"}}},"position":{"_type":"number","_count":"4"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"4"},"abbreviation":{"_type":"text","_count":"4"},"json-url":{"_type":"url","_count":"4"},"web-url":{"_type":"url","_count":"4"},"aristotle-id":{"_type":"number","_count":"4"}}},"election":{"_type":"","_attr":{"polling-date":{"_type":"datetime","_count":"4"},"type":{"_type":"text","_count":"4"},"json-url":{"_type":"url","_count":"4"},"web-url":{"_type":"blank","_count":"1"},"year":{"_type":"number","_count":"4"}}}}},"is-incumbent":{"_type":"number","_count":"1"},"party":{"_type":"","_attr":{"name":{"_type":"text","_count":"1"},"abbreviation":{"_type":"text","_count":"1"},"json-url":{"_type":"url","_count":"1"},"web-url":{"_type":"url","_count":"1"},"aristotle-id":{"_type":"number","_count":"1"}}},"aristotle-id":{"_type":"number","_count":"1"},"image":{"_type":"url","_count":"1"},"contact-details":{"_type":"","_attr":{"websites":{"_type":"","_attr":{"url":{"_type":"url","_count":"2"},"name":{"_type":"text","_count":"2"}}},"email-addresses":{"_type":"","_attr":{"email":{"_type":"text","_count":"1"},"type":{"_type":"text","_count":"1"}}}}},"constituency":{"_type":"","_attr":{"name":{"_type":"text","_count":"1"},"aristotle-url":{"_type":"url","_count":"1"},"json-url":{"_type":"url","_count":"1"},"aristotle-id":{"_type":"number","_count":"1"},"pa_code":{"_type":"number","_count":"1"}}},"aristotle-url":{"_type":"url","_count":"1"},"school":{"_type":"text","_count":"1"}}}}],"wires":[{"id":"_w3","src":{"id":"_OUTPUT","moduleid":"sw-579"},"tgt":{"id":"URL","moduleid":"sw-610"}},{"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-606"},"tgt":{"id":"1_PATH","moduleid":"sw-579"}},{"id":"_w5","src":{"id":"_OUTPUT","moduleid":"sw-610"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}
+{
+    "layout": [
+        {
+            "id": "sw-579", 
+            "xy": [
+                501, 
+                -83
+            ]
+        }, 
+        {
+            "id": "_OUTPUT", 
+            "xy": [
+                555, 
+                386
+            ]
+        }, 
+        {
+            "id": "sw-606", 
+            "xy": [
+                819, 
+                -39
+            ]
+        }, 
+        {
+            "id": "sw-610", 
+            "xy": [
+                189, 
+                -2
+            ]
+        }
+    ], 
+    "modules": [
+        {
+            "conf": {
+                "BASE": {
+                    "type": "text", 
+                    "value": ""
+                }, 
+                "PARAM": [
+                    {
+                        "key": {
+                            "type": "text", 
+                            "value": ""
+                        }, 
+                        "value": {
+                            "type": "text", 
+                            "value": ""
+                        }
+                    }
+                ], 
+                "PATH": [
+                    {
+                        "terminal": "1_PATH", 
+                        "type": "text"
+                    }, 
+                    {
+                        "type": "text", 
+                        "value": "json"
+                    }
+                ]
+            }, 
+            "id": "sw-579", 
+            "type": "urlbuilder"
+        }, 
+        {
+            "conf": {}, 
+            "id": "_OUTPUT", 
+            "type": "output"
+        }, 
+        {
+            "conf": {
+                "debug": {
+                    "type": "text", 
+                    "value": ""
+                }, 
+                "default": {
+                    "type": "text", 
+                    "value": "1276"
+                }, 
+                "name": {
+                    "type": "text", 
+                    "value": "gid"
+                }, 
+                "position": {
+                    "type": "number", 
+                    "value": ""
+                }, 
+                "prompt": {
+                    "type": "text", 
+                    "value": "MP Guardian ID"
+                }
+            }, 
+            "id": "sw-606", 
+            "type": "textinput"
+        }, 
+        {
+            "conf": {
+                "URL": {
+                    "terminal": "URL", 
+                    "type": "url"
+                }, 
+                "path": {
+                    "type": "text", 
+                    "value": "person"
+                }
+            }, 
+            "id": "sw-610", 
+            "type": "fetchdata"
+        }
+    ], 
+    "terminaldata": [
+        {
+            "data": {
+                "_count": "1", 
+                "_type": "url"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-579"
+        }, 
+        {
+            "data": {
+                "_count": "1", 
+                "_type": "number"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-606"
+        }, 
+        {
+            "data": {
+                "_attr": {
+                    "aristotle-id": {
+                        "_count": "1", 
+                        "_type": "number"
+                    }, 
+                    "aristotle-url": {
+                        "_count": "1", 
+                        "_type": "url"
+                    }, 
+                    "candidacies": {
+                        "_attr": {
+                            "constituency": {
+                                "_attr": {
+                                    "aristotle-id": {
+                                        "_count": "4", 
+                                        "_type": "number"
+                                    }, 
+                                    "aristotle-url": {
+                                        "_count": "4", 
+                                        "_type": "url"
+                                    }, 
+                                    "json-url": {
+                                        "_count": "4", 
+                                        "_type": "url"
+                                    }, 
+                                    "name": {
+                                        "_count": "4", 
+                                        "_type": "text"
+                                    }, 
+                                    "pa_code": {
+                                        "_count": "4", 
+                                        "_type": "number"
+                                    }
+                                }, 
+                                "_type": ""
+                            }, 
+                            "election": {
+                                "_attr": {
+                                    "json-url": {
+                                        "_count": "4", 
+                                        "_type": "url"
+                                    }, 
+                                    "polling-date": {
+                                        "_count": "4", 
+                                        "_type": "datetime"
+                                    }, 
+                                    "type": {
+                                        "_count": "4", 
+                                        "_type": "text"
+                                    }, 
+                                    "web-url": {
+                                        "_count": "1", 
+                                        "_type": "blank"
+                                    }, 
+                                    "year": {
+                                        "_count": "4", 
+                                        "_type": "number"
+                                    }
+                                }, 
+                                "_type": ""
+                            }, 
+                            "party": {
+                                "_attr": {
+                                    "abbreviation": {
+                                        "_count": "4", 
+                                        "_type": "text"
+                                    }, 
+                                    "aristotle-id": {
+                                        "_count": "4", 
+                                        "_type": "number"
+                                    }, 
+                                    "json-url": {
+                                        "_count": "4", 
+                                        "_type": "url"
+                                    }, 
+                                    "name": {
+                                        "_count": "4", 
+                                        "_type": "text"
+                                    }, 
+                                    "web-url": {
+                                        "_count": "4", 
+                                        "_type": "url"
+                                    }
+                                }, 
+                                "_type": ""
+                            }, 
+                            "position": {
+                                "_count": "4", 
+                                "_type": "number"
+                            }, 
+                            "votes-as-percentage": {
+                                "_count": "4", 
+                                "_type": "number"
+                            }, 
+                            "votes-as-quantity": {
+                                "_count": "4", 
+                                "_type": "number"
+                            }
+                        }, 
+                        "_type": ""
+                    }, 
+                    "constituency": {
+                        "_attr": {
+                            "aristotle-id": {
+                                "_count": "1", 
+                                "_type": "number"
+                            }, 
+                            "aristotle-url": {
+                                "_count": "1", 
+                                "_type": "url"
+                            }, 
+                            "json-url": {
+                                "_count": "1", 
+                                "_type": "url"
+                            }, 
+                            "name": {
+                                "_count": "1", 
+                                "_type": "text"
+                            }, 
+                            "pa_code": {
+                                "_count": "1", 
+                                "_type": "number"
+                            }
+                        }, 
+                        "_type": ""
+                    }, 
+                    "contact-details": {
+                        "_attr": {
+                            "email-addresses": {
+                                "_attr": {
+                                    "email": {
+                                        "_count": "1", 
+                                        "_type": "text"
+                                    }, 
+                                    "type": {
+                                        "_count": "1", 
+                                        "_type": "text"
+                                    }
+                                }, 
+                                "_type": ""
+                            }, 
+                            "websites": {
+                                "_attr": {
+                                    "name": {
+                                        "_count": "2", 
+                                        "_type": "text"
+                                    }, 
+                                    "url": {
+                                        "_count": "2", 
+                                        "_type": "url"
+                                    }
+                                }, 
+                                "_type": ""
+                            }
+                        }, 
+                        "_type": ""
+                    }, 
+                    "image": {
+                        "_count": "1", 
+                        "_type": "url"
+                    }, 
+                    "is-incumbent": {
+                        "_count": "1", 
+                        "_type": "number"
+                    }, 
+                    "name": {
+                        "_count": "1", 
+                        "_type": "text"
+                    }, 
+                    "party": {
+                        "_attr": {
+                            "abbreviation": {
+                                "_count": "1", 
+                                "_type": "text"
+                            }, 
+                            "aristotle-id": {
+                                "_count": "1", 
+                                "_type": "number"
+                            }, 
+                            "json-url": {
+                                "_count": "1", 
+                                "_type": "url"
+                            }, 
+                            "name": {
+                                "_count": "1", 
+                                "_type": "text"
+                            }, 
+                            "web-url": {
+                                "_count": "1", 
+                                "_type": "url"
+                            }
+                        }, 
+                        "_type": ""
+                    }, 
+                    "school": {
+                        "_count": "1", 
+                        "_type": "text"
+                    }, 
+                    "university": {
+                        "_count": "1", 
+                        "_type": "text"
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-610"
+        }
+    ], 
+    "wires": [
+        {
+            "id": "_w3", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-579"
+            }, 
+            "tgt": {
+                "id": "URL", 
+                "moduleid": "sw-610"
+            }
+        }, 
+        {
+            "id": "_w1", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-606"
+            }, 
+            "tgt": {
+                "id": "1_PATH", 
+                "moduleid": "sw-579"
+            }
+        }, 
+        {
+            "id": "_w5", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-610"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

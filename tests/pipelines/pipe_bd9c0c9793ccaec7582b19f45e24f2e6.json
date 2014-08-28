@@ -1,1 +1,2756 @@
-{"layout":[{"id":"_OUTPUT","xy":[537,3071]},{"id":"sw-567","xy":[409,657]},{"id":"sw-594","xy":[402,511]},{"id":"sw-627","xy":[409,962]},{"id":"sw-688","xy":[409,1215]},{"id":"sw-895","xy":[424,1428]},{"id":"sw-906","xy":[312,1549]},{"id":"sw-1040","xy":[288,2027]},{"id":"sw-415","xy":[470,204]},{"id":"sw-435","xy":[423,85]},{"id":"sw-459","xy":[472,386]},{"id":"sw-425","xy":[634,85]},{"id":"sw-946","xy":[402,1779]},{"id":"sw-957","xy":[300,2223]},{"id":"sw-1006","xy":[409,2565]},{"id":"sw-632","xy":[177,2761]},{"id":"sw-672","xy":[627,2761]},{"id":"sw-683","xy":[428,1925]},{"id":"sw-724","xy":[402,2419]},{"id":"sw-735","xy":[622,1925]},{"id":"sw-743","xy":[738,2027]},{"id":"sw-754","xy":[840,2213]},{"id":"sw-733","xy":[537,2997]}],"modules":[{"type":"output","id":"_OUTPUT","conf":{}},{"type":"loop","id":"sw-567","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"strconcat","id":"sw-1057","conf":{"part":[{"subkey":"a.1.content","type":"text"},{"value":", ","type":"text"},{"subkey":"content.0","type":"text"},{"value":", ","type":"text"},{"subkey":"content.1","type":"text"}]}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"title","type":"text"}}},{"type":"filter","id":"sw-594","conf":{"MODE":{"type":"text","value":"permit"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"class","type":"text"},"op":{"type":"text","value":"is"},"value":{"value":"solu","type":"text"}}]}},{"type":"loop","id":"sw-627","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"urlbuilder","id":"sw-664","conf":{"BASE":{"value":"http://www.aarresaari.net/jobboard","type":"text"},"PATH":{"subkey":"a.1.href","type":"text"},"PARAM":[]}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"link","type":"text"}}},{"type":"loop","id":"sw-688","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"strconcat","id":"sw-696","conf":{"part":{"subkey":"font.content","type":"text"}}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"published","type":"text"}}},{"type":"rename","id":"sw-895","conf":{"RULE":[{"field":{"value":"published","type":"text"},"op":{"type":"text","value":"copy"},"newval":{"value":"deadline","type":"text"}}]}},{"type":"regex","id":"sw-906","conf":{"RULE":[{"field":{"value":"published","type":"text"},"match":{"value":"Ilmoitus lisätty:\\s+(\\d+).(\\d+).(\\d+).*","type":"text"},"replace":{"value":"$2/$1/$3","type":"text"},"singlelinematch":{"type":"text","value":"2"}},{"field":{"value":"deadline","type":"text"},"match":{"value":".*Viimeinen hakupäivä:\\s+(\\d+).(\\d+).(\\d+).*","type":"text"},"replace":{"value":"$2/$1/$3","type":"text"},"singlelinematch":{"type":"text","value":"2"}}]}},{"type":"loop","id":"sw-1040","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"datebuilder","id":"sw-1048","conf":{"DATE":{"subkey":"published","type":"datetime"}}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"y:published","type":"text"}}},{"type":"urlbuilder","id":"sw-415","conf":{"BASE":{"type":"text","terminal":"BASE"},"PARAM":[{"key":{"value":"docAddr","type":"text"},"value":{"type":"text","terminal":"PARAM_1_value"}},{"key":{"value":"forceXML","type":"text"},"value":{"value":"on","type":"text"}}]}},{"type":"strconcat","id":"sw-435","conf":{"part":{"value":"http://www.aarresaari.net/jobboard/jobs.html","type":"text"}}},{"type":"fetchdata","id":"sw-459","conf":{"URL":{"type":"url","terminal":"URL"},"path":{"value":"body.p","type":"text"}}},{"type":"strconcat","id":"sw-425","conf":{"part":{"value":"http://users.jyu.fi/~atsoukka/cgi-bin/aarresaari.cgi","type":"text"}}},{"type":"filter","id":"sw-946","conf":{"MODE":{"type":"text","value":"permit"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"deadline","type":"text"},"op":{"type":"text","value":"matches"},"value":{"value":"\\d+/\\d+/\\d+","type":"text"}}]}},{"type":"loop","id":"sw-957","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"datebuilder","id":"sw-965","conf":{"DATE":{"subkey":"deadline","type":"datetime"}}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"deadline","type":"text"}}},{"type":"loop","id":"sw-1006","conf":{"with":{"value":"deadline","type":"text"},"embed":{"value":{"type":"dateformat","id":"sw-1014","conf":{"format":{"value":"%d.%m.%Y","type":"text"}}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"description","type":"text"}}},{"type":"loop","id":"sw-632","conf":{"with":{"value":"","type":"text"},"embed":{"value":{"type":"strconcat","id":"sw-640","conf":{"part":[{"value":"Viimeinen hakup&#0228;iv&#0228; ","type":"text"},{"subkey":"description","type":"text"}]}},"type":"module"},"emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"description","type":"text"}}},{"type":"filter","id":"sw-672","conf":{"MODE":{"type":"text","value":"block"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"deadline","type":"text"},"op":{"type":"text","value":"matches"},"value":{"value":"\\d+/\\d+/\\d+","type":"text"}}]}},{"type":"union","id":"sw-683","conf":{}},{"type":"filter","id":"sw-724","conf":{"MODE":{"type":"text","value":"permit"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"deadline.utime","type":"text"},"op":{"type":"text","value":"greater"},"value":{"type":"text","terminal":"RULE_1_value","subkey":"utime"}}]}},{"type":"datebuilder","id":"sw-735","conf":{"DATE":{"value":"-1 day","type":"datetime"}}},{"type":"dateformat","id":"sw-743","conf":{"format":{"value":"%m-%d-%Y","type":"text"}}},{"type":"datebuilder","id":"sw-754","conf":{"DATE":{"type":"datetime","terminal":"DATE"}}},{"type":"union","id":"sw-733","conf":{}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-567","data":{"_type":"item","_attr":{"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"content":{"_type":"text","_count":"18"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-594","data":{"_type":"item","_attr":{"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"content":{"_type":"text","_count":"18"},"class":{"_type":"text","_count":"9"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-627","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"content":{"_type":"text","_count":"18"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-688","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"content":{"_type":"text","_count":"18"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}}},{"id":"_OUTPUT","moduleid":"sw-895","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"18"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"}}}},{"id":"_OUTPUT","moduleid":"sw-906","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_count":"9"},"content":{"_type":"text","_count":"18"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"}}}},{"id":"_OUTPUT","moduleid":"sw-1040","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_count":"9"},"content":{"_type":"text","_count":"18"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-415","data":{"_type":"url","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-435","data":{"_type":"url","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-459","data":{"_type":"item","_attr":{"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"6"},"content":{"_type":"text","_count":"3"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"3"},"border":{"_type":"number","_count":"3"}}},"onclick":{"_type":"text","_count":"3"},"title":{"_type":"text","_count":"3"}}},"content":{"_type":"text","_count":"6"},"class":{"_type":"text","_count":"3"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"3"},"content":{"_type":"text","_count":"3"}}}}}},{"id":"_OUTPUT","moduleid":"sw-425","data":{"_type":"url","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-946","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_count":"9"},"content":{"_type":"text","_count":"18"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"}}}},{"id":"_OUTPUT","moduleid":"sw-957","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}},"content":{"_type":"text","_count":"18"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-1006","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}},"content":{"_type":"text","_count":"18"},"description":{"_type":"datetime","_count":"9"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"class":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-632","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}},"content":{"_type":"text","_count":"18"},"description":{"_type":"text","_count":"9"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"class":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-683","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_count":"9"},"content":{"_type":"text","_count":"18"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"}}}},{"id":"_OUTPUT","moduleid":"sw-724","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}},"content":{"_type":"text","_count":"18"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"title":{"_type":"text","_count":"9"},"class":{"_type":"text","_count":"9"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}}}}},{"id":"_OUTPUT","moduleid":"sw-735","data":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"1"},"timezone":{"_type":"text","_count":"1"},"second":{"_type":"number","_count":"1"},"month":{"_type":"number","_count":"1"},"minute":{"_type":"number","_count":"1"},"utime":{"_type":"number","_count":"1"},"day_of_week":{"_type":"number","_count":"1"},"day":{"_type":"number","_count":"1"},"year":{"_type":"number","_count":"1"}}}},{"id":"_OUTPUT","moduleid":"sw-743","data":{"_type":"datetime","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-754","data":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"1"},"timezone":{"_type":"text","_count":"1"},"second":{"_type":"number","_count":"1"},"month":{"_type":"number","_count":"1"},"minute":{"_type":"number","_count":"1"},"utime":{"_type":"number","_count":"1"},"day_of_week":{"_type":"number","_count":"1"},"day":{"_type":"number","_count":"1"},"year":{"_type":"number","_count":"1"}}}},{"id":"_OUTPUT","moduleid":"sw-733","data":{"_type":"item","_attr":{"link":{"_type":"url","_count":"9"},"br":{"_type":"blank"},"a":{"_type":"","_attr":{"href":{"_type":"text","_count":"18"},"content":{"_type":"text","_count":"9"},"img":{"_type":"","_attr":{"src":{"_type":"url","_count":"9"},"border":{"_type":"number","_count":"9"}}},"onclick":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"}}},"deadline":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}},"content":{"_type":"text","_count":"18"},"description":{"_type":"text","_count":"9"},"font":{"_type":"","_attr":{"color":{"_type":"text","_count":"9"},"content":{"_type":"text","_count":"9"}}},"published":{"_type":"datetime","_count":"9"},"class":{"_type":"text","_count":"9"},"title":{"_type":"text","_count":"9"},"y:published":{"_type":"datetime","_attr":{"hour":{"_type":"number","_count":"9"},"timezone":{"_type":"text","_count":"9"},"second":{"_type":"number","_count":"9"},"month":{"_type":"number","_count":"9"},"minute":{"_type":"number","_count":"9"},"utime":{"_type":"number","_count":"9"},"day_of_week":{"_type":"number","_count":"9"},"day":{"_type":"number","_count":"9"},"year":{"_type":"number","_count":"9"}}}}}}],"wires":[{"id":"_w0","src":{"id":"_OUTPUT","moduleid":"sw-567"},"tgt":{"id":"_INPUT","moduleid":"sw-627"}},{"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-594"},"tgt":{"id":"_INPUT","moduleid":"sw-567"}},{"id":"_w2","src":{"id":"_OUTPUT","moduleid":"sw-627"},"tgt":{"id":"_INPUT","moduleid":"sw-688"}},{"id":"_w3","src":{"id":"_OUTPUT","moduleid":"sw-688"},"tgt":{"id":"_INPUT","moduleid":"sw-895"}},{"id":"_w4","src":{"id":"_OUTPUT","moduleid":"sw-895"},"tgt":{"id":"_INPUT","moduleid":"sw-906"}},{"id":"_w5","src":{"id":"_OUTPUT","moduleid":"sw-906"},"tgt":{"id":"_INPUT","moduleid":"sw-946"}},{"id":"_w6","src":{"id":"_OUTPUT","moduleid":"sw-1040"},"tgt":{"id":"_INPUT","moduleid":"sw-957"}},{"id":"_w7","src":{"id":"_OUTPUT","moduleid":"sw-415"},"tgt":{"id":"URL","moduleid":"sw-459"}},{"id":"_w8","src":{"id":"_OUTPUT","moduleid":"sw-435"},"tgt":{"id":"PARAM_1_value","moduleid":"sw-415"}},{"id":"_w9","src":{"id":"_OUTPUT","moduleid":"sw-459"},"tgt":{"id":"_INPUT","moduleid":"sw-594"}},{"id":"_w10","src":{"id":"_OUTPUT","moduleid":"sw-425"},"tgt":{"id":"BASE","moduleid":"sw-415"}},{"id":"_w11","src":{"id":"_OUTPUT","moduleid":"sw-946"},"tgt":{"id":"_INPUT","moduleid":"sw-683"}},{"id":"_w12","src":{"id":"_OUTPUT","moduleid":"sw-957"},"tgt":{"id":"_INPUT","moduleid":"sw-724"}},{"id":"_w13","src":{"id":"_OUTPUT","moduleid":"sw-1006"},"tgt":{"id":"_INPUT","moduleid":"sw-632"}},{"id":"_w14","src":{"id":"_OUTPUT","moduleid":"sw-632"},"tgt":{"id":"_INPUT","moduleid":"sw-733"}},{"id":"_w15","src":{"id":"_OUTPUT","moduleid":"sw-683"},"tgt":{"id":"_INPUT","moduleid":"sw-1040"}},{"id":"_w16","src":{"id":"_OUTPUT","moduleid":"sw-724"},"tgt":{"id":"_INPUT","moduleid":"sw-1006"}},{"id":"_w17","src":{"id":"_OUTPUT","moduleid":"sw-735"},"tgt":{"id":"_INPUT","moduleid":"sw-743"}},{"id":"_w18","src":{"id":"_OUTPUT","moduleid":"sw-743"},"tgt":{"id":"DATE","moduleid":"sw-754"}},{"id":"_w19","src":{"id":"_OUTPUT","moduleid":"sw-754"},"tgt":{"id":"RULE_1_value","moduleid":"sw-724"}},{"id":"_w20","src":{"id":"_OUTPUT","moduleid":"sw-733"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}
+{
+    "layout": [
+        {
+            "id": "_OUTPUT",
+            "xy": [
+                537,
+                3071
+            ]
+        },
+        {
+            "id": "sw-567",
+            "xy": [
+                409,
+                657
+            ]
+        },
+        {
+            "id": "sw-594",
+            "xy": [
+                402,
+                511
+            ]
+        },
+        {
+            "id": "sw-627",
+            "xy": [
+                409,
+                962
+            ]
+        },
+        {
+            "id": "sw-688",
+            "xy": [
+                409,
+                1215
+            ]
+        },
+        {
+            "id": "sw-895",
+            "xy": [
+                424,
+                1428
+            ]
+        },
+        {
+            "id": "sw-906",
+            "xy": [
+                312,
+                1549
+            ]
+        },
+        {
+            "id": "sw-1040",
+            "xy": [
+                288,
+                2027
+            ]
+        },
+        {
+            "id": "sw-415",
+            "xy": [
+                470,
+                204
+            ]
+        },
+        {
+            "id": "sw-435",
+            "xy": [
+                423,
+                85
+            ]
+        },
+        {
+            "id": "sw-459",
+            "xy": [
+                472,
+                386
+            ]
+        },
+        {
+            "id": "sw-425",
+            "xy": [
+                634,
+                85
+            ]
+        },
+        {
+            "id": "sw-946",
+            "xy": [
+                402,
+                1779
+            ]
+        },
+        {
+            "id": "sw-957",
+            "xy": [
+                300,
+                2223
+            ]
+        },
+        {
+            "id": "sw-1006",
+            "xy": [
+                409,
+                2565
+            ]
+        },
+        {
+            "id": "sw-632",
+            "xy": [
+                177,
+                2761
+            ]
+        },
+        {
+            "id": "sw-672",
+            "xy": [
+                627,
+                2761
+            ]
+        },
+        {
+            "id": "sw-683",
+            "xy": [
+                428,
+                1925
+            ]
+        },
+        {
+            "id": "sw-724",
+            "xy": [
+                402,
+                2419
+            ]
+        },
+        {
+            "id": "sw-735",
+            "xy": [
+                622,
+                1925
+            ]
+        },
+        {
+            "id": "sw-743",
+            "xy": [
+                738,
+                2027
+            ]
+        },
+        {
+            "id": "sw-754",
+            "xy": [
+                840,
+                2213
+            ]
+        },
+        {
+            "id": "sw-733",
+            "xy": [
+                537,
+                2997
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "conf": {},
+            "id": "_OUTPUT",
+            "type": "output"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "title"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "part": [
+                                {
+                                    "subkey": "a.1.content",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": ", "
+                                },
+                                {
+                                    "subkey": "content.0",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": ", "
+                                },
+                                {
+                                    "subkey": "content.1",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "id": "sw-1057",
+                        "type": "strconcat"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-567",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "MODE": {
+                    "type": "text",
+                    "value": "permit"
+                },
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "class"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "is"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "solu"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-594",
+            "type": "filter"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "link"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "BASE": {
+                                "type": "text",
+                                "value": ""
+                            },
+                            "PARAM": [],
+                            "PATH": {
+                                "subkey": "a.1.href",
+                                "type": "text"
+                            }
+                        },
+                        "id": "sw-664",
+                        "type": "urlbuilder"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-627",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "published"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "part": {
+                                "subkey": "font.content",
+                                "type": "text"
+                            }
+                        },
+                        "id": "sw-696",
+                        "type": "strconcat"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-688",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "published"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "deadline"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "copy"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-895",
+            "type": "rename"
+        },
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "published"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "Ilmoitus lisätty:\\s+(\\d+).(\\d+).(\\d+).*"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "$2/$1/$3"
+                        },
+                        "singlelinematch": {
+                            "type": "text",
+                            "value": "2"
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "deadline"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": ".*Viimeinen hakupäivä:\\s+(\\d+).(\\d+).(\\d+).*"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "$2/$1/$3"
+                        },
+                        "singlelinematch": {
+                            "type": "text",
+                            "value": "2"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-906",
+            "type": "regex"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "y:published"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "DATE": {
+                                "subkey": "published",
+                                "type": "datetime"
+                            }
+                        },
+                        "id": "sw-1048",
+                        "type": "datebuilder"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-1040",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "BASE": {
+                    "terminal": "BASE",
+                    "type": "text"
+                },
+                "PARAM": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "docAddr"
+                        },
+                        "value": {
+                            "terminal": "PARAM_1_value",
+                            "type": "text"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "forceXML"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "on"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-415",
+            "type": "urlbuilder"
+        },
+        {
+            "conf": {
+                "part": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-435",
+            "type": "strconcat"
+        },
+        {
+            "conf": {
+                "URL": {
+                    "terminal": "URL",
+                    "type": "url"
+                },
+                "path": {
+                    "type": "text",
+                    "value": "body.p"
+                }
+            },
+            "id": "sw-459",
+            "type": "fetchdata"
+        },
+        {
+            "conf": {
+                "part": {
+                    "type": "text",
+                    "value": "file://data/users.jyu.fi_~atsoukka_cgi_bin_aarresaari.html"
+                }
+            },
+            "id": "sw-425",
+            "type": "strconcat"
+        },
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "MODE": {
+                    "type": "text",
+                    "value": "permit"
+                },
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "deadline"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "matches"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "\\d+/\\d+/\\d+"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-946",
+            "type": "filter"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "deadline"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "DATE": {
+                                "subkey": "deadline",
+                                "type": "datetime"
+                            }
+                        },
+                        "id": "sw-965",
+                        "type": "datebuilder"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-957",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "description"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "format": {
+                                "type": "text",
+                                "value": "%d.%m.%Y"
+                            }
+                        },
+                        "id": "sw-1014",
+                        "type": "dateformat"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": "deadline"
+                }
+            },
+            "id": "sw-1006",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "description"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "part": [
+                                {
+                                    "type": "text",
+                                    "value": "Viimeinen hakup&#0228;iv&#0228; "
+                                },
+                                {
+                                    "subkey": "description",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "id": "sw-640",
+                        "type": "strconcat"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-632",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "MODE": {
+                    "type": "text",
+                    "value": "block"
+                },
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "deadline"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "matches"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "\\d+/\\d+/\\d+"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-672",
+            "type": "filter"
+        },
+        {
+            "conf": {},
+            "id": "sw-683",
+            "type": "union"
+        },
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "MODE": {
+                    "type": "text",
+                    "value": "permit"
+                },
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "deadline.utime"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "greater"
+                        },
+                        "value": {
+                            "subkey": "utime",
+                            "terminal": "RULE_1_value",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-724",
+            "type": "filter"
+        },
+        {
+            "conf": {
+                "DATE": {
+                    "type": "datetime",
+                    "value": "-1 day"
+                }
+            },
+            "id": "sw-735",
+            "type": "datebuilder"
+        },
+        {
+            "conf": {
+                "format": {
+                    "type": "text",
+                    "value": "%m-%d-%Y"
+                }
+            },
+            "id": "sw-743",
+            "type": "dateformat"
+        },
+        {
+            "conf": {
+                "DATE": {
+                    "terminal": "DATE",
+                    "type": "datetime"
+                }
+            },
+            "id": "sw-754",
+            "type": "datebuilder"
+        },
+        {
+            "conf": {},
+            "id": "sw-733",
+            "type": "union"
+        }
+    ],
+    "terminaldata": [
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-567"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-594"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-627"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-688"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-895"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-906"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-1040"
+        },
+        {
+            "data": {
+                "_count": "1",
+                "_type": "url"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-415"
+        },
+        {
+            "data": {
+                "_count": "1",
+                "_type": "url"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-435"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "6",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "3",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "3",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "3",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "3",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "6",
+                        "_type": "text"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "3",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "3",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-459"
+        },
+        {
+            "data": {
+                "_count": "1",
+                "_type": "url"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-425"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-946"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-957"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "description": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-1006"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "description": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-632"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-683"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-724"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "day": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "day_of_week": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "hour": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "minute": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "month": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "second": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "timezone": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "utime": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "year": {
+                        "_count": "1",
+                        "_type": "number"
+                    }
+                },
+                "_type": "datetime"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-735"
+        },
+        {
+            "data": {
+                "_count": "1",
+                "_type": "datetime"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-743"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "day": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "day_of_week": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "hour": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "minute": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "month": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "second": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "timezone": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "utime": {
+                        "_count": "1",
+                        "_type": "number"
+                    },
+                    "year": {
+                        "_count": "1",
+                        "_type": "number"
+                    }
+                },
+                "_type": "datetime"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-754"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "a": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "href": {
+                                "_count": "18",
+                                "_type": "text"
+                            },
+                            "img": {
+                                "_attr": {
+                                    "border": {
+                                        "_count": "9",
+                                        "_type": "number"
+                                    },
+                                    "src": {
+                                        "_count": "9",
+                                        "_type": "url"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "onclick": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "title": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "br": {
+                        "_type": "blank"
+                    },
+                    "class": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "content": {
+                        "_count": "18",
+                        "_type": "text"
+                    },
+                    "deadline": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "description": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "font": {
+                        "_attr": {
+                            "color": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "published": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-733"
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w0",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-567"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-627"
+            }
+        },
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-594"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-567"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-627"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-688"
+            }
+        },
+        {
+            "id": "_w3",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-688"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-895"
+            }
+        },
+        {
+            "id": "_w4",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-895"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-906"
+            }
+        },
+        {
+            "id": "_w5",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-906"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-946"
+            }
+        },
+        {
+            "id": "_w6",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-1040"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-957"
+            }
+        },
+        {
+            "id": "_w7",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-415"
+            },
+            "tgt": {
+                "id": "URL",
+                "moduleid": "sw-459"
+            }
+        },
+        {
+            "id": "_w8",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-435"
+            },
+            "tgt": {
+                "id": "PARAM_1_value",
+                "moduleid": "sw-415"
+            }
+        },
+        {
+            "id": "_w9",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-459"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-594"
+            }
+        },
+        {
+            "id": "_w10",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-425"
+            },
+            "tgt": {
+                "id": "BASE",
+                "moduleid": "sw-415"
+            }
+        },
+        {
+            "id": "_w11",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-946"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-683"
+            }
+        },
+        {
+            "id": "_w12",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-957"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-724"
+            }
+        },
+        {
+            "id": "_w13",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-1006"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-632"
+            }
+        },
+        {
+            "id": "_w14",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-632"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-733"
+            }
+        },
+        {
+            "id": "_w15",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-683"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-1040"
+            }
+        },
+        {
+            "id": "_w16",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-724"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-1006"
+            }
+        },
+        {
+            "id": "_w17",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-735"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-743"
+            }
+        },
+        {
+            "id": "_w18",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-743"
+            },
+            "tgt": {
+                "id": "DATE",
+                "moduleid": "sw-754"
+            }
+        },
+        {
+            "id": "_w19",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-754"
+            },
+            "tgt": {
+                "id": "RULE_1_value",
+                "moduleid": "sw-724"
+            }
+        },
+        {
+            "id": "_w20",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-733"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

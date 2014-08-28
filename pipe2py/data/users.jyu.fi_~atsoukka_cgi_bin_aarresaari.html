@@ -1,0 +1,37 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-US">
+<head><title>HTML tidy service</title>
+<link rel="stylesheet" href="http://www.w3.org/StyleSheets/base" />
+<meta name="robots" content="noindex, nofollow" />
+</head>
+<body>
+
+<p><a href="http://www.w3.org/"><img src="http://www.w3.org/Icons/w3c_home" alt="W3C"/></a></p>
+
+<h1>Tidy your HTML</h1>
+
+
+<form method="GET">
+<p>Address of document to tidy: <input name="docAddr" value=""/></p>
+<p><label><input type="checkbox" name="indent" /> indent</label></p>
+<p><label><input type="checkbox" name="forceXML" /> enforce XML well-formedness of the results</label> (may lead to loss of parts of the originating document if too ill-formed)</p>
+<p><input type="submit" value="get tidy results"/></p>
+</form>
+
+<hr />
+<h2>Stuff used to build this service</h2>
+<ul>
+<li><a href="http://tidy.sourceforge.net/">tidy</a></li>
+<li><a href="http://xmlsoft.org/xmllint.html">xmllint</a> (for enforcing XML well-formedness)</li>
+<li><a href="http://www.python.org/">python</a>, apache, etc.</li>
+</ul>
+<p>See also the <a href="http://dev.w3.org/cvsweb/2000/tidy-svc/">underlying Python script</a>.</p>
+<address>
+script $Revision: 1.15 $ of $Date: 2010/11/22 16:44:06 $<br />
+by <a href="http://www.w3.org/People/Connolly/">Dan Connolly</a><br />
+Further developed and maintained by <a href="http://www.w3.org/People/Dom/">Dominique Hazael-Massieux</a>
+</address>
+</body>
+</html>
+
