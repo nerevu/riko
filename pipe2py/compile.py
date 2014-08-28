@@ -33,6 +33,9 @@
 
    License: see LICENSE file
 """
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
+
 import fileinput
 import sys
 import requests
@@ -262,14 +265,15 @@ def build_pipeline(context, pipe):
             # input at runtime (as we can to sub-pipelines)
             # Note: no embed (so no subloops) or wire kwargs are
             # passed and outer_kwargs are passed in
-            generator.__name__ = 'pipe_%s' % module_id
+            generator.__name__ = str('pipe_%s' % module_id)
             steps[module_id] = generator
         else:  # else this module is not an embedded module:
             steps[module_id] = generator(*args, **kwargs)
 
         if context and context.verbose:
-            print '%s (%s) = %s(%s)' % (
-                steps[module_id], module_id, generator, str(args))
+            print(
+                '%s (%s) = %s(%s)' % (
+                    steps[module_id], module_id, generator, str(args)))
 
     if context.describe_input:
         pipeline = sorted(pyinput)
@@ -310,7 +314,7 @@ def stringify_pipe(context, pipe):
             conf_kwargs = filter(lambda x: x[0] == 'conf', kwargs.items())
             all_args = chain(con_args, nconf_kwargs, conf_kwargs)
 
-            print (
+            print(
                 '%s = %s(%s)' % (
                     module_id, pymodule_generator, str_args(all_args)
                 )
@@ -338,8 +342,8 @@ def analyze_pipe(context, pipe):
         print
         filtered = filter(lambda x: not x.startswith('pipe:'), moduletypes)
         pipes = filter(lambda x: x.startswith('pipe:'), moduletypes)
-        print 'Modules used:', ', '.join(filtered) or None
-        print 'Other pipes used:', ', '.join(x[5:] for x in pipes) or None
+        print('Modules used:', ', '.join(filtered) or None)
+        print('Other pipes used:', ', '.join(x[5:] for x in pipes) or None)
 
 
 def _convert_json(json):
@@ -383,7 +387,7 @@ if __name__ == '__main__':
         results = pipe_raw['query']['results']
 
         if not results:
-            print 'Pipe not found'
+            print('Pipe not found')
             sys.exit(1)
 
         pipe_def = results['json']['PIPE']['working']
@@ -417,7 +421,7 @@ if __name__ == '__main__':
         count = pipe_output['count']
 
         if not count:
-            print 'Pipe results not found'
+            print('Pipe results not found')
             sys.exit(1)
 
         path = p.join(parent, 'output', 'data', '%s_output.json' % pipe_name)
