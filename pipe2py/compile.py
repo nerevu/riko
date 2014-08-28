@@ -339,7 +339,6 @@ def analyze_pipe(context, pipe):
     moduletypes = sorted(list(modules))
 
     if context and context.verbose:
-        print
         filtered = filter(lambda x: not x.startswith('pipe:'), moduletypes)
         pipes = filter(lambda x: x.startswith('pipe:'), moduletypes)
         print('Modules used:', ', '.join(filtered) or None)
