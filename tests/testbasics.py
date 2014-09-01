@@ -7,6 +7,7 @@
 import unittest
 
 from os import path as p, remove
+from importlib import import_module
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
 from pipe2py.util import extract_modules
@@ -26,17 +27,25 @@ class TestBasics(unittest.TestCase):
 
             See createtest.py for an attempt at creating a stable test-suite.
     """
-    def _get_pipe_def(self, pipe_name):
+    def _get_pipeline(self, pipe_name):
+        try:
+            module = import_module('tests.pypiplines.%s' % pipe_name)
+        except ImportError:
+            parent = p.dirname(__file__)
+            pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
 
-        pipe_file_name = p.join(
-            p.dirname(__file__), 'pipelines', '%s.json' % pipe_name)
+            with open(pipe_file_name) as f:
+                pipe_def = loads(f.read())
 
-        with open(pipe_file_name) as f:
-            return loads(f.read())
+            pipe = parse_pipe_def(pipe_def, pipe_name)
+            pipeline = build_pipeline(self.context, pipe)
+        else:
+            pipe_generator = getattr(module, pipe_name)
+            pipeline = pipe_generator(self.context)
 
-    def _load(self, pipe_def, pipe_name, value=0, check=1):
-        pipe = parse_pipe_def(pipe_def, pipe_name)
-        pipeline = list(build_pipeline(self.context, pipe))
+        return list(pipeline)
+
+    def _load(self, pipeline, pipe_name, value=0, check=1):
         length = len(pipeline)
         switch = {1: '>', -1: '<', 0: '=='}
 
@@ -47,16 +56,23 @@ class TestBasics(unittest.TestCase):
         # 0 if length == value
         compared = cmp(length, value)
 
+        try:
+            module = import_module('tests.pypiplines.%s' % pipe_name)
+        except ImportError:
+            parent = p.dirname(__file__)
+            pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
+            modules = extract_modules(pipe_file_name=pipe_file_name)
+        else:
+            pipe_generator = getattr(module, pipe_name)
+            modules = extract_modules(pipe_generator=pipe_generator)
+
         print 'pipeline length %s %i, but expected %s %i.' % (
             switch.get(compared), value, switch.get(check), value)
 
-        print 'Modules used in pipe %s: %s' % (
-            pipe_name, extract_modules(pipe_def=pipe_def))
+        print 'Modules used in %s: %s' % (pipe_name, modules)
 
         # assert that pipeline length is as expected
-        self.assertEqual(compared, check)
-
-        return pipeline
+        return self.assertEqual(compared, check)
 
     def setUp(self):
         """Compile common subpipe"""
@@ -79,22 +95,22 @@ class TestBasics(unittest.TestCase):
             fetch-feed in a loop with emit all
         """
         pipe_name = 'pipe_HrX5bjkv3BGEp9eSy6ky6g'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     def test_fetchsitefeed(self):
         """Loads a pipeline containing a fetchsitefeed module
         """
         pipe_name = 'pipe_551507461cbcb19a828165daad5fe007'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop
         """
         pipe_name = 'pipe_125e9fe8bb5f84526d21bebfec3ad116'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name, 1, 0)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name, 1, 0)
         base = 'http://ajax.googleapis.com/ajax/services/language/detect'
         contains = {
             u'description': None, u'language': None,
@@ -109,8 +125,8 @@ class TestBasics(unittest.TestCase):
             to check the results
         """
         pipe_name = 'pipe_e519dd393f943315f7e4128d19db2eac'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
 ##############
 # Offline Tests
@@ -120,8 +136,8 @@ class TestBasics(unittest.TestCase):
             check the results
         """
         pipe_name = 'pipe_2de0e4517ed76082dcddf66f7b218057'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     def test_feed(self):
         """Loads a simple test pipeline and compiles and executes it to check
@@ -130,8 +146,8 @@ class TestBasics(unittest.TestCase):
             TODO: have these tests iterate over a number of test pipelines
         """
         pipe_name = 'testpipe1'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
         [self.assertIn('the', i.get('description')) for i in pipeline]
 
     def test_filtered_multiple_sources(self):
@@ -141,15 +157,15 @@ class TestBasics(unittest.TestCase):
             (assumes its been compiled to a .py file - see test setUp)
         """
         pipe_name = 'pipe_c1cfa58f96243cea6ff50a12fc50c984'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     def test_european_performance_cars(self):
         """Loads a pipeline containing a sort
         """
         pipe_name = 'pipe_8NMkiTW32xGvMbDKruymrA'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     # todo: need tests with single and mult-part key
 
@@ -157,8 +173,8 @@ class TestBasics(unittest.TestCase):
         """Loads a pipeline containing a reverse and truncate
         """
         pipe_name = 'pipe_58a53262da5a095fe7a0d6d905cc4db6'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name, 3, 0)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name, 3, 0)
         prev_title = None
 
         for i in pipeline:
@@ -169,15 +185,15 @@ class TestBasics(unittest.TestCase):
         """Loads a pipeline containing a tail
         """
         pipe_name = 'pipe_06c4c44316efb0f5f16e4e7fa4589ba2'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     def test_itembuilder(self):
         """Loads a pipeline containing an itembuilder
         """
         pipe_name = 'pipe_b96287458de001ad62a637095df33ad5'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name, 2, 0)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name, 2, 0)
 
         contains = [
             {u'attrpath': {u'attr2': u'VAL2'}, u'ATTR1': u'VAL1'},
@@ -196,8 +212,8 @@ class TestBasics(unittest.TestCase):
         """Loads a pipeline containing an rssitembuilder
         """
         pipe_name = 'pipe_1166de33b0ea6936d96808717355beaa'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name, 3, 0)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name, 3, 0)
 
         contains = [
             {
@@ -233,8 +249,8 @@ class TestBasics(unittest.TestCase):
         """Loads a pipeline containing a csv source
         """
         pipe_name = 'pipe_UuvYtuMe3hGDsmRgPm7D0g'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
         description = (
             u'Total allowances claimed, inc travel: '
@@ -286,11 +302,11 @@ class TestBasics(unittest.TestCase):
         """
         self.context.describe_input = True
         pipe_name = 'pipe_5fabfc509a8e44342941060c7c7d0340'
-        pipe_def = self._get_pipe_def(pipe_name)
-        inputs = self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
         self.assertTrue(
-            inputs, [
+            pipeline, [
                 (
                     u'', u'dateinput1', u'dateinput1', u'datetime',
                     u'10/14/2010'
@@ -317,8 +333,8 @@ class TestBasics(unittest.TestCase):
             Also tests for empty source string and reference to 'y:id.value'
         """
         pipe_name = 'pipe_6e30c269a69baf92cd420900b0645f88'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     # def test_submodule_loop(self):
     #     """Loads a pipeline containing a sub-module in a loop and passes
@@ -353,8 +369,8 @@ class TestBasics(unittest.TestCase):
         """Loads a pipeline containing a stringtokeniser
         """
         pipe_name = 'pipe_975789b47f17690a21e89b10a702bcbd'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name, 2, 0)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name, 2, 0)
         contains = [{u'title': u'#hashtags'}, {u'title': u'#with'}]
         # print list(pipeline)
         [self.assertIn(item, pipeline) for item in contains]
@@ -363,29 +379,29 @@ class TestBasics(unittest.TestCase):
         """Loads a pipeline containing a fetchpage module
         """
         pipe_name = 'pipe_9420a757a49ddf11d8b98349abb5bcf4'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     def test_fetchpage_loop(self):
         """Loads a pipeline containing a fetchpage module within a loop
         """
         pipe_name = 'pipe_188eca77fd28c96c559f71f5729d91ec'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     def test_split(self):
         """Loads an example pipeline containing a split module
         """
         pipe_name = 'pipe_QMrlL_FS3BGlpwryODY80A'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
 
     def test_simplemath_1(self):
         """Loads a pipeline containing simplemath
         """
         pipe_name = 'pipe_zKJifuNS3BGLRQK_GsevXg'  # empty feed
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name, check=0)
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name, check=0)
 
     # todo: test simplemath - divide by zero and check/implement yahoo handling
     # todo: test malformed pipeline syntax
