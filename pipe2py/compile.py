@@ -104,11 +104,11 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
         import_name = 'pipe2py.pypipelines.%s' % util.pythonise(module_type)
         import_module(import_name) if steps else None
         pythonised_type = util.pythonise(module_type)
-        pymodule_name = '%s' % pythonised_type
-        pymodule_generator = '%s' % pythonised_type
+        module_name = '%s' % pythonised_type
+        pipe_name = pythonised_type
     else:
-        pymodule_name = 'pipe%s' % module_type
-        pymodule_generator = 'pipe_%s' % module_type
+        module_name = 'pipe%s' % module_type
+        pipe_name = 'pipe_%s' % module_type
 
     if context.describe_input or not steps:
         # Find any required subpipelines and user inputs
@@ -128,8 +128,8 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
         if steps:
             output = {
                 'pyinput': pyinput,
-                'pymodule_name': pymodule_name,
-                'pymodule_generator': pymodule_generator,
+                'module_name': module_name,
+                'pipe_name': pipe_name,
             }
 
     if not output:
@@ -195,8 +195,8 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
 
         output = {
             'pyinput': pyinput,
-            'pymodule_name': pymodule_name,
-            'pymodule_generator': pymodule_generator,
+            'module_name': module_name,
+            'pipe_name': pipe_name,
             'args': args,
             'kwargs': kwargs,
         }
@@ -271,8 +271,8 @@ def build_pipeline(context, pipe):
 
     for module_id in topological_sort(pipe['graph']):
         commons = _pipe_commons(context, pipe, module_id, pyinput, steps)
-        pymodule_name = commons['pymodule_name']
-        pymodule_generator = commons['pymodule_generator']
+        module_name = commons['module_name']
+        pipe_name = commons['pipe_name']
         pyinput = commons['pyinput']
 
         if context.describe_input:
@@ -281,16 +281,16 @@ def build_pipeline(context, pipe):
         args = commons['args']
         kwargs = commons['kwargs']
 
-        if pymodule_name.startswith('pipe_'):
+        if module_name.startswith('pipe_'):
             # Import any required sub-pipelines and user inputs
             # Note: assumes they have already been compiled to accessible .py
             # files
-            import_name = 'pipe2py.pypipelines.%s' % pymodule_name
+            import_name = 'pipe2py.pypipelines.%s' % module_name
         else:
-            import_name = 'pipe2py.modules.%s' % pymodule_name
+            import_name = 'pipe2py.modules.%s' % module_name
 
         module = import_module(import_name)
-        generator = getattr(module, pymodule_generator)
+        pipe_generator = getattr(module, pipe_name)
 
         # if this module is an embedded module:
         if module_id in pipe['embed']:
@@ -298,15 +298,15 @@ def build_pipeline(context, pipe):
             # input at runtime (as we can to sub-pipelines)
             # Note: no embed (so no subloops) or wire kwargs are
             # passed and outer_kwargs are passed in
-            generator.__name__ = str('pipe_%s' % module_id)
-            steps[module_id] = generator
+            pipe_generator.__name__ = str('pipe_%s' % module_id)
+            steps[module_id] = pipe_generator
         else:  # else this module is not an embedded module:
-            steps[module_id] = generator(*args, **kwargs)
+            steps[module_id] = pipe_generator(*args, **kwargs)
 
         if context and context.verbose:
             print(
                 '%s (%s) = %s(%s)' % (
-                    steps[module_id], module_id, generator, str(args)))
+                    steps[module_id], module_id, pipe_generator, str(args)))
 
     if context.describe_input:
         pipeline = sorted(pyinput)
@@ -330,16 +330,16 @@ def stringify_pipe(context, pipe):
 
         commons = _pipe_commons(context, pipe, module_id, pyinput)
         pyinput = commons['pyinput']
-        pymodule_generator = commons['pymodule_generator']
-        pymodule_name = commons['pymodule_name']
+        module_name = commons['module_name']
+        pipe_name = commons['pipe_name']
         args = commons['args']
         kwargs = commons['kwargs']
 
         module['args'] = repr_args(chain(args, kwargs.items()))
         module['id'] = module_id
-        module['sub_pipe'] = pymodule_name.startswith('pipe_')
-        module['pymodule_name'] = pymodule_name
-        module['pymodule_generator'] = pymodule_generator
+        module['sub_pipe'] = module_name.startswith('pipe_')
+        module['name'] = module_name
+        module['pipe_name'] = pipe_name
         modules.append(module)
 
         if context and context.verbose:
@@ -350,7 +350,7 @@ def stringify_pipe(context, pipe):
 
             print(
                 '%s = %s(%s)' % (
-                    module_id, pymodule_generator, str_args(all_args)
+                    module_id, pipe_name, str_args(all_args)
                 )
             ).encode('utf-8')
 
