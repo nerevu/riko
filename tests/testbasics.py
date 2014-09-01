@@ -70,6 +70,58 @@ class TestBasics(unittest.TestCase):
     def tearDown(self):
         remove('pipe_2de0e4517ed76082dcddf66f7b218057.py')
 
+##############
+# Online Tests
+##############
+    def test_feeddiscovery(self):
+        """Loads a pipeline containing a feed auto-discovery module plus
+            fetch-feed in a loop with emit all
+        """
+        pipe_name = 'pipe_HrX5bjkv3BGEp9eSy6ky6g'
+        pipe_def = self._get_pipe_def(pipe_name)
+        self._load(pipe_def, pipe_name)
+
+    def test_fetchsitefeed(self):
+        """Loads a pipeline containing a fetchsitefeed module
+        """
+        pipe_name = 'pipe_551507461cbcb19a828165daad5fe007'
+        pipe_def = self._get_pipe_def(pipe_name)
+        self._load(pipe_def, pipe_name)
+
+    def test_loops_1(self):
+        """Loads a pipeline containing a loop
+        """
+        pipe_name = 'pipe_125e9fe8bb5f84526d21bebfec3ad116'
+        pipe_def = self._get_pipe_def(pipe_name)
+        pipeline = self._load(pipe_def, pipe_name, 1, 0)
+        base = 'http://ajax.googleapis.com/ajax/services/language/detect'
+        contains = {
+            u'description': None, u'language': None,
+            u'language-url': base + '?q=Guten+Tag&v=1.0',
+            u'title': u'Guten Tag'
+        }
+
+        [self.assertEqual(item, contains) for item in pipeline]
+
+    def test_urlbuilder(self):
+        """Loads the RTW URL Builder test pipeline and compiles and executes it
+            to check the results
+        """
+        pipe_name = 'pipe_e519dd393f943315f7e4128d19db2eac'
+        pipe_def = self._get_pipe_def(pipe_name)
+        self._load(pipe_def, pipe_name)
+
+##############
+# Offline Tests
+##############
+    def test_simplest(self):
+        """Loads the RTW simple test pipeline and compiles and executes it to
+            check the results
+        """
+        pipe_name = 'pipe_2de0e4517ed76082dcddf66f7b218057'
+        pipe_def = self._get_pipe_def(pipe_name)
+        self._load(pipe_def, pipe_name)
+
     def test_feed(self):
         """Loads a simple test pipeline and compiles and executes it to check
             the results
@@ -81,14 +133,6 @@ class TestBasics(unittest.TestCase):
         pipeline = self._load(pipe_def, pipe_name)
         [self.assertIn('the', i.get('description')) for i in pipeline]
 
-    def test_simplest(self):
-        """Loads the RTW simple test pipeline and compiles and executes it to
-            check the results
-        """
-        pipe_name = 'pipe_2de0e4517ed76082dcddf66f7b218057'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
-
     def test_filtered_multiple_sources(self):
         """Loads the filter multiple sources pipeline and compiles and executes
             it to check the results
@@ -96,14 +140,6 @@ class TestBasics(unittest.TestCase):
             (assumes its been compiled to a .py file - see test setUp)
         """
         pipe_name = 'pipe_c1cfa58f96243cea6ff50a12fc50c984'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
-
-    def test_urlbuilder(self):
-        """Loads the RTW URL Builder test pipeline and compiles and executes it
-            to check the results
-        """
-        pipe_name = 'pipe_e519dd393f943315f7e4128d19db2eac'
         pipe_def = self._get_pipe_def(pipe_name)
         self._load(pipe_def, pipe_name)
 
@@ -312,29 +348,6 @@ class TestBasics(unittest.TestCase):
     #     finally:
     #         remove("%s.py" % pipe_name)
 
-    def test_loops_1(self):
-        """Loads a pipeline containing a loop
-        """
-        pipe_name = 'pipe_125e9fe8bb5f84526d21bebfec3ad116'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipeline = self._load(pipe_def, pipe_name, 1, 0)
-        base = 'http://ajax.googleapis.com/ajax/services/language/detect'
-        contains = {
-            u'description': None, u'language': None,
-            u'language-url': base + '?q=Guten+Tag&v=1.0',
-            u'title': u'Guten Tag'
-        }
-
-        [self.assertEqual(item, contains) for item in pipeline]
-
-    def test_feeddiscovery(self):
-        """Loads a pipeline containing a feed auto-discovery module plus
-            fetch-feed in a loop with emit all
-        """
-        pipe_name = 'pipe_HrX5bjkv3BGEp9eSy6ky6g'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
-
     def test_stringtokeniser(self):
         """Loads a pipeline containing a stringtokeniser
         """
@@ -344,13 +357,6 @@ class TestBasics(unittest.TestCase):
         contains = [{u'title': u'#hashtags'}, {u'title': u'#with'}]
         # print list(pipeline)
         [self.assertIn(item, pipeline) for item in contains]
-
-    def test_fetchsitefeed(self):
-        """Loads a pipeline containing a fetchsitefeed module
-        """
-        pipe_name = 'pipe_551507461cbcb19a828165daad5fe007'
-        pipe_def = self._get_pipe_def(pipe_name)
-        self._load(pipe_def, pipe_name)
 
     def test_fetchpage(self):
         """Loads a pipeline containing a fetchpage module
