@@ -141,6 +141,7 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_b96287458de001ad62a637095df33ad5'
         pipe_def = self._get_pipe_def(pipe_name)
         pipeline = self._load(pipe_def, pipe_name, 2, 0)
+
         contains = [
             {u'attrpath': {u'attr2': u'VAL2'}, u'ATTR1': u'VAL1'},
             {
@@ -151,6 +152,7 @@ class TestBasics(unittest.TestCase):
         ]
         # print list(pipeline)
         # self.assertIn(contains[1], pipeline)
+
         [self.assertIn(item, pipeline) for item in contains]
 
     def test_rssitembuilder(self):
@@ -159,6 +161,7 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_1166de33b0ea6936d96808717355beaa'
         pipe_def = self._get_pipe_def(pipe_name)
         pipeline = self._load(pipe_def, pipe_name, 3, 0)
+
         contains = [
             {
                 'media:thumbnail': {'url': u'http://example.com/a.jpg'},

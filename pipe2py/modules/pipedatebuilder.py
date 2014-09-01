@@ -15,6 +15,7 @@ SWITCH = {
     'now':  dt.now(),
 }
 
+
 def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a date and yields it forever.
 
