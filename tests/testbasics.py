@@ -40,10 +40,11 @@ class TestBasics(unittest.TestCase):
         length = len(pipeline)
         switch = {1: '>', -1: '<', 0: '=='}
 
-        # compare pipeline length to baseline value
-        # 1: length > value
-        # -1: length < value
-        # 0: length == value
+        # compare pipeline length to baseline value and obtain the following
+        # result
+        # 1 if length > value
+        # -1 if length < value
+        # 0 if length == value
         compared = cmp(length, value)
 
         print 'pipeline length %s %i, but expected %s %i.' % (
