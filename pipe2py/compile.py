@@ -104,7 +104,7 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
         import_name = 'pipe2py.pypipelines.%s' % util.pythonise(module_type)
         import_module(import_name) if steps else None
         pythonised_type = util.pythonise(module_type)
-        module_name = '%s' % pythonised_type
+        module_name = pythonised_type
         pipe_name = pythonised_type
     else:
         module_name = 'pipe%s' % module_type
