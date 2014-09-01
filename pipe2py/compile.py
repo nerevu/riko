@@ -110,9 +110,9 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
         module_name = 'pipe%s' % module_type
         pipe_name = 'pipe_%s' % module_type
 
-    if context.describe_input or not steps:
+    if context.describe_input or context.describe_dependencies or not steps:
         # Find any required subpipelines and user inputs
-        if conf and 'prompt' in conf:
+        if context.describe_input and conf and 'prompt' in conf:
             # Note: there seems to be no need to recursively collate inputs
             # from subpipelines
             module_confs = (
@@ -124,6 +124,11 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
             )
 
             pyinput.append(module_confs)
+        elif context.describe_dependencies:
+            if 'embed' in module['conf']:
+                pyinput.append(module['conf']['embed']['value']['type'])
+
+            pyinput.append(module_name)
 
         if steps:
             output = {
@@ -260,8 +265,8 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
 def build_pipeline(context, pipe):
     """Convert a pipe into an executable Python pipeline
 
-        If context.describe_input then just return the input requirements
-        instead of the pipeline
+        If context.describe_input or context.describe_dependencies then just
+        return that instead of the pipeline
 
         Note: any subpipes must be available to import as .py files current
         namespace can become polluted by submodule wrapper definitions
@@ -275,7 +280,7 @@ def build_pipeline(context, pipe):
         pipe_name = commons['pipe_name']
         pyinput = commons['pyinput']
 
-        if context.describe_input:
+        if context.describe_input or context.describe_dependencies:
             continue
 
         args = commons['args']
@@ -308,8 +313,8 @@ def build_pipeline(context, pipe):
                 '%s (%s) = %s(%s)' % (
                     steps[module_id], module_id, pipe_generator, str(args)))
 
-    if context.describe_input:
-        pipeline = sorted(pyinput)
+    if context.describe_input or context.describe_dependencies:
+        pipeline = sorted(set(pyinput))
     else:
         pipeline = steps[module_id]
 
@@ -319,8 +324,8 @@ def build_pipeline(context, pipe):
 def stringify_pipe(context, pipe):
     """Convert a pipe into Python script
 
-       If context.describe_input is passed to the script then it just
-       returns the input requirements instead of the pipeline
+       If context.describe_input or context.describe_dependencies is passed to
+       the script then it just returns that instead of the pipeline
     """
     modules = []
     pyinput = None
