@@ -2,7 +2,6 @@
 #
 
 import time
-from datetime import datetime
 from pipe2py.lib.dotdict import DotDict
 from pipe2py import util
 
@@ -21,23 +20,22 @@ def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
     """
     conf = DotDict(conf)
     date_format = conf.get('format', **kwargs)
+    date = ()
 
     for item in _INPUT:
-        if isinstance(item, basestring):
-            for df in util.ALTERNATIVE_DATE_FORMATS:
-                try:
-                    date_tuple = datetime.strptime(item, df).timetuple()
-                    break
-                except:
-                    pass
-            else:
-                # todo: raise an exception: unexpected date format
-                pass
+        if not hasattr(item, 'tm_year'):
+            date = util.get_date(item)
+
+        date = date.timetuple() if date else item
+
+        if not date:
+            raise Exception('Unexpected date format: %s' % date_format)
 
         try:
-            date_string = time.strftime(date_format, date_tuple)   # todo: check all PHP formats are covered by Python
+            # todo: check that all PHP formats are covered by Python
+            date_string = time.strftime(date_format, date)
         except TypeError:
-            #silent error handling e.g. if item is not a date
+            # silent error handling e.g. if item is not a date
             continue
-
-        yield date_string
+        else:
+            yield date_string

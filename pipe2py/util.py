@@ -3,6 +3,7 @@
 
 import string
 
+from datetime import datetime
 from urllib2 import quote
 from os import path as p
 from operator import itemgetter
@@ -169,6 +170,14 @@ def get_value(field, item=None, default=None, encode=False, func=False, **kwargs
         value = None
 
     return value
+
+
+def get_date(date_string):
+    for date_format in ALTERNATIVE_DATE_FORMATS:
+        try:
+            return datetime.strptime(date_string, date_format)
+        except ValueError:
+            pass
 
 
 def get_input(context, conf):
