@@ -481,16 +481,6 @@ class TestBasics(unittest.TestCase):
     #     self.assertTrue(len(list(pipe)) > 0)
 
     # # removed: dead link
-    # def test_complex_datebuilding(self):
-    #     """Loads a pipeline containing a datebuilder with complex inputs
-    #     """
-    #     pipe_file = 'pipe_bd9c0c9793ccaec7582b19f45e24f2e6.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
-    #     # todo: check the data!
-    #     self.assertTrue(len(list(pipe)) > 0)
-
-    # # removed: dead link
     # def test_twitter_caption_search(self):
     #     """Loads the Twitter Caption Search pipeline and compiles and
     #         executes it to check the results
@@ -505,21 +495,6 @@ class TestBasics(unittest.TestCase):
     #         count += 1
 
     #     self.assertTrue(count > 0)
-
-    # # removed: 'dc:creator' missing
-    # def test_unique(self):
-    #     """Loads a pipeline containing a unique
-    #     """
-    #     pipe_file = 'pipe_1I75yiUv3BGhgVWjjUnRlg.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
-
-    #     # todo: check the data! e.g. pubdate etc.
-    #     creators = set()
-    #     for i in pipe:
-    #         if i.get('dc:creator') in creators:
-    #             self.fail()
-    #         creators.add(i.get('dc:creator'))
 
     # # removed: dead link
     # def test_loop_example(self):
