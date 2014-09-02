@@ -1,130 +1,130 @@
 {
     "layout": [
         {
-            "id": "sw-138", 
+            "id": "sw-138",
             "xy": [
-                204, 
+                204,
                 210
             ]
-        }, 
+        },
         {
-            "id": "_OUTPUT", 
+            "id": "_OUTPUT",
             "xy": [
-                272, 
+                272,
                 609
             ]
-        }, 
+        },
         {
-            "id": "sw-180", 
+            "id": "sw-180",
             "xy": [
-                177, 
+                177,
                 490
             ]
-        }, 
+        },
         {
-            "id": "sw-286", 
+            "id": "sw-286",
             "xy": [
-                226, 
+                226,
                 85
             ]
         }
-    ], 
+    ],
     "modules": [
         {
             "conf": {
                 "assign_part": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "all"
-                }, 
+                },
                 "assign_to": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "title"
-                }, 
+                },
                 "embed": {
-                    "type": "module", 
+                    "type": "module",
                     "value": {
                         "conf": {
                             "part": [
                                 {
-                                    "subkey": "headline", 
+                                    "subkey": "headline",
                                     "type": "text"
-                                }, 
+                                },
                                 {
-                                    "type": "text", 
+                                    "type": "text",
                                     "value": " ("
-                                }, 
+                                },
                                 {
-                                    "subkey": "severity", 
+                                    "subkey": "severity",
                                     "type": "text"
-                                }, 
+                                },
                                 {
-                                    "type": "text", 
+                                    "type": "text",
                                     "value": ")"
                                 }
                             ]
-                        }, 
-                        "id": "sw-298", 
+                        },
+                        "id": "sw-298",
                         "type": "strconcat"
                     }
-                }, 
+                },
                 "emit_part": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "all"
-                }, 
+                },
                 "mode": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "assign"
-                }, 
+                },
                 "with": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
                 }
-            }, 
-            "id": "sw-138", 
+            },
+            "id": "sw-138",
             "type": "loop"
-        }, 
+        },
         {
-            "conf": {}, 
-            "id": "_OUTPUT", 
+            "conf": {},
+            "id": "_OUTPUT",
             "type": "output"
-        }, 
+        },
         {
             "conf": {
                 "RULE": [
                     {
                         "field": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "expires"
-                        }, 
+                        },
                         "newval": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "pubDate"
-                        }, 
+                        },
                         "op": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "rename"
                         }
                     }
                 ]
-            }, 
-            "id": "sw-180", 
+            },
+            "id": "sw-180",
             "type": "rename"
-        }, 
+        },
         {
             "conf": {
                 "URL": {
-                    "type": "url", 
-                    "value": ""
-                }, 
+                    "type": "url",
+                    "value": "file://data/capnorth.oes.ca.gov_89509.xml"
+                },
                 "path": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "info"
                 }
-            }, 
-            "id": "sw-286", 
+            },
+            "id": "sw-286",
             "type": "fetchdata"
         }
-    ], 
+    ],
     "terminaldata": [
         {
             "data": {
@@ -132,289 +132,289 @@
                     "area": {
                         "_attr": {
                             "areaDesc": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
-                            }, 
+                            },
                             "geocode": {
                                 "_attr": {
                                     "value": {
-                                        "_count": "1", 
+                                        "_count": "1",
                                         "_type": "text"
-                                    }, 
+                                    },
                                     "valueName": {
-                                        "_count": "1", 
+                                        "_count": "1",
                                         "_type": "text"
                                     }
-                                }, 
+                                },
                                 "_type": ""
-                            }, 
+                            },
                             "polygon": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
                             }
-                        }, 
+                        },
                         "_type": ""
-                    }, 
+                    },
                     "category": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "certainty": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "description": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "event": {
                         "_type": "blank"
-                    }, 
+                    },
                     "expires": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "datetime"
-                    }, 
+                    },
                     "headline": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "parameter": {
                         "_attr": {
                             "value": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
-                            }, 
+                            },
                             "valueName": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
                             }
-                        }, 
+                        },
                         "_type": ""
-                    }, 
+                    },
                     "senderName": {
                         "_type": "blank"
-                    }, 
+                    },
                     "severity": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "title": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "urgency": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-138"
-        }, 
+        },
         {
             "data": {
                 "_attr": {
                     "area": {
                         "_attr": {
                             "areaDesc": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
-                            }, 
+                            },
                             "geocode": {
                                 "_attr": {
                                     "value": {
-                                        "_count": "1", 
+                                        "_count": "1",
                                         "_type": "text"
-                                    }, 
+                                    },
                                     "valueName": {
-                                        "_count": "1", 
+                                        "_count": "1",
                                         "_type": "text"
                                     }
-                                }, 
+                                },
                                 "_type": ""
-                            }, 
+                            },
                             "polygon": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
                             }
-                        }, 
+                        },
                         "_type": ""
-                    }, 
+                    },
                     "category": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "certainty": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "description": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "event": {
                         "_type": "blank"
-                    }, 
+                    },
                     "expires": {
                         "_type": "blank"
-                    }, 
+                    },
                     "headline": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "parameter": {
                         "_attr": {
                             "value": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
-                            }, 
+                            },
                             "valueName": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
                             }
-                        }, 
+                        },
                         "_type": ""
-                    }, 
+                    },
                     "pubDate": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "datetime"
-                    }, 
+                    },
                     "senderName": {
                         "_type": "blank"
-                    }, 
+                    },
                     "severity": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "title": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "urgency": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-180"
-        }, 
+        },
         {
             "data": {
                 "_attr": {
                     "area": {
                         "_attr": {
                             "areaDesc": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
-                            }, 
+                            },
                             "geocode": {
                                 "_attr": {
                                     "value": {
-                                        "_count": "1", 
+                                        "_count": "1",
                                         "_type": "text"
-                                    }, 
+                                    },
                                     "valueName": {
-                                        "_count": "1", 
+                                        "_count": "1",
                                         "_type": "text"
                                     }
-                                }, 
+                                },
                                 "_type": ""
-                            }, 
+                            },
                             "polygon": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
                             }
-                        }, 
+                        },
                         "_type": ""
-                    }, 
+                    },
                     "category": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "certainty": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "description": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "event": {
                         "_type": "blank"
-                    }, 
+                    },
                     "expires": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "datetime"
-                    }, 
+                    },
                     "headline": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "parameter": {
                         "_attr": {
                             "value": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
-                            }, 
+                            },
                             "valueName": {
-                                "_count": "1", 
+                                "_count": "1",
                                 "_type": "text"
                             }
-                        }, 
+                        },
                         "_type": ""
-                    }, 
+                    },
                     "senderName": {
                         "_type": "blank"
-                    }, 
+                    },
                     "severity": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
-                    }, 
+                    },
                     "urgency": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-286"
         }
-    ], 
+    ],
     "wires": [
         {
-            "id": "_w0", 
+            "id": "_w0",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-138"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-180"
             }
-        }, 
+        },
         {
-            "id": "_w1", 
+            "id": "_w1",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-180"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "_OUTPUT"
             }
-        }, 
+        },
         {
-            "id": "_w2", 
+            "id": "_w2",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-286"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-138"
             }
         }
