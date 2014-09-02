@@ -1,231 +1,231 @@
 {
     "layout": [
         {
-            "id": "sw-261", 
+            "id": "sw-261",
             "xy": [
-                "309", 
+                "309",
                 "648"
             ]
-        }, 
+        },
         {
-            "id": "sw-443", 
+            "id": "sw-443",
             "xy": [
-                "267", 
+                "267",
                 "299"
             ]
-        }, 
+        },
         {
-            "id": "sw-507", 
+            "id": "sw-507",
             "xy": [
-                "177", 
+                "177",
                 "-188"
             ]
-        }, 
+        },
         {
-            "id": "sw-327", 
+            "id": "sw-327",
             "xy": [
-                "248", 
+                "248",
                 "-349"
             ]
-        }, 
+        },
         {
-            "id": "sw-303", 
+            "id": "sw-303",
             "xy": [
-                "255", 
+                "255",
                 "76"
             ]
         }
-    ], 
+    ],
     "modules": [
         {
-            "conf": null, 
-            "id": "sw-261", 
+            "conf": null,
+            "id": "sw-261",
             "type": "output"
-        }, 
+        },
         {
             "conf": {
                 "author": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "description": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "guid": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "link": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "mediaContentHeight": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "mediaContentType": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "mediaContentURL": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "img.src"
-                }, 
+                },
                 "mediaContentWidth": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "mediaThumbHeight": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "mediaThumbURL": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "mediaThumbWidth": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "pubdate": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "title": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "img.alt"
                 }
-            }, 
-            "id": "sw-443", 
+            },
+            "id": "sw-443",
             "type": "createrss"
-        }, 
+        },
         {
             "conf": {
                 "assign_part": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "all"
-                }, 
+                },
                 "assign_to": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "description"
-                }, 
+                },
                 "embed": {
-                    "type": "module", 
+                    "type": "module",
                     "value": {
                         "conf": {
                             "part": [
                                 {
-                                    "type": "text", 
+                                    "type": "text",
                                     "value": "<img src=\""
-                                }, 
+                                },
                                 {
-                                    "subkey": "img.src", 
+                                    "subkey": "img.src",
                                     "type": "text"
-                                }, 
+                                },
                                 {
-                                    "type": "text", 
+                                    "type": "text",
                                     "value": "\">"
                                 }
                             ]
-                        }, 
-                        "id": "sw-515", 
+                        },
+                        "id": "sw-515",
                         "type": "strconcat"
                     }
-                }, 
+                },
                 "emit_part": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "all"
-                }, 
+                },
                 "mode": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "assign"
-                }, 
+                },
                 "with": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
                 }
-            }, 
-            "id": "sw-507", 
+            },
+            "id": "sw-507",
             "type": "loop"
-        }, 
+        },
         {
             "conf": {
                 "URL": {
-                    "type": "url", 
-                    "value": ""
-                }, 
+                    "type": "url",
+                    "value": "http://pinterest.com/popular/"
+                },
                 "xpath": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "//a[@class='PinImage ImgLink']"
                 }
-            }, 
-            "id": "sw-327", 
+            },
+            "id": "sw-327",
             "type": "xpathfetchpage"
-        }, 
+        },
         {
             "conf": {
                 "RULE": {
                     "field": {
-                        "type": "text", 
+                        "type": "text",
                         "value": "href"
-                    }, 
+                    },
                     "newval": {
-                        "type": "text", 
+                        "type": "text",
                         "value": "link"
-                    }, 
+                    },
                     "op": {
-                        "type": "text", 
+                        "type": "text",
                         "value": "rename"
                     }
                 }
-            }, 
-            "id": "sw-303", 
+            },
+            "id": "sw-303",
             "type": "rename"
         }
-    ], 
+    ],
     "wires": [
         {
-            "id": "_w0", 
+            "id": "_w0",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-443"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-261"
             }
-        }, 
+        },
         {
-            "id": "_w5", 
+            "id": "_w5",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-507"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-303"
             }
-        }, 
+        },
         {
-            "id": "_w3", 
+            "id": "_w3",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-327"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-507"
             }
-        }, 
+        },
         {
-            "id": "_w7", 
+            "id": "_w7",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-303"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-443"
             }
         }
