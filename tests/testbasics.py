@@ -342,35 +342,6 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
 
-    # def test_submodule_loop(self):
-    #     """Loads a pipeline containing a sub-module in a loop and passes
-    #         input parameters. Also tests json fetch with nested list, assigns
-    #         part of loop result, and regexes multi-part reference.
-
-    #        Note: too slow
-    #     """
-    #     # todo: use small, fixed data set to restrict duration
-    #     # Compile submodule to disk
-    #     self.context = Context(test=True)
-    #     pipe_name = 'pipe_bd0834cfe6cdacb0bea5569505d330b8'
-    #     pipe_def = self._get_pipe_def(pipe_name)
-    #     pipe = parse_pipe_def(pipe_def, pipe_name)
-
-    #     try:
-    #         with open("%s.py" % pipe_name, "w") as f:
-    #             f.write(stringify_pipe(self.context, pipe))
-
-    #         pipe_name = 'pipe_b3d43c00f9e1145ff522fb71ea743e99'
-    #         pipe_def = self._get_pipe_def(pipe_name)
-    #         pipeline = self._load(pipe_def, pipe_name)
-
-    #         contains = u'Hywel Francis (University of Wales, Swansea (UWS))'
-    #         # lots of data, so just check some of it
-    #         sliced = islice(pipeline, 3)
-    #         [self.assertEqual(item['title'], contains) for item in sliced]
-    #     finally:
-    #         remove("%s.py" % pipe_name)
-
     def test_stringtokeniser(self):
         """Loads a pipeline containing a stringtokeniser
         """
@@ -408,143 +379,113 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name, check=0)
 
+    def test_twitter_caption_search(self):
+        """Loads the Twitter Caption Search pipeline and compiles and
+            executes it to check the results
+        """
+        pipe_name = 'pipe_eb3e27f8f1841835fdfd279cd96ff9d8'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+
+
+    def test_loop_example(self):
+        """Loads the loop example pipeline and compiles and executes it to
+            check the results
+        """
+        pipe_name = 'pipe_dAI_R_FS3BG6fTKsAsqenA'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name, value=1, check=0)
+        contains = (
+            ' THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ '
+            'WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY\n            '
+            ' (Severe)'
+        )
+
+        # todo: check the data! e.g. pubdate etc.
+        [self.assertEqual(contains, item['title']) for item in pipeline]
+
+    def test_namespaceless_xml_input(self):
+        """Loads a pipeline containing deep xml source with no namespace
+        """
+        pipe_name = 'pipe_402e244d09a4146cd80421c6628eb6d9'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name, value=5, check=1)
+        contains = [
+            'Gower to Anglesey',
+            'The Riddle of the Tides',
+            'Wales: Severn Bore',
+        ]
+
+        sliced = islice(pipeline, 3)
+        [self.assertIn(item['title'], contains) for item in sliced]
+
+    # # need to compile
+    # def test_yql(self):
+    #     """Loads a pipeline containing a yql query
+    #     """
+    #     pipe_name = 'pipe_ea463d94cd7c63ea003d9b1d0589d9df'
+    #     pipeline = self._get_pipeline(pipe_name)
+    #     self._load(pipeline, pipe_name)
+    #     [self.assertEqual(i['title'], i['a']['content']) for i in pipeline]
+
     # todo: test simplemath - divide by zero and check/implement yahoo handling
     # todo: test malformed pipeline syntax
     # todo: test pipe compilation (compare output against expected .py file)
 
-##############
-# Failing Tests
-##############
-    # # failing
-    # def test_twitter(self):
-    #     """Loads a pipeline containing a loop, complex regex etc. for twitter
+#######################
+# Unimplemented modules
+#######################
+    # # pipelocationbuilder module not yet implemented
+    # def test_submodule_loop(self):
+    #     """Loads a pipeline containing a sub-module in a loop and passes
+    #         input parameters. Also tests json fetch with nested list, assigns
+    #         part of loop result, and regexes multi-part reference.
     #     """
-    #     pipe_file = 'pipe_ac45e9eb9b0174a4e53f23c4c9903c3f.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
-    #     # todo: check the data!
-    #     self.assertTrue(len(list(pipe)) > 0)
+    #     pipe_name = 'pipe_b3d43c00f9e1145ff522fb71ea743e99'
+    #     pipeline = self._get_pipeline(pipe_name)
+    #     self._load(pipeline, pipe_name)
+    #     contains = u'Hywel Francis (University of Wales, Swansea (UWS))'
+    #     sliced = islice(pipeline, 3)  # lots of data, so just check some of it
+    #     [self.assertEqual(item['title'], contains) for item in sliced]
 
-    # # failing
-    # def test_xpathfetchpage_1(self):
-    #     """Loads a pipeline containing xpathfetchpage
-    #     """
-    #     pipe_file = 'pipe_a08134746e30a6dd3a7cb3c0cf098692.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
-
-    #     try:
-    #         self.assertTrue(len(list(pipe)) > 0)
-    #         [self.assertTrue('title' in i) for i in pipe]
-    #     except ImportError:
-    #         pass  #ignore in case lxml not installed
-
-    # # failing
-    # def test_yql(self):
-    #     """Loads a pipeline containing a yql query
-    #     """
-    #     pipe_name = 'pipe_80fb3dfc08abfa7e27befe9306fc3ded'
-    #     pipe_def = self._get_pipe_def(pipe_name)
-    #     pipeline = self._load(pipe_def, pipe_name)
-    #     [self.assertEqual(i['title'], i['a']['content']) for i in pipeline]
-
-##############
-# Broken Tests
-##############
-    # # Note: this test will be skipped for now
-    # # - it requires a TermExtractor module which isn't top of the list
+    # # TermExtractor module not yet implemented
     # def test_simpletagger(self):
     #     """Loads the RTW simple tagger pipeline and compiles and executes it
     #          to check the results
-    #         Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
-    #         (assumes its been compiled to a .py file - see test setUp)
     #     """
-    #     pipe_file = 'pipe_93abb8500bd41d56a37e8885094c8d10.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
+    #     pipe_name = 'pipe_93abb8500bd41d56a37e8885094c8d10'
+    #     pipeline = self._get_pipeline(pipe_name)
+    #     self._load(pipeline, pipe_name)
 
-    #     # todo: check the data!
-    #     count = 0
-    #     for i in pipe:
-    #         count += 1
+###############
+# Failing Tests
+###############
+    # # needs twitter api authentication
+    # # need to compile
+    # def test_twitter(self):
+    #     """Loads a pipeline containing a loop, complex regex etc. for twitter
+    #     """
+    #     pipe_name = 'pipe_21a90f8ebdba0265c136861a49cf3d93'
+    #     pipeline = self._get_pipeline(pipe_name)
+    #     self._load(pipeline, pipe_name)
 
-    #     self.assertTrue(count > 0)
+    # # need to fix xpath
+    # def test_xpathfetchpage_1(self):
+    #     """Loads a pipeline containing xpathfetchpage
+    #     """
+    #     pipe_name = 'pipe_a08134746e30a6dd3a7cb3c0cf098692'
+    #     pipeline = self._get_pipeline(pipe_name)
+    #     self._load(pipeline, pipe_name)
+    #     [self.assertTrue('title' in i) for i in pipe]
 
-    # # removed: dead link
+    # # dead link, need to find a new data source
     # def test_urlbuilder_loop(self):
     #     """Loads a pipeline containing a URL builder in a loop
     #     """
-    #     pipe_file = 'pipe_e65397e116d7754da0dd23425f1f0af1.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
-    #     # todo: check the data!
-    #     self.assertTrue(len(list(pipe)) > 0)
+    #     pipe_name = 'pipe_e65397e116d7754da0dd23425f1f0af1'
+    #     pipeline = self._get_pipeline(pipe_name)
+    #     self._load(pipeline, pipe_name)
 
-    # # removed: dead link
-    # def test_twitter_caption_search(self):
-    #     """Loads the Twitter Caption Search pipeline and compiles and
-    #         executes it to check the results
-    #     """
-    #     pipe_file = 'pipe_eb3e27f8f1841835fdfd279cd96ff9d8.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
-
-    #     # todo: check the data!
-    #     count = 0
-    #     for i in pipe:
-    #         count += 1
-
-    #     self.assertTrue(count > 0)
-
-    # # removed: dead link
-    # def test_loop_example(self):
-    #     """Loads the loop example pipeline and compiles and executes it to
-    #         check the results
-    #     """
-    #     pipe_file = 'pipe_dAI_R_FS3BG6fTKsAsqenA.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
-
-    #     # todo: check the data! e.g. pubdate etc.
-    #     count = 0
-    #     for i in pipe:
-    #         count += 1
-
-    #     self.assertTrue(count == 1)
-    #     self.assertEqual(
-    #         i['title'],
-    #         'THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ '
-    #         "WASHINGTON/OREGON\nAND CALIFORNIA ONLY\n(Severe)"
-    #     )
-
-    # # removed: data too unstable: get a local copy
-    # def test_namespaceless_xml_input(self):
-    #     """Loads a pipeline containing deep xml source with no namespace
-    #     """
-    #     pipe_file = 'pipe_402e244d09a4146cd80421c6628eb6d9.json'
-    #     pipe_def = self._get_pipe_def(pipe_file)
-    #     pipe = parse_and_build_pipe(self.context, pipe_def)
-
-    #     count = 0
-    #     match = 0
-    #     for i in pipe:
-    #         count += 1
-    #         t = i['title']
-    #         if t == 'Lands End to Porthcawl':
-    #             match += 1
-    #         if t == 'Brittany':
-    #             match += 1
-    #         if t == 'Ravenscar to Hull':
-    #             match += 1
-    #         if t == 'East Coast - Smugglers, Alum and Scarborough Bay':
-    #             match += 1
-    #         if t == "Swanage to Land's End":
-    #             match += 1
-    #         if t == 'Heart of the British Isles - A Grand Tour':
-    #             match += 1
-
-    #     self.assertTrue(count == 5)
-    #     self.assertTrue(match == 5)
 
 if __name__ == '__main__':
     unittest.main()
