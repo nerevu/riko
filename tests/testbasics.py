@@ -73,14 +73,27 @@ class TestBasics(unittest.TestCase):
         """Compile common subpipe"""
         self.context = Context(test=True)
         pipe_name = 'pipe_2de0e4517ed76082dcddf66f7b218057'
-        pipe_def = self._get_pipe_def(pipe_name)
-        pipe = parse_pipe_def(pipe_def, pipe_name)
+        parent = p.dirname(__file__)
+        pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
 
-        with open("%s.py" % pipe_name, "w") as f:
+        with open(pipe_file_name) as f:
+            pipe_def = loads(f.read())
+
+        pipe = parse_pipe_def(pipe_def, pipe_name)
+        parent = p.dirname(p.dirname(__file__))
+        pipe_file_name = p.join(
+            parent, 'pipe2py', 'pypipelines', '%s.py' % pipe_name)
+
+        with open(pipe_file_name, 'w') as f:
             f.write(stringify_pipe(self.context, pipe))
 
     def tearDown(self):
-        remove('pipe_2de0e4517ed76082dcddf66f7b218057.py')
+        pipe_name = 'pipe_2de0e4517ed76082dcddf66f7b218057'
+        parent = p.dirname(p.dirname(__file__))
+        pipe_file_name = p.join(
+            parent, 'pipe2py', 'pypipelines', '%s.py' % pipe_name)
+
+        remove(pipe_file_name)
 
 ##############
 # Online Tests

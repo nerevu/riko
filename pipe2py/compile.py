@@ -101,9 +101,8 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
     output = None
 
     if module_type.startswith('pipe:'):
-        # Import any required sub-pipelines and user inputs
-        # Note: assumes they have already been compiled to accessible .py files
-        import_module(util.pythonise(module_type)) if steps else None
+        import_name = 'pipe2py.pypipelines.%s' % util.pythonise(module_type)
+        import_module(import_name) if steps else None
         pythonised_type = util.pythonise(module_type)
         pymodule_name = '%s' % pythonised_type
         pymodule_generator = '%s' % pythonised_type
@@ -283,7 +282,10 @@ def build_pipeline(context, pipe):
         kwargs = commons['kwargs']
 
         if pymodule_name.startswith('pipe_'):
-            import_name = pymodule_name
+            # Import any required sub-pipelines and user inputs
+            # Note: assumes they have already been compiled to accessible .py
+            # files
+            import_name = 'pipe2py.pypipelines.%s' % pymodule_name
         else:
             import_name = 'pipe2py.modules.%s' % pymodule_name
 
