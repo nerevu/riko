@@ -36,15 +36,11 @@ def repr_args(args):
 def repr_arg(d):
     """formats a function argument prettily but as working code
 
-    dicts are expressed in key=value syntax where possible
     unicode encodable as ascii is formatted as str"""
     if isinstance(d, dict):
         # if d can be expressed in key=value syntax:
-        if 'with' not in d:
-            return "dict(%s)" % repr_args(d.items())
-        else:
-            return "{%s}" % ", ".join("%s: %s" % (repr_arg(k), repr_arg(v))
-                                      for k, v in d.items())
+        return "{%s}" % ", ".join(
+            "%s: %s" % (repr_arg(k), repr_arg(v)) for k, v in d.items())
     if isinstance(d, list):
         return "[%s]" % ", ".join(repr_arg(elem) for elem in d)
     if isinstance(d, unicode):
