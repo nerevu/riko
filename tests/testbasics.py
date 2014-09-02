@@ -21,11 +21,6 @@ except (ImportError, AttributeError):
 
 class TestBasics(unittest.TestCase):
     """Test a few sample pipelines
-
-        Note: asserting post-conditions for these is almost impossible because
-            many use live sources.
-
-            See createtest.py for an attempt at creating a stable test-suite.
     """
     def _get_pipeline(self, pipe_name):
         try:
@@ -203,8 +198,6 @@ class TestBasics(unittest.TestCase):
                 u'attr1': u'val1'
             }
         ]
-        # print list(pipeline)
-        # self.assertIn(contains[1], pipeline)
 
         [self.assertIn(item, pipeline) for item in contains]
 
@@ -372,7 +365,6 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name, 2, 0)
         contains = [{u'title': u'#hashtags'}, {u'title': u'#with'}]
-        # print list(pipeline)
         [self.assertIn(item, pipeline) for item in contains]
 
     def test_fetchpage(self):
