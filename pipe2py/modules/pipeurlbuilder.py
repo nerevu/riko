@@ -5,12 +5,14 @@ import urllib
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
+
 def _gen_params(param_defs, item, **kwargs):
     for p in param_defs:
         p = DotDict(p)
         key = util.get_value(p['key'], item, **kwargs)
         value = util.get_value(p['value'], item, **kwargs)
         yield (key, value)
+
 
 def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a url and yields it forever.
@@ -38,7 +40,8 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
             forever = item.get('forever')
             url = conf.get('BASE', **kwargs)
             url += '/' if not url.endswith('/') else url
-            path = [util.get_value(DotDict(p), item, **kwargs) for p in paths if p]
+            path = [
+                util.get_value(DotDict(p), item, **kwargs) for p in paths if p]
             url += "/".join(str(p) for p in path)
             url = url.rstrip("/")
             url = util.url_quote(url)  # Ensure url is valid

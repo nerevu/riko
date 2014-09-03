@@ -22,8 +22,11 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     kwargs -- other inputs, e.g. to feed terminals for rule values
     conf:
         mode -- how to affect output - either assign or EMIT
-        assign_to -- if mode is assign, which field to assign to (new or existing)
-        loop_with -- pass a particular field into the submodule rather than the whole item
+        assign_to -- if mode is assign, which field to assign to
+            (new or existing)
+
+        loop_with -- pass a particular field into the submodule rather than the
+            whole item
     embed -- embedded submodule
 
     Yields (_OUTPUT):
@@ -89,4 +92,4 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
             yield item
         elif mode != 'EMIT':
             raise Exception(
-                    "Invalid mode %s (expecting 'assign' or 'EMIT')" % mode)
+                "Invalid mode %s (expecting 'assign' or 'EMIT')" % mode)

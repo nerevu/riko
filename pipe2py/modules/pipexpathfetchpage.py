@@ -65,7 +65,7 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                     print '--------------EOF item data ----------------'
 
                 if use_as_string:
-                    yield {'content' : unicode(i)}
+                    yield {'content': unicode(i)}
                 else:
                     yield i
 

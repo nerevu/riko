@@ -136,9 +136,9 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
 
-##############
+###############
 # Offline Tests
-##############
+###############
     def test_simplest(self):
         """Loads the RTW simple test pipeline and compiles and executes it to
             check the results
@@ -386,7 +386,6 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_eb3e27f8f1841835fdfd279cd96ff9d8'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
-
 
     def test_loop_example(self):
         """Loads the loop example pipeline and compiles and executes it to

@@ -12,38 +12,38 @@ from feedparser import FeedParserDict
 
 
 class DotDict(FeedParserDict):
-	"""A dictionary whose keys can be accessed using dot notation
-	r = {'attr1': {'attr2': 'value'}}
-	e.g. r['a.content'] -> ['a']['content']
+    """A dictionary whose keys can be accessed using dot notation
+    r = {'attr1': {'attr2': 'value'}}
+    e.g. r['a.content'] -> ['a']['content']
 
-	TODO: make DotDict(dict)['field'] return a DotDict instance
-	"""
-	def __init__(self, dict=None, **kwargs):
-		super(DotDict, self).__init__(self, **kwargs)
-		self.update(dict)
+    TODO: make DotDict(dict)['field'] return a DotDict instance
+    """
+    def __init__(self, dict=None, **kwargs):
+        super(DotDict, self).__init__(self, **kwargs)
+        self.update(dict)
 
-	def __getitem__(self, key):
-		try:
-	    	value = dict.__getitem__(self, key)
+    def __getitem__(self, key):
+        try:
+            value = dict.__getitem__(self, key)
         except KeyError:
-			value = super(DotDict, self).__getitem__(key)
+            value = super(DotDict, self).__getitem__(key)
 
-		if hasattr(value, 'keys'):
-			value = DotDict(value)
+        if hasattr(value, 'keys'):
+            value = DotDict(value)
 
         return value
 
     def __setitem__(self, key, value):
         return dict.__setitem__(self, key, value)
 
-	def _parse_key(self, key=None):
-		try:
-			# remove any trailing '.'
-			keys = key.rstrip('.').split('.') if key else []
-		except AttributeError:
-			keys = [key['subkey']] if key else []
+    def _parse_key(self, key=None):
+        try:
+            # remove any trailing '.'
+            keys = key.rstrip('.').split('.') if key else []
+        except AttributeError:
+            keys = [key['subkey']] if key else []
 
-		return keys
+        return keys
 
 	def _gen_first_keys(self, keys):
 		for key in keys:
@@ -106,14 +106,14 @@ class DotDict(FeedParserDict):
 	    return value
 
     def update(self, dict=None):
-    	if dict:
-	    	try:
-				keys_with_dots = filter(lambda k: '.' in k, dict.keys())
-	    	except AttributeError:
-			    [self.set(k, v) for k, v in dict]
-			else:
-				# remove key if a subkey redefines it
-				# i.e., 'author.name' has precedence over 'author'
-				to_delete = self._gen_first_keys(keys_with_dots)
-				[dict.pop(key, None) for key in to_delete]
-	    		[self.set(k, v) for k, v in dict.items()]
+        if dict:
+            try:
+                keys_with_dots = filter(lambda k: '.' in k, dict.keys())
+            except AttributeError:
+                [self.set(k, v) for k, v in dict]
+            else:
+                # remove key if a subkey redefines it
+                # i.e., 'author.name' has precedence over 'author'
+                to_delete = self._gen_first_keys(keys_with_dots)
+                [dict.pop(key, None) for key in to_delete]
+                [self.set(k, v) for k, v in dict.items()]

@@ -15,6 +15,7 @@ Y_SWITCH = {
     # todo: any more??
 }
 
+
 def _gen_key_value(conf, item, **kwargs):
     for key in conf:
         # todo: really dereference item?

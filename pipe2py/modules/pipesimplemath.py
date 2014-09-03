@@ -6,7 +6,7 @@ from pipe2py.lib.dotdict import DotDict
 from math import pow
 
 OPS = {
-    'add': lambda x, y: x+y,
+    'add': lambda x, y: x + y,
     'subtract': lambda x, y: x - y,
     'multiply': lambda x, y: x * y,
     'divide': lambda x, y: x / (y * 1.0),
@@ -16,7 +16,8 @@ OPS = {
 
 
 def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator performs basic arithmetic, such as addition and subtraction.
+    """This operator performs basic arithmetic, such as addition and
+    subtraction.
 
     Keyword arguments:
     context -- pipeline context

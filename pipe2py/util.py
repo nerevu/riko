@@ -37,12 +37,12 @@ def extract_modules(pipe_file_name=None, pipe_def=None, pipe_generator=None):
     if pipe_file_name or pipe_def:
         pipe_def = pipe_def or loads(pjson)
         num = len(pipe_def['modules'])
-        modules = map(dict.get, pipe_def['modules'], repeat('type', num))
+        pydeps = map(dict.get, pipe_def['modules'], repeat('type', num))
 
         for m in pipe_def['modules']:
             try:
                 if m['conf'].get('embed'):
-                    modules.append(m['conf']['embed']['value']['type'])
+                    pydeps.append(m['conf']['embed']['value']['type'])
             except AttributeError:
                 pass
     else:

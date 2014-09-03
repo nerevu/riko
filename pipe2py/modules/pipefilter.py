@@ -97,11 +97,13 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     >>> input = pipe_fetchdata(_INPUT=pipe_forever(), conf=conf)
     >>> mode = {'value': 'permit'}
     >>> combine = {'value': 'and'}
-    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, 'value': {'value': 'web'}}]
+    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, \
+'value': {'value': 'web'}}]
     >>> conf = {'MODE': mode, 'COMBINE': combine, 'RULE': rule}
     >>> pipe_filter(_INPUT=input, conf=conf).next()['title']
     u'E-Commerce Website Developer | Elance Job'
-    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, 'value': {'value': 'kjhlked'}}]
+    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, \
+'value': {'value': 'kjhlked'}}]
     >>> conf = {'MODE': mode, 'COMBINE': combine, 'RULE': rule}
     >>> list(pipe_filter(_INPUT=input, conf=conf))
     []

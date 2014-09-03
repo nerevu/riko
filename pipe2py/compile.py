@@ -58,6 +58,7 @@ from pipe2py.lib.topsort import topological_sort
 
 PARENT = p.dirname(__file__)
 
+
 class MyPrettyPrinter(PrettyPrinter):
     def format(self, object, context, maxlevels, level):
         if isinstance(object, unicode):
@@ -127,7 +128,7 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
     module = pipe['modules'][module_id]
     module_type = module['type']
     conf = module['conf']
-    kwargs = {'conf': conf}
+    pykwargs = {'conf': conf}
     output = None
 
     if module_type.startswith('pipe:'):

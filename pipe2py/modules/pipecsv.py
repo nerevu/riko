@@ -23,7 +23,8 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
     conf:
         URL -- url
         skip -- number of header rows to skip
-        col_mode -- column name source: row=header row(s), custom=defined in col_name
+        col_mode -- column name source: row=header row(s),
+                    custom=defined in col_name
         col_name -- list of custom column names
         col_row_start -- first column header row
         col_row_end -- last column header row

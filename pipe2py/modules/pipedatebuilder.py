@@ -12,7 +12,7 @@ SWITCH = {
 
     # better to use utcnow?
     # todo: is this allowed by Yahoo?
-    'now':  dt.now(),
+    'now': dt.now(),
 }
 
 

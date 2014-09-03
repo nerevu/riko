@@ -1,6 +1,7 @@
 # todo: use unicodecsv from pip
 import csv, codecs
 
+
 class UTF8Recoder(object):
     """
     Iterator that reads an encoded stream and re-encodes the input to UTF-8
@@ -13,6 +14,7 @@ class UTF8Recoder(object):
 
     def next(self):
         return self.reader.next().encode("utf-8")
+
 
 class UnicodeReader(object):
     """
