@@ -1,8 +1,15 @@
 # pipefetchsitefeed.py
 #
 
-import feedparser
-feedparser.USER_AGENT = "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" % feedparser.__version__
+try:
+    import speedparser as feedparser
+except ImportError:
+    import feedparser
+
+    feedparser.USER_AGENT = (
+        "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" %
+        feedparser.__version__
+    )
 
 from urllib2 import urlopen
 from pipe2py.lib import autorss
@@ -37,7 +44,7 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
             autodsc_conf = {u'URL': {u'type': u'url', u'value': url}}
 
             for link in autorss.getRSSLink(url.encode('utf-8')):
-                parsed = feedparser.parse(urlopen(link))
+                parsed = feedparser.parse(urlopen(link).read())
 
                 for entry in util.gen_entries(parsed):
                     yield entry

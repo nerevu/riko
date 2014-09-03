@@ -1,8 +1,15 @@
 # pipefetch.py
 #
 
-import feedparser
-feedparser.USER_AGENT = "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" % feedparser.__version__
+try:
+    import speedparser as feedparser
+except ImportError:
+    import feedparser
+
+    feedparser.USER_AGENT = (
+        "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" %
+        feedparser.__version__
+    )
 
 from urllib2 import urlopen
 from pipe2py.lib.dotdict import DotDict
@@ -35,7 +42,7 @@ def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
             if context and context.verbose:
                 print "pipe_fetch loading:", url
 
-            parsed = feedparser.parse(urlopen(url))
+            parsed = feedparser.parse(urlopen(url).read())
 
             for entry in util.gen_entries(parsed):
                 yield entry
