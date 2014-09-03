@@ -6,6 +6,14 @@ from pipe2py.lib import unicodecsv as csv
 from pipe2py.lib.dotdict import DotDict
 
 
+def _gen_fieldnames(conf, reader, **kwargs):
+    start = util.get_value(conf['col_row_start'], item, func=int, **kwargs)
+    end = util.get_value(conf['col_row_end'], item, func=int, **kwargs)
+
+    for i in xrange((end - start) + 1):
+        yield reader.next()
+
+
 def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
     """This source fetches and parses a csv file to yield items.
 
@@ -31,17 +39,17 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
       in the header
     """
     conf = DotDict(conf)
+    conf_sep = conf['separator']
+    conf_mode = conf['col_mode']
     col_name = conf['col_name']
 
     for item in _INPUT:
         item = DotDict(item)
         url = util.get_value(conf['URL'], item, **kwargs)
-        sep = util.get_value(conf['separator'], item, **kwargs).encode('utf-8')
-        skip = int(util.get_value(conf['skip'], item, **kwargs))
-        col_mode = util.get_value(conf['col_mode'], item, **kwargs)
-        row_start = int(util.get_value(conf['col_row_start'], item, **kwargs))
-        row_end = int(util.get_value(conf['col_row_end'], item, **kwargs))
         url = util.get_abspath(url)
+        separator = util.get_value(conf_sep, item, encode=True, **kwargs)
+        skip = util.get_value(conf['skip'], item, func=int, **kwargs)
+        col_mode = util.get_value(conf_mode, item, **kwargs)
 
         f = urlopen(url)
 
@@ -51,15 +59,13 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         for i in xrange(skip):
             f.next()
 
-        reader = csv.UnicodeReader(f, delimiter=sep)
+        reader = csv.UnicodeReader(f, delimiter=separator)
         fieldnames = []
 
         if col_mode == 'custom':
             fieldnames = [DotDict(x).get() for x in col_name]
         else:
-            for row in xrange((row_end - row_start) +1):
-                row = reader.next()
-                fieldnames.extend(row)
+            fieldnames = _gen_fieldnames(conf, reader, **kwargs)
 
         for rows in reader:
             yield dict(zip(fieldnames, rows))

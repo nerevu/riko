@@ -44,20 +44,10 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
 
     for item in _INPUT:
         item = DotDict(item)
-
-        if loop_with:
-            inp = item.get(loop_with, **kwargs)
-        else:
-            inp = item
-
-        # Pass any input parameters into the submodule
-        embed_context.inputs = {}
-
-        embed_context.inputs = {
-            key: util.get_value(DotDict(value), item, func=unicode)
-            for key, value in embed_conf.items()}
+        inp = item.get(loop_with, **kwargs) if loop_with else item
 
         # prepare the submodule
+        embed_context.inputs = dict(_gen_inputs(item, embed_conf))
         submodule = embed(embed_context, [inp], embed_conf)
         results = None
 
@@ -65,27 +55,23 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
             # loop over the submodule, emitting as we go or collecting results
             # for later assignment
             for i in submodule:
-                if assign_part == 'first':
-                    if mode == 'EMIT':
-                        yield i
-                    else:
-                        results = i
-                    break
+                if mode == 'EMIT':
+                    yield i
+                elif assign_part == 'first':
+                    results = i
                 else:
-                    if mode == 'EMIT':
-                        yield i
-                    else:
-                        if results:
-                            results.append(i)
-                        else:
-                            results = [i]
+                    results = results or []
+                    results.append(i)
 
-            if results and mode == 'assign':
+                if assign_part == 'first':
+                    break
+
+            if results and len(results) == 1 and hasattr(results[0], 'keys'):
                 # this is a hack to make sure fetchpage works in an out of a
                 # loop while not disturbing strconcat in a loop etc.
-                # goes with the comment below about checking the delivery capability of the source
-                if len(results) == 1 and hasattr(results[0], 'keys'):
-                    results = [results]
+                # goes with the comment below about checking the delivery
+                # capability of the source
+                results = [results] if mode == 'assign' else results
 
         # todo: any other errors we want to continue looping after?
         except HTTPError:
@@ -98,12 +84,9 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
             # note: i suspect this needs to be more discerning and only happen
             # if the source can only ever deliver 1 result, e.g. strconcat vs.
             # fetchpage
-            if results and len(results) == 1:
-                results = results[0]
-
+            results = results[0] if results and len(results) == 1 else results
             item.set(assign_to, results)
             yield item
-        elif mode == 'EMIT':
-            pass  # already yielded
-        else:
-            raise Exception("Invalid mode %s (expecting assign or EMIT)" % mode)
+        elif mode != 'EMIT':
+            raise Exception(
+                    "Invalid mode %s (expecting 'assign' or 'EMIT')" % mode)

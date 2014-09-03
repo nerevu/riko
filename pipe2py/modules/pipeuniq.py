@@ -1,6 +1,5 @@
 # pipeuniq.py
 #
-from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -17,20 +16,13 @@ def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     source items, one per unique field value
     """
+    seen = set()
     conf = DotDict(conf)
     field = conf.get('field', **kwargs)
-    order = ['%s%s' % ('', field)]
 
-    # read all and sort
-    sorted_input = []
     for item in _INPUT:
-        sorted_input.append(item)
+        value = DotDict(item).get(field)
 
-    sorted_input = util.multikeysort(sorted_input, order)
-
-    seen = None
-    for item in sorted_input:
-        # todo: do we ever need get_value here instead of item[]?
-        if seen != item[field]:
+        if value not in seen:
+            seen.add(value)
             yield item
-            seen = item[field]

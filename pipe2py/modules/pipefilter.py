@@ -9,14 +9,53 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Filter
 """
 
-import datetime
 import re
 
+from datetime import datetime as dt
+from itertools import ifilter
+from decimal import Decimal, InvalidOperation
 from pipe2py import util
-from decimal import Decimal
 from pipe2py.lib.dotdict import DotDict
 
-COMBINE_BOOLEAN = {"and": all, "or": any}
+
+COMBINE_BOOLEAN = {'and': all, 'or': any}
+SWITCH = {
+    # todo: check which of these should be case insensitive
+    # todo: use regex?
+    'contains': lambda x, y: x and x.lower() in y.lower(),
+    'doesnotcontain': lambda x, y: x and x.lower() not in y.lower(),
+    'matches': lambda x, y: re.search(x, y),
+    'is': lambda x, y: cmp(x, y) is 0,
+    'greater': lambda x, y: cmp(x, y) is -1,
+    'less': lambda x, y: cmp(x, y) is 1,
+    'after': lambda x, y: cmp(x, y) is -1,
+    'before': lambda x, y: cmp(x, y) is 1,
+}
+
+
+def _gen_rulepass(rules, item):
+    for rule in rules:
+        field, op, value = rule
+
+        try:
+            x = Decimal(value)
+            y = Decimal(item.get(field))
+        except InvalidOperation:
+            x = value
+            y = item.get(field)
+
+        if y is None:
+            yield False
+        elif isinstance(y, basestring):
+            try:
+                y = dt.strptime(y, util.DATE_FORMAT).timetuple()
+            except ValueError:
+                pass
+
+        try:
+            yield SWITCH.get(op)(x, y)
+        except (UnicodeDecodeError, AttributeError):
+            yield False
 
 
 def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
@@ -68,82 +107,23 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     []
     """
     conf = DotDict(conf)
-    mode = conf.get('MODE')
-    combine = conf.get('COMBINE')
-    rules = []
-
+    mode = conf.get('MODE', **kwargs)
+    combine = conf.get('COMBINE', **kwargs)
+    fields = ['field', 'op', 'value']
     rule_defs = util.listize(conf['RULE'])
+    rule_defs = [DotDict(rule_def) for rule_def in rule_defs]
 
-    for rule in rule_defs:
-        rule = DotDict(rule)
-        field = rule.get('field', **kwargs)
-        op = rule.get('op', **kwargs)
-        value = rule.get('value', **kwargs)
-        rules.append((field, op, value))
+    # use list bc iterator gets used up if there are no matching feeds
+    rules = list(util.gen_rules(rule_defs, fields, **kwargs))
 
     for item in _INPUT:
         item = DotDict(item)
+
         if combine in COMBINE_BOOLEAN:
-            res = COMBINE_BOOLEAN[combine](_rulepass(rule, item) for rule in rules)
+            res = COMBINE_BOOLEAN[combine](_gen_rulepass(rules, DotDict(item)))
         else:
             raise Exception(
                 "Invalid combine: %s (expecting 'and' or 'or')" % combine)
 
         if (res and mode == 'permit') or (not res and mode == 'block'):
             yield item
-
-#todo precompile these into lambdas for speed
-def _rulepass(rule, item):
-    field, op, value = rule
-    data = item.get(field)
-
-    if data is None:
-        return False
-
-    #todo check which of these should be case insensitive
-    if op == "contains":
-        try:
-            if value.lower() and value.lower() in data.lower():  #todo use regex?
-                return True
-        except UnicodeDecodeError:
-            pass
-    if op == "doesnotcontain":
-        try:
-            if value.lower() and value.lower() not in data.lower():  #todo use regex?
-                return True
-        except UnicodeDecodeError:
-            pass
-    if op == "matches":
-        if re.search(value, data):
-            return True
-    if op == "is":
-        if data == value:
-            return True
-    if op == "greater":
-        try:
-            if Decimal(data) > Decimal(value):
-                return True
-        except:
-            if data > value:
-                return True
-    if op == "less":
-        try:
-            if Decimal(data) < Decimal(value):
-                return True
-        except:
-            if data < value:
-                return True
-    if op == "after":
-        #todo handle partial datetime values
-        if isinstance(value, basestring):
-            value = datetime.datetime.strptime(value, util.DATE_FORMAT).timetuple()
-        if data > value:
-            return True
-    if op == "before":
-        #todo handle partial datetime values
-        if isinstance(value, basestring):
-            value = datetime.datetime.strptime(value, util.DATE_FORMAT).timetuple()
-        if data < value:
-            return True
-
-    return False

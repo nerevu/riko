@@ -6,7 +6,6 @@ import string
 from datetime import datetime
 from urllib2 import quote
 from os import path as p
-from operator import itemgetter
 from itertools import repeat
 from pipe2py import Context
 
@@ -63,105 +62,43 @@ def pythonise(id, encoding='ascii'):
     return id.encode(encoding)
 
 
-def xml_to_dict(element):
-    """Convert xml into dict"""
-    i = dict(element.items())
-    if element.getchildren():
-        if element.text and element.text.strip():
-            i['content'] = element.text
-        for child in element.getchildren():
-            if str(child)[:4] == '<!--':
-                continue
-            tag = child.tag.split('}', 1)[-1]
-            i[tag] = xml_to_dict(child)
-    else:
-        if not i.keys():
-            if element.text and element.text.strip():
-                i = element.text
-        else:
-            if element.text and element.text.strip():
-                i['content'] = element.text
+def _make_content(i, tag, new):
+    content = i.get(tag)
 
-    return i
+    if content and new:
+        content = content if hasattr(content, 'append') else [content]
+        content.append(new)
+    elif new:
+        content = new
+
+    return content
 
 
-def etree_to_pipes(element):
-    """Convert ETree xml into dict imitating how Yahoo Pipes does it.
+def etree_to_dict(element):
+    """Convert an eTree xml into dict imitating how Yahoo Pipes does it.
 
     todo: further investigate white space and multivalue handling
     """
-    # start as a dict of attributes
     i = dict(element.items())
-    if len(element):  # if element has child elements
-        if element.text and element.text.strip():  # if element has text
-            i['content'] = element.text
+    content = element.text.strip() if element.text else None
+    i.update({'content': content}) if content else None
 
-        for child in element:
-            if str(child)[:4] == '<!--':
-                continue
+    if len(element.getchildren()):
+        for child in element.iterchildren():
             tag = child.tag.split('}', 1)[-1]
+            new = etree_to_dict(child)
+            content = _make_content(i, tag, new)
+            i.update({tag: content}) if content else None
 
-            # process child recursively and append it to parent dict
-            subtree = etree_to_pipes(child)
-            content = i.get(tag)
-            if content is None:
-                content = subtree
-            elif isinstance(content, list):
-                content = content + [subtree]
-            else:
-                content = [content, subtree]
-            i[tag] = content
-
-            if child.tail and child.tail.strip():  # if text after child
-                # append to text content of parent
-                text = child.tail
-                content = i.get('content')
-                if content is None:
-                    content = text
-                elif isinstance(content, list):
-                    content = content + [text]
-                else:
-                    content = [content, text]
-                i['content'] = content
-    else:  # element is leaf node
-        if not i.keys():  # if element doesn't have attributes
-            if element.text and element.text.strip():  # if element has text
-                i = element.text
-        else:  # element has attributes
-            if element.text and element.text.strip():  # if element has text
-                i['content'] = element.text
+            tag = 'content'
+            new = child.tail.strip() if child.tail else None
+            content = _make_content(i, tag, new)
+            i.update({tag: content}) if content else None
+    elif content and not set(i.keys()).difference(['content']):
+        # element is leaf node and doesn't have attributes
+        i = content
 
     return i
-
-
-def multikeysort(items, columns):
-    """Sorts a list of items by the columns
-
-       (columns precedeed with a '-' will sort descending)
-    """
-    comparers = [
-        (
-            (itemgetter(col[1:].strip()), -1) if col.startswith('-') else (
-                itemgetter(col.strip()), 1
-            )
-        ) for col in columns
-    ]
-
-    def comparer(left, right):
-        for fn, mult in comparers:
-            try:
-                result = cmp(fn(left), fn(right))
-            except KeyError:
-                # todo: perhaps care more if only one side has the missing key
-                result = 0
-            except TypeError:  # todo: handle bool better?
-                # todo: perhaps care more if only one side has the missing key
-                result = 0
-            if result:
-                return mult * result
-        else:
-            return 0
-    return sorted(items, cmp=comparer)
 
 
 def get_value(field, item=None, default=None, encode=False, func=False, **kwargs):
@@ -265,3 +202,76 @@ def gen_entries(parsed):
         entry['y:id'] = entry.get('id')
         # TODO: more?
         yield entry
+
+
+def gen_items(item, yield_if_none=False):
+    if item and hasattr(item, 'append'):
+        for nested_item in item:
+            yield nested_item
+    elif item:
+        yield item
+    elif yield_if_none:
+        yield
+
+
+def gen_rules(rule_defs, fields, **kwargs):
+    for rule in rule_defs:
+        if not hasattr(rule, 'delete'):
+            raise TypeError('rule must be of type DotDict')
+
+        yield tuple(rule.get(field, **kwargs) for field in fields)
+
+
+def recursive_dict(element):
+    return element.tag, dict(map(recursive_dict, element)) or element.text
+
+
+###########################################################
+# Generator Tricks for Systems Programmers by David Beazley
+###########################################################
+def _gen_cat(sources):
+    """Feed a generated sequence into a queue
+    Concatenate multiple generators into a single sequence
+    """
+    for s in sources:
+        for item in s:
+            yield item
+
+
+def _send_to_queue(source, queue):
+    """Feed a generated sequence into a queue
+    """
+    for item in source:
+        queue.put(item)
+    queue.put(StopIteration)
+
+
+def _gen_from_queue(queue):
+    """Generate items received on a queue
+    """
+    while True:
+        item = queue.get()
+        if item is StopIteration: break
+        yield item
+
+
+def _gen_multiplex(sources, target, generator, queue, Thread):
+    """Generate threads to run the generator and send items to a shared queue
+    """
+    for src in sources:
+        thr = Thread(target=target, args=(src, queue))
+        thr.start()
+        yield generator(queue)
+
+
+def multiplex(sources):
+    """Consume several generators in parallel
+    """
+    from Queue import Queue
+    from threading import Thread
+
+    queue = Queue()
+    consumers = _gen_multiplex(
+        sources, _send_to_queue, _gen_from_queue, queue, Thread)
+
+    return _gen_cat(consumers)

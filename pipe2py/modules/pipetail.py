@@ -22,18 +22,5 @@ def pipe_tail(context=None, _INPUT=None, conf=None, **kwargs):
     conf = DotDict(conf)
     limit = conf.get('count', func=int, **kwargs)
 
-
-    try:
-        # if python 2.6+ we can use a sliding window and save memory
-        from collections import deque
-        buffer = deque(_INPUT, limit)
-    except:
-        buffer = []
-
-    for item in _INPUT:
-        buffer.append(item)
-
-    # slice [-limit:] in a list/deque compatible way
-    for i in xrange(-1, -(min(len(buffer), limit)+1), -1):
-        yield buffer[i]
-
+    for item in deque(_INPUT, limit):
+        yield item

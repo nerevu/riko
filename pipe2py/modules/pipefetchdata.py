@@ -7,17 +7,24 @@
 
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchData
 """
+from lxml import objectify
+from lxml.etree import XMLSyntaxError
 from urllib2 import urlopen
-from xml.etree import cElementTree as ElementTree
 
 try:
-    import json
-    json.loads # test access to the attributes of the right json module
+    from json import loads
 except (ImportError, AttributeError):
-    import simplejson as json
+    from simplejson import loads
 
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
+
+
+def _parse_dict(split_path, element):
+    for i in split_path:
+        element = element.get(i) if element else None
+
+    return element
 
 
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
@@ -52,12 +59,13 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     >>> path = 'appointment'
     >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
-    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()
-    ['begin', 'uid', 'places', 'alarmTime', 'duration', 'subject']
+    >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
+    ['alarmTime', 'begin', 'duration', 'places', 'subject', 'uid']
     >>> conf = {'URL': {'value': url}, 'path': {'value': ''}}
-    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()
-    ['reminder', 'appointment']
+    >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
+    ['appointment', 'reminder']
     """
+    # todo: iCal and KML
     conf = DotDict(conf)
     urls = util.listize(conf['URL'])
 
@@ -66,66 +74,31 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
             item = DotDict(item)
             url = util.get_value(DotDict(item_url), item, **kwargs)
             url = util.get_abspath(url)
+            f = urlopen(url)
             path = util.get_value(conf['path'], item, **kwargs)
-            match = None
+            split_path = path.split(".") if path else []
+            res = {}
 
-            #Parse the file into a dictionary
             try:
+                tree = objectify.parse(f)
+                root = tree.getroot()
+            except XMLSyntaxError:
+                if context and context.verbose:
+                    print "pipe_fetchdata loading json:", url
+
                 f = urlopen(url)
-                ft = ElementTree.parse(f)
+                element = loads(f.read())
+            else:
                 if context and context.verbose:
                     print "pipe_fetchdata loading xml:", url
-                root = ft.getroot()
-                #Move to the point referenced by the path
-                #todo lxml would simplify and speed up this
-                if path:
-                    if root.tag[0] == '{':
-                        namespace = root.tag[1:].split("}")[0]
-                        for i in path.split(".")[:-1]:
-                            root = root.find("{%s}%s" % (namespace, i))
-                            if root is None:
-                                return
-                        match = "{%s}%s" % (namespace, path.split(".")[-1])
-                    else:
-                        match = "%s" % (path.split(".")[-1])
-                #Convert xml into generation of dicts
-                if match:
-                    for element in root.findall(match):
-                        i = util.etree_to_pipes(element)
-                        yield i
-                else:
-                    i = util.etree_to_pipes(root)
+
+                # print etree.tostring(element, pretty_print=True)
+                element = util.etree_to_dict(root)
+            finally:
+                res = _parse_dict(split_path, element) if element else None
+
+                for i in util.gen_items(res, True):
                     yield i
-
-            except Exception, e:
-                try:
-                    f = urlopen(url)
-                    d = json.load(f)
-                    #todo test:-
-                    if context and context.verbose:
-                        print "pipe_fetchdata loading json:", url
-                    if path:
-                        for i in path.split(".")[:-1]:
-                            d = d.get(i)
-                        match = path.split(".")[-1]
-                    if match and d is not None:
-                        for itemd in d:
-                            if not match or itemd == match:
-                                if isinstance(d[itemd], list):
-                                    for nested_item in d[itemd]:
-                                        yield nested_item
-                                else:
-                                    yield [d[itemd]]
-                    else:
-                        yield d
-                except Exception, e:
-                    #todo try iCal and yield
-                    #todo try KML and yield
-                    if context and context.verbose:
-                        print "xml and json both failed:"
-
-                    raise
-
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

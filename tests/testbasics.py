@@ -396,9 +396,8 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name, value=1, check=0)
         contains = (
-            ' THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ '
-            'WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY\n            '
-            ' (Severe)'
+            'THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ '
+            'WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY (Severe)'
         )
 
         # todo: check the data! e.g. pubdate etc.

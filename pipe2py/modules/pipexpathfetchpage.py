@@ -4,8 +4,8 @@
 import re
 
 from urllib2 import urlopen
-from html5lib import parse
-from lxml import etree
+from lxml import html
+from lxml.html import html5parser
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
@@ -47,38 +47,17 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 print '...............EOF...................'
 
             xpath = conf.get('xpath', **kwargs)
-
-            if 'html5' in conf:
-                value = conf.get('html5', **kwargs)
-                html5 = value == 'true'
-            else:
-                html5 = False
-
-            if 'useAsString' in conf:
-                value = conf.get('useAsString', **kwargs)
-                use_as_string = value == 'true'
-            else:
-                use_as_string = False
-
-
-            if html5:
-                # from lxml.html import html5parser
-                # root = html5parser.fromstring(content)
-                root = parse(
-                    content,
-                    treebuilder='lxml',
-                    namespaceHTMLElements=False
-                )
-            else:
-                root = etree.HTML(content)
-
-            res_items = root.xpath(xpath)
+            html5 = conf.get('html5', **kwargs) == 'true'
+            use_as_string = conf.get('useAsString', **kwargs) == 'true'
+            tree = html5parser.parse(f) if html5 else html.parse(f)
+            root = tree.getroot()
+            items = root.xpath(xpath)
 
             if context and context.verbose:
-                print 'XPathFetchPage: found count items:', len(res_items)
+                print 'XPathFetchPage: found count items:', len(items)
 
-            for res_item in res_items:
-                i = util.etree_to_pipes(res_item) #TODO xml_to_dict(res_item)
+            for etree in items:
+                i = util.etree_to_dict(etree)
 
                 if context and context.verbose:
                     print '--------------item data --------------------'

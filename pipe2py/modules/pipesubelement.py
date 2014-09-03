@@ -17,20 +17,14 @@ def pipe_subelement(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     subelement of source item
     """
-    conf = DotDict(conf)
-    path = conf['path']
-    path['subkey'] = path['value']  #switch to using as a reference
-    del path['value']
-
     for item in _INPUT:
-        item = DotDict(item)
-        t = util.get_value(path, item)
-        if t:
-            if isinstance(t, list):
-                for nested_item in t:
-                    yield nested_item
-            else:
-                yield t
+        path = DotDict(item).get(conf['path'], **kwargs)
+
+        for res in path:
+            for i in util.gen_items(res, True):
+                yield i
+
+        yield util.gen_items()
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

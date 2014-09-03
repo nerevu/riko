@@ -5,6 +5,20 @@ from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
 
+def _gen_string(parts, item, context=None, **kwargs):
+    for part in parts:
+        try:
+            yield util.get_value(DotDict(part), item, **kwargs)
+        except AttributeError:
+            # ignore if the item is referenced but doesn't have our source
+            # field
+            # todo: issue a warning if debugging?
+            continue
+        except TypeError:
+            if context and context.verbose:
+                print "pipe_strconcat: TypeError"
+
+
 def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a string.
 
@@ -21,16 +35,4 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     parts = util.listize(conf['part'])
 
     for item in _INPUT:
-        item = DotDict(item)
-
-        s = ""
-        for part in parts:
-            try:
-                s += util.get_value(DotDict(part), item, **kwargs)
-            except AttributeError:
-                continue  #ignore if the item is referenced but doesn't have our source field (todo: issue a warning if debugging?)
-            except TypeError:
-                if context and context.verbose:
-                    print "pipe_strconcat: TypeError"
-
-        yield s
+        yield ''.join(_gen_string(parts, DotDict(item), context, **kwargs))

@@ -19,6 +19,46 @@ from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
 
+def _get_args(item, rule, sub_string, sub_func, key=False):
+    content = item[rule[0]]['content'] if key else item[rule[0]]
+    return (rule[0], re.sub(sub_string, sub_func, unicode(content)))
+
+
+def _gen_rules(rule_defs, **kwargs):
+    for rule in rule_defs:
+        rule = DotDict(rule)
+
+        # flags = re.DOTALL # DOTALL was the default for pipe2py previously
+        # flag 'm'
+        flags = re.MULTILINE if 'multilinematch' in rule else 0
+
+        # flag 'i'; this name is reversed from its meaning
+        flags |= re.IGNORECASE if 'casematch' in rule else 0
+
+        # flag 's'
+        flags |= re.DOTALL if 'singlelinematch' in rule else 0
+
+        # todo: 'globalmatch' is the default in python
+        # todo: if set, re.sub() below would get count=0 and by default would
+        # get count=1
+
+        # todo: use subkey?
+        match = rule.get('match', **kwargs)
+
+        # compile for speed and we need to pass flags
+        matchc = re.compile(match, flags)
+
+        # todo: use subkey?
+        replace = rule.get('replace', **kwargs) or ''
+
+        # Convert regex to Python format
+        # todo: use a common routine for this
+        # map $1 to \1 etc.
+        # todo: also need to escape any existing \1 etc.
+        replace = re.sub('\$(\d+)', r'\\\1', replace)
+        yield (rule.get('filed'), matchc, replace)
+
+
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     """Applies regex rules to _INPUT items.
 
@@ -41,49 +81,10 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : source pipe items post regexes application
     """
-    rules = []
+    rule_defs = util.listize(conf['RULE'])
 
-    rule_defs = conf['RULE']
-    if not isinstance(rule_defs, list):
-        rule_defs = [rule_defs]
-
-    for rule in rule_defs:
-        rule = DotDict(rule)
-
-        # flags = re.DOTALL # DOTALL was the default for pipe2py previously
-        flags = 0
-
-        # flag 'm'
-        if 'multilinematch' in rule:
-            flags |= re.MULTILINE
-
-        # flag 'i'; this name is reversed from its meaning
-        if 'casematch' in rule:
-            flags |= re.IGNORECASE
-
-        # flag 's'
-        if 'singlelinematch' in rule:
-            flags |= re.DOTALL
-
-        # todo: 'globalmatch' is the default in python
-        # todo: if set, re.sub() below would get count=0 and by default would
-        # get count=1
-
-        # todo: use subkey?
-        match = rule.get('match', **kwargs)
-
-        # compile for speed and we need to pass flags
-        matchc = re.compile(match, flags)
-
-        # todo: use subkey?
-        replace = rule.get('replace', **kwargs) or ''
-
-        # Convert regex to Python format
-        # todo: use a common routine for this
-        # map $1 to \1 etc.
-        # todo: also need to escape any existing \1 etc.
-        replace = re.sub('\$(\d+)', r'\\\1', replace)
-        rules.append((rule.get('field'), matchc, replace))
+    # use list bc iterator gets used up if there are no matching feeds
+    rules = list(_gen_rules(rule_defs, **kwargs))
 
     for item in _INPUT:
         item = DotDict(item)
@@ -111,10 +112,13 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
                     # the content of the node possible gotcha: the content
                     # might be a subtree, in which case we revert to modifying
                     # the literal of the subtree dict
-                    item.set(rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]]['content'])))
-                    item.set(rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
+                    args1 = _get_args(item, rule, rule[1], rule[2], 'content')
+                    args2 = _get_args(item, rule, '\$\{(.+?)\}', sub_fields)
                 else:
-                    item.set(rule[0], re.sub(rule[1], rule[2], unicode(item[rule[0]])))
-                    item.set(rule[0], re.sub('\$\{(.+?)\}', sub_fields, unicode(item[rule[0]])))
-        yield item
+                    args1 = _get_args(item, rule, rule[1], rule[2])
+                    args2 = _get_args(item, rule, sub_string, sub_fields)
 
+                item.set(*args1)
+                item.set(*args2)
+
+        yield item

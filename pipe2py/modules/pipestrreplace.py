@@ -26,18 +26,9 @@ def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     source string with replacements
     """
-    rules = []
-
-    rule_defs = conf['RULE']
-    if not isinstance(rule_defs, list):
-        rule_defs = [rule_defs]
-
-    for rule in rule_defs:
-        rule = DotDict(rule)
-        find = util.get_value(rule['find'], None, **kwargs)
-        param = util.get_value(rule['param'], None, **kwargs)
-        replace = util.get_value(rule['replace'], None, **kwargs)
-        rules.append((find, param, replace))
+    conf = DotDict(conf)
+    fields = ['find', 'param', 'replace']
+    rules = list(util.gen_rules(conf['RULE'], fields, **kwargs))
 
     for item in _INPUT:
         yield reduce(

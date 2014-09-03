@@ -16,10 +16,5 @@ def pipe_reverse(context=None, _INPUT=None, conf=None, **kwargs):
     Yields (_OUTPUT):
     reversed order of _INPUT items
     """
-    input=[]
-
-    for item in _INPUT:
-        input.append(item)
-
-    for item in reversed(input):
+    for item in reversed(list(_INPUT)):
         yield item

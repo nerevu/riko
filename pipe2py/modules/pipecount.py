@@ -40,7 +40,7 @@ def pipe_count(context=None, _INPUT=None, conf=None, **kwargs):
     >>> items = data_raw['value']['items']
     """
 
-    count = sum(1 for item in _INPUT)
+    count = len(list(_INPUT))
     # todo: check all operators (not placeable in loops)
     # read _INPUT once only & then serve - in case they serve multiple further
     # steps
