@@ -8,6 +8,7 @@ from urllib2 import quote
 from os import path as p
 from operator import itemgetter
 from itertools import repeat
+from pipe2py import Context
 
 try:
     from json import loads
@@ -28,22 +29,25 @@ DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
 
-def extract_modules(pipe_file_name=None, pipe_def=None):
+def extract_modules(pipe_file_name=None, pipe_def=None, pipe_generator=None):
     """Extract modules used by a pipe"""
     if pipe_file_name:
         with open(pipe_file_name) as f:
             pjson = f.read()
 
-    pipe_def = pipe_def or loads(pjson)
-    num = len(pipe_def['modules'])
-    modules = map(dict.get, pipe_def['modules'], repeat('type', num))
+    if pipe_file_name or pipe_def:
+        pipe_def = pipe_def or loads(pjson)
+        num = len(pipe_def['modules'])
+        modules = map(dict.get, pipe_def['modules'], repeat('type', num))
 
-    for m in pipe_def['modules']:
-        try:
-            if m['conf'].get('embed'):
-                modules.append(m['conf']['embed']['value']['type'])
-        except AttributeError:
-            pass
+        for m in pipe_def['modules']:
+            try:
+                if m['conf'].get('embed'):
+                    modules.append(m['conf']['embed']['value']['type'])
+            except AttributeError:
+                pass
+    else:
+        modules = pipe_generator(Context(describe_dependencies=True))
 
     return sorted(set(modules))
 
