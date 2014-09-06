@@ -35,27 +35,27 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
             url = util.get_value(item_url, item, **kwargs)
             if context.verbose:
                 print "FetchPage: Preparing to download:",url
-                
+
             try:
                 request = urllib2.Request(url)
                 request.add_header('User-Agent','Yahoo Pipes 1.0')
                 request = urllib2.build_opener().open(request)
                 content = unicode(request.read(),
                                   request.headers['content-type'].split('charset=')[-1])
-        
+
                 # TODO it seems that Yahoo! converts relative links to absolute
                 # TODO this needs to be done on the content but seems to be a non-trival
                 # TODO task python?
-        
+
                 if context.verbose:
                     print "............FetchPage: content ................."
                     print content.encode("utf-8")
                     print "............FetchPage: EOF     ................."
-        
+
                 from_delimiter = util.get_value(conf["from"], _INPUT, **kwargs)
                 to_delimiter = util.get_value(conf["to"], _INPUT, **kwargs)
                 split_token = util.get_value(conf["token"], _INPUT, **kwargs)
-        
+
                 # determine from location, i.e. from where to start reading content
                 from_location = 0
                 if from_delimiter != "":
@@ -63,12 +63,12 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
                     # Yahoo! does not strip off the from_delimiter.
                     #if from_location > 0:
                     #    from_location += len(from_delimiter)
-        
+
                 # determine to location, i.e. where to stop reading content
                 to_location = 0
                 if to_delimiter != "":
                     to_location = content.find(to_delimiter, from_location)
-        
+
                 # reduce the content depended on the to/from locations
                 if from_location > 0 and to_location > 0:
                     content = content[from_location:to_location]
@@ -76,28 +76,28 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
                     content = content[from_location:]
                 elif to_location > 0:
                     content = content[:to_location]
-        
+
                 # determine items depended on the split_token
-                res_items = []
+                items = []
                 if split_token != "":
-                    res_items = content.split(split_token)
+                    items = content.split(split_token)
                 else:
-                    res_items = [content]
-        
+                    items = [content]
+
                 if context.verbose:
-                    print "FetchPage: found count items:",len(res_items)
-        
-                for res_item in res_items:
+                    print "FetchPage: found count items:",len(items)
+
+                for i in items:
                     if context.verbose:
                         print "--------------item data --------------------"
-                        print res_item
+                        print i
                         print "--------------EOF item data ----------------"
-                    yield { "content" : res_item }
-        
+                    yield { "content" : i }
+
             except Exception, e:
                 if context.verbose:
                     print "FetchPage: failed to retrieve from:", url
-        
+
                     print "----------------- FetchPage -----------------"
                     import traceback
                     traceback.print_exc()
@@ -106,4 +106,4 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
 
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
             break
-            
+

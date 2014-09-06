@@ -1,5 +1,5 @@
 # pipenumberinput.py
-#
+# vim: sw=4:ts=4:expandtab
 
 from pipe2py import util
 
@@ -18,12 +18,12 @@ def pipe_numberinput(context, _INPUT, conf, **kwargs):
     text
     """
     value = util.get_input(context, conf)
-        
+
     try:
-        value = float(value)
+        value = int(value)
     except:
         value = 0
-    
+
     while True:
         yield value
 

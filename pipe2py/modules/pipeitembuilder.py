@@ -19,7 +19,7 @@ def pipe_itembuilder(context, _INPUT, conf, **kwargs):
     attrs = conf['attrs']
     if not isinstance(attrs, list):
         attrs = [attrs]
-    
+
     for item in _INPUT:
         d = {}
         for attr in attrs:
@@ -28,11 +28,11 @@ def pipe_itembuilder(context, _INPUT, conf, **kwargs):
                 value = util.get_value(attr['value'], item, **kwargs)
             except KeyError:
                 continue  #ignore if the item is referenced but doesn't have our source or target field (todo: issue a warning if debugging?)
-            
+
             util.set_value(d, key, value)
-        
+
         yield d
-        
+
         if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
             break
-            
+
