@@ -6,7 +6,7 @@ from pipe2py.lib import unicodecsv as csv
 from pipe2py.lib.dotdict import DotDict
 
 
-def _gen_fieldnames(conf, reader, **kwargs):
+def _gen_fieldnames(conf, reader, item, **kwargs):
     start = util.get_value(conf['col_row_start'], item, func=int, **kwargs)
     end = util.get_value(conf['col_row_end'], item, func=int, **kwargs)
 
@@ -66,7 +66,7 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         if col_mode == 'custom':
             fieldnames = [DotDict(x).get() for x in col_name]
         else:
-            fieldnames = _gen_fieldnames(conf, reader, **kwargs)
+            fieldnames = _gen_fieldnames(conf, reader, item, **kwargs)
 
         for rows in reader:
             yield dict(zip(fieldnames, rows))

@@ -104,6 +104,8 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
             # nor if this is the right way to detect that we're looking at
             # an HTML node and not a plain string
             if rule[0] in item and item[rule[0]]:
+                sub_string = '\$\{(.+?)\}'
+
                 if (
                     hasattr(item[rule[0]], 'keys')
                     and 'content' in item[rule[0]]
@@ -113,7 +115,7 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
                     # might be a subtree, in which case we revert to modifying
                     # the literal of the subtree dict
                     args1 = _get_args(item, rule, rule[1], rule[2], 'content')
-                    args2 = _get_args(item, rule, '\$\{(.+?)\}', sub_fields)
+                    args2 = _get_args(item, rule, sub_string, sub_fields)
                 else:
                     args1 = _get_args(item, rule, rule[1], rule[2])
                     args2 = _get_args(item, rule, sub_string, sub_fields)

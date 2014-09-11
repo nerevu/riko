@@ -30,6 +30,7 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
         - items should be cleaned, i.e. stripped of HTML tags
     """
     conf = DotDict(conf)
+    split_token = conf.get('token', **kwargs)
     urls = util.listize(conf['URL'])
 
     for item in _INPUT:

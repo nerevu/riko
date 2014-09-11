@@ -310,8 +310,7 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_5fabfc509a8e44342941060c7c7d0340'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
-
-        self.assertTrue(
+        self.assertEqual(
             pipeline, [
                 (
                     u'', u'dateinput1', u'dateinput1', u'datetime',
@@ -329,7 +328,7 @@ class TestBasics(unittest.TestCase):
                 ),
                 (
                     u'', u'urlinput1', u'urlinput1', u'url',
-                    u'http://example.com'
+                    u'file://data/example.html'
                 )
             ]
         )
@@ -474,7 +473,7 @@ class TestBasics(unittest.TestCase):
     #     pipe_name = 'pipe_a08134746e30a6dd3a7cb3c0cf098692'
     #     pipeline = self._get_pipeline(pipe_name)
     #     self._load(pipeline, pipe_name)
-    #     [self.assertTrue('title' in i) for i in pipe]
+    #     [self.assertIn(i, 'title') for i in pipe]
 
     # # dead link, need to find a new data source
     # def test_urlbuilder_loop(self):

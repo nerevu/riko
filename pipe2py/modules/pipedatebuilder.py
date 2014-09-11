@@ -29,6 +29,7 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
     date
     """
     conf = DotDict(conf)
+    date_format = conf.get('format', **kwargs)
 
     for item in _INPUT:
         date = util.get_value(conf['DATE'], DotDict(item), **kwargs).lower()
