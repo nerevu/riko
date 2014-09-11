@@ -10,7 +10,6 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-import sys
 from pipe2py.lib.dotdict import DotDict
 
 # note: for some reason the config needs to match pubdate but should output

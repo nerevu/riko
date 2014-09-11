@@ -2,8 +2,6 @@
 # Copyright (C) 2011 Gerrit Riessen
 # This code is licensed under the GNU Public License.
 
-import re
-
 from urllib2 import urlopen
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict

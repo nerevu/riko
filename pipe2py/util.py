@@ -222,10 +222,6 @@ def gen_rules(rule_defs, fields, **kwargs):
         yield tuple(rule.get(field, **kwargs) for field in fields)
 
 
-def recursive_dict(element):
-    return element.tag, dict(map(recursive_dict, element)) or element.text
-
-
 ###########################################################
 # Generator Tricks for Systems Programmers by David Beazley
 ###########################################################

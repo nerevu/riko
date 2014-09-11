@@ -12,7 +12,6 @@
 import re
 
 from datetime import datetime as dt
-from itertools import ifilter
 from decimal import Decimal, InvalidOperation
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict

@@ -1,8 +1,6 @@
 # pipexpathfetchpage.py
 # vim: sw=4:ts=4:expandtab
 
-import re
-
 from urllib2 import urlopen
 from lxml import html
 from lxml.html import html5parser

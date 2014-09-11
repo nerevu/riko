@@ -41,8 +41,6 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
             if context and context.verbose:
                 print "pipe_fetchsitefeed loading:", url
 
-            autodsc_conf = {u'URL': {u'type': u'url', u'value': url}}
-
             for link in autorss.getRSSLink(url.encode('utf-8')):
                 parsed = feedparser.parse(urlopen(link).read())
 

@@ -1,7 +1,6 @@
 # piperssitembuilder.py
 #
 
-import urllib
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 

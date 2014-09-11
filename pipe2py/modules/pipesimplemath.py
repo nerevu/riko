@@ -1,7 +1,6 @@
 # pipesimplemath.py
 #
 
-from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 from math import pow
 

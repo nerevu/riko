@@ -4,7 +4,6 @@
 
 from itertools import tee, imap
 from copy import deepcopy
-from pipe2py import util
 
 
 class Split(object):

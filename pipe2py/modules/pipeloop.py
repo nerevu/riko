@@ -36,7 +36,8 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     mode = conf.get('mode')
     assign_to = conf.get('assign_to')
     assign_part = conf.get('assign_part')
-    emit_part = conf.get('emit_part')
+    # TODO: what is this for??
+    # emit_part = conf.get('emit_part')
     loop_with = conf.get('with')
     embed_conf = conf.get('embed')['conf']
 
