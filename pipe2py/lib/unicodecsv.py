@@ -1,5 +1,6 @@
 # todo: use unicodecsv from pip
-import csv, codecs
+import csv
+import codecs
 
 
 class UTF8Recoder(object):

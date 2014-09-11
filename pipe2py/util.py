@@ -247,7 +247,10 @@ def _gen_from_queue(queue):
     """
     while True:
         item = queue.get()
-        if item is StopIteration: break
+
+        if item is StopIteration:
+            break
+
         yield item
 
 
