@@ -78,9 +78,11 @@ class DotDict(FeedParserDict):
         reduce(lambda i, k: i.setdefault(k, {}), first, item)[last] = value
         dict.update(self, item)
 
-    def get(self, key=None, default=None, encode=False, func=False, **kwargs):
+    def get(self, key=None, default=None, **kwargs):
         keys = self._parse_key(key)
         value = DotDict(self.copy())
+        encode = kwargs.pop('encode', None)
+        func = kwargs.pop('func', None)
 
         for key in keys:
             if not value:

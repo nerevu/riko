@@ -101,12 +101,12 @@ def etree_to_dict(element):
     return i
 
 
-def get_value(field, item=None, default=None, encode=False, func=False, **kwargs):
+def get_value(field, item=None, default=None, **kwargs):
     try:
         if item and field.get('subkey'):
-            value = item.get(field['subkey'], default, encode, func, **kwargs)
+            value = item.get(field['subkey'], default, **kwargs)
         else:
-            value = field.get(None, default, encode, func, **kwargs)
+            value = field.get(None, default, **kwargs)
     except AttributeError:
         value = None
 
