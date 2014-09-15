@@ -28,7 +28,7 @@ DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
 
-def extract_modules(pipe_file_name=None, pipe_def=None, pipe_generator=None):
+def extract_dependencies(pipe_file_name=None, pipe_def=None, pipe_generator=None):
     """Extract modules used by a pipe"""
     if pipe_file_name:
         with open(pipe_file_name) as f:
@@ -46,9 +46,9 @@ def extract_modules(pipe_file_name=None, pipe_def=None, pipe_generator=None):
             except AttributeError:
                 pass
     else:
-        modules = pipe_generator(Context(describe_dependencies=True))
+        pydeps = pipe_generator(Context(describe_dependencies=True))
 
-    return sorted(set(modules))
+    return sorted(set(pydeps))
 
 
 def pythonise(id, encoding='ascii'):
