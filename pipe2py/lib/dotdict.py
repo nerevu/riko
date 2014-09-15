@@ -45,6 +45,17 @@ class DotDict(FeedParserDict):
 
         return keys
 
+    def _parse_value(self, value, key):
+        try:
+            value = value[key]
+        except (KeyError, TypeError):
+            if key in ['value', 'content', 'utime']:
+                value = value
+            else:
+                value = None
+
+        return value
+
     def _gen_first_keys(self, keys):
         for key in keys:
             subkeys = self._parse_key(key)
@@ -75,18 +86,8 @@ class DotDict(FeedParserDict):
             if not value:
                 break
 
-            if key.isdigit():
-                # if the key looks like a number, then we're indexing into a
-                # list so convert it to an integer
-                key = int(key)
-
-            try:
-                value = value[key]
-            except (KeyError, TypeError):
-                if key in ['value', 'content', 'utime']:
-                    value = value
-                else:
-                    value = default
+            key = int(key) if key.isdigit() else key
+            value = self._parse_value(value, key) or default
 
         if hasattr(value, 'keys') and 'terminal' in value:
             # value fed in from another module
@@ -94,16 +95,9 @@ class DotDict(FeedParserDict):
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 
-        if value and encode:
-            value = value.encode('utf-8')
-
-        if value and func:
-            value = func(value)
-
-
-        if hasattr(value, 'keys'):
-            value = DotDict(value)
-
+        value = value.encode('utf-8') if value and encode else value
+        value = func(value) if value and func else value
+        value = DotDict(value) if hasattr(value, 'keys') else value
         return value
 
     def update(self, dict=None):
