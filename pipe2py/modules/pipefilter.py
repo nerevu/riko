@@ -124,7 +124,7 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
             res = COMBINE_BOOLEAN[combine](_gen_rulepass(rules, DotDict(item)))
         else:
             raise Exception(
-                "Invalid combine: %s (expecting 'and' or 'or')" % combine)
+                "Invalid combine: %s. (Expected 'and' or 'or')" % combine)
 
         if (res and mode == 'permit') or (not res and mode == 'block'):
             yield item

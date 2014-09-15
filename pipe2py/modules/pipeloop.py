@@ -93,4 +93,4 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
             yield item
         elif mode != 'EMIT':
             raise Exception(
-                "Invalid mode %s (expecting 'assign' or 'EMIT')" % mode)
+                "Invalid mode: %s. (Expected 'assign' or 'EMIT')" % mode)
