@@ -3,7 +3,6 @@
 
 from pipe2py import util
 from copy import copy
-from urllib2 import HTTPError
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -61,17 +60,8 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         # prepare the submodule
         embed_context.inputs = dict(_gen_inputs(item, embed_conf))
         submodule = embed(embed_context, [inp], embed_conf)
-
-        try:
-            first = assign_part == 'first'
-            results = _gen_results(submodule, mode, first)
-
-        # todo: any other errors we want to continue looping after?
-        except HTTPError:
-            if context and context.verbose:
-                print "Submodule gave HTTPError - continuing the loop"
-
-            continue
+        first = assign_part == 'first'
+        results = _gen_results(submodule, mode, first)
 
         if not results:
             continue
