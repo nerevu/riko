@@ -7,6 +7,37 @@ from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
 
+def _parse_content(content, conf, **kwargs):
+    from_delimiter = conf.get("from", **kwargs)
+    to_delimiter = conf.get("to", **kwargs)
+
+    # determine from location, i.e. from where to start reading
+    # content
+    from_location = 0
+
+    if from_delimiter != "":
+        from_location = content.find(from_delimiter)
+        # Yahoo! does not strip off the from_delimiter.
+        # if from_location > 0:
+        # from_location += len(from_delimiter)
+
+    # determine to location, i.e. where to stop reading content
+    to_location = 0
+
+    if to_delimiter != "":
+        to_location = content.find(to_delimiter, from_location)
+
+    # reduce the content depended on the to/from locations
+    if from_location > 0 and to_location > 0:
+        parsed = content[from_location:to_location]
+    elif from_location > 0:
+        parsed = content[from_location:]
+    elif to_location > 0:
+        parsed = content[:to_location]
+
+    return parsed
+
+
 def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     """Fetch Page module
 
@@ -51,35 +82,8 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 print content
                 print '...............EOF...................'
 
-            from_delimiter = conf.get("from", **kwargs)
-            to_delimiter = conf.get("to", **kwargs)
-            split_token = conf.get("token", **kwargs)
-
-            # determine from location, i.e. from where to start reading
-            # content
-            from_location = 0
-
-            if from_delimiter != "":
-                from_location = content.find(from_delimiter)
-                # Yahoo! does not strip off the from_delimiter.
-                # if from_location > 0:
-                # from_location += len(from_delimiter)
-
-            # determine to location, i.e. where to stop reading content
-            to_location = 0
-
-            if to_delimiter != "":
-                to_location = content.find(to_delimiter, from_location)
-
-            # reduce the content depended on the to/from locations
-            if from_location > 0 and to_location > 0:
-                content = content[from_location:to_location]
-            elif from_location > 0:
-                content = content[from_location:]
-            elif to_location > 0:
-                content = content[:to_location]
-
-            items = content.split(split_token) if split_token else [content]
+            parsed = _parse_content(content, conf, **kwargs)
+            items = parsed.split(split_token) if split_token else [parsed]
 
             if context and context.verbose:
                 print "FetchPage: found count items:", len(items)

@@ -45,65 +45,66 @@ class DotDict(FeedParserDict):
 
         return keys
 
-	def _gen_first_keys(self, keys):
-		for key in keys:
-			subkeys = self._parse_key(key)
-			yield '.'.join(subkeys[:-1])
+    def _gen_first_keys(self, keys):
+        for key in keys:
+            subkeys = self._parse_key(key)
+            yield '.'.join(subkeys[:-1])
 
-	def delete(self, key):
-		keys = self._parse_key(key)
-		last = keys[-1]
+    def delete(self, key):
+        keys = self._parse_key(key)
+        last = keys[-1]
 
-		try:
-			del reduce(lambda i, k: DotDict(i).get(k), [self] + keys[:-1])[last]
-		except KeyError:
-			pass
+        try:
+            del reduce(lambda i, k: DotDict(i).get(k), [self] + keys[:-1])[last]
+        except KeyError:
+            pass
 
     def set(self, key, value):
-		keys = self._parse_key(key)
-		first = keys[:-1]
-		last = keys[-1]
-		item = self.copy()
-		reduce(lambda i, k: i.setdefault(k, {}), first, item)[last] = value
-		dict.update(self, item)
+        keys = self._parse_key(key)
+        first = keys[:-1]
+        last = keys[-1]
+        item = self.copy()
+        reduce(lambda i, k: i.setdefault(k, {}), first, item)[last] = value
+        dict.update(self, item)
 
     def get(self, key=None, default=None, encode=False, func=False, **kwargs):
-		keys = self._parse_key(key)
-		value = DotDict(self.copy())
+        keys = self._parse_key(key)
+        value = DotDict(self.copy())
 
         for key in keys:
-        	if not value:
-        		break
+            if not value:
+                break
 
-        	if key.isdigit():
-		        # if the key looks like a number, then we're indexing into a
-		        # list so convert it to an integer
-        		key = int(key)
+            if key.isdigit():
+                # if the key looks like a number, then we're indexing into a
+                # list so convert it to an integer
+                key = int(key)
 
-			try:
-				value = value[key]
-			except (KeyError, TypeError):
-				if key in ['value', 'content', 'utime']:
-				    value = value
-				else:
-					value = default
+            try:
+                value = value[key]
+            except (KeyError, TypeError):
+                if key in ['value', 'content', 'utime']:
+                    value = value
+                else:
+                    value = default
 
-	    if hasattr(value, 'keys') and 'terminal' in value:
-		    # value fed in from another module
-			value = kwargs[util.pythonise(value['terminal'])].next()
-		elif hasattr(value, 'keys') and 'value' in value:
-		    value = value['value']
+        if hasattr(value, 'keys') and 'terminal' in value:
+            # value fed in from another module
+            value = kwargs[util.pythonise(value['terminal'])].next()
+        elif hasattr(value, 'keys') and 'value' in value:
+            value = value['value']
 
-	    if value and encode:
-	        value = value.encode('utf-8')
+        if value and encode:
+            value = value.encode('utf-8')
 
-	    if value and func:
-	        value = func(value)
+        if value and func:
+            value = func(value)
 
-	    if hasattr(value, 'keys'):
-	    	value = DotDict(value)
 
-	    return value
+        if hasattr(value, 'keys'):
+            value = DotDict(value)
+
+        return value
 
     def update(self, dict=None):
         if dict:

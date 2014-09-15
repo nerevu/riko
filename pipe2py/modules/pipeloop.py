@@ -7,6 +7,14 @@ from urllib2 import HTTPError
 from pipe2py.lib.dotdict import DotDict
 
 
+def _gen_results(submodule, mode, first=False):
+    for i in submodule:
+        yield i
+
+        if first:
+            break
+
+
 def _gen_inputs(item, conf):
     # Pass any input parameters into the submodule
     for key in conf:
@@ -53,29 +61,10 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
         # prepare the submodule
         embed_context.inputs = dict(_gen_inputs(item, embed_conf))
         submodule = embed(embed_context, [inp], embed_conf)
-        results = None
 
         try:
-            # loop over the submodule, emitting as we go or collecting results
-            # for later assignment
-            for i in submodule:
-                if mode == 'EMIT':
-                    yield i
-                elif assign_part == 'first':
-                    results = i
-                else:
-                    results = results or []
-                    results.append(i)
-
-                if assign_part == 'first':
-                    break
-
-            if results and len(results) == 1 and hasattr(results[0], 'keys'):
-                # this is a hack to make sure fetchpage works in an out of a
-                # loop while not disturbing strconcat in a loop etc.
-                # goes with the comment below about checking the delivery
-                # capability of the source
-                results = [results] if mode == 'assign' else results
+            first = assign_part == 'first'
+            results = _gen_results(submodule, mode, first)
 
         # todo: any other errors we want to continue looping after?
         except HTTPError:
@@ -84,13 +73,24 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
 
             continue
 
-        if mode == 'assign':
+        if not results:
+            continue
+        elif mode == 'EMIT':
+            for i in results:
+                yield i
+        elif mode == 'assign':
+            results = list(results)
+
+            # this is a hack to make sure fetchpage works in an out of a
+            # loop while not disturbing strconcat in a loop etc.
             # note: i suspect this needs to be more discerning and only happen
             # if the source can only ever deliver 1 result, e.g. strconcat vs.
             # fetchpage
-            results = results[0] if results and len(results) == 1 else results
+            if len(results) == 1 and not hasattr(results[0], 'keys'):
+                results = results[0]
+
             item.set(assign_to, results)
             yield item
-        elif mode != 'EMIT':
+        else:
             raise Exception(
                 "Invalid mode: %s. (Expected 'assign' or 'EMIT')" % mode)
