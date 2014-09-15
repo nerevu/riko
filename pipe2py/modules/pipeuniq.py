@@ -4,7 +4,8 @@ from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator filters out non unique items according to the specified field.
+    """This operator filters out non unique items according to the specified
+    field.
 
     Keyword arguments:
     context -- pipeline context

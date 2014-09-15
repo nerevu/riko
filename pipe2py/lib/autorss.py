@@ -8,7 +8,7 @@ __copyright__ = "Copyright 2002, Mark Pilgrim"
 __license__ = "Python"
 
 try:
-    import timeoutsocket # http://www.timo-tasi.org/python/timeoutsocket.py
+    import timeoutsocket  # http://www.timo-tasi.org/python/timeoutsocket.py
 except ImportError:
     pass
 else:
@@ -33,7 +33,7 @@ class LinkParser(SGMLParser):
         if not ('type', 'application/rss+xml') in attrs:
             return
 
-        hreflist = [e[1] for e in attrs if e[0]=='href']
+        hreflist = [e[1] for e in attrs if e[0] == 'href']
 
         if hreflist:
             self.href.extend(hreflist)
@@ -45,6 +45,7 @@ class LinkParser(SGMLParser):
 
     start_body = end_head
 
+
 def getRSSLinkFromHTMLSource(html):
     try:
         parser = LinkParser()
@@ -52,6 +53,7 @@ def getRSSLinkFromHTMLSource(html):
         return parser.href
     except:
         return []
+
 
 def getRSSLink(url):
     try:

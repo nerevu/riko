@@ -40,7 +40,7 @@ def _gen_order(keys, **kwargs):
         key = DotDict(key)
         field = key.get('field', **kwargs)
         sort_dir = key.get('dir', **kwargs)
-        yield '%s%s' % (sort_dir=='DESC' and '-' or '', field)
+        yield '%s%s' % (sort_dir == 'DESC' and '-' or '', field)
 
 
 def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):

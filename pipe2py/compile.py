@@ -58,6 +58,7 @@ from pipe2py.lib.topsort import topological_sort
 
 PARENT = p.dirname(__file__)
 
+
 class MyPrettyPrinter(PrettyPrinter):
     def format(self, object, context, maxlevels, level):
         if isinstance(object, unicode):
@@ -98,12 +99,12 @@ def _gen_string_modules(context, pipe, pyinput):
         pipe_name = commons['pipe_name']
         module_name = commons['module_name']
         args = commons['args']
-        kwargs = commons['kwargs']
+        pykwargs = commons['pykwargs']
 
         if context and context.verbose:
             con_args = filter(lambda x: x != Id('context'), args)
-            nconf_kwargs = filter(lambda x: x[0] != 'conf', kwargs.items())
-            conf_kwargs = filter(lambda x: x[0] == 'conf', kwargs.items())
+            nconf_kwargs = filter(lambda x: x[0] != 'conf', pykwargs.items())
+            conf_kwargs = filter(lambda x: x[0] == 'conf', pykwargs.items())
             all_args = chain(con_args, nconf_kwargs, conf_kwargs)
 
             print (
@@ -113,7 +114,7 @@ def _gen_string_modules(context, pipe, pyinput):
             ).encode('utf-8')
 
         yield {
-            'args': repr_args(chain(args, kwargs.items())),
+            'args': repr_args(chain(args, pykwargs.items())),
             'id': module_id,
             'sub_pipe': module_name.startswith('pipe_'),
             'name': module_name,
@@ -127,7 +128,7 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
     module = pipe['modules'][module_id]
     module_type = module['type']
     conf = module['conf']
-    kwargs = {'conf': conf}
+    pykwargs = {'conf': conf}
     output = None
 
     if module_type.startswith('pipe:'):
@@ -194,10 +195,10 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
             # if the wire is to this module and it's *NOT* the default input
             # and it's the default output
             if is_default_out_only:
-                # set the extra inputs of this module as kwargs of this module
+                # set the extra inputs of this module as pykwargs of this module
                 pipe_id = util.pythonise(pipe_wire['tgt']['id'])
                 updated = steps[moduleid] if steps else Id(moduleid)
-                kwargs.update({pipe_id: updated})
+                pykwargs.update({pipe_id: updated})
 
         if module_id in pipe['embed']:
             text = 'input_module of an embedded module was already set'
@@ -208,14 +209,14 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
         args = [context, input_module] if steps else [
             Id('context'), Id(input_module)]
 
-        # set the embedded module in the kwargs if this is loop module
+        # set the embedded module in the pykwargs if this is loop module
         if module_type == 'loop':
             value = module['conf']['embed']['value']
             pipe_id = util.pythonise(value['id'])
             updated = steps[pipe_id] if steps else Id('pipe_%s' % pipe_id)
-            kwargs.update({'embed': updated})
+            pykwargs.update({'embed': updated})
 
-        # set splits in the kwargs if this is split module
+        # set splits in the pykwargs if this is split module
         if module_type == 'split':
             filtered = filter(
                 lambda x: module_id == util.pythonise(x[1]['src']['moduleid']),
@@ -224,14 +225,14 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
 
             count = len(filtered)
             updated = count if steps else Id(count)
-            kwargs.update({'splits': updated})
+            pykwargs.update({'splits': updated})
 
         output = {
             'pyinput': pyinput,
             'module_name': module_name,
             'pipe_name': pipe_name,
             'args': args,
-            'kwargs': kwargs,
+            'pykwargs': pykwargs,
         }
 
     return output
@@ -312,7 +313,7 @@ def build_pipeline(context, pipe):
             continue
 
         args = commons['args']
-        kwargs = commons['kwargs']
+        pykwargs = commons['pykwargs']
 
         if module_name.startswith('pipe_'):
             # Import any required sub-pipelines and user inputs
@@ -329,12 +330,11 @@ def build_pipeline(context, pipe):
         if module_id in pipe['embed']:
             # We need to wrap submodules (used by loops) so we can pass the
             # input at runtime (as we can to sub-pipelines)
-            # Note: no embed (so no subloops) or wire kwargs are
-            # passed and outer_kwargs are passed in
+            # Note: no embed (so no subloops) or wire pykwargs are passed
             pipe_generator.__name__ = str('pipe_%s' % module_id)
             steps[module_id] = pipe_generator
         else:  # else this module is not an embedded module:
-            steps[module_id] = pipe_generator(*args, **kwargs)
+            steps[module_id] = pipe_generator(*args, **pykwargs)
 
         if context and context.verbose:
             print(

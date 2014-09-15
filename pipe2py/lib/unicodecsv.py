@@ -1,5 +1,7 @@
 # todo: use unicodecsv from pip
-import csv, codecs
+import csv
+import codecs
+
 
 class UTF8Recoder(object):
     """
@@ -13,6 +15,7 @@ class UTF8Recoder(object):
 
     def next(self):
         return self.reader.next().encode("utf-8")
+
 
 class UnicodeReader(object):
     """

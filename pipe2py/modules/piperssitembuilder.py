@@ -1,7 +1,6 @@
 # piperssitembuilder.py
 #
 
-import urllib
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
@@ -14,6 +13,7 @@ Y_SWITCH = {
     'guid': 'y:id',
     # todo: any more??
 }
+
 
 def _gen_key_value(conf, item, **kwargs):
     for key in conf:

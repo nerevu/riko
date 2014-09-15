@@ -1,6 +1,7 @@
 # pipeoutput.py
 #
 
+
 def pipe_output(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator outputs the input source, i.e. does nothing.
 

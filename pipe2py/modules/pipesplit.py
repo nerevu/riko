@@ -1,10 +1,9 @@
 # pipesplit.py
 #
-# (module contributed by https://github.com/tuukka, 2b62cf3a5d8408f7d0d8e3f332dcb19dcbca64bb)
+# module contributed by https://github.com/tuukka
 
 from itertools import tee, imap
 from copy import deepcopy
-from pipe2py import util
 
 
 class Split(object):

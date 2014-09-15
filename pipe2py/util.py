@@ -28,7 +28,7 @@ DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
 
-def extract_modules(pipe_file_name=None, pipe_def=None, pipe_generator=None):
+def extract_dependencies(pipe_file_name=None, pipe_def=None, pipe_generator=None):
     """Extract modules used by a pipe"""
     if pipe_file_name:
         with open(pipe_file_name) as f:
@@ -37,18 +37,18 @@ def extract_modules(pipe_file_name=None, pipe_def=None, pipe_generator=None):
     if pipe_file_name or pipe_def:
         pipe_def = pipe_def or loads(pjson)
         num = len(pipe_def['modules'])
-        modules = map(dict.get, pipe_def['modules'], repeat('type', num))
+        pydeps = map(dict.get, pipe_def['modules'], repeat('type', num))
 
         for m in pipe_def['modules']:
             try:
                 if m['conf'].get('embed'):
-                    modules.append(m['conf']['embed']['value']['type'])
+                    pydeps.append(m['conf']['embed']['value']['type'])
             except AttributeError:
                 pass
     else:
-        modules = pipe_generator(Context(describe_dependencies=True))
+        pydeps = pipe_generator(Context(describe_dependencies=True))
 
-    return sorted(set(modules))
+    return sorted(set(pydeps))
 
 
 def pythonise(id, encoding='ascii'):
@@ -101,12 +101,12 @@ def etree_to_dict(element):
     return i
 
 
-def get_value(field, item=None, default=None, encode=False, func=False, **kwargs):
+def get_value(field, item=None, default=None, **kwargs):
     try:
         if item and field.get('subkey'):
-            value = item.get(field['subkey'], default, encode, func, **kwargs)
+            value = item.get(field['subkey'], default, **kwargs)
         else:
-            value = field.get(None, default, encode, func, **kwargs)
+            value = field.get(None, default, **kwargs)
     except AttributeError:
         value = None
 
@@ -222,10 +222,6 @@ def gen_rules(rule_defs, fields, **kwargs):
         yield tuple(rule.get(field, **kwargs) for field in fields)
 
 
-def recursive_dict(element):
-    return element.tag, dict(map(recursive_dict, element)) or element.text
-
-
 ###########################################################
 # Generator Tricks for Systems Programmers by David Beazley
 ###########################################################
@@ -251,7 +247,10 @@ def _gen_from_queue(queue):
     """
     while True:
         item = queue.get()
-        if item is StopIteration: break
+
+        if item is StopIteration:
+            break
+
         yield item
 
 

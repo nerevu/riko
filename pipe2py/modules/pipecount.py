@@ -8,7 +8,6 @@
 
     http://pipes.yahoo.com/pipes/docs?doc=operators#Count
 """
-from pipe2py import util
 
 
 def pipe_count(context=None, _INPUT=None, conf=None, **kwargs):

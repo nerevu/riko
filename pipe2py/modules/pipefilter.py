@@ -12,7 +12,6 @@
 import re
 
 from datetime import datetime as dt
-from itertools import ifilter
 from decimal import Decimal, InvalidOperation
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
@@ -97,11 +96,13 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     >>> input = pipe_fetchdata(_INPUT=pipe_forever(), conf=conf)
     >>> mode = {'value': 'permit'}
     >>> combine = {'value': 'and'}
-    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, 'value': {'value': 'web'}}]
+    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, \
+'value': {'value': 'web'}}]
     >>> conf = {'MODE': mode, 'COMBINE': combine, 'RULE': rule}
     >>> pipe_filter(_INPUT=input, conf=conf).next()['title']
     u'E-Commerce Website Developer | Elance Job'
-    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, 'value': {'value': 'kjhlked'}}]
+    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, \
+'value': {'value': 'kjhlked'}}]
     >>> conf = {'MODE': mode, 'COMBINE': combine, 'RULE': rule}
     >>> list(pipe_filter(_INPUT=input, conf=conf))
     []
@@ -123,7 +124,7 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
             res = COMBINE_BOOLEAN[combine](_gen_rulepass(rules, DotDict(item)))
         else:
             raise Exception(
-                "Invalid combine: %s (expecting 'and' or 'or')" % combine)
+                "Invalid combine: %s. (Expected 'and' or 'or')" % combine)
 
         if (res and mode == 'permit') or (not res and mode == 'block'):
             yield item

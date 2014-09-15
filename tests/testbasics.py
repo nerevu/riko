@@ -10,7 +10,7 @@ from os import path as p, remove
 from importlib import import_module
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
-from pipe2py.util import extract_modules
+from pipe2py.util import extract_dependencies
 from pipe2py import Context
 
 try:
@@ -56,15 +56,15 @@ class TestBasics(unittest.TestCase):
         except ImportError:
             parent = p.dirname(__file__)
             pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
-            modules = extract_modules(pipe_file_name=pipe_file_name)
+            pydeps = extract_dependencies(pipe_file_name=pipe_file_name)
         else:
             pipe_generator = getattr(module, pipe_name)
-            modules = extract_modules(pipe_generator=pipe_generator)
+            pydeps = extract_dependencies(pipe_generator=pipe_generator)
 
         print 'pipeline length %s %i, but expected %s %i.' % (
             switch.get(compared), value, switch.get(check), value)
 
-        print 'Modules used in %s: %s' % (pipe_name, modules)
+        print 'Modules used in %s: %s' % (pipe_name, pydeps)
 
         # assert that pipeline length is as expected
         return self.assertEqual(compared, check)
@@ -136,9 +136,9 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
 
-##############
+###############
 # Offline Tests
-##############
+###############
     def test_simplest(self):
         """Loads the RTW simple test pipeline and compiles and executes it to
             check the results
@@ -269,37 +269,37 @@ class TestBasics(unittest.TestCase):
         )
 
         contains = {
-                u'FamilyNumOfJourneys': u'0',
-                u'Member': u'Lancaster',
-                u'MPOtherEuropean': u'0',
-                u'FamilyTotal': u'0',
-                u'OfficeRunningCosts': u'19848',
-                u'MPOtherRail': u'233',
-                u'CostofStayingAwayFromMainHome': u'22541',
-                u'StationeryAssocdPostageCosts': u'3471',
-                u'CommsAllowance': u'9767',
-                u'Mileage': u'3358',
-                u'MPMisc': u'20',
-                u'title': u'Mr Mark Lancaster',
-                u'description': description,
-                u'TotalAllowancesClaimedIncTravel': u'151619',
-                u'SpouseTotal': u'31',
-                u'EmployeeTotal': u'222',
-                u'MPRail': u'1473',
-                u'LondonSupplement': u'0',
-                u'StaffingCosts': u'88283',
-                u'EmployeeNumOfJourneys': u'21',
-                u'CentrallyPurchasedStationery': u'1149',
-                u'TotalBasicAllowancesExcTravel': u'146282',
-                u'CentralITProvision': u'1223',
-                u'StaffCoverAndOtherCosts': u'0',
-                u'firstName': u'Mr Mark',
-                u'MPOtherAir': u'0',
-                u'MPOtherMileage': u'0',
-                u'TotalTravelClaimed': u'5337',
-                u'MPAir': u'0',
-                u'SpouseNumOfJourneys': u'1'
-            }
+            u'FamilyNumOfJourneys': u'0',
+            u'Member': u'Lancaster',
+            u'MPOtherEuropean': u'0',
+            u'FamilyTotal': u'0',
+            u'OfficeRunningCosts': u'19848',
+            u'MPOtherRail': u'233',
+            u'CostofStayingAwayFromMainHome': u'22541',
+            u'StationeryAssocdPostageCosts': u'3471',
+            u'CommsAllowance': u'9767',
+            u'Mileage': u'3358',
+            u'MPMisc': u'20',
+            u'title': u'Mr Mark Lancaster',
+            u'description': description,
+            u'TotalAllowancesClaimedIncTravel': u'151619',
+            u'SpouseTotal': u'31',
+            u'EmployeeTotal': u'222',
+            u'MPRail': u'1473',
+            u'LondonSupplement': u'0',
+            u'StaffingCosts': u'88283',
+            u'EmployeeNumOfJourneys': u'21',
+            u'CentrallyPurchasedStationery': u'1149',
+            u'TotalBasicAllowancesExcTravel': u'146282',
+            u'CentralITProvision': u'1223',
+            u'StaffCoverAndOtherCosts': u'0',
+            u'firstName': u'Mr Mark',
+            u'MPOtherAir': u'0',
+            u'MPOtherMileage': u'0',
+            u'TotalTravelClaimed': u'5337',
+            u'MPAir': u'0',
+            u'SpouseNumOfJourneys': u'1'
+        }
 
         [self.assertEqual(contains, item) for item in pipeline]
 
@@ -310,8 +310,7 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_5fabfc509a8e44342941060c7c7d0340'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
-
-        self.assertTrue(
+        self.assertEqual(
             pipeline, [
                 (
                     u'', u'dateinput1', u'dateinput1', u'datetime',
@@ -329,7 +328,7 @@ class TestBasics(unittest.TestCase):
                 ),
                 (
                     u'', u'urlinput1', u'urlinput1', u'url',
-                    u'http://example.com'
+                    u'file://data/example.html'
                 )
             ]
         )
@@ -386,7 +385,6 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_eb3e27f8f1841835fdfd279cd96ff9d8'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
-
 
     def test_loop_example(self):
         """Loads the loop example pipeline and compiles and executes it to
@@ -475,7 +473,7 @@ class TestBasics(unittest.TestCase):
     #     pipe_name = 'pipe_a08134746e30a6dd3a7cb3c0cf098692'
     #     pipeline = self._get_pipeline(pipe_name)
     #     self._load(pipeline, pipe_name)
-    #     [self.assertTrue('title' in i) for i in pipe]
+    #     [self.assertIn(i, 'title') for i in pipe]
 
     # # dead link, need to find a new data source
     # def test_urlbuilder_loop(self):

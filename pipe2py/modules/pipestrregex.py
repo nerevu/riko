@@ -40,6 +40,7 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
 
     for item in _INPUT:
         for rule in rules:
+            match, replace = rule
             item = re.sub(match, replace, item)
 
         yield item
