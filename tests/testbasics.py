@@ -56,7 +56,11 @@ class TestBasics(unittest.TestCase):
         except ImportError:
             parent = p.dirname(__file__)
             pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
-            pydeps = extract_dependencies(pipe_file_name=pipe_file_name)
+
+            with open(pipe_file_name) as f:
+                pjson = f.read()
+
+            pydeps = extract_dependencies(loads(pjson))
         else:
             pipe_generator = getattr(module, pipe_name)
             pydeps = extract_dependencies(pipe_generator=pipe_generator)

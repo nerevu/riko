@@ -341,17 +341,6 @@ def stringify_pipe(context, pipe):
     return template.render(**tmpl_kwargs)
 
 
-def analyze_pipe(context, pipe):
-    modules = set(module['type'] for module in pipe['modules'].values())
-    moduletypes = sorted(list(modules))
-
-    if context and context.verbose:
-        filtered = filter(lambda x: not x.startswith('pipe:'), moduletypes)
-        pipes = filter(lambda x: x.startswith('pipe:'), moduletypes)
-        print('Modules used:', ', '.join(filtered) or None)
-        print('Other pipes used:', ', '.join(x[5:] for x in pipes) or None)
-
-
 if __name__ == '__main__':
     usage = 'usage: %prog [options] [filename]'
     parser = OptionParser(usage=usage)
@@ -409,7 +398,10 @@ if __name__ == '__main__':
     path = p.join(PARENT, 'pypipelines', '%s.py' % pipe_name)
     data = stringify_pipe(context, pipe)
     write_file(data, path)
-    analyze_pipe(context, pipe)
+
+    if context and context.verbose:
+        pydeps = util.extract_dependencies(pipe_def)
+        print('Modules used in %s: %s' % (pipe['name'], pydeps))
 
     if options.savejson:
         path = p.join(PARENT, 'pipelines', '%s.json' % pipe_name)

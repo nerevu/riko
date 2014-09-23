@@ -6,7 +6,6 @@ import string
 from datetime import datetime
 from urllib2 import quote
 from os import path as p
-from itertools import repeat
 from pipe2py import Context
 
 try:
@@ -28,25 +27,14 @@ DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
 
-def extract_dependencies(pipe_file_name=None, pipe_def=None, pipe_generator=None):
+def extract_dependencies(pipe_def=None, pipe_generator=None):
     """Extract modules used by a pipe"""
-    if pipe_file_name:
-        with open(pipe_file_name) as f:
-            pjson = f.read()
-
-    if pipe_file_name or pipe_def:
-        pipe_def = pipe_def or loads(pjson)
-        num = len(pipe_def['modules'])
-        pydeps = map(dict.get, pipe_def['modules'], repeat('type', num))
-
-        for m in pipe_def['modules']:
-            try:
-                if m['conf'].get('embed'):
-                    pydeps.append(m['conf']['embed']['value']['type'])
-            except AttributeError:
-                pass
-    else:
+    if pipe_def:
+        pydeps = gen_dependencies(pipe_def)
+    elif pipe_generator:
         pydeps = pipe_generator(Context(describe_dependencies=True))
+    else:
+        raise Exception('Must supply at least one kwarg!')
 
     return sorted(set(pydeps))
 
@@ -217,6 +205,16 @@ def gen_rules(rule_defs, fields, **kwargs):
             raise TypeError('rule must be of type DotDict')
 
         yield tuple(rule.get(field, **kwargs) for field in fields)
+
+
+def gen_dependencies(pipe_def):
+    for module in pipe_def['modules']:
+        yield 'pipe%s' % module['type']
+
+        try:
+            yield 'pipe%s' % module['conf']['embed']['value']['type']
+        except (KeyError, TypeError):
+            pass
 
 
 def gen_modules(pipe_def):
