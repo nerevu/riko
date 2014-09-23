@@ -90,8 +90,6 @@ def _load_json(json):
     return loaded
 
 
-
-
 def _gen_string_modules(context, pipe, pyinput):
     for module_id in topological_sort(pipe['graph']):
         commons = _pipe_commons(context, pipe, module_id, pyinput)
@@ -193,7 +191,7 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
             )
 
             # if the wire is to this module and it's *NOT* the default input
-            # and it's the default output
+            # but it *is* the default output
             if is_default_out_only:
                 # set the extra inputs of this module as pykwargs of this module
                 pipe_id = util.pythonise(pipe_wire['tgt']['id'])

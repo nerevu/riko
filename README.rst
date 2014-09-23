@@ -21,7 +21,6 @@ Each Yahoo module is coded as a separate Python module. This might help in
 future if the generators are made to run on separate processors/machines and
 we could use queues to plumb them together.
 
-
 Setting up the environment
 ==========================
 Install the package::
@@ -54,7 +53,6 @@ Run in the test directory::
 
 In test-mode, modules needing user input use the default values rather than
 prompting the user. This is done by setting `context.test==True`.
-
 
 Usage
 =====

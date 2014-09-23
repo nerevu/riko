@@ -14,7 +14,6 @@ try:
 except (ImportError, AttributeError):
     from simplejson import loads
 
-DATE_FORMAT = "%m/%d/%Y"
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
     "%m/%d/%y",
@@ -24,7 +23,8 @@ ALTERNATIVE_DATE_FORMATS = (
     # todo more: whatever Yahoo can accept
 )
 
-DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
+DATE_FORMAT = '%m/%d/%Y'
+DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
 
@@ -132,8 +132,6 @@ def get_input(context, conf):
     prompt = conf['prompt']['value']
     # debug = conf['debug']['value']
 
-    value = None
-
     if context.submodule:
         value = context.inputs.get(name, default)
     elif context.test:
@@ -142,12 +140,11 @@ def get_input(context, conf):
         value = default
     elif context.console:
         value = raw_input(
-            prompt.encode('utf-8') + (
-                " (default=%s) " % default.encode('utf-8')
-            )
+            "%s (default=%s) " % (
+                prompt.encode('utf-8'), default.encode('utf-8'))
         )
-        if value == "":
-            value = default
+
+        value = value or default
     else:
         value = context.inputs.get(name, default)
 

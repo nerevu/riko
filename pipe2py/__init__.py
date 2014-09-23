@@ -7,7 +7,6 @@
 class Context(object):
     """The context of a pipeline
         verbose = debug printing during compilation and running
-
         describe_input = return pipe input requirements
         describe_dependencies = return a list of sub-pipelines used
         test = use debug values for input prompts, i.e. for unit tests
