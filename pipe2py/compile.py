@@ -354,6 +354,9 @@ if __name__ == '__main__':
         "-p", "--pipe", dest="pipeid", help="read pipe JSON from Yahoo",
         metavar="PIPEID")
     parser.add_option(
+        "-c", "--compiledpath", dest="compiledpath",
+        help="the compiled pipe file destination path")
+    parser.add_option(
         "-s", dest="savejson", help="save pipe JSON to file",
         action="store_true")
     parser.add_option(
@@ -407,7 +410,8 @@ if __name__ == '__main__':
         pipe_def = _load_json(pjson)
 
     pipe = parse_pipe_def(pipe_def, pipe_name)
-    path = p.join(PARENT, 'pypipelines', '%s.py' % pipe_name)
+    new_path = p.join(PARENT, 'pypipelines', '%s.py' % pipe_name)
+    path = options.compiledpath or new_path
     data = stringify_pipe(context, pipe, pipe_def)
     size = write_file(data, path)
 
