@@ -219,6 +219,51 @@ def gen_rules(rule_defs, fields, **kwargs):
         yield tuple(rule.get(field, **kwargs) for field in fields)
 
 
+def gen_modules(pipe_def):
+    for module in listize(pipe_def['modules']):
+        yield (pythonise(module['id']), module)
+
+
+def gen_embedded_modules(pipe_def):
+    for module in listize(pipe_def['modules']):
+        if module['type'] == 'loop':
+            embed = module['conf']['embed']['value']
+            yield (pythonise(embed['id']), embed)
+
+
+def gen_wires(pipe_def):
+    for wire in listize(pipe_def['wires']):
+        yield (pythonise(wire['id']), wire)
+
+
+def gen_graph1(pipe_def):
+    for module in listize(pipe_def['modules']):
+        yield (pythonise(module['id']), [])
+
+        # make the loop dependent on its embedded module
+        if module['type'] == 'loop':
+            embed = module['conf']['embed']['value']
+            yield (pythonise(embed['id']), [pythonise(module['id'])])
+
+
+def gen_graph2(pipe_def):
+    for wire in listize(pipe_def['wires']):
+        src_id = pythonise(wire['src']['moduleid'])
+        tgt_id = pythonise(wire['tgt']['moduleid'])
+        yield (src_id, tgt_id)
+
+
+def gen_graph3(graph):
+    # Remove any orphan nodes
+    values = graph.values()
+
+    for node, value in graph.items():
+        targetted = [node in v for v in values]
+
+        if value or any(targetted):
+            yield (node, value)
+
+
 ###########################################################
 # Generator Tricks for Systems Programmers by David Beazley
 ###########################################################
