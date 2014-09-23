@@ -79,7 +79,7 @@ def write_file(data, path, pretty=False):
             elif pretty:
                 data = unicode(MyPrettyPrinter().pformat(data), 'utf-8')
 
-            f.write(data)
+            return f.write(data)
 
 
 def _load_json(json):
@@ -397,7 +397,10 @@ if __name__ == '__main__':
     pipe = parse_pipe_def(pipe_def, pipe_name)
     path = p.join(PARENT, 'pypipelines', '%s.py' % pipe_name)
     data = stringify_pipe(context, pipe)
-    write_file(data, path)
+    size = write_file(data, path)
+
+    if context and context.verbose:
+        print('wrote %i bytes to %s' % (size, path))
 
     if context and context.verbose:
         pydeps = util.extract_dependencies(pipe_def)
@@ -405,7 +408,10 @@ if __name__ == '__main__':
 
     if options.savejson:
         path = p.join(PARENT, 'pipelines', '%s.json' % pipe_name)
-        write_file(pipe_def, path, True)
+        size = write_file(pipe_def, path, True)
+
+        if context and context.verbose:
+            print('wrote %i bytes to %s' % (size, path))
 
     if options.saveoutput:
         base = 'http://pipes.yahoo.com/pipes/pipe.run'
@@ -419,7 +425,10 @@ if __name__ == '__main__':
             sys.exit(1)
 
         path = p.join(PARENT, 'data', '%s_output.json' % pipe_name)
-        write_file(pipe_output, path, True)
+        size = write_file(pipe_output, path, True)
+
+        if context and context.verbose:
+            print('wrote %i bytes to %s' % (size, path))
 
     # for build example - see test/testbasics.py
 
