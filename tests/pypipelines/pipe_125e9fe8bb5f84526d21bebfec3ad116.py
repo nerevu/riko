@@ -19,6 +19,9 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(context=None, _INPUT=None, conf=None, 
     if context and context.describe_input:
         return [(u'', u'textinput1', u'Enter Text', u'text', u'Guten Tag')]
 
+    if context and context.describe_dependencies:
+        return [u'pipefetchdata', u'pipeitembuilder', u'pipeloop', u'pipeoutput', u'piperename', u'pipetextinput', u'pipeurlbuilder']
+
     forever = pipe_forever()
 
     # We need to wrap submodules (used by loops) so we can pass the
@@ -57,8 +60,7 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(context=None, _INPUT=None, conf=None, 
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_125e9fe8bb5f84526d21bebfec3ad116(context, None)
+    pipeline = pipe_125e9fe8bb5f84526d21bebfec3ad116(Context())
 
     for i in pipeline:
         print i

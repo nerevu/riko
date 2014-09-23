@@ -7,34 +7,36 @@ from pipe2py.modules.pipefetchsitefeed import pipe_fetchsitefeed
 from pipe2py.modules.pipetruncate import pipe_truncate
 from pipe2py.modules.pipeoutput import pipe_output
 
+
 def pipe_551507461cbcb19a828165daad5fe007(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return [(u'', u'urlinput1', u'Enter a URL', u'url', u'file://data/www.bbc.co.uk_news.html')]
+
+    if context and context.describe_dependencies:
+        return [u'pipefetchsitefeed', u'pipeoutput', u'pipetruncate', u'pipeurlinput']
 
     forever = pipe_forever()
 
-
     sw_242 = pipe_urlinput(
-        context, forever, conf=dict(default=dict(type='url', value='file://data/www.bbc.co.uk_news.html'), position=dict(type='number', value=''), prompt=dict(type='text', value='Enter a URL'), name=dict(type='text', value='urlinput1'), debug=dict(type='url', value='file://data/www.bbc.co.uk_news.html')))
-
+        context, forever, conf={'debug': {'type': 'url', 'value': 'file://data/www.bbc.co.uk_news.html'}, 'default': {'type': 'url', 'value': 'file://data/www.bbc.co.uk_news.html'}, 'prompt': {'type': 'text', 'value': 'Enter a URL'}, 'name': {'type': 'text', 'value': 'urlinput1'}, 'position': {'type': 'number', 'value': ''}})
+    
     sw_234 = pipe_fetchsitefeed(
-        context, forever, _1_URL=sw_242, conf=dict(URL=dict(terminal='1_URL', type='url')))
-
+        context, forever, _1_URL=sw_242, conf={'URL': {'terminal': '1_URL', 'type': 'url'}})
+    
     sw_246 = pipe_truncate(
-        context, sw_234, conf=dict(count=dict(type='number', value='5')))
-
+        context, sw_234, conf={'count': {'type': 'number', 'value': '5'}})
+    
     _OUTPUT = pipe_output(
-        context, sw_246, conf=dict())
-
+        context, sw_246, conf={})
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_551507461cbcb19a828165daad5fe007(context, None)
+    pipeline = pipe_551507461cbcb19a828165daad5fe007(Context())
 
     for i in pipeline:
         print i

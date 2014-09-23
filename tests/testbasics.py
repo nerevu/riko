@@ -24,7 +24,7 @@ class TestBasics(unittest.TestCase):
     """
     def _get_pipeline(self, pipe_name):
         try:
-            module = import_module('tests.pypiplines.%s' % pipe_name)
+            module = import_module('tests.pypipelines.%s' % pipe_name)
         except ImportError:
             parent = p.dirname(__file__)
             pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
@@ -33,7 +33,7 @@ class TestBasics(unittest.TestCase):
                 pipe_def = loads(f.read())
 
             pipe = parse_pipe_def(pipe_def, pipe_name)
-            pipeline = build_pipeline(self.context, pipe)
+            pipeline = build_pipeline(self.context, pipe, pipe_def)
         else:
             pipe_generator = getattr(module, pipe_name)
             pipeline = pipe_generator(self.context)
@@ -52,11 +52,15 @@ class TestBasics(unittest.TestCase):
         compared = cmp(length, value)
 
         try:
-            module = import_module('tests.pypiplines.%s' % pipe_name)
+            module = import_module('tests.pypipelines.%s' % pipe_name)
         except ImportError:
             parent = p.dirname(__file__)
             pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
-            pydeps = extract_dependencies(pipe_file_name=pipe_file_name)
+
+            with open(pipe_file_name) as f:
+                pjson = f.read()
+
+            pydeps = extract_dependencies(loads(pjson))
         else:
             pipe_generator = getattr(module, pipe_name)
             pydeps = extract_dependencies(pipe_generator=pipe_generator)
@@ -71,7 +75,13 @@ class TestBasics(unittest.TestCase):
 
     def setUp(self):
         """Compile common subpipe"""
-        self.context = Context(test=True)
+        kwargs = {
+            'test': True,
+            'describe_input': True,
+            'describe_dependencies': True,
+        }
+
+        self.context = Context(**kwargs)
         pipe_name = 'pipe_2de0e4517ed76082dcddf66f7b218057'
         parent = p.dirname(__file__)
         pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
@@ -85,7 +95,9 @@ class TestBasics(unittest.TestCase):
             parent, 'pipe2py', 'pypipelines', '%s.py' % pipe_name)
 
         with open(pipe_file_name, 'w') as f:
-            f.write(stringify_pipe(self.context, pipe))
+            f.write(stringify_pipe(self.context, pipe, pipe_def))
+            self.context.describe_input = False
+            self.context.describe_dependencies = False
 
     def tearDown(self):
         pipe_name = 'pipe_2de0e4517ed76082dcddf66f7b218057'
@@ -333,6 +345,82 @@ class TestBasics(unittest.TestCase):
             ]
         )
 
+    def test_describe_dependencies(self):
+        """Loads a pipeline but just gets the input requirements
+        """
+        self.context.describe_dependencies = True
+        pipe_name = 'pipe_5fabfc509a8e44342941060c7c7d0340'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+        self.assertEqual(
+            pipeline, [
+                'pipedateinput',
+                'pipelocationinput',
+                'pipenumberinput',
+                'pipeoutput',
+                'pipeprivateinput',
+                'piperssitembuilder',
+                'pipetextinput',
+                'pipeurlinput'
+            ]
+        )
+
+    def test_describe_both(self):
+        """Loads a pipeline but just gets the input requirements
+        """
+        self.context.describe_input = True
+        self.context.describe_dependencies = True
+        pipe_name = 'pipe_5fabfc509a8e44342941060c7c7d0340'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+
+        inputs = [
+            (
+                u'', u'dateinput1', u'dateinput1', u'datetime',
+                u'10/14/2010'
+            ),
+            (
+                u'', u'locationinput1', u'locationinput1', u'location',
+                u'isle of wight, uk'
+            ),
+            (u'', u'numberinput1', u'numberinput1', u'number', u'12121'),
+            (u'', u'privateinput1', u'privateinput1', u'text', u''),
+            (
+                u'', u'textinput1', u'textinput1', u'text',
+                u'This is default text - is there debug text too?'
+            ),
+            (
+                u'', u'urlinput1', u'urlinput1', u'url',
+                u'file://data/example.html'
+            )
+        ]
+
+        dependencies = [
+            'pipedateinput',
+            'pipelocationinput',
+            'pipenumberinput',
+            'pipeoutput',
+            'pipeprivateinput',
+            'piperssitembuilder',
+            'pipetextinput',
+            'pipeurlinput'
+        ]
+
+        self.assertEqual(
+            pipeline, [{u'inputs': inputs, 'dependencies': dependencies}])
+
+    def test_input_override(self):
+        """Loads a pipeline with input override
+        """
+        self.context.inputs = {'textinput1': 'IBM'}
+        pipe_name = 'pipe_1LNyRuNS3BGdkTKaAsqenA'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+        sliced = islice(pipeline, 3)
+        contains = self.context.inputs['textinput1']
+        # check if the ticker is in the title of any of the first 3 items
+        self.assertIn(contains, ' '.join(item['title'] for item in sliced))
+
     def test_union_just_other(self):
         """Loads a pipeline containing a union with the first input unconnected
             Also tests for empty source string and reference to 'y:id.value'
@@ -427,6 +515,8 @@ class TestBasics(unittest.TestCase):
 
     # todo: test simplemath - divide by zero and check/implement yahoo handling
     # todo: test malformed pipeline syntax
+    # todo: move these tests to the module doc blocks so each module is tested
+    # individually
     # todo: test pipe compilation (compare output against expected .py file)
 
 #######################

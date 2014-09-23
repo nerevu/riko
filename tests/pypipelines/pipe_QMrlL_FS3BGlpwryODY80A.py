@@ -11,46 +11,48 @@ from pipe2py.modules.piperegex import pipe_regex
 from pipe2py.modules.pipeunion import pipe_union
 from pipe2py.modules.pipeoutput import pipe_output
 
+
 def pipe_QMrlL_FS3BGlpwryODY80A(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return []
+
+    if context and context.describe_dependencies:
+        return [u'pipefetch', u'pipefilter', u'pipeoutput', u'piperegex', u'pipesplit', u'pipeunion']
 
     forever = pipe_forever()
 
-
     sw_140 = pipe_fetch(
-        context, forever, conf=dict(URL=dict(type='url', value='file://data/news.yahoo.com_rss_health.xml')))
-
+        context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/news.yahoo.com_rss_health.xml'}})
+    
     sw_108 = pipe_split(
         context, sw_140, splits=2, conf=None)
-
+    
     sw_159 = pipe_filter(
-        context, sw_108, conf=dict(COMBINE=dict(type='text', value='and'), MODE=dict(type='text', value='permit'), RULE=dict(field=dict(type='text', value='description'), value=dict(type='text', value='drug'), op=dict(type='text', value='contains'))))
-
+        context, sw_108, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'drug'}, 'op': {'type': 'text', 'value': 'contains'}}})
+    
     sw_204 = pipe_regex(
-        context, sw_159, conf=dict(RULE=dict(field=dict(type='text', value='title'), match=dict(type='text', value='(.+)'), replace=dict(type='text', value='[Drugs] $1'))))
-
+        context, sw_159, conf={'RULE': {'field': {'type': 'text', 'value': 'title'}, 'match': {'type': 'text', 'value': '(.+)'}, 'replace': {'type': 'text', 'value': '[Drugs] $1'}}})
+    
     sw_148 = pipe_filter(
-        context, sw_108, conf=dict(COMBINE=dict(type='text', value='and'), MODE=dict(type='text', value='permit'), RULE=dict(field=dict(type='text', value='description'), value=dict(type='text', value='weight'), op=dict(type='text', value='contains'))))
-
+        context, sw_108, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'weight'}, 'op': {'type': 'text', 'value': 'contains'}}})
+    
     sw_189 = pipe_regex(
-        context, sw_148, conf=dict(RULE=dict(field=dict(type='text', value='title'), match=dict(type='text', value='(.+)'), replace=dict(type='text', value='[Weight] $1'))))
-
+        context, sw_148, conf={'RULE': {'field': {'type': 'text', 'value': 'title'}, 'match': {'type': 'text', 'value': '(.+)'}, 'replace': {'type': 'text', 'value': '[Weight] $1'}}})
+    
     sw_170 = pipe_union(
         context, forever, _OTHER3=sw_204, conf=None, _OTHER=sw_189)
-
+    
     _OUTPUT = pipe_output(
         context, sw_170, conf=None)
-
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_QMrlL_FS3BGlpwryODY80A(context, None)
+    pipeline = pipe_QMrlL_FS3BGlpwryODY80A(Context())
 
     for i in pipeline:
         print i

@@ -2,52 +2,53 @@
 
 from pipe2py import Context
 from pipe2py.modules.pipeforever import pipe_forever
-from pipe2py.modules.pipefetch import pipe_fetch
 from pipe2py.modules.pipeurlbuilder import pipe_urlbuilder
+from pipe2py.modules.pipefetch import pipe_fetch
 from pipe2py.modules.pipeloop import pipe_loop
 from pipe2py.modules.piperename import pipe_rename
 from pipe2py.modules.piperegex import pipe_regex
 from pipe2py.modules.pipeoutput import pipe_output
 
+
 def pipe_e65397e116d7754da0dd23425f1f0af1(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return []
+
+    if context and context.describe_dependencies:
+        return [u'pipefetch', u'pipeloop', u'pipeoutput', u'piperegex', u'piperename', u'pipeurlbuilder']
 
     forever = pipe_forever()
 
-
-    sw_565 = pipe_fetch(
-        context, forever, conf=dict(URL=dict(type='url', value='')))
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
     def pipe_sw_634(context=None, _INPUT=None, conf=None, **kwargs):
         # todo: insert submodule description here
-        sw_634 = pipe_urlbuilder(
-            context, _INPUT, conf=dict(PATH=dict(type='text', value=''), BASE=dict(type='text', value=''), PARAM=[dict(value=dict(type='text', value='qr'), key=dict(type='text', value='cht')), dict(value=dict(type='text', value='200x200'), key=dict(type='text', value='chs')), dict(value=dict(type='text', subkey='link'), key=dict(type='text', value='chl'))]))
-        return sw_634
+        return pipe_urlbuilder(
+            context, forever, conf={'PATH': {'type': 'text', 'value': ''}, 'BASE': {'type': 'text', 'value': ''}, 'PARAM': [{'value': {'type': 'text', 'value': 'qr'}, 'key': {'type': 'text', 'value': 'cht'}}, {'value': {'type': 'text', 'value': '200x200'}, 'key': {'type': 'text', 'value': 'chs'}}, {'value': {'type': 'text', 'subkey': 'link'}, 'key': {'type': 'text', 'value': 'chl'}}]})
     
-
+    sw_565 = pipe_fetch(
+        context, forever, conf={'URL': {'type': 'url', 'value': ''}})
+    
     sw_626 = pipe_loop(
-        context, sw_565, embed=pipe_sw_634, conf={'assign_part': dict(type='text', value='all'), 'with': dict(type='text', value=''), 'emit_part': dict(type='text', value='all'), 'mode': dict(type='text', value='assign'), 'embed': dict(type='module', value=dict(type='urlbuilder', id='sw-634', conf=dict(PATH=dict(type='text', value=''), BASE=dict(type='text', value=''), PARAM=[dict(value=dict(type='text', value='qr'), key=dict(type='text', value='cht')), dict(value=dict(type='text', value='200x200'), key=dict(type='text', value='chs')), dict(value=dict(type='text', subkey='link'), key=dict(type='text', value='chl'))]))), 'assign_to': dict(type='text', value='media:content.url')})
-
+        context, sw_565, embed=pipe_sw_634, conf={'assign_part': {'type': 'text', 'value': 'all'}, 'assign_to': {'type': 'text', 'value': 'media:content.url'}, 'emit_part': {'type': 'text', 'value': 'all'}, 'mode': {'type': 'text', 'value': 'assign'}, 'embed': {'type': 'module', 'value': {'type': 'urlbuilder', 'id': 'sw-634', 'conf': {'PATH': {'type': 'text', 'value': ''}, 'BASE': {'type': 'text', 'value': ''}, 'PARAM': [{'value': {'type': 'text', 'value': 'qr'}, 'key': {'type': 'text', 'value': 'cht'}}, {'value': {'type': 'text', 'value': '200x200'}, 'key': {'type': 'text', 'value': 'chs'}}, {'value': {'type': 'text', 'subkey': 'link'}, 'key': {'type': 'text', 'value': 'chl'}}]}}}, 'with': {'type': 'text', 'value': ''}})
+    
     sw_592 = pipe_rename(
-        context, sw_626, conf=dict(RULE=[dict(newval=dict(type='text', value='description'), field=dict(type='text', value='media:content.url'), op=dict(type='text', value='copy'))]))
-
+        context, sw_626, conf={'RULE': [{'field': {'type': 'text', 'value': 'media:content.url'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'description'}}]})
+    
     sw_636 = pipe_regex(
-        context, sw_592, conf=dict(RULE=[dict(field=dict(type='text', value='description'), match=dict(type='text', value='(.*)'), replace=dict(type='text', value='<img src="$1" alt="QRcode" /><br/>${title}'))]))
-
+        context, sw_592, conf={'RULE': [{'field': {'type': 'text', 'value': 'description'}, 'match': {'type': 'text', 'value': '(.*)'}, 'replace': {'type': 'text', 'value': '<img src="$1" alt="QRcode" /><br/>${title}'}}]})
+    
     _OUTPUT = pipe_output(
-        context, sw_636, conf=dict())
-
+        context, sw_636, conf={})
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_e65397e116d7754da0dd23425f1f0af1(context, None)
+    pipeline = pipe_e65397e116d7754da0dd23425f1f0af1(Context())
 
     for i in pipeline:
         print i

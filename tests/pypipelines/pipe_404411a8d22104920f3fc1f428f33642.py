@@ -3,42 +3,44 @@
 from pipe2py import Context
 from pipe2py.modules.pipeforever import pipe_forever
 from pipe2py.modules.pipefetch import pipe_fetch
-from pipe2py.modules.pipecount import pipe_count
 from pipe2py.modules.pipefetch import pipe_fetch
+from pipe2py.modules.pipecount import pipe_count
 from pipe2py.modules.pipetruncate import pipe_truncate
 from pipe2py.modules.pipeoutput import pipe_output
+
 
 def pipe_404411a8d22104920f3fc1f428f33642(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return []
+
+    if context and context.describe_dependencies:
+        return [u'pipecount', u'pipefetch', u'pipeoutput', u'pipetruncate']
 
     forever = pipe_forever()
 
-
-    sw_561 = pipe_fetch(
-        context, forever, conf=dict(URL=dict(type='url', value='file://data/feeds.delicious.com_v2_rss_popular?count=3.xml')))
-
-    sw_569 = pipe_count(
-        context, sw_561, conf=dict())
-
     sw_502 = pipe_fetch(
-        context, forever, conf=dict(URL=dict(type='url', value='file://data/feeds.delicious.com_v2_rss_popular?count=15.xml')))
-
+        context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/feeds.delicious.com_v2_rss_popular?count=15.xml'}})
+    
+    sw_561 = pipe_fetch(
+        context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/feeds.delicious.com_v2_rss_popular?count=3.xml'}})
+    
+    sw_569 = pipe_count(
+        context, sw_561, conf={})
+    
     sw_583 = pipe_truncate(
-        context, sw_502, count=sw_569, conf=dict(count=dict(terminal='count', type='number')))
-
+        context, sw_502, count=sw_569, conf={'count': {'terminal': 'count', 'type': 'number'}})
+    
     _OUTPUT = pipe_output(
-        context, sw_583, conf=dict())
-
+        context, sw_583, conf={})
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_404411a8d22104920f3fc1f428f33642(context, None)
+    pipeline = pipe_404411a8d22104920f3fc1f428f33642(Context())
 
     for i in pipeline:
         print i

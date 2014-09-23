@@ -6,7 +6,6 @@ import string
 from datetime import datetime
 from urllib2 import quote
 from os import path as p
-from itertools import repeat
 from pipe2py import Context
 
 try:
@@ -14,7 +13,6 @@ try:
 except (ImportError, AttributeError):
     from simplejson import loads
 
-DATE_FORMAT = "%m/%d/%Y"
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
     "%m/%d/%y",
@@ -24,31 +22,33 @@ ALTERNATIVE_DATE_FORMATS = (
     # todo more: whatever Yahoo can accept
 )
 
-DATETIME_FORMAT = DATE_FORMAT + " %H:%M:%S"
+DATE_FORMAT = '%m/%d/%Y'
+DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
 
-def extract_dependencies(pipe_file_name=None, pipe_def=None, pipe_generator=None):
+def extract_dependencies(pipe_def=None, pipe_generator=None):
     """Extract modules used by a pipe"""
-    if pipe_file_name:
-        with open(pipe_file_name) as f:
-            pjson = f.read()
-
-    if pipe_file_name or pipe_def:
-        pipe_def = pipe_def or loads(pjson)
-        num = len(pipe_def['modules'])
-        pydeps = map(dict.get, pipe_def['modules'], repeat('type', num))
-
-        for m in pipe_def['modules']:
-            try:
-                if m['conf'].get('embed'):
-                    pydeps.append(m['conf']['embed']['value']['type'])
-            except AttributeError:
-                pass
-    else:
+    if pipe_def:
+        pydeps = gen_dependencies(pipe_def)
+    elif pipe_generator:
         pydeps = pipe_generator(Context(describe_dependencies=True))
+    else:
+        raise Exception('Must supply at least one kwarg!')
 
     return sorted(set(pydeps))
+
+
+def extract_input(pipe_def=None, pipe_generator=None):
+    """Extract inputs required by a pipe"""
+    if pipe_def:
+        pyinput = gen_input(pipe_def)
+    elif pipe_generator:
+        pyinput = pipe_generator(Context(describe_input=True))
+    else:
+        raise Exception('Must supply at least one kwarg!')
+
+    return sorted(list(pyinput))
 
 
 def pythonise(id, encoding='ascii'):
@@ -128,28 +128,19 @@ def get_input(context, conf):
        Assumes conf has name, default, prompt and debug
     """
     name = conf['name']['value']
-    default = conf['default']['value']
     prompt = conf['prompt']['value']
-    # debug = conf['debug']['value']
+    default = conf['default']['value'] or conf['debug']['value']
 
-    value = None
-
-    if context.submodule:
+    if context.submodule or context.inputs:
         value = context.inputs.get(name, default)
-    elif context.test:
+    elif not context.test:
         # we skip user interaction during tests
-        # note: docs say debug is used, but doesn't seem to be
-        value = default
-    elif context.console:
         value = raw_input(
-            prompt.encode('utf-8') + (
-                " (default=%s) " % default.encode('utf-8')
-            )
-        )
-        if value == "":
-            value = default
+            "%s (default=%s) " % (
+                prompt.encode('utf-8'), default.encode('utf-8'))
+        ) or default
     else:
-        value = context.inputs.get(name, default)
+        value = default
 
     return value
 
@@ -157,10 +148,10 @@ def get_input(context, conf):
 def get_abspath(url):
     url = 'http://%s' % url if url and '://' not in url else url
 
-    if url.startswith('file:///'):
+    if url and url.startswith('file:///'):
         # already have an abspath
         pass
-    elif url.startswith('file://'):
+    elif url and url.startswith('file://'):
         parent = p.dirname(__file__)
         rel_path = url[7:]
         abspath = p.abspath(p.join(parent, rel_path))
@@ -220,6 +211,94 @@ def gen_rules(rule_defs, fields, **kwargs):
             raise TypeError('rule must be of type DotDict')
 
         yield tuple(rule.get(field, **kwargs) for field in fields)
+
+
+def gen_dependencies(pipe_def):
+    for module in pipe_def['modules']:
+        yield 'pipe%s' % module['type']
+
+        try:
+            yield 'pipe%s' % module['conf']['embed']['value']['type']
+        except (KeyError, TypeError):
+            pass
+
+
+def gen_input(pipe_def):
+    fields = ['position', 'name', 'prompt']
+
+    for module in pipe_def['modules']:
+        # Note: there seems to be no need to recursively collate inputs
+        # from subpipelines
+        try:
+            module_confs = [module['conf'][x]['value'] for x in fields]
+        except (KeyError, TypeError):
+            pass
+        else:
+            values = ['type', 'value']
+            module_confs.extend((module['conf']['default'][x] for x in values))
+            yield tuple(module_confs)
+
+
+def gen_names(module_ids, pipe, ntype='module'):
+    for module_id in module_ids:
+        module_type = pipe['modules'][module_id]['type']
+
+        if module_type.startswith('pipe:'):
+            name = pythonise(module_type)
+        elif ntype == 'module':
+            name = 'pipe%s' % module_type
+        elif ntype == 'pipe':
+            name = 'pipe_%s' % module_type
+        else:
+            raise Exception(
+                "Invalid type: %s. (Expected 'module' or 'pipe')" % ntype)
+
+        yield name
+
+
+def gen_modules(pipe_def):
+    for module in listize(pipe_def['modules']):
+        yield (pythonise(module['id']), module)
+
+
+def gen_embedded_modules(pipe_def):
+    for module in listize(pipe_def['modules']):
+        if module['type'] == 'loop':
+            embed = module['conf']['embed']['value']
+            yield (pythonise(embed['id']), embed)
+
+
+def gen_wires(pipe_def):
+    for wire in listize(pipe_def['wires']):
+        yield (pythonise(wire['id']), wire)
+
+
+def gen_graph1(pipe_def):
+    for module in listize(pipe_def['modules']):
+        yield (pythonise(module['id']), [])
+
+        # make the loop dependent on its embedded module
+        if module['type'] == 'loop':
+            embed = module['conf']['embed']['value']
+            yield (pythonise(embed['id']), [pythonise(module['id'])])
+
+
+def gen_graph2(pipe_def):
+    for wire in listize(pipe_def['wires']):
+        src_id = pythonise(wire['src']['moduleid'])
+        tgt_id = pythonise(wire['tgt']['moduleid'])
+        yield (src_id, tgt_id)
+
+
+def gen_graph3(graph):
+    # Remove any orphan nodes
+    values = graph.values()
+
+    for node, value in graph.items():
+        targetted = [node in v for v in values]
+
+        if value or any(targetted):
+            yield (node, value)
 
 
 ###########################################################

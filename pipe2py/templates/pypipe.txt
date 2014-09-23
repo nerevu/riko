@@ -48,8 +48,7 @@ def {{ pipe_name }}(context=None, _INPUT=None, conf=None, **kwargs):
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = {{ pipe_name }}(context, None)
+    pipeline = {{ pipe_name }}(Context())
 
     for i in pipeline:
         print i

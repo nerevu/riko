@@ -11,21 +11,20 @@ def testpipe1(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context and context.describe_input:
+    if context and (context.describe_input or context.describe_dependencies):
         return []
 
     forever = pipe_forever()
 
-
     sw_90 = pipe_fetch(
-        context, forever, conf={'URL': {'type': 'url', 'value': 'file://feed.xml'}})
-
+        context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/feed.xml'}})
+    
     sw_102 = pipe_filter(
         context, sw_90, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': [{'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'the'}, 'op': {'type': 'text', 'value': 'contains'}}]})
-
+    
     _OUTPUT = pipe_output(
         context, sw_102, conf=[])
-
+    
     return _OUTPUT
 
 

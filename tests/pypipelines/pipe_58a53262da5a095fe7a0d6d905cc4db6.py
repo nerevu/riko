@@ -11,46 +11,48 @@ from pipe2py.modules.pipetruncate import pipe_truncate
 from pipe2py.modules.pipereverse import pipe_reverse
 from pipe2py.modules.pipeoutput import pipe_output
 
+
 def pipe_58a53262da5a095fe7a0d6d905cc4db6(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return []
+
+    if context and context.describe_dependencies:
+        return [u'pipefetch', u'pipeoutput', u'pipereverse', u'pipesort', u'pipetruncate', u'pipeunion', u'pipeurlbuilder']
 
     forever = pipe_forever()
 
-
     sw_550 = pipe_fetch(
-        context, forever, conf=dict(URL=[dict(type='url', value='file://data/blog.ouseful.info_feed.xml'), dict(type='url', value='file://data/feeds.feedburner.com_TheEdTechie.xml')]))
-
+        context, forever, conf={'URL': [{'type': 'url', 'value': 'file://data/blog.ouseful.info_feed.xml'}, {'type': 'url', 'value': 'file://data/feeds.feedburner.com_TheEdTechie.xml'}]})
+    
     sw_606 = pipe_urlbuilder(
-        context, forever, conf=dict(PATH=dict(type='text', value=''), BASE=dict(type='text', value='file://data/www.greenhughes.com_rssfeed.xml'), PARAM=[dict(value=dict(type='text', value=''), key=dict(type='text', value=''))]))
-
+        context, forever, conf={'PATH': {'type': 'text', 'value': ''}, 'BASE': {'type': 'text', 'value': 'file://data/www.greenhughes.com_rssfeed.xml'}, 'PARAM': [{'value': {'type': 'text', 'value': ''}, 'key': {'type': 'text', 'value': ''}}]})
+    
     sw_572 = pipe_fetch(
-        context, forever, _1_URL=sw_606, conf=dict(URL=dict(terminal='1_URL', type='url')))
-
+        context, forever, _1_URL=sw_606, conf={'URL': {'terminal': '1_URL', 'type': 'url'}})
+    
     sw_580 = pipe_union(
-        context, sw_550, _OTHER=sw_572, conf=dict())
-
+        context, sw_550, _OTHER=sw_572, conf={})
+    
     sw_565 = pipe_sort(
-        context, sw_580, conf=dict(KEY=[dict(field=dict(type='text', value='title'), dir=dict(type='text', value='ASC'))]))
-
+        context, sw_580, conf={'KEY': [{'field': {'type': 'text', 'value': 'title'}, 'dir': {'type': 'text', 'value': 'ASC'}}]})
+    
     sw_596 = pipe_truncate(
-        context, sw_565, conf=dict(count=dict(type='number', value='3')))
-
+        context, sw_565, conf={'count': {'type': 'number', 'value': '3'}})
+    
     sw_625 = pipe_reverse(
-        context, sw_596, conf=dict())
-
+        context, sw_596, conf={})
+    
     _OUTPUT = pipe_output(
-        context, sw_625, conf=dict())
-
+        context, sw_625, conf={})
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_58a53262da5a095fe7a0d6d905cc4db6(context, None)
+    pipeline = pipe_58a53262da5a095fe7a0d6d905cc4db6(Context())
 
     for i in pipeline:
         print i

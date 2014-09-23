@@ -36,6 +36,10 @@ def _gen_rulepass(rules, item):
     for rule in rules:
         field, op, value = rule
 
+        if not value:
+            yield True
+            continue
+
         try:
             x = Decimal(value)
             y = Decimal(item.get(field))
@@ -45,6 +49,7 @@ def _gen_rulepass(rules, item):
 
         if y is None:
             yield False
+            continue
         elif isinstance(y, basestring):
             try:
                 y = dt.strptime(y, util.DATE_FORMAT).timetuple()

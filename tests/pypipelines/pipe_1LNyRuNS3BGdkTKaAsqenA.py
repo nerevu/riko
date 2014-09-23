@@ -9,40 +9,42 @@ from pipe2py.modules.pipefetch import pipe_fetch
 from pipe2py.modules.pipefilter import pipe_filter
 from pipe2py.modules.pipeoutput import pipe_output
 
+
 def pipe_1LNyRuNS3BGdkTKaAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return [(u'', u'textinput1', u'Stock Symbol:', u'text', u'yhoo'), (u'', u'textinput2', u'Search Term:', u'text', u'')]
+
+    if context and context.describe_dependencies:
+        return [u'pipefetch', u'pipefilter', u'pipeoutput', u'pipetextinput', u'pipeurlbuilder']
 
     forever = pipe_forever()
 
-
     sw_131 = pipe_textinput(
-        context, forever, conf=dict(default=dict(type='text', value=''), position=dict(type='number', value=''), prompt=dict(type='text', value='Search Term:'), name=dict(type='text', value='textinput2'), debug=dict(type='text', value='')))
-
+        context, forever, conf={'debug': {'type': 'text', 'value': ''}, 'default': {'type': 'text', 'value': ''}, 'prompt': {'type': 'text', 'value': 'Search Term:'}, 'name': {'type': 'text', 'value': 'textinput2'}, 'position': {'type': 'number', 'value': ''}})
+    
     sw_116 = pipe_textinput(
-        context, forever, conf=dict(default=dict(type='text', value='yhoo'), position=dict(type='number', value=''), prompt=dict(type='text', value='Stock Symbol:'), name=dict(type='text', value='textinput1'), debug=dict(type='text', value='yhoo')))
-
+        context, forever, conf={'debug': {'type': 'text', 'value': 'yhoo'}, 'default': {'type': 'text', 'value': 'yhoo'}, 'prompt': {'type': 'text', 'value': 'Stock Symbol:'}, 'name': {'type': 'text', 'value': 'textinput1'}, 'position': {'type': 'number', 'value': ''}})
+    
     sw_85 = pipe_urlbuilder(
-        context, forever, PARAM_1_value=sw_116, conf=dict(PATH=dict(type='text', value='headline'), BASE=dict(type='text', value=''), PARAM=[dict(value=dict(terminal='PARAM_1_value', type='text'), key=dict(type='text', value='s'))]))
-
+        context, forever, PARAM_1_value=sw_116, conf={'PATH': {'type': 'text', 'value': 'headline'}, 'BASE': {'type': 'text', 'value': 'http://finance.yahoo.com/rss'}, 'PARAM': [{'value': {'terminal': 'PARAM_1_value', 'type': 'text'}, 'key': {'type': 'text', 'value': 's'}}]})
+    
     sw_108 = pipe_fetch(
-        context, forever, _1_URL=sw_85, conf=dict(URL=dict(terminal='1_URL', type='url')))
-
+        context, forever, _1_URL=sw_85, conf={'URL': {'terminal': '1_URL', 'type': 'url'}})
+    
     sw_120 = pipe_filter(
-        context, sw_108, RULE_1_value=sw_131, conf=dict(COMBINE=dict(type='text', value='and'), MODE=dict(type='text', value='permit'), RULE=[dict(field=dict(type='text', value='description'), value=dict(terminal='RULE_1_value', type='text'), op=dict(type='text', value='contains'))]))
-
+        context, sw_108, RULE_1_value=sw_131, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': [{'field': {'type': 'text', 'value': 'description'}, 'value': {'terminal': 'RULE_1_value', 'type': 'text'}, 'op': {'type': 'text', 'value': 'contains'}}]})
+    
     _OUTPUT = pipe_output(
-        context, sw_120, conf=dict())
-
+        context, sw_120, conf={})
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_1LNyRuNS3BGdkTKaAsqenA(context, None)
+    pipeline = pipe_1LNyRuNS3BGdkTKaAsqenA(Context())
 
     for i in pipeline:
         print i
