@@ -128,25 +128,19 @@ def get_input(context, conf):
        Assumes conf has name, default, prompt and debug
     """
     name = conf['name']['value']
-    default = conf['default']['value']
     prompt = conf['prompt']['value']
-    # debug = conf['debug']['value']
+    default = conf['default']['value'] or conf['debug']['value']
 
-    if context.submodule:
+    if context.submodule or context.inputs:
         value = context.inputs.get(name, default)
-    elif context.test:
+    elif not context.test:
         # we skip user interaction during tests
-        # note: docs say debug is used, but doesn't seem to be
-        value = default
-    elif context.console:
         value = raw_input(
             "%s (default=%s) " % (
                 prompt.encode('utf-8'), default.encode('utf-8'))
-        )
-
-        value = value or default
+        ) or default
     else:
-        value = context.inputs.get(name, default)
+        value = default
 
     return value
 
