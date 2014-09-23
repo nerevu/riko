@@ -8,42 +8,43 @@ from pipe2py.modules.pipeloop import pipe_loop
 from pipe2py.modules.piperename import pipe_rename
 from pipe2py.modules.pipeoutput import pipe_output
 
+
 def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return []
+
+    if context and context.describe_dependencies:
+        return [u'pipefetchdata', u'pipeloop', u'pipeoutput', u'piperename', u'pipestrconcat']
 
     forever = pipe_forever()
 
-
-    sw_286 = pipe_fetchdata(
-        context, forever, conf=dict(URL=dict(type='url', value='file://data/capnorth.oes.ca.gov_89509.xml'), path=dict(type='text', value='info')))
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
     def pipe_sw_298(context=None, _INPUT=None, conf=None, **kwargs):
         # todo: insert submodule description here
-        sw_298 = pipe_strconcat(
-            context, _INPUT, conf=dict(part=[dict(type='text', subkey='headline'), dict(type='text', value=' ('), dict(type='text', subkey='severity'), dict(type='text', value=')')]))
-        return sw_298
-
-
+        return pipe_strconcat(
+            context, _INPUT, conf={'part': [{'type': 'text', 'subkey': 'headline'}, {'type': 'text', 'value': ' ('}, {'type': 'text', 'subkey': 'severity'}, {'type': 'text', 'value': ')'}]})
+    
+    sw_286 = pipe_fetchdata(
+        context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/capnorth.oes.ca.gov_89509.xml'}, 'path': {'type': 'text', 'value': 'info'}})
+    
     sw_138 = pipe_loop(
-        context, sw_286, embed=pipe_sw_298, conf={'assign_part': dict(type='text', value='all'), 'with': dict(type='text', value=''), 'emit_part': dict(type='text', value='all'), 'mode': dict(type='text', value='assign'), 'embed': dict(type='module', value=dict(type='strconcat', id='sw-298', conf=dict(part=[dict(type='text', subkey='headline'), dict(type='text', value=' ('), dict(type='text', subkey='severity'), dict(type='text', value=')')]))), 'assign_to': dict(type='text', value='title')})
-
+        context, sw_286, embed=pipe_sw_298, conf={'assign_part': {'type': 'text', 'value': 'all'}, 'assign_to': {'type': 'text', 'value': 'title'}, 'emit_part': {'type': 'text', 'value': 'all'}, 'mode': {'type': 'text', 'value': 'assign'}, 'embed': {'type': 'module', 'value': {'type': 'strconcat', 'id': 'sw-298', 'conf': {'part': [{'type': 'text', 'subkey': 'headline'}, {'type': 'text', 'value': ' ('}, {'type': 'text', 'subkey': 'severity'}, {'type': 'text', 'value': ')'}]}}}, 'with': {'type': 'text', 'value': ''}})
+    
     sw_180 = pipe_rename(
-        context, sw_138, conf=dict(RULE=[dict(newval=dict(type='text', value='pubDate'), field=dict(type='text', value='expires'), op=dict(type='text', value='rename'))]))
-
+        context, sw_138, conf={'RULE': [{'field': {'type': 'text', 'value': 'expires'}, 'op': {'type': 'text', 'value': 'rename'}, 'newval': {'type': 'text', 'value': 'pubDate'}}]})
+    
     _OUTPUT = pipe_output(
-        context, sw_180, conf=dict())
-
+        context, sw_180, conf={})
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_dAI_R_FS3BG6fTKsAsqenA(context, None)
+    pipeline = pipe_dAI_R_FS3BG6fTKsAsqenA(Context())
 
     for i in pipeline:
         print i

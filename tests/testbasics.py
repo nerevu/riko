@@ -24,7 +24,7 @@ class TestBasics(unittest.TestCase):
     """
     def _get_pipeline(self, pipe_name):
         try:
-            module = import_module('tests.pypiplines.%s' % pipe_name)
+            module = import_module('tests.pypipelines.%s' % pipe_name)
         except ImportError:
             parent = p.dirname(__file__)
             pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)
@@ -52,7 +52,7 @@ class TestBasics(unittest.TestCase):
         compared = cmp(length, value)
 
         try:
-            module = import_module('tests.pypiplines.%s' % pipe_name)
+            module = import_module('tests.pypipelines.%s' % pipe_name)
         except ImportError:
             parent = p.dirname(__file__)
             pipe_file_name = p.join(parent, 'pipelines', '%s.json' % pipe_name)

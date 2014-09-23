@@ -230,26 +230,24 @@ def _gen_pykwargs(context, pipe, module_id, steps=None):
 def _get_input_module(pipe, module_id, steps):
     input_module = steps['forever'] if steps else 'forever'
 
-    for key, pipe_wire in pipe['wires'].items():
-        moduleid = util.pythonise(pipe_wire['src']['moduleid'])
+    if module_id in pipe['embed']:
+        input_module = '_INPUT'
+    else:
+        for key, pipe_wire in pipe['wires'].items():
+            moduleid = util.pythonise(pipe_wire['src']['moduleid'])
 
-        # todo? this equates the outputs
-        is_default_in_and_out = (
-            util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
-            and pipe_wire['tgt']['id'] == '_INPUT'
-            and pipe_wire['src']['id'].startswith('_OUTPUT')
-        )
+            # todo? this equates the outputs
+            is_default_in_and_out = (
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
+                and pipe_wire['tgt']['id'] == '_INPUT'
+                and pipe_wire['src']['id'].startswith('_OUTPUT')
+            )
 
-        # if the wire is to this module and it's the default input and it's
-        # the default output:
-        if is_default_in_and_out:
-            input_module = steps[moduleid] if steps else moduleid
-
-        if module_id in pipe['embed']:
-            # what is this for???
-            text = 'input_module of an embedded module was already set'
-            assert input_module == (steps['forever'], text)
-            input_module = '_INPUT'
+            # if the wire is to this module and it's the default input and it's
+            # the default output:
+            if is_default_in_and_out:
+                input_module = steps[moduleid] if steps else moduleid
+                break
 
     return input_module
 

@@ -12,12 +12,16 @@ from pipe2py.modules.pipeloop import pipe_loop
 from pipe2py.modules.pipeloop import pipe_loop
 from pipe2py.modules.pipeoutput import pipe_output
 
+
 def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return [(u'', u'name', u'Name', u'text', u'Lancaster')]
+
+    if context and context.describe_dependencies:
+        return [u'pipecsv', u'pipefilter', u'pipeloop', u'pipeoutput', u'piperename', u'pipestrconcat', u'pipetextinput']
 
     forever = pipe_forever()
 
@@ -25,46 +29,42 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
     # input at runtime (as we can to subpipelines)
     def pipe_sw_581(context=None, _INPUT=None, conf=None, **kwargs):
         # todo: insert submodule description here
-        sw_581 = pipe_strconcat(
-            context, _INPUT, conf=dict(part=[dict(type='text', subkey='firstName'), dict(type='text', value=' '), dict(type='text', subkey='Member')]))
-        return sw_581
-
-
-    sw_371 = pipe_textinput(
-        context, forever, conf=dict(default=dict(type='text', value='Lancaster'), position=dict(type='number', value=''), prompt=dict(type='text', value='Name'), name=dict(type='text', value='name'), debug=dict(type='text', value='')))
+        return pipe_strconcat(
+            context, _INPUT, conf={'part': [{'type': 'text', 'subkey': 'firstName'}, {'type': 'text', 'value': ' '}, {'type': 'text', 'subkey': 'Member'}]})
+    
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
     def pipe_sw_408(context=None, _INPUT=None, conf=None, **kwargs):
         # todo: insert submodule description here
-        sw_408 = pipe_strconcat(
-            context, _INPUT, conf=dict(part=[dict(type='text', value='Total allowances claimed, inc travel: '), dict(type='text', subkey='TotalAllowancesClaimedIncTravel'), dict(type='text', value='<br>Total basic allowances claimed, ex travel: '), dict(type='text', subkey='TotalBasicAllowancesExcTravel'), dict(type='text', value='<br>Total Travel claimed: '), dict(type='text', subkey='TotalTravelClaimed'), dict(type='text', value='<br>MP Mileage: '), dict(type='text', subkey='Mileage'), dict(type='text', value='<br>MP Rail Travel: '), dict(type='text', subkey='MPRail'), dict(type='text', value='<br>MP Air Travel: '), dict(type='text', subkey='MPAir'), dict(type='text', value='<br>Cost of staying away from main home: '), dict(type='text', subkey='CostofStayingAwayFromMainHome'), dict(type='text', value='<br>London Supplement: '), dict(type='text', subkey='LondonSupplement'), dict(type='text', value='<br>Office Running Costs: '), dict(type='text', subkey='OfficeRunningCosts'), dict(type='text', value='<br>Staffing Costs: '), dict(type='text', subkey='StaffingCosts')]))
-        return sw_408
-
-
+        return pipe_strconcat(
+            context, _INPUT, conf={'part': [{'type': 'text', 'value': 'Total allowances claimed, inc travel: '}, {'type': 'text', 'subkey': 'TotalAllowancesClaimedIncTravel'}, {'type': 'text', 'value': '<br>Total basic allowances claimed, ex travel: '}, {'type': 'text', 'subkey': 'TotalBasicAllowancesExcTravel'}, {'type': 'text', 'value': '<br>Total Travel claimed: '}, {'type': 'text', 'subkey': 'TotalTravelClaimed'}, {'type': 'text', 'value': '<br>MP Mileage: '}, {'type': 'text', 'subkey': 'Mileage'}, {'type': 'text', 'value': '<br>MP Rail Travel: '}, {'type': 'text', 'subkey': 'MPRail'}, {'type': 'text', 'value': '<br>MP Air Travel: '}, {'type': 'text', 'subkey': 'MPAir'}, {'type': 'text', 'value': '<br>Cost of staying away from main home: '}, {'type': 'text', 'subkey': 'CostofStayingAwayFromMainHome'}, {'type': 'text', 'value': '<br>London Supplement: '}, {'type': 'text', 'subkey': 'LondonSupplement'}, {'type': 'text', 'value': '<br>Office Running Costs: '}, {'type': 'text', 'subkey': 'OfficeRunningCosts'}, {'type': 'text', 'value': '<br>Staffing Costs: '}, {'type': 'text', 'subkey': 'StaffingCosts'}]})
+    
+    sw_371 = pipe_textinput(
+        context, forever, conf={'debug': {'type': 'text', 'value': ''}, 'default': {'type': 'text', 'value': 'Lancaster'}, 'prompt': {'type': 'text', 'value': 'Name'}, 'name': {'type': 'text', 'value': 'name'}, 'position': {'type': 'number', 'value': ''}})
+    
     sw_340 = pipe_csv(
-        context, forever, conf=dict(other_sep=dict(type='text', value=''), URL=dict(type='url', value='file://data/spreadsheets.google.com_pub?key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv'), skip=dict(type='number', value='0'), col_name=[dict(type='text', value='Member'), dict(type='text', value='firstName'), dict(type='text', value='TotalAllowancesClaimedIncTravel'), dict(type='text', value='TotalBasicAllowancesExcTravel'), dict(type='text', value='TotalTravelClaimed'), dict(type='text', value='CostofStayingAwayFromMainHome'), dict(type='text', value='LondonSupplement'), dict(type='text', value='OfficeRunningCosts'), dict(type='text', value='StaffingCosts'), dict(type='text', value='CentrallyPurchasedStationery'), dict(type='text', value='StationeryAssocdPostageCosts'), dict(type='text', value='CentralITProvision'), dict(type='text', value='StaffCoverAndOtherCosts'), dict(type='text', value='CommsAllowance'), dict(type='text', value='Mileage'), dict(type='text', value='MPRail'), dict(type='text', value='MPAir'), dict(type='text', value='MPMisc'), dict(type='text', value='MPOtherMileage'), dict(type='text', value='MPOtherRail'), dict(type='text', value='MPOtherAir'), dict(type='text', value='MPOtherEuropean'), dict(type='text', value='SpouseTotal'), dict(type='text', value='SpouseNumOfJourneys'), dict(type='text', value='FamilyTotal'), dict(type='text', value='FamilyNumOfJourneys'), dict(type='text', value='EmployeeTotal'), dict(type='text', value='EmployeeNumOfJourneys')], col_row_start=dict(type='number', value='1'), col_mode=dict(type='text', value='custom'), separator=dict(type='text', value=','), col_row_end=dict(type='number', value='1')))
-
+        context, forever, conf={'other_sep': {'type': 'text', 'value': ''}, 'URL': {'type': 'url', 'value': 'file://data/spreadsheets.google.com_pub?key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv'}, 'skip': {'type': 'number', 'value': '0'}, 'col_name': [{'type': 'text', 'value': 'Member'}, {'type': 'text', 'value': 'firstName'}, {'type': 'text', 'value': 'TotalAllowancesClaimedIncTravel'}, {'type': 'text', 'value': 'TotalBasicAllowancesExcTravel'}, {'type': 'text', 'value': 'TotalTravelClaimed'}, {'type': 'text', 'value': 'CostofStayingAwayFromMainHome'}, {'type': 'text', 'value': 'LondonSupplement'}, {'type': 'text', 'value': 'OfficeRunningCosts'}, {'type': 'text', 'value': 'StaffingCosts'}, {'type': 'text', 'value': 'CentrallyPurchasedStationery'}, {'type': 'text', 'value': 'StationeryAssocdPostageCosts'}, {'type': 'text', 'value': 'CentralITProvision'}, {'type': 'text', 'value': 'StaffCoverAndOtherCosts'}, {'type': 'text', 'value': 'CommsAllowance'}, {'type': 'text', 'value': 'Mileage'}, {'type': 'text', 'value': 'MPRail'}, {'type': 'text', 'value': 'MPAir'}, {'type': 'text', 'value': 'MPMisc'}, {'type': 'text', 'value': 'MPOtherMileage'}, {'type': 'text', 'value': 'MPOtherRail'}, {'type': 'text', 'value': 'MPOtherAir'}, {'type': 'text', 'value': 'MPOtherEuropean'}, {'type': 'text', 'value': 'SpouseTotal'}, {'type': 'text', 'value': 'SpouseNumOfJourneys'}, {'type': 'text', 'value': 'FamilyTotal'}, {'type': 'text', 'value': 'FamilyNumOfJourneys'}, {'type': 'text', 'value': 'EmployeeTotal'}, {'type': 'text', 'value': 'EmployeeNumOfJourneys'}], 'col_row_start': {'type': 'number', 'value': '1'}, 'col_mode': {'type': 'text', 'value': 'custom'}, 'separator': {'type': 'text', 'value': ','}, 'col_row_end': {'type': 'number', 'value': '1'}})
+    
     sw_375 = pipe_filter(
-        context, sw_340, RULE_1_value=sw_371, conf=dict(COMBINE=dict(type='text', value='and'), MODE=dict(type='text', value='permit'), RULE=[dict(field=dict(type='text', value='Member'), value=dict(terminal='RULE_1_value', type='text'), op=dict(type='text', value='contains'))]))
-
+        context, sw_340, RULE_1_value=sw_371, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': [{'field': {'type': 'text', 'value': 'Member'}, 'value': {'terminal': 'RULE_1_value', 'type': 'text'}, 'op': {'type': 'text', 'value': 'contains'}}]})
+    
     sw_385 = pipe_rename(
-        context, sw_375, conf=dict(RULE=[dict(newval=dict(type='text', value='title'), field=dict(type='text', value='Member'), op=dict(type='text', value='copy'))]))
-
+        context, sw_375, conf={'RULE': [{'field': {'type': 'text', 'value': 'Member'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'title'}}]})
+    
     sw_400 = pipe_loop(
-        context, sw_385, embed=pipe_sw_408, conf={'assign_part': dict(type='text', value='all'), 'with': dict(type='text', value=''), 'emit_part': dict(type='text', value='all'), 'mode': dict(type='text', value='assign'), 'embed': dict(type='module', value=dict(type='strconcat', id='sw-408', conf=dict(part=[dict(type='text', value='Total allowances claimed, inc travel: '), dict(type='text', subkey='TotalAllowancesClaimedIncTravel'), dict(type='text', value='<br>Total basic allowances claimed, ex travel: '), dict(type='text', subkey='TotalBasicAllowancesExcTravel'), dict(type='text', value='<br>Total Travel claimed: '), dict(type='text', subkey='TotalTravelClaimed'), dict(type='text', value='<br>MP Mileage: '), dict(type='text', subkey='Mileage'), dict(type='text', value='<br>MP Rail Travel: '), dict(type='text', subkey='MPRail'), dict(type='text', value='<br>MP Air Travel: '), dict(type='text', subkey='MPAir'), dict(type='text', value='<br>Cost of staying away from main home: '), dict(type='text', subkey='CostofStayingAwayFromMainHome'), dict(type='text', value='<br>London Supplement: '), dict(type='text', subkey='LondonSupplement'), dict(type='text', value='<br>Office Running Costs: '), dict(type='text', subkey='OfficeRunningCosts'), dict(type='text', value='<br>Staffing Costs: '), dict(type='text', subkey='StaffingCosts')]))), 'assign_to': dict(type='text', value='description')})
-
+        context, sw_385, embed=pipe_sw_408, conf={'assign_part': {'type': 'text', 'value': 'all'}, 'assign_to': {'type': 'text', 'value': 'description'}, 'emit_part': {'type': 'text', 'value': 'all'}, 'mode': {'type': 'text', 'value': 'assign'}, 'embed': {'type': 'module', 'value': {'type': 'strconcat', 'id': 'sw-408', 'conf': {'part': [{'type': 'text', 'value': 'Total allowances claimed, inc travel: '}, {'type': 'text', 'subkey': 'TotalAllowancesClaimedIncTravel'}, {'type': 'text', 'value': '<br>Total basic allowances claimed, ex travel: '}, {'type': 'text', 'subkey': 'TotalBasicAllowancesExcTravel'}, {'type': 'text', 'value': '<br>Total Travel claimed: '}, {'type': 'text', 'subkey': 'TotalTravelClaimed'}, {'type': 'text', 'value': '<br>MP Mileage: '}, {'type': 'text', 'subkey': 'Mileage'}, {'type': 'text', 'value': '<br>MP Rail Travel: '}, {'type': 'text', 'subkey': 'MPRail'}, {'type': 'text', 'value': '<br>MP Air Travel: '}, {'type': 'text', 'subkey': 'MPAir'}, {'type': 'text', 'value': '<br>Cost of staying away from main home: '}, {'type': 'text', 'subkey': 'CostofStayingAwayFromMainHome'}, {'type': 'text', 'value': '<br>London Supplement: '}, {'type': 'text', 'subkey': 'LondonSupplement'}, {'type': 'text', 'value': '<br>Office Running Costs: '}, {'type': 'text', 'subkey': 'OfficeRunningCosts'}, {'type': 'text', 'value': '<br>Staffing Costs: '}, {'type': 'text', 'subkey': 'StaffingCosts'}]}}}, 'with': {'type': 'text', 'value': ''}})
+    
     sw_573 = pipe_loop(
-        context, sw_400, embed=pipe_sw_581, conf={'assign_part': dict(type='text', value='all'), 'with': dict(type='text', value=''), 'emit_part': dict(type='text', value='all'), 'mode': dict(type='text', value='assign'), 'embed': dict(type='module', value=dict(type='strconcat', id='sw-581', conf=dict(part=[dict(type='text', subkey='firstName'), dict(type='text', value=' '), dict(type='text', subkey='Member')]))), 'assign_to': dict(type='text', value='title')})
-
+        context, sw_400, embed=pipe_sw_581, conf={'assign_part': {'type': 'text', 'value': 'all'}, 'assign_to': {'type': 'text', 'value': 'title'}, 'emit_part': {'type': 'text', 'value': 'all'}, 'mode': {'type': 'text', 'value': 'assign'}, 'embed': {'type': 'module', 'value': {'type': 'strconcat', 'id': 'sw-581', 'conf': {'part': [{'type': 'text', 'subkey': 'firstName'}, {'type': 'text', 'value': ' '}, {'type': 'text', 'subkey': 'Member'}]}}}, 'with': {'type': 'text', 'value': ''}})
+    
     _OUTPUT = pipe_output(
-        context, sw_573, conf=dict())
-
+        context, sw_573, conf={})
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_UuvYtuMe3hGDsmRgPm7D0g(context, None)
+    pipeline = pipe_UuvYtuMe3hGDsmRgPm7D0g(Context())
 
     for i in pipeline:
         print i

@@ -2,14 +2,14 @@
 
 from pipe2py import Context
 from pipe2py.modules.pipeforever import pipe_forever
-from pipe2py.modules.pipeitembuilder import pipe_itembuilder
+from pipe2py.modules.piperssitembuilder import pipe_rssitembuilder
 from pipe2py.modules.pipeitembuilder import pipe_itembuilder
 from pipe2py.modules.pipeitembuilder import pipe_itembuilder
 from pipe2py.modules.pipeitembuilder import pipe_itembuilder
 from pipe2py.modules.pipeunion import pipe_union
+from pipe2py.modules.pipeitembuilder import pipe_itembuilder
 from pipe2py.modules.pipeloop import pipe_loop
 from pipe2py.modules.pipeloop import pipe_loop
-from pipe2py.modules.piperssitembuilder import pipe_rssitembuilder
 from pipe2py.modules.pipeunion import pipe_union
 from pipe2py.modules.pipeoutput import pipe_output
 
@@ -21,8 +21,18 @@ def pipe_1166de33b0ea6936d96808717355beaa(context=None, _INPUT=None, conf=None, 
     if context and context.describe_input:
         return []
 
+    if context and context.describe_dependencies:
+        return [u'pipeitembuilder', u'pipeloop', u'pipeoutput', u'piperssitembuilder', u'pipeunion']
+
     forever = pipe_forever()
 
+    # We need to wrap submodules (used by loops) so we can pass the
+    # input at runtime (as we can to subpipelines)
+    def pipe_sw_710(context=None, _INPUT=None, conf=None, **kwargs):
+        # todo: insert submodule description here
+        return pipe_itembuilder(
+            context, _INPUT, conf={'attrs': [{'value': {'type': 'text', 'subkey': 'newtitle'}, 'key': {'type': 'text', 'value': 'title'}}, {'value': {'type': 'text', 'value': 'DESCRIPTION'}, 'key': {'type': 'text', 'value': 'description.content'}}]})
+    
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
     def pipe_sw_696(context=None, _INPUT=None, conf=None, **kwargs):
@@ -30,12 +40,8 @@ def pipe_1166de33b0ea6936d96808717355beaa(context=None, _INPUT=None, conf=None, 
         return pipe_itembuilder(
             context, _INPUT, conf={'attrs': [{'value': {'type': 'text', 'value': 'NEWTITLE'}, 'key': {'type': 'text', 'value': 'newtitle'}}, {'value': {'type': 'text', 'subkey': 'title'}, 'key': {'type': 'text', 'value': 'title'}}]})
     
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_sw_710(context=None, _INPUT=None, conf=None, **kwargs):
-        # todo: insert submodule description here
-        return pipe_itembuilder(
-            context, _INPUT, conf={'attrs': [{'value': {'type': 'text', 'subkey': 'newtitle'}, 'key': {'type': 'text', 'value': 'title'}}, {'value': {'type': 'text', 'value': 'DESCRIPTION'}, 'key': {'type': 'text', 'value': 'description.content'}}]})
+    sw_674 = pipe_rssitembuilder(
+        context, forever, conf={'mediaContentHeight': {'type': 'text', 'value': ''}, 'mediaThumbURL': {'type': 'text', 'value': 'http://example.com/a.jpg'}, 'mediaContentType': {'type': 'text', 'value': ''}, 'description': {'type': 'text', 'value': 'b'}, 'pubdate': {'type': 'text', 'value': ''}, 'author': {'type': 'text', 'value': ''}, 'title': {'type': 'text', 'value': 'a'}, 'mediaThumbHeight': {'type': 'text', 'value': ''}, 'link': {'type': 'text', 'value': 'http://example.com/test.php?this=that'}, 'mediaContentWidth': {'type': 'text', 'value': ''}, 'mediaContentURL': {'type': 'text', 'value': ''}, 'guid': {'type': 'text', 'value': ''}, 'mediaThumbWidth': {'type': 'text', 'value': ''}})
     
     sw_554 = pipe_itembuilder(
         context, forever, conf={'attrs': [{'value': {'type': 'text', 'value': 'TITLE1'}, 'key': {'type': 'text', 'value': 'title'}}]})
@@ -52,9 +58,6 @@ def pipe_1166de33b0ea6936d96808717355beaa(context=None, _INPUT=None, conf=None, 
     sw_688 = pipe_loop(
         context, sw_656, embed=pipe_sw_710, conf={'assign_part': {'type': 'text', 'value': 'all'}, 'assign_to': {'type': 'text', 'value': 'loop:itembuilder'}, 'emit_part': {'type': 'text', 'value': 'all'}, 'mode': {'type': 'text', 'value': 'assign'}, 'embed': {'type': 'module', 'value': {'type': 'itembuilder', 'id': 'sw-710', 'conf': {'attrs': [{'value': {'type': 'text', 'subkey': 'newtitle'}, 'key': {'type': 'text', 'value': 'title'}}, {'value': {'type': 'text', 'value': 'DESCRIPTION'}, 'key': {'type': 'text', 'value': 'description.content'}}]}}}, 'with': {'type': 'text', 'value': ''}})
     
-    sw_674 = pipe_rssitembuilder(
-        context, forever, conf={'mediaContentHeight': {'type': 'text', 'value': ''}, 'mediaThumbURL': {'type': 'text', 'value': ''}, 'mediaContentType': {'type': 'text', 'value': ''}, 'description': {'type': 'text', 'value': 'b'}, 'pubdate': {'type': 'text', 'value': ''}, 'author': {'type': 'text', 'value': ''}, 'title': {'type': 'text', 'value': 'a'}, 'mediaThumbHeight': {'type': 'text', 'value': ''}, 'link': {'type': 'text', 'value': ''}, 'mediaContentWidth': {'type': 'text', 'value': ''}, 'mediaContentURL': {'type': 'text', 'value': ''}, 'guid': {'type': 'text', 'value': ''}, 'mediaThumbWidth': {'type': 'text', 'value': ''}})
-    
     sw_730 = pipe_union(
         context, sw_674, _OTHER2=sw_688, conf={})
     
@@ -65,8 +68,7 @@ def pipe_1166de33b0ea6936d96808717355beaa(context=None, _INPUT=None, conf=None, 
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_1166de33b0ea6936d96808717355beaa(context, None)
+    pipeline = pipe_1166de33b0ea6936d96808717355beaa(Context())
 
     for i in pipeline:
         print i

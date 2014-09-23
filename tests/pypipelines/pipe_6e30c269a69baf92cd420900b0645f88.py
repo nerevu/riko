@@ -12,49 +12,51 @@ from pipe2py.modules.piperegex import pipe_regex
 from pipe2py.modules.pipesort import pipe_sort
 from pipe2py.modules.pipeoutput import pipe_output
 
+
 def pipe_6e30c269a69baf92cd420900b0645f88(context=None, _INPUT=None, conf=None, **kwargs):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context.describe_input:
+    if context and context.describe_input:
         return []
+
+    if context and context.describe_dependencies:
+        return [u'pipefetch', u'pipefilter', u'pipeoutput', u'piperegex', u'piperename', u'pipesort', u'pipeunion', u'pipeuniq']
 
     forever = pipe_forever()
 
-
     sw_135 = pipe_fetch(
-        context, forever, conf=dict(URL=dict(type='url', value='file://data/rss.sueddeutsche.de_rss_Topthemen.xml')))
-
+        context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/rss.sueddeutsche.de_rss_Topthemen.xml'}})
+    
     sw_233 = pipe_fetch(
-        context, forever, conf=dict(URL=dict(type='url', value='file://data/rss.sueddeutsche.de_rss_Politik.xml')))
-
+        context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/rss.sueddeutsche.de_rss_Politik.xml'}})
+    
     sw_154 = pipe_union(
-        context, forever, _OTHER3=sw_233, conf=dict(), _OTHER=sw_135)
-
+        context, forever, _OTHER3=sw_233, conf={}, _OTHER=sw_135)
+    
     sw_173 = pipe_uniq(
-        context, sw_154, conf=dict(field=dict(type='text', value='title')))
-
+        context, sw_154, conf={'field': {'type': 'text', 'value': 'title'}})
+    
     sw_180 = pipe_filter(
-        context, sw_173, conf=dict(COMBINE=dict(type='text', value='or'), MODE=dict(type='text', value='block'), RULE=[dict(field=dict(type='text', value='link'), value=dict(type='text', value='/sport/'), op=dict(type='text', value='contains')), dict(field=dict(type='text', value='title'), value=dict(type='text', value='Bildstrecke:'), op=dict(type='text', value='contains'))]))
-
+        context, sw_173, conf={'COMBINE': {'type': 'text', 'value': 'or'}, 'MODE': {'type': 'text', 'value': 'block'}, 'RULE': [{'field': {'type': 'text', 'value': 'link'}, 'value': {'type': 'text', 'value': '/sport/'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'title'}, 'value': {'type': 'text', 'value': 'Bildstrecke:'}, 'op': {'type': 'text', 'value': 'contains'}}]})
+    
     sw_210 = pipe_rename(
-        context, sw_180, conf=dict(RULE=[dict(newval=dict(type='text', value='link'), field=dict(type='text', value='y:id.value'), op=dict(type='text', value='copy'))]))
-
+        context, sw_180, conf={'RULE': [{'field': {'type': 'text', 'value': 'y:id.value'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'link'}}]})
+    
     sw_195 = pipe_regex(
-        context, sw_210, conf=dict(RULE=[dict(singlelinematch=dict(type='text', value='2'), globalmatch=dict(type='text', value='1'), replace=dict(type='text', value=''), field=dict(type='text', value='description'), match=dict(type='text', value='</div>.*$'), casematch=dict(type='text', value='8')), dict(field=dict(type='text', value='link'), match=dict(type='text', value='^(.*\\/.*)\\/'), replace=dict(type='text', value='$1/2.220/'))]))
-
+        context, sw_210, conf={'RULE': [{'singlelinematch': {'type': 'text', 'value': '2'}, 'globalmatch': {'type': 'text', 'value': '1'}, 'replace': {'type': 'text', 'value': ''}, 'field': {'type': 'text', 'value': 'description'}, 'casematch': {'type': 'text', 'value': '8'}, 'match': {'type': 'text', 'value': '</div>.*$'}}, {'field': {'type': 'text', 'value': 'link'}, 'match': {'type': 'text', 'value': '^(.*\\/.*)\\/'}, 'replace': {'type': 'text', 'value': '$1/2.220/'}}]})
+    
     sw_191 = pipe_sort(
-        context, sw_195, conf=dict(KEY=[dict(field=dict(type='text', value='pubDate'), dir=dict(type='text', value='DESC'))]))
-
+        context, sw_195, conf={'KEY': [{'field': {'type': 'text', 'value': 'pubDate'}, 'dir': {'type': 'text', 'value': 'DESC'}}]})
+    
     _OUTPUT = pipe_output(
-        context, sw_191, conf=dict())
-
+        context, sw_191, conf={})
+    
     return _OUTPUT
 
 
 if __name__ == "__main__":
-    context = Context()
-    pipeline = pipe_6e30c269a69baf92cd420900b0645f88(context, None)
+    pipeline = pipe_6e30c269a69baf92cd420900b0645f88(Context())
 
     for i in pipeline:
         print i
