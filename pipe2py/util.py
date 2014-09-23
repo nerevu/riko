@@ -154,10 +154,10 @@ def get_input(context, conf):
 def get_abspath(url):
     url = 'http://%s' % url if url and '://' not in url else url
 
-    if url.startswith('file:///'):
+    if url and url.startswith('file:///'):
         # already have an abspath
         pass
-    elif url.startswith('file://'):
+    elif url and url.startswith('file://'):
         parent = p.dirname(__file__)
         rel_path = url[7:]
         abspath = p.abspath(p.join(parent, rel_path))
