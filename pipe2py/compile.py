@@ -7,17 +7,15 @@
         in-process
 
     Usage:
-     a) python compile.py pipe1.json
-        python pipe1.py
+     a) python pipe2py/compile.py tests/pipelines/testpipe1.json
+        python pipe2py/pypipelines/testpipe1.py
 
      b) from pipe2py import compile, Context
 
         pipe_def = json.loads(pjson)
         pipe = parse_pipe_def(pipe_def, pipe_name)
-        pipeline = build_pipeline(Context(), pipe))
-
-        for i in pipeline:
-            print i
+        pipeline = build_pipeline(Context(), pipe)
+        print list(pipeline)
 
     Instead of passing a filename, a pipe id can be passed (-p) to fetch the
     JSON from Yahoo, e.g.
@@ -283,8 +281,7 @@ def build_pipeline(context, pipe, pipe_def):
         If context.describe_input or context.describe_dependencies then just
         return that instead of the pipeline
 
-        Note: any subpipes must be available to import as .py files current
-        namespace can become polluted by submodule wrapper definitions
+        Note: any subpipes must be available to import from pipe2py.pypipelines
     """
     module_ids = topological_sort(pipe['graph'])
     pydeps = util.extract_dependencies(pipe_def)
@@ -315,9 +312,6 @@ def build_pipeline(context, pipe, pipe_def):
 
 def stringify_pipe(context, pipe, pipe_def):
     """Convert a pipe into Python script
-
-       If context.describe_input or context.describe_dependencies is passed to
-       the script then it just returns that instead of the pipeline
     """
     module_ids = topological_sort(pipe['graph'])
 
@@ -351,8 +345,7 @@ if __name__ == '__main__':
     parser = OptionParser(usage=usage)
 
     parser.add_option(
-        "-p", "--pipe", dest="pipeid", help="read pipe JSON from Yahoo",
-        metavar="PIPEID")
+        "-p", "--pipe", dest="pipeid", help="read pipe JSON from Yahoo")
     parser.add_option(
         "-c", "--compiledpath", dest="compiledpath",
         help="the compiled pipe file destination path")
@@ -360,7 +353,7 @@ if __name__ == '__main__':
         "-s", dest="savejson", help="save pipe JSON to file",
         action="store_true")
     parser.add_option(
-        "-o", dest="saveoutput", help="save pipe output to file",
+        "-o", dest="saveoutput", help="save output from pipes.yahoo.com to file",
         action="store_true")
     parser.add_option(
         "-v", dest="verbose", help="set verbose debug", action="store_true")

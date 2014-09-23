@@ -515,6 +515,8 @@ class TestBasics(unittest.TestCase):
 
     # todo: test simplemath - divide by zero and check/implement yahoo handling
     # todo: test malformed pipeline syntax
+    # todo: move these tests to the module doc blocks so each module is tested
+    # individually
     # todo: test pipe compilation (compare output against expected .py file)
 
 #######################
