@@ -40,9 +40,7 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
             forever = item.get('forever')
             url = conf.get('BASE', **kwargs)
             url += '/' if not url.endswith('/') else url
-            path = [
-                util.get_value(DotDict(p), item, **kwargs) for p in paths if p]
-            url += "/".join(str(p) for p in path)
+            url += "/".join(str(p) for p in paths if p)
             url = url.rstrip("/")
             url = util.url_quote(url)  # Ensure url is valid
             params = dict(_gen_params(param_defs, item, **kwargs))
