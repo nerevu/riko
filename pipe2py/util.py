@@ -39,6 +39,18 @@ def extract_dependencies(pipe_def=None, pipe_generator=None):
     return sorted(set(pydeps))
 
 
+def extract_input(pipe_def=None, pipe_generator=None):
+    """Extract inputs required by a pipe"""
+    if pipe_def:
+        pyinput = gen_input(pipe_def)
+    elif pipe_generator:
+        pyinput = pipe_generator(Context(describe_input=True))
+    else:
+        raise Exception('Must supply at least one kwarg!')
+
+    return sorted(list(pyinput))
+
+
 def pythonise(id, encoding='ascii'):
     """Return a Python-friendly id"""
     replace = {'-': '_', ':': '_', '/': '_'}
@@ -215,6 +227,39 @@ def gen_dependencies(pipe_def):
             yield 'pipe%s' % module['conf']['embed']['value']['type']
         except (KeyError, TypeError):
             pass
+
+
+def gen_input(pipe_def):
+    fields = ['position', 'name', 'prompt']
+
+    for module in pipe_def['modules']:
+        # Note: there seems to be no need to recursively collate inputs
+        # from subpipelines
+        try:
+            module_confs = [module['conf'][x]['value'] for x in fields]
+        except (KeyError, TypeError):
+            pass
+        else:
+            values = ['type', 'value']
+            module_confs.extend((module['conf']['default'][x] for x in values))
+            yield tuple(module_confs)
+
+
+def gen_names(module_ids, pipe, ntype='module'):
+    for module_id in module_ids:
+        module_type = pipe['modules'][module_id]['type']
+
+        if module_type.startswith('pipe:'):
+            name = pythonise(module_type)
+        elif ntype == 'module':
+            name = 'pipe%s' % module_type
+        elif ntype == 'pipe':
+            name = 'pipe_%s' % module_type
+        else:
+            raise Exception(
+                "Invalid type: %s. (Expected 'module' or 'pipe')" % ntype)
+
+        yield name
 
 
 def gen_modules(pipe_def):
