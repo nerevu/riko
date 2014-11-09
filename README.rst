@@ -28,7 +28,7 @@ Dependencies
 ------------
 Install the dependencies::
 
-  pip install requirements.txt
+  pip install -r requirements.txt
 
 If using a Python version before 2.6 then simplejson is needed::
 
@@ -42,7 +42,7 @@ Install the package::
 
 Unit tests
 ==========
-Run in the test directory::
+Run::
 
   python tests/testbasics.py
 
