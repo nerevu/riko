@@ -6,7 +6,7 @@ from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_tail(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator truncates the number of items in a feed.
+    """Returns a specified number of items from the bottom of a feed.
 
     Keyword arguments:
     context -- pipeline context
