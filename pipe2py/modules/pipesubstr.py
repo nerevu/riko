@@ -1,26 +1,30 @@
 # pipesubstr.py
 #
 
-from pipe2py import util
+from pipe2py.lib.dotdict import DotDict
 
-def pipe_substr(context, _INPUT, conf, **kwargs):
+
+def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     """Returns a substring.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- source generator
     conf:
         from -- starting character
         length -- number of characters to return
-    
+
     Yields (_OUTPUT):
     portion of source string
     """
-    sfrom = int(util.get_value(conf['from'], None, **kwargs))
-    length = int(util.get_value(conf['length'], None, **kwargs))
+    conf = DotDict(conf)
+    start = conf.get('from', func=int, **kwargs)
+    length = conf.get('length', func=int, **kwargs)
 
     for item in _INPUT:
-        yield item[sfrom:sfrom+length]
+        yield item[start:start + length]
 
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
-            break        
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
+            break

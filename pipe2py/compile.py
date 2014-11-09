@@ -7,17 +7,15 @@
         in-process
 
     Usage:
-     a) python compile.py pipe1.json
-        python pipe1.py
+     a) python pipe2py/compile.py tests/pipelines/testpipe1.json
+        python pipe2py/pypipelines/testpipe1.py
 
      b) from pipe2py import compile, Context
 
         pipe_def = json.loads(pjson)
         pipe = parse_pipe_def(pipe_def, pipe_name)
-        pipeline = build_pipeline(self.context, pipe))
-
-        for i in pipeline:
-            print i
+        pipeline = build_pipeline(Context(), pipe)
+        print list(pipeline)
 
     Instead of passing a filename, a pipe id can be passed (-p) to fetch the
     JSON from Yahoo, e.g.
@@ -28,71 +26,211 @@
     Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
     Python generator pipelines inspired by:
         David Beazely (http://www.dabeaz.com/generators-uk)
-    Universal Feed Parser and auto-rss modules by:
-        Mark Pilgrim (http://feedparser.org)
+    auto-rss module by Mark Pilgrim
 
    License: see LICENSE file
 """
-import fileinput
-import urllib
-import sys
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
 
-from itertools import chain
+import fileinput
+import sys
+import requests
+
+try:
+    from json import loads, dumps
+except (ImportError, AttributeError):
+    from simplejson import loads, dumps
+
+from codecs import open
+from itertools import chain, izip
+from collections import defaultdict
 from importlib import import_module
+from pprint import PrettyPrinter
 from jinja2 import Environment, PackageLoader
 from optparse import OptionParser
-from os.path import splitext, split
+from os import path as p
 from pipe2py import Context, util
-from pipe2py.pprint2 import Id, repr_args, str_args
-from pipe2py.topsort import topological_sort
-from pipe2py.modules import pipeforever
+from pipe2py.modules.pipeforever import pipe_forever
+from pipe2py.lib.pprint2 import Id, repr_args, str_args
+from pipe2py.lib.topsort import topological_sort
+
+PARENT = p.dirname(__file__)
 
 
-def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
-    pyinput = pyinput or []
-    module = pipe['modules'][module_id]
-    module_type = module['type']
-    conf = module['conf']
-    kwargs = {'conf': conf}
-    output = None
+class MyPrettyPrinter(PrettyPrinter):
+    def format(self, object, context, maxlevels, level):
+        if isinstance(object, unicode):
+            return (object.encode('utf8'), True, False)
+        else:
+            return PrettyPrinter.format(
+                self, object, context, maxlevels, level)
 
-    if module_type.startswith('pipe:'):
+
+def write_file(data, path, pretty=False):
+    if data and path:
+        with open(path, 'w', encoding='utf-8') as f:
+            if hasattr(data, 'keys') and pretty:
+                data = dumps(data, sort_keys=True, indent=4, ensure_ascii=False)
+            elif hasattr(data, 'keys'):
+                data = dumps(data, ensure_ascii=False)
+            elif pretty:
+                data = unicode(MyPrettyPrinter().pformat(data), 'utf-8')
+
+            return f.write(data)
+
+
+def _load_json(json):
+    try:
+        loaded = loads(json.encode('utf-8'))
+    except UnicodeDecodeError:
+        loaded = loads(json)
+
+    return loaded
+
+
+def _get_zipped(context, pipe, **kwargs):
+    module_ids = kwargs['module_ids']
+    module_names = kwargs['module_names']
+    pipe_names = kwargs['pipe_names']
+    return izip(module_ids, module_names, pipe_names)
+
+
+def _gen_string_modules(context, pipe, zipped):
+    for module_id, module_name, pipe_name in zipped:
+        pyargs = _get_pyargs(context, pipe, module_id)
+        pykwargs = dict(_gen_pykwargs(context, pipe, module_id))
+
+        if context and context.verbose:
+            con_args = filter(lambda x: x != Id('context'), args)
+            nconf_kwargs = filter(lambda x: x[0] != 'conf', pykwargs.items())
+            conf_kwargs = filter(lambda x: x[0] == 'conf', pykwargs.items())
+            all_args = chain(con_args, nconf_kwargs, conf_kwargs)
+
+            print (
+                '%s = %s(%s)' % (
+                    module_id, pipe_name, str_args(all_args)
+                )
+            ).encode('utf-8')
+
+        yield {
+            'args': repr_args(chain(pyargs, pykwargs.items())),
+            'id': module_id,
+            'sub_pipe': module_name.startswith('pipe_'),
+            'name': module_name,
+            'pipe_name': pipe_name,
+        }
+
+
+def _gen_steps(context, pipe, **kwargs):
+    module_id = kwargs['module_id']
+    module_name = kwargs['module_name']
+    pipe_name = kwargs['pipe_name']
+    steps = kwargs['steps']
+
+    if module_name.startswith('pipe_'):
         # Import any required sub-pipelines and user inputs
-        # Note: assumes they have already been compiled to accessible .py files
-        import_module(util.pythonise(module_type)) if steps else None
-        pythonised_type = util.pythonise(module_type)
-        pymodule_name = '%s' % pythonised_type
-        pymodule_generator = '%s' % pythonised_type
+        # Note: assumes they have already been compiled to accessible .py
+        # files
+        import_name = 'pipe2py.pypipelines.%s' % module_name
     else:
-        pymodule_name = 'pipe%s' % module_type
-        pymodule_generator = 'pipe_%s' % module_type
+        import_name = 'pipe2py.modules.%s' % module_name
 
-    if context.describe_input or not steps:
-        # Find any required subpipelines and user inputs
-        if conf and 'prompt' in conf:
-            # Note: there seems to be no need to recursively collate inputs
-            # from subpipelines
-            module_confs = (
-                module['conf']['position']['value'],
-                module['conf']['name']['value'],
-                module['conf']['prompt']['value'],
-                module['conf']['default']['type'],
-                module['conf']['default']['value']
+    module = import_module(import_name)
+    pipe_generator = getattr(module, pipe_name)
+
+    # if this module is an embedded module:
+    if module_id in pipe['embed']:
+        # We need to wrap submodules (used by loops) so we can pass the
+        # input at runtime (as we can to sub-pipelines)
+        # Note: no embed (so no subloops) or wire pykwargs are passed
+        pipe_generator.__name__ = str('pipe_%s' % module_id)
+        yield (module_id, pipe_generator)
+    else:  # else this module is not embedded:
+        pyargs = _get_pyargs(context, pipe, module_id, steps)
+        pykwargs = dict(_gen_pykwargs(context, pipe, module_id, steps))
+        yield (module_id, pipe_generator(*pyargs, **pykwargs))
+
+
+def _get_steps(context, pipe, zipped):
+    steps = {'forever': pipe_forever()}
+
+    for module_id, module_name, pipe_name in zipped:
+        kwargs = {
+            'module_id': module_id,
+            'module_name': module_name,
+            'pipe_name': pipe_name,
+            'steps': steps,
+        }
+
+        steps.update(dict(_gen_steps(context, pipe, **kwargs)))
+
+    return steps
+
+
+def _get_pyargs(context, pipe, module_id, steps=None):
+    describe = context.describe_input or context.describe_dependencies
+
+    if not (describe and steps):
+        # find the default input of this module
+        input_module = _get_input_module(pipe, module_id, steps)
+
+        return [context, input_module] if steps else [
+            Id('context'), Id(input_module)]
+
+
+def _gen_pykwargs(context, pipe, module_id, steps=None):
+    module = pipe['modules'][module_id]
+    yield ('conf', module['conf'])
+    describe = context.describe_input or context.describe_dependencies
+
+    if not (describe and steps):
+        wires = pipe['wires']
+        module_type = module['type']
+
+        # find the default input of this module
+        for key, pipe_wire in wires.items():
+            moduleid = util.pythonise(pipe_wire['src']['moduleid'])
+
+            # todo? this equates the outputs
+            is_default_out_only = (
+                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
+                and pipe_wire['tgt']['id'] != '_INPUT'
+                and pipe_wire['src']['id'].startswith('_OUTPUT')
             )
 
-            pyinput.append(module_confs)
+            # if the wire is to this module and it's *NOT* the default input
+            # but it *is* the default output
+            if is_default_out_only:
+                # set the extra inputs of this module as pykwargs of this module
+                pipe_id = util.pythonise(pipe_wire['tgt']['id'])
+                yield (pipe_id, steps[moduleid] if steps else Id(moduleid))
 
-        if steps:
-            output = {
-                'pyinput': pyinput,
-                'pymodule_name': pymodule_name,
-                'pymodule_generator': pymodule_generator,
-            }
+        # set the embedded module in the pykwargs if this is loop module
+        if module_type == 'loop':
+            value = module['conf']['embed']['value']
+            pipe_id = util.pythonise(value['id'])
+            updated = steps[pipe_id] if steps else Id('pipe_%s' % pipe_id)
+            yield ('embed', updated)
 
-    if not output:
-        # find the default input of this module
-        input_module = steps['forever'] if steps else 'forever'
+        # set splits in the pykwargs if this is split module
+        if module_type == 'split':
+            filtered = filter(
+                lambda x: module_id == util.pythonise(x[1]['src']['moduleid']),
+                pipe['wires'].items()
+            )
 
+            count = len(filtered)
+            updated = count if steps else Id(count)
+            yield ('splits', updated)
+
+
+def _get_input_module(pipe, module_id, steps):
+    input_module = steps['forever'] if steps else 'forever'
+
+    if module_id in pipe['embed']:
+        input_module = '_INPUT'
+    else:
         for key, pipe_wire in pipe['wires'].items():
             moduleid = util.pythonise(pipe_wire['src']['moduleid'])
 
@@ -107,58 +245,9 @@ def _pipe_commons(context, pipe, module_id, pyinput=None, steps=None):
             # the default output:
             if is_default_in_and_out:
                 input_module = steps[moduleid] if steps else moduleid
+                break
 
-            # todo? this equates the outputs
-            is_default_out_only = (
-                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
-                and pipe_wire['tgt']['id'] != '_INPUT'
-                and pipe_wire['src']['id'].startswith('_OUTPUT')
-            )
-
-            # if the wire is to this module and it's *NOT* the default input
-            # and it's the default output
-            if is_default_out_only:
-                # set the extra inputs of this module as kwargs of this module
-                pipe_id = util.pythonise(pipe_wire['tgt']['id'])
-                updated = steps[moduleid] if steps else Id(moduleid)
-                kwargs.update({pipe_id: updated})
-
-        if module_id in pipe['embed']:
-            text = 'input_module of an embedded module was already set'
-            # what is this for???
-            # assert input_module == (steps['forever'], text)
-            input_module = '_INPUT'
-
-        args = [context, input_module] if steps else [
-            Id('context'), Id(input_module)]
-
-        # set the embedded module in the kwargs if this is loop module
-        if module_type == 'loop':
-            value = module['conf']['embed']['value']
-            pipe_id = util.pythonise(value['id'])
-            updated = steps[pipe_id] if steps else Id('pipe_%s' % pipe_id)
-            kwargs.update({'embed': updated})
-
-        # set splits in the kwargs if this is split module
-        if module_type == 'split':
-            filtered = filter(
-                lambda x: module_id == util.pythonise(x[1]['src']['moduleid']),
-                pipe['wires'].items()
-            )
-
-            count = len(filtered)
-            updated = count if steps else Id(count)
-            kwargs.update({'splits': updated})
-
-        output = {
-            'pyinput': pyinput,
-            'pymodule_name': pymodule_name,
-            'pymodule_generator': pymodule_generator,
-            'args': args,
-            'kwargs': kwargs,
-        }
-
-    return output
+    return input_module
 
 
 def parse_pipe_def(pipe_def, pipe_name='anonymous'):
@@ -171,231 +260,187 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
     Returns:
     pipe -- an internal representation of a pipe
     """
-    pipe = {
+    graph = defaultdict(list, util.gen_graph1(pipe_def))
+    [graph[k].append(v) for k, v in util.gen_graph2(pipe_def)]
+    modules = dict(util.gen_modules(pipe_def))
+    embed = dict(util.gen_embedded_modules(pipe_def))
+    modules.update(embed)
+
+    return {
         'name': util.pythonise(pipe_name),
-        'modules': {},
-        'embed': {},
-        'graph': {},
-        'wires': {},
+        'modules': modules,
+        'embed': embed,
+        'graph': dict(util.gen_graph3(graph)),
+        'wires': dict(util.gen_wires(pipe_def)),
     }
 
-    modules = pipe_def['modules']
 
-    if not isinstance(modules, list):
-        modules = [modules]
-
-    for module in modules:
-        pipe['modules'][util.pythonise(module['id'])] = module
-        pipe['graph'][util.pythonise(module['id'])] = []
-        module_type = module['type']
-
-        if module_type == 'loop':
-            embed = module['conf']['embed']['value']
-            pipe['modules'][util.pythonise(embed['id'])] = embed
-            pipe['graph'][util.pythonise(embed['id'])] = []
-            pipe['embed'][util.pythonise(embed['id'])] = embed
-
-            # make the loop dependent on its embedded module
-            pipe['graph'][util.pythonise(embed['id'])].append(
-                util.pythonise(module['id']))
-
-    wires = pipe_def['wires']
-
-    if not isinstance(wires, list):
-        wires = [wires]
-
-    for wire in wires:
-        pipe['wires'][util.pythonise(wire['id'])] = wire
-        pipe['graph'][util.pythonise(wire['src']['moduleid'])].append(
-            util.pythonise(wire['tgt']['moduleid']))
-
-    # Remove any orphan nodes
-    for node in pipe['graph'].keys():
-        targetted = [node in value for key, value in pipe['graph'].items()]
-        if not pipe['graph'][node] and not any(targetted):
-            del pipe['graph'][node]
-
-    return pipe
-
-
-def build_pipeline(context, pipe):
+def build_pipeline(context, pipe, pipe_def):
     """Convert a pipe into an executable Python pipeline
 
-        If context.describe_input then just return the input requirements
-        instead of the pipeline
+        If context.describe_input or context.describe_dependencies then just
+        return that instead of the pipeline
 
-        Note: any subpipes must be available to import as .py files current
-        namespace can become polluted by submodule wrapper definitions
+        Note: any subpipes must be available to import from pipe2py.pypipelines
     """
-    pyinput = None
-    steps = {'forever': pipeforever.pipe_forever(context, None, conf=None)}
+    module_ids = topological_sort(pipe['graph'])
+    pydeps = util.extract_dependencies(pipe_def)
+    pyinput = util.extract_input(pipe_def)
 
-    for module_id in topological_sort(pipe['graph']):
-        commons = _pipe_commons(context, pipe, module_id, pyinput, steps)
-        pymodule_name = commons['pymodule_name']
-        pymodule_generator = commons['pymodule_generator']
-        pyinput = commons['pyinput']
+    if not (context.describe_input or context.describe_dependencies):
+        kwargs = {
+            'module_ids': module_ids,
+            'module_names': util.gen_names(module_ids, pipe),
+            'pipe_names': util.gen_names(module_ids, pipe, 'pipe'),
+        }
 
-        if context.describe_input:
-            continue
+        zipped = _get_zipped(context, pipe, **kwargs)
+        steps = _get_steps(context, pipe, zipped)
 
-        args = commons['args']
-        kwargs = commons['kwargs']
-
-        if pymodule_name.startswith('pipe_'):
-            import_name = pymodule_name
-        else:
-            import_name = 'pipe2py.modules.%s' % pymodule_name
-
-        module = import_module(import_name)
-        generator = getattr(module, pymodule_generator)
-
-        # if this module is an embedded module:
-        if module_id in pipe['embed']:
-            # We need to wrap submodules (used by loops) so we can pass the
-            # input at runtime (as we can to sub-pipelines)
-            # Note: no embed (so no subloops) or wire kwargs are
-            # passed and outer_kwargs are passed in
-            generator.__name__ = 'pipe_%s' % module_id
-            steps[module_id] = generator
-        else:  # else this module is not an embedded module:
-            steps[module_id] = generator(*args, **kwargs)
-
-        if context.verbose:
-            print '%s (%s) = %s(%s)' % (
-                steps[module_id], module_id, generator, str(args))
-
-    if context.describe_input:
-        pipeline = sorted(pyinput)
+    if context.describe_input and context.describe_dependencies:
+        pipeline = [{'inputs': pyinput, 'dependencies': pydeps}]
+    elif context.describe_input:
+        pipeline = pyinput
+    elif context.describe_dependencies:
+        pipeline = pydeps
     else:
-        pipeline = steps[module_id]
+        pipeline = steps[module_ids[-1]]
 
-    return pipeline
+    for i in pipeline:
+        yield i
 
 
-def stringify_pipe(context, pipe):
+def stringify_pipe(context, pipe, pipe_def):
     """Convert a pipe into Python script
-
-       If context.describe_input is passed to the script then it just
-       returns the input requirements instead of the pipeline
     """
-    modules = []
-    pyinput = None
+    module_ids = topological_sort(pipe['graph'])
 
-    for module_id in topological_sort(pipe['graph']):
-        module = {}
+    kwargs = {
+        'module_ids': module_ids,
+        'module_names': util.gen_names(module_ids, pipe),
+        'pipe_names': util.gen_names(module_ids, pipe, 'pipe'),
+    }
 
-        commons = _pipe_commons(context, pipe, module_id, pyinput)
-        pyinput = commons['pyinput']
-        pymodule_generator = commons['pymodule_generator']
-        pymodule_name = commons['pymodule_name']
-        args = commons['args']
-        kwargs = commons['kwargs']
-
-        module['args'] = repr_args(chain(args, kwargs.items()))
-        module['id'] = module_id
-        module['pymodule_name'] = pymodule_name
-        module['pymodule_generator'] = pymodule_generator
-        modules.append(module)
-
-        if context.verbose:
-            con_args = filter(lambda x: x != Id('context'), args)
-            nconf_kwargs = filter(lambda x: x[0] != 'conf', kwargs.items())
-            conf_kwargs = filter(lambda x: x[0] == 'conf', kwargs.items())
-            all_args = chain(con_args, nconf_kwargs, conf_kwargs)
-
-            print (
-                '%s = %s(%s)' % (
-                    module_id, pymodule_generator, str_args(all_args)
-                )
-            ).encode('utf-8')
-
+    zipped = _get_zipped(context, pipe, **kwargs)
+    modules = list(_gen_string_modules(context, pipe, zipped))
+    pydeps = util.extract_dependencies(pipe_def)
+    pyinput = util.extract_input(pipe_def)
     env = Environment(loader=PackageLoader('pipe2py'))
     template = env.get_template('pypipe.txt')
 
     tmpl_kwargs = {
         'modules': modules,
         'pipe_name': pipe['name'],
-        'inputs': unicode(sorted(pyinput)),
+        'inputs': unicode(pyinput),
+        'dependencies': unicode(pydeps),
         'embedded_pipes': pipe['embed'],
-        'last_module': module_id,
+        'last_module': module_ids[-1],
     }
 
     return template.render(**tmpl_kwargs)
 
 
-def analyze_pipe(context, pipe):
-    modules = set(module['type'] for module in pipe['modules'].values())
-    moduletypes = sorted(list(modules))
-
-    if context.verbose:
-        print
-        print 'Modules used:', ', '.join(
-            name for name in moduletypes if not name.startswith('pipe:')
-        ) or None
-
-        print 'Other pipes used:', ', '.join(
-            name[5:] for name in moduletypes if name.startswith('pipe:')
-        ) or None
-
 if __name__ == '__main__':
-    try:
-        import json
-        json.loads  # test access to the attributes of the right json module
-    except (ImportError, AttributeError):
-        import simplejson as json
-
     usage = 'usage: %prog [options] [filename]'
     parser = OptionParser(usage=usage)
 
     parser.add_option(
-        "-p", "--pipe", dest="pipeid", help="read pipe JSON from Yahoo",
-        metavar="PIPEID")
+        "-p", "--pipe", dest="pipeid", help="read pipe JSON from Yahoo")
+    parser.add_option(
+        "-c", "--compiledpath", dest="compiledpath",
+        help="the compiled pipe file destination path")
     parser.add_option(
         "-s", dest="savejson", help="save pipe JSON to file",
+        action="store_true")
+    parser.add_option(
+        "-o", dest="saveoutput", help="save output from pipes.yahoo.com to file",
         action="store_true")
     parser.add_option(
         "-v", dest="verbose", help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()
 
-    filename = args[0] if args else None
-    context = Context(verbose=options.verbose)
+    pipe_file_name = args[0] if args else None
+
+    kwargs = {
+        'describe_input': True,
+        'describe_dependencies': True,
+        'verbose': options.verbose,
+    }
+
+    context = Context(**kwargs)
 
     if options.pipeid:
+        pipe_name = 'pipe_%s' % options.pipeid
+
+        # Get the pipeline definition
         base = 'http://query.yahooapis.com/v1/public/yql?q='
         select = 'select%20PIPE.working%20from%20json%20'
-        where = 'where%20url%3D%22http%3A%2F%2Fpipes.yahoo.com'
-        pipe = '%2Fpipes%2Fpipe.info%3F_out%3Djson%26_id%3D'
+        where = 'where%20url=%22http%3A%2F%2Fpipes.yahoo.com'
+        pipe = '%2Fpipes%2Fpipe.info%3F_out=json%26_id=%s' % options.pipeid
         end = '%22&format=json'
-        url = base + select + where + pipe + options.pipeid + end
+        url = base + select + where + pipe + end
+        # todo: refactor this url->json
 
-        src = ''.join(urllib.urlopen(url).readlines())
-        src_json = json.loads(src)
-        results = src_json['query']['results']
+        pjson = requests.get(url).text
+        pipe_raw = _load_json(pjson)
+        results = pipe_raw['query']['results']
 
         if not results:
-            print 'Pipe not found'
+            print('Pipe not found')
             sys.exit(1)
 
-        pjson = results['json']['PIPE']['working']
-        pipe_name = 'pipe_%s' % options.pipeid
-    elif filename:
-        pjson = ''.join(line for line in open(filename))
-        pipe_name = splitext(split(filename)[-1])[0]
-    else:
-        pjson = ''.join(line for line in fileinput.input())
-        pipe_name = 'anonymous'
+        pipe_def = results['json']['PIPE']['working']
+    elif pipe_file_name:
+        pipe_name = p.splitext(p.split(pipe_file_name)[-1])[0]
 
-    pipe_def = json.loads(pjson)
+        with open(pipe_file_name) as f:
+            pjson = f.read()
+
+        pipe_def = _load_json(pjson)
+    else:
+        pipe_name = 'anonymous'
+        pjson = ''.join(line for line in fileinput.input())
+        pipe_def = _load_json(pjson)
+
     pipe = parse_pipe_def(pipe_def, pipe_name)
+    new_path = p.join(PARENT, 'pypipelines', '%s.py' % pipe_name)
+    path = options.compiledpath or new_path
+    data = stringify_pipe(context, pipe, pipe_def)
+    size = write_file(data, path)
+
+    if context and context.verbose:
+        print('wrote %i bytes to %s' % (size, path))
+
+    if context and context.verbose:
+        pydeps = util.extract_dependencies(pipe_def)
+        print('Modules used in %s: %s' % (pipe['name'], pydeps))
 
     if options.savejson:
-        with open('%s.json' % pipe_name, 'w') as f:
-            pprint(json.loads(pjson.encode('utf-8')), f)
+        path = p.join(PARENT, 'pipelines', '%s.json' % pipe_name)
+        size = write_file(pipe_def, path, True)
 
-    with open('%s.py' % pipe_name, 'w') as f:
-        f.write(stringify_pipe(context, pipe))
+        if context and context.verbose:
+            print('wrote %i bytes to %s' % (size, path))
 
-    analyze_pipe(context, pipe)
+    if options.saveoutput:
+        base = 'http://pipes.yahoo.com/pipes/pipe.run'
+        url = '%s?_id=%s&_render=json' % (base, options.pipeid)
+        ojson = requests.get(url).text
+        pipe_output = _load_json(ojson)
+        count = pipe_output['count']
+
+        if not count:
+            print('Pipe results not found')
+            sys.exit(1)
+
+        path = p.join(PARENT, 'data', '%s_output.json' % pipe_name)
+        size = write_file(pipe_output, path, True)
+
+        if context and context.verbose:
+            print('wrote %i bytes to %s' % (size, path))
 
     # for build example - see test/testbasics.py
+
+    # todo: to create stable, repeatable test cases we should:
+    #  build the pipeline to find the external data sources
+    #  download and save any fetchdata/fetch source data

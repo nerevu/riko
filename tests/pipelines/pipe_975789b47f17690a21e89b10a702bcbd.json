@@ -1,1 +1,442 @@
-{"layout":[{"id":"sw-417","xy":[514,-122]},{"id":"_OUTPUT","xy":[453,510]},{"id":"sw-424","xy":[183,-76]},{"id":"sw-436","xy":[177,27]},{"id":"sw-447","xy":[239,150]},{"id":"sw-470","xy":[203,291]},{"id":"sw-490","xy":[649,289]},{"id":"sw-501","xy":[618,430]}],"modules":[{"type":"textinput","id":"sw-417","conf":{"name":{"value":"q","type":"text"},"prompt":{"value":"Status update","type":"text"},"position":{"value":"","type":"number"},"default":{"value":"Here's #: some #hashtags to play #with","type":"text"},"debug":{"value":"","type":"text"}}},{"type":"output","id":"_OUTPUT","conf":{}},{"type":"itembuilder","id":"sw-424","conf":{"attrs":[{"key":{"value":"title","type":"text"},"value":{"type":"text","terminal":"attrs_1_value"}}]}},{"type":"filter","id":"sw-436","conf":{"MODE":{"type":"text","value":"permit"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"title","type":"text"},"op":{"type":"text","value":"contains"},"value":{"value":"#","type":"text"}}]}},{"type":"regex","id":"sw-447","conf":{"RULE":[{"field":{"value":"title","type":"text"},"match":{"value":" [^#]*","type":"text"},"replace":{"value":" ","type":"text"},"globalmatch":{"type":"text","value":"1"}},{"field":{"value":"title","type":"text"},"match":{"value":"^[^#]*","type":"text"},"replace":{"value":"","type":"text"}}]}},{"type":"loop","id":"sw-470","conf":{"with":{"value":"title","type":"text"},"embed":{"value":{"type":"stringtokenizer","id":"sw-478","conf":{"to-str":{"value":" ","type":"text"}}},"type":"module"},"mode":{"type":"text","value":"EMIT"},"emit_part":{"type":"text","value":"all"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"loop:stringtokenizer","type":"text"}}},{"type":"filter","id":"sw-490","conf":{"MODE":{"type":"text","value":"permit"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"content","type":"text"},"op":{"type":"text","value":"matches"},"value":{"value":"#[\\w]","type":"text"}}]}},{"type":"rename","id":"sw-501","conf":{"RULE":[{"field":{"value":"content","type":"text"},"op":{"type":"text","value":"rename"},"newval":{"value":"title","type":"text"}}]}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-417","data":{"_type":"text","_count":"1"}},{"id":"_OUTPUT","moduleid":"sw-424","data":{"_type":"item","_attr":{"title":{"_type":"text","_count":"1"}}}},{"id":"_OUTPUT","moduleid":"sw-436","data":{"_type":"item","_attr":{"title":{"_type":"text","_count":"1"}}}},{"id":"_OUTPUT","moduleid":"sw-447","data":{"_type":"item","_attr":{"title":{"_type":"text","_count":"1"}}}},{"id":"_OUTPUT","moduleid":"sw-470","data":{"_type":"item","_attr":{"content":{"_type":"text","_count":"3"}}}},{"id":"_OUTPUT","moduleid":"sw-490","data":{"_type":"item","_attr":{"content":{"_type":"text","_count":"2"}}}},{"id":"_OUTPUT","moduleid":"sw-501","data":{"_type":"item","_attr":{"content":{"_type":"blank"},"title":{"_type":"text","_count":"2"}}}}],"wires":[{"id":"_w0","src":{"id":"_OUTPUT","moduleid":"sw-417"},"tgt":{"id":"attrs_1_value","moduleid":"sw-424"}},{"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-424"},"tgt":{"id":"_INPUT","moduleid":"sw-436"}},{"id":"_w2","src":{"id":"_OUTPUT","moduleid":"sw-436"},"tgt":{"id":"_INPUT","moduleid":"sw-447"}},{"id":"_w3","src":{"id":"_OUTPUT","moduleid":"sw-447"},"tgt":{"id":"_INPUT","moduleid":"sw-470"}},{"id":"_w4","src":{"id":"_OUTPUT","moduleid":"sw-470"},"tgt":{"id":"_INPUT","moduleid":"sw-490"}},{"id":"_w5","src":{"id":"_OUTPUT","moduleid":"sw-490"},"tgt":{"id":"_INPUT","moduleid":"sw-501"}},{"id":"_w6","src":{"id":"_OUTPUT","moduleid":"sw-501"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}}]}
+{
+    "layout": [
+        {
+            "id": "sw-417", 
+            "xy": [
+                514, 
+                -122
+            ]
+        }, 
+        {
+            "id": "_OUTPUT", 
+            "xy": [
+                453, 
+                510
+            ]
+        }, 
+        {
+            "id": "sw-424", 
+            "xy": [
+                183, 
+                -76
+            ]
+        }, 
+        {
+            "id": "sw-436", 
+            "xy": [
+                177, 
+                27
+            ]
+        }, 
+        {
+            "id": "sw-447", 
+            "xy": [
+                239, 
+                150
+            ]
+        }, 
+        {
+            "id": "sw-470", 
+            "xy": [
+                203, 
+                291
+            ]
+        }, 
+        {
+            "id": "sw-490", 
+            "xy": [
+                649, 
+                289
+            ]
+        }, 
+        {
+            "id": "sw-501", 
+            "xy": [
+                618, 
+                430
+            ]
+        }
+    ], 
+    "modules": [
+        {
+            "conf": {
+                "debug": {
+                    "type": "text", 
+                    "value": ""
+                }, 
+                "default": {
+                    "type": "text", 
+                    "value": "Here's #: some #hashtags to play #with"
+                }, 
+                "name": {
+                    "type": "text", 
+                    "value": "q"
+                }, 
+                "position": {
+                    "type": "number", 
+                    "value": ""
+                }, 
+                "prompt": {
+                    "type": "text", 
+                    "value": "Status update"
+                }
+            }, 
+            "id": "sw-417", 
+            "type": "textinput"
+        }, 
+        {
+            "conf": {}, 
+            "id": "_OUTPUT", 
+            "type": "output"
+        }, 
+        {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text", 
+                            "value": "title"
+                        }, 
+                        "value": {
+                            "terminal": "attrs_1_value", 
+                            "type": "text"
+                        }
+                    }
+                ]
+            }, 
+            "id": "sw-424", 
+            "type": "itembuilder"
+        }, 
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text", 
+                    "value": "and"
+                }, 
+                "MODE": {
+                    "type": "text", 
+                    "value": "permit"
+                }, 
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text", 
+                            "value": "title"
+                        }, 
+                        "op": {
+                            "type": "text", 
+                            "value": "contains"
+                        }, 
+                        "value": {
+                            "type": "text", 
+                            "value": "#"
+                        }
+                    }
+                ]
+            }, 
+            "id": "sw-436", 
+            "type": "filter"
+        }, 
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text", 
+                            "value": "title"
+                        }, 
+                        "globalmatch": {
+                            "type": "text", 
+                            "value": "1"
+                        }, 
+                        "match": {
+                            "type": "text", 
+                            "value": " [^#]*"
+                        }, 
+                        "replace": {
+                            "type": "text", 
+                            "value": " "
+                        }
+                    }, 
+                    {
+                        "field": {
+                            "type": "text", 
+                            "value": "title"
+                        }, 
+                        "match": {
+                            "type": "text", 
+                            "value": "^[^#]*"
+                        }, 
+                        "replace": {
+                            "type": "text", 
+                            "value": ""
+                        }
+                    }
+                ]
+            }, 
+            "id": "sw-447", 
+            "type": "regex"
+        }, 
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text", 
+                    "value": "all"
+                }, 
+                "assign_to": {
+                    "type": "text", 
+                    "value": "loop:stringtokenizer"
+                }, 
+                "embed": {
+                    "type": "module", 
+                    "value": {
+                        "conf": {
+                            "to-str": {
+                                "type": "text", 
+                                "value": " "
+                            }
+                        }, 
+                        "id": "sw-478", 
+                        "type": "stringtokenizer"
+                    }
+                }, 
+                "emit_part": {
+                    "type": "text", 
+                    "value": "all"
+                }, 
+                "mode": {
+                    "type": "text", 
+                    "value": "EMIT"
+                }, 
+                "with": {
+                    "type": "text", 
+                    "value": "title"
+                }
+            }, 
+            "id": "sw-470", 
+            "type": "loop"
+        }, 
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text", 
+                    "value": "and"
+                }, 
+                "MODE": {
+                    "type": "text", 
+                    "value": "permit"
+                }, 
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text", 
+                            "value": "content"
+                        }, 
+                        "op": {
+                            "type": "text", 
+                            "value": "matches"
+                        }, 
+                        "value": {
+                            "type": "text", 
+                            "value": "#[\\w]"
+                        }
+                    }
+                ]
+            }, 
+            "id": "sw-490", 
+            "type": "filter"
+        }, 
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text", 
+                            "value": "content"
+                        }, 
+                        "newval": {
+                            "type": "text", 
+                            "value": "title"
+                        }, 
+                        "op": {
+                            "type": "text", 
+                            "value": "rename"
+                        }
+                    }
+                ]
+            }, 
+            "id": "sw-501", 
+            "type": "rename"
+        }
+    ], 
+    "terminaldata": [
+        {
+            "data": {
+                "_count": "1", 
+                "_type": "text"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-417"
+        }, 
+        {
+            "data": {
+                "_attr": {
+                    "title": {
+                        "_count": "1", 
+                        "_type": "text"
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-424"
+        }, 
+        {
+            "data": {
+                "_attr": {
+                    "title": {
+                        "_count": "1", 
+                        "_type": "text"
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-436"
+        }, 
+        {
+            "data": {
+                "_attr": {
+                    "title": {
+                        "_count": "1", 
+                        "_type": "text"
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-447"
+        }, 
+        {
+            "data": {
+                "_attr": {
+                    "content": {
+                        "_count": "3", 
+                        "_type": "text"
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-470"
+        }, 
+        {
+            "data": {
+                "_attr": {
+                    "content": {
+                        "_count": "2", 
+                        "_type": "text"
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-490"
+        }, 
+        {
+            "data": {
+                "_attr": {
+                    "content": {
+                        "_type": "blank"
+                    }, 
+                    "title": {
+                        "_count": "2", 
+                        "_type": "text"
+                    }
+                }, 
+                "_type": "item"
+            }, 
+            "id": "_OUTPUT", 
+            "moduleid": "sw-501"
+        }
+    ], 
+    "wires": [
+        {
+            "id": "_w0", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-417"
+            }, 
+            "tgt": {
+                "id": "attrs_1_value", 
+                "moduleid": "sw-424"
+            }
+        }, 
+        {
+            "id": "_w1", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-424"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "sw-436"
+            }
+        }, 
+        {
+            "id": "_w2", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-436"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "sw-447"
+            }
+        }, 
+        {
+            "id": "_w3", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-447"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "sw-470"
+            }
+        }, 
+        {
+            "id": "_w4", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-470"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "sw-490"
+            }
+        }, 
+        {
+            "id": "_w5", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-490"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "sw-501"
+            }
+        }, 
+        {
+            "id": "_w6", 
+            "src": {
+                "id": "_OUTPUT", 
+                "moduleid": "sw-501"
+            }, 
+            "tgt": {
+                "id": "_INPUT", 
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

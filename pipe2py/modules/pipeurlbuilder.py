@@ -3,10 +3,20 @@
 
 import urllib
 from pipe2py import util
+from pipe2py.lib.dotdict import DotDict
 
-def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
+
+def _gen_params(param_defs, item, **kwargs):
+    for p in param_defs:
+        p = DotDict(p)
+        key = util.get_value(p['key'], item, **kwargs)
+        value = util.get_value(p['value'], item, **kwargs)
+        yield (key, value)
+
+
+def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """This source builds a url and yields it forever.
-    
+
     Keyword arguments:
     context -- pipeline context
     _INPUT -- not used
@@ -14,36 +24,29 @@ def pipe_urlbuilder(context, _INPUT, conf, **kwargs):
         BASE -- base
         PATH -- path elements
         PARAM -- query parameters
-    
+
     Yields (_OUTPUT):
     url
     """
+    conf = DotDict(conf)
+    paths = util.listize(conf.get('PATH'))  # use .get() incase 'PATH' isnt set
+    param_defs = util.listize(conf['PARAM'])
+    url = None
 
     for item in _INPUT:
-        #note: we could cache get_value results if item==True
-        url = util.get_value(conf['BASE'], item, **kwargs)
-        if not url.endswith('/'):
-            url += '/'
+        # if _INPUT is pipeforever and not a loop, get values from cache
+        if not url:
+            item = DotDict(item)
+            forever = item.get('forever')
+            url = conf.get('BASE', **kwargs)
+            url += '/' if not url.endswith('/') else url
+            url += "/".join(str(p) for p in paths if p)
+            url = url.rstrip("/")
+            url = util.url_quote(url)  # Ensure url is valid
+            params = dict(_gen_params(param_defs, item, **kwargs))
 
-        if 'PATH' in conf: 
-            path = conf['PATH']
-            if not isinstance(path, list):
-                path = [path]
-            path = [util.get_value(p, item, **kwargs) for p in path if p]
-
-            url += "/".join(str(p) for p in path if p)
-        url = url.rstrip("/")
-
-        #Ensure url is valid
-        url = util.url_quote(url)
-
-        param_defs = conf['PARAM']
-        if not isinstance(param_defs, list):
-            param_defs = [param_defs]
-
-        params = dict([(util.get_value(p['key'], item, **kwargs), util.get_value(p['value'], item, **kwargs)) for p in param_defs if p])
-        if params and params.keys() != [u'']:
-            url += "?" + urllib.urlencode(params)
+            if params and params.keys() != [u'']:
+                url += "?" + urllib.urlencode(params)
 
         yield url
-
+        url = url if forever else None

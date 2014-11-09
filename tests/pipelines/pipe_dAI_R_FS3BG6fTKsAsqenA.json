@@ -1,12 +1,422 @@
-{"layout":[{"id":"sw-138","xy":[204,210]},{"id":"_OUTPUT","xy":[272,609]},{"id":"sw-180","xy":[177,490]},{"id":"sw-286","xy":[226,85]}],
-"modules":[{"type":"loop","id":"sw-138","conf":{"with":{"value":"","type":"text"},
-           "embed":{"value":
-                {"type":"strconcat","id":"sw-298",
-                "conf":{"part":[{"subkey":"headline","type":"text"},
-                                {"value":" (","type":"text"},
-                                {"subkey":"severity","type":"text"},
-                                {"value":")","type":"text"}]}},
-                                "type":"module"},
-                "emit_part":{"type":"text","value":"all"},"mode":{"type":"text","value":"assign"},"assign_part":{"type":"text","value":"all"},"assign_to":{"value":"title","type":"text"}}},
-           {"type":"output","id":"_OUTPUT","conf":{}},
-           {"type":"rename","id":"sw-180","conf":{"RULE":[{"field":{"value":"expires","type":"text"},"op":{"type":"text","value":"rename"},"newval":{"value":"pubDate","type":"text"}}]}},{"type":"fetchdata","id":"sw-286","conf":{"URL":{"value":"http://capnorth.oes.ca.gov/89509.xml","type":"url"},"path":{"value":"info","type":"text"}}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-138","data":{"_type":"item","_attr":{"certainty":{"_count":"1","_type":"text"},"urgency":{"_count":"1","_type":"text"},"senderName":{"_type":"blank"},"area":{"_type":"","_attr":{"areaDesc":{"_count":"1","_type":"text"},"polygon":{"_count":"1","_type":"text"},"geocode":{"_type":"","_attr":{"valueName":{"_count":"1","_type":"text"},"value":{"_count":"1","_type":"text"}}}}},"event":{"_type":"blank"},"description":{"_count":"1","_type":"text"},"parameter":{"_type":"","_attr":{"valueName":{"_count":"1","_type":"text"},"value":{"_count":"1","_type":"text"}}},"category":{"_count":"1","_type":"text"},"title":{"_count":"1","_type":"text"},"severity":{"_count":"1","_type":"text"},"headline":{"_count":"1","_type":"text"},"expires":{"_count":"1","_type":"datetime"}}}},{"id":"_OUTPUT","moduleid":"sw-180","data":{"_type":"item","_attr":{"certainty":{"_count":"1","_type":"text"},"urgency":{"_count":"1","_type":"text"},"senderName":{"_type":"blank"},"area":{"_type":"","_attr":{"areaDesc":{"_count":"1","_type":"text"},"polygon":{"_count":"1","_type":"text"},"geocode":{"_type":"","_attr":{"valueName":{"_count":"1","_type":"text"},"value":{"_count":"1","_type":"text"}}}}},"event":{"_type":"blank"},"description":{"_count":"1","_type":"text"},"parameter":{"_type":"","_attr":{"valueName":{"_count":"1","_type":"text"},"value":{"_count":"1","_type":"text"}}},"category":{"_count":"1","_type":"text"},"title":{"_count":"1","_type":"text"},"severity":{"_count":"1","_type":"text"},"pubDate":{"_count":"1","_type":"datetime"},"headline":{"_count":"1","_type":"text"},"expires":{"_type":"blank"}}}},{"id":"_OUTPUT","moduleid":"sw-286","data":{"_type":"item","_attr":{"certainty":{"_count":"1","_type":"text"},"urgency":{"_count":"1","_type":"text"},"senderName":{"_type":"blank"},"area":{"_type":"","_attr":{"areaDesc":{"_count":"1","_type":"text"},"polygon":{"_count":"1","_type":"text"},"geocode":{"_type":"","_attr":{"valueName":{"_count":"1","_type":"text"},"value":{"_count":"1","_type":"text"}}}}},"event":{"_type":"blank"},"description":{"_count":"1","_type":"text"},"parameter":{"_type":"","_attr":{"valueName":{"_count":"1","_type":"text"},"value":{"_count":"1","_type":"text"}}},"category":{"_count":"1","_type":"text"},"severity":{"_count":"1","_type":"text"},"headline":{"_count":"1","_type":"text"},"expires":{"_count":"1","_type":"datetime"}}}}],"wires":[{"id":"_w0","src":{"id":"_OUTPUT","moduleid":"sw-138"},"tgt":{"id":"_INPUT","moduleid":"sw-180"}},{"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-180"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}},{"id":"_w2","src":{"id":"_OUTPUT","moduleid":"sw-286"},"tgt":{"id":"_INPUT","moduleid":"sw-138"}}]}
+{
+    "layout": [
+        {
+            "id": "sw-138",
+            "xy": [
+                204,
+                210
+            ]
+        },
+        {
+            "id": "_OUTPUT",
+            "xy": [
+                272,
+                609
+            ]
+        },
+        {
+            "id": "sw-180",
+            "xy": [
+                177,
+                490
+            ]
+        },
+        {
+            "id": "sw-286",
+            "xy": [
+                226,
+                85
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "conf": {
+                "assign_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign_to": {
+                    "type": "text",
+                    "value": "title"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "part": [
+                                {
+                                    "subkey": "headline",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": " ("
+                                },
+                                {
+                                    "subkey": "severity",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": ")"
+                                }
+                            ]
+                        },
+                        "id": "sw-298",
+                        "type": "strconcat"
+                    }
+                },
+                "emit_part": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "mode": {
+                    "type": "text",
+                    "value": "assign"
+                },
+                "with": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-138",
+            "type": "loop"
+        },
+        {
+            "conf": {},
+            "id": "_OUTPUT",
+            "type": "output"
+        },
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "expires"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "pubDate"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "rename"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-180",
+            "type": "rename"
+        },
+        {
+            "conf": {
+                "URL": {
+                    "type": "url",
+                    "value": "file://data/capnorth.oes.ca.gov_89509.xml"
+                },
+                "path": {
+                    "type": "text",
+                    "value": "info"
+                }
+            },
+            "id": "sw-286",
+            "type": "fetchdata"
+        }
+    ],
+    "terminaldata": [
+        {
+            "data": {
+                "_attr": {
+                    "area": {
+                        "_attr": {
+                            "areaDesc": {
+                                "_count": "1",
+                                "_type": "text"
+                            },
+                            "geocode": {
+                                "_attr": {
+                                    "value": {
+                                        "_count": "1",
+                                        "_type": "text"
+                                    },
+                                    "valueName": {
+                                        "_count": "1",
+                                        "_type": "text"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "polygon": {
+                                "_count": "1",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "category": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "certainty": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "description": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "event": {
+                        "_type": "blank"
+                    },
+                    "expires": {
+                        "_count": "1",
+                        "_type": "datetime"
+                    },
+                    "headline": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "parameter": {
+                        "_attr": {
+                            "value": {
+                                "_count": "1",
+                                "_type": "text"
+                            },
+                            "valueName": {
+                                "_count": "1",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "senderName": {
+                        "_type": "blank"
+                    },
+                    "severity": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "urgency": {
+                        "_count": "1",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-138"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "area": {
+                        "_attr": {
+                            "areaDesc": {
+                                "_count": "1",
+                                "_type": "text"
+                            },
+                            "geocode": {
+                                "_attr": {
+                                    "value": {
+                                        "_count": "1",
+                                        "_type": "text"
+                                    },
+                                    "valueName": {
+                                        "_count": "1",
+                                        "_type": "text"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "polygon": {
+                                "_count": "1",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "category": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "certainty": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "description": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "event": {
+                        "_type": "blank"
+                    },
+                    "expires": {
+                        "_type": "blank"
+                    },
+                    "headline": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "parameter": {
+                        "_attr": {
+                            "value": {
+                                "_count": "1",
+                                "_type": "text"
+                            },
+                            "valueName": {
+                                "_count": "1",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "pubDate": {
+                        "_count": "1",
+                        "_type": "datetime"
+                    },
+                    "senderName": {
+                        "_type": "blank"
+                    },
+                    "severity": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "urgency": {
+                        "_count": "1",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-180"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "area": {
+                        "_attr": {
+                            "areaDesc": {
+                                "_count": "1",
+                                "_type": "text"
+                            },
+                            "geocode": {
+                                "_attr": {
+                                    "value": {
+                                        "_count": "1",
+                                        "_type": "text"
+                                    },
+                                    "valueName": {
+                                        "_count": "1",
+                                        "_type": "text"
+                                    }
+                                },
+                                "_type": ""
+                            },
+                            "polygon": {
+                                "_count": "1",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "category": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "certainty": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "description": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "event": {
+                        "_type": "blank"
+                    },
+                    "expires": {
+                        "_count": "1",
+                        "_type": "datetime"
+                    },
+                    "headline": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "parameter": {
+                        "_attr": {
+                            "value": {
+                                "_count": "1",
+                                "_type": "text"
+                            },
+                            "valueName": {
+                                "_count": "1",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "senderName": {
+                        "_type": "blank"
+                    },
+                    "severity": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "urgency": {
+                        "_count": "1",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-286"
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w0",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-138"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-180"
+            }
+        },
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-180"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-286"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-138"
+            }
+        }
+    ]
+}

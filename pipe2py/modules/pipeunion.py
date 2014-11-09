@@ -3,7 +3,8 @@
 
 from pipe2py import util
 
-def pipe_union(context, _INPUT, **kwargs):
+
+def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator merges up to 5 source together.
 
     Keyword arguments:
@@ -15,20 +16,17 @@ def pipe_union(context, _INPUT, **kwargs):
     Yields (_OUTPUT):
     union of all source items
     """
-
-    #TODO the multiple sources should be pulled in parallel
-    # check David Beazely for suggestions (co-routines with queues?)
-    # or maybe use multiprocessing and Queues (perhaps over multiple servers too)
-    #Single thread and sequential pulling will do for now...
-
     for item in _INPUT:
-        #this is being fed forever, i.e. not a real source so just use _OTHERs
-        if item == True:
+        # this is being fed forever, i.e. not a real source so just use _OTHERs
+        if item.get('forever'):
             break
 
         yield item
 
-    for other in kwargs:
-        if other.startswith('_OTHER'):
-            for item in kwargs[other]:
-                yield item
+    # todo: can the multiple sources should be pulled over multiple servers?
+    sources = (
+        items for src, items in kwargs.items() if src.startswith('_OTHER')
+    )
+
+    for item in util.multiplex(sources):
+        yield item

@@ -2,11 +2,43 @@
 # Copyright (C) 2011 Gerrit Riessen
 # This code is licensed under the GNU Public License.
 
-import urllib2
-import re
+from urllib2 import urlopen
 from pipe2py import util
+from pipe2py.lib.dotdict import DotDict
 
-def pipe_fetchpage(context, _INPUT, conf, **kwargs):
+
+def _parse_content(content, conf, **kwargs):
+    from_delimiter = conf.get("from", **kwargs)
+    to_delimiter = conf.get("to", **kwargs)
+
+    # determine from location, i.e. from where to start reading
+    # content
+    from_location = 0
+
+    if from_delimiter != "":
+        from_location = content.find(from_delimiter)
+        # Yahoo! does not strip off the from_delimiter.
+        # if from_location > 0:
+        # from_location += len(from_delimiter)
+
+    # determine to location, i.e. where to stop reading content
+    to_location = 0
+
+    if to_delimiter != "":
+        to_location = content.find(to_delimiter, from_location)
+
+    # reduce the content depended on the to/from locations
+    if from_location > 0 and to_location > 0:
+        parsed = content[from_location:to_location]
+    elif from_location > 0:
+        parsed = content[from_location:]
+    elif to_location > 0:
+        parsed = content[:to_location]
+
+    return parsed
+
+
+def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     """Fetch Page module
 
     _INPUT -- not used since this does not have inputs.
@@ -26,84 +58,45 @@ def pipe_fetchpage(context, _INPUT, conf, **kwargs):
           (not documented but happens)
         - items should be cleaned, i.e. stripped of HTML tags
     """
-    urls = conf['URL']
-    if not isinstance(urls, list):
-        urls = [urls]
+    conf = DotDict(conf)
+    split_token = conf.get('token', **kwargs)
+    urls = util.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(item_url, item, **kwargs)
-            if context.verbose:
-                print "FetchPage: Preparing to download:",url
+            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = util.get_abspath(url)
 
-            try:
-                request = urllib2.Request(url)
-                request.add_header('User-Agent','Yahoo Pipes 1.0')
-                request = urllib2.build_opener().open(request)
-                content = unicode(request.read(),
-                                  request.headers['content-type'].split('charset=')[-1])
+            if not url:
+                continue
 
-                # TODO it seems that Yahoo! converts relative links to absolute
-                # TODO this needs to be done on the content but seems to be a non-trival
-                # TODO task python?
+            f = urlopen(url)
 
-                if context.verbose:
-                    print "............FetchPage: content ................."
-                    print content.encode("utf-8")
-                    print "............FetchPage: EOF     ................."
+            # TODO: it seems that Yahoo! converts relative links to
+            # absolute. This needs to be done on the content but seems to
+            # be a non-trival task python?
+            content = unicode(f.read(), 'utf-8')
 
-                from_delimiter = util.get_value(conf["from"], _INPUT, **kwargs)
-                to_delimiter = util.get_value(conf["to"], _INPUT, **kwargs)
-                split_token = util.get_value(conf["token"], _INPUT, **kwargs)
+            if context and context.verbose:
+                print '............Content .................'
+                print content
+                print '...............EOF...................'
 
-                # determine from location, i.e. from where to start reading content
-                from_location = 0
-                if from_delimiter != "":
-                    from_location = content.find(from_delimiter)
-                    # Yahoo! does not strip off the from_delimiter.
-                    #if from_location > 0:
-                    #    from_location += len(from_delimiter)
+            parsed = _parse_content(content, conf, **kwargs)
+            items = parsed.split(split_token) if split_token else [parsed]
 
-                # determine to location, i.e. where to stop reading content
-                to_location = 0
-                if to_delimiter != "":
-                    to_location = content.find(to_delimiter, from_location)
+            if context and context.verbose:
+                print "FetchPage: found count items:", len(items)
 
-                # reduce the content depended on the to/from locations
-                if from_location > 0 and to_location > 0:
-                    content = content[from_location:to_location]
-                elif from_location > 0:
-                    content = content[from_location:]
-                elif to_location > 0:
-                    content = content[:to_location]
+            for i in items:
+                if context and context.verbose:
+                    print "--------------item data --------------------"
+                    print i
+                    print "--------------EOF item data ----------------"
 
-                # determine items depended on the split_token
-                items = []
-                if split_token != "":
-                    items = content.split(split_token)
-                else:
-                    items = [content]
+                yield {"content": i}
 
-                if context.verbose:
-                    print "FetchPage: found count items:",len(items)
-
-                for i in items:
-                    if context.verbose:
-                        print "--------------item data --------------------"
-                        print i
-                        print "--------------EOF item data ----------------"
-                    yield { "content" : i }
-
-            except Exception, e:
-                if context.verbose:
-                    print "FetchPage: failed to retrieve from:", url
-
-                    print "----------------- FetchPage -----------------"
-                    import traceback
-                    traceback.print_exc()
-                    print "----------------- FetchPage -----------------"
-                raise
-
-        if item == True: #i.e. this is being fed forever, i.e. not in a loop, so we just yield our item once
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
             break
-

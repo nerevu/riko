@@ -2,9 +2,46 @@
 # vim: sw=4:ts=4:expandtab
 
 from pipe2py import util
+from pipe2py.lib.dotdict import DotDict
 
 
-def pipe_rename(context, _INPUT, conf, **kwargs):
+def _gen_rules(rule_defs, **kwargs):
+    rule_defs = util.listize(rule_defs)
+
+    # todo: use subkey?
+    for rule_def in rule_defs:
+        rule_def = DotDict(rule_def)
+        op = rule_def.get('op', **kwargs)
+        newfield = {'subkey': rule_def.get('field')}
+        newval = rule_def.get('newval', **kwargs)
+        yield (op, newfield, newval)
+
+
+def _convert_item(rules, item, **kwargs):
+    for rule in rules:
+        value = util.get_value(rule[1], item, **kwargs)
+
+        try:
+            # forces an exception if any part is not found
+            item.set(rule[2], value)
+        except AttributeError:
+            # ignore if the source doesn't have our field
+            # todo: issue a warning if debugging?
+            pass
+
+        if rule[0] == 'rename':
+            try:
+                item.delete(rule[1]['subkey'])
+            # TypeError catches pseudo subkeys, e.g. summary.content
+            except (KeyError, TypeError):
+                # ignore if the target doesn't have our field
+                # todo: issue a warning if debugging?
+                pass
+
+    return item
+
+
+def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator renames or copies fields in the input source.
 
     Keyword arguments:
@@ -17,32 +54,8 @@ def pipe_rename(context, _INPUT, conf, **kwargs):
     Yields (_OUTPUT):
     source items after copying/renaming
     """
-    rules = []
-
-    rule_defs = conf['RULE']
-    if not isinstance(rule_defs, list):
-        rule_defs = [rule_defs]
-
-    for rule in rule_defs:
-        newval = util.get_value(rule['newval'], None, **kwargs) #todo use subkey?
-        newfield = rule['field']
-        #trick the get_value in the loop to mapping value onto an item key (rather than taking it literally, i.e. make it a LHS reference, not a RHS value)
-        newfield['subkey'] = newfield['value']
-        del newfield['value']
-
-        rules.append((rule['op']['value'], newfield, newval))
+    conf = DotDict(conf)
+    rules = list(_gen_rules(conf['RULE'], **kwargs))
 
     for item in _INPUT:
-        for rule in rules:
-            try:
-                value = util.get_value(rule[1], item, **kwargs) #forces an exception if any part is not found
-                util.set_value(item, rule[2], value)
-                if rule[0] == 'rename':
-                    try:
-                        util.del_value(item, rule[1]['subkey'])
-                    except (KeyError, TypeError):  #TypeError catches pseudo subkeys, e.g. summary.content
-                        pass  #ignore if the target doesn't have our field (todo: issue a warning if debugging?)
-            except AttributeError:
-                pass  #ignore if the source doesn't have our field (todo: issue a warning if debugging?)
-        yield item
-
+        yield _convert_item(rules, DotDict(item), **kwargs)

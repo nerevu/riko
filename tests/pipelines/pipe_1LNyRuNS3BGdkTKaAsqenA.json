@@ -1,1 +1,445 @@
-{"layout":[{"id":"sw-85","xy":[269,274]},{"id":"_OUTPUT","xy":[317,786]},{"id":"sw-108","xy":[177,454]},{"id":"sw-116","xy":[312,85]},{"id":"sw-120","xy":[200,643]},{"id":"sw-131","xy":[446,454]}],"modules":[{"type":"urlbuilder","id":"sw-85","conf":{"BASE":{"value":"http://finance.yahoo.com/rss","type":"text"},"PATH":{"value":"headline","type":"text"},"PARAM":[{"key":{"value":"s","type":"text"},"value":{"type":"text","terminal":"PARAM_1_value"}}]}},{"type":"output","id":"_OUTPUT","conf":{}},{"type":"fetch","id":"sw-108","conf":{"URL":{"type":"url","terminal":"1_URL"}}},{"type":"textinput","id":"sw-116","conf":{"name":{"value":"textinput1","type":"text"},"prompt":{"value":"Stock Symbol:","type":"text"},"position":{"value":"","type":"number"},"default":{"value":"yhoo","type":"text"},"debug":{"value":"yhoo","type":"text"}}},{"type":"filter","id":"sw-120","conf":{"MODE":{"type":"text","value":"permit"},"COMBINE":{"type":"text","value":"and"},"RULE":[{"field":{"value":"description","type":"text"},"op":{"type":"text","value":"contains"},"value":{"type":"text","terminal":"RULE_1_value"}}]}},{"type":"textinput","id":"sw-131","conf":{"name":{"value":"textinput2","type":"text"},"prompt":{"value":"Search Term:","type":"text"},"position":{"value":"","type":"number"},"default":{"value":"","type":"text"},"debug":{"value":"","type":"text"}}}],"terminaldata":[{"id":"_OUTPUT","moduleid":"sw-85","data":{"_count":"1","_type":"url"}},{"id":"_OUTPUT","moduleid":"sw-108","data":{"_type":"item","_attr":{"link":{"_count":"9","_type":"url"},"y:title":{"_count":"9","_type":"text"},"y:id":{"_type":"","_attr":{"value":{"_count":"9","_type":"text"},"permalink":{"_count":"9","_type":"text"}}},"title":{"_count":"9","_type":"text"},"guid":{"_type":"","_attr":{"isPermaLink":{"_count":"9","_type":"text"},"content":{"_count":"9","_type":"text"}}},"description":{"_count":"3","_type":"blank"},"pubDate":{"_count":"9","_type":"datetime"},"y:published":{"_type":"datetime","_attr":{"hour":{"_count":"9","_type":"number"},"timezone":{"_count":"9","_type":"text"},"month":{"_count":"9","_type":"number"},"second":{"_count":"9","_type":"number"},"minute":{"_count":"9","_type":"number"},"utime":{"_count":"9","_type":"number"},"day_of_week":{"_count":"9","_type":"number"},"day":{"_count":"9","_type":"number"},"year":{"_count":"9","_type":"number"}}}}}},{"id":"_OUTPUT","moduleid":"sw-116","data":{"_count":"1","_type":"text"}},{"id":"_OUTPUT","moduleid":"sw-120","data":{"_type":"item","_attr":{"link":{"_count":"9","_type":"url"},"y:title":{"_count":"9","_type":"text"},"y:id":{"_type":"","_attr":{"value":{"_count":"9","_type":"text"},"permalink":{"_count":"9","_type":"text"}}},"title":{"_count":"9","_type":"text"},"guid":{"_type":"","_attr":{"isPermaLink":{"_count":"9","_type":"text"},"content":{"_count":"9","_type":"text"}}},"description":{"_count":"1","_type":"blank"},"pubDate":{"_count":"9","_type":"datetime"},"y:published":{"_type":"datetime","_attr":{"hour":{"_count":"9","_type":"number"},"timezone":{"_count":"9","_type":"text"},"month":{"_count":"9","_type":"number"},"second":{"_count":"9","_type":"number"},"minute":{"_count":"9","_type":"number"},"utime":{"_count":"9","_type":"number"},"day_of_week":{"_count":"9","_type":"number"},"day":{"_count":"9","_type":"number"},"year":{"_count":"9","_type":"number"}}}}}},{"id":"_OUTPUT","moduleid":"sw-131","data":{"_type":"blank"}}],"wires":[{"id":"_w0","src":{"id":"_OUTPUT","moduleid":"sw-85"},"tgt":{"id":"1_URL","moduleid":"sw-108"}},{"id":"_w1","src":{"id":"_OUTPUT","moduleid":"sw-108"},"tgt":{"id":"_INPUT","moduleid":"sw-120"}},{"id":"_w2","src":{"id":"_OUTPUT","moduleid":"sw-116"},"tgt":{"id":"PARAM_1_value","moduleid":"sw-85"}},{"id":"_w3","src":{"id":"_OUTPUT","moduleid":"sw-120"},"tgt":{"id":"_INPUT","moduleid":"_OUTPUT"}},{"id":"_w4","src":{"id":"_OUTPUT","moduleid":"sw-131"},"tgt":{"id":"RULE_1_value","moduleid":"sw-120"}}]}
+{
+    "layout": [
+        {
+            "id": "sw-85",
+            "xy": [
+                269,
+                274
+            ]
+        },
+        {
+            "id": "_OUTPUT",
+            "xy": [
+                317,
+                786
+            ]
+        },
+        {
+            "id": "sw-108",
+            "xy": [
+                177,
+                454
+            ]
+        },
+        {
+            "id": "sw-116",
+            "xy": [
+                312,
+                85
+            ]
+        },
+        {
+            "id": "sw-120",
+            "xy": [
+                200,
+                643
+            ]
+        },
+        {
+            "id": "sw-131",
+            "xy": [
+                446,
+                454
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "conf": {
+                "BASE": {
+                    "type": "text",
+                    "value": "http://finance.yahoo.com/rss"
+                },
+                "PARAM": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "s"
+                        },
+                        "value": {
+                            "terminal": "PARAM_1_value",
+                            "type": "text"
+                        }
+                    }
+                ],
+                "PATH": {
+                    "type": "text",
+                    "value": "headline"
+                }
+            },
+            "id": "sw-85",
+            "type": "urlbuilder"
+        },
+        {
+            "conf": {},
+            "id": "_OUTPUT",
+            "type": "output"
+        },
+        {
+            "conf": {
+                "URL": {
+                    "terminal": "1_URL",
+                    "type": "url"
+                }
+            },
+            "id": "sw-108",
+            "type": "fetch"
+        },
+        {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": "yhoo"
+                },
+                "default": {
+                    "type": "text",
+                    "value": "yhoo"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "textinput1"
+                },
+                "position": {
+                    "type": "number",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Stock Symbol:"
+                }
+            },
+            "id": "sw-116",
+            "type": "textinput"
+        },
+        {
+            "conf": {
+                "COMBINE": {
+                    "type": "text",
+                    "value": "and"
+                },
+                "MODE": {
+                    "type": "text",
+                    "value": "permit"
+                },
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        },
+                        "value": {
+                            "terminal": "RULE_1_value",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-120",
+            "type": "filter"
+        },
+        {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": ""
+                },
+                "default": {
+                    "type": "text",
+                    "value": ""
+                },
+                "name": {
+                    "type": "text",
+                    "value": "textinput2"
+                },
+                "position": {
+                    "type": "number",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Search Term:"
+                }
+            },
+            "id": "sw-131",
+            "type": "textinput"
+        }
+    ],
+    "terminaldata": [
+        {
+            "data": {
+                "_count": "1",
+                "_type": "url"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-85"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "description": {
+                        "_count": "3",
+                        "_type": "blank"
+                    },
+                    "guid": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "isPermaLink": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "pubDate": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:id": {
+                        "_attr": {
+                            "permalink": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "value": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "y:title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-108"
+        },
+        {
+            "data": {
+                "_count": "1",
+                "_type": "text"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-116"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "description": {
+                        "_count": "1",
+                        "_type": "blank"
+                    },
+                    "guid": {
+                        "_attr": {
+                            "content": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "isPermaLink": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "link": {
+                        "_count": "9",
+                        "_type": "url"
+                    },
+                    "pubDate": {
+                        "_count": "9",
+                        "_type": "datetime"
+                    },
+                    "title": {
+                        "_count": "9",
+                        "_type": "text"
+                    },
+                    "y:id": {
+                        "_attr": {
+                            "permalink": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "value": {
+                                "_count": "9",
+                                "_type": "text"
+                            }
+                        },
+                        "_type": ""
+                    },
+                    "y:published": {
+                        "_attr": {
+                            "day": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "day_of_week": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "hour": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "minute": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "month": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "second": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "timezone": {
+                                "_count": "9",
+                                "_type": "text"
+                            },
+                            "utime": {
+                                "_count": "9",
+                                "_type": "number"
+                            },
+                            "year": {
+                                "_count": "9",
+                                "_type": "number"
+                            }
+                        },
+                        "_type": "datetime"
+                    },
+                    "y:title": {
+                        "_count": "9",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-120"
+        },
+        {
+            "data": {
+                "_type": "blank"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-131"
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w0",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-85"
+            },
+            "tgt": {
+                "id": "1_URL",
+                "moduleid": "sw-108"
+            }
+        },
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-108"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-120"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-116"
+            },
+            "tgt": {
+                "id": "PARAM_1_value",
+                "moduleid": "sw-85"
+            }
+        },
+        {
+            "id": "_w3",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-120"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        },
+        {
+            "id": "_w4",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-131"
+            },
+            "tgt": {
+                "id": "RULE_1_value",
+                "moduleid": "sw-120"
+            }
+        }
+    ]
+}
