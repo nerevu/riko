@@ -4,9 +4,9 @@
     pipe2py.modules.piperegex
     ~~~~~~~~~~~~~~
 
-    Provides methods for modifing fields in a feed using regular
+    Provides methods for modifying fields in a feed using regular
     expressions, a powerful type of pattern matching.
-    Think of it as search-and-replace on steriods.
+    Think of it as search-and-replace on steroids.
     You can define multiple Regex rules.
     Each has the general format: "In [field] replace [regex pattern] with
     [text]".

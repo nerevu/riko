@@ -191,9 +191,7 @@ def gen_entries(parsed):
             'name')
         entry['y:title'] = entry.get('title')
         entry['y:id'] = entry.get('id')
-        # TODO: more?
         yield entry
-
 
 def gen_items(item, yield_if_none=False):
     if item and hasattr(item, 'append'):
