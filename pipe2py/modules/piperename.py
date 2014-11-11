@@ -32,15 +32,25 @@ def _convert_item(rules, item, **kwargs):
 def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     """This operator renames or copies fields in the input source.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
-        RULE -- rules - each rule comprising (op, field, newval)
+    context : pipe2py.Context object
+    _INPUT : source generator of dicts
+    conf : dict
+        {
+            'RULE': [
+                {
+                    'op': {'value': 'rename or copy'},
+                    'field': {'value': 'old field'},
+                    'newval': {'value': 'new field'}
+                }
+            ]
+        }
 
-    Yields (_OUTPUT):
-    source items after copying/renaming
+    kwargs : other inputs, e.g., to feed terminals for rule values
+
+    Yields
+    ------
+    _OUTPUT : source pipe after copying/renaming
+
     """
     conf = DotDict(conf)
     fields = ['field', 'op', 'newval']
