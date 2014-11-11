@@ -21,6 +21,7 @@ from itertools import (
 from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
+from collections import defaultdict
 from pipe2py import Context
 from pipe2py.lib.log import Logger
 from mezmorize import Cache
@@ -189,10 +190,10 @@ def finitize(_INPUT):
         yield i
 
 
-def get_value(field, item=None, force=False, **kwargs):
+def get_value(field, item=None, force=False, **opts):
     item = item or {}
 
-    OPS = {
+    switch = {
         'number': {'default': 0.0, 'func': float},
         'integer': {'default': 0, 'func': int},
         'text': {'default': '', 'func': lambda i: encode(i)},
@@ -201,9 +202,13 @@ def get_value(field, item=None, force=False, **kwargs):
     }
 
     try:
-        kwargs.update(OPS.get(field.get('type', 'text'), {}))
+        defaults = switch.get(field.get('type', 'text'), {})
     except AttributeError:
-        kwargs.update(OPS['text'])
+        defaults = switch['text']
+
+    kwargs = defaultdict(str, **defaults)
+    kwargs.update(opts)
+    default = kwargs['default']
 
     try:
         value = item.get(field['subkey'], **kwargs)
@@ -213,15 +218,15 @@ def get_value(field, item=None, force=False, **kwargs):
         elif force:
             value = field
         elif field:
-            value = field.get(None, **kwargs)
+            value = field.get(**kwargs)
         else:
-            value = kwargs.get('default')
+            value = default
     except (TypeError, AttributeError):
         # field is already set to a value so use it or the default
-        value = field or kwargs.get('default')
+        value = field or default
     except (ValueError):
         # error converting subkey value with OPS['func'] so use the default
-        value = kwargs.get('default')
+        value = default
 
     return value
 
