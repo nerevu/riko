@@ -13,7 +13,8 @@ import re
 
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
-from itertools import imap
+from functools import partial
+from itertools import imap, repeat, ifilter
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -33,22 +34,30 @@ SWITCH = {
 }
 
 
-def _gen_rulepass(rules, item):
-    for rule in rules:
-        if not rule.value:
-            yield True
-            continue
+def parse_result(results, item, _pass, permit=True):
+    if _pass:
+        _output = item
+    elif not ((results and permit) or (not results and not permit)):
+        _output = None
+    else:
+        _output = item
 
+    return _output
+
+
+def parse_rule(rule, item, **kwargs):
+    if not rule.value:
+        result = True
+    else:
         try:
             x = Decimal(rule.value)
-            y = Decimal(item.get(rule.field))
+            y = Decimal(item.get(rule.field, **kwargs))
         except InvalidOperation:
             x = rule.value
             y = item.get(rule.field)
 
         if y is None:
-            yield False
-            continue
+            result = False
         elif isinstance(y, basestring):
             try:
                 y = dt.strptime(y, utils.DATE_FORMAT).timetuple()
@@ -56,9 +65,16 @@ def _gen_rulepass(rules, item):
                 pass
 
         try:
-            yield SWITCH.get(rule.op)(x, y)
+            result = SWITCH.get(rule.op)(x, y)
         except (UnicodeDecodeError, AttributeError):
-            yield False
+            result = False
+
+    return result
+
+
+def parse_rules(rules, item, _pass, **kwargs):
+    results = imap(partial(parse_rule, **kwargs), rules, repeat(item))
+    return (results, item, _pass)
 
 
 def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
@@ -83,9 +99,9 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
 
     kwargs : other inputs, e.g., to feed terminals for rule values
 
-    Yields
-    ------
-    _OUTPUT : items
+    Returns
+    -------
+    _OUTPUT : generator of filtered items
 
     Examples
     --------
@@ -112,20 +128,23 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     []
     """
     conf = DotDict(conf)
-    mode = conf.get('MODE', **kwargs)
+    test = kwargs.pop('pass_if', None)
+    permit = conf.get('MODE', **kwargs) == 'permit'
     combine = conf.get('COMBINE', **kwargs)
+
+    if not combine in ['and', 'or']:
+        raise Exception(
+            "Invalid combine: %s. (Expected 'and' or 'or')" % combine)
+
     rule_defs = imap(DotDict, utils.listize(conf['RULE']))
+    get_pass = partial(utils.get_pass, test=test)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
+    funcs = [COMBINE_BOOLEAN[combine], utils.passthrough, utils.passthrough]
 
-    for item in _INPUT:
-        item = DotDict(item)
-        rules = (utils.parse_conf(r, item, **kwargs) for r in rule_defs)
-
-        if combine in COMBINE_BOOLEAN:
-            generated_rules = _gen_rulepass(rules, DotDict(item))
-            res = COMBINE_BOOLEAN[combine](generated_rules)
-        else:
-            raise Exception(
-                "Invalid combine: %s. (Expected 'and' or 'or')" % combine)
-
-        if (res and mode == 'permit') or (not res and mode == 'block'):
-            yield item
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.split_input(inputs, get_rules, utils.passthrough, get_pass)
+    outputs = utils.get_output(splits, partial(parse_rules, **kwargs))
+    parsed = utils.parse_splits(outputs, *funcs)
+    _OUTPUT = utils.get_output(parsed, partial(parse_result, permit=permit))
+    return _OUTPUT

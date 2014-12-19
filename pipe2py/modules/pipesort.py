@@ -8,45 +8,33 @@
 """
 
 from operator import itemgetter
+from functools import partial
+from itertools import imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def _multikeysort(items, order):
-    """Sorts a items by order
+def get_comparer(x):
+    if x.startswith('-'):
+        result = (itemgetter(x[1:].strip()), -1)
+    else:
+        result = (itemgetter(x.strip()), 1)
 
-       (items in order preceded with a '-' will sort descending)
-    """
-    comparers = [
-        (
-            (itemgetter(x[1:].strip()), -1) if x.startswith('-') else (
-                itemgetter(x.strip()), 1
-            )
-        ) for x in order
-    ]
-
-    def comparer(left, right):
-        for fn, mult in comparers:
-            try:
-                result = cmp(fn(left), fn(right))
-            except (KeyError, TypeError):
-                # todo: perhaps care more if only one side has the missing key
-                # todo: handle bool better?
-                pass
-            else:
-                return mult * result
-
-        return 0
-
-    return sorted(items, cmp=comparer)
+    return result
 
 
-def _gen_order(keys, **kwargs):
-    for key in keys:
-        key = DotDict(key)
-        field = key.get('field', **kwargs)
-        sort_dir = key.get('dir', **kwargs)
-        yield '%s%s' % (sort_dir == 'DESC' and '-' or '', field)
+def multikeysort(left, right, comparers=None):
+    for func, multiplier in comparers:
+        try:
+            result = cmp(func(left), func(right))
+        except (KeyError, TypeError):
+            # todo: perhaps care more if only one side has the missing key
+            # todo: handle bool better?
+            pass
+        else:
+            return multiplier * result
+
+    return 0
 
 
 def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):
@@ -67,12 +55,18 @@ def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):
         ]
     }
 
-    Yields
-    ------
-    _OUTPUT : item
+    Returns
+    -------
+    _OUTPUT : generator of sorted items
     """
-    keys = utils.listize(conf['KEY'])
-    order = _gen_order(keys, **kwargs)
-
-    for item in _multikeysort(_INPUT, order):
-        yield item
+    conf = DotDict(conf)
+    test = kwargs.pop('pass_if', None)
+    _pass = utils.get_pass({}, test)
+    key_defs = imap(DotDict, utils.listize(conf['KEY']))
+    keys = imap(utils.parse_conf, key_defs)
+    parse_key = lambda k: '%s%s' % ('-' if k.dir == 'DESC' else '', k.field)
+    order = imap(parse_key, keys)
+    comparers = map(get_comparer, order)
+    cmp_func = partial(multikeysort, comparers=comparers)
+    _OUTPUT = _INPUT if _pass else iter(sorted(_INPUT, cmp=cmp_func))
+    return _OUTPUT

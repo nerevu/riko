@@ -8,12 +8,15 @@
 """
 
 import re
-from itertools import imap
+from functools import partial
+from itertools import imap, repeat
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-
+def parse_result(rules, word, _pass):
+    func = lambda word, rule: re.sub(rule.match, rule.replace, word)
+    return word if _pass else reduce(func, rules, word)
 
 
 def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
@@ -33,20 +36,22 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
         ]
     }
 
-    Yields
-    ------
-    _OUTPUT : replaced strings
+    Returns
+    -------
+    _OUTPUT : generator of replaced strings
     """
     conf = DotDict(conf)
+    test = kwargs.pop('pass_if', None)
     loop_with = kwargs.pop('with', None)
-    rule_defs = imap(DotDict, utils.listize(conf['RULE']))
+    rule_defs = map(DotDict, utils.listize(conf['RULE']))
+    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
+    get_pass = partial(utils.get_pass, test=test)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
+    funcs1 = [utils.convert_rules, utils.get_word, utils.passthrough]
 
-    func = lambda word, rule: re.sub(rule.match, rule.replace, word)
-
-    for item in _INPUT:
-        _input = DotDict(item)
-        _with = item.get(loop_with, **kwargs) if loop_with else item
-        word = utils.get_word(_with)
-        rules = (utils.parse_conf(r, _input, **kwargs) for r in rule_defs)
-        new_rules = utils.convert_rules(rules)
-        yield reduce(func, new_rules, word)
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.split_input(inputs, get_rules, get_with, get_pass)
+    parsed = utils.parse_splits(splits, *funcs1)
+    _OUTPUT = utils.get_output(parsed, parse_result)
+    return _OUTPUT

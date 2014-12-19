@@ -7,23 +7,27 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Rename
 """
 
-from itertools import imap
+from functools import partial
+from itertools import imap, repeat
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def _convert_item(rules, item, **kwargs):
-    for rule in rules:
-        try:
-            item.set(rule.newval, item.get(rule.field, **kwargs))
-        except (IndexError):
-            # Catch error when 'newval' is blank (equivalent to deleting field)
-            pass
+def func(item, rule, **kwargs):
+    try:
+        item.set(rule.newval, item.get(rule.field, **kwargs))
+    except (IndexError):
+        # Catch error when 'newval' is blank (equivalent to deleting field)
+        pass
 
-        if rule.op == 'rename':
-            item.delete(rule.field)
+    if rule.op == 'rename':
+        item.delete(rule.field)
 
     return item
+
+
+def parse_result(rules, item, _pass, **kwargs):
+    return item if _pass else reduce(partial(func, **kwargs), rules, item)
 
 
 def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
@@ -46,14 +50,19 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
 
     kwargs : other inputs, e.g., to feed terminals for rule values
 
-    Yields
-    ------
-    _OUTPUT : items
+    Returns
+    -------
+    _OUTPUT : generator of items
 
     """
     conf = DotDict(conf)
+    test = kwargs.pop('pass_if', None)
     rule_defs = imap(DotDict, utils.listize(conf['RULE']))
+    get_pass = partial(utils.get_pass, test=test)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
 
-    for item in _INPUT:
-        rules = (utils.parse_conf(r, item, **kwargs) for r in rule_defs)
-        yield _convert_item(rules, DotDict(item), **kwargs)
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.split_input(inputs, get_rules, utils.passthrough, get_pass)
+    _OUTPUT = utils.get_output(splits, partial(parse_result, **kwargs))
+    return _OUTPUT

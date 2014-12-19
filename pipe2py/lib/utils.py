@@ -15,10 +15,10 @@ import string
 import re
 from collections import namedtuple
 from datetime import datetime
+from itertools import groupby, chain, izip, tee
 from urllib2 import quote
 from os import path as p
 from pipe2py import Context
-from itertools import groupby, chain
 
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
@@ -146,10 +146,29 @@ def get_value(field, item, **kwargs):
     return value
 
 
-def parse_conf(conf, item, **kwargs):
+def split_input(_INPUT, *funcs):
+    for items in izip(*tee(_INPUT, len(funcs))):
+        yield (func(item) for item, func in izip(items, funcs))
+
+
+def parse_conf(conf=None, item=None, **kwargs):
     keys = conf.keys()
     Conf = namedtuple('Conf', keys)
     return Conf(*list(get_value(conf[k], item, **kwargs) for k in keys))
+
+
+def parse_splits(splits, *funcs):
+    for split in splits:
+        yield (func(item) for item, func in izip(split, funcs))
+
+
+def get_output(parsed, func):
+    for group in parsed:
+        yield func(*list(group))
+
+
+def get_pass(item, test=None):
+    return test and test(item)
 
 
 def get_date(date_string):
@@ -211,6 +230,10 @@ def get_num(item):
         num = 0.0
 
     return num
+
+
+def passthrough(item):
+    return item
 
 
 def get_word(item):

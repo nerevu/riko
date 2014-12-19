@@ -11,12 +11,17 @@
 from __future__ import absolute_import
 
 
+def forever():
+    while True:
+        yield {'forever': True}
+
+
 def pipe_forever():
     """A source that returns an infinite generator of items. Loopable.
 
-    Yields
+    Returns
     -------
-    _OUTPUT : items
+    _OUTPUT : generator of items
     """
-    while True:
-        yield {'forever': True}
+    _OUTPUT = forever()
+    return _OUTPUT

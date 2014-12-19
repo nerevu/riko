@@ -16,10 +16,10 @@ def pipe_output(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : pipe2py.modules pipe like object (iterable of items)
     conf : {'format': {'value': <format>}}
 
-    Yields
+    Returns
     ------
-    _OUTPUT : item
+    _OUTPUT : _INPUT
     """
     # todo: convert to XML, JSON, iCal, KLM, CSV...
-    for item in _INPUT:
-        yield item
+    _OUTPUT = _INPUT
+    return _OUTPUT

@@ -9,7 +9,8 @@
 """
 
 from copy import copy
-from itertools import chain
+from functools import partial
+from itertools import chain, imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -27,7 +28,12 @@ def parse(item, conf, embed, **kwargs):
     return submodule
 
 
-def get_item(submodule, item, assign_to, test=None, emit=False, first=False):
+def parse_result(submodule, item, **kwargs):
+    assign_to = kwargs.get('assign_to')
+    test = kwargs.get('test')
+    emit = kwargs.get('emit')
+    first = kwargs.get('first')
+
     if utils.get_pass(item, test):
         r = item.get(assign_to)
     else:
@@ -72,11 +78,12 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
         'embed': {'value': {'conf': <module conf>}}
     }
 
-    Yields
-    ------
-    _OUTPUT : items
+    Returns
+    -------
+    _OUTPUT : generator of items
     """
     conf = DotDict(conf)
+    test = kwargs.get('pass_if')
     emit = conf.get('mode') == 'EMIT'
     assign_to = conf.get('assign_to')
     first_part = 'emit_part' if emit else 'assign_part'
@@ -88,9 +95,11 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     embed_context.submodule = True
     embed_conf = conf.get('embed').get('conf', {})
     kwargs.update({'context': embed_context, 'with': conf.get('with')})
-    pkwargs = {'test': kwargs.get('pass_if'), 'emit': emit, 'first': first}
+    get_submodule = lambda _input: parse(_input, embed_conf, embed, **kwargs)
+    pkwargs = {
+        'assign_to': assign_to, 'test': test, 'emit': emit, 'first': first}
 
-    for item in _INPUT:
-        _input = DotDict(item)
-        submodule = parse(_input, embed_conf, embed, **kwargs)
-        yield get_item(submodule, _input, assign_to, **pkwargs)
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.split_input(inputs, get_submodule, utils.passthrough)
+    _OUTPUT = utils.get_output(splits, partial(parse_result, **pkwargs))
+    return _OUTPUT

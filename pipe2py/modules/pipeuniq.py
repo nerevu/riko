@@ -7,7 +7,21 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators
 """
 
+from functools import partial
+from itertools import repeat, imap
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
+
+
+def unique_items(items, field):
+    seen = set()
+
+    for item in items:
+        value = item.get(field)
+
+        if value not in seen:
+            seen.add(value)
+            yield item
 
 
 def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
@@ -21,17 +35,13 @@ def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
     kwargs -- other inputs, e.g. to feed terminals for rule values
     conf : {'field': {'type': 'text', value': <field to be unique>}}
 
-    Yields
-    ------
-    _OUTPUT : source items, one per unique field value
+    Returns
+    -------
+    _OUTPUT : generator of unique items
     """
-    seen = set()
     conf = DotDict(conf)
-    field = conf.get('field', **kwargs)
-
-    for item in _INPUT:
-        value = DotDict(item).get(field)
-
-        if value not in seen:
-            seen.add(value)
-            yield item
+    test = kwargs.pop('pass_if', None)
+    _pass = utils.get_pass({}, test)
+    parsed = imap(partial(utils.parse_conf, **kwargs), conf, repeat({}))
+    _OUTPUT = _INPUT if _pass else unique_items(_INPUT, parsed.field)
+    return _OUTPUT

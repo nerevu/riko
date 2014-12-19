@@ -7,7 +7,8 @@
     http://pipes.yahoo.com/pipes/docs?doc=string
 """
 
-from itertools import imap
+from functools import partial
+from itertools import imap, repeat
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -17,6 +18,11 @@ SWITCH = {
     '3': lambda word, rule: word.replace(rule.find, rule.replace),
     # todo: else assertion
 }
+
+
+def parse_result(rules, word, _pass):
+    func = lambda word, rule: SWITCH.get(rule.param)(word, rule)
+    return word if _pass else reduce(func, rules, word)
 
 
 def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
@@ -36,24 +42,21 @@ def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
         ]
     }
 
-    Yields
-    ------
-    _OUTPUT : replaced strings
+    Returns
+    -------
+    _OUTPUT : generator of replaced strings
     """
     conf = DotDict(conf)
     test = kwargs.pop('pass_if', None)
     loop_with = kwargs.pop('with', None)
-    rule_defs = imap(DotDict, utils.listize(conf['RULE']))
+    rule_defs = map(DotDict, utils.listize(conf['RULE']))
+    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
+    get_pass = partial(utils.get_pass, test=test)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
+    funcs = [get_rules, utils.get_word, utils.passthrough]
 
-    func = lambda word, rule: SWITCH.get(rule.param)(word, rule)
-
-    for item in _INPUT:
-        if utils.get_pass(item, test):
-            yield
-            continue
-
-        _input = DotDict(item)
-        _with = item.get(loop_with, **kwargs) if loop_with else item
-        word = utils.get_word(_with)
-        rules = (utils.parse_conf(r, _input, **kwargs) for r in rule_defs)
-        yield reduce(func, rules, word)
+    splits = utils.split_input(_INPUT, DotDict, get_with, get_pass)
+    parsed = utils.parse_splits(splits, *funcs)
+    _OUTPUT = utils.get_output(parsed, parse_result)
+    return _OUTPUT

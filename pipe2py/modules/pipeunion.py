@@ -8,7 +8,24 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Union
 """
 
+from itertools import chain, ifilter
 from pipe2py.lib import utils
+
+others_filter = lambda x: x[0].startswith('_OTHER')
+
+
+def gen_input_items(_INPUT):
+    for item in _INPUT:
+        # this is being fed forever, i.e. not a real source so just use _OTHERs
+        if item.get('forever'):
+            break
+
+        yield item
+
+
+def gen_others(others):
+    for src, items in others:
+        yield items
 
 
 def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
@@ -25,21 +42,14 @@ def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
     _OTHER1 : pipe2py.modules pipe like object
     _OTHER2 : etc.
 
-    Yields
+    Returns
     -------
-    _OUTPUT : items
+    _OUTPUT : generator of items
     """
-    for item in _INPUT:
-        # this is being fed forever, i.e. not a real source so just use _OTHERs
-        if item.get('forever'):
-            break
 
-        yield item
-
-    # todo: can the multiple sources should be pulled over multiple servers?
-    sources = (
-        items for src, items in kwargs.items() if src.startswith('_OTHER')
-    )
-
-    for item in utils.multiplex(sources):
-        yield item
+    others = ifilter(others_filter, kwargs.items())
+    others_iter = gen_others(others)
+    others_items = utils.multiplex(others_iter)
+    input_items = gen_input_items(_INPUT)
+    _OUTPUT = chain(input_items, others_items)
+    return _OUTPUT

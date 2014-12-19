@@ -7,6 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=number#SimpleMath
 """
 
+from functools import partial
 from math import pow
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
@@ -35,17 +36,16 @@ def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
         'OP': {'type': 'text', 'value': <'modulo'>}
     }
 
-    Yields
-    ------
-    _OUTPUT : float
+    Returns
+    -------
+    _OUTPUT : generator of tokenized floats
     """
-    conf = DotDict(conf)
     loop_with = kwargs.pop('with', None)
+    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
+    get_conf = partial(utils.parse_conf, DotDict(conf), **kwargs)
+    parse_result = lambda conf, num: OPS[conf.OP](num, conf.OTHER)
 
-    for item in _INPUT:
-        _input = DotDict(item)
-        _with = item.get(loop_with, **kwargs) if loop_with else item
-        value = utils.get_value(conf['OTHER'], _input, **kwargs)
-        op = utils.get_value(conf['OP'], _input, **kwargs)
-        num = utils.get_num(_with)
-        yield OPS[op](num, value)
+    splits = utils.split_input(_INPUT, DotDict, get_with)
+    parsed = utils.parse_splits(splits, get_conf, utils.get_num)
+    _OUTPUT = utils.get_output(parsed, parse_result)
+    return _OUTPUT

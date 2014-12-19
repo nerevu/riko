@@ -8,19 +8,34 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchFeed
 """
 
-try:
-    import speedparser as feedparser
-except ImportError:
-    import feedparser
 
-    feedparser.USER_AGENT = (
-        "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" %
-        feedparser.__version__
-    )
+import speedparser
 
 from urllib2 import urlopen
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
+
+
+def parse(url, context=None):
+    if context and context.verbose:
+        print "pipe_fetch loading:", url
+
+    content = urlopen(url).read()
+    parsed = speedparser.parse(content)
+    results = utils.gen_entries(parsed)
+    return results
+
+
+def gen_urls(_INPUT, urls, context, **kwargs):
+    for item in _INPUT:
+        for item_url in urls:
+            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            yield utils.get_abspath(url)
+
+        if item.get('forever'):
+            # _INPUT is pipeforever and not a loop,
+            # so we just yield our item once
+            break
 
 
 def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
@@ -33,30 +48,14 @@ def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : pipeforever pipe or an iterable of items or fields
     conf : {'URL': [{'value': <url>, 'type': 'url'}]}
 
-    Yields
+    Returns
     -------
-    _OUTPUT : items
+    _OUTPUT : generator of items
     """
     conf = DotDict(conf)
     urls = utils.listize(conf['URL'])
+    generated_urls = gen_urls(_INPUT, urls, context, **kwargs)
+    results = (parse(url, context) for url in generated_urls)
+    _OUTPUT = utils.multiplex(results)
+    return _OUTPUT
 
-    for item in _INPUT:
-        for item_url in urls:
-            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = utils.get_abspath(url)
-
-            if not url:
-                continue
-
-            if context and context.verbose:
-                print "pipe_fetch loading:", url
-
-            parsed = feedparser.parse(urlopen(url).read())
-
-            for entry in utils.gen_entries(parsed):
-                yield entry
-
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
