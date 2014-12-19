@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#ItemBuilder
 """
 
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -16,8 +16,8 @@ def _gen_key_value(attrs, item, **kwargs):
         attr = DotDict(attr)
 
         try:
-            key = util.get_value(attr['key'], item, **kwargs)
-            value = util.get_value(attr['value'], item, **kwargs)
+            key = utils.get_value(attr['key'], item, **kwargs)
+            value = utils.get_value(attr['value'], item, **kwargs)
 
         # ignore if the item is referenced but doesn't have our source
         # or target field
@@ -56,7 +56,7 @@ def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : items
     """
     # conf = DotDict(conf)
-    attrs = util.listize(conf['attrs'])
+    attrs = utils.listize(conf['attrs'])
 
     for item in _INPUT:
         d = DotDict(_gen_key_value(attrs, DotDict(item), **kwargs))

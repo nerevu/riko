@@ -8,7 +8,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Loop
 """
 
-from pipe2py import util
+from pipe2py.lib import utils
 from copy import copy
 from pipe2py.lib.dotdict import DotDict
 
@@ -24,7 +24,7 @@ def _gen_results(submodule, mode, first=False):
 def _gen_inputs(item, conf):
     # Pass any input parameters into the submodule
     for key in conf:
-        yield (key, util.get_value(conf[key], item, func=unicode))
+        yield (key, utils.get_value(conf[key], item, func=unicode))
 
 
 def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):

@@ -8,15 +8,15 @@
 """
 
 import urllib
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
 def _gen_params(param_defs, item, **kwargs):
     for p in param_defs:
         p = DotDict(p)
-        key = util.get_value(p['key'], item, **kwargs)
-        value = util.get_value(p['value'], item, **kwargs)
+        key = utils.get_value(p['key'], item, **kwargs)
+        value = utils.get_value(p['value'], item, **kwargs)
         yield (key, value)
 
 
@@ -46,8 +46,8 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : url
     """
     conf = DotDict(conf)
-    paths = util.listize(conf.get('PATH'))  # use .get() incase 'PATH' isnt set
-    param_defs = util.listize(conf['PARAM'])
+    paths = utils.listize(conf.get('PATH'))  # use .get() incase 'PATH' isnt set
+    param_defs = utils.listize(conf['PARAM'])
     url = None
 
     for item in _INPUT:
@@ -59,7 +59,7 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
             url += '/' if not url.endswith('/') else url
             url += "/".join(str(p) for p in paths if p)
             url = url.rstrip("/")
-            url = util.url_quote(url)  # Ensure url is valid
+            url = utils.url_quote(url)  # Ensure url is valid
             params = dict(_gen_params(param_defs, item, **kwargs))
 
             if params and params.keys() != [u'']:

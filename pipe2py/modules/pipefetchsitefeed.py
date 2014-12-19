@@ -19,7 +19,7 @@ except ImportError:
 
 from urllib2 import urlopen
 from pipe2py.lib import autorss
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -38,12 +38,12 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : items
     """
     conf = DotDict(conf)
-    urls = util.listize(conf['URL'])
+    urls = utils.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = util.get_abspath(url)
+            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = utils.get_abspath(url)
 
             if context and context.verbose:
                 print "pipe_fetchsitefeed loading:", url
@@ -51,7 +51,7 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
             for link in autorss.getRSSLink(url.encode('utf-8')):
                 parsed = feedparser.parse(urlopen(link).read())
 
-                for entry in util.gen_entries(parsed):
+                for entry in utils.gen_entries(parsed):
                     yield entry
 
         if item.get('forever'):

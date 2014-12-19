@@ -8,14 +8,14 @@
 """
 
 from urllib2 import urlopen
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib import unicodecsv as csv
 from pipe2py.lib.dotdict import DotDict
 
 
 def _gen_fieldnames(conf, reader, item, **kwargs):
-    start = util.get_value(conf['col_row_start'], item, func=int, **kwargs)
-    end = util.get_value(conf['col_row_end'], item, func=int, **kwargs)
+    start = utils.get_value(conf['col_row_start'], item, func=int, **kwargs)
+    end = utils.get_value(conf['col_row_end'], item, func=int, **kwargs)
 
     for i in xrange((end - start) + 1):
         yield reader.next()
@@ -54,11 +54,11 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
 
     for item in _INPUT:
         item = DotDict(item)
-        url = util.get_value(conf['URL'], item, **kwargs)
-        url = util.get_abspath(url)
-        separator = util.get_value(conf_sep, item, encode=True, **kwargs)
-        skip = util.get_value(conf['skip'], item, func=int, **kwargs)
-        col_mode = util.get_value(conf_mode, item, **kwargs)
+        url = utils.get_value(conf['URL'], item, **kwargs)
+        url = utils.get_abspath(url)
+        separator = utils.get_value(conf_sep, item, encode=True, **kwargs)
+        skip = utils.get_value(conf['skip'], item, func=int, **kwargs)
+        col_mode = utils.get_value(conf_mode, item, **kwargs)
 
         f = urlopen(url)
 

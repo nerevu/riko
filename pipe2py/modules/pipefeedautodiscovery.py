@@ -7,8 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#FeedAutoDiscovery
 """
 
-from pipe2py import util
-from pipe2py.lib import autorss
+from pipe2py.lib import autorss, utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -27,12 +26,12 @@ def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : items
     """
     conf = DotDict(conf)
-    urls = util.listize(conf['URL'])
+    urls = utils.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = util.get_abspath(url)
+            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = utils.get_abspath(url)
 
             if context and context.verbose:
                 print "pipe_feedautodiscovery loading:", url

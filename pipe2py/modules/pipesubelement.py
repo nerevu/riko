@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#SubElement
 """
 
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -28,10 +28,10 @@ def pipe_subelement(context=None, _INPUT=None, conf=None, **kwargs):
         path = DotDict(item).get(conf['path'], **kwargs)
 
         for res in path:
-            for i in util.gen_items(res, True):
+            for i in utils.gen_items(res, True):
                 yield i
 
-        yield util.gen_items()
+        yield utils.gen_items()
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

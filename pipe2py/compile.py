@@ -36,27 +36,18 @@ from __future__ import (
 
 import fileinput
 import sys
-import requests
 
-try:
-    from json import loads, dumps
-except (ImportError, AttributeError):
-    from simplejson import loads, dumps
-
+from json import dumps
 from codecs import open
 from itertools import chain, izip
 from collections import defaultdict
 from importlib import import_module
 from pprint import PrettyPrinter
 from jinja2 import Environment, PackageLoader
-from optparse import OptionParser
-from os import path as p
-from pipe2py import Context, util
 from pipe2py.modules.pipeforever import pipe_forever
+from pipe2py.lib import utils
 from pipe2py.lib.pprint2 import Id, repr_args, str_args
 from pipe2py.lib.topsort import topological_sort
-
-PARENT = p.dirname(__file__)
 
 
 class MyPrettyPrinter(PrettyPrinter):
@@ -79,15 +70,6 @@ def write_file(data, path, pretty=False):
                 data = unicode(MyPrettyPrinter().pformat(data), 'utf-8')
 
             return f.write(data)
-
-
-def _load_json(json):
-    try:
-        loaded = loads(json.encode('utf-8'))
-    except UnicodeDecodeError:
-        loaded = loads(json)
-
-    return loaded
 
 
 def _get_zipped(context, pipe, **kwargs):
@@ -191,11 +173,11 @@ def _gen_pykwargs(context, pipe, module_id, steps=None):
 
         # find the default input of this module
         for key, pipe_wire in wires.items():
-            moduleid = util.pythonise(pipe_wire['src']['moduleid'])
+            moduleid = utils.pythonise(pipe_wire['src']['moduleid'])
 
             # todo? this equates the outputs
             is_default_out_only = (
-                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
+                utils.pythonise(pipe_wire['tgt']['moduleid']) == module_id
                 and pipe_wire['tgt']['id'] != '_INPUT'
                 and pipe_wire['src']['id'].startswith('_OUTPUT')
             )
@@ -204,19 +186,19 @@ def _gen_pykwargs(context, pipe, module_id, steps=None):
             # but it *is* the default output
             if is_default_out_only:
                 # set the extra inputs of this module as pykwargs of this module
-                pipe_id = util.pythonise(pipe_wire['tgt']['id'])
+                pipe_id = utils.pythonise(pipe_wire['tgt']['id'])
                 yield (pipe_id, steps[moduleid] if steps else Id(moduleid))
 
         # set the embedded module in the pykwargs if this is loop module
         if module_type == 'loop':
             value = module['conf']['embed']['value']
-            pipe_id = util.pythonise(value['id'])
+            pipe_id = utils.pythonise(value['id'])
             updated = steps[pipe_id] if steps else Id('pipe_%s' % pipe_id)
             yield ('embed', updated)
 
         # set splits in the pykwargs if this is split module
         def filter_func(x):
-            module_id == util.pythonise(x[1]['src']['moduleid'])
+            module_id == utils.pythonise(x[1]['src']['moduleid'])
 
         if module_type == 'split':
             filtered = filter(filter_func, pipe['wires'].items())
@@ -232,11 +214,11 @@ def _get_input_module(pipe, module_id, steps):
         input_module = '_INPUT'
     else:
         for key, pipe_wire in pipe['wires'].items():
-            moduleid = util.pythonise(pipe_wire['src']['moduleid'])
+            moduleid = utils.pythonise(pipe_wire['src']['moduleid'])
 
             # todo? this equates the outputs
             is_default_in_and_out = (
-                util.pythonise(pipe_wire['tgt']['moduleid']) == module_id
+                utils.pythonise(pipe_wire['tgt']['moduleid']) == module_id
                 and pipe_wire['tgt']['id'] == '_INPUT'
                 and pipe_wire['src']['id'].startswith('_OUTPUT')
             )
@@ -261,18 +243,18 @@ def parse_pipe_def(pipe_def, pipe_name='anonymous'):
     Returns:
     pipe -- an internal representation of a pipe
     """
-    graph = defaultdict(list, util.gen_graph1(pipe_def))
-    [graph[k].append(v) for k, v in util.gen_graph2(pipe_def)]
-    modules = dict(util.gen_modules(pipe_def))
-    embed = dict(util.gen_embedded_modules(pipe_def))
+    graph = defaultdict(list, utils.gen_graph1(pipe_def))
+    [graph[k].append(v) for k, v in utils.gen_graph2(pipe_def)]
+    modules = dict(utils.gen_modules(pipe_def))
+    embed = dict(utils.gen_embedded_modules(pipe_def))
     modules.update(embed)
 
     return {
-        'name': util.pythonise(pipe_name),
+        'name': utils.pythonise(pipe_name),
         'modules': modules,
         'embed': embed,
-        'graph': dict(util.gen_graph3(graph)),
-        'wires': dict(util.gen_wires(pipe_def)),
+        'graph': dict(utils.gen_graph3(graph)),
+        'wires': dict(utils.gen_wires(pipe_def)),
     }
 
 
@@ -285,14 +267,14 @@ def build_pipeline(context, pipe, pipe_def):
         Note: any subpipes must be available to import from pipe2py.pypipelines
     """
     module_ids = topological_sort(pipe['graph'])
-    pydeps = util.extract_dependencies(pipe_def)
-    pyinput = util.extract_input(pipe_def)
+    pydeps = utils.extract_dependencies(pipe_def)
+    pyinput = utils.extract_input(pipe_def)
 
     if not (context.describe_input or context.describe_dependencies):
         kwargs = {
             'module_ids': module_ids,
-            'module_names': util.gen_names(module_ids, pipe),
-            'pipe_names': util.gen_names(module_ids, pipe, 'pipe'),
+            'module_names': utils.gen_names(module_ids, pipe),
+            'pipe_names': utils.gen_names(module_ids, pipe, 'pipe'),
         }
 
         zipped = _get_zipped(context, pipe, **kwargs)
@@ -318,14 +300,14 @@ def stringify_pipe(context, pipe, pipe_def):
 
     kwargs = {
         'module_ids': module_ids,
-        'module_names': util.gen_names(module_ids, pipe),
-        'pipe_names': util.gen_names(module_ids, pipe, 'pipe'),
+        'module_names': utils.gen_names(module_ids, pipe),
+        'pipe_names': utils.gen_names(module_ids, pipe, 'pipe'),
     }
 
     zipped = _get_zipped(context, pipe, **kwargs)
     modules = list(_gen_string_modules(context, pipe, zipped))
-    pydeps = util.extract_dependencies(pipe_def)
-    pyinput = util.extract_input(pipe_def)
+    pydeps = utils.extract_dependencies(pipe_def)
+    pyinput = utils.extract_input(pipe_def)
     env = Environment(loader=PackageLoader('pipe2py'))
     template = env.get_template('pypipe.txt')
 
@@ -339,101 +321,3 @@ def stringify_pipe(context, pipe, pipe_def):
     }
 
     return template.render(**tmpl_kwargs)
-
-
-if __name__ == '__main__':
-    usage = 'usage: %prog [options] [filename]'
-    parser = OptionParser(usage=usage)
-
-    parser.add_option(
-        "-p", "--pipe", dest="pipeid", help="read pipe JSON from Yahoo")
-    parser.add_option(
-        "-c", "--compiledpath", dest="compiledpath",
-        help="the compiled pipe file destination path")
-    parser.add_option(
-        "-s", dest="savejson", help="save pipe JSON to file",
-        action="store_true")
-    parser.add_option(
-        "-o", dest="saveoutput",
-        help="save output from pipes.yahoo.com to file", action="store_true")
-    parser.add_option(
-        "-v", dest="verbose", help="set verbose debug", action="store_true")
-    (options, args) = parser.parse_args()
-
-    pipe_file_name = args[0] if args else None
-
-    kwargs = {
-        'describe_input': True,
-        'describe_dependencies': True,
-        'verbose': options.verbose,
-    }
-
-    context = Context(**kwargs)
-
-    if options.pipeid:
-        pipe_name = 'pipe_%s' % options.pipeid
-
-        # Get the pipeline definition
-        url = 'http://pipes.yahoo.com/pipes/pipe.info'
-        data = {'_id': options.pipeid, '_out': 'json'}
-        r = requests.get(base, url=data)
-
-        try:
-            pipe_def = r.json()['PIPE']['working']
-        except TypeError:
-            print('Pipe not found')
-            sys.exit(1)
-    elif pipe_file_name:
-        pipe_name = p.splitext(p.split(pipe_file_name)[-1])[0]
-
-        with open(pipe_file_name) as f:
-            pjson = f.read()
-
-        pipe_def = _load_json(pjson)
-    else:
-        pipe_name = 'anonymous'
-        pjson = ''.join(line for line in fileinput.input())
-        pipe_def = _load_json(pjson)
-
-    pipe = parse_pipe_def(pipe_def, pipe_name)
-    new_path = p.join(PARENT, 'pypipelines', '%s.py' % pipe_name)
-    path = options.compiledpath or new_path
-    data = stringify_pipe(context, pipe, pipe_def)
-    size = write_file(data, path)
-
-    if context and context.verbose:
-        print('wrote %i bytes to %s' % (size, path))
-
-    if context and context.verbose:
-        pydeps = util.extract_dependencies(pipe_def)
-        print('Modules used in %s: %s' % (pipe['name'], pydeps))
-
-    if options.savejson:
-        path = p.join(PARENT, 'pipelines', '%s.json' % pipe_name)
-        size = write_file(pipe_def, path, True)
-
-        if context and context.verbose:
-            print('wrote %i bytes to %s' % (size, path))
-
-    if options.saveoutput:
-        base = 'http://pipes.yahoo.com/pipes/pipe.run'
-        url = '%s?_id=%s&_render=json' % (base, options.pipeid)
-        ojson = requests.get(url).text
-        pipe_output = _load_json(ojson)
-        count = pipe_output['count']
-
-        if not count:
-            print('Pipe results not found')
-            sys.exit(1)
-
-        path = p.join(PARENT, 'data', '%s_output.json' % pipe_name)
-        size = write_file(pipe_output, path, True)
-
-        if context and context.verbose:
-            print('wrote %i bytes to %s' % (size, path))
-
-    # for build example - see test/testbasics.py
-
-    # todo: to create stable, repeatable test cases we should:
-    #  build the pipeline to find the external data sources
-    #  download and save any fetchdata/fetch source data

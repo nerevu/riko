@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=user_inputs#PrivateText
 """
 
-from pipe2py import util
+from pipe2py.lib import utils
 
 
 def pipe_privateinput(context=None, _INPUT=None, conf=None, **kwargs):
@@ -29,7 +29,7 @@ def pipe_privateinput(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : text
     """
-    value = util.get_input(context, conf)
+    value = utils.get_input(context, conf)
 
     while True:
         yield value

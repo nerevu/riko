@@ -13,7 +13,7 @@
 """
 
 import re
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -83,7 +83,7 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : items
     """
-    rule_defs = util.listize(conf['RULE'])
+    rule_defs = utils.listize(conf['RULE'])
 
     # use list bc iterator gets used up if there are no matching feeds
     rules = list(_gen_rules(rule_defs, **kwargs))

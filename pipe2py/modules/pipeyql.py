@@ -10,7 +10,7 @@
 import requests
 
 from lxml.etree import parse
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -35,7 +35,7 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
 
     for item in _INPUT:
         item = DotDict(item)
-        yql = util.get_value(query, item, **kwargs)
+        yql = utils.get_value(query, item, **kwargs)
 
         # note: we use the default format of xml since json loses some
         # structure
@@ -56,7 +56,7 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
 
         # Convert xml into generation of dicts
         for element in results.getchildren():
-            yield util.etree_to_dict(element)
+            yield utils.etree_to_dict(element)
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

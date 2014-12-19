@@ -17,7 +17,7 @@ try:
 except (ImportError, AttributeError):
     from simplejson import loads
 
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -67,15 +67,15 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     """
     # todo: iCal and KML
     conf = DotDict(conf)
-    urls = util.listize(conf['URL'])
+    urls = utils.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
             item = DotDict(item)
-            url = util.get_value(DotDict(item_url), item, **kwargs)
-            url = util.get_abspath(url)
+            url = utils.get_value(DotDict(item_url), item, **kwargs)
+            url = utils.get_abspath(url)
             f = urlopen(url)
-            path = util.get_value(conf['path'], item, **kwargs)
+            path = utils.get_value(conf['path'], item, **kwargs)
             split_path = path.split(".") if path else []
             res = {}
 
@@ -93,11 +93,11 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
                     print "pipe_fetchdata loading xml:", url
 
                 # print etree.tostring(element, pretty_print=True)
-                element = util.etree_to_dict(root)
+                element = utils.etree_to_dict(root)
             finally:
                 res = _parse_dict(split_path, element) if element else None
 
-                for i in util.gen_items(res, True):
+                for i in utils.gen_items(res, True):
                     yield i
 
         if item.get('forever'):

@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.dotdict
+    pipe2py.lib.dotdict
     ~~~~~~~~~~~~~~
 
     Provides methods for creating dicts using dot notation
 """
 
-from pipe2py import util
+from . import utils
 from feedparser import FeedParserDict
 
 
@@ -93,7 +93,7 @@ class DotDict(FeedParserDict):
 
         if hasattr(value, 'keys') and 'terminal' in value:
             # value fed in from another module
-            value = kwargs[util.pythonise(value['terminal'])].next()
+            value = kwargs[utils.pythonise(value['terminal'])].next()
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 

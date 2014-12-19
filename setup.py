@@ -56,4 +56,5 @@ setup(
     package_data={'templates': 'templates/*.txt'},
     include_package_data=True,
     install_requires=parse_requirements('requirements.txt'),
+    scripts=[p.join('bin', 'compile')],
 )

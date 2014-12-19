@@ -10,7 +10,7 @@
 
 import time
 from pipe2py.lib.dotdict import DotDict
-from pipe2py import util
+from pipe2py.lib import utils
 
 
 def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
@@ -35,7 +35,7 @@ def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
 
     for item in _INPUT:
         if not hasattr(item, 'tm_year'):
-            date = util.get_date(item)
+            date = utils.get_date(item)
 
         date = date.timetuple() if date else item
 

@@ -167,7 +167,7 @@ def get_abspath(url):
         # already have an abspath
         pass
     elif url and url.startswith('file://'):
-        parent = p.dirname(__file__)
+        parent = p.dirname(p.dirname(__file__))
         rel_path = url[7:]
         abspath = p.abspath(p.join(parent, rel_path))
         url = 'file://%s' % abspath

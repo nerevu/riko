@@ -8,7 +8,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Union
 """
 
-from pipe2py import util
+from pipe2py.lib import utils
 
 
 def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
@@ -41,5 +41,5 @@ def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
         items for src, items in kwargs.items() if src.startswith('_OTHER')
     )
 
-    for item in util.multiplex(sources):
+    for item in utils.multiplex(sources):
         yield item

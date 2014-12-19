@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#RSSItemBuilder
 """
 
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 # map frontend names to rss items (use dots for sub-levels)
@@ -25,7 +25,7 @@ def _gen_key_value(conf, item, **kwargs):
     for key in conf:
         # todo: really dereference item?
         # sample pipe seems to suggest so: surprising
-        value = util.get_value(conf[key], item, **kwargs)
+        value = utils.get_value(conf[key], item, **kwargs)
 
         if value:
             yield (RSS_SWITCH.get(key, key), value)

@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
+
+import requests
+
+from os import path as p
+from json import loads
+from optparse import OptionParser
+from pipe2py import Context
+from pipe2py.compile import parse_pipe_def, stringify_pipe, write_file
+
+PARENT = p.dirname(p.dirname(__file__))
+
+
+def _load_json(json):
+    try:
+        loaded = loads(json.encode('utf-8'))
+    except UnicodeDecodeError:
+        loaded = loads(json)
+
+    return loaded
+
+
+if __name__ == '__main__':
+    usage = 'usage: %prog [options] [filename]'
+    parser = OptionParser(usage=usage)
+
+    parser.add_option(
+        "-p", "--pipe", dest="pipeid", help="read pipe JSON from Yahoo")
+    parser.add_option(
+        "-c", "--compiledpath", dest="compiledpath",
+        help="the compiled pipe file destination path")
+    parser.add_option(
+        "-s", dest="savejson", help="save pipe JSON to file",
+        action="store_true")
+    parser.add_option(
+        "-o", dest="saveoutput",
+        help="save output from pipes.yahoo.com to file", action="store_true")
+    parser.add_option(
+        "-v", dest="verbose", help="set verbose debug", action="store_true")
+    (options, args) = parser.parse_args()
+
+    pipe_file_name = args[0] if args else None
+
+    kwargs = {
+        'describe_input': True,
+        'describe_dependencies': True,
+        'verbose': options.verbose,
+    }
+
+    context = Context(**kwargs)
+
+    if options.pipeid:
+        pipe_name = 'pipe_%s' % options.pipeid
+
+        # Get the pipeline definition
+        url = 'http://pipes.yahoo.com/pipes/pipe.info'
+        data = {'_id': options.pipeid, '_out': 'json'}
+        r = requests.get(url, params=data)
+
+        try:
+            working = r.json()['PIPE']['working']
+            pipe_def = _load_json(working)
+        except TypeError:
+            print('Pipe not found')
+            sys.exit(1)
+    elif pipe_file_name:
+        pipe_name = p.splitext(p.split(pipe_file_name)[-1])[0]
+
+        with open(pipe_file_name) as f:
+            pjson = f.read()
+
+        pipe_def = _load_json(pjson)
+    else:
+        pipe_name = 'anonymous'
+        pjson = ''.join(line for line in fileinput.input())
+        pipe_def = _load_json(pjson)
+
+    pipe = parse_pipe_def(pipe_def, pipe_name)
+    new_path = p.join(PARENT, 'pipe2py', 'pypipelines', '%s.py' % pipe_name)
+    path = options.compiledpath or new_path
+    data = stringify_pipe(context, pipe, pipe_def)
+    size = write_file(data, path)
+
+    if context and context.verbose:
+        print('wrote %i bytes to %s' % (size, path))
+
+    if context and context.verbose:
+        pydeps = utils.extract_dependencies(pipe_def)
+        print('Modules used in %s: %s' % (pipe['name'], pydeps))
+
+    if options.savejson:
+        path = p.join(PARENT, 'pipe2py', 'pipelines', '%s.json' % pipe_name)
+        size = write_file(pipe_def, path, True)
+
+        if context and context.verbose:
+            print('wrote %i bytes to %s' % (size, path))
+
+    if options.saveoutput:
+        base = 'http://pipes.yahoo.com/pipes/pipe.run'
+        url = '%s?_id=%s&_render=json' % (base, options.pipeid)
+        ojson = requests.get(url).text
+        pipe_output = _load_json(ojson)
+        count = pipe_output['count']
+
+        if not count:
+            print('Pipe results not found')
+            sys.exit(1)
+
+        path = p.join(PARENT, 'pipe2py', 'data', '%s_output.json' % pipe_name)
+        size = write_file(pipe_output, path, True)
+
+        if context and context.verbose:
+            print('wrote %i bytes to %s' % (size, path))
+
+    # for build example - see test/testbasics.py
+
+    # todo: to create stable, repeatable test cases we should:
+    #  build the pipeline to find the external data sources
+    #  download and save any fetchdata/fetch source data

@@ -8,7 +8,7 @@
 """
 
 from operator import itemgetter
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -71,7 +71,7 @@ def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : item
     """
-    keys = util.listize(conf['KEY'])
+    keys = utils.listize(conf['KEY'])
     order = _gen_order(keys, **kwargs)
 
     for item in _multikeysort(_INPUT, order):

@@ -12,7 +12,7 @@
 # This code is licensed under the GNU Public License.
 
 from urllib2 import urlopen
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -75,12 +75,12 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
     """
     conf = DotDict(conf)
     split_token = conf.get('token', **kwargs)
-    urls = util.listize(conf['URL'])
+    urls = utils.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = util.get_abspath(url)
+            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = utils.get_abspath(url)
 
             if not url:
                 continue

@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=user_inputs#URL
 """
 
-from pipe2py import util
+from pipe2py.lib import utils
 
 
 def pipe_urlinput(context=None, _INPUT=None, conf=None, **kwargs):
@@ -29,8 +29,8 @@ def pipe_urlinput(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : url
     """
-    value = util.get_input(context, conf)
-    value = util.url_quote(value)
+    value = utils.get_input(context, conf)
+    value = utils.url_quote(value)
 
     while True:
         yield value

@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Rename
 """
 
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -62,11 +62,11 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     """
     conf = DotDict(conf)
     fields = ['field', 'op', 'newval']
-    rule_defs = util.listize(conf['RULE'])
+    rule_defs = utils.listize(conf['RULE'])
     rule_defs = [DotDict(rule_def) for rule_def in rule_defs]
 
     # use list bc iterator gets used up if there are no matching feeds
-    rules = list(util.gen_rules(rule_defs, fields, **kwargs))
+    rules = list(utils.gen_rules(rule_defs, fields, **kwargs))
 
     for item in _INPUT:
         yield _convert_item(rules, DotDict(item), **kwargs)

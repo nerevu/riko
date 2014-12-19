@@ -8,12 +8,12 @@
 """
 
 import re
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
 def _gen_rules(rule_defs, **kwargs):
-    rule_defs = util.listize(rule_defs)
+    rule_defs = utils.listize(rule_defs)
 
     # todo: compile regex here: c = re.compile(match)
     # todo: use subkey?

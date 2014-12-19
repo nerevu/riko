@@ -13,7 +13,7 @@ import re
 
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -52,7 +52,7 @@ def _gen_rulepass(rules, item):
             continue
         elif isinstance(y, basestring):
             try:
-                y = dt.strptime(y, util.DATE_FORMAT).timetuple()
+                y = dt.strptime(y, utils.DATE_FORMAT).timetuple()
             except ValueError:
                 pass
 
@@ -116,10 +116,10 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     mode = conf.get('MODE', **kwargs)
     combine = conf.get('COMBINE', **kwargs)
     fields = ['field', 'op', 'value']
-    rule_defs = [DotDict(rule_def) for rule_def in util.listize(conf['RULE'])]
+    rule_defs = [DotDict(rule_def) for rule_def in utils.listize(conf['RULE'])]
 
     # use list bc iterator gets used up if there are no matching feeds
-    rules = list(util.gen_rules(rule_defs, fields, **kwargs))
+    rules = list(utils.gen_rules(rule_defs, fields, **kwargs))
 
     for item in _INPUT:
         item = DotDict(item)
