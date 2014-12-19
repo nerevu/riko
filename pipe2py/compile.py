@@ -23,7 +23,8 @@
         python compile.py -p 2de0e4517ed76082dcddf66f7b218057
 
     Author: Greg Gaughan
-    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
+    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/
+        starting-to-think-about-a-yahoo-pipes-code-generator)
     Python generator pipelines inspired by:
         David Beazely (http://www.dabeaz.com/generators-uk)
     auto-rss module by Mark Pilgrim
@@ -214,12 +215,11 @@ def _gen_pykwargs(context, pipe, module_id, steps=None):
             yield ('embed', updated)
 
         # set splits in the pykwargs if this is split module
-        if module_type == 'split':
-            filtered = filter(
-                lambda x: module_id == util.pythonise(x[1]['src']['moduleid']),
-                pipe['wires'].items()
-            )
+        def filter_func(x):
+            module_id == util.pythonise(x[1]['src']['moduleid'])
 
+        if module_type == 'split':
+            filtered = filter(filter_func, pipe['wires'].items())
             count = len(filtered)
             updated = count if steps else Id(count)
             yield ('splits', updated)
@@ -359,8 +359,8 @@ if __name__ == '__main__':
         "-s", dest="savejson", help="save pipe JSON to file",
         action="store_true")
     parser.add_option(
-        "-o", dest="saveoutput", help="save output from pipes.yahoo.com to file",
-        action="store_true")
+        "-o", dest="saveoutput",
+        help="save output from pipes.yahoo.com to file", action="store_true")
     parser.add_option(
         "-v", dest="verbose", help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()

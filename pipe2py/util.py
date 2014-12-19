@@ -8,11 +8,6 @@ from urllib2 import quote
 from os import path as p
 from pipe2py import Context
 
-try:
-    from json import loads
-except (ImportError, AttributeError):
-    from simplejson import loads
-
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
     "%m/%d/%y",
