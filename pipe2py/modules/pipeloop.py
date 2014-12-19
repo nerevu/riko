@@ -76,8 +76,11 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
             # note: i suspect this needs to be more discerning and only happen
             # if the source can only ever deliver 1 result, e.g. strconcat vs.
             # fetchpage
-            if len(results) == 1 and not hasattr(results[0], 'keys'):
-                results = results[0]
+            if len(results) == 1 and and len(results[0]) == 1:
+                try:
+                    results = results[0].values()[0]
+                except AttributeError:
+                    pass
 
             item.set(assign_to, results)
             yield item
