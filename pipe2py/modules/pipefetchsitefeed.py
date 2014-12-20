@@ -1,5 +1,11 @@
-# pipefetchsitefeed.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefetchsitefeed
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchSiteFeed
+"""
 
 try:
     import speedparser as feedparser
@@ -18,17 +24,18 @@ from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source fetches and parses the first feed found on one or more sites
-       to yield the feed entries.
+    """A source that fetches and parses the first feed found on one or more
+    sites. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        URL -- url
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : URL -- url
 
-    Yields (_OUTPUT):
-    feed entries
+    Yields
+    ------
+    _OUTPUT : items
     """
     conf = DotDict(conf)
     urls = util.listize(conf['URL'])

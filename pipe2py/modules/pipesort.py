@@ -1,5 +1,11 @@
-# pipesort.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipesort
+    ~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Sort
+"""
 
 from operator import itemgetter
 from pipe2py import util
@@ -7,7 +13,7 @@ from pipe2py.lib.dotdict import DotDict
 
 
 def _multikeysort(items, order):
-    """Sorts a list of items by order
+    """Sorts a items by order
 
        (items in order preceded with a '-' will sort descending)
     """
@@ -44,17 +50,26 @@ def _gen_order(keys, **kwargs):
 
 
 def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator sorts the input source according to the specified key.
+    """An operator that sorts the input source according to the specified key.
+    Not loopable. Not lazy.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
     kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
-        KEY -- list of fields to sort by
+    conf : {
+        'KEY': [
+            {
+                'field': {'type': 'text', 'value': 'title'},
+                'dir': {'type': 'text', 'value': 'DESC'}
+            }
+        ]
+    }
 
-    Yields (_OUTPUT):
-    source items sorted by key
+    Yields
+    ------
+    _OUTPUT : item
     """
     keys = util.listize(conf['KEY'])
     order = _gen_order(keys, **kwargs)

@@ -13,7 +13,7 @@ from feedparser import FeedParserDict
 
 class DotDict(FeedParserDict):
     """A dictionary whose keys can be accessed using dot notation
-    r = {'attr1': {'attr2': 'value'}}
+    r = {'a': {'content': 'value'}}
     e.g. r['a.content'] -> ['a']['content']
 
     TODO: make DotDict(dict)['field'] return a DotDict instance

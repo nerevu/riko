@@ -1,5 +1,11 @@
-# pipexpathfetchpage.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipexpathfetchpage
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#XPathFetchPage
+"""
 
 from urllib2 import urlopen
 from lxml import html
@@ -9,21 +15,24 @@ from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
-    """XPath Fetch Page module
+    """A source that fetches the content of a given website as DOM nodes or a
+    string. Loopable.
 
-    _INPUT -- not used since this does not have inputs.
-
-    conf:
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : dict
        URL -- url object contain the URL to download
        xpath -- xpath to extract
        html5 -- use html5 parser?
        useAsString -- emit items as string?
 
-       Description: http://pipes.yahoo.com/pipes/docs?doc=sources#XPathFetchPage
-
        TODOS:
         - don't retrieve pages larger than 1.5MB
         - don't retrieve if page is not indexable.
+
+    Yields
+    ------
+    _OUTPUT : items
     """
     conf = DotDict(conf)
     urls = util.listize(conf['URL'])

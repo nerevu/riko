@@ -1,5 +1,11 @@
-# piperename.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.piperename
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Rename
+"""
 
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
@@ -30,26 +36,28 @@ def _convert_item(rules, item, **kwargs):
 
 
 def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator renames or copies fields in the input source.
+    """An operator that renames or copies fields in the input source.
+    Not loopable.
 
+    Parameters
+    ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
-    conf : dict
-        {
-            'RULE': [
-                {
-                    'op': {'value': 'rename or copy'},
-                    'field': {'value': 'old field'},
-                    'newval': {'value': 'new field'}
-                }
-            ]
-        }
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    conf : {
+        'RULE': [
+            {
+                'op': {'value': 'rename or copy'},
+                'field': {'value': 'old field'},
+                'newval': {'value': 'new field'}
+            }
+        ]
+    }
 
     kwargs : other inputs, e.g., to feed terminals for rule values
 
     Yields
     ------
-    _OUTPUT : source pipe after copying/renaming
+    _OUTPUT : items
 
     """
     conf = DotDict(conf)

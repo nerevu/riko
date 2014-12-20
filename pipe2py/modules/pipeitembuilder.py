@@ -1,5 +1,11 @@
-# pipeitembuilder.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipeitembuilder
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#ItemBuilder
+"""
 
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
@@ -26,16 +32,28 @@ def _gen_key_value(attrs, item, **kwargs):
 
 
 def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds an item.
+    """A source that builds an item. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        attrs -- key, value pairs
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items
+    conf : {
+        'attrs': [
+            {
+                'key': {'value': 'title'},
+                'value': {'value': 'new title'}
+            }, {
+                'key': {'value': 'description.content'},
+                'value': {'value': 'new description'}
+            }
+        ]
+    }
 
-    Yields (_OUTPUT):
-    item
+
+    Yields
+    ------
+    _OUTPUT : items
     """
     # conf = DotDict(conf)
     attrs = util.listize(conf['attrs'])

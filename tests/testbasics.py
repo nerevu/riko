@@ -1,7 +1,7 @@
 """Unit tests using basic pipeline modules
 
-   Note: many of these tests simply make sure the module compiles and runs
-         - we need more extensive tests with stable data feeds!
+    Note: many of these tests simply make sure the module compiles and runs.
+    We need more extensive tests with stable data feeds!
 """
 
 import unittest

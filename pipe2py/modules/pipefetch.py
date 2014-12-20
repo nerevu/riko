@@ -1,5 +1,12 @@
-# pipefetch.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefetch
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
+    Provides methods for fetching RSS feeds.
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchFeed
+"""
 
 try:
     import speedparser as feedparser
@@ -17,16 +24,18 @@ from pipe2py import util
 
 
 def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
-    """Fetches and parses one or more feeds to yield the feed entries.
+    """A source that fetches and parses one or more feeds to return the
+    entries. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        URL -- url
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : {'URL': [{'value': <url>, 'type': 'url'}]}
 
-    Yields (_OUTPUT):
-    feed entries
+    Yields
+    -------
+    _OUTPUT : items
     """
     conf = DotDict(conf)
     urls = util.listize(conf['URL'])

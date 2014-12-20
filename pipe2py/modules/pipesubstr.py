@@ -1,21 +1,30 @@
-# pipesubstr.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipesubstr
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=string
+"""
 
 from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
-    """Returns a substring.
+    """A string module that returns a substring. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        from -- starting character
-        length -- number of characters to return
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : iterable of items or strings
+    conf : {
+        'from': {'type': 'number', value': <starting position>},
+        'length': {'type': 'number', 'value': <count of characters to return>}
+    }
 
-    Yields (_OUTPUT):
-    portion of source string
+    Yields
+    ------
+    _OUTPUT : substrings
     """
     conf = DotDict(conf)
     start = conf.get('from', func=int, **kwargs)

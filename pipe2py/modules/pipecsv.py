@@ -1,5 +1,12 @@
-# pipecsv.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipecsv
+    ~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchCSV
+"""
+
 from urllib2 import urlopen
 from pipe2py import util
 from pipe2py.lib import unicodecsv as csv
@@ -15,13 +22,13 @@ def _gen_fieldnames(conf, reader, item, **kwargs):
 
 
 def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source fetches and parses a csv file to yield items.
+    """A source that fetches and parses a csv file to yield items. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        URL -- url
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : URL -- url
         skip -- number of header rows to skip
         col_mode -- column name source: row=header row(s),
                     custom=defined in col_name
@@ -30,8 +37,9 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         col_row_end -- last column header row
         separator -- column separator
 
-    Yields (_OUTPUT):
-    file entries
+    Yields
+    ------
+    _OUTPUT : items
 
     Note:
     Current restrictions:

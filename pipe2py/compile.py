@@ -253,7 +253,8 @@ def _get_input_module(pipe, module_id, steps):
 def parse_pipe_def(pipe_def, pipe_name='anonymous'):
     """Parse pipe JSON into internal structures
 
-    Keyword arguments:
+    Parameters
+    ----------
     pipe_def -- JSON representation of the pipe
     pipe_name -- a name for the pipe (used for linking pipes)
 

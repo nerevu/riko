@@ -1,5 +1,11 @@
-# pipesimplemath.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipesimplemath
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=number#SimpleMath
+"""
 
 from pipe2py.lib.dotdict import DotDict
 from math import pow
@@ -15,19 +21,22 @@ OPS = {
 
 
 def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator performs basic arithmetic, such as addition and
-    subtraction.
+    """A number module that performs basic arithmetic, such as addition and
+    subtraction. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : iterable of items or numbers
     kwargs -- other value, if wired in
-    conf:
-        other -- input value
-        op -- operator
+    conf : {
+        'OTHER': {'type': 'number', 'value': <'5'>},
+        'OP': {'type': 'text', 'value': <'modulo'>}
+    }
 
-    Yields (_OUTPUT):
-    result
+    Yields
+    ------
+    _OUTPUT : float
     """
     conf = DotDict(conf)
     value = conf.get('OTHER', func=float, **kwargs)

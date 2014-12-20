@@ -1,6 +1,13 @@
-# pipesplit.py
-#
-# module contributed by https://github.com/tuukka
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipesplit
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Split
+"""
+
+# contributed by https://github.com/tuukka
 
 from itertools import tee, imap
 from copy import deepcopy
@@ -24,16 +31,17 @@ class Split(object):
 
 
 def pipe_split(context, _INPUT, conf, splits, **kwargs):
-    """This operator splits a source into two identical copies.
+    """An operator that splits a source into identical copies. Not loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-    splits -- number of splits
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    conf : dict
+    splits : number of copies
 
-    Yields (_OUTPUT, _OUTPUT2...):
-    copies of all source items
+    Yields
+    ------
+    _OUTPUT, _OUTPUT2... : copies of all source items
     """
-
     return Split(context, _INPUT, conf, splits, **kwargs)

@@ -1,5 +1,11 @@
-"""Utility functions"""
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.lib.utils
+    ~~~~~~~~~~~~~~~~~
+    Utility functions
+
+"""
 
 import string
 

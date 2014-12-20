@@ -1,5 +1,11 @@
-# pipedatebuilder.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipedatebuilder
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/docs?doc=date#DateBuilder
+"""
 
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
@@ -17,16 +23,18 @@ SWITCH = {
 
 
 def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds a date and yields it forever.
+    """A date module that converts a text string into a datetime value. Useful
+    as terminal data. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- XXX
-    conf:
-        DATE -- date
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items
+    conf : {'DATE': {'type': 'datetime', 'value': '12/2/2014'}}
 
-    Yields (_OUTPUT):
-    date
+    Yields
+    ------
+    _OUTPUT : date timetuples
     """
     conf = DotDict(conf)
     date_format = conf.get('format', **kwargs)

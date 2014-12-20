@@ -1,5 +1,11 @@
-# piperssitembuilder.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.piperssitembuilder
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#RSSItemBuilder
+"""
 
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
@@ -29,15 +35,31 @@ def _gen_key_value(conf, item, **kwargs):
 
 
 def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds an rss item.
+    """A source that builds an rss item. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        dictionary of key/values
-    Yields (_OUTPUT):
-    item
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever asyncPipe or an iterable of items or fields
+    conf : {
+        'mediaContentType': {'type': 'text', 'value': ''},
+        'mediaContentHeight': {'type': 'text', 'value': ''},
+        'mediaContentWidth': {'type': 'text', 'value': ''},
+        'mediaContentURL': {'type': 'text', 'value': 'url'},
+        'mediaThumbHeight': {'type': 'text', 'value': ''},
+        'mediaThumbWidth': {'type': 'text', 'value': ''},
+        'mediaThumbURL': {'type': 'text', 'value': 'url'},
+        'description': {'type': 'text', 'value': 'description'},
+        'pubdate': {'type': 'text', 'value': 'pubdate'},
+        'author': {'type': 'text', 'value': 'author'},
+        'title': {'type': 'text', 'value': 'title'},
+        'link': {'type': 'text', 'value': 'url'},
+        'guid': {'type': 'text', 'value': 'guid'},
+    }
+
+    Yields
+    ------
+    _OUTPUT : items
     """
     conf = DotDict(conf)
 

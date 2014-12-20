@@ -1,20 +1,33 @@
-# pipeunion.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipeunion
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
+    Provides methods for merging separate sources into a single list of items.
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Union
+"""
 
 from pipe2py import util
 
 
 def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
-    """Merges multiple source together.
+    """An operator that merges multiple source together. Not loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- _OTHER1 - another source generator
-              _OTHER2 etc.
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT :  pipe2py.modules pipe like object (iterable of items)
+    conf : unused
 
-    Yields (_OUTPUT):
-    union of all source items
+    Keyword arguments
+    -----------------
+    _OTHER1 : pipe2py.modules pipe like object
+    _OTHER2 : etc.
+
+    Yields
+    -------
+    _OUTPUT : items
     """
     for item in _INPUT:
         # this is being fed forever, i.e. not a real source so just use _OTHERs

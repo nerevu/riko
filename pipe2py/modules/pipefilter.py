@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.modules.pipefilter
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Provides methods for filtering (including or excluding) items from a feed.
 
@@ -63,30 +63,30 @@ def _gen_rulepass(rules, item):
 
 
 def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
-    """Filters for _INPUT items matching the given rules.
+    """An operator that filters for source items matching the given rules.
+    Not loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
-    conf : dict
-        {
-            'MODE': {'value': 'permit' or 'block'},
-            'COMBINE': {'value': 'and' or 'or'}
-            'RULE': [
-                {
-                    'field': {'value': 'search field'},
-                    'op': {'value': 'one of SWITCH above'},
-                    'value': {'value': 'search term'}
-                }
-            ]
-        }
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    conf : {
+        'MODE': {'value': <'permit' or 'block'>},
+        'COMBINE': {'value': <'and' or 'or'>}
+        'RULE': [
+            {
+                'field': {'value': 'search field'},
+                'op': {'value': 'one of SWITCH above'},
+                'value': {'value': 'search term'}
+            }
+        ]
+    }
 
     kwargs : other inputs, e.g., to feed terminals for rule values
 
     Yields
     ------
-    _OUTPUT : source pipe items matching the rules
+    _OUTPUT : items
 
     Examples
     --------

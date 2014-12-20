@@ -1,20 +1,28 @@
-# pipestringtokenizer.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipestringtokenizer
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=string
+"""
 
 from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
-    """Splits a string into tokens delimited by separators.
+    """A string module that splits a string into tokens delimited by
+    separators. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        to-str -- separator string
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : iterable of strings
+    conf : {'to-str': {'value': <delimiter>}}
 
-    Yields (_OUTPUT):
-    tokens of the input string
+    Yields
+    ------
+    _OUTPUT : tokenized strings
     """
     conf = DotDict(conf)
     delim = conf.get('to-str', **kwargs)
@@ -23,12 +31,7 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
         for chunk in item.split(delim):
             yield {'content': chunk}
 
-        try:
-            forever = item.get('forever')
-        except AttributeError:
-            forever = False
-
-        if forever:
+        if item.get('forever'):
             # _INPUT is pipeforever and not a loop,
             # so we just yield our item once
             break

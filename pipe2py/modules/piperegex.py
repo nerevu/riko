@@ -2,14 +2,12 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.modules.piperegex
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Provides methods for modifying fields in a feed using regular
     expressions, a powerful type of pattern matching.
     Think of it as search-and-replace on steroids.
     You can define multiple Regex rules.
-    Each has the general format: "In [field] replace [regex pattern] with
-    [text]".
 
     http://pipes.yahoo.com/pipes/docs?doc=operators#Regex
 """
@@ -60,26 +58,30 @@ def _gen_rules(rule_defs, **kwargs):
 
 
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
-    """Applies regex rules to _INPUT items.
+    """An operator that replaces text in items using regexes. Each has the
+    general format: "In [field] replace [match] with [replace]". Not loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
-    conf: dict
-        {
-            'RULE': [
-                {
-                    'field': {'value': 'search field'},
-                    'match': {'value': 'regex'},
-                    'replace': {'value': 'replacement'}
-                }
-            ]
-        }
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    conf : {
+        'RULE': [
+            {
+                'field': {'value': <'search field'>},
+                'match': {'value': <'regex'>},
+                'replace': {'value': <'replacement'>},
+                'globalmatch': {'value': '1'},
+                'singlelinematch': {'value': '2'},
+                'multilinematch': {'value': '4'},
+                'casematch': {'value': '8'}
+            }
+        ]
+    }
 
     Yields
     ------
-    _OUTPUT : source pipe items post regexes application
+    _OUTPUT : items
     """
     rule_defs = util.listize(conf['RULE'])
 

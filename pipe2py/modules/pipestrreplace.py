@@ -1,5 +1,12 @@
-# pipestrreplace.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipestrreplace
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=string
+"""
+
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
 
@@ -12,19 +19,25 @@ SWITCH = {
 
 
 def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
-    """Replaces text with replacement text.
+    """A string module that replaces text. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        RULE -- rules - each rule comprising (find, param, replace):
-            find -- text to find
-            param -- type of match: 1=first, 2=last, 3=every
-            replace -- text to replace with
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : iterable of items or strings
+    conf : {
+        'RULE': [
+            {
+                'param': {'value': <match type: 1=first, 2=last, 3=every>},
+                'find': {'value': <text to find>},
+                'replace': {'value': <replacement>}
+            }
+        ]
+    }
 
-    Yields (_OUTPUT):
-    source string with replacements
+    Yields
+    ------
+    _OUTPUT : replaced strings
     """
     conf = DotDict(conf)
     fields = ['find', 'param', 'replace']

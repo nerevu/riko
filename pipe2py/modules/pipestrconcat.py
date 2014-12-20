@@ -1,5 +1,13 @@
-# pipestrconcat.py  #aka stringbuilder
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipestrconcat
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=string#StringBuilder
+"""
+
+# aka stringbuilder
 
 from pipe2py import util
 from pipe2py.lib.dotdict import DotDict
@@ -20,16 +28,21 @@ def _gen_string(parts, item, context=None, **kwargs):
 
 
 def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds a string.
+    """A string module that builds a string. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        part -- parts
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items
+    conf : {
+        'part': [
+            {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
+        ]
+    }
 
-    Yields (_OUTPUT):
-    string
+    Yields
+    ------
+    _OUTPUT : joined strings
     """
     conf = DotDict(conf)
     parts = util.listize(conf['part'])

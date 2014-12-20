@@ -2,11 +2,12 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.modules.pipefetchdata
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Provides methods for fetching XML and JSON data sources.
 
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchData
 """
+
 from lxml import objectify
 from lxml.etree import XMLSyntaxError
 from urllib2 import urlopen
@@ -28,21 +29,20 @@ def _parse_dict(split_path, element):
 
 
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
-    """Fetches and parses an XML or JSON file.
+    """A source that fetches and parses an XML or JSON file. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
-    conf : dict
-        {
-            'URL': {'value': url},
-            'path': {'value': dot separated path to data list}
-        }
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : {
+        'URL': {'value': <url>},
+        'path': {'value': <dot separated path to data list>}
+    }
 
     Yields
     ------
-    _OUTPUT : pipe items fetched from source
+    _OUTPUT : items
 
     Examples
     --------

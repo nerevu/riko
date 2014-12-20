@@ -1,5 +1,11 @@
-# pipestrregex.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipestrregex
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=string
+"""
 
 import re
 from pipe2py import util
@@ -24,17 +30,25 @@ def _gen_rules(rule_defs, **kwargs):
 
 
 def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator replaces values using regexes.
+    """A string module that replaces text using regexes. Each has the general
+    format: "In [field] replace [regex pattern] with [text]". Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
-        RULE -- rules - each rule comprising (match, replace)
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : iterable of items or strings
+    conf : {
+        'RULE': [
+            {
+                'match': {'value': <regex>},
+                'replace': {'value': <'replacement'>}
+            }
+        ]
+    }
 
-    Yields (_OUTPUT):
-    source item after replacing values matching regexes
+    Yields
+    ------
+    _OUTPUT : replaced strings
     """
     rules = _gen_rules(conf['RULE'], **kwargs)
 

@@ -1,5 +1,11 @@
-# pipeurlbuilder.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipeurlbuilder
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=url#URLBuilder
+"""
 
 import urllib
 from pipe2py import util
@@ -15,18 +21,29 @@ def _gen_params(param_defs, item, **kwargs):
 
 
 def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds a url and yields it forever.
+    """A url module that builds a url. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        BASE -- base
-        PATH -- path elements
-        PARAM -- query parameters
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : {
+        'PATH': {'type': 'text', 'value': <''>},
+        'BASE': {'type': 'text', 'value': <'http://site.com/feed.xml'>},
+        'PARAM': [
+            {
+                'key': {'value': <'order'>},
+                'value': {'value': <'desc'>}
+            }, {
+                'key': {'value': <'page'>},
+                'value': {'value': <'2'>}
+            }
+        ]
+    }
 
-    Yields (_OUTPUT):
-    url
+    Yields
+    ------
+    _OUTPUT : url
     """
     conf = DotDict(conf)
     paths = util.listize(conf.get('PATH'))  # use .get() incase 'PATH' isnt set
