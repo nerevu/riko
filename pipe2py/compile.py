@@ -341,12 +341,6 @@ def stringify_pipe(context, pipe, pipe_def):
     return template.render(**tmpl_kwargs)
 
 
-def yql(query):
-    base = 'http://query.yahooapis.com/v1/public/yql'
-    r = requests.get(base, params={'q': query, 'format': 'json'})
-    return r.json()['query']['results']
-
-
 if __name__ == '__main__':
     usage = 'usage: %prog [options] [filename]'
     parser = OptionParser(usage=usage)
@@ -380,14 +374,12 @@ if __name__ == '__main__':
         pipe_name = 'pipe_%s' % options.pipeid
 
         # Get the pipeline definition
-        base = 'http://pipes.yahoo.com/pipes/pipe.info'
-        query = (
-            'select PIPE.working from json where url="%s?_out=json&_id=%s"' % (
-                base, options.pipeid)
-        )
+        url = 'http://pipes.yahoo.com/pipes/pipe.info'
+        data = {'_id': options.pipeid, '_out': 'json'}
+        r = requests.get(base, url=data)
 
         try:
-            pipe_def = yql(query)['json']['PIPE']['working']
+            pipe_def = r.json()['PIPE']['working']
         except TypeError:
             print('Pipe not found')
             sys.exit(1)
