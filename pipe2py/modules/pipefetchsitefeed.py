@@ -7,15 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchSiteFeed
 """
 
-try:
-    import speedparser as feedparser
-except ImportError:
-    import feedparser
-
-    feedparser.USER_AGENT = (
-        "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" %
-        feedparser.__version__
-    )
+import speedparser
 
 from urllib2 import urlopen
 from pipe2py.lib import autorss
@@ -49,7 +41,7 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
                 print "pipe_fetchsitefeed loading:", url
 
             for link in autorss.getRSSLink(url.encode('utf-8')):
-                parsed = feedparser.parse(urlopen(link).read())
+                parsed = speedparser.parse(urlopen(link).read())
 
                 for entry in utils.gen_entries(parsed):
                     yield entry
