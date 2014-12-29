@@ -13,7 +13,7 @@ from datetime import datetime
 from urllib2 import quote
 from os import path as p
 from pipe2py import Context
-from itertools import chain
+from itertools import groupby, chain
 
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
@@ -62,6 +62,19 @@ def pythonise(id, encoding='ascii'):
 
     id = '_%s' % id if id[0] in string.digits else id
     return id.encode(encoding)
+
+
+def group_by(data, attr, default=None):
+    groups = {}
+
+    # like operator.itemgetter but fills in missing keys with a default value
+    keyfunc = lambda item: lambda obj: obj.get(item, default)
+    data.sort(key=keyfunc(attr))
+
+    for key, values in groupby(data, keyfunc(attr)):
+        groups[str(key)] = list(v for v in values)
+
+    return groups
 
 
 def _make_content(i, tag, new):
