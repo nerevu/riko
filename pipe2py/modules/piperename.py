@@ -7,30 +7,21 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Rename
 """
 
+from itertools import imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
 def _convert_item(rules, item, **kwargs):
     for rule in rules:
-        field, op, newfield = rule
-
         try:
-            # forces an exception if any part is not found
-            item.set(newfield, item.get(field, **kwargs))
-        except AttributeError:
-            # ignore if the source doesn't have our field
-            # todo: issue a warning if debugging?
+            item.set(rule.newval, item.get(rule.field, **kwargs))
+        except (IndexError):
+            # Catch error when 'newval' is blank (equivalent to deleting field)
             pass
 
-        if op == 'rename':
-            try:
-                item.delete(field)
-            # TypeError catches pseudo subkeys, e.g. summary.content
-            except (KeyError, TypeError):
-                # ignore if the target doesn't have our field
-                # todo: issue a warning if debugging?
-                pass
+        if rule.op == 'rename':
+            item.delete(rule.field)
 
     return item
 
@@ -61,12 +52,8 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
 
     """
     conf = DotDict(conf)
-    fields = ['field', 'op', 'newval']
-    rule_defs = utils.listize(conf['RULE'])
-    rule_defs = [DotDict(rule_def) for rule_def in rule_defs]
-
-    # use list bc iterator gets used up if there are no matching feeds
-    rules = list(utils.gen_rules(rule_defs, fields, **kwargs))
+    rule_defs = imap(DotDict, utils.listize(conf['RULE']))
 
     for item in _INPUT:
+        rules = (utils.parse_conf(r, item, **kwargs) for r in rule_defs)
         yield _convert_item(rules, DotDict(item), **kwargs)

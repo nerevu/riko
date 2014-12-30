@@ -9,22 +9,11 @@
 
 # aka stringbuilder
 
+from itertools import imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def _gen_string(parts, item, context=None, **kwargs):
-    for part in parts:
-        try:
-            yield utils.get_value(DotDict(part), item, **kwargs)
-        except AttributeError:
-            # ignore if the item is referenced but doesn't have our source
-            # field
-            # todo: issue a warning if debugging?
-            continue
-        except TypeError:
-            if context and context.verbose:
-                print "pipe_strconcat: TypeError"
 
 
 def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
@@ -45,7 +34,8 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : joined strings
     """
     conf = DotDict(conf)
-    parts = utils.listize(conf['part'])
+    parts = imap(DotDict, utils.listize(conf['part']))
 
     for item in _INPUT:
-        yield ''.join(_gen_string(parts, DotDict(item), context, **kwargs))
+        _input = DotDict(item)
+        yield ''.join(utils.get_value(p, _input, **kwargs) for p in parts)

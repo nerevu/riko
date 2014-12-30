@@ -7,6 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=string
 """
 
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -27,13 +28,12 @@ def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : substrings
     """
     conf = DotDict(conf)
-    start = conf.get('from', func=int, **kwargs)
-    length = conf.get('length', func=int, **kwargs)
+    loop_with = kwargs.pop('with', None)
 
     for item in _INPUT:
-        yield item[start:start + length]
-
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+        _input = DotDict(item)
+        _with = item.get(loop_with, **kwargs) if loop_with else item
+        start = utils.get_value(conf['from'], _input, func=int, **kwargs)
+        length = utils.get_value(conf['length'], _input, func=int, **kwargs)
+        word = utils.get_word(_with)
+        yield word[start:start + length]

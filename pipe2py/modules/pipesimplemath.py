@@ -7,8 +7,9 @@
     http://pipes.yahoo.com/pipes/docs?doc=number#SimpleMath
 """
 
-from pipe2py.lib.dotdict import DotDict
 from math import pow
+from pipe2py.lib import utils
+from pipe2py.lib.dotdict import DotDict
 
 OPS = {
     'add': lambda x, y: x + y,
@@ -39,8 +40,12 @@ def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : float
     """
     conf = DotDict(conf)
-    value = conf.get('OTHER', func=float, **kwargs)
-    op = conf.get('OP', **kwargs)
+    loop_with = kwargs.pop('with', None)
 
     for item in _INPUT:
-        yield OPS[op](float(item), value)
+        _input = DotDict(item)
+        _with = item.get(loop_with, **kwargs) if loop_with else item
+        value = utils.get_value(conf['OTHER'], _input, **kwargs)
+        op = utils.get_value(conf['OP'], _input, **kwargs)
+        num = utils.get_num(_with)
+        yield OPS[op](num, value)

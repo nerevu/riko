@@ -13,6 +13,7 @@ import re
 
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
+from itertools import imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -34,18 +35,16 @@ SWITCH = {
 
 def _gen_rulepass(rules, item):
     for rule in rules:
-        field, op, value = rule
-
-        if not value:
+        if not rule.value:
             yield True
             continue
 
         try:
-            x = Decimal(value)
-            y = Decimal(item.get(field))
+            x = Decimal(rule.value)
+            y = Decimal(item.get(rule.field))
         except InvalidOperation:
-            x = value
-            y = item.get(field)
+            x = rule.value
+            y = item.get(rule.field)
 
         if y is None:
             yield False
@@ -57,7 +56,7 @@ def _gen_rulepass(rules, item):
                 pass
 
         try:
-            yield SWITCH.get(op)(x, y)
+            yield SWITCH.get(rule.op)(x, y)
         except (UnicodeDecodeError, AttributeError):
             yield False
 
@@ -115,17 +114,15 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     conf = DotDict(conf)
     mode = conf.get('MODE', **kwargs)
     combine = conf.get('COMBINE', **kwargs)
-    fields = ['field', 'op', 'value']
-    rule_defs = [DotDict(rule_def) for rule_def in utils.listize(conf['RULE'])]
-
-    # use list bc iterator gets used up if there are no matching feeds
-    rules = list(utils.gen_rules(rule_defs, fields, **kwargs))
+    rule_defs = imap(DotDict, utils.listize(conf['RULE']))
 
     for item in _INPUT:
         item = DotDict(item)
+        rules = (utils.parse_conf(r, item, **kwargs) for r in rule_defs)
 
         if combine in COMBINE_BOOLEAN:
-            res = COMBINE_BOOLEAN[combine](_gen_rulepass(rules, DotDict(item)))
+            generated_rules = _gen_rulepass(rules, DotDict(item))
+            res = COMBINE_BOOLEAN[combine](generated_rules)
         else:
             raise Exception(
                 "Invalid combine: %s. (Expected 'and' or 'or')" % combine)

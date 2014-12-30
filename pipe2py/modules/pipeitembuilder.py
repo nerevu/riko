@@ -7,28 +7,9 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#ItemBuilder
 """
 
+from itertools import imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
-
-
-def _gen_key_value(attrs, item, **kwargs):
-    for attr in attrs:
-        attr = DotDict(attr)
-
-        try:
-            key = utils.get_value(attr['key'], item, **kwargs)
-            value = utils.get_value(attr['value'], item, **kwargs)
-
-        # ignore if the item is referenced but doesn't have our source
-        # or target field
-        # todo: issue a warning if debugging?
-        except KeyError:
-            continue
-
-        if not all([key, value]):
-            continue
-
-        yield (key, value)
 
 
 def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
@@ -55,15 +36,14 @@ def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : items
     """
-    # conf = DotDict(conf)
-    attrs = utils.listize(conf['attrs'])
+    conf = DotDict(conf)
+    attrs = imap(DotDict, utils.listize(conf['attrs']))
 
     for item in _INPUT:
-        d = DotDict(_gen_key_value(attrs, DotDict(item), **kwargs))
-        [d.set(k, v) for k, v in d.iteritems()]
-        yield d
+        _input = DotDict(item)
+        pairs = (utils.parse_conf(a, _input, **kwargs) for a in attrs)
+        yield DotDict(p for p in pairs if all(p))
 
         if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
+            # _INPUT is infinite and not a loop, so just yield item once
             break

@@ -8,16 +8,19 @@
 """
 
 import urllib
+from itertools import imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def _gen_params(param_defs, item, **kwargs):
-    for p in param_defs:
-        p = DotDict(p)
-        key = utils.get_value(p['key'], item, **kwargs)
-        value = utils.get_value(p['value'], item, **kwargs)
-        yield (key, value)
+
+def parse_base(base, paths, params):
+    url = '%s/' % base if not base.endswith('/') else base
+    url += '/'.join(imap(str, ifilter(None, paths)))
+    url = url.rstrip('/')
+    url = utils.url_quote(url)  # Ensure url is valid
+    url += '?%s' % urllib.urlencode(params) if params and url else ''
+    return url
 
 
 def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
@@ -46,24 +49,15 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : url
     """
     conf = DotDict(conf)
-    paths = utils.listize(conf.get('PATH'))  # use .get() incase 'PATH' isnt set
-    param_defs = utils.listize(conf['PARAM'])
-    url = None
+    param_defs = map(DotDict, utils.listize(conf['PARAM']))
+    path_defs = map(DotDict, utils.listize(conf['PATH']))
 
     for item in _INPUT:
-        # if _INPUT is pipeforever and not a loop, get values from cache
-        if not url:
-            item = DotDict(item)
-            forever = item.get('forever')
-            url = conf.get('BASE', **kwargs)
-            url += '/' if not url.endswith('/') else url
-            url += "/".join(str(p) for p in paths if p)
-            url = url.rstrip("/")
-            url = utils.url_quote(url)  # Ensure url is valid
-            params = dict(_gen_params(param_defs, item, **kwargs))
-
-            if params and params.keys() != [u'']:
-                url += "?" + urllib.urlencode(params)
-
-        yield url
-        url = url if forever else None
+        _input = DotDict(item)
+        base = utils.get_value(conf['BASE'], _input, **kwargs)
+        pairs = (utils.parse_conf(p, _input, **kwargs) for p in param_defs)
+        paths = (utils.get_value(p, _input, **kwargs) for p in path_defs)
+        true_params = (p for p in pairs if all(p))
+        real_params = dict((p.key, p.value) for p in true_params)
+        _output = parse_base(base, paths, real_params)
+        yield _output

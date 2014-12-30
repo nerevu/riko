@@ -30,23 +30,21 @@ def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : formatted dates
     """
     conf = DotDict(conf)
+    loop_with = kwargs.pop('with', None)
     date_format = conf.get('format', **kwargs)
-    date = ()
+    # timezone = conf.get('timezone', **kwargs)
 
     for item in _INPUT:
-        if not hasattr(item, 'tm_year'):
-            date = utils.get_date(item)
-
-        date = date.timetuple() if date else item
-
-        if not date:
-            raise Exception('Unexpected date format: %s' % date_format)
+        _with = item.get(loop_with, **kwargs) if loop_with else item
 
         try:
             # todo: check that all PHP formats are covered by Python
-            date_string = time.strftime(date_format, date)
-        except TypeError:
-            # silent error handling e.g. if item is not a date
+            date_string = time.strftime(date_format, _with)
+        except TypeError as e:
+            if context and context.verbose:
+                print 'Error formatting date: %s' % item
+                print e
+
             continue
         else:
             yield date_string

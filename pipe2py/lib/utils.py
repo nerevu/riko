@@ -9,6 +9,8 @@
 
 import string
 
+import re
+from collections import namedtuple
 from datetime import datetime
 from urllib2 import quote
 from os import path as p
@@ -116,16 +118,37 @@ def etree_to_dict(element):
     return i
 
 
-def get_value(field, item=None, default=None, **kwargs):
+def get_value(field, item, **kwargs):
+    OPS = {
+        'number': {'default': 0.0, 'func': float},
+        'integer': {'default': 0, 'func': int},
+        'text': {'default': ''},
+        'unicode': {'default': '', 'func': unicode},
+        'bool': {'default': False, 'func': lambda i: bool(int(i))},
+    }
+
     try:
-        if item and field.get('subkey'):
-            value = item.get(field['subkey'], default, **kwargs)
-        else:
-            value = field.get(None, default, **kwargs)
+        kwargs.update(OPS.get(field.get('type', 'text'), {}))
     except AttributeError:
-        value = None
+        pass
+
+    try:
+        value = item.get(field['subkey'], **kwargs)
+    except KeyError:
+        if not hasattr(field, 'delete'):
+            raise TypeError('field must be of type DotDict')
+        else:
+            value = field.get(None, **kwargs)
+    except (TypeError, AttributeError):
+        value = kwargs.get('default')
 
     return value
+
+
+def parse_conf(conf, item, **kwargs):
+    keys = conf.keys()
+    Conf = namedtuple('Conf', keys)
+    return Conf(*list(get_value(conf[k], item, **kwargs) for k in keys))
 
 
 def get_date(date_string):
@@ -175,6 +198,31 @@ def get_abspath(url):
     return url
 
 
+def get_num(item):
+    try:
+        joined = ''.join(item.itervalues())
+    except AttributeError:
+        joined = item
+
+    try:
+        num = float(joined)
+    except (ValueError, TypeError):
+        num = 0.0
+
+    return num
+
+
+def get_word(item):
+    try:
+        word = ''.join(item.itervalues())
+    except AttributeError:
+        word = item
+    except TypeError:
+        word = None
+
+    return word or ''
+
+
 def rreplace(s, find, replace, count=None):
     li = s.rsplit(find, count)
     return replace.join(li)
@@ -218,12 +266,47 @@ def gen_items(item, yield_if_none=False):
         yield
 
 
-def gen_rules(rule_defs, fields, **kwargs):
-    for rule in rule_defs:
-        if not hasattr(rule, 'delete'):
-            raise TypeError('rule must be of type DotDict')
+def convert_rules(rules, **kwargs):
+    Rule = namedtuple('Rule', ['match', 'replace', 'field', 'count'])
 
-        yield tuple(rule.get(field, **kwargs) for field in fields)
+    for rule in rules:
+        try:
+            # flag 'i' --> 2
+            flags = re.IGNORECASE if rule.ignorecase else 0
+        except AttributeError:
+            flags = 0
+
+        try:
+            # flag 'm' --> 8
+            flags |= re.MULTILINE if rule.multilinematch else 0
+        except AttributeError:
+            pass
+
+        try:
+            # flag 's' --> 16
+            flags |= re.DOTALL if rule.singlelinematch else 0
+        except AttributeError:
+            pass
+
+        try:
+            # flag 'g' --> 0
+            count = 0 if rule.globalmatch else 1
+        except AttributeError:
+            count = 1
+
+        # Convert regex to Python format
+        # todo: also need to escape any existing \1 etc.
+        replace = re.sub('\$(\d+)', r'\\\1', rule.replace)
+
+        try:
+            field = rule.field
+        except AttributeError:
+            new_rule = Rule(rule.match, replace, None, None)
+        else:
+            matchc = re.compile(rule.match, flags)  # compile for speed
+            new_rule = Rule(matchc, replace, field, count)
+
+        yield new_rule
 
 
 def gen_dependencies(pipe_def):

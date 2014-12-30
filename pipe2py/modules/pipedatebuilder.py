@@ -37,10 +37,10 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : date timetuples
     """
     conf = DotDict(conf)
-    date_format = conf.get('format', **kwargs)
 
     for item in _INPUT:
-        date = utils.get_value(conf['DATE'], DotDict(item), **kwargs).lower()
+        _input = DotDict(item)
+        date = utils.get_value(conf['DATE'], _input, **kwargs).lower()
 
         if date.endswith(' day') or date.endswith(' days'):
             count = int(date.split(' ')[0])
@@ -55,6 +55,6 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
             new_date = utils.get_date(date)
 
         if not new_date:
-            raise Exception('Unexpected date format: %s' % date_format)
+            raise Exception('Unrecognized date string: %s' % date)
 
         yield new_date.timetuple()

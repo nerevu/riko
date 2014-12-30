@@ -8,27 +8,52 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Loop
 """
 
-from pipe2py.lib import utils
 from copy import copy
+from itertools import chain
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
-
-
-def _gen_results(submodule, mode, first=False):
-    for i in submodule:
-        yield i
-
-        if first:
-            break
 
 
 def _gen_inputs(item, conf):
     # Pass any input parameters into the submodule
-    for key in conf:
+    for key in conf.iterkeys():
         yield (key, utils.get_value(conf[key], item, func=unicode))
 
 
-def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
-    """This operator loops over the input performing the embedded submodule.
+def parse(item, conf, embed, **kwargs):
+    context = kwargs.pop('context')
+    context.inputs = dict(_gen_inputs(item, conf))  # prepare the submodule
+    submodule = embed(context, [item], conf, **kwargs)
+    return submodule
+
+
+def get_item(submodule, item, assign_to, test=None, emit=False, first=False):
+    if utils.get_pass(item, test):
+        r = item.get(assign_to)
+    else:
+        r = submodule.next()
+
+    if not first and hasattr(r, 'keys'):
+        # submodule can deliver 1 or more results,
+        # e.g. stringtokenizer
+        assign = list(chain([r], submodule))
+    else:
+        # submodule only delivers 1 result, e.g. strconcat
+        # or user selected 'first'
+        assign = r
+
+    if emit:
+        result = assign
+    else:
+        item.set(assign_to, assign)
+        result = item
+
+    return result
+
+
+def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
+    """An operator that loops over the input and performs the embedded
+    submodule. Not loopable.
 
     Parameters
     ----------
@@ -52,50 +77,20 @@ def pipe_loop(context, _INPUT, conf, embed=None, **kwargs):
     _OUTPUT : items
     """
     conf = DotDict(conf)
-    mode = conf.get('mode')
+    emit = conf.get('mode') == 'EMIT'
     assign_to = conf.get('assign_to')
-    assign_part = conf.get('assign_part')
-    # TODO: what is this for??
-    # emit_part = conf.get('emit_part')
-    loop_with = conf.get('with')
-    embed_conf = conf.get('embed')['conf']
+    first_part = 'emit_part' if emit else 'assign_part'
+    first = conf.get(first_part) == 'first'
 
     # Prepare the submodule to take parameters from the loop instead of from
     # the user
     embed_context = copy(context)
     embed_context.submodule = True
+    embed_conf = conf.get('embed').get('conf', {})
+    kwargs.update({'context': embed_context, 'with': conf.get('with')})
+    pkwargs = {'test': kwargs.get('pass_if'), 'emit': emit, 'first': first}
 
     for item in _INPUT:
-        item = DotDict(item)
-        inp = item.get(loop_with, **kwargs) if loop_with else item
-
-        # prepare the submodule
-        embed_context.inputs = dict(_gen_inputs(item, embed_conf))
-        submodule = embed(embed_context, [inp], embed_conf)
-        first = assign_part == 'first'
-        results = _gen_results(submodule, mode, first)
-
-        if not results:
-            continue
-        elif mode == 'EMIT':
-            for i in results:
-                yield i
-        elif mode == 'assign':
-            results = list(results)
-
-            # this is a hack to make sure fetchpage works in an out of a
-            # loop while not disturbing strconcat in a loop etc.
-            # note: i suspect this needs to be more discerning and only happen
-            # if the source can only ever deliver 1 result, e.g. strconcat vs.
-            # fetchpage
-            if len(results) == 1 and and len(results[0]) == 1:
-                try:
-                    results = results[0].values()[0]
-                except AttributeError:
-                    pass
-
-            item.set(assign_to, results)
-            yield item
-        else:
-            raise Exception(
-                "Invalid mode: %s. (Expected 'assign' or 'EMIT')" % mode)
+        _input = DotDict(item)
+        submodule = parse(_input, embed_conf, embed, **kwargs)
+        yield get_item(submodule, _input, assign_to, **pkwargs)

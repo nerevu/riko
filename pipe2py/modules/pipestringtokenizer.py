@@ -7,6 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=string
 """
 
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -25,13 +26,18 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : tokenized strings
     """
     conf = DotDict(conf)
-    delim = conf.get('to-str', **kwargs)
+    test = kwargs.pop('pass_if', None)
+    loop_with = kwargs.pop('with', None)
 
     for item in _INPUT:
-        for chunk in item.split(delim):
-            yield {'content': chunk}
+        if utils.get_pass(item, test):
+            yield
+            continue
 
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+        _input = DotDict(item)
+        _with = item.get(loop_with, **kwargs) if loop_with else item
+        word = utils.get_word(_with)
+        delim = utils.get_value(conf['to-str'], _input, **kwargs)
+
+        for chunk in word.split(delim):
+            yield {'content': chunk}

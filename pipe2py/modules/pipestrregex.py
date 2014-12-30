@@ -8,25 +8,12 @@
 """
 
 import re
+from itertools import imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def _gen_rules(rule_defs, **kwargs):
-    rule_defs = utils.listize(rule_defs)
 
-    # todo: compile regex here: c = re.compile(match)
-    # todo: use subkey?
-    for rule in rule_defs:
-        rule = DotDict(rule)
-        match = rule.get('match', **kwargs)
-        replace = rule.get('replace', **kwargs)
-
-        # Convert regex to Python format
-        # todo: use a common routine for this, e.g., map $1 to \1 etc.
-        # todo: also need to escape any existing \1 etc.
-        replace = re.sub('\$(\d+)', r'\\\1', replace) or ''
-        yield (match, replace)
 
 
 def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
@@ -50,11 +37,16 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : replaced strings
     """
-    rules = _gen_rules(conf['RULE'], **kwargs)
+    conf = DotDict(conf)
+    loop_with = kwargs.pop('with', None)
+    rule_defs = imap(DotDict, utils.listize(conf['RULE']))
+
+    func = lambda word, rule: re.sub(rule.match, rule.replace, word)
 
     for item in _INPUT:
-        for rule in rules:
-            match, replace = rule
-            item = re.sub(match, replace, item)
-
-        yield item
+        _input = DotDict(item)
+        _with = item.get(loop_with, **kwargs) if loop_with else item
+        word = utils.get_word(_with)
+        rules = (utils.parse_conf(r, _input, **kwargs) for r in rule_defs)
+        new_rules = utils.convert_rules(rules)
+        yield reduce(func, new_rules, word)
