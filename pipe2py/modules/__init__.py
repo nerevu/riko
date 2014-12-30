@@ -54,6 +54,9 @@ __all__ = [
     'pipesubstr',
     'pipestrreplace',
     'pipestringtokenizer',
+    'pipestrtransform',
+    'pipehash',
+    'pipeexchangerate'
     # 'pipetermextractor',
     # 'pipetranslate',
     # 'pipeyahooshortcuts',
@@ -68,6 +71,7 @@ __all__ = [
 
     # Number Modules
     'pipesimplemath',
+    'pipecurrencyformat',
 
     # Output Modules
     'pipeoutput',

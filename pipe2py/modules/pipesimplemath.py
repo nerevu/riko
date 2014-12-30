@@ -16,6 +16,7 @@ OPS = {
     'add': lambda x, y: x + y,
     'subtract': lambda x, y: x - y,
     'multiply': lambda x, y: x * y,
+    'mean': lambda x, y: (x + y) / 2.0,
     'divide': lambda x, y: x / (y * 1.0),
     'modulo': lambda x, y: x % y,
     'power': lambda x, y: pow(x, y),

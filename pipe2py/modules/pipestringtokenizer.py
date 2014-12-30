@@ -16,8 +16,19 @@ def parse_result(conf, word, _pass):
     if _pass:
         token = None
     else:
-        chunks = word.split(conf.delimiter)
-        token = [{'content': chunk} for chunk in chunks]
+        splits = word.split(conf.delimiter)
+
+        try:
+            chunks = set(splits) if conf.dedupe else splits
+        except AttributeError:
+            chunks = splits
+
+        try:
+            chunks = sorted(chunks) if conf.sort else chunks
+        except AttributeError:
+            chunks = chunks
+
+        token = ({'content': chunk} for chunk in chunks)
 
     return token
 
@@ -29,8 +40,12 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : iterable of strings
-    conf : {'to-str': {'value': <delimiter>}}
+    _INPUT : iterable of items or strings
+    conf : {
+        'to-str': {'value': <delimiter>},
+        'dedupe': {'type': 'bool', value': <1>},
+        'sort': {'type': 'bool', value': <1>}
+    }
 
     Returns
     -------
