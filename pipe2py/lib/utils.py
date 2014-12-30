@@ -17,8 +17,29 @@ from collections import namedtuple
 from datetime import datetime
 from itertools import groupby, chain, izip, tee
 from urllib2 import quote
-from os import path as p
+from os import path as p, environ
 from pipe2py import Context
+from mezmorize import Cache
+
+if environ.get('DATABASE_URL'):  # HEROKU
+    cache_config = {
+        'CACHE_TYPE': 'saslmemcached',
+        'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
+        'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
+        'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')}
+else:
+    try:
+        import pylibmc
+    except ImportError:
+        cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
+    else:
+        cache_config = {
+            'DEBUG': True,
+            'CACHE_TYPE': 'memcached',
+            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
+
+cache = Cache(**cache_config)
+timeout = 60 * 60 * 1
 
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
@@ -32,6 +53,10 @@ ALTERNATIVE_DATE_FORMATS = (
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
+
+
+def memoize(*args, **kwargs):
+    return cache.memoize(*args, **kwargs)
 
 
 def extract_dependencies(pipe_def=None, pipe_generator=None):
@@ -92,6 +117,7 @@ def _make_content(i, tag, new):
     return content
 
 
+@memoize(timeout)
 def etree_to_dict(element):
     """Convert an eTree xml into dict imitating how Yahoo Pipes does it.
 
@@ -119,6 +145,7 @@ def etree_to_dict(element):
     return i
 
 
+@memoize(timeout)
 def get_value(field, item, **kwargs):
     OPS = {
         'number': {'default': 0.0, 'func': float},
@@ -167,6 +194,7 @@ def get_output(parsed, func):
         yield func(*list(group))
 
 
+@cache.memoize(timeout)
 def get_pass(item, test=None):
     return test and test(item)
 

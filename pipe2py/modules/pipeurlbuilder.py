@@ -12,8 +12,10 @@ from itertools import imap, ifilter
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
+timeout = 60 * 60 * 1
 
 
+@utils.memoize(timeout)
 def parse_base(base, paths, params):
     url = '%s/' % base if not base.endswith('/') else base
     url += '/'.join(imap(str, ifilter(None, paths)))
