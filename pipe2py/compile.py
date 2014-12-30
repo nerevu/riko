@@ -34,9 +34,6 @@
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import fileinput
-import sys
-
 from json import dumps
 from codecs import open
 from itertools import chain, izip

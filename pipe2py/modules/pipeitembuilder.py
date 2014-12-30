@@ -31,7 +31,6 @@ def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
         ]
     }
 
-
     Yields
     ------
     _OUTPUT : items

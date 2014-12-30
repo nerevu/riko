@@ -58,4 +58,3 @@ def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
     results = (parse(url, context) for url in generated_urls)
     _OUTPUT = utils.multiplex(results)
     return _OUTPUT
-

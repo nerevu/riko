@@ -7,6 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Reverse
 """
 
+
 def pipe_reverse(context=None, _INPUT=None, conf=None, **kwargs):
     """An operator that reverses the order of source items. Not loopable. Not
     lazy.

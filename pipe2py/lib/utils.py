@@ -309,6 +309,7 @@ def gen_entries(parsed):
         entry['y:id'] = entry.get('id')
         yield entry
 
+
 def gen_items(item, yield_if_none=False):
     if item and hasattr(item, 'append'):
         for nested_item in item:
