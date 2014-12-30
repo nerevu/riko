@@ -45,7 +45,7 @@ class DotDict(FeedParserDict):
 
         return keys
 
-    def _parse_value(self, value, key):
+    def _parse_value(self, value, key, default=None):
         try:
             value = value[key]
         except (KeyError, TypeError):
@@ -54,7 +54,7 @@ class DotDict(FeedParserDict):
             else:
                 value = None
 
-        return value
+        return value or default
 
     def _gen_first_keys(self, keys):
         for key in keys:
@@ -89,7 +89,7 @@ class DotDict(FeedParserDict):
                 break
 
             key = int(key) if key.isdigit() else key
-            value = self._parse_value(value, key) or default
+            value = self._parse_value(value, key, default)
 
         if hasattr(value, 'keys') and 'terminal' in value:
             # value fed in from another module

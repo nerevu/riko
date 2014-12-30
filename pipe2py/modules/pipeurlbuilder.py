@@ -8,7 +8,7 @@
 """
 
 import urllib
-from itertools import imap
+from itertools import imap, ifilter
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -57,7 +57,7 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
         base = utils.get_value(conf['BASE'], _input, **kwargs)
         pairs = (utils.parse_conf(p, _input, **kwargs) for p in param_defs)
         paths = (utils.get_value(p, _input, **kwargs) for p in path_defs)
-        true_params = (p for p in pairs if all(p))
+        true_params = ifilter(all, pairs)
         real_params = dict((p.key, p.value) for p in true_params)
         _output = parse_base(base, paths, real_params)
         yield _output

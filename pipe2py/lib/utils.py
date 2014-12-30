@@ -7,6 +7,9 @@
 
 """
 
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
+
 import string
 
 import re
@@ -58,10 +61,8 @@ def extract_input(pipe_def=None, pipe_generator=None):
 def pythonise(id, encoding='ascii'):
     """Return a Python-friendly id"""
     replace = {'-': '_', ':': '_', '/': '_'}
-
-    for key, value in replace.items():
-        id = id.replace(key, value)
-
+    func = lambda id, pair: id.replace(pair[0], pair[1])
+    id = reduce(func, replace.iteritems(), id)
     id = '_%s' % id if id[0] in string.digits else id
     return id.encode(encoding)
 
@@ -83,7 +84,7 @@ def _make_content(i, tag, new):
     content = i.get(tag)
 
     if content and new:
-        content = content if hasattr(content, 'append') else [content]
+        content = listize(content)
         content.append(new)
     elif new:
         content = new
@@ -237,7 +238,8 @@ def url_quote(url):
 
 
 def listize(item):
-    return item if hasattr(item, 'append') else [item]
+    listlike = set(['append', 'next']).intersection(dir(item))
+    return item if listlike else [item]
 
 
 ############
@@ -245,13 +247,13 @@ def listize(item):
 ############
 def gen_entries(parsed):
     for entry in parsed['entries']:
-        entry['pubDate'] = entry.get('updated_parsed')
-        entry['y:published'] = entry.get('updated_parsed')
         entry['dc:creator'] = entry.get('author')
         entry['author.uri'] = entry.get('author_detail', {}).get(
             'href')
         entry['author.name'] = entry.get('author_detail', {}).get(
             'name')
+        entry['pubDate'] = entry.get('updated_parsed')
+        entry['y:published'] = entry.get('updated_parsed')
         entry['y:title'] = entry.get('title')
         entry['y:id'] = entry.get('id')
         yield entry
@@ -390,8 +392,8 @@ def gen_graph3(graph):
     # Remove any orphan nodes
     values = graph.values()
 
-    for node, value in graph.items():
-        targetted = [node in v for v in values]
+    for node, value in graph.iteritems():
+        targetted = (node in v for v in values)
 
         if value or any(targetted):
             yield (node, value)

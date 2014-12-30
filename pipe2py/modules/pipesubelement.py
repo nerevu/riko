@@ -24,14 +24,13 @@ def pipe_subelement(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : items
     """
+    path = DotDict(conf).get('path', **kwargs)
+
     for item in _INPUT:
-        path = DotDict(item).get(conf['path'], **kwargs)
+        element = DotDict(item).get(path, **kwargs)
 
-        for res in path:
-            for i in utils.gen_items(res, True):
-                yield i
-
-        yield utils.gen_items()
+        for i in utils.gen_items(element):
+            yield {'content': i}
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

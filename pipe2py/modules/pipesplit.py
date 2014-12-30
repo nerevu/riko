@@ -21,7 +21,7 @@ class Split(object):
 
         # deepcopy each item passed along so that changes in one branch
         # don't affect the other branch
-        self.iterators = [imap(deepcopy, iterator) for iterator in iterators]
+        self.iterators = (imap(deepcopy, iterator) for iterator in iterators)
 
     def __iter__(self):
         try:

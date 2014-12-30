@@ -30,7 +30,7 @@ def _gen_key_value(conf, item, **kwargs):
         if value:
             yield (RSS_SWITCH.get(key, key), value)
 
-        if value and Y_SWITCH.get(key):
+        if value and key in Y_SWITCH:
             yield (Y_SWITCH.get(key), value)
 
 

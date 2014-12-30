@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#ItemBuilder
 """
 
-from itertools import imap
+from itertools import imap, ifilter
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -42,7 +42,7 @@ def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     for item in _INPUT:
         _input = DotDict(item)
         pairs = (utils.parse_conf(a, _input, **kwargs) for a in attrs)
-        yield DotDict(p for p in pairs if all(p))
+        yield DotDict(ifilter(all, pairs))
 
         if item.get('forever'):
             # _INPUT is infinite and not a loop, so just yield item once

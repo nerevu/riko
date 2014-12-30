@@ -8,6 +8,8 @@
     indirect terminal inputs.
 """
 
+from __future__ import absolute_import
+
 
 def pipe_forever():
     """A source that returns an infinite generator of items. Loopable.

@@ -85,7 +85,7 @@ def _gen_string_modules(context, pipe, zipped):
         pykwargs = dict(_gen_pykwargs(context, pipe, module_id))
 
         if context and context.verbose:
-            con_args = filter(lambda x: x != Id('context'), args)
+            con_args = filter(lambda x: x != Id('context'), pyargs)
             nconf_kwargs = filter(lambda x: x[0] != 'conf', pykwargs.items())
             conf_kwargs = filter(lambda x: x[0] == 'conf', pykwargs.items())
             all_args = chain(con_args, nconf_kwargs, conf_kwargs)
