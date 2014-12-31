@@ -63,6 +63,6 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
 
     inputs = imap(DotDict, _INPUT)
-    splits = utils.split_input(inputs, get_rules, utils.passthrough, get_pass)
-    _OUTPUT = utils.get_output(splits, partial(parse_result, **kwargs))
+    splits = utils.broadcast(inputs, get_rules, utils.passthrough, get_pass)
+    _OUTPUT = utils.gather(splits, partial(parse_result, **kwargs))
     return _OUTPUT

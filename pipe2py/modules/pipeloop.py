@@ -100,6 +100,6 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
         'assign_to': assign_to, 'test': test, 'emit': emit, 'first': first}
 
     inputs = imap(DotDict, _INPUT)
-    splits = utils.split_input(inputs, get_submodule, utils.passthrough)
-    _OUTPUT = utils.get_output(splits, partial(parse_result, **pkwargs))
+    splits = utils.broadcast(inputs, get_submodule, utils.passthrough)
+    _OUTPUT = utils.gather(splits, partial(parse_result, **pkwargs))
     return _OUTPUT

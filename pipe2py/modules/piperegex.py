@@ -65,7 +65,7 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     funcs = [utils.convert_rules, utils.passthrough, utils.passthrough]
 
     inputs = imap(DotDict, _INPUT)
-    splits = utils.split_input(inputs, get_rules, utils.passthrough, get_pass)
-    parsed = utils.parse_splits(splits, *funcs)
-    _OUTPUT = utils.get_output(parsed, parse_result)
+    splits = utils.broadcast(inputs, get_rules, utils.passthrough, get_pass)
+    parsed = utils.dispatch(splits, *funcs)
+    _OUTPUT = utils.gather(parsed, parse_result)
     return _OUTPUT

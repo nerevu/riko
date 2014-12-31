@@ -173,7 +173,7 @@ def get_value(field, item, **kwargs):
     return value
 
 
-def split_input(_INPUT, *funcs):
+def broadcast(_INPUT, *funcs):
     for items in izip(*tee(_INPUT, len(funcs))):
         yield (func(item) for item, func in izip(items, funcs))
 
@@ -184,14 +184,14 @@ def parse_conf(conf=None, item=None, **kwargs):
     return Conf(*list(get_value(conf[k], item, **kwargs) for k in keys))
 
 
-def parse_splits(splits, *funcs):
+def dispatch(splits, *funcs):
     for split in splits:
         yield (func(item) for item, func in izip(split, funcs))
 
 
-def get_output(parsed, func):
-    for group in parsed:
-        yield func(*list(group))
+def gather(splits, func):
+    for split in splits:
+        yield func(*list(split))
 
 
 @cache.memoize(timeout)

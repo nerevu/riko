@@ -46,7 +46,7 @@ def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     get_conf = partial(utils.parse_conf, DotDict(conf), **kwargs)
     parse_result = lambda conf, num: OPS[conf.OP](num, conf.OTHER)
 
-    splits = utils.split_input(_INPUT, DotDict, get_with)
-    parsed = utils.parse_splits(splits, get_conf, utils.get_num)
-    _OUTPUT = utils.get_output(parsed, parse_result)
+    splits = utils.broadcast(_INPUT, DotDict, get_with)
+    parsed = utils.dispatch(splits, get_conf, utils.get_num)
+    _OUTPUT = utils.gather(parsed, parse_result)
     return _OUTPUT

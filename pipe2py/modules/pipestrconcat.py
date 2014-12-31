@@ -44,6 +44,6 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     get_parts = lambda i: imap(get_value, part_defs, repeat(i))
 
     inputs = imap(DotDict, _INPUT)
-    splits = utils.split_input(inputs, get_parts, get_pass)
-    _OUTPUT = utils.get_output(splits, parse_result)
+    splits = utils.broadcast(inputs, get_parts, get_pass)
+    _OUTPUT = utils.gather(splits, parse_result)
     return _OUTPUT

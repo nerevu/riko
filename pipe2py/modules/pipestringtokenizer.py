@@ -60,7 +60,7 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     get_conf = partial(utils.parse_conf, conf, **kwargs)
     funcs = [get_conf, utils.get_word, utils.passthrough]
 
-    splits = utils.split_input(_INPUT, DotDict, get_with, get_pass)
-    parsed = utils.parse_splits(splits, *funcs)
-    _OUTPUT = utils.get_output(parsed, parse_result)
+    splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
+    parsed = utils.dispatch(splits, *funcs)
+    _OUTPUT = utils.gather(parsed, parse_result)
     return _OUTPUT

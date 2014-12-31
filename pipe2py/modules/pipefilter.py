@@ -143,8 +143,8 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     funcs = [COMBINE_BOOLEAN[combine], utils.passthrough, utils.passthrough]
 
     inputs = imap(DotDict, _INPUT)
-    splits = utils.split_input(inputs, get_rules, utils.passthrough, get_pass)
-    outputs = utils.get_output(splits, partial(parse_rules, **kwargs))
-    parsed = utils.parse_splits(outputs, *funcs)
-    _OUTPUT = utils.get_output(parsed, partial(parse_result, permit=permit))
+    splits = utils.broadcast(inputs, get_rules, utils.passthrough, get_pass)
+    outputs = utils.gather(splits, partial(parse_rules, **kwargs))
+    parsed = utils.dispatch(outputs, *funcs)
+    _OUTPUT = utils.gather(parsed, partial(parse_result, permit=permit))
     return _OUTPUT
