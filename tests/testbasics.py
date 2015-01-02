@@ -148,6 +148,18 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
 
+    def test_input_override(self):
+        """Loads a pipeline with input override
+        """
+        self.context.inputs = {'textinput1': 'IBM'}
+        pipe_name = 'pipe_1LNyRuNS3BGdkTKaAsqenA'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+        sliced = islice(pipeline, 3)
+        contains = self.context.inputs['textinput1']
+        # check if the ticker is in the title of any of the first 3 items
+        self.assertIn(contains, ' '.join(item['title'] for item in sliced))
+
 ###############
 # Offline Tests
 ###############
@@ -408,18 +420,6 @@ class TestBasics(unittest.TestCase):
 
         self.assertEqual(
             pipeline, [{u'inputs': inputs, 'dependencies': dependencies}])
-
-    def test_input_override(self):
-        """Loads a pipeline with input override
-        """
-        self.context.inputs = {'textinput1': 'IBM'}
-        pipe_name = 'pipe_1LNyRuNS3BGdkTKaAsqenA'
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
-        sliced = islice(pipeline, 3)
-        contains = self.context.inputs['textinput1']
-        # check if the ticker is in the title of any of the first 3 items
-        self.assertIn(contains, ' '.join(item['title'] for item in sliced))
 
     def test_union_just_other(self):
         """Loads a pipeline containing a union with the first input unconnected
