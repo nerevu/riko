@@ -163,6 +163,13 @@ class TestBasics(unittest.TestCase):
 ###############
 # Offline Tests
 ###############
+    def test_kazeeki(self):
+        """Loads the kazeeki simple test pipeline
+        """
+        pipe_name = 'pipe_kazeeki'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+
     def test_simplest(self):
         """Loads the RTW simple test pipeline and compiles and executes it to
             check the results
