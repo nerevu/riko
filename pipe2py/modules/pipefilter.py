@@ -34,10 +34,10 @@ SWITCH = {
 }
 
 
-def parse_result(results, item, _pass, permit=True):
+def parse_result(result, item, _pass, permit=True):
     if _pass:
         _output = item
-    elif not ((results and permit) or (not results and not permit)):
+    elif not ((result and permit) or (not result and not permit)):
         _output = None
     else:
         _output = item
