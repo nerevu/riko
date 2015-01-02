@@ -168,7 +168,7 @@ def get_value(field, item=None, **kwargs):
     try:
         kwargs.update(OPS.get(field.get('type', 'text'), {}))
     except AttributeError:
-        pass
+        kwargs.update(OPS['text'])
 
     try:
         value = item.get(field['subkey'], **kwargs)
@@ -178,7 +178,7 @@ def get_value(field, item=None, **kwargs):
         else:
             value = field.get(None, **kwargs)
     except (TypeError, AttributeError):
-        value = kwargs.get('default')
+        value = field or kwargs.get('default')
 
     return value
 

@@ -4,648 +4,306 @@
 
 from pipe2py import Context
 from pipe2py.modules.pipeforever import pipe_forever
-from pipe2py.modules.pipestrregex import pipe_strregex
-from pipe2py.modules.pipestrreplace import pipe_strreplace
-from pipe2py.modules.pipestrconcat import pipe_strconcat
-from pipe2py.modules.pipesubstr import pipe_substr
-from pipe2py.modules.pipefetch import pipe_fetch
-from pipe2py.modules.piperename import pipe_rename
-from pipe2py.modules.piperegex import pipe_regex
-from pipe2py.modules.pipeloop import pipe_loop
-from pipe2py.modules.pipestringtokenizer import pipe_stringtokenizer
-from pipe2py.modules.pipehash import pipe_hash
-from pipe2py.modules.pipecurrencyformat import pipe_currencyformat
-from pipe2py.modules.pipeexchangerate import pipe_exchangerate
-from pipe2py.modules.pipesimplemath import pipe_simplemath
-from pipe2py.modules.pipeitembuilder import pipe_itembuilder
-from pipe2py.modules.pipeoutput import pipe_output
+from pipe2py.lib.utils import combine_dicts as cdict
+from pipe2py.lib.collections import SyncPipe
+
+forever = pipe_forever()
+make_regex = lambda f, m, r: {'field': f, 'match': m, 'replace': r}
+
+
+def make_simplemath(other, op):
+    return {'OTHER': {'subkey': other, 'type': 'number'}, 'OP': op}
+
+
+def make_substring(_from, length):
+    return {
+        'from': {'type': 'integer', 'value': _from}
+        , 'length': {'type': 'integer', 'value': length}
+    }
+
+
+def make_exchangerate(quote, offline=True):
+    return {
+        'quote': quote
+        , 'default': DEF_CUR_CODE
+        , 'offline': {'type': 'bool', 'value': offline}
+    }
+
+
+def make_tokenizer(to_str, dedupe=False, sort=False):
+    return {
+        'to-str': to_str
+        , 'dedupe': {'type': 'bool', 'value': dedupe}
+        , 'sort': {'type': 'bool', 'value': sort}
+    }
+
+
+def make_loop(_with, assign_to, embed_conf, **kwargs):
+    return {
+        'assign_part': kwargs.get('part', 'all'),
+        'emit_part': kwargs.get('part', 'all'),
+        'mode': kwargs.get('mode', 'assign'),
+        'with': _with,
+        'assign_to': assign_to,
+        'embed': {'conf': embed_conf},
+        'pass_if': kwargs.get('pass_if')
+    }
 
 DEF_CUR_CODE = 'USD'
+mmatch = {'multilinematch': '4'}
+smatch = {'singlelinematch': '2'}
+gmatch = {'globalmatch': '1'}
+
+rename1_rule = [
+    {'newval': '', 'field': 'y:title', 'op': 'rename'},
+    {'newval': '', 'field': 'content', 'op': 'rename'},
+    {'newval': 'k:posted', 'field': 'y:published', 'op': 'rename'},
+    {'newval': 'k:job_type', 'field': 'description', 'op': 'copy'},
+    {'newval': 'k:content', 'field': 'description', 'op': 'copy'},
+    {'newval': 'k:work_location', 'field': 'description', 'op': 'copy'},
+    {'newval': 'k:client_location', 'field': 'description', 'op': 'copy'},
+    # {'newval': 'k:category', 'field': 'description', 'op': 'copy'},
+    {'newval': 'k:tags', 'field': 'description', 'op': 'copy'},
+    {'newval': 'k:due', 'field': 'description', 'op': 'copy'},
+    {'newval': 'k:submissions', 'field': 'description', 'op': 'copy'},
+    {'newval': 'k:budget_raw', 'field': 'description', 'op': 'copy'},
+    {'newval': 'k:marketplace', 'field': 'link', 'op': 'copy'},
+    {'newval': 'k:author', 'field': 'title', 'op': 'copy'}]
+
+rename2_rule = [
+    {'newval': 'k:budget_raw1', 'field': 'k:budget_raw', 'op': 'copy'},
+    {'newval': 'k:budget_raw2', 'field': 'k:budget_raw', 'op': 'copy'}]
+
+rename3_rule = [
+    {'newval': 'k:budget_raw1_num', 'field': 'k:budget_raw1', 'op': 'copy'},
+    {'newval': 'k:budget_raw1_sym', 'field': 'k:budget_raw1', 'op': 'copy'},
+    {'newval': 'k:budget_raw1_code', 'field': 'k:budget_raw1', 'op': 'copy'},
+    {'newval': 'k:budget_raw2_num', 'field': 'k:budget_raw2', 'op': 'copy'},
+    {'newval': 'k:budget_raw2_sym', 'field': 'k:budget_raw2', 'op': 'copy'},
+    {'newval': 'k:budget_raw2_code', 'field': 'k:budget_raw2', 'op': 'copy'}]
+
+rename4_rule = [
+    {'newval': 'k:budget_full', 'field': 'k:budget_w_sym', 'op': 'copy'}]
+
+match1_1 = '^(.*)( - oDesk|\\| Elance Job)'
+match1_2 = u'^((http[s]?|ftp):\\/\\/)?\\/?([^\\/\\.]+\\.)*?([^\\/\\.]+\\.[^:\\/\\s\\.]{2,3}(\\.[^:\\/\\s\\.]\u200c\u200b{2,3})?(:\\d+)?)($|\\/)([^#?\\s]+)?(.*?)?(#[\\w\\-]+)?$'
+match1_3 = '^.*(Hourly budget:|Budget:</b> Hourly).*'
+match1_4 = '^.*(Fixed Price budget:|Budget:</b> Fixed Price).*'
+match1_5 = '^(?!\\b(hourly|fixed)\\b).*'
+match1_6 = '^(.*)(<b>(Category:|Budget)</b>|Budget:)(.*)'
+match1_7 = '^(.*)(<b>Description:</b>)(.*?)(<br /><b>Category:</b>)(.*)'
+match1_8 = '(.*)(<b>Proposals:</b>)(.*?)(<a href)(.*)'
+match1_9 = '(.*)(?!<b>Proposals:</b>)(.*)(<a href)(.*)'
+match1_10 = '(.*)(\\bby\\b)(.*)'
+match1_11 = '(.*)(?!\\bby\\b)(.*)'
+match1_12 = '(.*)(<b>(Freelancer|Preferred Job) Location:</b>)(.*?)(<br />)(.*)'
+match1_13 = '^(.*)(?!<b>(Freelancer|Preferred Job) Location:</b>)(.*)$'
+match1_14 = '(.*)(<b>(Client Location:</b>|Country</b>:))(.*?)(<br />|<br>)(.*)'
+match1_15 = '(.*)(<b>(Category:</b>|Category</b>:))(.*?)(<br />|<b>Skills</b>)(.*)'
+match1_16 = '(.*)(<b>(Required skills|Desired Skills):</b>)(.*?)(<br />)(.*)'
+match1_17 = '(.*)(Jobs:)(.*?)(\\))(.*)'
+match1_18 = '&gt;|<br>'
+match1_19 = '(\\w+)(?!.*,)'
+match1_20 = '\\/'
+match1_21 = '[^a-zA-Z\\d,]+'
+match1_22 = '.*Time Left.*\\(Ends(.*)\\) <br />'
+match1_23 = '.*(?!Time Left.*\(Ends(.*)\) <br />)'
+match1_24 = '(.*)(Fixed Price budget:</b>|Hourly budget.*Rate:|Budget:|Type and Budget|Budget</b>:)(.*?)(<br />|<br>|, Jobs:)(.*)'
+match1_25 = 'Under|Upto|Less than|or less'
+match1_26 = '(?!.*-.*)(.*)'
+
+regex1_rule = [
+    cdict(mmatch, smatch, make_regex('title', match1_1, '$1'))
+    , make_regex('k:marketplace', match1_2, '$4')
+    , cdict(mmatch, smatch, make_regex('k:job_type', match1_3, 'hourly'))
+    , cdict(mmatch, smatch, make_regex('k:job_type', match1_4, 'fixed'))
+    , cdict(mmatch, smatch, make_regex('k:job_type', match1_5, 'unknown'))
+    , cdict(mmatch, smatch, make_regex('k:content', match1_6, '$1'))
+    , cdict(mmatch, smatch, make_regex('k:content', match1_7, '$3'))
+    , cdict(mmatch, smatch, make_regex('k:submissions', match1_8, '$3'))
+    , cdict(mmatch, smatch, make_regex('k:submissions', match1_9, 'unknown'))
+    , cdict(mmatch, smatch, make_regex('k:author', match1_10, '$3'))
+    , cdict(mmatch, smatch, make_regex('k:author', match1_11, 'unknown'))
+    , cdict(mmatch, smatch, make_regex('k:work_location', match1_12, '$4'))
+    , cdict(mmatch, smatch, make_regex('k:work_location', match1_13, 'unknown'))
+    , cdict(mmatch, smatch, make_regex('k:client_location', match1_14, '$4'))
+    , cdict(mmatch, smatch, make_regex('k:tags', match1_15, '$4'))
+    , cdict(mmatch, smatch, make_regex('k:tags', match1_16, '$4'))
+    , cdict(mmatch, smatch, make_regex('k:tags', match1_17, '$3'))
+    , cdict(gmatch, make_regex('k:tags', match1_18, ''))
+    , cdict(gmatch, make_regex('k:tags', match1_19, '$1,'))
+    , cdict(gmatch, make_regex('k:tags', match1_20, ','))
+    , cdict(gmatch, make_regex('k:tags', match1_21, '-'))
+    , cdict(gmatch, make_regex('k:tags', '^-|-$', ''))
+    , cdict(gmatch, make_regex('k:tags', ',-|-,', ','))
+    , cdict(gmatch, make_regex('k:tags', '^,|,$', ''))
+    , cdict(mmatch, smatch, make_regex('k:due', match1_22, '$1'))
+    , cdict(mmatch, smatch, make_regex('k:due', match1_23, 'unknown'))
+    , cdict(mmatch, smatch, make_regex('k:budget_raw', match1_24, '$3'))
+    , make_regex('k:budget_raw', 'k', '000')
+    , make_regex('k:budget_raw', match1_25, '-')
+    , make_regex('k:budget_raw', match1_26, '$1-$1')
+]
+
+regex2_rule = [
+    make_regex('k:budget_raw1', '(.*)-(.*)', '$1')
+    , make_regex('k:budget_raw2', '(.*)-(.*)', '$2')
+]
+
+regex3_rule = [
+    make_regex('k:budget_raw1_num', '[^\\d]*(\\d+\\.?\\d*).*', '$1')
+    , make_regex('k:budget_raw1_sym', '\\s*([$£€₹]).*', '$1')
+    , make_regex('k:budget_raw1_code', '.*(\\b[A-Z]{3}\\b).*', '$1')
+    , make_regex('k:budget_raw2_num', '[^\\d]*(\\d+\\.?\\d*).*', '$1')
+    , make_regex('k:budget_raw2_sym', '\\s*([$£€₹]).*', '$1')
+    , make_regex('k:budget_raw2_code', '.*(\\b[A-Z]{3}\\b).*', '$1')
+]
+
+regex4_rule = [make_regex('k:cur_code', '^(?![A-Z]{3}\\b)(.*)', DEF_CUR_CODE)]
+
+strregex1_conf = {
+    'RULE': [
+        make_regex(None, '.*hr.*', 'hourly')
+        , make_regex(None, '.*unknown.*', 'unknown')
+        , make_regex(None, '^(?!.*(hourly|unknown).*).*', 'fixed')
+    ]
+}
+
+strregex2_conf = {
+    'RULE': [make_regex(None, '^unknown$', {'subkey': 'loop:strregex'})]}
+
+strregex3_conf = {
+    'RULE': [
+        {'param': '1', 'find': '$', 'replace': 'USD'}
+        , {'param': '1', 'find': u'£', 'replace': 'GBP'}
+        , {'param': '1', 'find': u'€', 'replace': 'EUR'}
+        , {'param': '1', 'find': u'₹', 'replace': 'INR'}
+    ]
+}
+
+strregex4_conf = {
+    'RULE': [
+        {'match': 'fixed', 'replace': '1'}
+        , {'match': 'hourly', 'replace': '2'}
+        , {'match': 'unknown', 'replace': '3'}
+    ]
+}
+
+strconcat1_conf = {
+    'part': [
+        {'subkey': 'k:budget_raw1_code'}
+        , {'subkey': 'k:budget_raw2_code'}
+    ]
+}
+
+strconcat2_conf = {
+    'part': [
+        {'subkey': 'k:budget_raw1_sym'}
+        , {'subkey': 'k:budget_raw2_sym'}
+    ]
+}
+
+strconcat3_conf = {
+    'part': [
+        {'subkey': 'k:budget_w_sym'}
+        , {'value': ' ('}
+        , {'subkey': 'k:budget_converted_w_sym'}
+        , {'value': ')'}
+    ]
+}
+
+strconcat4_conf = {
+    'part': [{'subkey': 'k:budget_full'}, {'value': ' / hr'}]}
+
+tokenizer_conf = make_tokenizer(',', True, True)
+substring1_conf = make_substring('0', '3')
+substring2_conf = make_substring('0', '1')
+currencyformat1_conf = {'currency': {'subkey': 'k:cur_code'}}
+exchangerate_conf = make_exchangerate(DEF_CUR_CODE, True)
+currencyformat2_conf = {'currency': DEF_CUR_CODE}
+simplemath1_conf = make_simplemath('k:budget_raw2_num', 'mean')
+simplemath2_conf = make_simplemath('k:rate', 'multiply')
+test1 = lambda item: item.get('k:cur_code')
+test2 = lambda item: item.get('k:cur_code') != DEF_CUR_CODE
+test3 = lambda item: item.get('k:cur_code') == DEF_CUR_CODE
+test4 = lambda item: item.get('k:job_type') != 'hourly'
+
+my_item = {
+    'content': u'<p>Hello, I need to fix an application i am working on.\xa0\xa0Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>',
+    'link': u'https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss',
+    'pubDate': 'December 27, 2014',
+    'summary': u'<p>Hello, I need to fix an application i am working on.\xa0\xa0Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>',
+    'title': u'Need to fix Ionic Rss Reader Application - oDesk',
+    'updated': u'Sat, 27 Dec 2014 13:32:55 +0000',
+    'y:id': None,
+    'y:published': None,
+    'y:title': u'Need to fix Ionic Rss Reader Application - oDesk'
+}
+
+loop1_conf = make_loop('k:budget_raw', 'loop:strregex', strregex1_conf)
+loop2_conf = make_loop('k:job_type', 'k:job_type', strregex2_conf)
+loop3_conf = make_loop('k:tags', 'k:tags', tokenizer_conf)
+loop4_conf = make_loop('k:budget_raw1_num', 'k:budget', simplemath1_conf)
+loop5_conf = make_loop('', 'k:cur_code', strconcat1_conf)
+loop6_conf = make_loop('k:cur_code', 'k:cur_code', substring1_conf)
+loop7_conf = make_loop('', 'k:budget_sym', strconcat2_conf)
+loop8_conf = make_loop('k:budget_sym', 'k:budget_sym', substring2_conf)
+loop9_conf = make_loop(
+    'k:budget_sym', 'k:cur_code', strregex3_conf, pass_if=test1)
+loop10_conf = make_loop('k:job_type', 'k:job_type_code', strregex4_conf)
+loop11_conf = make_loop('link', 'id', {'embed': {}})
+loop12_conf = make_loop('k:budget', 'k:budget_w_sym', currencyformat1_conf)
+loop13_conf = make_loop('k:cur_code', 'k:rate', exchangerate_conf)
+loop14_conf = make_loop('k:budget', 'k:budget_converted', simplemath2_conf)
+loop15_conf = make_loop(
+    'k:budget_converted', 'k:budget_converted_w_sym', currencyformat2_conf)
+loop16_conf = make_loop('', 'k:budget_full', strconcat3_conf, pass_if=test3)
+loop17_conf = make_loop('', 'k:budget_full', strconcat4_conf, pass_if=test4)
+
+itembuilder_attrs = [{'key': k, 'value': v} for k, v in my_item.items()]
+fetch_conf = {'URL': ['http://feeds.feedburner.com/odesk/rss']}
+itembuilder_conf = {'attrs': itembuilder_attrs}
+
+def parse_source(source):
+    pipe = (
+        source
+            .pipe('rename', conf={'RULE': rename1_rule})
+            .pipe('regex', conf={'RULE': regex1_rule})
+            .pipe('rename', conf={'RULE': rename2_rule})
+            .pipe('regex', conf={'RULE': regex2_rule})
+            .pipe('rename', conf={'RULE': rename3_rule})
+            .pipe('regex', conf={'RULE': regex3_rule})
+            .loop('strregex', conf=loop1_conf)
+            .loop('strregex', conf=loop2_conf)
+            .loop('stringtokenizer', conf=loop3_conf)
+            .loop('simplemath', conf=loop4_conf)
+            .loop('strconcat', conf=loop5_conf)
+            .loop('substr', conf=loop6_conf)
+            .loop('strconcat', conf=loop7_conf)
+            .loop('substr', conf=loop8_conf)
+            .loop('strreplace', conf=loop9_conf)
+            .pipe('regex', conf={'RULE': regex4_rule})
+            .loop('strregex', conf=loop10_conf)
+            .loop('hash', conf=loop11_conf)
+            .loop('currencyformat', conf=loop12_conf)
+            .loop('exchangerate', conf=loop13_conf)
+            .loop('simplemath', conf=loop14_conf)
+            .loop('currencyformat', conf=loop15_conf)
+            .pipe('rename', pass_if=test2, conf={'RULE': rename4_rule})
+            .loop('strconcat', conf=loop16_conf)
+            .loop('strconcat', conf=loop17_conf)
+    )
+
+    return pipe.output
 
 
-def pipe_kazeeki(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_kazeeki(context=None, conf=itembuilder_conf, **kwargs):
+    # source = SyncPipe('fetch', conf=fetch_conf, context=context)
+    source = SyncPipe('itembuilder', conf=conf, context=context)
+    output = parse_source(source)
+    return output
 
-    if context and context.describe_input:
-        return []
-
-    if context and context.describe_dependencies:
-        return [
-            u'pipefetch',
-            u'pipeloop',
-            u'pipeoutput',
-            u'piperegex',
-            u'piperename',
-            u'pipestrconcat',
-            u'pipestringtokenizer',
-            u'pipestrregex'
-        ]
-
-    forever = pipe_forever()
-    fetch_conf = {'URL': {'value': 'http://feeds.feedburner.com/odesk/rss'}}
-    rename1_rule = [
-        {
-            'newval': {'value': ''},
-            'field': {'value': 'y:title'},
-            'op': {'value': 'rename'}
-        }, {
-            'newval': {'value': ''},
-            'field': {'value': 'content'},
-            'op': {'value': 'rename'}
-        }, {
-            'newval': {'value': 'k:posted'},
-            'field': {'value': 'y:published'},
-            'op': {'value': 'rename'}
-        }, {
-            'newval': {'value': 'k:job_type'},
-            'field': {'value': 'description'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:content'},
-            'field': {'value': 'description'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:work_location'},
-            'field': {'value': 'description'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:client_location'},
-            'field': {'value': 'description'},
-            'op': {'value': 'copy'}
-        }, {
-        #     'newval': {'value': 'k:category'},
-        #     'field': {'value': 'description'},
-        #     'op': {'value': 'copy'}
-        # }, {
-            'newval': {'value': 'k:tags'},
-            'field': {'value': 'description'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:due'},
-            'field': {'value': 'description'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:submissions'},
-            'field': {'value': 'description'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:budget_raw'},
-            'field': {'value': 'description'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:marketplace'},
-            'field': {'value': 'link'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:author'},
-            'field': {'value': 'title'},
-            'op': {'value': 'copy'}}]
-
-    rename2_rule = [
-        {
-            'newval': {'value': 'k:budget_raw1'},
-            'field': {'value': 'k:budget_raw'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:budget_raw2'},
-            'field': {'value': 'k:budget_raw'},
-            'op': {'value': 'copy'}}]
-
-    rename3_rule = [
-        {
-            'newval': {'value': 'k:budget_raw1_num'},
-            'field': {'value': 'k:budget_raw1'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:budget_raw1_sym'},
-            'field': {'value': 'k:budget_raw1'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:budget_raw1_code'},
-            'field': {'value': 'k:budget_raw1'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:budget_raw2_num'},
-            'field': {'value': 'k:budget_raw2'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:budget_raw2_sym'},
-            'field': {'value': 'k:budget_raw2'},
-            'op': {'value': 'copy'}
-        }, {
-            'newval': {'value': 'k:budget_raw2_code'},
-            'field': {'value': 'k:budget_raw2'},
-            'op': {'value': 'copy'}}]
-
-    rename4_rule = [
-        {
-            'newval': {'value': 'k:budget_full'},
-            'field': {'value': 'k:budget_w_sym'},
-            'op': {'value': 'copy'}}]
-
-    regex1_rule = [
-        {
-            'field': {'value': 'title'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '^(.*)( - oDesk|\\| Elance Job)'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:marketplace'},
-            'match': {
-                'value': u'^((http[s]?|ftp):\\/\\/)?\\/?([^\\/\\.]+\\.)*?([^\\/\\.]+\\.[^:\\/\\s\\.]{2,3}(\\.[^:\\/\\s\\.]\u200c\u200b{2,3})?(:\\d+)?)($|\\/)([^#?\\s]+)?(.*?)?(#[\\w\\-]+)?$'
-            }, 'replace': {'value': '$4'}
-        }, {
-            'field': {'value': 'k:job_type'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '^.*(Hourly budget:|Budget:</b> Hourly).*'},
-            'replace': {'value': 'hourly'}
-        }, {
-            'field': {'value': 'k:job_type'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {
-                'value': '^.*(Fixed Price budget:|Budget:</b> Fixed Price).*'
-            }, 'replace': {'value': 'fixed'}
-        }, {
-            'field': {'value': 'k:job_type'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '^(?!\\b(hourly|fixed)\\b).*'},
-            'replace': {'value': 'unknown'}
-        }, {
-            'field': {'value': 'k:content'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '^(.*)(<b>(Category:|Budget)</b>|Budget:)(.*)'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:content'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {
-                'value': '^(.*)(<b>Description:</b>)(.*?)(<br /><b>Category:</b>)(.*)'
-            }, 'replace': {'value': '$3'}
-        }, {
-            'field': {'value': 'k:submissions'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '(.*)(<b>Proposals:</b>)(.*?)(<a href)(.*)'},
-            'replace': {'value': '$3'}
-        }, {
-            'field': {'value': 'k:submissions'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '(.*)(?!<b>Proposals:</b>)(.*)(<a href)(.*)'},
-            'replace': {'value': 'unknown'}
-        }, {
-            'field': {'value': 'k:author'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '(.*)(\\bby\\b)(.*)'},
-            'replace': {'value': '$3'}
-        }, {
-            'field': {'value': 'k:author'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '(.*)(?!\\bby\\b)(.*)'},
-            'replace': {'value': 'unknown'}
-        }, {
-            'field': {'value': 'k:work_location'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {
-                'value': '(.*)(<b>(Freelancer|Preferred Job) Location:</b>)(.*?)(<br />)(.*)'
-            }, 'replace': {'value': '$4'}
-        }, {
-            'field': {'value': 'k:work_location'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {
-                'value': '^(.*)(?!<b>(Freelancer|Preferred Job) Location:</b>)(.*)$'
-            }, 'replace': {'value': 'unknown'}
-        }, {
-            'field': {'value': 'k:client_location'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {
-                'value': '(.*)(<b>(Client Location:</b>|Country</b>:))(.*?)(<br />|<br>)(.*)'
-            }, 'replace': {'value': '$4'}
-        }, {
-            'field': {'value': 'k:tags'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '(.*)(<b>(Category:</b>|Category</b>:))(.*?)(<br />|<b>Skills</b>)(.*)'},
-            'replace': {'value': '$4'}
-        }, {
-            'field': {'value': 'k:tags'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {
-                'value': '(.*)(<b>(Required skills|Desired Skills):</b>)(.*?)(<br />)(.*)'
-            }, 'replace': {'value': '$4'}
-        }, {
-            'field': {'value': 'k:tags'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '(.*)(Jobs:)(.*?)(\\))(.*)'},
-            'replace': {'value': '$3'}
-        }, {
-            'field': {'value': 'k:tags'},
-            'globalmatch': {'value': '1'},
-            'match': {'value': '&gt;|<br>'},
-            'replace': {'value': ''}
-        }, {
-            'field': {'value': 'k:tags'},
-            'globalmatch': {'value': '1'},
-            'match': {'value': '(\\w+)(?!.*,)'},
-            'replace': {'value': '$1,'}
-        }, {
-            'field': {'value': 'k:tags'},
-            'globalmatch': {'value': '1'},
-            'match': {'value': '\\/'},
-            'replace': {'value': ','}
-        }, {
-            'field': {'value': 'k:tags'},
-            'globalmatch': {'value': '1'},
-            'match': {'value': '[^a-zA-Z\\d,]+'},
-            'replace': {'value': '-'}
-        }, {
-            'field': {'value': 'k:tags'},
-            'globalmatch': {'value': '1'},
-            'match': {'value': '^-|-$'},
-            'replace': {'value': ''}
-        }, {
-            'field': {'value': 'k:tags'},
-            'globalmatch': {'value': '1'},
-            'match': {'value': ',-|-,'},
-            'replace': {'value': ','}
-        }, {
-            'field': {'value': 'k:tags'},
-            'globalmatch': {'value': '1'},
-            'match': {'value': '^,|,$'},
-            'replace': {'value': ''}
-        }, {
-            'field': {'value': 'k:due'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '.*Time Left.*\\(Ends(.*)\\) <br />'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:due'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {'value': '.*(?!Time Left.*\(Ends(.*)\) <br />)'},
-            'replace': {'value': 'unknown'}
-        }, {
-            'field': {'value': 'k:budget_raw'},
-            'multilinematch': {'value': '4'},
-            'singlelinematch': {'value': '2'},
-            'match': {
-                'value': '(.*)(Fixed Price budget:</b>|Hourly budget.*Rate:|Budget:|Type and Budget|Budget</b>:)(.*?)(<br />|<br>|, Jobs:)(.*)'
-            }, 'replace': {'value': '$3'}
-        }, {
-            'field': {'value': 'k:budget_raw'},
-            'match': {'value': 'k'},
-            'replace': {'value': '000'}
-        }, {
-            'field': {'value': 'k:budget_raw'},
-            'match': {'value': 'Under|Upto|Less than|or less'},
-            'replace': {'value': '-'}
-        }, {
-            'field': {'value': 'k:budget_raw'},
-            'match': {'value': '(?!.*-.*)(.*)'},
-            'replace': {'value': '$1-$1'}
-        }]
-
-    regex2_rule = [
-        {
-            'field': {'value': 'k:budget_raw1'},
-            'match': {'value': '(.*)-(.*)'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:budget_raw2'},
-            'match': {'value': '(.*)-(.*)'},
-            'replace': {'value': '$2'}}]
-
-    regex3_rule = [
-        {
-            'field': {'value': 'k:budget_raw1_num'},
-            'match': {'value': '[^\\d]*(\\d+\\.?\\d*).*'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:budget_raw1_sym'},
-            'match': {'value': '\\s*([$£€₹]).*'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:budget_raw1_code'},
-            'match': {'value': '.*(\\b[A-Z]{3}\\b).*'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:budget_raw2_num'},
-            'match': {'value': '[^\\d]*(\\d+\\.?\\d*).*'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:budget_raw2_sym'},
-            'match': {'value': '\\s*([$£€₹]).*'},
-            'replace': {'value': '$1'}
-        }, {
-            'field': {'value': 'k:budget_raw2_code'},
-            'match': {'value': '.*(\\b[A-Z]{3}\\b).*'},
-            'replace': {'value': '$1'}}]
-
-    regex4_rule = [
-        {
-            'field': {'value': 'k:cur_code'},
-            'match': {'value': '^(?![A-Z]{3}\\b)(.*)'},
-            'replace': {'value': DEF_CUR_CODE}}]
-
-    strregex1_rule = [
-        {
-            'match': {'value': '.*hr.*'},
-            'replace': {'value': 'hourly'}
-        }, {
-            'match': {'value': '.*unknown.*'},
-            'replace': {'value': 'unknown'}
-        }, {
-            'match': {'value': '^(?!.*(hourly|unknown).*).*'},
-            'replace': {'value': 'fixed'}}]
-
-    strregex2_rule = [
-        {
-            'match': {'value': '^unknown$'},
-            'replace': {'subkey': 'loop:strregex'}}]
-
-    strregex3_rule = [
-        {
-            'param': {'value': '1'},
-            'find': {'value': '$'},
-            'replace': {'value': 'USD'}
-        }, {
-            'param': {'value': '1'},
-            'find': {'value': u'£'},
-            'replace': {'value': 'GBP'}
-        }, {
-            'param': {'value': '1'},
-            'find': {'value': u'€'},
-            'replace': {'value': 'EUR'}
-        }, {
-            'param': {'value': '1'},
-            'find': {'value': u'₹'},
-            'replace': {'value': 'INR'}
-        }]
-
-    strregex4_rule = [
-        {
-            'param': {'value': '1'},
-            'match': {'type': 'text', 'value': 'fixed'},
-            'replace': {'value': '1'}
-        }, {
-            'match': {'value': 'hourly'},
-            'replace': {'value': '2'}
-        }, {
-            'match': {'value': 'unknown'},
-            'replace': {'value': '3'}
-        }]
-
-    tokenizer_conf = {
-        'to-str': {'value': ','},
-        'dedupe': {'type': 'bool', 'value': '1'},
-        'sort': {'type': 'bool', 'value': '1'}}
-
-    strconcat1_conf = {
-        'part': [
-            {'subkey': 'k:budget_raw1_code'}, {'subkey': 'k:budget_raw2_code'}
-        ]}
-
-    strconcat2_conf = {
-        'part': [
-            {'subkey': 'k:budget_raw1_sym'}, {'subkey': 'k:budget_raw2_sym'}]}
-
-    strconcat3_conf = {
-        'part': [
-            {'subkey': 'k:budget_w_sym'},
-            {'value': ' ('},
-            {'subkey': 'k:budget_converted_w_sym'},
-            {'value': ')'}]}
-
-    strconcat4_conf = {
-        'part': [
-            {'subkey': 'k:budget_full'},
-            {'value': ' / hr'}]}
-
-    substring1_conf = {
-        'from': {'type': 'integer', 'value': '0'},
-        'length': {'type': 'integer', 'value': '3'}}
-
-    substring2_conf = {
-        'from': {'type': 'integer', 'value': '0'},
-        'length': {'type': 'integer', 'value': '1'}}
-
-    currencyformat1_conf = {'currency': {'subkey': 'k:cur_code'}}
-    exchangerate_conf = {
-        'quote': {'value': DEF_CUR_CODE},
-        'default': {'value': DEF_CUR_CODE},
-        'offline': {'type': 'bool', 'value': '1'},
-    }
-    currencyformat2_conf = {'currency': {'value': DEF_CUR_CODE}}
-
-    simplemath1_conf = {
-        'OTHER': {'subkey': 'k:budget_raw2_num', 'type': 'number'},
-        'OP': {'value': 'mean', 'type': 'text'}}
-
-    simplemath2_conf = {
-        'OTHER': {'subkey': 'k:rate', 'type': 'number'},
-        'OP': {'value': 'multiply', 'type': 'text'}}
-
-    test1 = lambda item: item.get('k:cur_code')
-    test2 = lambda item: item.get('k:cur_code') != DEF_CUR_CODE
-    test3 = lambda item: item.get('k:cur_code') == DEF_CUR_CODE
-    test4 = lambda item: item.get('k:job_type') != 'hourly'
-
-    itembuilder_attrs = [
-        {
-            'key': {'value': 'content'},
-            'value': {'value': u'<p>Hello, I need to fix an application i am working on.\xa0\xa0Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>'}
-        }, {
-            'key': {'value': 'link'},
-            'value': {'value': u'https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss'},
-        }, {
-            'key': {'value': 'pubDate'},
-            'value': {'value': 'December 27, 2014'},
-        }, {
-            'key': {'value': 'summary'},
-            'value': {'value': u'<p>Hello, I need to fix an application i am working on.\xa0\xa0Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>'},
-        }, {
-            'key': {'value': 'title'},
-            'value': {'value': u'Need to fix Ionic Rss Reader Application - oDesk'},
-        }, {
-            'key': {'value': 'updated'},
-            'value': {'value': u'Sat, 27 Dec 2014 13:32:55 +0000'},
-        }, {
-            'key': {'value': 'y:id'},
-            'value': {'value': None},
-        }, {
-            'key': {'value': 'y:published'},
-            'value': {'value': None},
-        }, {
-            'key': {'value': 'y:title'},
-            'value': {'value': u'Need to fix Ionic Rss Reader Application - oDesk'}}]
-
-    # fetch = pipe_fetch(context, forever, conf=fetch_conf)
-    items = pipe_itembuilder(context, forever, conf={'attrs': itembuilder_attrs})
-    rename1 = pipe_rename(context, items, conf={'RULE': rename1_rule})
-    regex1 = pipe_regex(context, rename1, conf={'RULE': regex1_rule})
-    rename2 = pipe_rename(context, regex1, conf={'RULE': rename2_rule})
-    regex2 = pipe_regex(context, rename2, conf={'RULE': regex2_rule})
-    rename3 = pipe_rename(context, regex2, conf={'RULE': rename3_rule})
-    regex3 = pipe_regex(context, rename3, conf={'RULE': regex3_rule})
-
-    loop1 = pipe_loop(
-        context, regex3, embed=pipe_strregex, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:budget_raw'},
-            'assign_to': {'value': 'loop:strregex'},
-            'embed': {'value': {'conf': {'RULE': strregex1_rule}}}})
-
-    loop2 = pipe_loop(
-        context, loop1, embed=pipe_strregex, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:job_type'},
-            'assign_to': {'value': 'k:job_type'},
-            'embed': {'value': {'conf': {'RULE': strregex2_rule}}}})
-
-    loop3 = pipe_loop(
-        context, loop2, embed=pipe_stringtokenizer, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:tags'},
-            'assign_to': {'value': 'k:tags'},
-            'embed': {'value': {'conf': tokenizer_conf}}})
-
-    loop4 = pipe_loop(
-        context, loop3, embed=pipe_simplemath, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:budget_raw1_num'},
-            'assign_to': {'value': 'k:budget'},
-            'embed': {'value': {'conf': simplemath1_conf}}})
-
-    loop5 = pipe_loop(
-        context, loop4, embed=pipe_strconcat, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': ''},
-            'assign_to': {'value': 'k:cur_code'},
-            'embed': {'value': {'conf': strconcat1_conf}}})
-
-    loop6 = pipe_loop(
-        context, loop5, embed=pipe_substr, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:cur_code'},
-            'assign_to': {'value': 'k:cur_code'},
-            'embed': {'value': {'conf': substring1_conf}}})
-
-    loop7 = pipe_loop(
-        context, loop6, embed=pipe_strconcat, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': ''},
-            'assign_to': {'value': 'k:budget_sym'},
-            'embed': {'value': {'conf': strconcat2_conf}}})
-
-    loop8 = pipe_loop(
-        context, loop7, embed=pipe_substr, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:budget_sym'},
-            'assign_to': {'value': 'k:budget_sym'},
-            'embed': {'value': {'conf': substring2_conf}}})
-
-    loop9 = pipe_loop(
-        context, loop8, embed=pipe_strreplace, pass_if=test1, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:budget_sym'},
-            'assign_to': {'value': 'k:cur_code'},
-            'embed': {'value': {'conf': {'RULE': strregex3_rule}}}})
-
-    regex4 = pipe_regex(context, loop9, conf={'RULE': regex4_rule})
-
-    loop10 = pipe_loop(
-        context, loop9, embed=pipe_strregex, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:job_type'},
-            'assign_to': {'value': 'k:job_type_code'},
-            'embed': {'value': {'conf': {'RULE': strregex4_rule}}}})
-
-    loop11 = pipe_loop(
-        context, loop10, embed=pipe_hash, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'link'},
-            'assign_to': {'value': 'id'},
-            'embed': {'value': {}}})
-
-    loop12 = pipe_loop(
-        context, loop11, embed=pipe_currencyformat, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:budget'},
-            'assign_to': {'value': 'k:budget_w_sym'},
-            'embed': {'value': {'conf': currencyformat1_conf}}})
-
-    loop13 = pipe_loop(
-        context, loop12, embed=pipe_exchangerate, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:cur_code'},
-            'assign_to': {'value': 'k:rate'},
-            'embed': {'value': {'conf': exchangerate_conf}}})
-
-    loop14 = pipe_loop(
-        context, loop13, embed=pipe_simplemath, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:budget'},
-            'assign_to': {'value': 'k:budget_converted'},
-            'embed': {'value': {'conf': simplemath2_conf}}})
-
-    loop15 = pipe_loop(
-        context, loop14, embed=pipe_currencyformat, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': 'k:budget_converted'},
-            'assign_to': {'value': 'k:budget_converted_w_sym'},
-            'embed': {'value': {'conf': currencyformat2_conf}}})
-
-    rename4 = pipe_rename(
-        context, loop15, pass_if=test2, conf={'RULE': rename4_rule})
-
-    loop16 = pipe_loop(
-        context, rename4, embed=pipe_strconcat, pass_if=test3, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': ''},
-            'assign_to': {'value': 'k:budget_full'},
-            'embed': {'value': {'conf': strconcat3_conf}}})
-
-    loop17 = pipe_loop(
-        context, loop16, embed=pipe_strconcat, pass_if=test4, conf={
-            'assign_part': {'value': 'all'},
-            'mode': {'value': 'assign'},
-            'with': {'value': ''},
-            'assign_to': {'value': 'k:budget_full'},
-            'embed': {'value': {'conf': strconcat4_conf}}})
-
-    return pipe_output(context, loop17, conf={})
 
 if __name__ == "__main__":
-    pipeline = pipe_82cdc3ce2af818cea73009f17cef4cd5(Context())
-
-    for i in pipeline:
+    for i in pipe_kazeeki(Context()):
         print i
