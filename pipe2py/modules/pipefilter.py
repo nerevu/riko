@@ -138,7 +138,8 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
 
     rule_defs = map(DotDict, utils.listize(conf['RULE']))
     get_pass = partial(utils.get_pass, test=test)
-    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_value = partial(utils.get_value, **kwargs)
+    parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
     get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
     funcs = [COMBINE_BOOLEAN[combine], utils.passthrough, utils.passthrough]
 

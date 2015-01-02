@@ -54,7 +54,7 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     conf = DotDict(conf)
     param_defs = map(DotDict, utils.listize(conf['PARAM']))
     get_value = partial(utils.get_value, **kwargs)
-    parse_conf = partial(utils.parse_conf, **kwargs)
+    parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
     get_base = partial(utils.get_value, conf['BASE'], **kwargs)
     get_params = lambda i: imap(parse_conf, param_defs, repeat(i))
     funcs = [utils.passthrough, utils.passthrough, utils.parse_params]

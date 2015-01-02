@@ -4,6 +4,11 @@
 # Note: each module name must match the name used internally by Yahoo, preceded
 # by pipe
 
+from functools import partial
+from itertools import imap, repeat
+from pipe2py.lib import utils
+from pipe2py.lib.dotdict import DotDict
+
 __all__ = [
     # Source Modules
     'pipecsv',
@@ -80,3 +85,25 @@ __all__ = [
     # 'pipeoutputkml',
     # 'pipeoutputcsv',
 ]
+
+
+def get_broadcast_funcs(pieces, ftype='with', parse=True, **kwargs):
+    test = kwargs.pop('pass_if', None)
+    piece_defs = map(DotDict, utils.listize(pieces))
+    get_value = partial(utils.get_value, **kwargs)
+    get_pass = partial(utils.get_pass, test=test)
+
+    if parse:
+        parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
+    else:
+        parse_conf = get_value
+
+    get_pieces = lambda i: imap(parse_conf, piece_defs, repeat(i))
+
+    f = {
+        'with': partial(utils.get_with, **kwargs),
+        'pass': utils.passthrough,
+        None: utils.passnone
+    }
+
+    return [get_pieces, f[ftype], get_pass]

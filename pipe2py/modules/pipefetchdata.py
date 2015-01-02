@@ -17,17 +17,63 @@ try:
 except (ImportError, AttributeError):
     from simplejson import loads
 
+from functools import partial
+from itertools import imap
+from twisted.internet.defer import inlineCallbacks, maybeDeferred, returnValue
+from . import get_broadcast_funcs as get_funcs
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncGather
 
 
-def _parse_dict(split_path, element):
-    for i in split_path:
+# Common functions
+def get_parsed(_INPUT, conf, **kwargs):
+    finite = utils.make_finite(_INPUT)
+    inputs = imap(DotDict, finite)
+    broadcast_funcs = get_funcs(conf, ftype=None, **kwargs)
+    confs = imap(broadcast_funcs[0], inputs)
+    splits = imap(parse_conf, confs)
+    return utils.dispatch(splits, get_element, utils.passthrough)
+
+
+def parse_result(path, element=None):
+    for i in path:
         element = element.get(i) if element else None
 
     return element
 
 
+def parse_conf(conf):
+    url = utils.get_abspath(conf.URL)
+    path = conf.path.split('.') if conf.path else []
+    return (url, path)
+
+
+def get_element(url):
+    try:
+        tree = objectify.parse(urlopen(url))
+        root = tree.getroot()
+    except XMLSyntaxError:
+        element = loads(urlopen(url).read())
+    else:
+        # print etree.tostring(element, pretty_print=True)
+        element = utils.etree_to_dict(root)
+
+    return element
+
+
+# Async functions
+@inlineCallbacks
+def asyncPipeFetchdata(context=None, _INPUT=None, conf=None, **kwargs):
+    _input = yield _INPUT
+    parsed = get_parsed(_input, conf, **kwargs)
+    results = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
+    items = imap(utils.gen_items, results)
+    _OUTPUT = utils.multiplex(items)
+    returnValue(_OUTPUT)
+
+
+# Synchronous functions
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     """A source that fetches and parses an XML or JSON file. Loopable.
 
@@ -66,41 +112,8 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     [u'appointment', 'reminder']
     """
     # todo: iCal and KML
-    conf = DotDict(conf)
-    urls = utils.listize(conf['URL'])
-
-    for item in _INPUT:
-        for item_url in urls:
-            item = DotDict(item)
-            url = utils.get_value(DotDict(item_url), item, **kwargs)
-            url = utils.get_abspath(url)
-            f = urlopen(url)
-            path = utils.get_value(conf['path'], item, **kwargs)
-            split_path = path.split(".") if path else []
-            res = {}
-
-            try:
-                tree = objectify.parse(f)
-                root = tree.getroot()
-            except XMLSyntaxError:
-                if context and context.verbose:
-                    print "pipe_fetchdata loading json:", url
-
-                f = urlopen(url)
-                element = loads(f.read())
-            else:
-                if context and context.verbose:
-                    print "pipe_fetchdata loading xml:", url
-
-                # print etree.tostring(element, pretty_print=True)
-                element = utils.etree_to_dict(root)
-            finally:
-                res = _parse_dict(split_path, element) if element else None
-
-                for i in utils.gen_items(res, True):
-                    yield i
-
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+    parsed = get_parsed(_INPUT, conf, **kwargs)
+    results = utils.gather(parsed, parse_result)
+    items = imap(utils.gen_items, results)
+    _OUTPUT = utils.multiplex(items)
+    return _OUTPUT

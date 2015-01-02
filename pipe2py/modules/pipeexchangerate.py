@@ -7,29 +7,46 @@
 
 import requests
 
-from functools import partial
+from itertools import imap
+from twisted.internet.defer import inlineCallbacks, returnValue
+from twisted.web.client import getPage
+from . import get_broadcast_funcs as get_funcs
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncNone, asyncGather
 
 timeout = 60 * 60 * 24  # 24 hours in seconds
 
+FIELDS = [
+    {'name': 'USD/USD', 'price': 1},
+    {'name': 'USD/EUR', 'price': 0.8234},
+    {'name': 'USD/GBP', 'price': 0.6448},
+    {'name': 'USD/INR', 'price': 63.6810},
+]
 
-@utils.memoize(timeout)
-def get_rates(offline=False):
-    if offline:
-        fields = [
-            {'name': 'USD/USD', 'price': 1},
-            {'name': 'USD/EUR', 'price': 0.8234},
-            {'name': 'USD/GBP', 'price': 0.6448},
-            {'name': 'USD/INR', 'price': 63.6810},
-        ]
-    else:
-        EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
-        EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
-        r = requests.get(EXCHANGE_API, params={'format': 'json'})
-        fields = r.json()['list']['resources']['resource']['fields']
+EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
+EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
+PARAMS = {'format': 'json'}
 
-    return {i['name']: i['price'] for i in fields}
+
+# Common functions
+def get_parsed(_INPUT, conf, **kwargs):
+    inputs = imap(DotDict, _INPUT)
+    broadcast_funcs = get_funcs(conf, **kwargs)
+    dispatch_funcs = [utils.compress_conf, utils.get_word, utils.passthrough]
+    splits = utils.broadcast(inputs, *broadcast_funcs)
+    return utils.dispatch(splits, *dispatch_funcs)
+
+
+def get_base(conf, word):
+    base = word or conf.default
+
+    try:
+        offline = conf.offline
+    except AttributeError:
+        offline = False
+
+    return (base, offline)
 
 
 def calc_rate(from_cur, to_cur, rates):
@@ -45,15 +62,60 @@ def calc_rate(from_cur, to_cur, rates):
     return 1 / float(rate)
 
 
-def parse_result(conf, base, _pass):
-    base = base or conf.default
+def parse_request(r, offline):
+    if offline:
+        fields = FIELDS
+    else:
+        fields = r.json()['list']['resources']['resource']['fields']
 
-    try:
-        offline = conf.offline
-    except AttributeError:
-        offline = False
+    return {i['name']: i['price'] for i in fields}
 
-    return base if _pass else calc_rate(base, conf.quote, get_rates(offline))
+
+# Async functions
+@inlineCallbacks
+@utils.memoize(timeout)
+def asyncParseResult(conf, word, _pass):
+    base, offline = get_base(conf, word)
+    kwargs = {'params': PARAMS}
+    r = yield asyncNone if offline else getPage(EXCHANGE_API, **kwargs)
+    rates = parse_request(r, offline)
+    result = base if _pass else calc_rate(base, conf.quote, rates)
+    returnValue(result)
+
+
+@inlineCallbacks
+def asyncPipeExchangeRate(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously retrieves the current exchange rate
+    for a given currency pair. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or strings (base currency)
+    conf : {
+        'quote': {'value': <'USD'>},
+        'default': {'value': <'USD'>},
+        'offline': {'type': 'bool', 'value': '0'},
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of hashed strings
+    """
+    _input = yield _INPUT
+    parsed = get_parsed(_input, conf, **kwargs)
+    _OUTPUT = yield asyncGather(parsed, asyncParseResult)
+    returnValue(_OUTPUT)
+
+
+# Synchronous functions
+@utils.memoize(timeout)
+def parse_result(conf, word, _pass):
+    base, offline = get_base(conf, word)
+    r = None if offline else requests.get(EXCHANGE_API, params=PARAMS)
+    rates = parse_request(r, offline)
+    result = base if _pass else calc_rate(base, conf.quote, rates)
+    return result
 
 
 def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
@@ -74,14 +136,6 @@ def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : hashed strings
     """
-    test = kwargs.pop('pass_if', None)
-    loop_with = kwargs.pop('with', None)
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_pass = partial(utils.get_pass, test=test)
-    get_conf = partial(utils.parse_conf, DotDict(conf), **kwargs)
-    funcs = [get_conf, utils.get_word, utils.passthrough]
-
-    splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
-    parsed = utils.dispatch(splits, *funcs)
+    parsed = get_parsed(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(parsed, parse_result)
     return _OUTPUT

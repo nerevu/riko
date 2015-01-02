@@ -9,11 +9,20 @@
 """
 
 from __future__ import absolute_import
+from itertools import takewhile, repeat
+from pipe2py.twisted.utils import asyncReturn
+
+forever = takewhile(bool, repeat({'forever': True}))
 
 
-def forever():
-    while True:
-        yield {'forever': True}
+def asyncPipeForever():
+    """A source that returns a Deferred infinite generator of items. Loopable.
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of items
+    """
+    return asyncReturn(forever)
 
 
 def pipe_forever():
@@ -23,5 +32,4 @@ def pipe_forever():
     -------
     _OUTPUT : generator of items
     """
-    _OUTPUT = forever()
-    return _OUTPUT
+    return forever

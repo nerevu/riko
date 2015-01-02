@@ -16,7 +16,7 @@ import re
 from collections import namedtuple
 from datetime import datetime
 from functools import partial
-from itertools import groupby, chain, izip, tee, takewhile, ifilter
+from itertools import groupby, chain, izip, tee, takewhile, ifilter, imap
 from urllib2 import quote
 from os import path as p, environ
 from pipe2py import Context
@@ -54,6 +54,8 @@ ALTERNATIVE_DATE_FORMATS = (
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
+
+combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
 
 
 def memoize(*args, **kwargs):
@@ -198,11 +200,16 @@ def gather(splits, func):
         yield func(*list(split))
 
 
-def parse_conf(conf, item=None, **kwargs):
+def parse_conf(conf, item=None, parse_func=None, **kwargs):
     keys = conf.keys()
     Conf = namedtuple('Conf', keys)
-    func = partial(get_value, item=item, **kwargs)
-    return Conf(*map(func, (conf[k] for k in keys)))
+    iterable = imap(lambda k: conf[k], keys)
+    result = map(partial(parse_func, item=item), iterable)
+    return Conf(*result)
+
+
+def compress_conf(confs, **kwargs):
+    return confs.next()
 
 
 @cache.memoize(timeout)
@@ -214,6 +221,11 @@ def parse_params(params):
 def get_pass(item=None, test=None):
     item = item or {}
     return test and test(item)
+
+
+def get_with(item, **kwargs):
+    loop_with = kwargs.pop('with', None)
+    return item.get(loop_with, **kwargs) if loop_with else item
 
 
 def get_date(date_string):
@@ -279,6 +291,10 @@ def get_num(item):
 
 def passthrough(item):
     return item
+
+
+def passnone(item):
+    return None
 
 
 def get_word(item):

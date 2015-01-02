@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#RSSItemBuilder
 """
 from functools import partial
-from itertools import imap, starmap, chain, ifilter
+from itertools import imap, starmap, ifilter
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -44,11 +44,12 @@ def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : items
     """
-    parse_conf = partial(utils.parse_conf, DotDict(conf), **kwargs)
+    get_value = partial(utils.get_value, **kwargs)
+    pkwargs = utils.combine_dicts({'parse_func': get_value}, kwargs)
+    parse_conf = partial(utils.parse_conf, DotDict(conf), **pkwargs)
     get_RSS = lambda key, value: (RSS.get(key, key), value)
     get_YAHOO = lambda key, value: (YAHOO.get(key), value)
     make_dict = lambda func, conf: dict(starmap(func, conf._asdict().items()))
-    combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
     clean_dict = lambda d: dict(ifilter(lambda t: all(t), d.items()))
     funcs = [partial(make_dict, get_RSS), partial(make_dict, get_YAHOO)]
 
@@ -56,7 +57,7 @@ def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     inputs = imap(DotDict, finite)
     confs = imap(parse_conf, inputs)
     splits = utils.broadcast(confs, *funcs)
-    combined = utils.gather(splits, combine_dicts)
+    combined = utils.gather(splits, utils.combine_dicts)
     result = imap(clean_dict, combined)
     _OUTPUT = imap(DotDict, result)
     return _OUTPUT

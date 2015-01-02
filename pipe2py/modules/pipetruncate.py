@@ -7,6 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators
 """
 
+from functools import partial
 from itertools import islice
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
@@ -29,6 +30,7 @@ def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
     """
     test = kwargs.pop('pass_if', None)
     _pass = utils.get_pass(test=test)
-    parsed = utils.parse_conf(DotDict(conf), **kwargs)
+    get_value = partial(utils.get_value, **kwargs)
+    parsed = utils.parse_conf(DotDict(conf), parse_func=get_value, **kwargs)
     _OUTPUT = _INPUT if _pass else islice(_INPUT, int(parsed.count))
     return _OUTPUT

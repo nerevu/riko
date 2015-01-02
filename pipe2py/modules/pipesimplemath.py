@@ -8,9 +8,13 @@
 """
 
 from functools import partial
+from itertools import imap
 from math import pow
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import get_broadcast_funcs as get_funcs
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncGather
 
 OPS = {
     'add': lambda x, y: x + y,
@@ -23,6 +27,45 @@ OPS = {
 }
 
 
+# Common functions
+def get_parsed(_INPUT, conf, **kwargs):
+    inputs = imap(DotDict, _INPUT)
+    broadcast_funcs = get_funcs(conf, **kwargs)
+    dispatch_funcs = [utils.compress_conf, utils.get_num, utils.passthrough]
+    splits = utils.broadcast(inputs, *broadcast_funcs)
+    return utils.dispatch(splits, *dispatch_funcs)
+
+
+def parse_result(conf, num, _pass):
+    return num if _pass else OPS[conf.OP](num, conf.OTHER)
+
+
+# Async functions
+@inlineCallbacks
+def asyncPipeSimpleMath(context=None, _INPUT=None, conf=None, **kwargs):
+    """A number module that asynchronously performs basic arithmetic, such as
+    addition and subtraction. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or numbers
+    conf : {
+        'OTHER': {'type': 'number', 'value': <'5'>},
+        'OP': {'type': 'text', 'value': <'modulo'>}
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of tokenized floats
+    """
+    _input = yield _INPUT
+    parsed = get_parsed(_input, conf, **kwargs)
+    _OUTPUT = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
+    returnValue(_OUTPUT)
+
+
+# Synchronous functions
 def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     """A number module that performs basic arithmetic, such as addition and
     subtraction. Loopable.
@@ -41,12 +84,6 @@ def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of tokenized floats
     """
-    loop_with = kwargs.pop('with', None)
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_conf = partial(utils.parse_conf, DotDict(conf), **kwargs)
-    parse_result = lambda conf, num: OPS[conf.OP](num, conf.OTHER)
-
-    splits = utils.broadcast(_INPUT, DotDict, get_with)
-    parsed = utils.dispatch(splits, get_conf, utils.get_num)
+    parsed = get_parsed(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(parsed, parse_result)
     return _OUTPUT

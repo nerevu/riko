@@ -9,9 +9,21 @@
 
 import re
 from functools import partial
-from itertools import imap, repeat
+from itertools import imap
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import get_broadcast_funcs as get_funcs
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncGather
+
+
+# Common functions
+def get_parsed(_INPUT, conf, **kwargs):
+    inputs = imap(DotDict, _INPUT)
+    broadcast_funcs = get_funcs(conf['RULE'], **kwargs)
+    dispatch_funcs = [utils.convert_rules, utils.get_word, utils.passthrough]
+    splits = utils.broadcast(inputs, *broadcast_funcs)
+    return utils.dispatch(splits, *dispatch_funcs)
 
 
 def parse_result(rules, word, _pass):
@@ -19,6 +31,37 @@ def parse_result(rules, word, _pass):
     return word if _pass else reduce(func, rules, word)
 
 
+# Async functions
+@inlineCallbacks
+def asyncPipeStrRegex(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously replaces text using regexes. Each
+    has the general format: "In [field] replace [regex pattern] with [text]".
+    Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or strings
+    conf : {
+        'RULE': [
+            {
+                'match': {'value': <regex>},
+                'replace': {'value': <'replacement'>}
+            }
+        ]
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of replaced strings
+    """
+    _input = yield _INPUT
+    parsed = get_parsed(_input, conf, **kwargs)
+    _OUTPUT = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
+    returnValue(_OUTPUT)
+
+
+# Synchronous functions
 def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that replaces text using regexes. Each has the general
     format: "In [field] replace [regex pattern] with [text]". Loopable.
@@ -40,18 +83,6 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of replaced strings
     """
-    conf = DotDict(conf)
-    test = kwargs.pop('pass_if', None)
-    loop_with = kwargs.pop('with', None)
-    rule_defs = map(DotDict, utils.listize(conf['RULE']))
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_pass = partial(utils.get_pass, test=test)
-    parse_conf = partial(utils.parse_conf, **kwargs)
-    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
-    funcs1 = [utils.convert_rules, utils.get_word, utils.passthrough]
-
-    inputs = imap(DotDict, _INPUT)
-    splits = utils.broadcast(inputs, get_rules, get_with, get_pass)
-    parsed = utils.dispatch(splits, *funcs1)
+    parsed = get_parsed(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(parsed, parse_result)
     return _OUTPUT
