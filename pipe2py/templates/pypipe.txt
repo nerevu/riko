@@ -30,11 +30,7 @@ def {{ pipe_name }}(context=None, _INPUT=None, conf=None, **kwargs):
     forever = pipe_forever()
 {% for module in modules -%}
     {% if module.id in embedded_pipes %}
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_{{ module.id }}(context=None, _INPUT=None, conf=None, **kwargs):
-        # todo: insert submodule description here
-        return {{ module.pipe_name }}(context, _INPUT, conf, **kwargs)
+    pipe_{{ module.id }} = {{ module.pipe_name }}
     {% endif -%}
 {%- endfor %}
 
