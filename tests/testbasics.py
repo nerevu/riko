@@ -254,29 +254,29 @@ class TestBasics(unittest.TestCase):
 
         contains = [
             {
-                'media:thumbnail': {'url': u'http://example.com/a.jpg'},
-                u'link': u'http://example.com/test.php?this=that',
-                u'description': u'b', u'y:title': u'a', u'title': u'a'
+                'media:thumbnail': {'url': 'http://example.com/a.jpg'},
+                'link': 'http://example.com/test.php?this=that',
+                'description': 'b', 'y:title': 'a', 'title': 'a'
             },
             {
-                u'newtitle': u'NEWTITLE',
-                u'loop:itembuilder': [
+                'newtitle': 'NEWTITLE',
+                'loop:itembuilder': [
                     {
-                        u'description': {u'content': u'DESCRIPTION'},
-                        u'title': u'NEWTITLE',
+                        'description': {'content': 'DESCRIPTION'},
+                        'title': 'NEWTITLE',
                     }
                 ],
-                u'title': u'TITLE1',
+                'title': 'TITLE1',
             },
             {
-                u'newtitle': u'NEWTITLE',
-                u'loop:itembuilder': [
+                'newtitle': 'NEWTITLE',
+                'loop:itembuilder': [
                     {
-                        u'description': {u'content': u'DESCRIPTION'},
-                        u'title': u'NEWTITLE',
+                        'description': {'content': 'DESCRIPTION'},
+                        'title': 'NEWTITLE',
                     }
                 ],
-                u'title': u'TITLE2',
+                'title': 'TITLE2',
             }
         ]
 

@@ -60,10 +60,10 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
     >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
-    ['alarmTime', 'begin', 'duration', 'places', 'subject', 'uid']
+    [u'alarmTime', u'begin', u'duration', u'places', u'subject', u'uid']
     >>> conf = {'URL': {'value': url}, 'path': {'value': ''}}
     >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
-    ['appointment', 'reminder']
+    [u'appointment', 'reminder']
     """
     # todo: iCal and KML
     conf = DotDict(conf)

@@ -27,6 +27,11 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
 
     pipe_name = 'pipe_%s' % args[0]
-    module = import_module('pipe2py.pypipelines.%s' % pipe_name)
+
+    try:
+        module = import_module('pipe2py.pypipelines.%s' % pipe_name)
+    except ImportError:
+        module = import_module('tests.pypipelines.%s' % pipe_name)
+
     pipe_generator = getattr(module, pipe_name)
-    pprint(list(pipe_generator(Context()))[0])
+    pprint(pipe_generator(Context(test=True, verbose=True)).next())
