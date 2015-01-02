@@ -165,7 +165,7 @@ class TestBasics(unittest.TestCase):
 
             TODO: have these tests iterate over a number of test pipelines
         """
-        pipe_name = 'testpipe1'
+        pipe_name = 'pipe_testpipe1'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
         [self.assertIn('the', i.get('description')) for i in pipeline]
