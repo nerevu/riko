@@ -40,7 +40,7 @@ sys.dont_write_bytecode = True
 
 setup(
     name='pipe2py',
-    version='0.19.0',
+    version='0.20.0',
     description=(
         'A project to compile Yahoo! Pipes into Python. '
         'The pipe2py package can compile a Yahoo! Pipe into pure Python source'

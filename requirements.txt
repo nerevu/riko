@@ -5,3 +5,5 @@ lxml==3.3.5
 mccabe==0.2.1
 six==1.7.3
 speedparser==0.1.8
+feedparser==5.1.3
+requests==2.4.3

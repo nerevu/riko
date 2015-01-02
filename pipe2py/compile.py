@@ -23,7 +23,8 @@
         python compile.py -p 2de0e4517ed76082dcddf66f7b218057
 
     Author: Greg Gaughan
-    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/starting-to-think-about-a-yahoo-pipes-code-generator)
+    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/
+        starting-to-think-about-a-yahoo-pipes-code-generator)
     Python generator pipelines inspired by:
         David Beazely (http://www.dabeaz.com/generators-uk)
     auto-rss module by Mark Pilgrim
@@ -214,12 +215,11 @@ def _gen_pykwargs(context, pipe, module_id, steps=None):
             yield ('embed', updated)
 
         # set splits in the pykwargs if this is split module
-        if module_type == 'split':
-            filtered = filter(
-                lambda x: module_id == util.pythonise(x[1]['src']['moduleid']),
-                pipe['wires'].items()
-            )
+        def filter_func(x):
+            module_id == util.pythonise(x[1]['src']['moduleid'])
 
+        if module_type == 'split':
+            filtered = filter(filter_func, pipe['wires'].items())
             count = len(filtered)
             updated = count if steps else Id(count)
             yield ('splits', updated)
@@ -340,6 +340,12 @@ def stringify_pipe(context, pipe, pipe_def):
     return template.render(**tmpl_kwargs)
 
 
+def yql(query):
+    base = 'http://query.yahooapis.com/v1/public/yql'
+    r = requests.get(base, params={'q': query, 'format': 'json'})
+    return r.json()['query']['results']
+
+
 if __name__ == '__main__':
     usage = 'usage: %prog [options] [filename]'
     parser = OptionParser(usage=usage)
@@ -353,8 +359,8 @@ if __name__ == '__main__':
         "-s", dest="savejson", help="save pipe JSON to file",
         action="store_true")
     parser.add_option(
-        "-o", dest="saveoutput", help="save output from pipes.yahoo.com to file",
-        action="store_true")
+        "-o", dest="saveoutput",
+        help="save output from pipes.yahoo.com to file", action="store_true")
     parser.add_option(
         "-v", dest="verbose", help="set verbose debug", action="store_true")
     (options, args) = parser.parse_args()
@@ -373,23 +379,17 @@ if __name__ == '__main__':
         pipe_name = 'pipe_%s' % options.pipeid
 
         # Get the pipeline definition
-        base = 'http://query.yahooapis.com/v1/public/yql?q='
-        select = 'select%20PIPE.working%20from%20json%20'
-        where = 'where%20url=%22http%3A%2F%2Fpipes.yahoo.com'
-        pipe = '%2Fpipes%2Fpipe.info%3F_out=json%26_id=%s' % options.pipeid
-        end = '%22&format=json'
-        url = base + select + where + pipe + end
-        # todo: refactor this url->json
+        base = 'http://pipes.yahoo.com/pipes/pipe.info'
+        query = (
+            'select PIPE.working from json where url="%s?_out=json&_id=%s"' % (
+                base, options.pipeid)
+        )
 
-        pjson = requests.get(url).text
-        pipe_raw = _load_json(pjson)
-        results = pipe_raw['query']['results']
-
-        if not results:
+        try:
+            pipe_def = yql(query)['json']['PIPE']['working']
+        except TypeError:
             print('Pipe not found')
             sys.exit(1)
-
-        pipe_def = results['json']['PIPE']['working']
     elif pipe_file_name:
         pipe_name = p.splitext(p.split(pipe_file_name)[-1])[0]
 

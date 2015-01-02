@@ -7,11 +7,7 @@ from datetime import datetime
 from urllib2 import quote
 from os import path as p
 from pipe2py import Context
-
-try:
-    from json import loads
-except (ImportError, AttributeError):
-    from simplejson import loads
+from itertools import chain
 
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
@@ -191,9 +187,7 @@ def gen_entries(parsed):
             'name')
         entry['y:title'] = entry.get('title')
         entry['y:id'] = entry.get('id')
-        # TODO: more?
         yield entry
-
 
 def gen_items(item, yield_if_none=False):
     if item and hasattr(item, 'append'):
@@ -301,55 +295,6 @@ def gen_graph3(graph):
             yield (node, value)
 
 
-###########################################################
-# Generator Tricks for Systems Programmers by David Beazley
-###########################################################
-def _gen_cat(sources):
-    """Feed a generated sequence into a queue
-    Concatenate multiple generators into a single sequence
-    """
-    for s in sources:
-        for item in s:
-            yield item
-
-
-def _send_to_queue(source, queue):
-    """Feed a generated sequence into a queue
-    """
-    for item in source:
-        queue.put(item)
-    queue.put(StopIteration)
-
-
-def _gen_from_queue(queue):
-    """Generate items received on a queue
-    """
-    while True:
-        item = queue.get()
-
-        if item is StopIteration:
-            break
-
-        yield item
-
-
-def _gen_multiplex(sources, target, generator, queue, Thread):
-    """Generate threads to run the generator and send items to a shared queue
-    """
-    for src in sources:
-        thr = Thread(target=target, args=(src, queue))
-        thr.start()
-        yield generator(queue)
-
-
 def multiplex(sources):
-    """Consume several generators in parallel
-    """
-    from Queue import Queue
-    from threading import Thread
-
-    queue = Queue()
-    consumers = _gen_multiplex(
-        sources, _send_to_queue, _gen_from_queue, queue, Thread)
-
-    return _gen_cat(consumers)
+    """Combine multiple generators into one"""
+    return chain.from_iterable(sources)

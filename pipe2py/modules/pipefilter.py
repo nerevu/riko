@@ -116,8 +116,7 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     mode = conf.get('MODE', **kwargs)
     combine = conf.get('COMBINE', **kwargs)
     fields = ['field', 'op', 'value']
-    rule_defs = util.listize(conf['RULE'])
-    rule_defs = [DotDict(rule_def) for rule_def in rule_defs]
+    rule_defs = [DotDict(rule_def) for rule_def in util.listize(conf['RULE'])]
 
     # use list bc iterator gets used up if there are no matching feeds
     rules = list(util.gen_rules(rule_defs, fields, **kwargs))

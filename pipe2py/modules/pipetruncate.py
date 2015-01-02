@@ -6,7 +6,7 @@ from itertools import islice
 
 
 def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator truncates the number of items in a feed.
+    """Returns a specified number of items from the top of a feed.
 
     Keyword arguments:
     context -- pipeline context

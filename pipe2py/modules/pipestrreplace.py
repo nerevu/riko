@@ -28,7 +28,10 @@ def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
     """
     conf = DotDict(conf)
     fields = ['find', 'param', 'replace']
-    rules = list(util.gen_rules(conf['RULE'], fields, **kwargs))
+    rule_defs = [DotDict(rule_def) for rule_def in util.listize(conf['RULE'])]
+
+    # use list bc iterator gets used up if there are no matching feeds
+    rules = list(util.gen_rules(rule_defs, fields, **kwargs))
 
     for item in _INPUT:
         yield reduce(
