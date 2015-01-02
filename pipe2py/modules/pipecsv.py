@@ -14,8 +14,8 @@ from pipe2py.lib.dotdict import DotDict
 
 
 def _gen_fieldnames(conf, reader, item, **kwargs):
-    start = utils.get_value(conf['col_row_start'], item, func=int, **kwargs)
-    end = utils.get_value(conf['col_row_end'], item, func=int, **kwargs)
+    start = int(utils.get_value(conf['col_row_start'], item, **kwargs))
+    end = int(utils.get_value(conf['col_row_end'], item, **kwargs))
 
     for i in xrange((end - start) + 1):
         yield reader.next()
@@ -57,7 +57,7 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         url = utils.get_value(conf['URL'], item, **kwargs)
         url = utils.get_abspath(url)
         separator = utils.get_value(conf_sep, item, encode=True, **kwargs)
-        skip = utils.get_value(conf['skip'], item, func=int, **kwargs)
+        skip = int(utils.get_value(conf['skip'], item, **kwargs))
         col_mode = utils.get_value(conf_mode, item, **kwargs)
 
         f = urlopen(url)

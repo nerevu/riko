@@ -136,7 +136,7 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
         raise Exception(
             "Invalid combine: %s. (Expected 'and' or 'or')" % combine)
 
-    rule_defs = imap(DotDict, utils.listize(conf['RULE']))
+    rule_defs = map(DotDict, utils.listize(conf['RULE']))
     get_pass = partial(utils.get_pass, test=test)
     parse_conf = partial(utils.parse_conf, **kwargs)
     get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
@@ -146,5 +146,6 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     splits = utils.broadcast(inputs, get_rules, utils.passthrough, get_pass)
     outputs = utils.gather(splits, partial(parse_rules, **kwargs))
     parsed = utils.dispatch(outputs, *funcs)
-    _OUTPUT = utils.gather(parsed, partial(parse_result, permit=permit))
+    gathered = utils.gather(parsed, partial(parse_result, permit=permit))
+    _OUTPUT = ifilter(None, gathered)
     return _OUTPUT

@@ -20,7 +20,7 @@ from pipe2py.lib.dotdict import DotDict
 
 
 def func(item, rule):
-    string = item.get(rule.field)
+    string = item.get(rule.field) or ''
     replaced = re.sub(rule.match, rule.replace, string, rule.count)
     item.set(rule.field, replaced)
     return item
@@ -58,7 +58,7 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     """
     conf = DotDict(conf)
     test = kwargs.pop('pass_if', None)
-    rule_defs = imap(DotDict, utils.listize(conf['RULE']))
+    rule_defs = map(DotDict, utils.listize(conf['RULE']))
     get_pass = partial(utils.get_pass, test=test)
     parse_conf = partial(utils.parse_conf, **kwargs)
     get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))

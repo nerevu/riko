@@ -57,7 +57,7 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     """
     conf = DotDict(conf)
     test = kwargs.pop('pass_if', None)
-    rule_defs = imap(DotDict, utils.listize(conf['RULE']))
+    rule_defs = map(DotDict, utils.listize(conf['RULE']))
     get_pass = partial(utils.get_pass, test=test)
     parse_conf = partial(utils.parse_conf, **kwargs)
     get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))

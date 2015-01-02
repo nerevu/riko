@@ -24,33 +24,36 @@ def _gen_inputs(item, conf):
 def parse(item, conf, embed, **kwargs):
     context = kwargs.pop('context')
     context.inputs = dict(_gen_inputs(item, conf))  # prepare the submodule
-    submodule = embed(context, [item], conf, **kwargs)
+    submodule = embed(context, iter([item]), conf, **kwargs)
     return submodule
 
 
 def parse_result(submodule, item, **kwargs):
-    assign_to = kwargs.get('assign_to')
-    test = kwargs.get('test')
-    emit = kwargs.get('emit')
-    first = kwargs.get('first')
+    _pass = utils.get_pass(item, kwargs.get('test'))
 
-    if utils.get_pass(item, test):
-        r = item.get(assign_to)
+    if _pass:
+        result = item
     else:
-        r = submodule.next()
+        assign_to = kwargs.get('assign_to')
+        emit = kwargs.get('emit')
+        first = kwargs.get('first')
+        first_result = submodule.next()
+        is_item = hasattr(first_result, 'keys')
 
-    if not first and hasattr(r, 'keys'):
-        # submodule can deliver 1 or more results,
-        # e.g. stringtokenizer
-        assign = list(chain([r], submodule))
-    else:
-        # submodule only delivers 1 result, e.g. strconcat
-        # or user selected 'first'
-        assign = r
+    if not _pass and first and is_item:
+        all_results = iter([first_result])
+    elif not _pass and is_item:
+        # submodule delivers one or more results, e.g. fetchpage, tokenizer so
+        # grab the rest
+        all_results = chain([first_result], submodule)
+    elif not _pass:
+        # submodule delivers one result (text, number...), e.g. strconcat
+        all_results = first_result
 
-    if emit:
-        result = assign
-    else:
+    if not _pass and emit:
+        result = all_results if is_item else iter([all_results])
+    elif not _pass:
+        assign = list(all_results) if is_item else all_results
         item.set(assign_to, assign)
         result = item
 
@@ -101,5 +104,11 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
 
     inputs = imap(DotDict, _INPUT)
     splits = utils.broadcast(inputs, get_submodule, utils.passthrough)
-    _OUTPUT = utils.gather(splits, partial(parse_result, **pkwargs))
+    gathered = utils.gather(splits, partial(parse_result, **pkwargs))
+
+    if emit:
+        _OUTPUT = utils.multiplex(gathered)
+    else:
+        _OUTPUT = gathered
+
     return _OUTPUT

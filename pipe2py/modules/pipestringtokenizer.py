@@ -62,5 +62,6 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
 
     splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
     parsed = utils.dispatch(splits, *funcs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    items = utils.gather(parsed, parse_result)
+    _OUTPUT = utils.multiplex(items)
     return _OUTPUT

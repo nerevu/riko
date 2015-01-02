@@ -13,8 +13,9 @@ from pipe2py.lib.dotdict import DotDict
 
 
 def parse_result(conf, word, _pass):
-    end = conf.start + conf.length
-    return word if _pass else word[conf.start:end]
+    start = int(conf.start)
+    end = int(conf.start + conf.length)
+    return word if _pass else word[start:end]
 
 
 def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
