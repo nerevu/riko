@@ -8,7 +8,8 @@
 """
 
 import urllib
-from itertools import imap, ifilter
+from functools import partial
+from itertools import imap, ifilter, repeat
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -53,13 +54,15 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     conf = DotDict(conf)
     param_defs = map(DotDict, utils.listize(conf['PARAM']))
     path_defs = map(DotDict, utils.listize(conf['PATH']))
+    get_value = partial(utils.get_value, **kwargs)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_base = partial(utils.get_value, conf['BASE'], **kwargs)
+    get_paths = lambda i: imap(get_value, path_defs, repeat(i))
+    get_params = lambda i: imap(parse_conf, param_defs, repeat(i))
+    funcs = [utils.passthrough, utils.passthrough, utils.parse_params]
 
-    for item in _INPUT:
-        _input = DotDict(item)
-        base = utils.get_value(conf['BASE'], _input, **kwargs)
-        pairs = (utils.parse_conf(p, _input, **kwargs) for p in param_defs)
-        paths = (utils.get_value(p, _input, **kwargs) for p in path_defs)
-        true_params = ifilter(all, pairs)
-        real_params = dict((p.key, p.value) for p in true_params)
-        _output = parse_base(base, paths, real_params)
-        yield _output
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.broadcast(inputs, get_base, get_paths, get_params)
+    parsed = utils.dispatch(splits, *funcs)
+    _OUTPUT = utils.gather(parsed, parse_base)
+    return _OUTPUT

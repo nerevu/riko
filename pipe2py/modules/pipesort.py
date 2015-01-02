@@ -61,7 +61,7 @@ def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):
     """
     conf = DotDict(conf)
     test = kwargs.pop('pass_if', None)
-    _pass = utils.get_pass({}, test)
+    _pass = utils.get_pass(test=test)
     key_defs = imap(DotDict, utils.listize(conf['KEY']))
     keys = imap(utils.parse_conf, key_defs)
     parse_key = lambda k: '%s%s' % ('-' if k.dir == 'DESC' else '', k.field)

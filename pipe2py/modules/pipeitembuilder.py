@@ -7,7 +7,8 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#ItemBuilder
 """
 
-from itertools import imap, ifilter
+from functools import partial
+from itertools import imap, repeat
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -31,18 +32,18 @@ def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
         ]
     }
 
-    Yields
+    Returns
     ------
-    _OUTPUT : items
+    _OUTPUT : generator of items
     """
     conf = DotDict(conf)
-    attrs = imap(DotDict, utils.listize(conf['attrs']))
+    attr_defs = map(DotDict, utils.listize(conf['attrs']))
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_attrs = lambda i: imap(parse_conf, attr_defs, repeat(i))
 
-    for item in _INPUT:
-        _input = DotDict(item)
-        pairs = (utils.parse_conf(a, _input, **kwargs) for a in attrs)
-        yield DotDict(ifilter(all, pairs))
-
-        if item.get('forever'):
-            # _INPUT is infinite and not a loop, so just yield item once
-            break
+    finite = utils.make_finite(_INPUT)
+    inputs = imap(DotDict, finite)
+    attrs = imap(get_attrs, inputs)
+    results = imap(utils.parse_params, attrs)
+    _OUTPUT = imap(DotDict, results)
+    return _OUTPUT

@@ -7,8 +7,6 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators
 """
 
-from functools import partial
-from itertools import repeat, imap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -39,9 +37,8 @@ def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of unique items
     """
-    conf = DotDict(conf)
     test = kwargs.pop('pass_if', None)
-    _pass = utils.get_pass({}, test)
-    parsed = imap(partial(utils.parse_conf, **kwargs), conf, repeat({}))
+    _pass = utils.get_pass(test=test)
+    parsed = utils.parse_conf(DotDict(conf), **kwargs)
     _OUTPUT = _INPUT if _pass else unique_items(_INPUT, parsed.field)
     return _OUTPUT

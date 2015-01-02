@@ -15,7 +15,8 @@ import string
 import re
 from collections import namedtuple
 from datetime import datetime
-from itertools import groupby, chain, izip, tee
+from functools import partial
+from itertools import groupby, chain, izip, tee, takewhile, ifilter
 from urllib2 import quote
 from os import path as p, environ
 from pipe2py import Context
@@ -145,8 +146,17 @@ def etree_to_dict(element):
     return i
 
 
+def make_finite(_INPUT):
+    yield _INPUT.next()
+
+    for i in takewhile(lambda i: not 'forever' in i, _INPUT):
+        yield i
+
+
 @memoize(timeout)
-def get_value(field, item, **kwargs):
+def get_value(field, item=None, **kwargs):
+    item = item or {}
+
     OPS = {
         'number': {'default': 0.0, 'func': float},
         'integer': {'default': 0, 'func': int},
@@ -178,12 +188,6 @@ def broadcast(_INPUT, *funcs):
         yield (func(item) for item, func in izip(items, funcs))
 
 
-def parse_conf(conf=None, item=None, **kwargs):
-    keys = conf.keys()
-    Conf = namedtuple('Conf', keys)
-    return Conf(*list(get_value(conf[k], item, **kwargs) for k in keys))
-
-
 def dispatch(splits, *funcs):
     for split in splits:
         yield (func(item) for item, func in izip(split, funcs))
@@ -194,8 +198,21 @@ def gather(splits, func):
         yield func(*list(split))
 
 
+def parse_conf(conf, item=None, **kwargs):
+    keys = conf.keys()
+    Conf = namedtuple('Conf', keys)
+    func = partial(get_value, item=item, **kwargs)
+    return Conf(*map(func, (conf[k] for k in keys)))
+
+
 @cache.memoize(timeout)
-def get_pass(item, test=None):
+def parse_params(params):
+    true_params = ifilter(all, params)
+    return dict((x.key, x.value) for x in true_params)
+
+
+def get_pass(item=None, test=None):
+    item = item or {}
     return test and test(item)
 
 

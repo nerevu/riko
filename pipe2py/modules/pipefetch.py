@@ -11,6 +11,8 @@
 
 import speedparser
 
+from functools import partial
+from itertools import repeat, imap, ifilter
 from urllib2 import urlopen
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
@@ -24,18 +26,6 @@ def parse(url, context=None):
     parsed = speedparser.parse(content)
     results = utils.gen_entries(parsed)
     return results
-
-
-def gen_urls(_INPUT, urls, context, **kwargs):
-    for item in _INPUT:
-        for item_url in urls:
-            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            yield utils.get_abspath(url)
-
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
 
 
 def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
@@ -53,8 +43,16 @@ def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : generator of items
     """
     conf = DotDict(conf)
-    urls = utils.listize(conf['URL'])
-    generated_urls = gen_urls(_INPUT, urls, context, **kwargs)
-    results = (parse(url, context) for url in generated_urls)
-    _OUTPUT = utils.multiplex(results)
+    url_defs = map(DotDict, utils.listize(conf['URL']))
+    get_value = partial(utils.get_value, **kwargs)
+    get_urls = lambda i: imap(get_value, url_defs, repeat(i))
+
+    finite = utils.make_finite(_INPUT)
+    inputs = imap(DotDict, finite)
+    urls = imap(get_urls, inputs)
+    flat_urls = utils.multiplex(urls)
+    true_urls = ifilter(None, flat_urls)
+    abs_urls = imap(utils.get_abspath, true_urls)
+    items = imap(parse, abs_urls, repeat(context))
+    _OUTPUT = utils.multiplex(items)
     return _OUTPUT
