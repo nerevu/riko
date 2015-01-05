@@ -61,9 +61,9 @@ def pipe_currencyformat(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : iterable of items or numbers
     conf : {'currency': {'value': <'USD'>}}
 
-    Yields
-    ------
-    _OUTPUT : formatted currency
+    Returns
+    -------
+    _OUTPUT : generator of formatted currencies
     """
     parsed = get_parsed(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(parsed, parse_result)

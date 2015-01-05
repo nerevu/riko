@@ -51,16 +51,16 @@ def asyncPipeHash(context=None, _INPUT=None, conf=None, **kwargs):
 
 # Synchronous functions
 def pipe_hash(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that hashes the given text using. Loopable.
+    """A string module that hashes the given text. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
     _INPUT : iterable of items or strings
 
-    Yields
-    ------
-    _OUTPUT : hashed strings
+    Returns
+    -------
+    _OUTPUT : generator of hashed strings
     """
     parsed = get_parsed(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(parsed, parse_result)

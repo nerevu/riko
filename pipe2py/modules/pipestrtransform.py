@@ -73,9 +73,9 @@ def pipe_strtransform(context=None, _INPUT=None, conf=None, **kwargs):
         'title': {'type': 'bool', value': <1>},
     }
 
-    Yields
-    ------
-    _OUTPUT : tokenized strings
+    Returns
+    -------
+    _OUTPUT : generator of tokenized strings
     """
     parsed = get_parsed(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(parsed, parse_result)

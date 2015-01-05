@@ -132,9 +132,9 @@ def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
         'offline': {'type': 'bool', 'value': '0'},
     }
 
-    Yields
-    ------
-    _OUTPUT : hashed strings
+    Returns
+    -------
+    _OUTPUT : generator of hashed strings
     """
     parsed = get_parsed(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(parsed, parse_result)
