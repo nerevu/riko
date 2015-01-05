@@ -6,7 +6,6 @@
 """
 
 import ctypes
-
 from functools import partial
 from itertools import imap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred

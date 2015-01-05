@@ -59,7 +59,6 @@ def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of sorted items
     """
-    conf = DotDict(conf)
     test = kwargs.pop('pass_if', None)
     _pass = utils.get_pass(test=test)
     key_defs = imap(DotDict, utils.listize(conf['KEY']))

@@ -68,6 +68,5 @@ def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-
     _OUTPUT = get_output(_INPUT, **kwargs)
     return _OUTPUT

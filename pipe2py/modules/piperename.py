@@ -96,7 +96,6 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     Returns
     -------
     _OUTPUT : generator of items
-
     """
     splits = get_splits(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(splits, partial(parse_result, **kwargs))
