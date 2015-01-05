@@ -16,7 +16,8 @@ import re
 from collections import namedtuple
 from datetime import datetime
 from functools import partial
-from itertools import groupby, chain, izip, tee, takewhile, ifilter, imap
+from itertools import (
+    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap)
 from urllib2 import quote
 from os import path as p, environ
 from pipe2py import Context
@@ -55,6 +56,8 @@ DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
+star_func = lambda item, func: func(item)
+imap_func = lambda funcs, items: starmap(star_func, izip(items, funcs))
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
 
 
@@ -186,18 +189,17 @@ def get_value(field, item=None, **kwargs):
 
 
 def broadcast(_INPUT, *funcs):
-    for items in izip(*tee(_INPUT, len(funcs))):
-        yield (func(item) for item, func in izip(items, funcs))
+    splits = izip(*tee(_INPUT, len(funcs)))
+    return imap(partial(imap_func, funcs), splits)
 
 
 def dispatch(splits, *funcs):
-    for split in splits:
-        yield (func(item) for item, func in izip(split, funcs))
+    return imap(partial(imap_func, funcs), splits)
 
 
 def gather(splits, func):
-    for split in splits:
-        yield func(*list(split))
+    gather_func = lambda split: func(*list(split))
+    return imap(gather_func, splits)
 
 
 def parse_conf(conf, item=None, parse_func=None, **kwargs):
@@ -215,7 +217,7 @@ def compress_conf(confs, **kwargs):
 @cache.memoize(timeout)
 def parse_params(params):
     true_params = ifilter(all, params)
-    return dict((x.key, x.value) for x in true_params)
+    return dict(imap(lambda x: (x.key, x.value), true_params))
 
 
 def get_pass(item=None, test=None):
