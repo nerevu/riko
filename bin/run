@@ -9,6 +9,7 @@ import requests
 from importlib import import_module
 from pprint import pprint
 from optparse import OptionParser
+from twisted.internet.task import react
 from pipe2py import Context
 
 
@@ -21,11 +22,19 @@ def _load_json(json):
     return loaded
 
 
+def print_content(output):
+    pipe = list(output)
+    pprint(pipe[0])
+    print('count:', len(pipe))
+
+
 if __name__ == '__main__':
     usage = 'usage: %prog [pipeid]'
     parser = OptionParser(usage=usage)
-    (options, args) = parser.parse_args()
+    parser.add_option(
+        "-a", dest="async", help="load async pipe", action="store_true")
 
+    (options, args) = parser.parse_args()
     pipe_name = 'pipe_%s' % args[0]
 
     try:
@@ -33,5 +42,12 @@ if __name__ == '__main__':
     except ImportError:
         module = import_module('tests.pypipelines.%s' % pipe_name)
 
-    pipe_generator = getattr(module, pipe_name)
-    pprint(pipe_generator(Context(test=True, verbose=True)).next())
+    if options.async:
+        generator_name = 'asyncPipe%s' % args[0].title()
+        pipe_generator = getattr(module, generator_name)
+        react(pipe_generator, [Context()])
+    else:
+        generator_name = pipe_name
+        pipe_generator = getattr(module, generator_name)
+        output = pipe_generator(Context(test=True, verbose=True))
+        print_content(output)
