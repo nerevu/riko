@@ -40,9 +40,9 @@ else:
             'CACHE_TYPE': 'memcached',
             'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
 
-cache = Cache(**cache_config)
-timeout = 60 * 60 * 1
-
+DATE_FORMAT = '%m/%d/%Y'
+DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
+URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
     "%m/%d/%y",
@@ -52,13 +52,11 @@ ALTERNATIVE_DATE_FORMATS = (
     # todo more: whatever Yahoo can accept
 )
 
-DATE_FORMAT = '%m/%d/%Y'
-DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
-URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
-
 star_func = lambda item, func: func(item)
 imap_func = lambda funcs, items: starmap(star_func, izip(items, funcs))
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
+cache = Cache(**cache_config)
+timeout = 60 * 60 * 1
 
 
 def memoize(*args, **kwargs):
