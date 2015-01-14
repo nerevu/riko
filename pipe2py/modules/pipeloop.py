@@ -86,7 +86,7 @@ def get_pkwargs(conf, **kwargs):
 def asyncParseEmbed(item, conf, asyncEmbed, **kwargs):
     context = kwargs.pop('context')
     context.inputs = dict(get_inputs(item, conf))  # prepare the submodule
-    submodule = yield asyncEmbed(context, [item], conf, **kwargs)
+    submodule = yield asyncEmbed(context, iter([item]), conf, **kwargs)
     returnValue(submodule)
 
 

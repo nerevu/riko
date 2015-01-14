@@ -55,7 +55,7 @@ def asyncPipeStrconcat(context=None, _INPUT=None, conf=None, **kwargs):
     _input = yield _INPUT
     splits = get_splits(_input, conf, **kwargs)
     _OUTPUT = yield asyncGather(splits, partial(maybeDeferred, parse_result))
-    returnValue(_OUTPUT)
+    returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions

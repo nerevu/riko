@@ -58,7 +58,7 @@ def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
     _input = yield _INPUT
     parsed = get_parsed(_input, conf, **kwargs)
     _OUTPUT = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
-    returnValue(_OUTPUT)
+    returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
