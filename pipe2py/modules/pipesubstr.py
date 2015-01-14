@@ -18,7 +18,6 @@ from pipe2py.twisted.utils import asyncGather
 
 # Common functions
 def get_parsed(_INPUT, conf, **kwargs):
-    conf['start'] = conf.pop('from')
     inputs = imap(DotDict, _INPUT)
     broadcast_funcs = get_funcs(conf, **kwargs)
     dispatch_funcs = [utils.compress_conf, utils.get_word, utils.passthrough]
@@ -51,6 +50,7 @@ def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : twisted.internet.defer.Deferred generator of substrings
     """
     _input = yield _INPUT
+    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
     parsed = get_parsed(_input, conf, **kwargs)
     _OUTPUT = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
     returnValue(iter(_OUTPUT))
@@ -73,6 +73,7 @@ def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of substrings
     """
+    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
     parsed = get_parsed(_INPUT, conf, **kwargs)
     _OUTPUT = utils.gather(parsed, parse_result)
     return _OUTPUT

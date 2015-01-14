@@ -18,7 +18,6 @@ from pipe2py.twisted.utils import asyncGather
 
 # Common functions
 def get_parsed(_INPUT, conf, **kwargs):
-    conf['delimiter'] = conf.pop('to-str')
     inputs = imap(DotDict, _INPUT)
     broadcast_funcs = get_funcs(conf, **kwargs)
     dispatch_funcs = [utils.compress_conf, utils.get_word, utils.passthrough]
@@ -68,6 +67,7 @@ def asyncPipeStringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
     _input = yield _INPUT
+    conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
     parsed = get_parsed(_input, conf, **kwargs)
     items = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
     _OUTPUT = utils.multiplex(items)
@@ -93,6 +93,7 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
+    conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
     parsed = get_parsed(_INPUT, conf, **kwargs)
     items = utils.gather(parsed, parse_result)
     _OUTPUT = utils.multiplex(items)
