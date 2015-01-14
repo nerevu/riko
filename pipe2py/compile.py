@@ -34,7 +34,7 @@
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from json import dumps
+from json import dumps, JSONEncoder
 from codecs import open
 from itertools import chain, izip
 from collections import defaultdict
@@ -56,11 +56,28 @@ class MyPrettyPrinter(PrettyPrinter):
                 self, object, context, maxlevels, level)
 
 
+class CustomEncoder(JSONEncoder):
+    def default(self, obj):
+        if set(['quantize', 'year', 'tm_hour']).intersection(dir(obj)):
+            return str(obj)
+        elif set(['next', 'union']).intersection(dir(obj)):
+            return list(obj)
+
+        return JSONEncoder.default(self, obj)
+
+
 def write_file(data, path, pretty=False):
     if data and path:
         with open(path, 'w', encoding='utf-8') as f:
             if hasattr(data, 'keys') and pretty:
-                data = dumps(data, sort_keys=True, indent=4, ensure_ascii=False)
+                kwargs = {
+                    'cls': CustomEncoder,
+                    'sort_keys': True,
+                    'indent': 4,
+                    'ensure_ascii': False
+                }
+
+                data = dumps(data, **kwargs)
             elif hasattr(data, 'keys'):
                 data = dumps(data, ensure_ascii=False)
             elif pretty:
