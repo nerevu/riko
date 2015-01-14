@@ -66,18 +66,28 @@ def parse_request(r, offline):
     if offline:
         fields = FIELDS
     else:
-        fields = r.json()['list']['resources']['resource']['fields']
+        resources = r['list']['resources']
+        fields = (r['resource']['fields'] for r in resources)
 
     return {i['name']: i['price'] for i in fields}
 
 
+@utils.memoize(timeout)
+def get_rate_data():
+    return requests.get(EXCHANGE_API, params=PARAMS)
+
+
 # Async functions
 @inlineCallbacks
-@utils.memoize(timeout)
 def asyncParseResult(conf, word, _pass):
     base, offline = get_base(conf, word)
-    kwargs = {'params': PARAMS}
-    r = yield asyncNone if offline else getPage(EXCHANGE_API, **kwargs)
+
+    if offline:
+        r = None
+    else:
+        data = yield deferToThread(get_rate_data)
+        r = data.json()
+
     rates = parse_request(r, offline)
     result = base if _pass else calc_rate(base, conf.quote, rates)
     returnValue(result)
@@ -109,10 +119,9 @@ def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
 
 
 # Synchronous functions
-@utils.memoize(timeout)
 def parse_result(conf, word, _pass):
     base, offline = get_base(conf, word)
-    r = None if offline else requests.get(EXCHANGE_API, params=PARAMS)
+    r = None if offline else get_rate_data().json()
     rates = parse_request(r, offline)
     result = base if _pass else calc_rate(base, conf.quote, rates)
     return result

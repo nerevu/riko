@@ -121,7 +121,6 @@ def _make_content(i, tag, new):
     return content
 
 
-@memoize(timeout)
 def etree_to_dict(element):
     """Convert an eTree xml into dict imitating how Yahoo Pipes does it.
 
@@ -156,7 +155,6 @@ def make_finite(_INPUT):
         yield i
 
 
-@memoize(timeout)
 def get_value(field, item=None, **kwargs):
     item = item or {}
 
@@ -212,7 +210,6 @@ def parse_conf(conf, item=None, parse_func=None, **kwargs):
     return Conf(*result)
 
 
-@cache.memoize(timeout)
 def parse_params(params):
     true_params = ifilter(all, params)
     return dict(imap(lambda x: (x.key, x.value), true_params))
