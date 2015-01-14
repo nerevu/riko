@@ -42,7 +42,7 @@ def parse_result(conf, num, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeSimpleMath(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeSimplemath(context=None, _INPUT=None, conf=None, **kwargs):
     """A number module that asynchronously performs basic arithmetic, such as
     addition and subtraction. Loopable.
 

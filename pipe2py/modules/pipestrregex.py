@@ -33,7 +33,7 @@ def parse_result(rules, word, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeStrRegex(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that asynchronously replaces text using regexes. Each
     has the general format: "In [field] replace [regex pattern] with [text]".
     Loopable.

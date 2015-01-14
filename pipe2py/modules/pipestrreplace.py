@@ -39,7 +39,7 @@ def parse_result(rules, word, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeStrReplace(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeStrreplace(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that asynchronously replaces text. Loopable.
 
     Parameters

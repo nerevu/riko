@@ -30,7 +30,7 @@ def parse_result(conf, word, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeStrTransform(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeStrtransform(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that asynchronously splits a string into tokens
     delimited by separators. Loopable.
 

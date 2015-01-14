@@ -84,7 +84,7 @@ def asyncParseResult(conf, word, _pass):
 
 
 @inlineCallbacks
-def asyncPipeExchangeRate(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that asynchronously retrieves the current exchange rate
     for a given currency pair. Loopable.
 

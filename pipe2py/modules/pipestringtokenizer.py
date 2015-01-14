@@ -49,7 +49,7 @@ def parse_result(conf, word, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeStringTokenizer(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeStringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that asynchronously splits a string into tokens
     delimited by separators. Loopable.
 

@@ -26,7 +26,7 @@ def get_output(_INPUT, conf, **kwargs):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeItemBuilder(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeItembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """A source that asynchronously builds an item. Loopable.
 
     Parameters

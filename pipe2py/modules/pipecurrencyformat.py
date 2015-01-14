@@ -30,7 +30,7 @@ def parse_result(conf, num, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeCurrencyFormat(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeCurrencyformat(context=None, _INPUT=None, conf=None, **kwargs):
     """A number module that asynchronously formats a number to a given currency
     string. Loopable.
 

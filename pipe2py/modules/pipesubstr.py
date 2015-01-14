@@ -34,7 +34,7 @@ def parse_result(conf, word, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeSubStr(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that asynchronously returns a substring. Loopable.
 
     Parameters
