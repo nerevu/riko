@@ -19,8 +19,8 @@ from pipe2py.twisted.utils import asyncGather
 # Common functions
 def get_parsed(_INPUT, conf, **kwargs):
     inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf, **kwargs)
-    dispatch_funcs = [utils.compress_conf, utils.get_word, utils.passthrough]
+    broadcast_funcs = get_funcs(conf, listize=False, **kwargs)
+    dispatch_funcs = [utils.passthrough, utils.get_word, utils.passthrough]
     splits = utils.broadcast(inputs, *broadcast_funcs)
     return utils.dispatch(splits, *dispatch_funcs)
 

@@ -87,9 +87,10 @@ __all__ = [
 ]
 
 
-def get_broadcast_funcs(pieces, ftype='with', parse=True, **kwargs):
+def get_broadcast_funcs(pieces, ftype='with', **kwargs):
     test = kwargs.pop('pass_if', None)
-    piece_defs = map(DotDict, utils.listize(pieces))
+    listize = kwargs.pop('listize', True)
+    parse = kwargs.pop('parse', True)
     get_value = partial(utils.get_value, **kwargs)
     get_pass = partial(utils.get_pass, test=test)
 
@@ -98,7 +99,12 @@ def get_broadcast_funcs(pieces, ftype='with', parse=True, **kwargs):
     else:
         parse_conf = get_value
 
-    get_pieces = lambda i: imap(parse_conf, piece_defs, repeat(i))
+    if listize:
+        piece_defs = map(DotDict, utils.listize(pieces))
+        get_pieces = lambda i: imap(parse_conf, piece_defs, repeat(i))
+    else:
+        piece_defs = DotDict(pieces)
+        get_pieces = partial(parse_conf, piece_defs)
 
     f = {
         'with': partial(utils.get_with, **kwargs),

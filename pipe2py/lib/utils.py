@@ -181,7 +181,11 @@ def get_value(field, item=None, **kwargs):
         else:
             value = field.get(None, **kwargs)
     except (TypeError, AttributeError):
+        # field is already set to a value so use it or the default
         value = field or kwargs.get('default')
+    except (ValueError):
+        # error converting subkey value with OPS['func'] so use the default
+        value = kwargs.get('default')
 
     return value
 
@@ -206,10 +210,6 @@ def parse_conf(conf, item=None, parse_func=None, **kwargs):
     iterable = imap(lambda k: conf[k], keys)
     result = map(partial(parse_func, item=item), iterable)
     return Conf(*result)
-
-
-def compress_conf(confs, **kwargs):
-    return confs.next()
 
 
 @cache.memoize(timeout)

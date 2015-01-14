@@ -30,13 +30,13 @@ from pipe2py.twisted.utils import asyncGather
 def get_parsed(_INPUT, conf, **kwargs):
     finite = utils.make_finite(_INPUT)
     inputs = imap(DotDict, finite)
-    broadcast_funcs = get_funcs(conf, ftype=None, **kwargs)
+    broadcast_funcs = get_funcs(conf, ftype=None, listize=False, **kwargs)
     confs = imap(broadcast_funcs[0], inputs)
     splits = imap(parse_conf, confs)
     return utils.dispatch(splits, get_element, utils.passthrough)
 
 
-def parse_result(path, element=None):
+def parse_result(element, path):
     for i in path:
         element = element.get(i) if element else None
 
