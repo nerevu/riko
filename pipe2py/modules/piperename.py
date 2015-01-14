@@ -10,19 +10,16 @@
 from functools import partial
 from itertools import imap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-from . import get_broadcast_funcs as get_funcs
+from . import (
+    get_broadcast_funcs as get_funcs,
+    get_async_broadcast_funcs as get_async_funcs)
+
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather
+from pipe2py.twisted.utils import asyncGather, asyncBroadcast
 
 
 # Common functions
-def get_splits(_INPUT, conf, **kwargs):
-    inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf['RULE'], ftype='pass', **kwargs)
-    return utils.broadcast(inputs, *broadcast_funcs)
-
-
 def func(item, rule, **kwargs):
     try:
         item.set(rule.newval, item.get(rule.field, **kwargs))
@@ -67,7 +64,9 @@ def asyncPipeRename(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
     _input = yield _INPUT
-    splits = get_splits(_input, conf, **kwargs)
+    inputs = imap(DotDict, _input)
+    broadcast_funcs = get_async_funcs(conf['RULE'], ftype='pass', **kwargs)
+    splits = yield asyncBroadcast(inputs, *broadcast_funcs)
     _OUTPUT = yield asyncGather(splits, partial(maybeDeferred, parse_result))
     returnValue(iter(_OUTPUT))
 
@@ -97,6 +96,8 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    splits = get_splits(_INPUT, conf, **kwargs)
+    inputs = imap(DotDict, _INPUT)
+    broadcast_funcs = get_funcs(conf['RULE'], ftype='pass', **kwargs)
+    splits = utils.broadcast(inputs, *broadcast_funcs)
     _OUTPUT = utils.gather(splits, partial(parse_result, **kwargs))
     return _OUTPUT

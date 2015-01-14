@@ -52,12 +52,17 @@ ALTERNATIVE_DATE_FORMATS = (
     # todo more: whatever Yahoo can accept
 )
 
-star_func = lambda item, func: func(item)
-imap_func = lambda funcs, items: starmap(star_func, izip(items, funcs))
+# leave option to substitute with multiprocessing
+_map_func = imap
+
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
 cache = Cache(**cache_config)
 timeout = 60 * 60 * 1
 sub_rule = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
+
+
+def _apply_func(funcs, items, map_func=starmap):
+    return map_func(lambda item, func: func(item), izip(items, funcs))
 
 
 def memoize(*args, **kwargs):
@@ -97,17 +102,15 @@ def pythonise(id, encoding='ascii'):
     return id.encode(encoding)
 
 
-def group_by(data, attr, default=None):
-    groups = {}
-
+def group_by(iterable, attr, default=None):
     # like operator.itemgetter but fills in missing keys with a default value
     keyfunc = lambda item: lambda obj: obj.get(item, default)
-    data.sort(key=keyfunc(attr))
+    sorted_iterable = sorted(iterable, key=keyfunc(attr))
+    groups = groupby(sorted_iterable, keyfunc(attr))
+    grouped = {str(k): list(v) for k, v in groups}
 
-    for key, values in groupby(data, keyfunc(attr)):
-        groups[str(key)] = list(v for v in values)
+    return grouped
 
-    return groups
 
 
 def _make_content(i, tag, new):
@@ -189,25 +192,34 @@ def get_value(field, item=None, **kwargs):
     return value
 
 
-def broadcast(_INPUT, *funcs):
+def broadcast(_INPUT, *funcs, **kwargs):
+    map_func = kwargs.get('map_func', _map_func)
+    apply_func = kwargs.get('apply_func', _apply_func)
     splits = izip(*tee(_INPUT, len(funcs)))
-    return imap(partial(imap_func, funcs), splits)
+    return map_func(partial(apply_func, funcs), splits)
 
 
-def dispatch(splits, *funcs):
-    return imap(partial(imap_func, funcs), splits)
+def dispatch(splits, *funcs, **kwargs):
+    map_func = kwargs.get('map_func', _map_func)
+    apply_func = kwargs.get('apply_func', _apply_func)
+    return map_func(partial(apply_func, funcs), splits)
 
 
-def gather(splits, func):
+def gather(splits, func, **kwargs):
+    map_func = kwargs.get('map_func', _map_func)
     gather_func = lambda split: func(*list(split))
-    return imap(gather_func, splits)
+    return map_func(gather_func, splits)
+
+
+def _parse_conf(conf, keys, func):
+    iterable = imap(lambda k: conf[k], keys)
+    return map(func, iterable)
 
 
 def parse_conf(conf, item=None, parse_func=None, **kwargs):
     parse = kwargs.pop('parse', True)
     keys = conf.keys()
-    iterable = map(lambda k: conf[k], keys)
-    values = map(partial(parse_func, item=item), iterable)
+    values = _parse_conf(conf, keys, partial(parse_func, item=item))
 
     if parse:
         Conf = namedtuple('Conf', keys)
@@ -280,6 +292,17 @@ def get_abspath(url):
     return url
 
 
+def get_word(item):
+    try:
+        word = ''.join(item.itervalues())
+    except AttributeError:
+        word = item
+    except TypeError:
+        word = None
+
+    return word or ''
+
+
 def get_num(item):
     try:
         joined = ''.join(item.itervalues())
@@ -300,17 +323,6 @@ def passthrough(item):
 
 def passnone(item):
     return None
-
-
-def get_word(item):
-    try:
-        word = ''.join(item.itervalues())
-    except AttributeError:
-        word = item
-    except TypeError:
-        word = None
-
-    return word or ''
 
 
 def rreplace(s, find, replace, count=None):
@@ -375,6 +387,11 @@ def convert_rules(rules, recompile=False):
     # Convert replace pattern to Python/Linux format
     rule_func = partial(get_new_rule, recompile=recompile)
     return imap(rule_func, rules)
+
+
+def multiplex(sources):
+    """Combine multiple generators into one"""
+    return chain.from_iterable(sources)
 
 
 ############
@@ -490,8 +507,3 @@ def gen_graph3(graph):
 
         if value or any(targetted):
             yield (node, value)
-
-
-def multiplex(sources):
-    """Combine multiple generators into one"""
-    return chain.from_iterable(sources)

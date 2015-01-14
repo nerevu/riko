@@ -28,19 +28,20 @@ def asyncStarMap(asyncCallable, iterable):
     return gatherResults(deferreds, consumeErrors=True)
 
 
-def asyncImapFunc(funcs, items):
-    return asyncStarMap(utils.star_func, izip(items, funcs))
+# Internal functions
+_apply_func = partial(utils._apply_func, map_func=asyncStarMap)
+_map_func = asyncImap
 
 
-def asyncBroadcast(_INPUT, *funcs):
-    splits = izip(*tee(_INPUT, len(funcs)))
-    return asyncImap(partial(asyncImapFunc, funcs), splits)
+def asyncBroadcast(_INPUT, *asyncCallables):
+    kwargs = {'map_func': _map_func, 'apply_func': _apply_func}
+    return utils.broadcast(_INPUT, *asyncCallables, **kwargs)
 
 
-def asyncDispatch(splits, *funcs):
-    return asyncImap(partial(asyncImapFunc, funcs), splits)
+def asyncDispatch(splits, *asyncCallables):
+    kwargs = {'map_func': _map_func, 'apply_func': _apply_func}
+    return utils.dispatch(splits, *asyncCallables, **kwargs)
 
 
 def asyncGather(splits, asyncCallable):
-    func = lambda split: asyncCallable(*list(split))
-    return asyncImap(partial(func, asyncCallable), splits)
+    return utils.gather(splits, asyncCallable, map_func=_map_func)

@@ -16,13 +16,36 @@ import re
 from functools import partial
 from itertools import imap, starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-from . import get_broadcast_funcs as get_funcs
+from . import (
+    get_broadcast_funcs as get_funcs,
+    get_async_broadcast_funcs as get_async_funcs)
+
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather
+from pipe2py.twisted.utils import (
+    asyncDispatch, asyncGather, asyncBroadcast, asyncReturn, asyncImap)
 
 
 # Common functions
+@inlineCallbacks
+def asyncGetParsed(_INPUT, conf, convert=True, **kwargs):
+    asyncDict = partial(maybeDeferred, DotDict)
+    inputs = yield asyncImap(asyncDict, _INPUT)
+    pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
+    broadcast_funcs = get_async_funcs(conf['RULE'], **pkwargs)
+    splits = yield asyncBroadcast(inputs, *broadcast_funcs)
+
+    if convert:
+        convert_func = partial(utils.convert_rules, recompile=True)
+        ayncConvert = partial(maybeDeferred, convert_func)
+        dispatch_funcs = [ayncConvert, asyncReturn, asyncReturn]
+        result = yield asyncDispatch(splits, *dispatch_funcs)
+    else:
+        result = splits
+
+    returnValue(result)
+
+
 def get_parsed(_INPUT, conf, convert=True, **kwargs):
     inputs = imap(DotDict, _INPUT)
     pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
@@ -80,7 +103,7 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
     _input = yield _INPUT
-    parsed = get_parsed(_input, conf, **kwargs)
+    parsed = yield asyncGetParsed(_input, conf, convert=True, **kwargs)
     _OUTPUT = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
     returnValue(iter(_OUTPUT))
 
