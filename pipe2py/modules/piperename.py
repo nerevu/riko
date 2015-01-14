@@ -8,15 +8,10 @@
 """
 
 from functools import partial
-from itertools import imap
+from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-from . import (
-    get_broadcast_funcs as get_funcs,
-    get_async_broadcast_funcs as get_async_funcs)
-
-from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather, asyncBroadcast
+from . import get_splits, asyncGetSplits
+from pipe2py.twisted.utils import asyncStarMap
 
 
 # Common functions
@@ -63,11 +58,8 @@ def asyncPipeRename(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    _input = yield _INPUT
-    inputs = imap(DotDict, _input)
-    broadcast_funcs = get_async_funcs(conf['RULE'], ftype='pass', **kwargs)
-    splits = yield asyncBroadcast(inputs, *broadcast_funcs)
-    _OUTPUT = yield asyncGather(splits, partial(maybeDeferred, parse_result))
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], ftype='pass', **kwargs)
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), splits)
     returnValue(iter(_OUTPUT))
 
 
@@ -96,8 +88,6 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf['RULE'], ftype='pass', **kwargs)
-    splits = utils.broadcast(inputs, *broadcast_funcs)
-    _OUTPUT = utils.gather(splits, partial(parse_result, **kwargs))
+    splits = get_splits(_INPUT, conf['RULE'], ftype='pass', **kwargs)
+    _OUTPUT = starmap(partial(parse_result, **kwargs), splits)
     return _OUTPUT

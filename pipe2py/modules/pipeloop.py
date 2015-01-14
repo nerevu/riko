@@ -10,17 +10,18 @@
 
 from copy import copy
 from functools import partial
-from itertools import chain, imap
+from itertools import chain, imap, starmap
 from twisted.internet.defer import inlineCallbacks, returnValue
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather, asyncNone
+from pipe2py.twisted.utils import asyncStarMap, asyncNone
 
 
 # Common functions
 def get_splits(context, _INPUT, conf, embed, parse_func, **kwargs):
     inputs = imap(DotDict, _INPUT)
     test = kwargs.pop('pass_if', None)
+    get_pass = partial(utils.get_pass, test=test)
 
     # Prepare the submodule to take parameters from the loop instead of from
     # the user
@@ -29,7 +30,6 @@ def get_splits(context, _INPUT, conf, embed, parse_func, **kwargs):
     embed_conf = conf.get('embed').get('conf', {})
     kwargs.update({'context': embed_context, 'with': conf.get('with')})
     get_submodule = lambda i: parse_func(i, embed_conf, embed, **kwargs)
-    get_pass = partial(utils.get_pass, test=test)
     broadcast_funcs = [get_submodule, utils.passthrough, get_pass]
     return utils.broadcast(inputs, *broadcast_funcs)
 
@@ -127,7 +127,7 @@ def asyncPipeLoop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     conf = DotDict(conf)
     pkwargs = get_pkwargs(conf, **kwargs)
     splits = get_splits(context, _input, conf, embed, asyncParseEmbed, **kwargs)
-    gathered = yield asyncGather(splits, partial(asyncParseResult, **pkwargs))
+    gathered = yield asyncStarMap(partial(asyncParseResult, **pkwargs), splits)
     _OUTPUT = utils.multiplex(gathered) if pkwargs['emit'] else gathered
     returnValue(_OUTPUT)
 
@@ -168,7 +168,7 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     conf = DotDict(conf)
     pkwargs = get_pkwargs(conf, **kwargs)
     splits = get_splits(context, _INPUT, conf, embed, parse_embed, **kwargs)
-    gathered = utils.gather(splits, partial(parse_result, **pkwargs))
+    gathered = starmap(partial(parse_result, **pkwargs), splits)
     _OUTPUT = utils.multiplex(gathered) if pkwargs['emit'] else gathered
     return _OUTPUT
 

@@ -6,24 +6,16 @@
 """
 
 from functools import partial
-from itertools import imap
+from itertools import starmap
 from babel.numbers import format_currency
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-from . import get_broadcast_funcs as get_funcs
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather
+from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 
 # Common functions
-def get_parsed(_INPUT, conf, **kwargs):
-    inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf, listize=False, **kwargs)
-    dispatch_funcs = [utils.passthrough, utils.get_num, utils.passthrough]
-    splits = utils.broadcast(inputs, *broadcast_funcs)
-    return utils.dispatch(splits, *dispatch_funcs)
-
-
 def parse_result(conf, num, _pass):
     return num if _pass else format_currency(num, conf.currency)
 
@@ -44,9 +36,9 @@ def asyncPipeCurrencyformat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of formatted currencies
     """
-    _input = yield _INPUT
-    parsed = get_parsed(_input, conf, **kwargs)
-    _OUTPUT = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
+    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs('num'))
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     returnValue(iter(_OUTPUT))
 
 
@@ -65,6 +57,7 @@ def pipe_currencyformat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of formatted currencies
     """
-    parsed = get_parsed(_INPUT, conf, **kwargs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs('num'))
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

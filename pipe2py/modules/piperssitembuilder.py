@@ -57,7 +57,7 @@ def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     inputs = imap(DotDict, finite)
     confs = imap(parse_conf, inputs)
     splits = utils.broadcast(confs, *funcs)
-    combined = utils.gather(splits, utils.combine_dicts)
+    combined = starmap(utils.combine_dicts, splits)
     result = imap(clean_dict, combined)
     _OUTPUT = imap(DotDict, result)
     return _OUTPUT

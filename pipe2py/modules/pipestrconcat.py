@@ -10,28 +10,21 @@
 # aka stringbuilder
 
 from functools import partial
-from itertools import imap
+from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-from . import get_broadcast_funcs as get_funcs
+from . import get_splits, asyncGetSplits
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather
+from pipe2py.twisted.utils import asyncStarMap
 
 
 # Common functions
-def get_splits(_INPUT, conf, **kwargs):
-    inputs = imap(DotDict, _INPUT)
-    bkwargs = {'ftype': None, 'parse': False, 'd_index': 'x'}
-    broadcast_funcs = get_funcs(
-        conf['part'], **utils.combine_dicts(bkwargs, kwargs))
-
-    return utils.broadcast(inputs, *broadcast_funcs)
-
-
 def parse_result(parts, _, _pass):
-    # Since `ftype` in `get_splits` above is `None`, the second argument passed
-    # here is `None`. This uses `_` as a throw-a-way variable to soak it up.
-    return '' if _pass else ''.join((p.get('x') for p in parts))
+    if _pass:
+        result = ''
+    else:
+        result = ''.join((p.get('x') for p in parts))
+
+    return result
 
 
 # Async functions
@@ -54,9 +47,10 @@ def asyncPipeStrconcat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of joined strings
     """
-    _input = yield _INPUT
-    splits = get_splits(_input, conf, **kwargs)
-    _OUTPUT = yield asyncGather(splits, partial(maybeDeferred, parse_result))
+    pkwargs = {'ftype': None, 'parse': False, 'd_index': 'x'}
+    combined = utils.combine_dicts(pkwargs, kwargs)
+    splits = yield asyncGetSplits(_INPUT, conf['part'], **combined)
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), splits)
     returnValue(iter(_OUTPUT))
 
 
@@ -78,6 +72,8 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of joined strings
     """
-    splits = get_splits(_INPUT, conf, **kwargs)
-    _OUTPUT = utils.gather(splits, parse_result)
+    pkwargs = {'ftype': None, 'parse': False, 'd_index': 'x'}
+    combined = utils.combine_dicts(pkwargs, kwargs)
+    splits = get_splits(_INPUT, conf['part'], **combined)
+    _OUTPUT = starmap(parse_result, splits)
     return _OUTPUT

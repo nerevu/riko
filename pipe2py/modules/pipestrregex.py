@@ -8,26 +8,26 @@
 """
 
 from functools import partial
-from itertools import imap
+from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-from . import get_broadcast_funcs as get_funcs
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather
+from pipe2py.twisted.utils import (
+    asyncStarMap, asyncDispatch, asyncReturn, asyncReduce)
+
+func = utils.substitute
+convert = partial(utils.convert_rules, recompile=True)
 
 
-# Common functions
-def get_parsed(_INPUT, conf, **kwargs):
-    inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf['RULE'], parse=False, **kwargs)
-    convert = partial(utils.convert_rules, recompile=True)
-    dispatch_funcs = [convert, utils.get_word, utils.passthrough]
-    splits = utils.broadcast(inputs, *broadcast_funcs)
-    return utils.dispatch(splits, *dispatch_funcs)
+def asyncParseResult(rules, word, _pass):
+    # return asyncReturn(word) if _pass else coopReduce(func, rules, word)
+    asyncFunc = partial(maybeDeferred, func)
+    return asyncReturn(word) if _pass else asyncReduce(asyncFunc, rules, word)
 
 
 def parse_result(rules, word, _pass):
-    return word if _pass else reduce(utils.substitute, rules, word)
+    return word if _pass else reduce(func, rules, word)
 
 
 # Async functions
@@ -54,9 +54,10 @@ def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of replaced strings
     """
-    _input = yield _INPUT
-    parsed = get_parsed(_input, conf, **kwargs)
-    _OUTPUT = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], parse=False, **kwargs)
+    asyncFuncs = get_async_dispatch_funcs(first=partial(maybeDeferred, convert))
+    parsed = yield asyncDispatch(splits, *asyncFuncs)
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     returnValue(iter(_OUTPUT))
 
 
@@ -82,6 +83,7 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of replaced strings
     """
-    parsed = get_parsed(_INPUT, conf, **kwargs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf['RULE'], parse=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs(first=convert))
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

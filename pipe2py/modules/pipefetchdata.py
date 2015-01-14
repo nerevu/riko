@@ -18,35 +18,24 @@ except (ImportError, AttributeError):
     from simplejson import loads
 
 from functools import partial
-from itertools import imap
+from itertools import imap, starmap
 from twisted.internet.defer import inlineCallbacks, maybeDeferred, returnValue
-from . import get_broadcast_funcs as get_funcs
+from . import (
+    get_splits, asyncGetSplits, get_dispatch_funcs, get_async_dispatch_funcs)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather
+from pipe2py.twisted.utils import asyncStarMap, asyncImap, asyncDispatch
 
 
 # Common functions
-def get_parsed(_INPUT, conf, **kwargs):
-    finite = utils.make_finite(_INPUT)
-    inputs = imap(DotDict, finite)
-    broadcast_funcs = get_funcs(conf, ftype=None, listize=False, **kwargs)
-    confs = imap(broadcast_funcs[0], inputs)
-    splits = imap(parse_conf, confs)
-    return utils.dispatch(splits, get_element, utils.passthrough)
-
-
-def parse_result(element, path):
-    for i in path:
-        element = element.get(i) if element else None
-
-    return element
+def parse_result(element, path, _):
+    func = lambda element, i: element.get(i) if element else None
+    return reduce(func, path, element)
 
 
 def parse_conf(conf):
     url = utils.get_abspath(conf.URL)
     path = conf.path.split('.') if conf.path else []
-    return (url, path)
+    return (url, path, None)
 
 
 def get_element(url):
@@ -64,16 +53,36 @@ def get_element(url):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeFetchdata(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncGetParsed(_INPUT, asyncFunc):
     _input = yield _INPUT
-    parsed = get_parsed(_input, conf, **kwargs)
-    results = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
+    finite = utils.make_finite(_input)
+    confs = yield asyncImap(asyncFunc, finite)
+    splits = imap(parse_conf, confs)
+    asyncGetElement = partial(maybeDeferred, get_element)
+    asyncFuncs = get_async_dispatch_funcs('pass', asyncGetElement)
+    results = yield asyncDispatch(splits, *asyncFuncs)
+    returnValue(results)
+
+
+@inlineCallbacks
+def asyncPipeFetchdata(context=None, _INPUT=None, conf=None, **kwargs):
+    pkwargs = utils.combine_dicts(kwargs, {'ftype': None, 'listize': False})
+    asyncFuncs = yield asyncGetSplits(None, conf, **pkwargs)
+    parsed = yield asyncGetParsed(_INPUT, asyncFuncs[0])
+    results = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     items = imap(utils.gen_items, results)
     _OUTPUT = utils.multiplex(items)
     returnValue(_OUTPUT)
 
 
 # Synchronous functions
+def get_parsed(_INPUT, func):
+    finite = utils.make_finite(_INPUT)
+    confs = imap(func, finite)
+    splits = imap(parse_conf, confs)
+    return utils.dispatch(splits, *get_dispatch_funcs('pass', get_element))
+
+
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     """A source that fetches and parses an XML or JSON file. Loopable.
 
@@ -112,8 +121,9 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     [u'appointment', 'reminder']
     """
     # todo: iCal and KML
-    parsed = get_parsed(_INPUT, conf, **kwargs)
-    results = utils.gather(parsed, parse_result)
+    funcs = get_splits(None, conf, ftype=None, listize=False, **kwargs)
+    parsed = get_parsed(_INPUT, funcs[0])
+    results = starmap(parse_result, parsed)
     items = imap(utils.gen_items, results)
     _OUTPUT = utils.multiplex(items)
     return _OUTPUT

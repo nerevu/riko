@@ -14,7 +14,7 @@ import re
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 from functools import partial
-from itertools import imap, repeat, ifilter
+from itertools import imap, repeat, ifilter, starmap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -145,8 +145,8 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
 
     inputs = imap(DotDict, _INPUT)
     splits = utils.broadcast(inputs, get_rules, utils.passthrough, get_pass)
-    outputs = utils.gather(splits, partial(parse_rules, **kwargs))
+    outputs = starmap(partial(parse_rules, **kwargs), splits)
     parsed = utils.dispatch(outputs, *funcs)
-    gathered = utils.gather(parsed, partial(parse_result, permit=permit))
+    gathered = starmap(partial(parse_result, permit=permit), parsed)
     _OUTPUT = ifilter(None, gathered)
     return _OUTPUT

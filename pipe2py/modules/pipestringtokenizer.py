@@ -8,23 +8,15 @@
 """
 
 from functools import partial
-from itertools import imap
+from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-from . import get_broadcast_funcs as get_funcs
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather
+from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 
 # Common functions
-def get_parsed(_INPUT, conf, **kwargs):
-    inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf, listize=False, **kwargs)
-    dispatch_funcs = [utils.passthrough, utils.get_word, utils.passthrough]
-    splits = utils.broadcast(inputs, *broadcast_funcs)
-    return utils.dispatch(splits, *dispatch_funcs)
-
-
 def parse_result(conf, word, _pass):
     if _pass:
         token = None
@@ -66,10 +58,10 @@ def asyncPipeStringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    _input = yield _INPUT
     conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
-    parsed = get_parsed(_input, conf, **kwargs)
-    items = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
+    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    items = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     _OUTPUT = utils.multiplex(items)
     returnValue(_OUTPUT)
 
@@ -94,7 +86,8 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : generator of items
     """
     conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
-    parsed = get_parsed(_INPUT, conf, **kwargs)
-    items = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs())
+    items = starmap(parse_result, parsed)
     _OUTPUT = utils.multiplex(items)
     return _OUTPUT

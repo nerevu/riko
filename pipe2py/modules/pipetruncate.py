@@ -7,10 +7,8 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators
 """
 
-from functools import partial
 from itertools import islice
-from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from . import get_splits
 
 
 def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
@@ -28,9 +26,7 @@ def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    test = kwargs.pop('pass_if', None)
-    _pass = utils.get_pass(test=test)
-    get_value = partial(utils.get_value, **kwargs)
-    parsed = utils.parse_conf(DotDict(conf), parse_func=get_value, **kwargs)
+    funcs = get_splits(None, conf, ftype=None, listize=False, **kwargs)
+    parsed, _pass = funcs[0](), funcs[2]()
     _OUTPUT = _INPUT if _pass else islice(_INPUT, int(parsed.count))
     return _OUTPUT

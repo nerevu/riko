@@ -7,23 +7,15 @@
 
 import ctypes
 from functools import partial
-from itertools import imap
+from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-from . import get_broadcast_funcs as get_funcs
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncGather
+from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 
 # Common functions
-def get_parsed(_INPUT, conf, **kwargs):
-    inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf, listize=False, **kwargs)
-    dispatch_funcs = [utils.passthrough, utils.get_word, utils.passthrough]
-    splits = utils.broadcast(inputs, *broadcast_funcs)
-    return utils.dispatch(splits, *dispatch_funcs)
-
-
 def parse_result(conf, word, _pass):
     return word if _pass else ctypes.c_uint(hash(word)).value
 
@@ -42,9 +34,9 @@ def asyncPipeHash(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of hashed strings
     """
-    _input = yield _INPUT
-    parsed = get_parsed(_input, conf, **kwargs)
-    _OUTPUT = yield asyncGather(parsed, partial(maybeDeferred, parse_result))
+    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     returnValue(iter(_OUTPUT))
 
 
@@ -61,6 +53,7 @@ def pipe_hash(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of hashed strings
     """
-    parsed = get_parsed(_INPUT, conf, **kwargs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs())
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT
