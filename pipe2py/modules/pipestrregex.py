@@ -20,15 +20,15 @@ from pipe2py.twisted.utils import asyncGather
 # Common functions
 def get_parsed(_INPUT, conf, **kwargs):
     inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf['RULE'], **kwargs)
-    dispatch_funcs = [utils.convert_rules, utils.get_word, utils.passthrough]
+    broadcast_funcs = get_funcs(conf['RULE'], parse=False, **kwargs)
+    convert = partial(utils.convert_rules, recompile=True)
+    dispatch_funcs = [convert, utils.get_word, utils.passthrough]
     splits = utils.broadcast(inputs, *broadcast_funcs)
     return utils.dispatch(splits, *dispatch_funcs)
 
 
 def parse_result(rules, word, _pass):
-    func = lambda word, rule: re.sub(rule.match, rule.replace, word)
-    return word if _pass else reduce(func, rules, word)
+    return word if _pass else reduce(utils.substitute, rules, word)
 
 
 # Async functions

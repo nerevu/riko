@@ -21,15 +21,17 @@ from pipe2py.twisted.utils import asyncGather
 # Common functions
 def get_splits(_INPUT, conf, **kwargs):
     inputs = imap(DotDict, _INPUT)
-    bkwargs = utils.combine_dicts({'ftype': None, 'parse': False}, kwargs)
-    broadcast_funcs = get_funcs(conf['part'], **bkwargs)
+    bkwargs = {'ftype': None, 'parse': False, 'd_index': 'x'}
+    broadcast_funcs = get_funcs(
+        conf['part'], **utils.combine_dicts(bkwargs, kwargs))
+
     return utils.broadcast(inputs, *broadcast_funcs)
 
 
 def parse_result(parts, _, _pass):
     # Since `ftype` in `get_splits` above is `None`, the second argument passed
     # here is `None`. This uses `_` as a throw-a-way variable to soak it up.
-    return '' if _pass else ''.join(parts)
+    return '' if _pass else ''.join((p.get('x') for p in parts))
 
 
 # Async functions

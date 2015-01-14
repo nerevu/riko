@@ -14,7 +14,7 @@
 
 import re
 from functools import partial
-from itertools import imap
+from itertools import imap, starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import get_broadcast_funcs as get_funcs
 from pipe2py.lib import utils
@@ -23,23 +23,31 @@ from pipe2py.twisted.utils import asyncGather
 
 
 # Common functions
-def get_parsed(_INPUT, conf, **kwargs):
+def get_parsed(_INPUT, conf, convert=True, **kwargs):
     inputs = imap(DotDict, _INPUT)
-    broadcast_funcs = get_funcs(conf['RULE'], ftype='pass', **kwargs)
-    dispatch_funcs = [utils.convert_rules, utils.passthrough, utils.passthrough]
+    pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
+    broadcast_funcs = get_funcs(conf['RULE'], **pkwargs)
     splits = utils.broadcast(inputs, *broadcast_funcs)
-    return utils.dispatch(splits, *dispatch_funcs)
+
+    if convert:
+        convert_func = partial(utils.convert_rules, recompile=True)
+        dispatch_funcs = [convert_func, utils.passthrough, utils.passthrough]
+        result = utils.dispatch(splits, *dispatch_funcs)
+    else:
+        result = splits
+
+    return result
 
 
-def func(item, rule):
-    string = item.get(rule.field) or ''
-    replaced = re.sub(rule.match, rule.replace, string, rule.count)
-    item.set(rule.field, replaced)
-    return item
+def get_substitutions(field, word, rules):
+    replacement = reduce(utils.substitute, rules, word)
+    return (field, replacement)
 
 
-def parse_result(rules, item, _pass):
-    return item if _pass else reduce(func, rules, item)
+def get_groups(rules, item):
+    field_groups = utils.group_by(list(rules), 'field').items()
+    groups = starmap(lambda f, r: (f, item.get(f) or '', r), field_groups)
+    return groups
 
 
 # Async functions
@@ -78,6 +86,15 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
 
 
 # Synchronous functions
+def parse_result(rules, item, _pass):
+    if not _pass:
+        groups = get_groups(rules, item)
+        substitutions = starmap(get_substitutions, groups)
+        list(starmap(item.set, substitutions))
+
+    return item
+
+
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     """An operator that replaces text in items using regexes. Each has the
     general format: "In [field] replace [match] with [replace]". Not loopable.

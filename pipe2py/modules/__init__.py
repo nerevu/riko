@@ -5,7 +5,7 @@
 # by pipe
 
 from functools import partial
-from itertools import imap, repeat
+from itertools import imap, repeat, starmap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -90,17 +90,14 @@ __all__ = [
 def get_broadcast_funcs(pieces, ftype='with', **kwargs):
     test = kwargs.pop('pass_if', None)
     listize = kwargs.pop('listize', True)
-    parse = kwargs.pop('parse', True)
+    d_index = kwargs.pop('d_index', None)
     get_value = partial(utils.get_value, **kwargs)
     get_pass = partial(utils.get_pass, test=test)
-
-    if parse:
-        parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
-    else:
-        parse_conf = get_value
+    parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
 
     if listize:
-        piece_defs = map(DotDict, utils.listize(pieces))
+        defs = map(DotDict, utils.listize(pieces))
+        piece_defs = map(lambda p: {d_index: p}, defs) if d_index else defs
         get_pieces = lambda i: imap(parse_conf, piece_defs, repeat(i))
     else:
         piece_defs = DotDict(pieces)

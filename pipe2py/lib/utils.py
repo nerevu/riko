@@ -57,6 +57,7 @@ imap_func = lambda funcs, items: starmap(star_func, izip(items, funcs))
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
 cache = Cache(**cache_config)
 timeout = 60 * 60 * 1
+sub_rule = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
 
 
 def memoize(*args, **kwargs):
@@ -203,11 +204,18 @@ def gather(splits, func):
 
 
 def parse_conf(conf, item=None, parse_func=None, **kwargs):
+    parse = kwargs.pop('parse', True)
     keys = conf.keys()
-    Conf = namedtuple('Conf', keys)
-    iterable = imap(lambda k: conf[k], keys)
-    result = map(partial(parse_func, item=item), iterable)
-    return Conf(*result)
+    iterable = map(lambda k: conf[k], keys)
+    values = map(partial(parse_func, item=item), iterable)
+
+    if parse:
+        Conf = namedtuple('Conf', keys)
+        result = Conf(*values)
+    else:
+        result = dict(zip(keys, values))
+
+    return result
 
 
 def parse_params(params):
@@ -323,6 +331,52 @@ def listize(item):
     return item if listlike else [item]
 
 
+def substitute(word, rule):
+    return rule['match'].sub(rule['replace'], word, rule['count'])
+
+
+def fix_pattern(word, rule):
+    if '$' in word:
+        pattern = rule['match'].sub(rule['replace'], word, rule['count'])
+    else:
+        pattern = word
+
+    return pattern
+
+
+def get_new_rule(rule, recompile=False):
+    # flag 'i' --> 2
+    flags = re.IGNORECASE if rule.get('ignorecase') else 0
+
+    # flag 'm' --> 8
+    flags |= re.MULTILINE if rule.get('multilinematch') else 0
+
+    # flag 's' --> 16
+    flags |= re.DOTALL if rule.get('singlelinematch') else 0
+
+    # flag 'g' --> 0
+    count = 0 if rule.get('globalmatch') else 1
+    field = rule.get('field')
+    replace = fix_pattern(rule['replace'], sub_rule)
+    matchc = re.compile(rule['match'], flags) if recompile else rule['match']
+
+    rule = {
+        'match': matchc,
+        'replace': replace,
+        'field': field,
+        'count': count,
+        'flags': flags
+    }
+
+    return rule
+
+
+def convert_rules(rules, recompile=False):
+    # Convert replace pattern to Python/Linux format
+    rule_func = partial(get_new_rule, recompile=recompile)
+    return imap(rule_func, rules)
+
+
 ############
 # Generators
 ############
@@ -348,49 +402,6 @@ def gen_items(item, yield_if_none=False):
         yield item
     elif yield_if_none:
         yield
-
-
-def convert_rules(rules, **kwargs):
-    Rule = namedtuple('Rule', ['match', 'replace', 'field', 'count'])
-
-    for rule in rules:
-        try:
-            # flag 'i' --> 2
-            flags = re.IGNORECASE if rule.ignorecase else 0
-        except AttributeError:
-            flags = 0
-
-        try:
-            # flag 'm' --> 8
-            flags |= re.MULTILINE if rule.multilinematch else 0
-        except AttributeError:
-            pass
-
-        try:
-            # flag 's' --> 16
-            flags |= re.DOTALL if rule.singlelinematch else 0
-        except AttributeError:
-            pass
-
-        try:
-            # flag 'g' --> 0
-            count = 0 if rule.globalmatch else 1
-        except AttributeError:
-            count = 1
-
-        # Convert regex to Python format
-        # todo: also need to escape any existing \1 etc.
-        replace = re.sub('\$(\d+)', r'\\\1', rule.replace)
-
-        try:
-            field = rule.field
-        except AttributeError:
-            new_rule = Rule(rule.match, replace, None, None)
-        else:
-            matchc = re.compile(rule.match, flags)  # compile for speed
-            new_rule = Rule(matchc, replace, field, count)
-
-        yield new_rule
 
 
 def gen_dependencies(pipe_def):
