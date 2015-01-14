@@ -90,64 +90,66 @@ rename3_rule = [
 rename4_rule = [
     {'newval': 'k:budget_full', 'field': 'k:budget_w_sym', 'op': 'copy'}]
 
-match1_1 = '^(.*)( - oDesk|\\| Elance Job)'
-match1_2 = u'^((http[s]?|ftp):\\/\\/)?\\/?([^\\/\\.]+\\.)*?([^\\/\\.]+\\.[^:\\/\\s\\.]{2,3}(\\.[^:\\/\\s\\.]\u200c\u200b{2,3})?(:\\d+)?)($|\\/)([^#?\\s]+)?(.*?)?(#[\\w\\-]+)?$'
-match1_3 = '^.*(Hourly budget:|Budget:</b> Hourly).*'
-match1_4 = '^.*(Fixed Price budget:|Budget:</b> Fixed Price).*'
-match1_5 = '^(?!\\b(hourly|fixed)\\b).*'
-match1_6 = '^(.*)(<b>(Category:|Budget)</b>|Budget:)(.*)'
-match1_7 = '^(.*)(<b>Description:</b>)(.*?)(<br /><b>Category:</b>)(.*)'
-match1_8 = '(.*)(<b>Proposals:</b>)(.*?)(<a href)(.*)'
-match1_9 = '(.*)(?!<b>Proposals:</b>)(.*)(<a href)(.*)'
+match1_01 = '(.*)( - oDesk|\\| Elance Job)'
+match1_02 = '^(http[s]?:\\/\\/)?\\/?([^\\/\\.]+\\.)*([^\\/\\.]+\\.[^:\\/\\s\\.]{2,3})(.*)'
+match1_03 = '.*(Hourly budget:|Budget:<.*?> Hourly).*'
+match1_04 = '.*(Fixed Price budget:|Budget:<.*?> Fixed Price).*'
+match1_05 = '^(?!\\b(hourly|fixed)\\b).*'
+match1_06 = '(.*)(<b>)?(Category|Budget):?(<.*?>)?(.*)'
+match1_07 = '(.*)(<b>Description:<.*?>)(.*?)(<.*?>)(.*)'
+match1_08 = '(.*)(<b>Proposals:<.*?>)(.*?)(<a href)(.*)'
+match1_09 = '(.*)(<b>)(.*)'
 match1_10 = '(.*)(\\bby\\b)(.*)'
-match1_11 = '(.*)(?!\\bby\\b)(.*)'
-match1_12 = '(.*)(<b>(Freelancer|Preferred Job) Location:</b>)(.*?)(<br />)(.*)'
-match1_13 = '^(.*)(?!<b>(Freelancer|Preferred Job) Location:</b>)(.*)$'
-match1_14 = '(.*)(<b>(Client Location:</b>|Country</b>:))(.*?)(<br />|<br>)(.*)'
-match1_15 = '(.*)(<b>(Category:</b>|Category</b>:))(.*?)(<br />|<b>Skills</b>)(.*)'
-match1_16 = '(.*)(<b>(Required skills|Desired Skills):</b>)(.*?)(<br />)(.*)'
+match1_11 = '(.*)(<b>)(.*)'
+match1_12 = '(.*)(<b>(Freelancer|Preferred Job) Location:<.*?>)(.*?)(<.*?>)(.*)'
+match1_13 = '(.*)(<b>)(.*)'
+match1_14 = '(.*)(<b>(Client Location:<.*?>|Country<.*?>:))(.*?)(<.*?>)(.*)'
+match1_14b = '(.*)(<b>)(.*)'
+match1_15 = '(.*)(<b>(Category:?<.*?>:?))(.*?)(<.*?>|<b>Skills<.*?>)(.*)'
+match1_16 = '(.*)(<b>(Required skills|Desired Skills):<.*?>)(.*?)(<.*?>)(.*)'
 match1_17 = '(.*)(Jobs:)(.*?)(\\))(.*)'
 match1_18 = '&gt;|<br>'
 match1_19 = '(\\w+)(?!.*,)'
 match1_20 = '\\/'
 match1_21 = '[^a-zA-Z\\d,]+'
-match1_22 = '.*Time Left.*\\(Ends(.*)\\) <br />'
-match1_23 = '.*(?!Time Left.*\(Ends(.*)\) <br />)'
-match1_24 = '(.*)(Fixed Price budget:</b>|Hourly budget.*Rate:|Budget:|Type and Budget|Budget</b>:)(.*?)(<br />|<br>|, Jobs:)(.*)'
+match1_22 = '.*Time Left.*\\\(Ends(.*)\\\) <.*?>'
+match1_23 = '(.*)(<b>)(.*)'
+match1_24 = '(.*)(Fixed Price budget:<.*?>|Hourly budget.*Rate:|Budget:|Type and Budget|Budget<.*?>:)(.*?)(<.*?>|, Jobs:)(.*)'
 match1_25 = 'Under|Upto|Less than|or less'
-match1_26 = '(?!.*-.*)(.*)'
+match1_26 = '^(?!.*-.*)(.*)'
 
 regex1_rule = [
-    cdict(mmatch, smatch, make_regex('title', match1_1, '$1'))
-    , make_regex('k:marketplace', match1_2, '$4')
-    , cdict(mmatch, smatch, make_regex('k:job_type', match1_3, 'hourly'))
-    , cdict(mmatch, smatch, make_regex('k:job_type', match1_4, 'fixed'))
-    , cdict(mmatch, smatch, make_regex('k:job_type', match1_5, 'unknown'))
-    , cdict(mmatch, smatch, make_regex('k:content', match1_6, '$1'))
-    , cdict(mmatch, smatch, make_regex('k:content', match1_7, '$3'))
-    , cdict(mmatch, smatch, make_regex('k:submissions', match1_8, '$3'))
-    , cdict(mmatch, smatch, make_regex('k:submissions', match1_9, 'unknown'))
-    , cdict(mmatch, smatch, make_regex('k:author', match1_10, '$3'))
-    , cdict(mmatch, smatch, make_regex('k:author', match1_11, 'unknown'))
-    , cdict(mmatch, smatch, make_regex('k:work_location', match1_12, '$4'))
-    , cdict(mmatch, smatch, make_regex('k:work_location', match1_13, 'unknown'))
-    , cdict(mmatch, smatch, make_regex('k:client_location', match1_14, '$4'))
-    , cdict(mmatch, smatch, make_regex('k:tags', match1_15, '$4'))
-    , cdict(mmatch, smatch, make_regex('k:tags', match1_16, '$4'))
-    , cdict(mmatch, smatch, make_regex('k:tags', match1_17, '$3'))
-    , cdict(gmatch, make_regex('k:tags', match1_18, ''))
-    , cdict(gmatch, make_regex('k:tags', match1_19, '$1,'))
-    , cdict(gmatch, make_regex('k:tags', match1_20, ','))
-    , cdict(gmatch, make_regex('k:tags', match1_21, '-'))
-    , cdict(gmatch, make_regex('k:tags', '^-|-$', ''))
-    , cdict(gmatch, make_regex('k:tags', ',-|-,', ','))
-    , cdict(gmatch, make_regex('k:tags', '^,|,$', ''))
-    , cdict(mmatch, smatch, make_regex('k:due', match1_22, '$1'))
-    , cdict(mmatch, smatch, make_regex('k:due', match1_23, 'unknown'))
-    , cdict(mmatch, smatch, make_regex('k:budget_raw', match1_24, '$3'))
-    , make_regex('k:budget_raw', 'k', '000')
-    , make_regex('k:budget_raw', match1_25, '-')
-    , make_regex('k:budget_raw', match1_26, '$1-$1')
+    cdict(mmatch, smatch, make_regex('title', match1_01, '$1')),
+    make_regex('k:marketplace', match1_02, '$3'),
+    cdict(mmatch, smatch, make_regex('k:job_type', match1_03, 'hourly')),
+    cdict(mmatch, smatch, make_regex('k:job_type', match1_04, 'fixed')),
+    cdict(mmatch, smatch, make_regex('k:job_type', match1_05, 'unknown')),
+    cdict(mmatch, smatch, make_regex('k:content', match1_06, '$1')),
+    cdict(mmatch, smatch, make_regex('k:content', match1_07, '$3')),
+    cdict(mmatch, smatch, make_regex('k:submissions', match1_08, '$3')),
+    cdict(mmatch, smatch, make_regex('k:submissions', match1_09, 'unknown')),
+    cdict(mmatch, smatch, make_regex('k:author', match1_10, '$3')),
+    cdict(mmatch, smatch, make_regex('k:author', match1_11, 'unknown')),
+    cdict(mmatch, smatch, make_regex('k:work_location', match1_12, '$4')),
+    cdict(mmatch, smatch, make_regex('k:work_location', match1_13, 'unknown')),
+    cdict(mmatch, smatch, make_regex('k:client_location', match1_14, '$4')),
+    cdict(mmatch, smatch, make_regex('k:client_location', match1_14b, 'unknown')),
+    cdict(mmatch, smatch, make_regex('k:tags', match1_15, '$4')),
+    cdict(mmatch, smatch, make_regex('k:tags', match1_16, '$4')),
+    cdict(mmatch, smatch, make_regex('k:tags', match1_17, '$3')),
+    cdict(gmatch, make_regex('k:tags', match1_18, '')),
+    cdict(gmatch, make_regex('k:tags', match1_19, '$1,')),
+    cdict(gmatch, make_regex('k:tags', match1_20, ',')),
+    cdict(gmatch, make_regex('k:tags', match1_21, '-')),
+    cdict(gmatch, make_regex('k:tags', '^-|-$', '')),
+    cdict(gmatch, make_regex('k:tags', ',-|-,', ',')),
+    cdict(gmatch, make_regex('k:tags', '^,|,$', '')),
+    cdict(mmatch, smatch, make_regex('k:due', match1_22, '$1')),
+    cdict(mmatch, smatch, make_regex('k:due', match1_23, 'unknown')),
+    cdict(mmatch, smatch, make_regex('k:budget_raw', match1_24, '$3')),
+    make_regex('k:budget_raw', 'k', '000'),
+    make_regex('k:budget_raw', match1_25, '-'),
+    make_regex('k:budget_raw', match1_26, '$1-$1'),
 ]
 
 regex2_rule = [
