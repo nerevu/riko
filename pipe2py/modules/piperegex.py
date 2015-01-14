@@ -12,7 +12,6 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Regex
 """
 
-import re
 from functools import partial
 from itertools import imap, starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred

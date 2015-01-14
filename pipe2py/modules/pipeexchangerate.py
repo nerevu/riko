@@ -9,11 +9,11 @@ import requests
 
 from itertools import imap
 from twisted.internet.defer import inlineCallbacks, returnValue
-from twisted.web.client import getPage
+from twisted.internet.threads import deferToThread
 from . import get_broadcast_funcs as get_funcs
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncNone, asyncGather
+from pipe2py.twisted.utils import asyncGather
 
 timeout = 60 * 60 * 24  # 24 hours in seconds
 
