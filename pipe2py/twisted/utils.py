@@ -6,13 +6,47 @@
 from twisted.internet import defer
 from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)
+from twisted.internet.task import coiterate, cooperate
 from functools import partial
-from itertools import ifilter, imap, tee, izip, starmap
+from itertools import ifilter, imap, izip, starmap, repeat
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
+WORKERS = 50
+
 asyncNone = defer.succeed(None)
 asyncReturn = lambda result: defer.succeed(result)
+
+
+def _get_work(asyncCallable, callback, map_func, *iterables):
+    func = lambda *args: asyncCallable(*args).addCallback(callback)
+    return map_func(func, *iterables)
+
+
+def _parallel(work, asyncCallable):
+    deferreds = repeat(coiterate(work), WORKERS)
+    return gatherResults(deferreds, consumeErrors=True)
+
+
+# helper functions
+def coop(asyncCallable, callback, *iterables):
+    work = _get_work(asyncCallable, callback, imap, *iterables)
+    return coiterate(work)
+
+
+def asyncParallel(asyncCallable, callback, *iterables):
+    work = _get_work(asyncCallable, callback, imap, *iterables)
+    return _parallel(work, asyncCallable)
+
+
+def coopStar(asyncCallable, callback, iterable):
+    work = _get_work(asyncCallable, callback, starmap, *[iterable])
+    return coiterate(work)
+
+
+def asyncStarParallel(asyncCallable, callback, iterable):
+    work = _get_work(asyncCallable, callback, starmap, *[iterable])
+    return _parallel(work, asyncCallable)
 
 
 def trueDeferreds(sources, filter_func=None):
@@ -57,7 +91,28 @@ def asyncImap(asyncCallable, *iterables):
     return gatherResults(deferreds, consumeErrors=True)
 
 
+@inlineCallbacks
+def asyncStarCmap(asyncCallable, iterable):
+    """itertools.starmap for deferred callables using cooperative multitasking
+    """
+    results = []
+    yield coopStar(asyncCallable, results.append, iterable)
+    returnValue(results)
+
+
+@inlineCallbacks
+def asyncStarPmap(asyncCallable, iterable):
+    """itertools.starmap for deferred callables using parallel cooperative
+    multitasking
+    """
+    results = []
+    yield asyncStarParallel(asyncCallable, results.append, iterable)
+    returnValue(results)
+
+
 def asyncStarMap(asyncCallable, iterable):
+    """itertools.starmap for deferred callables
+    """
     deferreds = starmap(asyncCallable, iterable)
     return gatherResults(deferreds, consumeErrors=True)
 
