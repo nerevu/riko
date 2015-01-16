@@ -12,6 +12,8 @@ from pipe2py.lib.utils import combine_dicts as cdict
 from pipe2py.lib.collections import SyncPipe
 from pipe2py.twisted.collections import AsyncPipe
 
+PARENT = p.dirname(p.dirname(p.dirname(__file__)))
+
 forever = pipe_forever()
 make_regex = lambda f, m, r: {'field': f, 'match': m, 'replace': r}
 
@@ -283,6 +285,10 @@ sources = [
     , {'url': 'http://feeds.feedburner.com/elance/design'}
 ]
 
+abspath = p.abspath(p.join(PARENT, 'pipe2py', 'data', 'kazeeki.json'))
+url = "file://%s" % abspath
+fetchdata_conf = {'URL': {'value': url}, 'path': {'value': 'items'}}
+
 fetch_conf = {'URL': map(make_conf, sources)}
 itembuilder_conf = {'attrs': itembuilder_attrs}
 
@@ -327,14 +333,16 @@ def print_content(output):
 
 def pipe_kazeeki(context=None, conf=itembuilder_conf, **kwargs):
     # source = SyncPipe('fetch', conf=fetch_conf, context=context)
-    source = SyncPipe('itembuilder', conf=conf, context=context)
+    # source = SyncPipe('itembuilder', conf=conf, context=context)
+    source = SyncPipe('fetchdata', conf=fetchdata_conf, context=context)
     output = parse_source(source)
     return output
 
 
 def asyncPipeKazeeki(reactor, context=None, conf=itembuilder_conf, **kwargs):
     # source = AsyncPipe('fetch', conf=fetch_conf, context=context)
-    source = AsyncPipe('itembuilder', conf=conf, context=context)
+    # source = AsyncPipe('itembuilder', conf=conf, context=context)
+    source = AsyncPipe('fetchdata', conf=fetchdata_conf, context=context)
     output = parse_source(source)
     output.addCallback(print_content)
     return output
