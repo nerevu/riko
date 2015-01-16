@@ -268,7 +268,22 @@ loop16_conf = make_loop('', 'k:budget_full', strconcat3_conf, pass_if=test3)
 loop17_conf = make_loop('', 'k:budget_full', strconcat4_conf, pass_if=test4)
 
 itembuilder_attrs = [{'key': k, 'value': v} for k, v in my_item.items()]
-fetch_conf = {'URL': ['http://feeds.feedburner.com/odesk/rss']}
+
+def make_conf(source):
+    return {'value': source.values()[0], 'type': source.keys()[0]}
+
+sources = [
+    {'url': 'http://feeds.feedburner.com/guru/all'}
+    , {'url': 'http://feeds.feedburner.com/odesk/rss'}
+    , {'url': 'http://feeds.feedburner.com/elance/all'}
+    , {'url': 'http://feeds.feedburner.com/freelancer/all'}
+    , {'url': 'http://feeds.feedburner.com/guru/it'}
+    , {'url': 'http://feeds.feedburner.com/guru/design'}
+    , {'url': 'http://feeds.feedburner.com/elance/it'}
+    , {'url': 'http://feeds.feedburner.com/elance/design'}
+]
+
+fetch_conf = {'URL': map(make_conf, sources)}
 itembuilder_conf = {'attrs': itembuilder_attrs}
 
 def parse_source(source):
