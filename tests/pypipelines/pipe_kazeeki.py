@@ -110,13 +110,13 @@ match1_14b = '(.*)(<b>)(.*)'
 match1_15 = '(.*)(<b>(Category:?<.*?>:?))(.*?)(<.*?>|<b>Skills<.*?>)(.*)'
 match1_16 = '(.*)(<b>(Required skills|Desired Skills):<.*?>)(.*?)(<.*?>)(.*)'
 match1_17 = '(.*)(Jobs:)(.*?)(\\))(.*)'
-match1_18 = '&gt;|<br>'
+match1_18 = '&gt;|<br>|&amp;'
 match1_19 = '(\\w+)(?!.*,)'
 match1_20 = '\\/'
 match1_21 = '[^a-zA-Z\\d,]+'
 match1_22 = '.*Time Left.*\\\(Ends(.*)\\\) <.*?>'
 match1_23 = '(.*)(<b>)(.*)'
-match1_24 = '(.*)(Fixed Price budget:<.*?>|Hourly budget.*Rate:|Budget:|Type and Budget|Budget<.*?>:)(.*?)(<.*?>|, Jobs:)(.*)'
+match1_24 = '(.*)((budget|Budget|Hourly budget.*Rate):?<.*?>:?)(.*?)(<.*?>|, Jobs:)(.*)'
 match1_25 = 'Under|Upto|Less than|or less'
 match1_26 = '^(?!.*-.*)(.*)'
 
@@ -148,7 +148,7 @@ regex1_rule = [
     cdict(gmatch, make_regex('k:tags', '^,|,$', '')),
     cdict(mmatch, smatch, make_regex('k:due', match1_22, '$1')),
     cdict(mmatch, smatch, make_regex('k:due', match1_23, 'unknown')),
-    cdict(mmatch, smatch, make_regex('k:budget_raw', match1_24, '$3')),
+    cdict(mmatch, smatch, make_regex('k:budget_raw', match1_24, '$4')),
     make_regex('k:budget_raw', 'k', '000'),
     make_regex('k:budget_raw', match1_25, '-'),
     make_regex('k:budget_raw', match1_26, '$1-$1'),
@@ -161,11 +161,12 @@ regex2_rule = [
 
 regex3_rule = [
     make_regex('k:budget_raw1_num', '[^\\d]*(\\d+\\.?\\d*).*', '$1')
-    , make_regex('k:budget_raw1_sym', '\\s*([$£€₹]).*', '$1')
+    , make_regex('k:budget_raw1_sym', '.*([$£€₹]).*', '$1')
     , make_regex('k:budget_raw1_code', '.*(\\b[A-Z]{3}\\b).*', '$1')
     , make_regex('k:budget_raw2_num', '[^\\d]*(\\d+\\.?\\d*).*', '$1')
-    , make_regex('k:budget_raw2_sym', '\\s*([$£€₹]).*', '$1')
+    , make_regex('k:budget_raw2_sym', '.*([$£€₹]).*', '$1')
     , make_regex('k:budget_raw2_code', '.*(\\b[A-Z]{3}\\b).*', '$1')
+    , make_regex('k:budget_raw2_code', '.*(?!\\b[A-Z]{3}\\b).*', '')
 ]
 
 regex4_rule = [make_regex('k:cur_code', '^(?![A-Z]{3}\\b)(.*)', DEF_CUR_CODE)]
