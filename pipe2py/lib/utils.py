@@ -112,7 +112,6 @@ def group_by(iterable, attr, default=None):
     return grouped
 
 
-
 def _make_content(i, tag, new):
     content = i.get(tag)
 

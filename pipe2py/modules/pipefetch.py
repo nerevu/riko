@@ -37,6 +37,7 @@ def get_urls(_INPUT, conf, **kwargs):
 # 14-Twisted-inlineCallbacks-and-deferredGenerator.html
 # http://code.activestate.com/recipes/277099/
 
+
 @inlineCallbacks
 def asyncPipeFetch(context=None, _INPUT=None, conf=None, **kwargs):
     """A source that asynchronously fetches and parses one or more feeds to
