@@ -16,7 +16,7 @@ from pipe2py.lib import utils
 # Common functions
 def get_output(_INPUT, **kwargs):
     others_filter = lambda x: x[0].startswith('_OTHER')
-    others = ifilter(others_filter, kwargs.itertems())
+    others = ifilter(others_filter, kwargs.iteritems())
     others_iter = starmap(lambda src, items: items, others)
     others_items = utils.multiplex(others_iter)
     input_items = utils.make_finite(_INPUT)
