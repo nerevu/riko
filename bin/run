@@ -42,12 +42,14 @@ if __name__ == '__main__':
     except ImportError:
         module = import_module('tests.pypipelines.%s' % pipe_name)
 
+    context = Context(test=True, verbose=True)
+
     if options.async:
         generator_name = 'asyncPipe%s' % args[0].title()
         pipe_generator = getattr(module, generator_name)
-        react(pipe_generator, [Context()])
+        react(pipe_generator, [context])
     else:
         generator_name = pipe_name
         pipe_generator = getattr(module, generator_name)
-        output = pipe_generator(Context(test=True, verbose=True))
+        output = pipe_generator(context)
         print_content(output)
