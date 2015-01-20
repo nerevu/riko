@@ -53,7 +53,7 @@ def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     clean_dict = lambda d: dict(ifilter(lambda t: all(t), d.items()))
     funcs = [partial(make_dict, get_RSS), partial(make_dict, get_YAHOO)]
 
-    finite = utils.make_finite(_INPUT)
+    finite = utils.finitize(_INPUT)
     inputs = imap(DotDict, finite)
     confs = imap(parse_conf, inputs)
     splits = utils.broadcast(confs, *funcs)

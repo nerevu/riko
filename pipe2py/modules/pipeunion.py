@@ -19,7 +19,7 @@ def get_output(_INPUT, **kwargs):
     others = ifilter(others_filter, kwargs.iteritems())
     others_iter = starmap(lambda src, items: items, others)
     others_items = utils.multiplex(others_iter)
-    input_items = utils.make_finite(_INPUT)
+    input_items = utils.finitize(_INPUT)
     return chain(input_items, others_items)
 
 

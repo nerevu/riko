@@ -92,7 +92,7 @@ __all__ = [
 def _get_broadcast_funcs(pieces, ftype='with', **kwargs):
     test = kwargs.pop('pass_if', None)
     listize = kwargs.pop('listize', True)
-    d_index = kwargs.pop('d_index', None)
+    dictize = kwargs.pop('dictize', False)
     get_value = partial(utils.get_value, **kwargs)
     get_pass = partial(utils.get_pass, test=test)
     get_with = partial(utils.get_with, **kwargs)
@@ -100,8 +100,12 @@ def _get_broadcast_funcs(pieces, ftype='with', **kwargs):
 
     if listize:
         defs = map(DotDict, utils.listize(pieces))
-        piece_defs = map(lambda p: {d_index: p}, defs) if d_index else defs
-        get_pieces = lambda i: imap(parse_conf, piece_defs, repeat(i))
+        piece_defs = map(lambda p: {'_': p}, defs) if dictize else defs
+
+        def get_pieces(item):
+            pieces = imap(parse_conf, piece_defs, repeat(item))
+            pieces = (p.get('_') for p in pieces) if dictize else pieces
+            return pieces
     else:
         piece_defs = DotDict(pieces)
         get_pieces = partial(parse_conf, piece_defs)
@@ -153,18 +157,20 @@ def get_async_dispatch_funcs(ftype='word', first=asyncReturn):
     return [first, f[ftype], asyncReturn]
 
 
-def get_splits(_INPUT, pieces, **kwargs):
-    inputs = imap(DotDict, _INPUT) if _INPUT else None
-    funcs = get_broadcast_funcs(pieces, **kwargs)
+def get_splits(_INPUT, pieces=None, finitize=False, funcs=None, **kwargs):
+    finite = utils.finitize(_INPUT) if finitize and _INPUT else _INPUT
+    inputs = imap(DotDict, finite) if finite else None
+    funcs = funcs or get_broadcast_funcs(pieces, **kwargs)
     return utils.broadcast(inputs, *funcs) if inputs else funcs
 
 
 @inlineCallbacks
-def asyncGetSplits(_INPUT, pieces, **kwargs):
+def asyncGetSplits(_INPUT, pieces, finitize=False, **kwargs):
     _input = yield _INPUT
     # asyncDict = partial(maybeDeferred, DotDict)
     # inputs = yield asyncCmap(asyncDict, _input)
-    inputs = imap(DotDict, _input) if _input else None
+    finite = utils.finitize(_input) if finitize and _input else _input
+    inputs = imap(DotDict, finite) if finite else None
     funcs = get_async_broadcast_funcs(pieces, **kwargs)
 
     if inputs:

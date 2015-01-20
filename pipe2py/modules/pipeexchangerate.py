@@ -13,8 +13,10 @@ from twisted.internet.threads import deferToThread
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
+opts = {'listize': False}
 timeout = 60 * 60 * 24  # 24 hours in seconds
 
 FIELDS = [
@@ -104,7 +106,7 @@ def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of hashed strings
     """
-    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
     _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
     returnValue(iter(_OUTPUT))
@@ -137,7 +139,7 @@ def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of hashed strings
     """
-    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs())
     _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

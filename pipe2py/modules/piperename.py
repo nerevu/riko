@@ -11,7 +11,10 @@ from functools import partial
 from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import get_splits, asyncGetSplits
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap
+
+opts = {'ftype': 'pass'}
 
 
 # Common functions
@@ -58,7 +61,7 @@ def asyncPipeRename(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    splits = yield asyncGetSplits(_INPUT, conf['RULE'], ftype='pass', **kwargs)
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), splits)
     returnValue(iter(_OUTPUT))
 
@@ -88,6 +91,6 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    splits = get_splits(_INPUT, conf['RULE'], ftype='pass', **kwargs)
+    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
     _OUTPUT = starmap(partial(parse_result, **kwargs), splits)
     return _OUTPUT

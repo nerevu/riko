@@ -151,7 +151,7 @@ def etree_to_dict(element):
     return i
 
 
-def make_finite(_INPUT):
+def finitize(_INPUT):
     yield _INPUT.next()
 
     for i in takewhile(lambda i: not 'forever' in i, _INPUT):

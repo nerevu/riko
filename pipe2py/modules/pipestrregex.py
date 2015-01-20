@@ -13,24 +13,22 @@ from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import (
     asyncStarMap, asyncDispatch, asyncReturn, asyncReduce)
 
+opts = {'parse': False}
 func = utils.substitute
-convert = partial(utils.convert_rules, recompile=True)
+convert_func = partial(utils.convert_rules, recompile=True)
 
 
+# Async functions
 def asyncParseResult(rules, word, _pass):
     # return asyncReturn(word) if _pass else coopReduce(func, rules, word)
     asyncFunc = partial(maybeDeferred, func)
     return asyncReturn(word) if _pass else asyncReduce(asyncFunc, rules, word)
 
 
-def parse_result(rules, word, _pass):
-    return word if _pass else reduce(func, rules, word)
-
-
-# Async functions
 @inlineCallbacks
 def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that asynchronously replaces text using regexes. Each
@@ -54,14 +52,19 @@ def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of replaced strings
     """
-    splits = yield asyncGetSplits(_INPUT, conf['RULE'], parse=False, **kwargs)
-    asyncFuncs = get_async_dispatch_funcs(first=partial(maybeDeferred, convert))
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    first = partial(maybeDeferred, convert_func)
+    asyncFuncs = get_async_dispatch_funcs(first=first)
     parsed = yield asyncDispatch(splits, *asyncFuncs)
-    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
+    _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
+def parse_result(rules, word, _pass):
+    return word if _pass else reduce(func, rules, word)
+
+
 def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that replaces text using regexes. Each has the general
     format: "In [field] replace [regex pattern] with [text]". Loopable.
@@ -83,7 +86,7 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of replaced strings
     """
-    splits = get_splits(_INPUT, conf['RULE'], parse=False, **kwargs)
-    parsed = utils.dispatch(splits, *get_dispatch_funcs(first=convert))
+    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    parsed = utils.dispatch(splits, *get_dispatch_funcs(first=convert_func))
     _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

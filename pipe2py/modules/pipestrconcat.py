@@ -13,20 +13,11 @@ from functools import partial
 from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import get_splits, asyncGetSplits
-from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap
 
-opts = {'ftype': None, 'parse': False, 'd_index': 'x'}
-
-
-# Common functions
-def parse_result(parts, _, _pass):
-    if _pass:
-        result = ''
-    else:
-        result = ''.join((p.get('x') for p in parts))
-
-    return result
+opts = {'ftype': None, 'parse': False, 'dictize': True}
+parse_result = lambda parts, _, _pass: '' if _pass else ''.join(parts)
 
 
 # Async functions
@@ -49,8 +40,7 @@ def asyncPipeStrconcat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of joined strings
     """
-    pkwargs = utils.combine_dicts(opts, kwargs)
-    splits = yield asyncGetSplits(_INPUT, conf['part'], **pkwargs)
+    splits = yield asyncGetSplits(_INPUT, conf['part'], **cdicts(opts, kwargs))
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), splits)
     returnValue(iter(_OUTPUT))
 
@@ -73,7 +63,6 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of joined strings
     """
-    pkwargs = utils.combine_dicts(opts, kwargs)
-    splits = get_splits(_INPUT, conf['part'], **pkwargs)
+    splits = get_splits(_INPUT, conf['part'], **cdicts(opts, kwargs))
     _OUTPUT = starmap(parse_result, splits)
     return _OUTPUT

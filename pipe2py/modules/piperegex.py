@@ -13,14 +13,16 @@
 """
 
 from functools import partial
-from itertools import starmap
+from itertools import imap, starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import (
     asyncStarMap, asyncReduce, asyncDispatch, asyncReturn)
 
+opts = {'parse': False, 'ftype': 'pass'}
 func = utils.substitute
 convert_func = partial(utils.convert_rules, recompile=True)
 
@@ -83,11 +85,10 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
-    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **pkwargs)
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
     asyncConvert = partial(maybeDeferred, convert_func)
     asyncFuncs = get_async_dispatch_funcs('pass', asyncConvert)
-    parsed = yield asyncGetParsed(splits, asyncFuncs, convert=True)
+    parsed = yield asyncDispatch(splits, *asyncFuncs)
     _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
     returnValue(iter(_OUTPUT))
 
@@ -105,10 +106,6 @@ def parse_result(rules, item, _pass):
         list(starmap(item.set, substitutions))
 
     return item
-
-
-def get_parsed(splits, funcs, convert=True):
-    return utils.dispatch(splits, *funcs) if convert else splits
 
 
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
@@ -137,8 +134,7 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
-    splits = get_splits(_INPUT, conf['RULE'], **pkwargs)
-    parsed = get_parsed(splits, get_dispatch_funcs('pass', convert_func))
+    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', convert_func))
     _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT
