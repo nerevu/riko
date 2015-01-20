@@ -53,13 +53,18 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     """
     conf = DotDict(conf)
     param_defs = map(DotDict, utils.listize(conf['PARAM']))
-    path_defs = map(DotDict, utils.listize(conf['PATH']))
     get_value = partial(utils.get_value, **kwargs)
     parse_conf = partial(utils.parse_conf, **kwargs)
     get_base = partial(utils.get_value, conf['BASE'], **kwargs)
-    get_paths = lambda i: imap(get_value, path_defs, repeat(i))
     get_params = lambda i: imap(parse_conf, param_defs, repeat(i))
     funcs = [utils.passthrough, utils.passthrough, utils.parse_params]
+
+    try:
+        path_defs = map(DotDict, utils.listize(conf['PATH']))
+    except KeyError:
+        get_paths = lambda i: []
+    else:
+        get_paths = lambda i: imap(get_value, path_defs, repeat(i))
 
     inputs = imap(DotDict, _INPUT)
     splits = utils.broadcast(inputs, get_base, get_paths, get_params)

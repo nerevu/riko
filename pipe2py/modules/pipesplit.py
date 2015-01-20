@@ -26,7 +26,7 @@ class Split(object):
     def __iter__(self):
         try:
             return self.iterators.next()
-        except IndexError:
+        except StopIteration:
             raise ValueError("split has 2 outputs, tried to activate third")
 
 
