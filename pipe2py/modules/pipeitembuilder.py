@@ -29,13 +29,8 @@ def asyncPipeItembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : asyncPipe like object (twisted Deferred iterable of items)
     conf : {
         'attrs': [
-            {
-                'key': {'value': 'title'},
-                'value': {'value': 'new title'}
-            }, {
-                'key': {'value': 'description.content'},
-                'value': {'value': 'new description'}
-            }
+            {'key': {'value': 'title'}, 'value': {'value': 'new title'}},
+            {'key': {'value': 'desc.content'}, 'value': {'value': 'new desc'}}
         ]
     }
 
@@ -64,13 +59,8 @@ def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : pipeforever pipe or an iterable of items
     conf : {
         'attrs': [
-            {
-                'key': {'value': 'title'},
-                'value': {'value': 'new title'}
-            }, {
-                'key': {'value': 'description.content'},
-                'value': {'value': 'new description'}
-            }
+            {'key': {'value': <'title'>}, 'value': {'value': <'chair'>}},
+            {'key': {'value': <'color'>}, 'value': {'value': <'red'>}}
         ]
     }
 

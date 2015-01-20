@@ -32,7 +32,9 @@ def asyncPipeStrconcat(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : asyncPipe like object (twisted Deferred iterable of items)
     conf : {
         'part': [
-            {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
+            {'value': <'<img src="'>},
+            {'subkey': <'img.src'>},
+            {'value': <'">'>}
         ]
     }
 
@@ -55,7 +57,9 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : pipeforever pipe or an iterable of items
     conf : {
         'part': [
-            {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
+            {'value': '<img src="'},
+            {'subkey': 'img.src'},
+            {'value': '">'}
         ]
     }
 

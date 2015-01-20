@@ -41,10 +41,9 @@ def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : twisted Deferred iterable of items or strings
     conf : {
         'RULE': [
-            {
-                'match': {'value': <regex>},
-                'replace': {'value': <'replacement'>}
-            }
+            {'match': {'value': <regex1>}, 'replace': {'value': <'text1'>}},
+            {'match': {'value': <regex2>}, 'replace': {'value': <'text2'>}},
+            {'match': {'value': <regex3>}, 'replace': {'value': <'text3'>}},
         ]
     }
 

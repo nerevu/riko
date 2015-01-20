@@ -192,6 +192,23 @@ def get_value(field, item=None, **kwargs):
 
 
 def broadcast(_INPUT, *funcs, **kwargs):
+    """copies an iterable and delivers the items to multiple functions
+
+           /--> foo2bar(_INPUT) --> \
+          /                          \
+    _INPUT ---> foo2baz(_INPUT) ---> _OUTPUT
+          \                          /
+           \--> foo2qux(_INPUT) --> /
+
+    One way to construct such a flow in code would be::
+
+        _INPUT = repeat('foo', 3)
+        foo2bar = lambda word: word.replace('foo', 'bar')
+        foo2baz = lambda word: word.replace('foo', 'baz')
+        foo2qux = lambda word: word.replace('foo', 'quz')
+        _OUTPUT = broadcast(_INPUT, foo2bar, foo2baz, foo2qux)
+        _OUTPUT == repeat(('bar', 'baz', 'qux'), 3)
+    """
     map_func = kwargs.get('map_func', _map_func)
     apply_func = kwargs.get('apply_func', _apply_func)
     splits = izip(*tee(_INPUT, len(funcs)))
@@ -199,6 +216,24 @@ def broadcast(_INPUT, *funcs, **kwargs):
 
 
 def dispatch(splits, *funcs, **kwargs):
+    """takes multiple iterables (returned by dispatch or broadcast) and delivers
+    the items to multiple functions
+
+           /-----> _INPUT1 --> double(_INPUT1) --> \
+          /                                         \
+    splits ------> _INPUT2 --> triple(_INPUT2) ---> _OUTPUT
+          \                                         /
+           \--> _INPUT3 --> quadruple(_INPUT3) --> /
+
+    One way to construct such a flow in code would be::
+
+        splits = repeat(('bar', 'baz', 'qux'), 3)
+        double = lambda word: word * 2
+        triple = lambda word: word * 3
+        quadruple = lambda word: word * 4
+        _OUTPUT = dispatch(splits, double, triple, quadruple)
+        _OUTPUT == repeat(('barbar', 'bazbazbaz', 'quxquxquxqux'), 3)
+    """
     map_func = kwargs.get('map_func', _map_func)
     apply_func = kwargs.get('apply_func', _apply_func)
     return map_func(partial(apply_func, funcs), splits)

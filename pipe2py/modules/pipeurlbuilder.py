@@ -36,17 +36,12 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     context : pipe2py.Context object
     _INPUT : pipeforever pipe or an iterable of items or fields
     conf : {
+        'PARAM': [
+            {'key': {'value': <'order'>}, 'value': {'value': <'desc'>}},
+            {'key': {'value': <'page'>}, 'value': {'value': <'2'>}}
+        ]
         'PATH': {'type': 'text', 'value': <''>},
         'BASE': {'type': 'text', 'value': <'http://site.com/feed.xml'>},
-        'PARAM': [
-            {
-                'key': {'value': <'order'>},
-                'value': {'value': <'desc'>}
-            }, {
-                'key': {'value': <'page'>},
-                'value': {'value': <'2'>}
-            }
-        ]
     }
 
     Yields

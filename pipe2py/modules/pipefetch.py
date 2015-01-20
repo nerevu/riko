@@ -54,7 +54,13 @@ def asyncPipeFetch(context=None, _INPUT=None, conf=None, **kwargs):
     ----------
     context : pipe2py.Context object
     _INPUT : asyncPipe like object (twisted Deferred iterable of items)
-    conf : {'URL': [{'value': <url>, 'type': 'url'}]}
+    conf : {
+        'URL': [
+            {'type': 'url', 'value': <url1>},
+            {'type': 'url', 'value': <url2>},
+            {'type': 'url', 'value': <url3>},
+        ]
+    }
 
     Returns
     -------
@@ -82,7 +88,13 @@ def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
     ----------
     context : pipe2py.Context object
     _INPUT : pipeforever pipe or an iterable of items or fields
-    conf : {'URL': [{'value': <url>, 'type': 'url'}]}
+    conf : {
+        'URL': [
+            {'type': 'url', 'value': <url1>},
+            {'type': 'url', 'value': <url2>},
+            {'type': 'url', 'value': <url3>},
+        ]
+    }
 
     Returns
     -------
