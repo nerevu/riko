@@ -49,10 +49,9 @@ def parse_result(submodule, item, _pass, **kwargs):
         first = kwargs.get('first')
         first_result = submodule.next()
         is_item = hasattr(first_result, 'keys')
+        isnt_item = not is_item
 
-    if not _pass and first and is_item:
-        all_results = iter([first_result])
-    elif not _pass and is_item:
+    if not (_pass or first) and is_item:
         # submodule delivers one or more results, e.g. fetchpage, tokenizer so
         # grab the rest
         all_results = chain([first_result], submodule)
@@ -61,9 +60,9 @@ def parse_result(submodule, item, _pass, **kwargs):
         all_results = first_result
 
     if not _pass and emit:
-        result = all_results if is_item else iter([all_results])
+        result = iter([all_results]) if (first or isnt_item) else all_results
     elif not _pass:
-        assign = list(all_results) if is_item else all_results
+        assign = all_results if (first or isnt_item) else list(all_results)
         item.set(assign_to, assign)
         result = item
 
