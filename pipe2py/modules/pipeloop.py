@@ -170,4 +170,3 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     gathered = starmap(partial(parse_result, **pkwargs), splits)
     _OUTPUT = utils.multiplex(gathered) if pkwargs['emit'] else gathered
     return _OUTPUT
-

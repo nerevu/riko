@@ -7,7 +7,6 @@
     Provides methods for creating asynchronous pipe2py pipes
 """
 
-from twisted.internet.defer import inlineCallbacks, returnValue
 from pipe2py.modules.pipeforever import asyncPipeForever
 from pipe2py.lib.collections import PyPipe
 

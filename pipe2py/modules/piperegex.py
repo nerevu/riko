@@ -13,7 +13,7 @@
 """
 
 from functools import partial
-from itertools import imap, starmap
+from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)

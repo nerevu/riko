@@ -7,7 +7,7 @@
 
 import requests
 
-from itertools import imap, starmap
+from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.threads import deferToThread
 from . import (

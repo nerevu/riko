@@ -5,7 +5,7 @@
 # by pipe
 
 from functools import partial
-from itertools import imap, repeat, starmap
+from itertools import imap, repeat
 from twisted.internet.defer import maybeDeferred, inlineCallbacks, returnValue
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
@@ -166,5 +166,10 @@ def asyncGetSplits(_INPUT, pieces, **kwargs):
     # inputs = yield asyncCmap(asyncDict, _input)
     inputs = imap(DotDict, _input) if _input else None
     funcs = get_async_broadcast_funcs(pieces, **kwargs)
-    result = yield asyncBroadcast(inputs, *funcs) if inputs else asyncReturn(funcs)
+
+    if inputs:
+        result = yield asyncBroadcast(inputs, *funcs)
+    else:
+        result = yield asyncReturn(funcs)
+
     returnValue(result)

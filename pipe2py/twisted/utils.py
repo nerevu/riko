@@ -8,9 +8,8 @@ from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)
 from twisted.internet.task import coiterate, cooperate
 from functools import partial
-from itertools import ifilter, imap, izip, starmap, repeat
+from itertools import ifilter, imap, starmap, repeat
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
 
 WORKERS = 50
 
