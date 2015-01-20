@@ -7,29 +7,38 @@
 
 import requests
 
-from functools import partial
+from itertools import starmap
+from twisted.internet.defer import inlineCallbacks, returnValue
+from twisted.internet.threads import deferToThread
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 timeout = 60 * 60 * 24  # 24 hours in seconds
 
+FIELDS = [
+    {'name': 'USD/USD', 'price': 1},
+    {'name': 'USD/EUR', 'price': 0.8234},
+    {'name': 'USD/GBP', 'price': 0.6448},
+    {'name': 'USD/INR', 'price': 63.6810},
+]
 
-@utils.memoize(timeout)
-def get_rates(offline=False):
-    if offline:
-        fields = [
-            {'name': 'USD/USD', 'price': 1},
-            {'name': 'USD/EUR', 'price': 0.8234},
-            {'name': 'USD/GBP', 'price': 0.6448},
-            {'name': 'USD/INR', 'price': 63.6810},
-        ]
-    else:
-        EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
-        EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
-        r = requests.get(EXCHANGE_API, params={'format': 'json'})
-        fields = r.json()['list']['resources']['resource']['fields']
+EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
+EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
+PARAMS = {'format': 'json'}
 
-    return {i['name']: i['price'] for i in fields}
+
+# Common functions
+def get_base(conf, word):
+    base = word or conf.default
+
+    try:
+        offline = conf.offline
+    except AttributeError:
+        offline = False
+
+    return (base, offline)
 
 
 def calc_rate(from_cur, to_cur, rates):
@@ -45,15 +54,69 @@ def calc_rate(from_cur, to_cur, rates):
     return 1 / float(rate)
 
 
-def parse_result(conf, base, _pass):
-    base = base or conf.default
+def parse_request(r, offline):
+    if offline:
+        fields = FIELDS
+    else:
+        resources = r['list']['resources']
+        fields = (r['resource']['fields'] for r in resources)
 
-    try:
-        offline = conf.offline
-    except AttributeError:
-        offline = False
+    return {i['name']: i['price'] for i in fields}
 
-    return base if _pass else calc_rate(base, conf.quote, get_rates(offline))
+
+@utils.memoize(timeout)
+def get_rate_data():
+    return requests.get(EXCHANGE_API, params=PARAMS)
+
+
+# Async functions
+@inlineCallbacks
+def asyncParseResult(conf, word, _pass):
+    base, offline = get_base(conf, word)
+
+    if offline:
+        r = None
+    else:
+        data = yield deferToThread(get_rate_data)
+        r = data.json()
+
+    rates = parse_request(r, offline)
+    result = base if _pass else calc_rate(base, conf.quote, rates)
+    returnValue(result)
+
+
+@inlineCallbacks
+def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously retrieves the current exchange rate
+    for a given currency pair. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or strings (base currency)
+    conf : {
+        'quote': {'value': <'USD'>},
+        'default': {'value': <'USD'>},
+        'offline': {'type': 'bool', 'value': '0'},
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of hashed strings
+    """
+    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
+    returnValue(iter(_OUTPUT))
+
+
+# Synchronous functions
+def parse_result(conf, word, _pass):
+    base, offline = get_base(conf, word)
+    r = None if offline else get_rate_data().json()
+    rates = parse_request(r, offline)
+    result = base if _pass else calc_rate(base, conf.quote, rates)
+    return result
 
 
 def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
@@ -70,18 +133,11 @@ def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
         'offline': {'type': 'bool', 'value': '0'},
     }
 
-    Yields
-    ------
-    _OUTPUT : hashed strings
+    Returns
+    -------
+    _OUTPUT : generator of hashed strings
     """
-    test = kwargs.pop('pass_if', None)
-    loop_with = kwargs.pop('with', None)
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_pass = partial(utils.get_pass, test=test)
-    get_conf = partial(utils.parse_conf, DotDict(conf), **kwargs)
-    funcs = [get_conf, utils.get_word, utils.passthrough]
-
-    splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
-    parsed = utils.dispatch(splits, *funcs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs())
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

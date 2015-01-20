@@ -131,14 +131,7 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_125e9fe8bb5f84526d21bebfec3ad116'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name, 1, 0)
-        base = 'http://ajax.googleapis.com/ajax/services/language/detect'
-        contains = {
-            u'description': None, u'language': None,
-            u'language-url': base + '?q=Guten+Tag&v=1.0',
-            u'title': u'Guten Tag'
-        }
-
-        [self.assertEqual(item, contains) for item in pipeline]
+        [self.assertEqual(i['info']['login'], u'defunkt') for i in pipeline]
 
     def test_urlbuilder(self):
         """Loads the RTW URL Builder test pipeline and compiles and executes it

@@ -6,15 +6,43 @@
 """
 
 from functools import partial
+from itertools import starmap
 from babel.numbers import format_currency
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 
+# Common functions
 def parse_result(conf, num, _pass):
     return num if _pass else format_currency(num, conf.currency)
 
 
+# Async functions
+@inlineCallbacks
+def asyncPipeCurrencyformat(context=None, _INPUT=None, conf=None, **kwargs):
+    """A number module that asynchronously formats a number to a given currency
+    string. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or numbers
+    conf : {'currency': {'value': <'USD'>}}
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of formatted currencies
+    """
+    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs('num'))
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
+    returnValue(iter(_OUTPUT))
+
+
+# Synchronous functions
 def pipe_currencyformat(context=None, _INPUT=None, conf=None, **kwargs):
     """A number module that formats a number to a given currency string.
     Loopable.
@@ -25,18 +53,11 @@ def pipe_currencyformat(context=None, _INPUT=None, conf=None, **kwargs):
     _INPUT : iterable of items or numbers
     conf : {'currency': {'value': <'USD'>}}
 
-    Yields
-    ------
-    _OUTPUT : formatted currency
+    Returns
+    -------
+    _OUTPUT : generator of formatted currencies
     """
-    test = kwargs.pop('pass_if', None)
-    loop_with = kwargs.pop('with', None)
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_pass = partial(utils.get_pass, test=test)
-    get_conf = partial(utils.parse_conf, DotDict(conf), **kwargs)
-    funcs = [get_conf, utils.get_num, utils.passthrough]
-
-    splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
-    parsed = utils.dispatch(splits, *funcs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs('num'))
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

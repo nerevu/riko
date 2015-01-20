@@ -9,7 +9,7 @@
 
 import urllib
 from functools import partial
-from itertools import imap, ifilter, repeat
+from itertools import imap, ifilter, repeat, starmap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -54,7 +54,7 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     conf = DotDict(conf)
     param_defs = map(DotDict, utils.listize(conf['PARAM']))
     get_value = partial(utils.get_value, **kwargs)
-    parse_conf = partial(utils.parse_conf, **kwargs)
+    parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
     get_base = partial(utils.get_value, conf['BASE'], **kwargs)
     get_params = lambda i: imap(parse_conf, param_defs, repeat(i))
     funcs = [utils.passthrough, utils.passthrough, utils.parse_params]
@@ -69,5 +69,5 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     inputs = imap(DotDict, _INPUT)
     splits = utils.broadcast(inputs, get_base, get_paths, get_params)
     parsed = utils.dispatch(splits, *funcs)
-    _OUTPUT = utils.gather(parsed, parse_base)
+    _OUTPUT = starmap(parse_base, parsed)
     return _OUTPUT

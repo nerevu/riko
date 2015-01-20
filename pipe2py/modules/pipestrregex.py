@@ -7,18 +7,61 @@
     http://pipes.yahoo.com/pipes/docs?doc=string
 """
 
-import re
 from functools import partial
-from itertools import imap, repeat
+from itertools import starmap
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import (
+    asyncStarMap, asyncDispatch, asyncReturn, asyncReduce)
+
+func = utils.substitute
+convert = partial(utils.convert_rules, recompile=True)
+
+
+def asyncParseResult(rules, word, _pass):
+    # return asyncReturn(word) if _pass else coopReduce(func, rules, word)
+    asyncFunc = partial(maybeDeferred, func)
+    return asyncReturn(word) if _pass else asyncReduce(asyncFunc, rules, word)
 
 
 def parse_result(rules, word, _pass):
-    func = lambda word, rule: re.sub(rule.match, rule.replace, word)
     return word if _pass else reduce(func, rules, word)
 
 
+# Async functions
+@inlineCallbacks
+def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously replaces text using regexes. Each
+    has the general format: "In [field] replace [regex pattern] with [text]".
+    Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or strings
+    conf : {
+        'RULE': [
+            {
+                'match': {'value': <regex>},
+                'replace': {'value': <'replacement'>}
+            }
+        ]
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of replaced strings
+    """
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], parse=False, **kwargs)
+    asyncFuncs = get_async_dispatch_funcs(first=partial(maybeDeferred, convert))
+    parsed = yield asyncDispatch(splits, *asyncFuncs)
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
+    returnValue(iter(_OUTPUT))
+
+
+# Synchronous functions
 def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that replaces text using regexes. Each has the general
     format: "In [field] replace [regex pattern] with [text]". Loopable.
@@ -40,18 +83,7 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of replaced strings
     """
-    conf = DotDict(conf)
-    test = kwargs.pop('pass_if', None)
-    loop_with = kwargs.pop('with', None)
-    rule_defs = map(DotDict, utils.listize(conf['RULE']))
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_pass = partial(utils.get_pass, test=test)
-    parse_conf = partial(utils.parse_conf, **kwargs)
-    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
-    funcs1 = [utils.convert_rules, utils.get_word, utils.passthrough]
-
-    inputs = imap(DotDict, _INPUT)
-    splits = utils.broadcast(inputs, get_rules, get_with, get_pass)
-    parsed = utils.dispatch(splits, *funcs1)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf['RULE'], parse=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs(first=convert))
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

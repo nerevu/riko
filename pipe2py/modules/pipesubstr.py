@@ -8,16 +8,47 @@
 """
 
 from functools import partial
+from itertools import starmap
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 
+# Common functions
 def parse_result(conf, word, _pass):
     start = int(conf.start)
     end = int(conf.start + conf.length)
     return word if _pass else word[start:end]
 
 
+# Async functions
+@inlineCallbacks
+def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously returns a substring. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or strings
+    conf : {
+        'from': {'type': 'number', value': <starting position>},
+        'length': {'type': 'number', 'value': <count of characters to return>}
+    }
+
+    returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of substrings
+    """
+    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
+    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
+    returnValue(iter(_OUTPUT))
+
+
+# Synchronous functions
 def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that returns a substring. Loopable.
 
@@ -34,16 +65,8 @@ def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of substrings
     """
-    conf = DotDict(conf)
-    conf['start'] = conf.pop('from')
-    test = kwargs.pop('pass_if', None)
-    loop_with = kwargs.pop('with', None)
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_conf = partial(utils.parse_conf, conf, **kwargs)
-    get_pass = partial(utils.get_pass, test=test)
-    funcs = [get_conf, utils.get_word, utils.passthrough]
-
-    splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
-    parsed = utils.dispatch(splits, *funcs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
+    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs())
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

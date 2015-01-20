@@ -7,10 +7,14 @@
     http://pipes.yahoo.com/pipes/docs?doc=string#StringReplace
 """
 
+from itertools import starmap
 from functools import partial
-from itertools import imap, repeat
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import (
+    asyncStarMap, asyncDispatch, asyncReturn, asyncReduce)
 
 SWITCH = {
     '1': lambda word, rule: word.replace(rule.find, rule.replace, 1),
@@ -19,9 +23,47 @@ SWITCH = {
     # todo: else assertion
 }
 
+# Common functions
+func = lambda word, rule: SWITCH.get(rule.param)(word, rule)
 
+
+# Async functions
+def asyncParseResult(rules, word, _pass):
+    # asyncSubstitute = coopReduce(func, rules, word)
+    asyncSubstitute = asyncReduce(partial(maybeDeferred, func), rules, word)
+    return asyncReturn(word) if _pass else asyncSubstitute
+
+
+@inlineCallbacks
+def asyncPipeStrreplace(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously replaces text. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or strings
+    conf : {
+        'RULE': [
+            {
+                'param': {'value': <match type: 1=first, 2=last, 3=every>},
+                'find': {'value': <text to find>},
+                'replace': {'value': <replacement>}
+            }
+        ]
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of replaced strings
+    """
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
+    returnValue(iter(_OUTPUT))
+
+
+# Synchronous functions
 def parse_result(rules, word, _pass):
-    func = lambda word, rule: SWITCH.get(rule.param)(word, rule)
     return word if _pass else reduce(func, rules, word)
 
 
@@ -46,17 +88,7 @@ def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of replaced strings
     """
-    conf = DotDict(conf)
-    test = kwargs.pop('pass_if', None)
-    loop_with = kwargs.pop('with', None)
-    rule_defs = map(DotDict, utils.listize(conf['RULE']))
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_pass = partial(utils.get_pass, test=test)
-    parse_conf = partial(utils.parse_conf, **kwargs)
-    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
-    funcs = [get_rules, utils.get_word, utils.passthrough]
-
-    splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
-    parsed = utils.dispatch(splits, *funcs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf['RULE'], **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs())
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

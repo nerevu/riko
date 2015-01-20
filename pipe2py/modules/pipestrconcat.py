@@ -10,15 +10,52 @@
 # aka stringbuilder
 
 from functools import partial
-from itertools import imap, repeat
+from itertools import starmap
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import get_splits, asyncGetSplits
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncStarMap
+
+opts = {'ftype': None, 'parse': False, 'd_index': 'x'}
 
 
-def parse_result(parts, _pass):
-    return '' if _pass else ''.join(parts)
+# Common functions
+def parse_result(parts, _, _pass):
+    if _pass:
+        result = ''
+    else:
+        result = ''.join((p.get('x') for p in parts))
+
+    return result
 
 
+# Async functions
+@inlineCallbacks
+def asyncPipeStrconcat(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously builds a string. Loopable. No direct
+    input.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
+    conf : {
+        'part': [
+            {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
+        ]
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of joined strings
+    """
+    pkwargs = utils.combine_dicts(opts, kwargs)
+    splits = yield asyncGetSplits(_INPUT, conf['part'], **pkwargs)
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), splits)
+    returnValue(iter(_OUTPUT))
+
+
+# Synchronous functions
 def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that builds a string. Loopable.
 
@@ -36,14 +73,7 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of joined strings
     """
-    conf = DotDict(conf)
-    test = kwargs.pop('pass_if', None)
-    part_defs = map(DotDict, utils.listize(conf['part']))
-    get_pass = partial(utils.get_pass, test=test)
-    get_value = partial(utils.get_value, **kwargs)
-    get_parts = lambda i: imap(get_value, part_defs, repeat(i))
-
-    inputs = imap(DotDict, _INPUT)
-    splits = utils.broadcast(inputs, get_parts, get_pass)
-    _OUTPUT = utils.gather(splits, parse_result)
+    pkwargs = utils.combine_dicts(opts, kwargs)
+    splits = get_splits(_INPUT, conf['part'], **pkwargs)
+    _OUTPUT = starmap(parse_result, splits)
     return _OUTPUT

@@ -12,22 +12,103 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Regex
 """
 
-import re
 from functools import partial
-from itertools import imap, repeat
+from itertools import starmap
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import (
+    asyncStarMap, asyncReduce, asyncDispatch, asyncReturn)
+
+func = utils.substitute
+convert_func = partial(utils.convert_rules, recompile=True)
 
 
-def func(item, rule):
-    string = item.get(rule.field) or ''
-    replaced = re.sub(rule.match, rule.replace, string, rule.count)
-    item.set(rule.field, replaced)
-    return item
+# Common functions
+def get_groups(rules, item):
+    field_groups = utils.group_by(list(rules), 'field').items()
+    groups = starmap(lambda f, r: (f, item.get(f) or '', r), field_groups)
+    return groups
+
+
+# Async functions
+def asyncGetParsed(splits, funcs, convert=True):
+    return asyncDispatch(splits, *funcs) if convert else asyncReturn(splits)
+
+
+@inlineCallbacks
+def asyncGetSubstitutions(field, word, rules):
+    asyncSubstitute = partial(maybeDeferred, func)
+    replacement = yield asyncReduce(asyncSubstitute, rules, word)
+    result = (field, replacement)
+    returnValue(result)
+
+
+@inlineCallbacks
+def asyncParseResult(rules, item, _pass):
+    if not _pass:
+        groups = get_groups(rules, item)
+        substitutions = yield asyncStarMap(asyncGetSubstitutions, groups)
+        list(starmap(item.set, substitutions))
+
+    returnValue(item)
+
+
+@inlineCallbacks
+def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that asynchronously replaces text in items using regexes.
+    Each has the general format: "In [field] replace [match] with [replace]".
+    Not loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
+    conf : {
+        'RULE': [
+            {
+                'field': {'value': <'search field'>},
+                'match': {'value': <'regex'>},
+                'replace': {'value': <'replacement'>},
+                'globalmatch': {'value': '1'},
+                'singlelinematch': {'value': '2'},
+                'multilinematch': {'value': '4'},
+                'casematch': {'value': '8'}
+            }
+        ]
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of items
+    """
+    pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **pkwargs)
+    asyncConvert = partial(maybeDeferred, convert_func)
+    asyncFuncs = get_async_dispatch_funcs('pass', asyncConvert)
+    parsed = yield asyncGetParsed(splits, asyncFuncs, convert=True)
+    _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
+    returnValue(iter(_OUTPUT))
+
+
+# Synchronous functions
+def get_substitutions(field, word, rules):
+    replacement = reduce(func, rules, word)
+    return (field, replacement)
 
 
 def parse_result(rules, item, _pass):
-    return item if _pass else reduce(func, rules, item)
+    if not _pass:
+        groups = get_groups(rules, item)
+        substitutions = starmap(get_substitutions, groups)
+        list(starmap(item.set, substitutions))
+
+    return item
+
+
+def get_parsed(splits, funcs, convert=True):
+    return utils.dispatch(splits, *funcs) if convert else splits
 
 
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
@@ -56,16 +137,8 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    conf = DotDict(conf)
-    test = kwargs.pop('pass_if', None)
-    rule_defs = map(DotDict, utils.listize(conf['RULE']))
-    get_pass = partial(utils.get_pass, test=test)
-    parse_conf = partial(utils.parse_conf, **kwargs)
-    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
-    funcs = [utils.convert_rules, utils.passthrough, utils.passthrough]
-
-    inputs = imap(DotDict, _INPUT)
-    splits = utils.broadcast(inputs, get_rules, utils.passthrough, get_pass)
-    parsed = utils.dispatch(splits, *funcs)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
+    splits = get_splits(_INPUT, conf['RULE'], **pkwargs)
+    parsed = get_parsed(splits, get_dispatch_funcs('pass', convert_func))
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

@@ -8,10 +8,15 @@
 """
 
 from functools import partial
+from itertools import starmap
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 
+# Common functions
 def parse_result(conf, word, _pass):
     if _pass:
         token = None
@@ -33,6 +38,35 @@ def parse_result(conf, word, _pass):
     return token
 
 
+# Async functions
+@inlineCallbacks
+def asyncPipeStringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously splits a string into tokens
+    delimited by separators. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or strings
+    conf : {
+        'to-str': {'value': <delimiter>},
+        'dedupe': {'type': 'bool', value': <1>},
+        'sort': {'type': 'bool', value': <1>}
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of items
+    """
+    conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
+    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    items = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
+    _OUTPUT = utils.multiplex(items)
+    returnValue(_OUTPUT)
+
+
+# Synchronous functions
 def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that splits a string into tokens delimited by
     separators. Loopable.
@@ -51,17 +85,9 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    conf = DotDict(conf)
-    conf['delimiter'] = conf.pop('to-str')
-    test = kwargs.pop('pass_if', None)
-    loop_with = kwargs.pop('with', None)
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_pass = partial(utils.get_pass, test=test)
-    get_conf = partial(utils.parse_conf, conf, **kwargs)
-    funcs = [get_conf, utils.get_word, utils.passthrough]
-
-    splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
-    parsed = utils.dispatch(splits, *funcs)
-    items = utils.gather(parsed, parse_result)
+    conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
+    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs())
+    items = starmap(parse_result, parsed)
     _OUTPUT = utils.multiplex(items)
     return _OUTPUT

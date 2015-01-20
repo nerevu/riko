@@ -8,9 +8,13 @@
 """
 
 from functools import partial
+from itertools import starmap
 from math import pow
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 OPS = {
     'add': lambda x, y: x + y,
@@ -23,6 +27,37 @@ OPS = {
 }
 
 
+# Common functions
+def parse_result(conf, num, _pass):
+    return num if _pass else OPS[conf.OP](num, conf.OTHER)
+
+
+# Async functions
+@inlineCallbacks
+def asyncPipeSimplemath(context=None, _INPUT=None, conf=None, **kwargs):
+    """A number module that asynchronously performs basic arithmetic, such as
+    addition and subtraction. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items or numbers
+    conf : {
+        'OTHER': {'type': 'number', 'value': <'5'>},
+        'OP': {'type': 'text', 'value': <'modulo'>}
+    }
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of tokenized floats
+    """
+    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs('num'))
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
+    returnValue(iter(_OUTPUT))
+
+
+# Synchronous functions
 def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     """A number module that performs basic arithmetic, such as addition and
     subtraction. Loopable.
@@ -41,12 +76,7 @@ def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of tokenized floats
     """
-    loop_with = kwargs.pop('with', None)
-    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
-    get_conf = partial(utils.parse_conf, DotDict(conf), **kwargs)
-    parse_result = lambda conf, num: OPS[conf.OP](num, conf.OTHER)
-
-    splits = utils.broadcast(_INPUT, DotDict, get_with)
-    parsed = utils.dispatch(splits, get_conf, utils.get_num)
-    _OUTPUT = utils.gather(parsed, parse_result)
+    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    parsed = utils.dispatch(splits, *get_dispatch_funcs('num'))
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

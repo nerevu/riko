@@ -16,7 +16,8 @@ import re
 from collections import namedtuple
 from datetime import datetime
 from functools import partial
-from itertools import groupby, chain, izip, tee, takewhile, ifilter
+from itertools import (
+    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap)
 from urllib2 import quote
 from os import path as p, environ
 from pipe2py import Context
@@ -39,9 +40,9 @@ else:
             'CACHE_TYPE': 'memcached',
             'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
 
-cache = Cache(**cache_config)
-timeout = 60 * 60 * 1
-
+DATE_FORMAT = '%m/%d/%Y'
+DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
+URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
     "%m/%d/%y",
@@ -51,9 +52,17 @@ ALTERNATIVE_DATE_FORMATS = (
     # todo more: whatever Yahoo can accept
 )
 
-DATE_FORMAT = '%m/%d/%Y'
-DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
-URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
+# leave option to substitute with multiprocessing
+_map_func = imap
+
+combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
+cache = Cache(**cache_config)
+timeout = 60 * 60 * 1
+sub_rule = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
+
+
+def _apply_func(funcs, items, map_func=starmap):
+    return map_func(lambda item, func: func(item), izip(items, funcs))
 
 
 def memoize(*args, **kwargs):
@@ -93,17 +102,14 @@ def pythonise(id, encoding='ascii'):
     return id.encode(encoding)
 
 
-def group_by(data, attr, default=None):
-    groups = {}
-
+def group_by(iterable, attr, default=None):
     # like operator.itemgetter but fills in missing keys with a default value
     keyfunc = lambda item: lambda obj: obj.get(item, default)
-    data.sort(key=keyfunc(attr))
+    sorted_iterable = sorted(iterable, key=keyfunc(attr))
+    groups = groupby(sorted_iterable, keyfunc(attr))
+    grouped = {str(k): list(v) for k, v in groups}
 
-    for key, values in groupby(data, keyfunc(attr)):
-        groups[str(key)] = list(v for v in values)
-
-    return groups
+    return grouped
 
 
 def _make_content(i, tag, new):
@@ -118,7 +124,6 @@ def _make_content(i, tag, new):
     return content
 
 
-@memoize(timeout)
 def etree_to_dict(element):
     """Convert an eTree xml into dict imitating how Yahoo Pipes does it.
 
@@ -153,7 +158,6 @@ def make_finite(_INPUT):
         yield i
 
 
-@memoize(timeout)
 def get_value(field, item=None, **kwargs):
     item = item or {}
 
@@ -168,7 +172,7 @@ def get_value(field, item=None, **kwargs):
     try:
         kwargs.update(OPS.get(field.get('type', 'text'), {}))
     except AttributeError:
-        pass
+        kwargs.update(OPS['text'])
 
     try:
         value = item.get(field['subkey'], **kwargs)
@@ -178,42 +182,66 @@ def get_value(field, item=None, **kwargs):
         else:
             value = field.get(None, **kwargs)
     except (TypeError, AttributeError):
+        # field is already set to a value so use it or the default
+        value = field or kwargs.get('default')
+    except (ValueError):
+        # error converting subkey value with OPS['func'] so use the default
         value = kwargs.get('default')
 
     return value
 
 
-def broadcast(_INPUT, *funcs):
-    for items in izip(*tee(_INPUT, len(funcs))):
-        yield (func(item) for item, func in izip(items, funcs))
+def broadcast(_INPUT, *funcs, **kwargs):
+    map_func = kwargs.get('map_func', _map_func)
+    apply_func = kwargs.get('apply_func', _apply_func)
+    splits = izip(*tee(_INPUT, len(funcs)))
+    return map_func(partial(apply_func, funcs), splits)
 
 
-def dispatch(splits, *funcs):
-    for split in splits:
-        yield (func(item) for item, func in izip(split, funcs))
+def dispatch(splits, *funcs, **kwargs):
+    map_func = kwargs.get('map_func', _map_func)
+    apply_func = kwargs.get('apply_func', _apply_func)
+    return map_func(partial(apply_func, funcs), splits)
 
 
-def gather(splits, func):
-    for split in splits:
-        yield func(*list(split))
+def gather(splits, func, **kwargs):
+    map_func = kwargs.get('map_func', _map_func)
+    gather_func = lambda split: func(*list(split))
+    return map_func(gather_func, splits)
 
 
-def parse_conf(conf, item=None, **kwargs):
+def _parse_conf(conf, keys, func):
+    iterable = imap(lambda k: conf[k], keys)
+    return map(func, iterable)
+
+
+def parse_conf(conf, item=None, parse_func=None, **kwargs):
+    parse = kwargs.pop('parse', True)
     keys = conf.keys()
-    Conf = namedtuple('Conf', keys)
-    func = partial(get_value, item=item, **kwargs)
-    return Conf(*map(func, (conf[k] for k in keys)))
+    values = _parse_conf(conf, keys, partial(parse_func, item=item))
+
+    if parse:
+        Conf = namedtuple('Conf', keys)
+        result = Conf(*values)
+    else:
+        result = dict(zip(keys, values))
+
+    return result
 
 
-@cache.memoize(timeout)
 def parse_params(params):
     true_params = ifilter(all, params)
-    return dict((x.key, x.value) for x in true_params)
+    return dict(imap(lambda x: (x.key, x.value), true_params))
 
 
 def get_pass(item=None, test=None):
     item = item or {}
     return test and test(item)
+
+
+def get_with(item, **kwargs):
+    loop_with = kwargs.pop('with', None)
+    return item.get(loop_with, **kwargs) if loop_with else item
 
 
 def get_date(date_string):
@@ -263,6 +291,17 @@ def get_abspath(url):
     return url
 
 
+def get_word(item):
+    try:
+        word = ''.join(item.itervalues())
+    except AttributeError:
+        word = item
+    except TypeError:
+        word = None
+
+    return word or ''
+
+
 def get_num(item):
     try:
         joined = ''.join(item.itervalues())
@@ -281,15 +320,8 @@ def passthrough(item):
     return item
 
 
-def get_word(item):
-    try:
-        word = ''.join(item.itervalues())
-    except AttributeError:
-        word = item
-    except TypeError:
-        word = None
-
-    return word or ''
+def passnone(item):
+    return None
 
 
 def rreplace(s, find, replace, count=None):
@@ -308,6 +340,57 @@ def url_quote(url):
 def listize(item):
     listlike = set(['append', 'next']).intersection(dir(item))
     return item if listlike else [item]
+
+
+def substitute(word, rule):
+    return rule['match'].sub(rule['replace'], word, rule['count'])
+
+
+def fix_pattern(word, rule):
+    if '$' in word:
+        pattern = rule['match'].sub(rule['replace'], word, rule['count'])
+    else:
+        pattern = word
+
+    return pattern
+
+
+def get_new_rule(rule, recompile=False):
+    # flag 'i' --> 2
+    flags = re.IGNORECASE if rule.get('ignorecase') else 0
+
+    # flag 'm' --> 8
+    flags |= re.MULTILINE if rule.get('multilinematch') else 0
+
+    # flag 's' --> 16
+    flags |= re.DOTALL if rule.get('singlelinematch') else 0
+
+    # flag 'g' --> 0
+    count = 0 if rule.get('globalmatch') else 1
+    field = rule.get('field')
+    replace = fix_pattern(rule['replace'], sub_rule)
+    matchc = re.compile(rule['match'], flags) if recompile else rule['match']
+
+    rule = {
+        'match': matchc,
+        'replace': replace,
+        'field': field,
+        'count': count,
+        'flags': flags
+    }
+
+    return rule
+
+
+def convert_rules(rules, recompile=False):
+    # Convert replace pattern to Python/Linux format
+    rule_func = partial(get_new_rule, recompile=recompile)
+    return imap(rule_func, rules)
+
+
+def multiplex(sources):
+    """Combine multiple generators into one"""
+    return chain.from_iterable(sources)
 
 
 ############
@@ -335,49 +418,6 @@ def gen_items(item, yield_if_none=False):
         yield item
     elif yield_if_none:
         yield
-
-
-def convert_rules(rules, **kwargs):
-    Rule = namedtuple('Rule', ['match', 'replace', 'field', 'count'])
-
-    for rule in rules:
-        try:
-            # flag 'i' --> 2
-            flags = re.IGNORECASE if rule.ignorecase else 0
-        except AttributeError:
-            flags = 0
-
-        try:
-            # flag 'm' --> 8
-            flags |= re.MULTILINE if rule.multilinematch else 0
-        except AttributeError:
-            pass
-
-        try:
-            # flag 's' --> 16
-            flags |= re.DOTALL if rule.singlelinematch else 0
-        except AttributeError:
-            pass
-
-        try:
-            # flag 'g' --> 0
-            count = 0 if rule.globalmatch else 1
-        except AttributeError:
-            count = 1
-
-        # Convert regex to Python format
-        # todo: also need to escape any existing \1 etc.
-        replace = re.sub('\$(\d+)', r'\\\1', rule.replace)
-
-        try:
-            field = rule.field
-        except AttributeError:
-            new_rule = Rule(rule.match, replace, None, None)
-        else:
-            matchc = re.compile(rule.match, flags)  # compile for speed
-            new_rule = Rule(matchc, replace, field, count)
-
-        yield new_rule
 
 
 def gen_dependencies(pipe_def):
@@ -466,8 +506,3 @@ def gen_graph3(graph):
 
         if value or any(targetted):
             yield (node, value)
-
-
-def multiplex(sources):
-    """Combine multiple generators into one"""
-    return chain.from_iterable(sources)

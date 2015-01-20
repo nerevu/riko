@@ -7,8 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Unique
 """
 
-from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from . import get_splits
 
 
 def unique_items(items, field):
@@ -37,8 +36,7 @@ def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of unique items
     """
-    test = kwargs.pop('pass_if', None)
-    _pass = utils.get_pass(test=test)
-    parsed = utils.parse_conf(DotDict(conf), **kwargs)
+    funcs = get_splits(None, conf, ftype=None, listize=False, **kwargs)
+    parsed, _pass = funcs[0](), funcs[2]()
     _OUTPUT = _INPUT if _pass else unique_items(_INPUT, parsed.field)
     return _OUTPUT
