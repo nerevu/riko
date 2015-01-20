@@ -19,7 +19,6 @@ timeout = 60 * 60 * 1
 
 @utils.memoize(timeout)
 def parse_result(params, paths, base):
-    print (params, base, paths)
     url = '%s/' % base if not base.endswith('/') else base
     url += '/'.join(imap(str, ifilter(None, paths)))
     url = url.rstrip('/')
