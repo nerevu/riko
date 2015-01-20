@@ -1,46 +1,57 @@
-# pipestrregex.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipestrregex
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=string
+"""
 
 import re
-from pipe2py import util
+from functools import partial
+from itertools import imap, repeat
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def _gen_rules(rule_defs, **kwargs):
-    rule_defs = util.listize(rule_defs)
-
-    # todo: compile regex here: c = re.compile(match)
-    # todo: use subkey?
-    for rule in rule_defs:
-        rule = DotDict(rule)
-        match = rule.get('match', **kwargs)
-        replace = rule.get('replace', **kwargs)
-
-        # Convert regex to Python format
-        # todo: use a common routine for this, e.g., map $1 to \1 etc.
-        # todo: also need to escape any existing \1 etc.
-        replace = re.sub('\$(\d+)', r'\\\1', replace) or ''
-        yield (match, replace)
+def parse_result(rules, word, _pass):
+    func = lambda word, rule: re.sub(rule.match, rule.replace, word)
+    return word if _pass else reduce(func, rules, word)
 
 
 def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator replaces values using regexes.
+    """A string module that replaces text using regexes. Each has the general
+    format: "In [field] replace [regex pattern] with [text]". Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
-        RULE -- rules - each rule comprising (match, replace)
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : iterable of items or strings
+    conf : {
+        'RULE': [
+            {
+                'match': {'value': <regex>},
+                'replace': {'value': <'replacement'>}
+            }
+        ]
+    }
 
-    Yields (_OUTPUT):
-    source item after replacing values matching regexes
+    Returns
+    -------
+    _OUTPUT : generator of replaced strings
     """
-    rules = _gen_rules(conf['RULE'], **kwargs)
+    conf = DotDict(conf)
+    test = kwargs.pop('pass_if', None)
+    loop_with = kwargs.pop('with', None)
+    rule_defs = map(DotDict, utils.listize(conf['RULE']))
+    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
+    get_pass = partial(utils.get_pass, test=test)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
+    funcs1 = [utils.convert_rules, utils.get_word, utils.passthrough]
 
-    for item in _INPUT:
-        for rule in rules:
-            match, replace = rule
-            item = re.sub(match, replace, item)
-
-        yield item
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.broadcast(inputs, get_rules, get_with, get_pass)
+    parsed = utils.dispatch(splits, *funcs1)
+    _OUTPUT = utils.gather(parsed, parse_result)
+    return _OUTPUT

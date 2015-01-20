@@ -1,38 +1,49 @@
-# pipestrconcat.py  #aka stringbuilder
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipestrconcat
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from pipe2py import util
+    http://pipes.yahoo.com/pipes/docs?doc=string#StringBuilder
+"""
+
+# aka stringbuilder
+
+from functools import partial
+from itertools import imap, repeat
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def _gen_string(parts, item, context=None, **kwargs):
-    for part in parts:
-        try:
-            yield util.get_value(DotDict(part), item, **kwargs)
-        except AttributeError:
-            # ignore if the item is referenced but doesn't have our source
-            # field
-            # todo: issue a warning if debugging?
-            continue
-        except TypeError:
-            if context and context.verbose:
-                print "pipe_strconcat: TypeError"
+def parse_result(parts, _pass):
+    return '' if _pass else ''.join(parts)
 
 
 def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds a string.
+    """A string module that builds a string. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        part -- parts
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items
+    conf : {
+        'part': [
+            {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
+        ]
+    }
 
-    Yields (_OUTPUT):
-    string
+    Returns
+    -------
+    _OUTPUT : generator of joined strings
     """
     conf = DotDict(conf)
-    parts = util.listize(conf['part'])
+    test = kwargs.pop('pass_if', None)
+    part_defs = map(DotDict, utils.listize(conf['part']))
+    get_pass = partial(utils.get_pass, test=test)
+    get_value = partial(utils.get_value, **kwargs)
+    get_parts = lambda i: imap(get_value, part_defs, repeat(i))
 
-    for item in _INPUT:
-        yield ''.join(_gen_string(parts, DotDict(item), context, **kwargs))
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.broadcast(inputs, get_parts, get_pass)
+    _OUTPUT = utils.gather(splits, parse_result)
+    return _OUTPUT

@@ -1,30 +1,36 @@
-# pipesubelement.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipesubelement
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from pipe2py import util
+    http://pipes.yahoo.com/pipes/docs?doc=operators#SubElement
+"""
+
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_subelement(context=None, _INPUT=None, conf=None, **kwargs):
-    """Returns a subelement.
+    """An operator extracts select sub-elements from a feed. Not loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        path -- contains the value and type to select
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    conf : {'path': {'value': <element path>}}
 
-    Yields (_OUTPUT):
-    subelement of source item
+    Yields
+    ------
+    _OUTPUT : items
     """
+    path = DotDict(conf).get('path', **kwargs)
+
     for item in _INPUT:
-        path = DotDict(item).get(conf['path'], **kwargs)
+        element = DotDict(item).get(path, **kwargs)
 
-        for res in path:
-            for i in util.gen_items(res, True):
-                yield i
-
-        yield util.gen_items()
+        for i in utils.gen_items(element):
+            yield {'content': i}
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

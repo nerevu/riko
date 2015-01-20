@@ -2,8 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.modules.pipecount
-    ~~~~~~~~~~~~~~
-
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
     Provides methods for counting the number of items in a feed.
 
     http://pipes.yahoo.com/pipes/docs?doc=operators#Count
@@ -11,12 +10,13 @@
 
 
 def pipe_count(context=None, _INPUT=None, conf=None, **kwargs):
-    """Counts the number of _INPUT items and yields it forever.
+    """An operator that counts the number of _INPUT items and yields it
+    forever. Not loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
     conf : not used
 
     Yields
@@ -41,7 +41,5 @@ def pipe_count(context=None, _INPUT=None, conf=None, **kwargs):
 
     count = len(list(_INPUT))
     # todo: check all operators (not placeable in loops)
-    # read _INPUT once only & then serve - in case they serve multiple further
-    # steps
     while True:
         yield count

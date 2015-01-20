@@ -1,41 +1,62 @@
-# pipestrreplace.py
-#
-from pipe2py import util
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipestrreplace
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=string#StringReplace
+"""
+
+from functools import partial
+from itertools import imap, repeat
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 SWITCH = {
-    '1': lambda item, rule: item.replace(rule[0], rule[2], 1),
-    '2': lambda item, rule: util.rreplace(item, rule[0], rule[2], 1),
-    '3': lambda item, rule: item.replace(rule[0], rule[2]),
+    '1': lambda word, rule: word.replace(rule.find, rule.replace, 1),
+    '2': lambda word, rule: utils.rreplace(word, rule.find, rule.replace, 1),
+    '3': lambda word, rule: word.replace(rule.find, rule.replace),
     # todo: else assertion
 }
 
 
+def parse_result(rules, word, _pass):
+    func = lambda word, rule: SWITCH.get(rule.param)(word, rule)
+    return word if _pass else reduce(func, rules, word)
+
+
 def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
-    """Replaces text with replacement text.
+    """A string module that replaces text. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        RULE -- rules - each rule comprising (find, param, replace):
-            find -- text to find
-            param -- type of match: 1=first, 2=last, 3=every
-            replace -- text to replace with
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : iterable of items or strings
+    conf : {
+        'RULE': [
+            {
+                'param': {'value': <match type: 1=first, 2=last, 3=every>},
+                'find': {'value': <text to find>},
+                'replace': {'value': <replacement>}
+            }
+        ]
+    }
 
-    Yields (_OUTPUT):
-    source string with replacements
+    Returns
+    -------
+    _OUTPUT : generator of replaced strings
     """
     conf = DotDict(conf)
-    fields = ['find', 'param', 'replace']
-    rule_defs = [DotDict(rule_def) for rule_def in util.listize(conf['RULE'])]
+    test = kwargs.pop('pass_if', None)
+    loop_with = kwargs.pop('with', None)
+    rule_defs = map(DotDict, utils.listize(conf['RULE']))
+    get_with = lambda i: i.get(loop_with, **kwargs) if loop_with else i
+    get_pass = partial(utils.get_pass, test=test)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
+    funcs = [get_rules, utils.get_word, utils.passthrough]
 
-    # use list bc iterator gets used up if there are no matching feeds
-    rules = list(util.gen_rules(rule_defs, fields, **kwargs))
-
-    for item in _INPUT:
-        yield reduce(
-            lambda x, y: x or y,
-            (SWITCH.get(rule[1])(item, rule) for rule in rules),
-            item
-        )
+    splits = utils.broadcast(_INPUT, DotDict, get_with, get_pass)
+    parsed = utils.dispatch(splits, *funcs)
+    _OUTPUT = utils.gather(parsed, parse_result)
+    return _OUTPUT

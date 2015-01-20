@@ -1,53 +1,58 @@
-# pipefetch.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefetch
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
+    Provides methods for fetching RSS feeds.
 
-try:
-    import speedparser as feedparser
-except ImportError:
-    import feedparser
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchFeed
+"""
 
-    feedparser.USER_AGENT = (
-        "pipe2py (feedparser/%s) +https://github.com/ggaughan/pipe2py" %
-        feedparser.__version__
-    )
 
+import speedparser
+
+from functools import partial
+from itertools import repeat, imap, ifilter
 from urllib2 import urlopen
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
-from pipe2py import util
+
+
+def parse(url, context=None):
+    if context and context.verbose:
+        print "pipe_fetch loading:", url
+
+    content = urlopen(url).read()
+    parsed = speedparser.parse(content)
+    results = utils.gen_entries(parsed)
+    return results
 
 
 def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
-    """Fetches and parses one or more feeds to yield the feed entries.
+    """A source that fetches and parses one or more feeds to return the
+    entries. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        URL -- url
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : {'URL': [{'value': <url>, 'type': 'url'}]}
 
-    Yields (_OUTPUT):
-    feed entries
+    Returns
+    -------
+    _OUTPUT : generator of items
     """
     conf = DotDict(conf)
-    urls = util.listize(conf['URL'])
+    url_defs = map(DotDict, utils.listize(conf['URL']))
+    get_value = partial(utils.get_value, **kwargs)
+    get_urls = lambda i: imap(get_value, url_defs, repeat(i))
 
-    for item in _INPUT:
-        for item_url in urls:
-            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = util.get_abspath(url)
-
-            if not url:
-                continue
-
-            if context and context.verbose:
-                print "pipe_fetch loading:", url
-
-            parsed = feedparser.parse(urlopen(url).read())
-
-            for entry in util.gen_entries(parsed):
-                yield entry
-
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+    finite = utils.make_finite(_INPUT)
+    inputs = imap(DotDict, finite)
+    urls = imap(get_urls, inputs)
+    flat_urls = utils.multiplex(urls)
+    true_urls = ifilter(None, flat_urls)
+    abs_urls = imap(utils.get_abspath, true_urls)
+    items = imap(parse, abs_urls, repeat(context))
+    _OUTPUT = utils.multiplex(items)
+    return _OUTPUT

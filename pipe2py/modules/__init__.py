@@ -5,26 +5,29 @@
 # by pipe
 
 __all__ = [
-    'pipeforever',
+    # Source Modules
+    'pipecsv',
+    'pipefeedautodiscovery',
     'pipefetch',
     'pipefetchdata',
     'pipefetchpage',
-    'pipeyql',
-    'pipecsv',
-    'pipefeedautodiscovery',
     'pipefetchsitefeed',
-    'pipexpathfetchpage',
-    'pipedatebuilder',
-    'pipeurlbuilder',
+    'pipeforever',
     'pipeitembuilder',
     'piperssitembuilder',
+    'pipexpathfetchpage',
+    'pipeyql',
+
+    # User Input Modules
     'pipetextinput',
     'pipeurlinput',
-    'pipestrconcat',
-    'pipedateformat',
-    'pipestrregex',
     'pipenumberinput',
     'pipeprivateinput',
+    # 'pipedateinput',
+    # 'pipelocationinput',
+    # 'pipeprivateinput',
+
+    # Operator Modules
     'pipefilter',
     'piperename',
     'piperegex',
@@ -35,13 +38,45 @@ __all__ = [
     'pipetruncate',
     'pipereverse',
     'pipeuniq',
-    'pipesubstr',
-    'pipestrreplace',
     'pipesubelement',
     'pipetail',
     'pipecreaterss',
     'pipesplit',
-    'pipesimplemath',
-    'pipeoutput',
+    # 'pipewebservice',
+    # 'pipelocationextractor',
+
+    # URL Modules
+    'pipeurlbuilder',
+
+    # String Modules
+    'pipestrconcat',
+    'pipestrregex',
+    'pipesubstr',
+    'pipestrreplace',
     'pipestringtokenizer',
+    'pipestrtransform',
+    'pipehash',
+    'pipeexchangerate'
+    # 'pipetermextractor',
+    # 'pipetranslate',
+    # 'pipeyahooshortcuts',
+    # 'pipestrprivate',
+
+    # Date Modules
+    'pipedatebuilder',
+    'pipedateformat',
+
+    # Location Modules
+    # 'pipelocationbuilder',
+
+    # Number Modules
+    'pipesimplemath',
+    'pipecurrencyformat',
+
+    # Output Modules
+    'pipeoutput',
+    # 'pipeoutputjson',
+    # 'pipeoutputical',
+    # 'pipeoutputkml',
+    # 'pipeoutputcsv',
 ]

@@ -40,7 +40,7 @@ sys.dont_write_bytecode = True
 
 setup(
     name='pipe2py',
-    version='0.20.0',
+    version='0.21.0',
     description=(
         'A project to compile Yahoo! Pipes into Python. '
         'The pipe2py package can compile a Yahoo! Pipe into pure Python source'
@@ -56,4 +56,5 @@ setup(
     package_data={'templates': 'templates/*.txt'},
     include_package_data=True,
     install_requires=parse_requirements('requirements.txt'),
+    scripts=[p.join('bin', 'compile')],
 )

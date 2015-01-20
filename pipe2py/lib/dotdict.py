@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.dotdict
+    pipe2py.lib.dotdict
     ~~~~~~~~~~~~~~
 
     Provides methods for creating dicts using dot notation
 """
 
-from pipe2py import util
+from . import utils
 from feedparser import FeedParserDict
 
 
 class DotDict(FeedParserDict):
     """A dictionary whose keys can be accessed using dot notation
-    r = {'attr1': {'attr2': 'value'}}
+    r = {'a': {'content': 'value'}}
     e.g. r['a.content'] -> ['a']['content']
 
     TODO: make DotDict(dict)['field'] return a DotDict instance
@@ -45,7 +45,7 @@ class DotDict(FeedParserDict):
 
         return keys
 
-    def _parse_value(self, value, key):
+    def _parse_value(self, value, key, default=None):
         try:
             value = value[key]
         except (KeyError, TypeError):
@@ -54,7 +54,7 @@ class DotDict(FeedParserDict):
             else:
                 value = None
 
-        return value
+        return value or default
 
     def _gen_first_keys(self, keys):
         for key in keys:
@@ -89,11 +89,11 @@ class DotDict(FeedParserDict):
                 break
 
             key = int(key) if key.isdigit() else key
-            value = self._parse_value(value, key) or default
+            value = self._parse_value(value, key, default)
 
         if hasattr(value, 'keys') and 'terminal' in value:
             # value fed in from another module
-            value = kwargs[util.pythonise(value['terminal'])].next()
+            value = kwargs[utils.pythonise(value['terminal'])].next()
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 

@@ -1,52 +1,73 @@
-# pipeurlbuilder.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipeurlbuilder
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=url#URLBuilder
+"""
 
 import urllib
-from pipe2py import util
+from functools import partial
+from itertools import imap, ifilter, repeat
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
+timeout = 60 * 60 * 1
 
-def _gen_params(param_defs, item, **kwargs):
-    for p in param_defs:
-        p = DotDict(p)
-        key = util.get_value(p['key'], item, **kwargs)
-        value = util.get_value(p['value'], item, **kwargs)
-        yield (key, value)
+
+@utils.memoize(timeout)
+def parse_base(base, paths, params):
+    url = '%s/' % base if not base.endswith('/') else base
+    url += '/'.join(imap(str, ifilter(None, paths)))
+    url = url.rstrip('/')
+    url = utils.url_quote(url)  # Ensure url is valid
+    url += '?%s' % urllib.urlencode(params) if params and url else ''
+    return url
 
 
 def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds a url and yields it forever.
+    """A url module that builds a url. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        BASE -- base
-        PATH -- path elements
-        PARAM -- query parameters
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : {
+        'PATH': {'type': 'text', 'value': <''>},
+        'BASE': {'type': 'text', 'value': <'http://site.com/feed.xml'>},
+        'PARAM': [
+            {
+                'key': {'value': <'order'>},
+                'value': {'value': <'desc'>}
+            }, {
+                'key': {'value': <'page'>},
+                'value': {'value': <'2'>}
+            }
+        ]
+    }
 
-    Yields (_OUTPUT):
-    url
+    Yields
+    ------
+    _OUTPUT : url
     """
     conf = DotDict(conf)
-    paths = util.listize(conf.get('PATH'))  # use .get() incase 'PATH' isnt set
-    param_defs = util.listize(conf['PARAM'])
-    url = None
+    param_defs = map(DotDict, utils.listize(conf['PARAM']))
+    get_value = partial(utils.get_value, **kwargs)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_base = partial(utils.get_value, conf['BASE'], **kwargs)
+    get_params = lambda i: imap(parse_conf, param_defs, repeat(i))
+    funcs = [utils.passthrough, utils.passthrough, utils.parse_params]
 
-    for item in _INPUT:
-        # if _INPUT is pipeforever and not a loop, get values from cache
-        if not url:
-            item = DotDict(item)
-            forever = item.get('forever')
-            url = conf.get('BASE', **kwargs)
-            url += '/' if not url.endswith('/') else url
-            url += "/".join(str(p) for p in paths if p)
-            url = url.rstrip("/")
-            url = util.url_quote(url)  # Ensure url is valid
-            params = dict(_gen_params(param_defs, item, **kwargs))
+    try:
+        path_defs = map(DotDict, utils.listize(conf['PATH']))
+    except KeyError:
+        get_paths = lambda i: []
+    else:
+        get_paths = lambda i: imap(get_value, path_defs, repeat(i))
 
-            if params and params.keys() != [u'']:
-                url += "?" + urllib.urlencode(params)
-
-        yield url
-        url = url if forever else None
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.broadcast(inputs, get_base, get_paths, get_params)
+    parsed = utils.dispatch(splits, *funcs)
+    _OUTPUT = utils.gather(parsed, parse_base)
+    return _OUTPUT

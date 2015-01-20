@@ -1,64 +1,68 @@
-# piperename.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.piperename
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from pipe2py import util
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Rename
+"""
+
+from functools import partial
+from itertools import imap, repeat
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def _convert_item(rules, item, **kwargs):
-    for rule in rules:
-        field, op, newfield = rule
+def func(item, rule, **kwargs):
+    try:
+        item.set(rule.newval, item.get(rule.field, **kwargs))
+    except (IndexError):
+        # Catch error when 'newval' is blank (equivalent to deleting field)
+        pass
 
-        try:
-            # forces an exception if any part is not found
-            item.set(newfield, item.get(field, **kwargs))
-        except AttributeError:
-            # ignore if the source doesn't have our field
-            # todo: issue a warning if debugging?
-            pass
-
-        if op == 'rename':
-            try:
-                item.delete(field)
-            # TypeError catches pseudo subkeys, e.g. summary.content
-            except (KeyError, TypeError):
-                # ignore if the target doesn't have our field
-                # todo: issue a warning if debugging?
-                pass
+    if rule.op == 'rename':
+        item.delete(rule.field)
 
     return item
 
 
-def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator renames or copies fields in the input source.
+def parse_result(rules, item, _pass, **kwargs):
+    return item if _pass else reduce(partial(func, **kwargs), rules, item)
 
+
+def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that renames or copies fields in the input source.
+    Not loopable.
+
+    Parameters
+    ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
-    conf : dict
-        {
-            'RULE': [
-                {
-                    'op': {'value': 'rename or copy'},
-                    'field': {'value': 'old field'},
-                    'newval': {'value': 'new field'}
-                }
-            ]
-        }
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    conf : {
+        'RULE': [
+            {
+                'op': {'value': 'rename or copy'},
+                'field': {'value': 'old field'},
+                'newval': {'value': 'new field'}
+            }
+        ]
+    }
 
     kwargs : other inputs, e.g., to feed terminals for rule values
 
-    Yields
-    ------
-    _OUTPUT : source pipe after copying/renaming
+    Returns
+    -------
+    _OUTPUT : generator of items
 
     """
     conf = DotDict(conf)
-    fields = ['field', 'op', 'newval']
-    rule_defs = util.listize(conf['RULE'])
-    rule_defs = [DotDict(rule_def) for rule_def in rule_defs]
+    test = kwargs.pop('pass_if', None)
+    rule_defs = map(DotDict, utils.listize(conf['RULE']))
+    get_pass = partial(utils.get_pass, test=test)
+    parse_conf = partial(utils.parse_conf, **kwargs)
+    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
 
-    # use list bc iterator gets used up if there are no matching feeds
-    rules = list(util.gen_rules(rule_defs, fields, **kwargs))
-
-    for item in _INPUT:
-        yield _convert_item(rules, DotDict(item), **kwargs)
+    inputs = imap(DotDict, _INPUT)
+    splits = utils.broadcast(inputs, get_rules, utils.passthrough, get_pass)
+    _OUTPUT = utils.gather(splits, partial(parse_result, **kwargs))
+    return _OUTPUT

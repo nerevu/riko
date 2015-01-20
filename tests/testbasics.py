@@ -1,7 +1,7 @@
 """Unit tests using basic pipeline modules
 
-   Note: many of these tests simply make sure the module compiles and runs
-         - we need more extensive tests with stable data feeds!
+    Note: many of these tests simply make sure the module compiles and runs.
+    We need more extensive tests with stable data feeds!
 """
 
 import unittest
@@ -148,9 +148,28 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
 
+    def test_input_override(self):
+        """Loads a pipeline with input override
+        """
+        self.context.inputs = {'textinput1': 'IBM'}
+        pipe_name = 'pipe_1LNyRuNS3BGdkTKaAsqenA'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+        sliced = islice(pipeline, 3)
+        contains = self.context.inputs['textinput1']
+        # check if the ticker is in the title of any of the first 3 items
+        self.assertIn(contains, ' '.join(item['title'] for item in sliced))
+
 ###############
 # Offline Tests
 ###############
+    def test_kazeeki(self):
+        """Loads the kazeeki simple test pipeline
+        """
+        pipe_name = 'pipe_kazeeki'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+
     def test_simplest(self):
         """Loads the RTW simple test pipeline and compiles and executes it to
             check the results
@@ -165,7 +184,7 @@ class TestBasics(unittest.TestCase):
 
             TODO: have these tests iterate over a number of test pipelines
         """
-        pipe_name = 'testpipe1'
+        pipe_name = 'pipe_testpipe1'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
         [self.assertIn('the', i.get('description')) for i in pipeline]
@@ -235,29 +254,29 @@ class TestBasics(unittest.TestCase):
 
         contains = [
             {
-                'media:thumbnail': {'url': u'http://example.com/a.jpg'},
-                u'link': u'http://example.com/test.php?this=that',
-                u'description': u'b', u'y:title': u'a', u'title': u'a'
+                'media:thumbnail': {'url': 'http://example.com/a.jpg'},
+                'link': 'http://example.com/test.php?this=that',
+                'description': 'b', 'y:title': 'a', 'title': 'a'
             },
             {
-                u'newtitle': u'NEWTITLE',
-                u'loop:itembuilder': [
+                'newtitle': 'NEWTITLE',
+                'loop:itembuilder': [
                     {
-                        u'description': {u'content': u'DESCRIPTION'},
-                        u'title': u'NEWTITLE',
+                        'description': {'content': 'DESCRIPTION'},
+                        'title': 'NEWTITLE',
                     }
                 ],
-                u'title': u'TITLE1',
+                'title': 'TITLE1',
             },
             {
-                u'newtitle': u'NEWTITLE',
-                u'loop:itembuilder': [
+                'newtitle': 'NEWTITLE',
+                'loop:itembuilder': [
                     {
-                        u'description': {u'content': u'DESCRIPTION'},
-                        u'title': u'NEWTITLE',
+                        'description': {'content': 'DESCRIPTION'},
+                        'title': 'NEWTITLE',
                     }
                 ],
-                u'title': u'TITLE2',
+                'title': 'TITLE2',
             }
         ]
 
@@ -408,18 +427,6 @@ class TestBasics(unittest.TestCase):
 
         self.assertEqual(
             pipeline, [{u'inputs': inputs, 'dependencies': dependencies}])
-
-    def test_input_override(self):
-        """Loads a pipeline with input override
-        """
-        self.context.inputs = {'textinput1': 'IBM'}
-        pipe_name = 'pipe_1LNyRuNS3BGdkTKaAsqenA'
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
-        sliced = islice(pipeline, 3)
-        contains = self.context.inputs['textinput1']
-        # check if the ticker is in the title of any of the first 3 items
-        self.assertIn(contains, ' '.join(item['title'] for item in sliced))
 
     def test_union_just_other(self):
         """Loads a pipeline containing a union with the first input unconnected

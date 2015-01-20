@@ -2,11 +2,12 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.modules.pipefetchdata
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Provides methods for fetching XML and JSON data sources.
 
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchData
 """
+
 from lxml import objectify
 from lxml.etree import XMLSyntaxError
 from urllib2 import urlopen
@@ -16,7 +17,7 @@ try:
 except (ImportError, AttributeError):
     from simplejson import loads
 
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -28,21 +29,20 @@ def _parse_dict(split_path, element):
 
 
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
-    """Fetches and parses an XML or JSON file.
+    """A source that fetches and parses an XML or JSON file. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
-    conf : dict
-        {
-            'URL': {'value': url},
-            'path': {'value': dot separated path to data list}
-        }
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : {
+        'URL': {'value': <url>},
+        'path': {'value': <dot separated path to data list>}
+    }
 
     Yields
     ------
-    _OUTPUT : pipe items fetched from source
+    _OUTPUT : items
 
     Examples
     --------
@@ -60,22 +60,22 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
     >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
-    ['alarmTime', 'begin', 'duration', 'places', 'subject', 'uid']
+    [u'alarmTime', u'begin', u'duration', u'places', u'subject', u'uid']
     >>> conf = {'URL': {'value': url}, 'path': {'value': ''}}
     >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
-    ['appointment', 'reminder']
+    [u'appointment', 'reminder']
     """
     # todo: iCal and KML
     conf = DotDict(conf)
-    urls = util.listize(conf['URL'])
+    urls = utils.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
             item = DotDict(item)
-            url = util.get_value(DotDict(item_url), item, **kwargs)
-            url = util.get_abspath(url)
+            url = utils.get_value(DotDict(item_url), item, **kwargs)
+            url = utils.get_abspath(url)
             f = urlopen(url)
-            path = util.get_value(conf['path'], item, **kwargs)
+            path = utils.get_value(conf['path'], item, **kwargs)
             split_path = path.split(".") if path else []
             res = {}
 
@@ -93,11 +93,11 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
                     print "pipe_fetchdata loading xml:", url
 
                 # print etree.tostring(element, pretty_print=True)
-                element = util.etree_to_dict(root)
+                element = utils.etree_to_dict(root)
             finally:
                 res = _parse_dict(split_path, element) if element else None
 
-                for i in util.gen_items(res, True):
+                for i in utils.gen_items(res, True):
                     yield i
 
         if item.get('forever'):

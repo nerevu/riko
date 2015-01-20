@@ -1,13 +1,46 @@
-"""Utility functions"""
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.lib.utils
+    ~~~~~~~~~~~~~~~~~
+    Utility functions
+
+"""
+
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
 
 import string
+import re
 
+from collections import namedtuple
 from datetime import datetime
+from functools import partial
+from itertools import groupby, chain, izip, tee, takewhile, ifilter
 from urllib2 import quote
-from os import path as p
+from os import path as p, environ
 from pipe2py import Context
-from itertools import chain
+from mezmorize import Cache
+
+if environ.get('DATABASE_URL'):  # HEROKU
+    cache_config = {
+        'CACHE_TYPE': 'saslmemcached',
+        'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
+        'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
+        'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')}
+else:
+    try:
+        import pylibmc
+    except ImportError:
+        cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
+    else:
+        cache_config = {
+            'DEBUG': True,
+            'CACHE_TYPE': 'memcached',
+            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
+
+cache = Cache(**cache_config)
+timeout = 60 * 60 * 1
 
 ALTERNATIVE_DATE_FORMATS = (
     "%m-%d-%Y",
@@ -21,6 +54,10 @@ ALTERNATIVE_DATE_FORMATS = (
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
+
+
+def memoize(*args, **kwargs):
+    return cache.memoize(*args, **kwargs)
 
 
 def extract_dependencies(pipe_def=None, pipe_generator=None):
@@ -50,19 +87,30 @@ def extract_input(pipe_def=None, pipe_generator=None):
 def pythonise(id, encoding='ascii'):
     """Return a Python-friendly id"""
     replace = {'-': '_', ':': '_', '/': '_'}
-
-    for key, value in replace.items():
-        id = id.replace(key, value)
-
+    func = lambda id, pair: id.replace(pair[0], pair[1])
+    id = reduce(func, replace.iteritems(), id)
     id = '_%s' % id if id[0] in string.digits else id
     return id.encode(encoding)
+
+
+def group_by(data, attr, default=None):
+    groups = {}
+
+    # like operator.itemgetter but fills in missing keys with a default value
+    keyfunc = lambda item: lambda obj: obj.get(item, default)
+    data.sort(key=keyfunc(attr))
+
+    for key, values in groupby(data, keyfunc(attr)):
+        groups[str(key)] = list(v for v in values)
+
+    return groups
 
 
 def _make_content(i, tag, new):
     content = i.get(tag)
 
     if content and new:
-        content = content if hasattr(content, 'append') else [content]
+        content = listize(content)
         content.append(new)
     elif new:
         content = new
@@ -70,6 +118,7 @@ def _make_content(i, tag, new):
     return content
 
 
+@memoize(timeout)
 def etree_to_dict(element):
     """Convert an eTree xml into dict imitating how Yahoo Pipes does it.
 
@@ -97,16 +146,74 @@ def etree_to_dict(element):
     return i
 
 
-def get_value(field, item=None, default=None, **kwargs):
+def make_finite(_INPUT):
+    yield _INPUT.next()
+
+    for i in takewhile(lambda i: not 'forever' in i, _INPUT):
+        yield i
+
+
+@memoize(timeout)
+def get_value(field, item=None, **kwargs):
+    item = item or {}
+
+    OPS = {
+        'number': {'default': 0.0, 'func': float},
+        'integer': {'default': 0, 'func': int},
+        'text': {'default': ''},
+        'unicode': {'default': '', 'func': unicode},
+        'bool': {'default': False, 'func': lambda i: bool(int(i))},
+    }
+
     try:
-        if item and field.get('subkey'):
-            value = item.get(field['subkey'], default, **kwargs)
-        else:
-            value = field.get(None, default, **kwargs)
+        kwargs.update(OPS.get(field.get('type', 'text'), {}))
     except AttributeError:
-        value = None
+        pass
+
+    try:
+        value = item.get(field['subkey'], **kwargs)
+    except KeyError:
+        if not hasattr(field, 'delete'):
+            raise TypeError('field must be of type DotDict')
+        else:
+            value = field.get(None, **kwargs)
+    except (TypeError, AttributeError):
+        value = kwargs.get('default')
 
     return value
+
+
+def broadcast(_INPUT, *funcs):
+    for items in izip(*tee(_INPUT, len(funcs))):
+        yield (func(item) for item, func in izip(items, funcs))
+
+
+def dispatch(splits, *funcs):
+    for split in splits:
+        yield (func(item) for item, func in izip(split, funcs))
+
+
+def gather(splits, func):
+    for split in splits:
+        yield func(*list(split))
+
+
+def parse_conf(conf, item=None, **kwargs):
+    keys = conf.keys()
+    Conf = namedtuple('Conf', keys)
+    func = partial(get_value, item=item, **kwargs)
+    return Conf(*map(func, (conf[k] for k in keys)))
+
+
+@cache.memoize(timeout)
+def parse_params(params):
+    true_params = ifilter(all, params)
+    return dict((x.key, x.value) for x in true_params)
+
+
+def get_pass(item=None, test=None):
+    item = item or {}
+    return test and test(item)
 
 
 def get_date(date_string):
@@ -148,12 +255,41 @@ def get_abspath(url):
         # already have an abspath
         pass
     elif url and url.startswith('file://'):
-        parent = p.dirname(__file__)
+        parent = p.dirname(p.dirname(__file__))
         rel_path = url[7:]
         abspath = p.abspath(p.join(parent, rel_path))
         url = 'file://%s' % abspath
 
     return url
+
+
+def get_num(item):
+    try:
+        joined = ''.join(item.itervalues())
+    except AttributeError:
+        joined = item
+
+    try:
+        num = float(joined)
+    except (ValueError, TypeError):
+        num = 0.0
+
+    return num
+
+
+def passthrough(item):
+    return item
+
+
+def get_word(item):
+    try:
+        word = ''.join(item.itervalues())
+    except AttributeError:
+        word = item
+    except TypeError:
+        word = None
+
+    return word or ''
 
 
 def rreplace(s, find, replace, count=None):
@@ -170,7 +306,8 @@ def url_quote(url):
 
 
 def listize(item):
-    return item if hasattr(item, 'append') else [item]
+    listlike = set(['append', 'next']).intersection(dir(item))
+    return item if listlike else [item]
 
 
 ############
@@ -178,16 +315,17 @@ def listize(item):
 ############
 def gen_entries(parsed):
     for entry in parsed['entries']:
-        entry['pubDate'] = entry.get('updated_parsed')
-        entry['y:published'] = entry.get('updated_parsed')
         entry['dc:creator'] = entry.get('author')
         entry['author.uri'] = entry.get('author_detail', {}).get(
             'href')
         entry['author.name'] = entry.get('author_detail', {}).get(
             'name')
+        entry['pubDate'] = entry.get('updated_parsed')
+        entry['y:published'] = entry.get('updated_parsed')
         entry['y:title'] = entry.get('title')
         entry['y:id'] = entry.get('id')
         yield entry
+
 
 def gen_items(item, yield_if_none=False):
     if item and hasattr(item, 'append'):
@@ -199,12 +337,47 @@ def gen_items(item, yield_if_none=False):
         yield
 
 
-def gen_rules(rule_defs, fields, **kwargs):
-    for rule in rule_defs:
-        if not hasattr(rule, 'delete'):
-            raise TypeError('rule must be of type DotDict')
+def convert_rules(rules, **kwargs):
+    Rule = namedtuple('Rule', ['match', 'replace', 'field', 'count'])
 
-        yield tuple(rule.get(field, **kwargs) for field in fields)
+    for rule in rules:
+        try:
+            # flag 'i' --> 2
+            flags = re.IGNORECASE if rule.ignorecase else 0
+        except AttributeError:
+            flags = 0
+
+        try:
+            # flag 'm' --> 8
+            flags |= re.MULTILINE if rule.multilinematch else 0
+        except AttributeError:
+            pass
+
+        try:
+            # flag 's' --> 16
+            flags |= re.DOTALL if rule.singlelinematch else 0
+        except AttributeError:
+            pass
+
+        try:
+            # flag 'g' --> 0
+            count = 0 if rule.globalmatch else 1
+        except AttributeError:
+            count = 1
+
+        # Convert regex to Python format
+        # todo: also need to escape any existing \1 etc.
+        replace = re.sub('\$(\d+)', r'\\\1', rule.replace)
+
+        try:
+            field = rule.field
+        except AttributeError:
+            new_rule = Rule(rule.match, replace, None, None)
+        else:
+            matchc = re.compile(rule.match, flags)  # compile for speed
+            new_rule = Rule(matchc, replace, field, count)
+
+        yield new_rule
 
 
 def gen_dependencies(pipe_def):
@@ -288,8 +461,8 @@ def gen_graph3(graph):
     # Remove any orphan nodes
     values = graph.values()
 
-    for node, value in graph.items():
-        targetted = [node in v for v in values]
+    for node, value in graph.iteritems():
+        targetted = (node in v for v in values)
 
         if value or any(targetted):
             yield (node, value)

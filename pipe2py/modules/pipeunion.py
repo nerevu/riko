@@ -1,32 +1,41 @@
-# pipeunion.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipeunion
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
+    Provides methods for merging separate sources into a single list of items.
 
-from pipe2py import util
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Union
+"""
+
+from itertools import chain, ifilter
+from pipe2py.lib import utils
+
+others_filter = lambda x: x[0].startswith('_OTHER')
 
 
 def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
-    """Merges multiple source together.
+    """An operator that merges multiple source together. Not loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- _OTHER1 - another source generator
-              _OTHER2 etc.
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT :  pipe2py.modules pipe like object (iterable of items)
+    conf : unused
 
-    Yields (_OUTPUT):
-    union of all source items
+    Keyword arguments
+    -----------------
+    _OTHER1 : pipe2py.modules pipe like object
+    _OTHER2 : etc.
+
+    Returns
+    -------
+    _OUTPUT : generator of items
     """
-    for item in _INPUT:
-        # this is being fed forever, i.e. not a real source so just use _OTHERs
-        if item.get('forever'):
-            break
 
-        yield item
-
-    # todo: can the multiple sources should be pulled over multiple servers?
-    sources = (
-        items for src, items in kwargs.items() if src.startswith('_OTHER')
-    )
-
-    for item in util.multiplex(sources):
-        yield item
+    others = ifilter(others_filter, kwargs.items())
+    others_iter = (items for src, items in others)
+    others_items = utils.multiplex(others_iter)
+    input_items = utils.make_finite(_INPUT)
+    _OUTPUT = chain(input_items, others_items)
+    return _OUTPUT
