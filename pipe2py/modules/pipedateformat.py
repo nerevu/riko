@@ -10,7 +10,6 @@
 
 import time
 from pipe2py.lib.dotdict import DotDict
-from pipe2py.lib import utils
 
 
 def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):

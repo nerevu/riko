@@ -3,7 +3,6 @@
 """
     pipe2py.modules.pipeoutput
     ~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 """
 
 

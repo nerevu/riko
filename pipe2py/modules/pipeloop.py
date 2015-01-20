@@ -112,3 +112,4 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
         _OUTPUT = gathered
 
     return _OUTPUT
+
