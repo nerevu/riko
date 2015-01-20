@@ -4,7 +4,7 @@
     pipe2py.modules.pipesubstr
     ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    http://pipes.yahoo.com/pipes/docs?doc=string
+    http://pipes.yahoo.com/pipes/docs?doc=string#SubString
 """
 
 from functools import partial

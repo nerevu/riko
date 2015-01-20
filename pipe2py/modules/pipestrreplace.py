@@ -4,7 +4,7 @@
     pipe2py.modules.pipestrreplace
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    http://pipes.yahoo.com/pipes/docs?doc=string
+    http://pipes.yahoo.com/pipes/docs?doc=string#StringReplace
 """
 
 from functools import partial

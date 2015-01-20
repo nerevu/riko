@@ -4,7 +4,7 @@
     pipe2py.modules.pipeuniq
     ~~~~~~~~~~~~~~~~~~~~~~~~
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Unique
 """
 
 from pipe2py.lib import utils

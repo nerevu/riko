@@ -4,7 +4,7 @@
     pipe2py.modules.pipestringtokenizer
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    http://pipes.yahoo.com/pipes/docs?doc=string
+    http://pipes.yahoo.com/pipes/docs?doc=string#StringTokenizer
 """
 
 from functools import partial
