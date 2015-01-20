@@ -22,7 +22,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncImap, asyncStarMap
 
-opts = {'ftype': None, 'parse': False, 'dictize': True, 'finitize': True}
+opts = {'ftype': None, 'parse': False, 'finitize': True}
 
 
 def get_urls(urls):

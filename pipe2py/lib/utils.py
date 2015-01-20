@@ -246,16 +246,15 @@ def gather(splits, func, **kwargs):
 
 
 def _parse_conf(conf, keys, func):
-    iterable = imap(lambda k: conf[k], keys)
-    return map(func, iterable)
+    return map(func, imap(lambda k: conf[k], keys))
 
 
 def parse_conf(conf, item=None, parse_func=None, **kwargs):
-    parse = kwargs.pop('parse', True)
+    convert = kwargs.pop('convert', True)
     keys = conf.keys()
     values = _parse_conf(conf, keys, partial(parse_func, item=item))
 
-    if parse:
+    if convert:
         Conf = namedtuple('Conf', keys)
         result = Conf(*values)
     else:

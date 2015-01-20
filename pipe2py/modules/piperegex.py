@@ -22,7 +22,7 @@ from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import (
     asyncStarMap, asyncReduce, asyncDispatch, asyncReturn)
 
-opts = {'parse': False, 'ftype': 'pass'}
+opts = {'convert': False, 'ftype': 'pass'}
 func = utils.substitute
 convert_func = partial(utils.convert_rules, recompile=True)
 

@@ -13,7 +13,7 @@ from . import _get_broadcast_funcs as get_funcs, get_dispatch_funcs, get_splits
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
 
-opts = {'dictize': True, 'parse': False}
+opts = {'parse': False}
 timeout = 60 * 60 * 1
 
 
