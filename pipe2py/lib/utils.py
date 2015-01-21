@@ -55,7 +55,7 @@ ALTERNATIVE_DATE_FORMATS = (
 # leave option to substitute with multiprocessing
 _map_func = imap
 
-combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
+combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
 timeout = 60 * 60 * 1
 sub_rule = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
@@ -144,7 +144,7 @@ def etree_to_dict(element):
             new = child.tail.strip() if child.tail else None
             content = _make_content(i, tag, new)
             i.update({tag: content}) if content else None
-    elif content and not set(i.keys()).difference(['content']):
+    elif content and not set(i).difference(['content']):
         # element is leaf node and doesn't have attributes
         i = content
 
@@ -239,20 +239,15 @@ def dispatch(splits, *funcs, **kwargs):
     return map_func(partial(apply_func, funcs), splits)
 
 
-def _parse_conf(conf, keys, func):
-    return map(func, imap(lambda k: conf[k], keys))
-
-
 def parse_conf(conf, item=None, parse_func=None, **kwargs):
     convert = kwargs.pop('convert', True)
-    keys = conf.keys()
-    values = _parse_conf(conf, keys, partial(parse_func, item=item))
+    values = map(partial(parse_func, item=item), imap(conf.__getitem__, conf))
 
     if convert:
-        Conf = namedtuple('Conf', keys)
+        Conf = namedtuple('Conf', conf)
         result = Conf(*values)
     else:
-        result = dict(zip(keys, values))
+        result = dict(zip(conf, values))
 
     return result
 

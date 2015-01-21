@@ -23,35 +23,22 @@ from pipe2py.twisted.utils import (
     asyncStarMap, asyncReduce, asyncDispatch, asyncReturn)
 
 opts = {'convert': False, 'ftype': 'pass'}
-func = utils.substitute
+substitute = utils.substitute
 convert_func = partial(utils.convert_rules, recompile=True)
 
 
 # Common functions
 def get_groups(rules, item):
-    field_groups = utils.group_by(list(rules), 'field').items()
-    groups = starmap(lambda f, r: (f, item.get(f) or '', r), field_groups)
-    return groups
+    field_groups = utils.group_by(list(rules), 'field').iteritems()
+    return starmap(lambda f, r: (f, item.get(f) or '', r), field_groups)
 
 
 # Async functions
-def asyncGetParsed(splits, funcs, convert=True):
-    return asyncDispatch(splits, *funcs) if convert else asyncReturn(splits)
-
-
-@inlineCallbacks
-def asyncGetSubstitutions(field, word, rules):
-    asyncSubstitute = partial(maybeDeferred, func)
-    replacement = yield asyncReduce(asyncSubstitute, rules, word)
-    result = (field, replacement)
-    returnValue(result)
-
-
 @inlineCallbacks
 def asyncParseResult(rules, item, _pass):
     if not _pass:
         groups = get_groups(rules, item)
-        substitutions = yield asyncStarMap(asyncGetSubstitutions, groups)
+        substitutions = yield maybeDeferred(get_substitutions, groups)
         list(starmap(item.set, substitutions))
 
     returnValue(item)
@@ -89,23 +76,25 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
     asyncConvert = partial(maybeDeferred, convert_func)
     asyncFuncs = get_async_dispatch_funcs('pass', asyncConvert)
     parsed = yield asyncDispatch(splits, *asyncFuncs)
-    _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
+    _OUTPUT = yield maybeDeferred(parse_results, parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-def get_substitutions(field, word, rules):
-    replacement = reduce(func, rules, word)
-    return (field, replacement)
+def get_substitutions(groups):
+    for field, word, rules in groups:
+        replacement = reduce(substitute, rules, word)
+        yield (field, replacement)
 
 
-def parse_result(rules, item, _pass):
-    if not _pass:
-        groups = get_groups(rules, item)
-        substitutions = starmap(get_substitutions, groups)
-        list(starmap(item.set, substitutions))
+def parse_results(parsed):
+    for rules, item, _pass in parsed:
+        if not _pass:
+            groups = get_groups(rules, item)
+            substitutions = get_substitutions(groups)
+            list(starmap(item.set, substitutions))
 
-    return item
+        yield item
 
 
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
@@ -136,5 +125,5 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     """
     splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', convert_func))
-    _OUTPUT = starmap(parse_result, parsed)
+    _OUTPUT = parse_results(parsed)
     return _OUTPUT

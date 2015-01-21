@@ -37,7 +37,7 @@ def get_splits(context, _INPUT, conf, embed, parse_func, **kwargs):
 def get_inputs(item, conf):
     # Pass any input parameters into the submodule
     func = partial(utils.get_value, item=item, func=unicode)
-    return imap(lambda key: (key, func(conf[key])), conf.iterkeys())
+    return {key: func(conf[key]) for key in conf}
 
 
 def parse_result(submodule, item, _pass, **kwargs):
@@ -84,7 +84,7 @@ def get_pkwargs(conf, **kwargs):
 @inlineCallbacks
 def asyncParseEmbed(item, conf, asyncEmbed, **kwargs):
     context = kwargs.pop('context')
-    context.inputs = dict(get_inputs(item, conf))  # prepare the submodule
+    context.inputs = get_inputs(item, conf)  # prepare the submodule
     submodule = yield asyncEmbed(context, iter([item]), conf, **kwargs)
     returnValue(submodule)
 
@@ -134,7 +134,7 @@ def asyncPipeLoop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
 # Synchronous functions
 def parse_embed(item, conf, embed, **kwargs):
     context = kwargs.pop('context')
-    context.inputs = dict(get_inputs(item, conf))  # prepare the submodule
+    context.inputs = get_inputs(item, conf)  # prepare the submodule
     submodule = embed(context, iter([item]), conf, **kwargs)
     return submodule
 

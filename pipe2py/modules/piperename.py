@@ -31,8 +31,9 @@ def func(item, rule, **kwargs):
     return item
 
 
-def parse_result(rules, item, _pass, **kwargs):
-    return item if _pass else reduce(partial(func, **kwargs), rules, item)
+def parse_results(splits, **kwargs):
+    for rules, item, _pass in splits:
+        yield item if _pass else reduce(partial(func, **kwargs), rules, item)
 
 
 # Async functions
@@ -62,8 +63,8 @@ def asyncPipeRename(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
     splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
-    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), splits)
-    returnValue(iter(_OUTPUT))
+    _OUTPUT = yield maybeDeferred(parse_results, splits, **kwargs)
+    returnValue(_OUTPUT)
 
 
 # Synchronous functions
@@ -92,5 +93,5 @@ def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : generator of items
     """
     splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
-    _OUTPUT = starmap(partial(parse_result, **kwargs), splits)
+    _OUTPUT = parse_results(splits, **kwargs)
     return _OUTPUT

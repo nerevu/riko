@@ -8,6 +8,7 @@
 """
 
 from . import utils
+from itertools import starmap
 from feedparser import FeedParserDict
 
 
@@ -104,12 +105,12 @@ class DotDict(FeedParserDict):
     def update(self, dict=None):
         if dict:
             try:
-                keys_with_dots = filter(lambda k: '.' in k, dict.keys())
+                keys_with_dots = filter(lambda k: '.' in k, dict)
             except AttributeError:
-                [self.set(k, v) for k, v in dict]
+                list(starmap(self.set, dict))
             else:
                 # remove key if a subkey redefines it
                 # i.e., 'author.name' has precedence over 'author'
                 to_delete = self._gen_first_keys(keys_with_dots)
                 [dict.pop(key, None) for key in to_delete]
-                [self.set(k, v) for k, v in dict.items()]
+                list(starmap(self.set, dict.iteritems()))
