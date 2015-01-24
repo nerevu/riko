@@ -88,7 +88,11 @@ class DotDict(FeedParserDict):
             if not value:
                 break
 
-            key = int(key) if key.isdigit() else key
+            try:
+                key = int(key)
+            except ValueError:
+                pass
+
             value = self._parse_value(value, key, default)
 
         if hasattr(value, 'keys') and 'terminal' in value:
