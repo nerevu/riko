@@ -239,12 +239,6 @@ def dispatch(splits, *funcs, **kwargs):
     return map_func(partial(apply_func, funcs), splits)
 
 
-def gather(splits, func, **kwargs):
-    map_func = kwargs.get('map_func', _map_func)
-    gather_func = lambda split: func(*list(split))
-    return map_func(gather_func, splits)
-
-
 def _parse_conf(conf, keys, func):
     return map(func, imap(lambda k: conf[k], keys))
 
