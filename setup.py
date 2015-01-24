@@ -34,6 +34,9 @@ def parse_requirements(filename, parent=None):
         else:
             yield candidate
 
+requirements = parse_requirements('requirements.txt')
+packages = find_packages(exclude=['tests'])
+
 # Avoid byte-compiling the shipped template
 sys.dont_write_bytecode = True
 
@@ -52,9 +55,11 @@ setup(
     license = 'GPL2',
     author='Greg Gaughan',
     author_email='gjgaughan@gmail.com',
-    packages=find_packages(exclude=['tests']),
+    packages=packages,
     package_data={'templates': 'templates/*.txt'},
     include_package_data=True,
-    install_requires=parse_requirements('requirements.txt'),
+    classifiers=[],
+    keywords='',
     scripts=[p.join('bin', 'compile')],
+    install_requires=requirements,
 )
