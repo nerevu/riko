@@ -167,13 +167,13 @@ def get_splits(_INPUT, pieces=None, finitize=False, funcs=None, **kwargs):
 
 
 @inlineCallbacks
-def asyncGetSplits(_INPUT, pieces, finitize=False, **kwargs):
+def asyncGetSplits(_INPUT, pieces=None, finitize=False, funcs=None, **kwargs):
     _input = yield _INPUT
     # asyncDict = partial(maybeDeferred, DotDict)
     # inputs = yield asyncCmap(asyncDict, _input)
     finite = utils.finitize(_input) if finitize and _input else _input
     inputs = imap(DotDict, finite) if finite else None
-    funcs = get_async_broadcast_funcs(pieces, **kwargs)
+    funcs = funcs or get_async_broadcast_funcs(pieces, **kwargs)
 
     if inputs:
         result = yield asyncBroadcast(inputs, *funcs)
