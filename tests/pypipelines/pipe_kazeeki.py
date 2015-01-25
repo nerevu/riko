@@ -56,7 +56,6 @@ def make_loop(_with, assign_to, embed_conf, **kwargs):
         'with': _with,
         'assign_to': assign_to,
         'embed': {'conf': embed_conf},
-        'pass_if': kwargs.get('pass_if')
     }
 
 DEF_CUR_CODE = 'USD'
@@ -272,7 +271,7 @@ loop6_conf = make_loop('k:cur_code', 'k:cur_code', substring1_conf)
 loop7_conf = make_loop('', 'k:budget_sym', strconcat2_conf)
 loop8_conf = make_loop('k:budget_sym', 'k:budget_sym', substring2_conf)
 loop9_conf = make_loop(
-    'k:budget_sym', 'k:cur_code', strregex3_conf, pass_if=test1)
+    'k:budget_sym', 'k:cur_code', strregex3_conf)
 loop10_conf = make_loop('k:job_type', 'k:job_type_code', strregex4_conf)
 loop11_conf = make_loop('link', 'id', {'embed': {}})
 loop12_conf = make_loop('k:budget', 'k:budget_w_sym', currencyformat1_conf)
@@ -280,8 +279,8 @@ loop13_conf = make_loop('k:cur_code', 'k:rate', exchangerate_conf)
 loop14_conf = make_loop('k:budget', 'k:budget_converted', simplemath2_conf)
 loop15_conf = make_loop(
     'k:budget_converted', 'k:budget_converted_w_sym', currencyformat2_conf)
-loop16_conf = make_loop('', 'k:budget_full', strconcat3_conf, pass_if=test3)
-loop17_conf = make_loop('', 'k:budget_full', strconcat4_conf, pass_if=test4)
+loop16_conf = make_loop('', 'k:budget_full', strconcat3_conf)
+loop17_conf = make_loop('', 'k:budget_full', strconcat4_conf)
 
 itembuilder_attrs = [{'key': k, 'value': v} for k, v in my_item.items()]
 
@@ -324,7 +323,7 @@ def parse_source(source):
             .loop('substr', conf=loop6_conf)
             .loop('strconcat', conf=loop7_conf)
             .loop('substr', conf=loop8_conf)
-            .loop('strreplace', conf=loop9_conf)
+            .loop('strreplace', pass_if=test1, conf=loop9_conf)
             .pipe('regex', conf={'RULE': regex4_rule})
             .loop('strregex', conf=loop10_conf)
             .loop('hash', conf=loop11_conf)
@@ -333,8 +332,8 @@ def parse_source(source):
             .loop('simplemath', conf=loop14_conf)
             .loop('currencyformat', conf=loop15_conf)
             .pipe('rename', pass_if=test2, conf={'RULE': rename4_rule})
-            .loop('strconcat', conf=loop16_conf)
-            .loop('strconcat', conf=loop17_conf)
+            .loop('strconcat', pass_if=test3, conf=loop16_conf)
+            .loop('strconcat', pass_if=test4, conf=loop17_conf)
     )
 
     return pipe.output
