@@ -8,7 +8,7 @@
 """
 
 from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
+    absolute_import, division, print_function)
 
 import string
 import re
@@ -16,7 +16,8 @@ import re
 from datetime import datetime
 from functools import partial
 from itertools import (
-    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap)
+    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap, islice)
+from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
 from pipe2py import Context
@@ -57,7 +58,6 @@ _map_func = imap
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
 timeout = 60 * 60 * 1
-sub_rule = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
 
 
 class Objectify:
@@ -115,11 +115,28 @@ def pythonise(id, encoding='ascii'):
 def group_by(iterable, attr, default=None):
     # like operator.itemgetter but fills in missing keys with a default value
     keyfunc = lambda item: lambda obj: obj.get(item, default)
-    sorted_iterable = sorted(iterable, key=keyfunc(attr))
+    data = list(iterable)
+    order = unique_everseen(data, keyfunc(attr))
+    sorted_iterable = sorted(data, key=keyfunc(attr))
     groups = groupby(sorted_iterable, keyfunc(attr))
     grouped = {str(k): list(v) for k, v in groups}
 
-    return grouped
+    # return groups in original order
+    ordered = {key: grouped[key] for key in order}
+    return ordered
+
+
+def unique_everseen(iterable, key=None):
+    # List unique elements, preserving order. Remember all elements ever seen
+    # unique_everseen('ABBCcAD', str.lower) --> a b c d
+    seen = set()
+
+    for element in iterable:
+        k = str(key(element))
+
+        if k not in seen:
+            seen.add(k)
+            yield k
 
 
 def _make_content(i, tag, new):
@@ -373,6 +390,80 @@ def listize(item):
     return item if listlike else [item]
 
 
+def _gen_words(match, splits):
+    groups = ifilter(None, match.groups())
+
+    for s in splits:
+        try:
+            num = int(s)
+        except ValueError:
+            word = s
+        else:
+            word = islice(groups, num, num + 1).next()
+
+        yield word
+
+
+def multi_substitute(word, rules):
+    """ Apply multiple regex rules to 'word'
+    http://code.activestate.com/recipes/
+    576710-multi-regex-single-pass-replace-of-multiple-regexe/
+    """
+    flags = rules[0]['flags']
+
+    # Create a combined regex from the rules
+    tuples = ((p, r['match']) for p, r in enumerate(rules))
+    regexes = ('(?P<match_%i>%s)' % (p, r) for p, r in tuples)
+    pattern = '|'.join(regexes)
+    regex = re.compile(pattern, flags)
+    resplit = re.compile('\$(\d+)')
+
+    # For each match, look-up corresponding replace value in dictionary
+    rules_in_series = ifilter(itemgetter('series'), rules)
+    rules_in_parallel = (r for r in rules if not r['series'])
+
+    try:
+        has_parallel = [rules_in_parallel.next()]
+    except StopIteration:
+        has_parallel = []
+
+    for i in chain(rules_in_series, has_parallel):
+        prev_name = None
+        prev_is_series = None
+
+        for match in regex.finditer(word):
+            item = ifilter(itemgetter(1), match.groupdict().iteritems()).next()
+
+            if not item:
+                continue
+
+            name = item[0]
+            rule = rules[int(name[6:])]
+            series = rule.get('series')
+            kwargs = {'count': rule['count'], 'series': series}
+            is_previous = name is prev_name
+            singlematch = kwargs['count'] is 1
+            is_series = prev_is_series or kwargs['series']
+            isnt_previous = bool(prev_name) and not is_previous
+
+            if (is_previous and singlematch) or (isnt_previous and is_series):
+                continue
+
+            prev_name = name
+            prev_is_series = series
+
+            if resplit.findall(rule['replace']):
+                splits = resplit.split(rule['replace'])
+                words = _gen_words(match, splits)
+            else:
+                splits = rule['replace']
+                words = [word[:match.start()], splits, word[match.end():]]
+
+            word = ''.join(words)
+
+    return word
+
+
 def substitute(word, rule):
     return rule['match'].sub(rule['replace'], word, rule['count'])
 
@@ -399,15 +490,22 @@ def get_new_rule(rule, recompile=False):
     # flag 'g' --> 0
     count = 0 if rule.get('globalmatch') else 1
     field = rule.get('field')
-    replace = fix_pattern(rule['replace'], sub_rule)
-    matchc = re.compile(rule['match'], flags) if recompile else rule['match']
+
+    if recompile:
+        fix = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
+        replace = fix_pattern(rule['replace'], fix)
+        matchc = re.compile(rule['match'], flags)
+    else:
+        replace = rule['replace']
+        matchc = rule['match']
 
     rule = {
         'match': matchc,
         'replace': replace,
         'field': field,
         'count': count,
-        'flags': flags
+        'flags': flags,
+        'series': rule.get('seriesmatch', True),
     }
 
     return rule

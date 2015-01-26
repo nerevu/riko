@@ -23,8 +23,8 @@ from pipe2py.twisted.utils import (
     asyncStarMap, asyncReduce, asyncDispatch, asyncReturn)
 
 opts = {'convert': False, 'ftype': 'pass'}
-substitute = utils.substitute
-convert_func = partial(utils.convert_rules, recompile=True)
+substitute = utils.multi_substitute
+convert_func = partial(utils.convert_rules, recompile=False)
 
 
 # Common functions
@@ -83,7 +83,8 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
 # Synchronous functions
 def get_substitutions(groups):
     for field, word, rules in groups:
-        replacement = reduce(substitute, rules, word)
+        values = utils.group_by(rules, 'flags').itervalues()
+        replacement = reduce(substitute, values, word)
         yield (field, replacement)
 
 
