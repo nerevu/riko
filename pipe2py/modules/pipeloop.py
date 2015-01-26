@@ -12,26 +12,23 @@ from copy import copy
 from functools import partial
 from itertools import chain, imap, starmap
 from twisted.internet.defer import inlineCallbacks, returnValue
+from . import get_splits, asyncGetSplits
 from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.lib.dotdict import DotDict
 from pipe2py.twisted.utils import asyncStarMap, asyncNone
 
+opts = {'ftype': 'pass', 'listize': False}
+
 
 # Common functions
-def get_splits(context, _INPUT, conf, embed, parse_func, **kwargs):
-    inputs = imap(DotDict, _INPUT)
-    test = kwargs.pop('pass_if', None)
-    get_pass = partial(utils.get_pass, test=test)
-
+def get_cust_func(context, conf, embed, parse_func, **kwargs):
     # Prepare the submodule to take parameters from the loop instead of from
     # the user
     embed_context = copy(context)
     embed_context.submodule = True
-    embed_conf = conf.get('embed').get('conf', {})
     kwargs.update({'context': embed_context, 'with': conf.get('with')})
-    get_submodule = lambda i: parse_func(i, embed_conf, embed, **kwargs)
-    broadcast_funcs = [get_submodule, utils.passthrough, get_pass]
-    return utils.broadcast(inputs, *broadcast_funcs)
+    return partial(parse_func, embed=embed, **kwargs)
 
 
 def get_inputs(item, conf):
@@ -69,23 +66,24 @@ def parse_result(submodule, item, _pass, **kwargs):
     return result
 
 
-def get_pkwargs(conf, **kwargs):
-    test = kwargs.get('pass_if')
+def get_pkwargs(conf):
     emit = conf.get('mode') == 'EMIT'
-    assign_to = conf.get('assign_to')
     first_part = 'emit_part' if emit else 'assign_part'
-    first = conf.get(first_part) == 'first'
-    pkwargs = {'assign_to': assign_to, 'test': test, 'emit': emit}
-    pkwargs.update({'first': first})
+    pkwargs = {
+        'assign_to': conf.get('assign_to'),
+        'pass_if': conf.get('pass_if'),
+        'emit': emit,
+        'first': conf.get(first_part) == 'first'
+    }
     return pkwargs
 
 
 # Async functions
 @inlineCallbacks
-def asyncParseEmbed(item, conf, asyncEmbed, **kwargs):
+def asyncParseEmbed(conf, item=None, embed=None, **kwargs):
     context = kwargs.pop('context')
     context.inputs = get_inputs(item, conf)  # prepare the submodule
-    submodule = yield asyncEmbed(context, iter([item]), conf, **kwargs)
+    submodule = yield embed(context, iter([item]), conf, **kwargs)
     returnValue(submodule)
 
 
@@ -122,17 +120,19 @@ def asyncPipeLoop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    _input = yield _INPUT
     conf = DotDict(conf)
-    pkwargs = get_pkwargs(conf, **kwargs)
-    splits = get_splits(context, _input, conf, embed, asyncParseEmbed, **kwargs)
+    pkwargs = cdicts(get_pkwargs(conf), kwargs)
+    embed_conf = conf.get('embed').get('conf', {})
+    cust_func = get_cust_func(context, conf, embed, asyncParseEmbed, **kwargs)
+    opts.update({'cust_func': cust_func})
+    splits = yield asyncGetSplits(_INPUT, embed_conf, **cdicts(opts, kwargs))
     gathered = yield asyncStarMap(partial(asyncParseResult, **pkwargs), splits)
     _OUTPUT = utils.multiplex(gathered) if pkwargs['emit'] else gathered
     returnValue(_OUTPUT)
 
 
 # Synchronous functions
-def parse_embed(item, conf, embed, **kwargs):
+def parse_embed(conf, item=None, embed=None, **kwargs):
     context = kwargs.pop('context')
     context.inputs = get_inputs(item, conf)  # prepare the submodule
     submodule = embed(context, iter([item]), conf, **kwargs)
@@ -165,8 +165,11 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     _OUTPUT : generator of items
     """
     conf = DotDict(conf)
-    pkwargs = get_pkwargs(conf, **kwargs)
-    splits = get_splits(context, _INPUT, conf, embed, parse_embed, **kwargs)
+    pkwargs = cdicts(get_pkwargs(conf), kwargs)
+    embed_conf = conf.get('embed').get('conf', {})
+    cust_func = get_cust_func(context, conf, embed, parse_embed, **kwargs)
+    opts.update({'cust_func': cust_func})
+    splits = get_splits(_INPUT, embed_conf, **cdicts(opts, kwargs))
     gathered = starmap(partial(parse_result, **pkwargs), splits)
     _OUTPUT = utils.multiplex(gathered) if pkwargs['emit'] else gathered
     return _OUTPUT
