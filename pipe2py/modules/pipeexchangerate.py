@@ -17,7 +17,6 @@ from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 opts = {'listize': False}
-timeout = 60 * 60 * 24  # 24 hours in seconds
 
 FIELDS = [
     {'name': 'USD/USD', 'price': 1},
@@ -68,7 +67,7 @@ def parse_request(r, offline):
     return {i['name']: i['price'] for i in fields}
 
 
-@utils.memoize(timeout)
+@utils.memoize(utils.timeout)
 def get_rate_data():
     return requests.get(EXCHANGE_API, params=PARAMS)
 

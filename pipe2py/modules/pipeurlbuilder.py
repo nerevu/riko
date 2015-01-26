@@ -14,10 +14,9 @@ from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
 
 opts = {'parse': False}
-timeout = 60 * 60 * 1
 
 
-@utils.memoize(timeout)
+@utils.memoize(utils.timeout)
 def parse_result(params, paths, base):
     url = '%s/' % base if not base.endswith('/') else base
     url += '/'.join(imap(str, ifilter(None, paths)))
