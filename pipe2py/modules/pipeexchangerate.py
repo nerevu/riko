@@ -24,6 +24,8 @@ FIELDS = [
     {'name': 'USD/EUR', 'price': 0.8234},
     {'name': 'USD/GBP', 'price': 0.6448},
     {'name': 'USD/INR', 'price': 63.6810},
+    {'name': 'USD/PLN', 'price': 3.76},
+    {'name': 'USD/SGD', 'price': 1.34},
 ]
 
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
