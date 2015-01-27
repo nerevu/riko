@@ -67,7 +67,6 @@ smatch = {'singlelinematch': '2'}
 pmatch = {'seriesmatch': False}
 gmatch = {'globalmatch': '1'}
 pmatch = {'seriesmatch': False}
-
 cmatch = cdict(mmatch, smatch, pmatch)
 
 rename1_rule = [
@@ -222,10 +221,7 @@ strconcat1_conf = {
 }
 
 strconcat2_conf = {
-    'part': [
-        {'subkey': 'k:budget_raw1_sym'}
-        , {'subkey': 'k:budget_raw2_sym'}
-    ]
+    'part': [{'subkey': 'k:budget_raw1_sym'}, {'subkey': 'k:budget_raw2_sym'}]
 }
 
 strconcat3_conf = {
