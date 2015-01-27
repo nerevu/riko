@@ -49,7 +49,7 @@ def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     parse_conf = partial(utils.parse_conf, DotDict(conf), **pkwargs)
     get_RSS = lambda key, value: (RSS.get(key, key), value)
     get_YAHOO = lambda key, value: (YAHOO.get(key), value)
-    make_dict = lambda func, conf: dict(starmap(func, conf._asdict().items()))
+    make_dict = lambda func, conf: dict(starmap(func, conf.iteritems()))
     clean_dict = lambda d: dict(ifilter(lambda t: all(t), d.items()))
     funcs = [partial(make_dict, get_RSS), partial(make_dict, get_YAHOO)]
 

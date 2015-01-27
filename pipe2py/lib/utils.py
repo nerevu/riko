@@ -13,7 +13,6 @@ from __future__ import (
 import string
 import re
 
-from collections import namedtuple
 from datetime import datetime
 from functools import partial
 from itertools import (
@@ -59,6 +58,17 @@ combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
 timeout = 60 * 60 * 1
 sub_rule = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
+
+
+class Objectify:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+    def __iter__(self):
+        return self.__dict__.itervalues()
+
+    def iteritems(self):
+        return self.__dict__.iteritems()
 
 
 def _apply_func(funcs, items, map_func=starmap):
@@ -246,18 +256,12 @@ def dispatch(splits, *funcs, **kwargs):
 def parse_conf(conf, item=None, parse_func=None, **kwargs):
     convert = kwargs.pop('convert', True)
     values = map(partial(parse_func, item=item), imap(conf.__getitem__, conf))
-
-    if convert:
-        Conf = namedtuple('Conf', conf)
-        result = Conf(*values)
-    else:
-        result = dict(zip(conf, values))
-
-    return result
+    result = dict(zip(conf, values))
+    return Objectify(**result) if convert else result
 
 
 def parse_params(params):
-    true_params = ifilter(all, params)
+    true_params = filter(all, params)
     return dict(imap(lambda x: (x.key, x.value), true_params))
 
 
