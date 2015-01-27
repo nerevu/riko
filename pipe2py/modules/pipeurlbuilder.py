@@ -47,8 +47,8 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     ------
     _OUTPUT : url
     """
-    get_params = get_funcs(conf['PARAM'], **kwargs)[0]
-    get_paths = get_funcs(conf.get('PATH', {}), **cdicts(opts, kwargs))[0]
+    get_params = get_funcs(conf.get('PARAM', []), **kwargs)[0]
+    get_paths = get_funcs(conf.get('PATH', []), **cdicts(opts, kwargs))[0]
     get_base = get_funcs(conf['BASE'], listize=False, **cdicts(opts, kwargs))[0]
     parse_params = utils.parse_params
     splits = get_splits(_INPUT, funcs=[get_params, get_paths, get_base])

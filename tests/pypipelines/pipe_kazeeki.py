@@ -48,14 +48,17 @@ def make_tokenizer(to_str, dedupe=False, sort=False):
     }
 
 
-def make_loop(_with, assign_to, embed_conf, **kwargs):
+def make_loop(
+        _with, assign_to, embed_conf, pdictize=True, **kwargs
+    ):
+
     return {
         'assign_part': kwargs.get('part', 'all'),
         'emit_part': kwargs.get('part', 'all'),
         'mode': kwargs.get('mode', 'assign'),
         'with': _with,
         'assign_to': assign_to,
-        'embed': {'conf': embed_conf},
+        'embed': {'conf': embed_conf, 'pdictize': pdictize},
     }
 
 DEF_CUR_CODE = 'USD'
@@ -228,14 +231,13 @@ strconcat2_conf = {
 strconcat3_conf = {
     'part': [
         {'subkey': 'k:budget_w_sym'}
-        , {'value': ' ('}
+        , ' ('
         , {'subkey': 'k:budget_converted_w_sym'}
-        , {'value': ')'}
+        , ')'
     ]
 }
 
-strconcat4_conf = {
-    'part': [{'subkey': 'k:budget_full'}, {'value': ' / hr'}]}
+strconcat4_conf = {'part': [{'subkey': 'k:budget_full'}, ' / hr']}
 
 tokenizer_conf = make_tokenizer(',', True, True)
 substring1_conf = make_substring('0', '3')
@@ -250,6 +252,13 @@ test2 = lambda item: item.get('k:cur_code') != DEF_CUR_CODE
 test3 = lambda item: item.get('k:cur_code') == DEF_CUR_CODE
 test4 = lambda item: item.get('k:job_type') != 'hourly'
 
+# def test2(item):
+#     code = item.get('k:cur_code')
+#     print('code', code)
+#     print('DEF_CUR_CODE', DEF_CUR_CODE)
+#     print('pass', code != DEF_CUR_CODE)
+#     return code != DEF_CUR_CODE
+
 my_item = {
     'content': '<p>Hello, I need to fix an application i am working on.\xa0\xa0Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>',
     'link': 'https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss',
@@ -262,25 +271,24 @@ my_item = {
     'y:title': 'Need to fix Ionic Rss Reader Application - oDesk'
 }
 
-loop1_conf = make_loop('k:budget_raw', 'loop:strregex', strregex1_conf)
-loop2_conf = make_loop('k:job_type', 'k:job_type', strregex2_conf)
+loop1_conf = make_loop('k:budget_raw', 'loop:strregex', strregex1_conf, False)
+loop2_conf = make_loop('k:job_type', 'k:job_type', strregex2_conf, False)
 loop3_conf = make_loop('k:tags', 'k:tags', tokenizer_conf)
-loop4_conf = make_loop('k:budget_raw1_num', 'k:budget', simplemath1_conf)
-loop5_conf = make_loop('', 'k:cur_code', strconcat1_conf)
+loop4_conf = make_loop('k:budget_raw1_num', 'k:budget', simplemath1_conf, False)
+loop5_conf = make_loop('', 'k:cur_code', strconcat1_conf, False)
 loop6_conf = make_loop('k:cur_code', 'k:cur_code', substring1_conf)
-loop7_conf = make_loop('', 'k:budget_sym', strconcat2_conf)
+loop7_conf = make_loop('', 'k:budget_sym', strconcat2_conf, False)
 loop8_conf = make_loop('k:budget_sym', 'k:budget_sym', substring2_conf)
-loop9_conf = make_loop(
-    'k:budget_sym', 'k:cur_code', strregex3_conf)
-loop10_conf = make_loop('k:job_type', 'k:job_type_code', strregex4_conf)
-loop11_conf = make_loop('link', 'id', {'embed': {}})
-loop12_conf = make_loop('k:budget', 'k:budget_w_sym', currencyformat1_conf)
+loop9_conf = make_loop('k:budget_sym', 'k:cur_code', strregex3_conf, False)
+loop10_conf = make_loop('k:job_type', 'k:job_type_code', strregex4_conf, False)
+loop11_conf = make_loop('link', 'id', {'embed': {}}, False)
+loop12_conf = make_loop('k:budget', 'k:budget_w_sym', currencyformat1_conf, False)
 loop13_conf = make_loop('k:cur_code', 'k:rate', exchangerate_conf)
-loop14_conf = make_loop('k:budget', 'k:budget_converted', simplemath2_conf)
+loop14_conf = make_loop('k:budget', 'k:budget_converted', simplemath2_conf, False)
 loop15_conf = make_loop(
-    'k:budget_converted', 'k:budget_converted_w_sym', currencyformat2_conf)
-loop16_conf = make_loop('', 'k:budget_full', strconcat3_conf)
-loop17_conf = make_loop('', 'k:budget_full', strconcat4_conf)
+    'k:budget_converted', 'k:budget_converted_w_sym', currencyformat2_conf, False)
+loop16_conf = make_loop('', 'k:budget_full', strconcat3_conf, False)
+loop17_conf = make_loop('', 'k:budget_full', strconcat4_conf, False)
 
 itembuilder_attrs = [{'key': k, 'value': v} for k, v in my_item.items()]
 
@@ -300,8 +308,7 @@ sources = [
 
 abspath = p.abspath(p.join(PARENT, 'pipe2py', 'data', 'kazeeki.json'))
 url = "file://%s" % abspath
-fetchdata_conf = {'URL': {'value': url}, 'path': {'value': 'items'}}
-
+fetchdata_conf = {'URL': url, 'path': 'items'}
 fetch_conf = {'URL': map(make_conf, sources)}
 itembuilder_conf = {'attrs': itembuilder_attrs}
 
@@ -309,31 +316,31 @@ itembuilder_conf = {'attrs': itembuilder_attrs}
 def parse_source(source):
     pipe = (
         source
-            .pipe('rename', conf={'RULE': rename1_rule})
-            .pipe('regex', conf={'RULE': regex1_rule})
-            .pipe('rename', conf={'RULE': rename2_rule})
-            .pipe('regex', conf={'RULE': regex2_rule})
-            .pipe('rename', conf={'RULE': rename3_rule})
-            .pipe('regex', conf={'RULE': regex3_rule})
-            .loop('strregex', conf=loop1_conf)
-            .loop('strregex', conf=loop2_conf)
-            .loop('stringtokenizer', conf=loop3_conf)
-            .loop('simplemath', conf=loop4_conf)
-            .loop('strconcat', conf=loop5_conf)
-            .loop('substr', conf=loop6_conf)
-            .loop('strconcat', conf=loop7_conf)
-            .loop('substr', conf=loop8_conf)
-            .loop('strreplace', pass_if=test1, conf=loop9_conf)
-            .pipe('regex', conf={'RULE': regex4_rule})
-            .loop('strregex', conf=loop10_conf)
-            .loop('hash', conf=loop11_conf)
-            .loop('currencyformat', conf=loop12_conf)
-            .loop('exchangerate', conf=loop13_conf)
-            .loop('simplemath', conf=loop14_conf)
-            .loop('currencyformat', conf=loop15_conf)
-            .pipe('rename', pass_if=test2, conf={'RULE': rename4_rule})
-            .loop('strconcat', pass_if=test3, conf=loop16_conf)
-            .loop('strconcat', pass_if=test4, conf=loop17_conf)
+            .pipe('rename', pdictize=False, conf={'RULE': rename1_rule})
+            .pipe('regex', pdictize=False, conf={'RULE': regex1_rule})
+            .pipe('rename', pdictize=False, conf={'RULE': rename2_rule})
+            .pipe('regex', pdictize=False, conf={'RULE': regex2_rule})
+            .pipe('rename', pdictize=False, conf={'RULE': rename3_rule})
+            .pipe('regex', pdictize=False, conf={'RULE': regex3_rule})
+            .loop('strregex', pdictize=False, force=True, conf=loop1_conf)
+            .loop('strregex', pdictize=False, force=True, conf=loop2_conf)
+            .loop('stringtokenizer', pdictize=False, force=True, conf=loop3_conf)
+            .loop('simplemath', pdictize=False, force=True, conf=loop4_conf)
+            .loop('strconcat', pdictize=False, force=True, conf=loop5_conf)
+            .loop('substr', pdictize=False, force=True, conf=loop6_conf)
+            .loop('strconcat', pdictize=False, force=True, conf=loop7_conf)
+            .loop('substr', pdictize=False, force=True, conf=loop8_conf)
+            .loop('strreplace', pass_if=test1, pdictize=False, force=True, conf=loop9_conf)
+            .pipe('regex', pdictize=False, conf={'RULE': regex4_rule})
+            .loop('strregex', pdictize=False, force=True, conf=loop10_conf)
+            .loop('hash', pdictize=False, force=True, conf=loop11_conf)
+            .loop('currencyformat', pdictize=False, force=True, conf=loop12_conf)
+            .loop('exchangerate', pdictize=False, force=True, conf=loop13_conf)
+            .loop('simplemath', pdictize=False, force=True, conf=loop14_conf)
+            .loop('currencyformat', pdictize=False, force=True, conf=loop15_conf)
+            .pipe('rename', pass_if=test2, pdictize=False, conf={'RULE': rename4_rule})
+            .loop('strconcat', pass_if=test3, pdictize=False, force=True, conf=loop16_conf)
+            .loop('strconcat', pass_if=test4, pdictize=False, force=True, conf=loop17_conf)
     )
 
     return pipe.output
