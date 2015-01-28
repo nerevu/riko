@@ -13,6 +13,7 @@ from __future__ import (
 import string
 import re
 
+# from pprint import pprint
 from datetime import datetime
 from functools import partial
 from itertools import (
@@ -427,12 +428,28 @@ def multi_substitute(word, rules):
     except StopIteration:
         has_parallel = []
 
+    # print('================')
+    # pprint(rules)
+    # print('word:', word)
+    # print('pattern', pattern)
+    # print('flags', flags)
+
     for i in chain(rules_in_series, has_parallel):
+        # print('~~~~~~~~~~~~~~~~')
+        # print('new round')
+        # print('word:', word)
+        # found = list(regex.finditer(word))
+        # matchitems = [match.groupdict().items() for match in found]
+        # pprint(matchitems)
         prev_name = None
         prev_is_series = None
 
         for match in regex.finditer(word):
             item = ifilter(itemgetter(1), match.groupdict().iteritems()).next()
+
+            # print('----------------')
+            # print('groupdict:', match.groupdict().items())
+            # print('item:', item)
 
             if not item:
                 continue
@@ -461,6 +478,16 @@ def multi_substitute(word, rules):
 
             word = ''.join(words)
 
+            # print('name:', name)
+            # print('prereplace:', rule['replace'])
+            # print('splits:', splits)
+            # print('resplits:', resplit.findall(rule['replace']))
+            # print('groups:', filter(None, match.groups()))
+            # print('words:', words)
+            # print('range:', match.start(), '-', match.end())
+            # print('replace:', word)
+
+    # print('substitution:', word)
     return word
 
 
