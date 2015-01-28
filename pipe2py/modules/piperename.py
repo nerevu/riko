@@ -33,7 +33,12 @@ def func(item, rule, **kwargs):
 
 def parse_results(splits, **kwargs):
     for rules, item, _pass in splits:
-        yield item if _pass else reduce(partial(func, **kwargs), rules, item)
+        if _pass or not item:
+            result = item
+        else:
+            result = reduce(partial(func, **kwargs), rules, item)
+
+        yield result
 
 
 # Async functions

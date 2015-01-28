@@ -84,7 +84,7 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
 def get_substitutions(groups):
     for field, word, rules in groups:
         values = utils.group_by(rules, 'flags').itervalues()
-        replacement = reduce(substitute, values, word)
+        replacement = reduce(substitute, values, word) if word else word
         yield (field, replacement)
 
 

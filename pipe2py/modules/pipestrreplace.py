@@ -64,7 +64,7 @@ def asyncPipeStrreplace(context=None, _INPUT=None, conf=None, **kwargs):
 
 # Synchronous functions
 def parse_result(rules, word, _pass):
-    return word if _pass else reduce(func, rules, word)
+    return word if _pass or not word else reduce(func, rules, word)
 
 
 def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):

@@ -492,7 +492,12 @@ def multi_substitute(word, rules):
 
 
 def substitute(word, rule):
-    return rule['match'].sub(rule['replace'], word, rule['count'])
+    if word:
+        result = rule['match'].sub(rule['replace'], word, rule['count'])
+    else:
+        result = word
+
+    return result
 
 
 def fix_pattern(word, rule):
