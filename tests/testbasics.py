@@ -193,9 +193,11 @@ class TestBasics(unittest.TestCase):
             u'k:posted': u'time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)',
             u'k:rate': 1.0,
             u'k:submissions': u'unknown',
-            u'k:tags': [{'content': u'IT'},
-                 {'content': u'Software'},
-                 {'content': u'Web'}],
+            u'k:tags': [
+                {'content': u'IT'},
+                {'content': u'Software'},
+                {'content': u'Web'}
+            ],
             u'k:work_location': u' Worldwide',
             u'link': u'http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595',
             u'links': [{}],

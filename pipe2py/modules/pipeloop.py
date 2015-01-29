@@ -134,9 +134,9 @@ def parse_embed(item, context=None, conf=None, embed=None, **kwargs):
         embedded = parsed_conf['embed']
 
     embedded_conf = embedded.get('conf', {})
-    attrs = ['pass_if', 'pdictize']
-    embed_kwargs = {a: embedded[a] for a in attrs if a in embedded}
-    ekwargs = cdicts({'with': parsed_conf.get('with')}, embed_kwargs)
+    pairs = [('pass_if', kwargs), ('pdictize', embedded)]
+    true_pairs = ((x, y[x]) for x, y in pairs if x in y)
+    ekwargs = dict(chain([('with', parsed_conf.get('with'))], true_pairs))
     context.inputs = get_funcs(embedded_conf, **ekwargs)[0](item)
     submodule = embed(context, iter([item]), embedded_conf, **ekwargs)
     return submodule

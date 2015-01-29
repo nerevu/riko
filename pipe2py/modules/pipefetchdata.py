@@ -117,10 +117,10 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
     >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
-    [u'alarmTime', u'begin', u'duration', u'places', u'subject', u'uid']
+    ['alarmTime', 'begin', 'duration', 'places', 'subject', 'uid']
     >>> conf = {'URL': {'value': url}, 'path': {'value': ''}}
     >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
-    [u'appointment', 'reminder']
+    ['appointment', 'reminder']
     """
     # todo: iCal and KML
     funcs = get_splits(None, conf, **cdicts(opts, kwargs))

@@ -358,19 +358,34 @@ def print_content(output):
 #     size = write_file(data, path, True)
 
 
-def pipe_kazeeki(context=None, conf=itembuilder_conf, **kwargs):
-    # source = SyncPipe('fetch', conf=fetch_conf, context=context)
-    # source = SyncPipe('itembuilder', conf=conf, context=context)
-    source = SyncPipe('fetchdata', conf=fetchdata_conf, context=context)
-    output = parse_source(source)
+def pipe_kazeeki(context=None, conf=fetchdata_conf, **kwargs):
+    if context and context.describe_input:
+        output = []
+
+    elif context and context.describe_dependencies:
+        output = []
+    else:
+        skwargs = {'pdictize': False, 'conf': conf, 'context': context}
+        # source = SyncPipe('fetch', **skwargs)
+        # source = SyncPipe('itembuilder', **skwargs)
+        source = SyncPipe('fetchdata', **skwargs)
+        output = parse_source(source)
+
     return output
 
 
-def asyncPipeKazeeki(reactor, context=None, conf=itembuilder_conf, **kwargs):
-    # source = AsyncPipe('fetch', conf=fetch_conf, context=context)
-    # source = AsyncPipe('itembuilder', conf=conf, context=context)
-    source = AsyncPipe('fetchdata', conf=fetchdata_conf, context=context)
-    output = parse_source(source)
+def asyncPipeKazeeki(reactor, context=None, conf=fetchdata_conf, **kwargs):
+    if context and context.describe_input:
+        output = []
+
+    elif context and context.describe_dependencies:
+        output = []
+    else:
+        skwargs = {'pdictize': False, 'conf': conf, 'context': context}
+        # source = AsyncPipe('fetch', **skwargs)
+        # source = AsyncPipe('itembuilder', **skwargs)
+        source = AsyncPipe('fetchdata', **skwargs)
+        output = parse_source(source)
     output.addCallback(print_content)
     return output
 
