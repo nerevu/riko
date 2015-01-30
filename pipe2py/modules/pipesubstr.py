@@ -39,7 +39,7 @@ def parse_result(conf, word, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeSubstr(context=None, item=None, conf=None, **kwargs):
     """A string module that asynchronously returns a substring. Loopable.
 
     Parameters
@@ -56,14 +56,14 @@ def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : twisted.internet.defer.Deferred generator of substrings
     """
     conf['start'] = conf.pop('from', dict.get(conf, 'start'))
-    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    split = yield asyncGetSplit(item, conf, **cdicts(opts, kwargs))
+    parsed = yield asyncDispatch(split, *get_async_dispatch_funcs())
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_substr(context=None, item=None, conf=None, **kwargs):
     """A string module that returns a substring. Loopable.
 
     Parameters
@@ -80,7 +80,6 @@ def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : generator of substrings
     """
     conf['start'] = conf.pop('from', dict.get(conf, 'start'))
-    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs())
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    split = get_split(item, conf, **cdicts(opts, kwargs))
+    parsed = utils.dispatch(split, *get_dispatch_funcs())
+    return starmap(parse_result, parsed)

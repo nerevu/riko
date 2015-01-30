@@ -63,13 +63,9 @@ ALTERNATIVE_DATE_FORMATS = (
 )
 
 TIMEOUT = 60 * 60 * 1
+HALF_DAY = 60 * 60 * 12
 
-# leave option to substitute with multiprocessing
-_map_func = imap
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
-memoize = Cache(**cache_config).memoize
-timeout = 60 * 60 * 1
-half_day = 60 * 60 * 12
 encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 
 
@@ -96,6 +92,10 @@ def _apply_func(funcs, items, map_func=starmap):
 def get_logger(context):
     level = 'DEBUG' if context and context.verbose else 'INFO'
     return Logger(level).logger
+
+
+def memoize(*args, **kwargs):
+    return Cache(**cache_config).memoize(*args, **kwargs)
 
 
 def extract_dependencies(pipe_def=None, pipe_generator=None):
@@ -196,13 +196,6 @@ def etree_to_dict(element):
     return i
 
 
-def finitize(_INPUT):
-    yield _INPUT.next()
-
-    for i in takewhile(lambda i: not 'forever' in i, _INPUT):
-        yield i
-
-
 def get_value(field, item=None, force=False, **opts):
     item = item or {}
 
@@ -244,52 +237,27 @@ def get_value(field, item=None, force=False, **opts):
     return value
 
 
-def broadcast(_INPUT, *funcs, **kwargs):
-    """copies an iterable and delivers the items to multiple functions
+def dispatch(split, *funcs, **kwargs):
+    """takes a tuple of items (returned by dispatch or broadcast) and delivers
+    each item to different function
 
-           /--> foo2bar(_INPUT) --> \
-          /                          \
-    _INPUT ---> foo2baz(_INPUT) ---> _OUTPUT
-          \                          /
-           \--> foo2qux(_INPUT) --> /
-
-    One way to construct such a flow in code would be::
-
-        _INPUT = repeat('foo', 3)
-        foo2bar = lambda word: word.replace('foo', 'bar')
-        foo2baz = lambda word: word.replace('foo', 'baz')
-        foo2qux = lambda word: word.replace('foo', 'quz')
-        _OUTPUT = broadcast(_INPUT, foo2bar, foo2baz, foo2qux)
-        _OUTPUT == repeat(('bar', 'baz', 'qux'), 3)
-    """
-    map_func = kwargs.get('map_func', _map_func)
-    apply_func = kwargs.get('apply_func', _apply_func)
-    splits = izip(*tee(_INPUT, len(funcs)))
-    return map_func(partial(apply_func, funcs), splits)
-
-
-def dispatch(splits, *funcs, **kwargs):
-    """takes multiple iterables (returned by dispatch or broadcast) and delivers
-    the items to multiple functions
-
-           /-----> _INPUT1 --> double(_INPUT1) --> \
-          /                                         \
-    splits ------> _INPUT2 --> triple(_INPUT2) ---> _OUTPUT
-          \                                         /
-           \--> _INPUT3 --> quadruple(_INPUT3) --> /
+           /----> item1 --> double(item1) --> \
+          /                                    \
+    split ----> item2 --> triple(item2) ---> _OUTPUT
+          \                                    /
+           \-> item3 --> quadruple(item3) --> /
 
     One way to construct such a flow in code would be::
 
-        splits = repeat(('bar', 'baz', 'qux'), 3)
+        split = ('bar', 'baz', 'qux')
         double = lambda word: word * 2
         triple = lambda word: word * 3
         quadruple = lambda word: word * 4
-        _OUTPUT = dispatch(splits, double, triple, quadruple)
-        _OUTPUT == repeat(('barbar', 'bazbazbaz', 'quxquxquxqux'), 3)
+        _OUTPUT = dispatch(split, double, triple, quadruple)
+        _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
     """
-    map_func = kwargs.get('map_func', _map_func)
-    apply_func = kwargs.get('apply_func', _apply_func)
-    return map_func(partial(apply_func, funcs), splits)
+    map_func = kwargs.get('map_func', starmap)
+    return map_func(lambda item, func: func(item), izip(split, funcs))
 
 
 def parse_conf(conf, item=None, parse_func=None, **kwargs):

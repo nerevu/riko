@@ -35,7 +35,7 @@ def asyncParseResult(rules, word, _pass):
 
 
 @inlineCallbacks
-def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeStrregex(context=None, item=None, conf=None, **kwargs):
     """A string module that asynchronously replaces text using regexes. Each
     has the general format: "In [field] replace [regex pattern] with [text]".
     Loopable.
@@ -56,10 +56,10 @@ def asyncPipeStrregex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of replaced strings
     """
-    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    split = yield asyncGetSplit(item, conf['RULE'], **cdicts(opts, kwargs))
     first = partial(maybeDeferred, convert_func)
     asyncFuncs = get_async_dispatch_funcs(first=first)
-    parsed = yield asyncDispatch(splits, *asyncFuncs)
+    parsed = yield asyncDispatch(split, *asyncFuncs)
     _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
     returnValue(iter(_OUTPUT))
 
@@ -69,7 +69,7 @@ def parse_result(rules, word, _pass):
     return word if _pass or not word else reduce(func, rules, word)
 
 
-def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_strregex(context=None, item=None, conf=None, **kwargs):
     """A string module that replaces text using regexes. Each has the general
     format: "In [field] replace [regex pattern] with [text]". Loopable.
 
@@ -90,7 +90,6 @@ def pipe_strregex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of replaced strings
     """
-    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs(first=convert_func))
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    split = get_split(item, conf['RULE'], **cdicts(opts, kwargs))
+    parsed = utils.dispatch(split, *get_dispatch_funcs(first=convert_func))
+    return starmap(parse_result, parsed)

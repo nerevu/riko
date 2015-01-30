@@ -66,7 +66,7 @@ gmatch = {'globalmatch': '1'}
 pmatch = {'seriesmatch': False}
 cmatch = cdict(mmatch, smatch, pmatch)
 
-rename1_rule = [
+rename_rule = [
     {'newval': '', 'field': 'y:title', 'op': 'rename'},
     {'newval': '', 'field': 'content', 'op': 'rename'},
     {'newval': 'k:posted', 'field': 'y:published', 'op': 'rename'},
@@ -74,28 +74,12 @@ rename1_rule = [
     {'newval': 'k:content', 'field': 'description', 'op': 'copy'},
     {'newval': 'k:work_location', 'field': 'description', 'op': 'copy'},
     {'newval': 'k:client_location', 'field': 'description', 'op': 'copy'},
-    # {'newval': 'k:category', 'field': 'description', 'op': 'copy'},
     {'newval': 'k:tags', 'field': 'description', 'op': 'copy'},
     {'newval': 'k:due', 'field': 'description', 'op': 'copy'},
     {'newval': 'k:submissions', 'field': 'description', 'op': 'copy'},
     {'newval': 'k:budget_raw', 'field': 'description', 'op': 'copy'},
     {'newval': 'k:marketplace', 'field': 'link', 'op': 'copy'},
     {'newval': 'k:author', 'field': 'title', 'op': 'copy'}]
-
-rename2_rule = [
-    {'newval': 'k:budget_raw1', 'field': 'k:budget_raw', 'op': 'copy'},
-    {'newval': 'k:budget_raw2', 'field': 'k:budget_raw', 'op': 'copy'}]
-
-rename3_rule = [
-    {'newval': 'k:budget_raw1_num', 'field': 'k:budget_raw1', 'op': 'copy'},
-    {'newval': 'k:budget_raw1_sym', 'field': 'k:budget_raw1', 'op': 'copy'},
-    {'newval': 'k:budget_raw1_code', 'field': 'k:budget_raw1', 'op': 'copy'},
-    {'newval': 'k:budget_raw2_num', 'field': 'k:budget_raw2', 'op': 'copy'},
-    {'newval': 'k:budget_raw2_sym', 'field': 'k:budget_raw2', 'op': 'copy'},
-    {'newval': 'k:budget_raw2_code', 'field': 'k:budget_raw2', 'op': 'copy'}]
-
-rename4_rule = [
-    {'newval': 'k:budget_full', 'field': 'k:budget_w_sym', 'op': 'copy'}]
 
 match1_01 = '(.*)( - oDesk|\\| Elance Job)'
 match1_02 = '^(http[s]?:\\/\\/)?\\/?([^\\/\\.]+\\.)*([^\\/\\.]+\\.[^:\\/\\s\\.]{2,3})(.*)'
@@ -126,7 +110,7 @@ match1_24b = '^((?!(budget|Budget|Hourly budget.*Rate)).)*$'
 match1_25 = 'Under|Upto|Less than|or less'
 match1_26 = '^(?!.*-.*)(.*)'
 
-regex1_rule = [
+regex_rule = [
     cdict(mmatch, smatch, make_regex('title', match1_01, '$1')),
     make_regex('k:marketplace', match1_02, '$3'),
     cdict(cmatch, make_regex('k:job_type', match1_03, 'hourly')),
@@ -162,96 +146,6 @@ regex1_rule = [
     make_regex('k:budget_raw', match1_26, '$1 - $1'),
 ]
 
-regex2_rule = [
-    make_regex('k:budget_raw1', '(.*?)\\s*-\\s*(.*)', '$1')
-    , make_regex('k:budget_raw2', '(.*?)\\s*-\\s*(.*)', '$2')
-]
-
-regex3_rule = [
-    make_regex('k:budget_raw1_num', '[^\\d]*(\\d+\\.?\\d*).*', '$1'),
-    cdict(cmatch, make_regex('k:budget_raw1_sym', '.*([$£€₹]).*', '$1')),
-    cdict(cmatch, make_regex('k:budget_raw1_sym', '^(?![$£€₹]).*', '')),
-    cdict(cmatch, make_regex('k:budget_raw1_code', '.*(\\b[A-Z]{3}\\b).*', '$1')),
-    cdict(cmatch, make_regex('k:budget_raw1_code', '^(?!\\b[A-Z]{3}\\b).*', '')),
-    make_regex('k:budget_raw2_num', '[^\\d]*(\\d+\\.?\\d*).*', '$1'),
-    cdict(cmatch, make_regex('k:budget_raw2_sym', '.*([$£€₹]).*', '$1')),
-    cdict(cmatch, make_regex('k:budget_raw2_sym', '^(?![$£€₹]).*', '')),
-    cdict(cmatch, make_regex('k:budget_raw2_code', '.*(\\b[A-Z]{3}\\b).*', '$1')),
-    cdict(cmatch, make_regex('k:budget_raw2_code', '^(?!\\b[A-Z]{3}\\b).*', '')),
-]
-
-regex4_rule = [make_regex('k:cur_code', '^(?![A-Z]{3}\\b).*', DEF_CUR_CODE)]
-
-strregex1_conf = {
-    'RULE': [
-        make_regex(None, '.*hr.*', 'hourly')
-        , make_regex(None, '.*unknown.*', 'unknown')
-        , make_regex(None, '^(?!.*(hourly|unknown).*).*', 'fixed')
-    ]
-}
-
-strregex2_conf = {
-    'RULE': [make_regex(None, '^unknown$', {'subkey': 'loop:strregex'})]}
-
-strregex3_conf = {
-    'RULE': [
-        {'param': '1', 'find': '$', 'replace': 'USD'}
-        , {'param': '1', 'find': '£', 'replace': 'GBP'}
-        , {'param': '1', 'find': '€', 'replace': 'EUR'}
-        , {'param': '1', 'find': '₹', 'replace': 'INR'}
-    ]
-}
-
-strregex4_conf = {
-    'RULE': [
-        {'match': 'fixed', 'replace': '1'}
-        , {'match': 'hourly', 'replace': '2'}
-        , {'match': 'unknown', 'replace': '3'}
-    ]
-}
-
-strconcat1_conf = {
-    'part': [
-        {'subkey': 'k:budget_raw1_code'}
-        , {'subkey': 'k:budget_raw2_code'}
-    ]
-}
-
-strconcat2_conf = {
-    'part': [{'subkey': 'k:budget_raw1_sym'}, {'subkey': 'k:budget_raw2_sym'}]
-}
-
-strconcat3_conf = {
-    'part': [
-        {'subkey': 'k:budget_w_sym'}
-        , ' ('
-        , {'subkey': 'k:budget_converted_w_sym'}
-        , ')'
-    ]
-}
-
-strconcat4_conf = {'part': [{'subkey': 'k:budget_full'}, ' / hr']}
-
-tokenizer_conf = make_tokenizer(',', True, True)
-substring1_conf = make_substring('0', '3')
-substring2_conf = make_substring('0', '1')
-currencyformat1_conf = {'currency': {'subkey': 'k:cur_code'}}
-exchangerate_conf = make_exchangerate(DEF_CUR_CODE, False)
-currencyformat2_conf = {'currency': DEF_CUR_CODE}
-simplemath1_conf = make_simplemath('k:budget_raw2_num', 'mean')
-simplemath2_conf = make_simplemath('k:rate', 'multiply')
-test1 = lambda item: item.get('k:cur_code')
-test2 = lambda item: item.get('k:cur_code') != DEF_CUR_CODE
-test3 = lambda item: item.get('k:cur_code') == DEF_CUR_CODE
-test4 = lambda item: item.get('k:job_type') != 'hourly'
-
-# def test2(item):
-#     code = item.get('k:cur_code')
-#     print('code', code)
-#     print('DEF_CUR_CODE', DEF_CUR_CODE)
-#     print('pass', code != DEF_CUR_CODE)
-#     return code != DEF_CUR_CODE
-
 my_item = {
     'content': '<p>Hello, I need to fix an application i am working on.\xa0\xa0Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>',
     'link': 'https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss',
@@ -264,24 +158,6 @@ my_item = {
     'y:title': 'Need to fix Ionic Rss Reader Application - oDesk'
 }
 
-loop1_conf = make_loop('k:budget_raw', 'loop:strregex', strregex1_conf, False)
-loop2_conf = make_loop('k:job_type', 'k:job_type', strregex2_conf, False)
-loop3_conf = make_loop('k:tags', 'k:tags', tokenizer_conf)
-loop4_conf = make_loop('k:budget_raw1_num', 'k:budget', simplemath1_conf, False)
-loop5_conf = make_loop('', 'k:cur_code', strconcat1_conf, False)
-loop6_conf = make_loop('k:cur_code', 'k:cur_code', substring1_conf)
-loop7_conf = make_loop('', 'k:budget_sym', strconcat2_conf, False)
-loop8_conf = make_loop('k:budget_sym', 'k:budget_sym', substring2_conf)
-loop9_conf = make_loop('k:budget_sym', 'k:cur_code', strregex3_conf, False)
-loop10_conf = make_loop('k:job_type', 'k:job_type_code', strregex4_conf, False)
-loop11_conf = make_loop('link', 'id', {'embed': {}}, False)
-loop12_conf = make_loop('k:budget', 'k:budget_w_sym', currencyformat1_conf, False)
-loop13_conf = make_loop('k:cur_code', 'k:rate', exchangerate_conf)
-loop14_conf = make_loop('k:budget', 'k:budget_converted', simplemath2_conf, False)
-loop15_conf = make_loop(
-    'k:budget_converted', 'k:budget_converted_w_sym', currencyformat2_conf, False)
-loop16_conf = make_loop('', 'k:budget_full', strconcat3_conf, False)
-loop17_conf = make_loop('', 'k:budget_full', strconcat4_conf, False)
 itembuilder_attrs = [{'key': k, 'value': v} for k, v in my_item.items()]
 
 sources = [
@@ -295,7 +171,7 @@ sources = [
     , {'url': 'http://feeds.feedburner.com/elance/design'}
 ]
 
-abspath = p.abspath(p.join(PARENT, 'pipe2py', 'data', 'kazeeki.json'))
+abspath = p.abspath(p.join(PARENT, 'pipe2py', 'data', 'kazeeki3.json'))
 url = "file://%s" % abspath
 config = {
     'fetch': {'conf': {'URL': [s['url'] for s in sources]}, 'type': 'fetch'},
@@ -307,41 +183,15 @@ c = config['fetchdata']
 skwargs = {'pdictize': False, 'conf': c['conf']}
 
 def parse_source(source):
-    pipe = (
-        source
-            .pipe('rename', pdictize=False, conf={'RULE': rename1_rule})
-            .pipe('regex', pdictize=False, conf={'RULE': regex1_rule})
-            .pipe('rename', pdictize=False, conf={'RULE': rename2_rule})
-            .pipe('regex', pdictize=False, conf={'RULE': regex2_rule})
-            .pipe('rename', pdictize=False, conf={'RULE': rename3_rule})
-            .pipe('regex', pdictize=False, conf={'RULE': regex3_rule})
-            .loop('strregex', pdictize=False, force=True, conf=loop1_conf)
-            .loop('strregex', pdictize=False, force=True, conf=loop2_conf)
-            .loop('stringtokenizer', pdictize=False, force=True, conf=loop3_conf)
-            .loop('simplemath', pdictize=False, force=True, conf=loop4_conf)
-            .loop('strconcat', pdictize=False, force=True, conf=loop5_conf)
-            .loop('substr', pdictize=False, force=True, conf=loop6_conf)
-            .loop('strconcat', pdictize=False, force=True, conf=loop7_conf)
-            .loop('substr', pdictize=False, force=True, conf=loop8_conf)
-            .loop('strreplace', pass_if=test1, pdictize=False, force=True, conf=loop9_conf)
-            .pipe('regex', pdictize=False, conf={'RULE': regex4_rule})
-            .loop('strregex', pdictize=False, force=True, conf=loop10_conf)
-            .loop('hash', pdictize=False, force=True, conf=loop11_conf)
-            .loop('currencyformat', pdictize=False, force=True, conf=loop12_conf)
-            .loop('exchangerate', pdictize=False, force=True, conf=loop13_conf)
-            .loop('simplemath', pdictize=False, force=True, conf=loop14_conf)
-            .loop('currencyformat', pdictize=False, force=True, conf=loop15_conf)
-            .pipe('rename', pass_if=test2, pdictize=False, conf={'RULE': rename4_rule})
-            .loop('strconcat', pass_if=test3, pdictize=False, force=True, conf=loop16_conf)
-            .loop('strconcat', pass_if=test4, pdictize=False, force=True, conf=loop17_conf)
-    )
-
-    return pipe.output
+    fkwargs = [{'conf': {'RULE': rename_rule}}, {'conf': {'RULE': regex_rule}}]
+    # pipe = source.dispatch(('rename', fkwargs[0]), ('regex', fkwargs[1]))
+    pipe = source.rename(**fkwargs[0]).regex(**fkwargs[1])
+    return pipe
 
 
 def print_content(output):
-    pipe = list(output)
-    pprint(pipe[0])
+    pipe = output.list
+    pprint(pipe)
     print('count:', len(pipe))
 
 
@@ -360,6 +210,7 @@ def pipe_kazeeki(context=None):
     else:
         source = SyncPipe(c['type'], context=context, **skwargs)
         output = parse_source(source)
+        # output = source.rename(conf={'RULE': rename_rule})
 
     return output
 
@@ -372,7 +223,8 @@ def asyncPipeKazeeki(reactor, context=None):
         output = []
     else:
         source = AsyncPipe(c['type'], context=context, **skwargs)
-        output = parse_source(source)
+        # output = parse_source(source)
+        output = source.rename(conf={'RULE': rename_rule})
 
     output.addCallback(print_content)
     return output

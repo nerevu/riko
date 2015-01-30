@@ -26,7 +26,7 @@ SWITCH = {
 }
 
 
-def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_datebuilder(context=None, item=None, conf=None, **kwargs):
     """A date module that converts a text string into a datetime value. Useful
     as terminal data. Loopable.
 

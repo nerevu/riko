@@ -16,7 +16,7 @@ import time
 from pipe2py.lib.dotdict import DotDict
 
 
-def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_dateformat(context=None, item=None, conf=None, **kwargs):
     """Formats a datetime value. Loopable.
 
     Parameters

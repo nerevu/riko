@@ -19,7 +19,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_fetchsitefeed(context=None, item=None, conf=None, **kwargs):
     """A source that fetches and parses the first feed found on one or more
     sites. Loopable.
 

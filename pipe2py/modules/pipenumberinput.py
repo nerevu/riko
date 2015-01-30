@@ -14,7 +14,7 @@ from __future__ import (
 from pipe2py.lib import utils
 
 
-def pipe_numberinput(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_numberinput(context=None, item=None, conf=None, **kwargs):
     """An input that prompts the user for a number and yields it forever.
     Not loopable.
 

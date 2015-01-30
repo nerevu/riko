@@ -25,7 +25,7 @@ opts = {'ftype': None, 'listtize': True, 'finitize': True}
 
 # Async functions
 @inlineCallbacks
-def asyncPipeItembuilder(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeItembuilder(context=None, item=None, conf=None, **kwargs):
     """A source that asynchronously builds an item. Loopable.
 
     Parameters
@@ -55,7 +55,7 @@ def asyncPipeItembuilder(context=None, _INPUT=None, conf=None, **kwargs):
 
 
 # Synchronous functions
-def pipe_itembuilder(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_itembuilder(context=None, item=None, conf=None, **kwargs):
     """A source that builds an item. Loopable.
 
     Parameters

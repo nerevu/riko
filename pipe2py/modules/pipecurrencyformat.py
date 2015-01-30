@@ -31,7 +31,7 @@ def parse_result(conf, num, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeCurrencyformat(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeCurrencyformat(context=None, item=None, conf=None, **kwargs):
     """A number module that asynchronously formats a number to a given currency
     string. Loopable.
 
@@ -45,14 +45,14 @@ def asyncPipeCurrencyformat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of formatted currencies
     """
-    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs('num'))
+    split = yield asyncGetSplit(item, conf, **cdicts(opts, kwargs))
+    parsed = yield asyncDispatch(split, *get_async_dispatch_funcs('num'))
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-def pipe_currencyformat(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_currencyformat(context=None, item=None, conf=None, **kwargs):
     """A number module that formats a number to a given currency string.
     Loopable.
 
@@ -66,7 +66,6 @@ def pipe_currencyformat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of formatted currencies
     """
-    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs('num'))
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    split = get_split(item, conf, **cdicts(opts, kwargs))
+    parsed = utils.dispatch(split, *get_dispatch_funcs('num'))
+    return starmap(parse_result, parsed)

@@ -18,13 +18,12 @@ from __future__ import (
 
 from functools import partial
 from itertools import starmap
-from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-
-from . import (
-    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
+from twisted.internet import defer as df
+from twisted.internet.defer import inlineCallbacks, returnValue
+from . import get_dispatch_funcs, get_split
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncDispatch
+from pipe2py.twisted import utils as tu
 
 opts = {'convert': False, 'ftype': 'pass', 'dictize': True}
 substitute = utils.multi_substitute
@@ -39,17 +38,29 @@ def get_groups(rules, item):
 
 # Async functions
 @inlineCallbacks
+def asyncGetReplacement(field, word, rules):
+    values = utils.group_by(rules, 'flags').itervalues()
+
+    if word:
+        replacement = yield tu.coopReduce(substitute, values, word)
+    else:
+        replacement = yield tu.asyncReturn(word)
+
+    returnValue(tuple(field, replacement))
+
+
+@inlineCallbacks
 def asyncParseResult(rules, item, _pass):
     if not _pass:
         groups = get_groups(rules, item)
-        substitutions = yield maybeDeferred(get_substitutions, groups)
+        substitutions = yield tu.asyncStarMap(asyncGetReplacement, groups)
         list(starmap(item.set, substitutions))
 
     returnValue(item)
 
 
 @inlineCallbacks
-def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeRegex(context=None, item=None, conf=None, **kwargs):
     """An operator that asynchronously replaces text in items using regexes.
     Each has the general format: "In [field] replace [match] with [replace]".
     Not loopable.
@@ -57,7 +68,7 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
+    item : asyncPipe like object (twisted Deferred iterable of items)
     conf : {
         'RULE': [
             {
@@ -76,40 +87,39 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
-    asyncConvert = partial(maybeDeferred, convert_func)
-    asyncFuncs = get_async_dispatch_funcs('pass', asyncConvert)
-    parsed = yield asyncDispatch(splits, *asyncFuncs)
-    _OUTPUT = yield maybeDeferred(parse_results, parsed)
-    returnValue(iter(_OUTPUT))
+    pkwargs = cdicts(opts, kwargs, {'async': True})
+    split = get_split(item, conf['RULE'], **pkwargs)
+    asyncConvert = partial(df.maybeDeferred, convert_func)
+    asyncFuncs = get_dispatch_funcs('pass', asyncConvert, async=True)
+    parsed = yield tu.asyncDispatch(split, *asyncFuncs)
+    _OUTPUT = yield asyncParseResult(*parsed)
+    returnValue(_OUTPUT)
 
 
 # Synchronous functions
-def get_substitutions(groups):
-    for field, word, rules in groups:
-        values = utils.group_by(rules, 'flags').itervalues()
-        replacement = reduce(substitute, values, word) if word else word
-        yield (field, replacement)
+def get_replacement(field, word, rules):
+    values = utils.group_by(rules, 'flags').itervalues()
+    replacement = reduce(substitute, values, word) if word else word
+    return (field, replacement)
 
 
-def parse_results(parsed):
-    for rules, item, _pass in parsed:
-        if not _pass:
-            groups = get_groups(rules, item)
-            substitutions = get_substitutions(groups)
-            list(starmap(item.set, substitutions))
+def parse_result(rules, item, _pass):
+    if not _pass:
+        groups = get_groups(rules, item)
+        substitutions = starmap(get_replacement, groups)
+        list(starmap(item.set, substitutions))
 
-        yield item
+    return item
 
 
-def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_regex(context=None, item=None, conf=None, **kwargs):
     """An operator that replaces text in items using regexes. Each has the
     general format: "In [field] replace [match] with [replace]". Not loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    item : pipe2py.modules pipe like object (iterable of items)
     conf : {
         'RULE': [
             {
@@ -128,7 +138,9 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', convert_func))
-    _OUTPUT = parse_results(parsed)
+    split = get_split(item, conf['RULE'], **cdicts(opts, kwargs))
+    funcs = get_dispatch_funcs('pass', convert_func)
+    parsed = utils.dispatch(split, *funcs)
+    _OUTPUT = parse_result(*parsed)
     return _OUTPUT
+

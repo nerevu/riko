@@ -49,7 +49,7 @@ def parse_result(conf, num, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeSimplemath(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeSimplemath(context=None, item=None, conf=None, **kwargs):
     """A number module that asynchronously performs basic arithmetic, such as
     addition and subtraction. Loopable.
 
@@ -66,14 +66,14 @@ def asyncPipeSimplemath(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of tokenized floats
     """
-    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs('num'))
+    split = yield asyncGetSplit(item, conf, **cdicts(opts, kwargs))
+    parsed = yield asyncDispatch(split, *get_async_dispatch_funcs('num'))
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_simplemath(context=None, item=None, conf=None, **kwargs):
     """A number module that performs basic arithmetic, such as addition and
     subtraction. Loopable.
 
@@ -91,7 +91,6 @@ def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of tokenized floats
     """
-    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs('num'))
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    split = get_split(item, conf, **cdicts(opts, kwargs))
+    parsed = utils.dispatch(split, *get_dispatch_funcs('num'))
+    return starmap(parse_result, parsed)

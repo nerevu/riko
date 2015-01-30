@@ -14,7 +14,7 @@ from __future__ import (
 from pipe2py.lib import utils
 
 
-def pipe_urlinput(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_urlinput(context=None, item=None, conf=None, **kwargs):
     """An input that prompts the user for a url and yields it forever.
     Not loopable.
 

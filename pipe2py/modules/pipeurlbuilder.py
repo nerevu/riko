@@ -21,7 +21,7 @@ from pipe2py.lib.utils import combine_dicts as cdicts
 opts = {'parse': False}
 
 
-@utils.memoize(utils.timeout)
+@utils.memoize(utils.TIMEOUT)
 def parse_result(params, paths, base):
     url = '%s/' % base if not base.endswith('/') else base
     url += '/'.join(imap(str, ifilter(None, paths)))
@@ -31,7 +31,7 @@ def parse_result(params, paths, base):
     return url
 
 
-def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_urlbuilder(context=None, item=None, conf=None, **kwargs):
     """A url module that builds a url. Loopable.
 
     Parameters
@@ -56,7 +56,6 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     get_paths = get_funcs(conf.get('PATH', []), **pkwargs)[0]
     get_base = get_funcs(conf['BASE'], listize=False, **pkwargs)[0]
     parse_params = utils.parse_params
-    splits = get_splits(_INPUT, funcs=[get_params, get_paths, get_base])
-    parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', parse_params))
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    split = get_split(item, funcs=[get_params, get_paths, get_base])
+    parsed = utils.dispatch(split, *get_dispatch_funcs('pass', parse_params))
+    return starmap(parse_result, parsed)

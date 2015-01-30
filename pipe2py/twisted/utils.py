@@ -152,57 +152,9 @@ def asyncStarMap(asyncCallable, iterable):
     return gatherResults(deferreds, consumeErrors=True)
 
 
-# Internal functions
-_apply_func = partial(utils._apply_func, map_func=asyncStarMap)
-_map_func = asyncImap
+def asyncDispatch(split, *asyncCallables, **kwargs):
+    return asyncStarMap(lambda item, f: f(item), it.izip(split, asyncCallables))
 
 
-def asyncBroadcast(_INPUT, *asyncCallables):
-    """copies a source and delivers the items to multiple functions
-
-    _INPUT = it.repeat({'title': 'foo'}, 3)
-
-           /--> foo2bar(_INPUT) --> _OUTPUT1 == it.repeat('bar', 3)
-          /
-    _INPUT ---> foo2baz(_INPUT) --> _OUTPUT2 == it.repeat('baz', 3)
-          \
-           \--> foo2qux(_INPUT) --> _OUTPUT3 == it.repeat('quz', 3)
-
-    The way you would construct such a flow in code would be::
-
-        succeed = twisted.internet.defer.succeed
-        foo2bar = lambda item: succeed(item['title'].replace('foo', 'bar'))
-        foo2baz = lambda item: succeed(item['title'].replace('foo', 'baz'))
-        foo2qux = lambda item: succeed(item['title'].replace('foo', 'quz'))
-        asyncBroadcast(_INPUT, foo2bar, foo2baz, foo2qux)
-    """
-    kwargs = {'map_func': _map_func, 'apply_func': _apply_func}
-    return utils.broadcast(_INPUT, *asyncCallables, **kwargs)
-
-
-def asyncDispatch(splits, *asyncCallables):
-    """takes multiple sources (returned by asyncDispatch or asyncBroadcast)
-    and delivers the items to multiple functions
-
-    _INPUT1 = it.repeat('bar', 3)
-    _INPUT2 = it.repeat('baz', 3)
-    _INPUT3 = it.repeat('qux', 3)
-
-    _INPUT1 --> double(_INPUT) --> _OUTPUT1 == it.repeat('barbar', 3)
-
-    _INPUT2 --> triple(_INPUT) --> _OUTPUT2 == it.repeat('bazbazbaz', 3)
-
-    _INPUT3 --> quadruple(_INPUT) --> _OUTPUT3 == it.repeat('quxquxquxqux', 3)
-
-    The way you would construct such a flow in code would be::
-
-        succeed = twisted.internet.defer.succeed
-        _INPUT = it.repeat({'title': 'foo'}, 3)
-        splits = asyncBroadcast(_INPUT, foo2bar, foo2baz, foo2qux)
-        double = lambda item: succeed(item * 2)
-        triple = lambda item: succeed(item * 3)
-        quadruple = lambda item: succeed(item * 4)
-        asyncBroadcast(splits, double, triple, quadruple)
-    """
-    kwargs = {'map_func': _map_func, 'apply_func': _apply_func}
-    return utils.dispatch(splits, *asyncCallables, **kwargs)
+def asyncBroadcast(item, *asyncCallables, **kwargs):
+    return asyncDispatch(it.repeat(item), *asyncCallables, **kwargs)

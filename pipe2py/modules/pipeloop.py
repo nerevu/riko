@@ -91,7 +91,7 @@ def asyncParseResult(conf, item, _pass, asyncSubmodule):
 
 
 @inlineCallbacks
-def asyncPipeLoop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
+def asyncPipeLoop(context=None, item=None, conf=None, embed=None, **kwargs):
     """An operator that asynchronously loops over the input and performs the
     embedded submodule. Not loopable.
 
@@ -118,14 +118,14 @@ def asyncPipeLoop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     """
     cust_func = get_cust_func(context, conf, embed, parse_embed, **kwargs)
     opts.update({'cust_func': cust_func})
-    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
+    split = yield asyncGetSplit(item, conf, **cdicts(opts, kwargs))
     gathered = yield asyncStarMap(asyncParseResult, splits)
     _OUTPUT = utils.multiplex(gathered)
     returnValue(_OUTPUT)
 
 
 # Synchronous functions
-def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
+def pipe_loop(context=None, item=None, conf=None, embed=None, **kwargs):
     """An operator that loops over the input and performs the embedded
     submodule. Not loopable.
 
@@ -152,7 +152,7 @@ def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     """
     cust_func = get_cust_func(context, conf, embed, parse_embed, **kwargs)
     opts.update({'cust_func': cust_func})
-    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
+    split = get_split(item, conf, **cdicts(opts, kwargs))
     gathered = starmap(parse_result, splits)
     _OUTPUT = utils.multiplex(gathered)
     return _OUTPUT

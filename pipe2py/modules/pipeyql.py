@@ -18,7 +18,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_yql(context=None, item=None, conf=None, **kwargs):
     """A source that issues YQL queries. Loopable.
 
     Parameters

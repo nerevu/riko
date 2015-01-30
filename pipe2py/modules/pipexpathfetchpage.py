@@ -18,7 +18,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_xpathfetchpage(context=None, item=None, conf=None, **kwargs):
     """A source that fetches the content of a given website as DOM nodes or a
     string. Loopable.
 

@@ -15,7 +15,7 @@ from pipe2py.lib import autorss, utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_feedautodiscovery(context=None, item=None, conf=None, **kwargs):
     """A source that searches for and returns feed links found in a page.
     Loopable.
 

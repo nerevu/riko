@@ -30,7 +30,7 @@ def parse_result(conf, word, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeHash(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeHash(context=None, item=None, conf=None, **kwargs):
     """A string module that asynchronously hashes the given text. Loopable.
 
     Parameters
@@ -42,14 +42,14 @@ def asyncPipeHash(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of hashed strings
     """
-    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    split = yield asyncGetSplit(item, conf, **cdicts(opts, kwargs))
+    parsed = yield asyncDispatch(split, *get_async_dispatch_funcs())
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-def pipe_hash(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_hash(context=None, item=None, conf=None, **kwargs):
     """A string module that hashes the given text. Loopable.
 
     Parameters
@@ -61,7 +61,6 @@ def pipe_hash(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of hashed strings
     """
-    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs())
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    split = get_split(item, conf, **cdicts(opts, kwargs))
+    parsed = utils.dispatch(split, *get_dispatch_funcs())
+    return starmap(parse_result, parsed)

@@ -51,7 +51,7 @@ def asyncParseResult(urls, _, _pass):
 
 
 @inlineCallbacks
-def asyncPipeFetch(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeFetch(context=None, item=None, conf=None, **kwargs):
     """A source that asynchronously fetches and parses one or more feeds to
     return the feed entries. Loopable.
 
@@ -71,7 +71,7 @@ def asyncPipeFetch(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    splits = yield asyncGetSplits(_INPUT, conf['URL'], **cdicts(opts, kwargs))
+    split = yield asyncGetSplit(item, conf['URL'], **cdicts(opts, kwargs))
     items = yield asyncStarMap(asyncParseResult, splits)
     _OUTPUT = utils.multiplex(items)
     returnValue(_OUTPUT)
@@ -86,7 +86,7 @@ def parse_result(urls, _, _pass):
     return utils.multiplex(entries)
 
 
-def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_fetch(context=None, item=None, conf=None, **kwargs):
     """A source that fetches and parses one or more feeds to return the
     entries. Loopable.
 
@@ -106,7 +106,7 @@ def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    splits = get_splits(_INPUT, conf['URL'], **cdicts(opts, kwargs))
+    split = get_split(item, conf['URL'], **cdicts(opts, kwargs))
     items = starmap(parse_result, splits)
     _OUTPUT = utils.multiplex(items)
     return _OUTPUT

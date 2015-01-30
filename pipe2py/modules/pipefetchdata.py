@@ -19,13 +19,12 @@ from json import loads
 
 from functools import partial
 from itertools import imap, starmap
-from twisted.internet.defer import inlineCallbacks, maybeDeferred, returnValue
-from . import (
-    get_splits, asyncGetSplits, get_dispatch_funcs, get_async_dispatch_funcs)
+from twisted.internet import defer as df
+from twisted.internet.defer import inlineCallbacks, returnValue
+from . import get_split, get_dispatch_funcs
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import (
-    asyncStarMap, asyncImap, asyncDispatch, asyncReduce)
+from pipe2py.twisted import utils as tu
 
 opts = {'listize': False, 'ftype': None}
 func = lambda element, i: element.get(i) if element else None
@@ -50,28 +49,19 @@ def get_element(url):
     return element
 
 # Async functions
-asyncParseResult = lambda element, path, _: asyncReduce(func, path, element)
+asyncParseResult = lambda element, path, _: tu.coopReduce(func, path, element)
 
 
 @inlineCallbacks
-def asyncGetParsed(_INPUT, asyncFunc):
-    _input = yield _INPUT
-    finite = utils.finitize(_input)
-    confs = yield asyncImap(asyncFunc, finite)
-    splits = imap(parse_conf, confs)
-    asyncGetElement = partial(maybeDeferred, get_element)
-    asyncFuncs = get_async_dispatch_funcs('pass', asyncGetElement)
-    results = yield asyncDispatch(splits, *asyncFuncs)
-    returnValue(results)
-
-
-@inlineCallbacks
-def asyncPipeFetchdata(context=None, _INPUT=None, conf=None, **kwargs):
-    asyncFuncs = yield asyncGetSplits(None, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncGetParsed(_INPUT, asyncFuncs[0])
-    results = yield asyncStarMap(asyncParseResult, parsed)
-    items = imap(utils.gen_items, results)
-    _OUTPUT = utils.multiplex(items)
+def asyncPipeFetchdata(context=None, item=None, conf=None, **kwargs):
+    pkwargs = cdicts(opts, kwargs, {'async': True})
+    split_conf = yield get_split(item, conf, **pkwargs)[0]
+    parsed_conf = parse_conf(split_conf)
+    asyncGetElement = partial(df.maybeDeferred, get_element)
+    asyncFuncs = get_dispatch_funcs('pass', asyncGetElement, async=True)
+    parsed = yield tu.asyncDispatch(parsed_conf, *asyncFuncs)
+    result = yield asyncParseResult(*parsed)
+    _OUTPUT = utils.gen_items(result)
     returnValue(_OUTPUT)
 
 
@@ -79,20 +69,13 @@ def asyncPipeFetchdata(context=None, _INPUT=None, conf=None, **kwargs):
 parse_result = lambda element, path, _: reduce(func, path, element)
 
 
-def get_parsed(_INPUT, func):
-    finite = utils.finitize(_INPUT)
-    confs = imap(func, finite)
-    splits = imap(parse_conf, confs)
-    return utils.dispatch(splits, *get_dispatch_funcs('pass', get_element))
-
-
-def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_fetchdata(context=None, item=None, conf=None, **kwargs):
     """A source that fetches and parses an XML or JSON file. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : pipeforever pipe or an iterable of items or fields
+    item : pipeforever pipe or an iterable of items or fields
     conf : {
         'URL': {'value': <url>},
         'path': {'value': <dot separated path to data list>}
@@ -111,22 +94,23 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     >>> path = 'value.items'
     >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
-    >>> pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys()[:5]
+    >>> pipe_fetchdata(item=pipe_forever(), conf=conf).next().keys()[:5]
     [u'y:repeatcount', u'description', u'pubDate', u'title', u'y:published']
     >>> abspath = p.abspath(p.join(parent, 'data', 'places.xml'))
     >>> path = 'appointment'
     >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
-    >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
+    >>> sorted(pipe_fetchdata(item=pipe_forever(), conf=conf).next().keys())
     [u'alarmTime', u'begin', u'duration', u'places', u'subject', u'uid']
     >>> conf = {'URL': {'value': url}, 'path': {'value': ''}}
-    >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
+    >>> sorted(pipe_fetchdata(item=pipe_forever(), conf=conf).next().keys())
     [u'appointment', 'reminder']
     """
     # todo: iCal and KML
-    funcs = get_splits(None, conf, **cdicts(opts, kwargs))
-    parsed = get_parsed(_INPUT, funcs[0])
-    results = starmap(parse_result, parsed)
-    items = imap(utils.gen_items, results)
-    _OUTPUT = utils.multiplex(items)
+    split_conf = get_split(item, conf, **cdicts(opts, kwargs))[0]
+    parsed_conf = parse_conf(split_conf)
+    funcs = get_dispatch_funcs('pass', get_element)
+    parsed = utils.dispatch(parsed_conf, *funcs)
+    result = parse_result(*parsed)
+    _OUTPUT = utils.gen_items(result)
     return _OUTPUT

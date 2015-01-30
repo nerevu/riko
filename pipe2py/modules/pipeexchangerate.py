@@ -91,7 +91,7 @@ def parse_result(conf, word, _pass, rates=None):
 
 
 # Async functions
-@utils.memoize(utils.half_day)
+@utils.memoize(utils.HALF_DAY)
 def asyncGetOfflineRateData(*args, **kwargs):
     logger.debug('loading offline data')
 
@@ -103,7 +103,7 @@ def asyncGetOfflineRateData(*args, **kwargs):
     return resp
 
 
-@utils.memoize(utils.half_day)
+@utils.memoize(utils.HALF_DAY)
 def asyncGetRateData():
     logger.debug('asyncGetRateData')
     resp = treq.get(EXCHANGE_API, params=PARAMS)
@@ -112,7 +112,7 @@ def asyncGetRateData():
 
 
 @inlineCallbacks
-def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeExchangerate(context=None, item=None, conf=None, **kwargs):
     """A string module that asynchronously retrieves the current exchange rate
     for a given currency pair. Loopable.
 
@@ -140,14 +140,14 @@ def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
         rdata = asyncGetRateData()
 
     rates = parse_request(rdata)
-    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
+    split = yield asyncGetSplit(item, conf, **cdicts(opts, kwargs))
+    parsed = yield asyncDispatch(split, *get_async_dispatch_funcs())
     _OUTPUT = starmap(partial(parse_result, rates=rates), parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-@utils.memoize(utils.half_day)
+@utils.memoize(utils.HALF_DAY)
 def get_offline_rate_data(*args, **kwargs):
     if kwargs.get('err', True):
         logger.error('Error loading exchange rate data from %s' % EXCHANGE_API)
@@ -157,13 +157,13 @@ def get_offline_rate_data(*args, **kwargs):
     return loads(urlopen(LOCAL_RATES_URL).read())
 
 
-@utils.memoize(utils.half_day)
+@utils.memoize(utils.HALF_DAY)
 def get_rate_data():
     r = requests.get(EXCHANGE_API, params=PARAMS)
     return r.json()
 
 
-def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_exchangerate(context=None, item=None, conf=None, **kwargs):
     """A string module that retrieves the current exchange rate for a given
     currency pair. Loopable.
 
@@ -184,7 +184,7 @@ def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     offline = conf.get('offline', {}).get('value')
     rdata = get_offline_rate_data(err=False) if offline else get_rate_data()
     rates = parse_request(rdata)
-    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs())
+    split = get_split(item, conf, **cdicts(opts, kwargs))
+    parsed = utils.dispatch(split, *get_dispatch_funcs())
     _OUTPUT = starmap(partial(parse_result, rates=rates), parsed)
     return _OUTPUT

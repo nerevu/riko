@@ -21,7 +21,7 @@ RSS = {'mediaThumbURL': 'media:thumbnail.url'}
 YAHOO = {'title': 'y:title', 'guid': 'y:id'}
 
 
-def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_rssitembuilder(context=None, item=None, conf=None, **kwargs):
     """A source that builds an rss item. Loopable.
 
     Parameters

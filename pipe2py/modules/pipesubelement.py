@@ -15,7 +15,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
-def pipe_subelement(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_subelement(context=None, item=None, conf=None, **kwargs):
     """An operator extracts select sub-elements from a feed. Not loopable.
 
     Parameters

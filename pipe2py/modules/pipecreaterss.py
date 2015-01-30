@@ -41,7 +41,7 @@ RSS_FIELDS = {
 }
 
 
-def pipe_createrss(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_createrss(context=None, item=None, conf=None, **kwargs):
     """An operator that converts a source into an RSS stream. Not loopable.
 
     """

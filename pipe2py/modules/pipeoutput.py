@@ -9,19 +9,40 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-def pipe_output(context=None, _INPUT=None, conf=None, **kwargs):
+from twisted.internet.defer import inlineCallbacks, returnValue
+
+
+@inlineCallbacks
+def asyncPipeOutput(context=None, item=None, conf=None, **kwargs):
+    """An operator that asynchronously outputs the input source, i.e. does
+    nothing (for now).
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    item : asyncPipe like object (twisted Deferred iterable of items)
+    conf : {'format': {'value': <format>}}
+
+    Returns
+    ------
+    _OUTPUT : item
+    """
+    # todo: convert to XML, JSON, iCal, KLM, CSV...
+    returnValue(item)
+
+
+def pipe_output(context=None, item=None, conf=None, **kwargs):
     """Outputs the input source, i.e. does nothing (for now).
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    item : pipe2py.modules pipe like object (iterable of items)
     conf : {'format': {'value': <format>}}
 
     Returns
     ------
-    _OUTPUT : _INPUT
+    _OUTPUT : item
     """
     # todo: convert to XML, JSON, iCal, KLM, CSV...
-    _OUTPUT = _INPUT
-    return _OUTPUT
+    return item

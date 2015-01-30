@@ -38,7 +38,7 @@ def parse_result(parts, _, _pass):
 
 # Async functions
 @inlineCallbacks
-def asyncPipeStrconcat(context=None, _INPUT=None, conf=None, **kwargs):
+def asyncPipeStrconcat(context=None, item=None, conf=None, **kwargs):
     """A string module that asynchronously builds a string. Loopable. No direct
     input.
 
@@ -58,13 +58,13 @@ def asyncPipeStrconcat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of joined strings
     """
-    splits = yield asyncGetSplits(_INPUT, conf['part'], **cdicts(opts, kwargs))
+    split = yield asyncGetSplit(item, conf['part'], **cdicts(opts, kwargs))
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), splits)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_strconcat(context=None, item=None, conf=None, **kwargs):
     """A string module that builds a string. Loopable.
 
     Parameters
@@ -83,6 +83,5 @@ def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of joined strings
     """
-    splits = get_splits(_INPUT, conf['part'], **cdicts(opts, kwargs))
-    _OUTPUT = starmap(parse_result, splits)
-    return _OUTPUT
+    split = get_split(item, conf['part'], **cdicts(opts, kwargs))
+    return starmap(parse_result, splits)

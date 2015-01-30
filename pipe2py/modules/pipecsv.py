@@ -24,7 +24,7 @@ class DictReader(csv.DictReader):
         csv.DictReader.__init__(self, *args, **strings)
 
 
-def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_csv(context=None, item=None, conf=None, **kwargs):
     """A source that fetches and parses a csv file to yield items. Loopable.
 
     Parameters

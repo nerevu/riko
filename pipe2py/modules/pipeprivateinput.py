@@ -14,7 +14,7 @@ from __future__ import (
 from pipe2py.lib import utils
 
 
-def pipe_privateinput(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_privateinput(context=None, item=None, conf=None, **kwargs):
     """An input that prompts the user for some text and yields it forever.
     Not loopable.
 

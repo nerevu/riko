@@ -51,7 +51,7 @@ def _parse_content(content, conf, **kwargs):
     return parsed
 
 
-def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_fetchpage(context=None, item=None, conf=None, **kwargs):
     """A source that fetches the content of a given web site as a string.
     Loopable.
 

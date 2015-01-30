@@ -11,17 +11,24 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-from importlib import import_module
-from pipe2py import Context
-from pipe2py.modules.pipeforever import pipe_forever
+import itertools
 
-PIPETYPE = 'fetch'
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
+
+from functools import partial
+from itertools import imap
+from importlib import import_module
+from pipe2py import Context, modules
+from pipe2py.lib.utils import combine_dicts as cdicts
 
 
 class PyPipe(object):
     """A pipe2py module fetching object"""
-    def __init__(self, name=None, context=None):
-        self.name = name or PIPETYPE
+    def __init__(self, name, context=None):
+        self.name = name
         self.context = context or Context()
         self.module = import_module('pipe2py.modules.pipe%s' % self.name)
 
@@ -32,11 +39,27 @@ class PyPipe(object):
 
 class SyncPipe(PyPipe):
     """A synchronous PyPipe object"""
-    def __init__(self, name=None, context=None, **kwargs):
+    def __init__(self, name, context=None, parallel=False, **kwargs):
         super(SyncPipe, self).__init__(name, context)
-        self.pipe_input = kwargs.pop('input', pipe_forever())
+        self.input = kwargs.pop('input', None)
+        self.source = kwargs.pop('source', None)
+        self.item = kwargs.pop('item', None)
+        self.map = pmap(workers, **kwargs) if parallel else imap
         self.pipeline = getattr(self.module, 'pipe_%s' % self.name)
         self.kwargs = kwargs
+
+    def __getattr__(self, name):
+        if name is 'data':
+            return self.pipeline(self.context, self.item, **self.kwargs)
+        else:
+            return SyncPipe(name, source=self.name, input=self.data)
+
+    def __call__(self, **kwargs):
+        embed = self.embed(**kwargs)
+        func = partial(SyncPipe, self.name, self.context, embed=embed, **kwargs)
+        map_func = lambda item: func(item=item).data
+        item = self.map(map_func, self.input)
+        return SyncPipe('output', item=item)
 
     @property
     def list(self):
@@ -45,9 +68,46 @@ class SyncPipe(PyPipe):
     def pipe(self, name, **kwargs):
         return SyncPipe(name, self.context, input=self.output, **kwargs)
 
+    def embed(self, ename=None, **kwargs):
+        return SyncPipe(ename, self.context).pipeline if ename else ename
+
     def loop(self, name, **kwargs):
-        embed = SyncPipe(name, self.context).pipeline
-        return self.pipe('loop', embed=embed, **kwargs)
+        return self.pipe('loop', embed=self.embed(name), **kwargs)
+
+    def reducer(self, item, arg):
+        name, kwargs = arg
+        embed = self.embed(**kwargs)
+        pkwargs = cdicts(kwargs, {'item': item, 'embed': embed})
+        return SyncPipe(name, self.context, **pkwargs).data
+
+    def dispatch(self, *args, **kwargs):
+        map_func = lambda item: reduce(self.reducer, args, item)
+        item = self.map(map_func, self.data)
+        return SyncPipe('output', item=item)
+
+
+class Chainable(object):
+    def __init__(self, data, method=None):
+        self.data = data
+        self.method = method
+        self.list = list(data)
+
+    def __getattr__(self, name):
+        try:
+            method = getattr(self.data, name)
+        except AttributeError:
+            try:
+                method = getattr(builtins, name)
+            except AttributeError:
+                method = getattr(itertools, name)
+
+        return Chainable(self.data, method)
+
+    def __call__(self, *args, **kwargs):
+        try:
+            return Chainable(self.method(self.data, *args, **kwargs))
+        except TypeError:
+            return Chainable(self.method(args[0], self.data, **kwargs))
 
 
 def make_conf(value, conf_type='text'):

@@ -10,12 +10,12 @@ from __future__ import (
 
 from functools import partial
 from itertools import imap, repeat
-from twisted.internet.defer import maybeDeferred, inlineCallbacks, returnValue
+from twisted.internet import defer as df
 from pipe2py.lib import utils
+from pipe2py.twisted import utils as tu
 from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncReturn, asyncNone, asyncBroadcast
 
-__all__ = [
+__sources__ = [
     # Source Modules
     'pipecsv',
     'pipefeedautodiscovery',
@@ -28,7 +28,9 @@ __all__ = [
     'piperssitembuilder',
     'pipexpathfetchpage',
     'pipeyql',
+]
 
+__inputs__ = [
     # User Input Modules
     'pipenumberinput',
     'pipeprivateinput',
@@ -37,7 +39,9 @@ __all__ = [
     # 'pipedateinput',
     # 'pipelocationinput',
     # 'pipeprivateinput',
+]
 
+__operators__ = [
     # Operator Modules
     'pipecount',
     'pipecreaterss',
@@ -55,7 +59,9 @@ __all__ = [
     'pipeuniq',
     # 'pipewebservice',
     # 'pipelocationextractor',
+]
 
+__loopings__ = [
     # URL Modules
     'pipeurlbuilder',
 
@@ -83,7 +89,9 @@ __all__ = [
     # Number Modules
     'pipesimplemath',
     'pipecurrencyformat',
+]
 
+__outputs__ = [
     # Output Modules
     'pipeoutput',
     # 'pipeoutputjson',
@@ -92,100 +100,63 @@ __all__ = [
     # 'pipeoutputcsv',
 ]
 
+__all__ = __sources__ + __inputs__ + __operators__ + __loopings__ + __outputs__
+_map_func = imap
+_async_map_func = tu.asyncImap
 
-def _get_broadcast_funcs(pieces, ftype='with', **kwargs):
+
+def get_broadcast_funcs(pieces, ftype='with', async=False, **kwargs):
     test = kwargs.pop('pass_if', None)
     listize = kwargs.pop('listize', True)
     parse = kwargs.pop('parse', True)
     pdictize = kwargs.pop('pdictize', True)
     cust_func = kwargs.pop('cust_func', False)
     get_value = partial(utils.get_value, **kwargs)
-    get_pass = partial(utils.get_pass, test=test)
-    get_with = partial(utils.get_with, **kwargs)
+    _get_with = partial(utils.get_with, **kwargs)
+    _get_pass = partial(utils.get_pass, test=test)
 
     if parse:
-        get_func = partial(utils.parse_conf, parse_func=get_value, **kwargs)
+        _get_func = partial(utils.parse_conf, parse_func=get_value, **kwargs)
+        get_func = partial(df.maybeDeferred, _get_func) if async else _get_func
     else:
-        get_func = get_value
+        get_func = partial(df.maybeDeferred, get_value) if async else get_value
 
     if listize:
         listed = utils.listize(pieces)
         piece_defs = map(DotDict, listed) if pdictize else listed
-        get_pieces = lambda item: imap(get_func, piece_defs, repeat(item))
+        map_func = _async_map_func if async else _map_func
+        get_pieces = lambda item: map_func(get_func, piece_defs, repeat(item))
     else:
         piece_defs = DotDict(pieces) if pdictize else pieces
         get_pieces = partial(get_func, piece_defs)
 
-    return (get_pieces, get_with, get_pass, cust_func)
-
-
-def get_async_broadcast_funcs(pieces, ftype='with', **kwargs):
-    funcs = _get_broadcast_funcs(pieces, ftype, **kwargs)
-    get_pieces, get_with, get_pass, cust_func = funcs
+    get_pass = partial(df.maybeDeferred, _get_pass) if async else _get_pass
 
     f = {
-        'with': partial(maybeDeferred, get_with),
-        'pass': asyncReturn,
-        None: lambda item: asyncNone
+        'with': partial(df.maybeDeferred, _get_with) if async else _get_with,
+        'pass': tu.asyncReturn if async else utils.passthrough,
+        None: lambda _: tu.asyncNone if async else utils.passnone,
     }
 
-    asyncGetPieces = partial(maybeDeferred, get_pieces)
-    asyncGetPass = partial(maybeDeferred, get_pass)
-    return filter(None, [asyncGetPieces, f[ftype], asyncGetPass, cust_func])
-
-
-def get_broadcast_funcs(pieces, ftype='with', **kwargs):
-    funcs = _get_broadcast_funcs(pieces, ftype, **kwargs)
-    get_pieces, get_with, get_pass, cust_func = funcs
-    f = {'with': get_with, 'pass': utils.passthrough, None: utils.passnone}
     return filter(None, [get_pieces, f[ftype], get_pass, cust_func])
 
 
-def get_dispatch_funcs(ftype='word', first=utils.passthrough):
+def get_dispatch_funcs(ftype='word', first=None, async=False):
+    get_word, get_num = utils.get_word, utils.get_num
+    passthrough = tu.asyncReturn if async else utils.passthrough
+
     f = {
-        'word': utils.get_word,
-        'num': utils.get_num,
-        'pass': utils.passthrough,
-        None: utils.passnone,
+        'word': partial(df.maybeDeferred, get_word) if async else get_word,
+        'num': partial(df.maybeDeferred, get_num) if async else get_num,
+        'pass': passthrough,
+        None: lambda _: tu.asyncNone if async else utils.passnone,
     }
 
-    return [first, f[ftype], utils.passthrough]
+    return [first or passthrough, f[ftype], passthrough]
 
 
-def get_async_dispatch_funcs(ftype='word', first=asyncReturn):
-    f = {
-        'word': partial(maybeDeferred, utils.get_word),
-        'num': partial(maybeDeferred, utils.get_num),
-        'pass': asyncReturn,
-        None: lambda item: asyncNone,
-    }
-
-    return [first, f[ftype], asyncReturn]
-
-
-def get_splits(_INPUT, pieces=None, funcs=None, **kwargs):
-    finitize = kwargs.pop('finitize', False)
-    dictize = kwargs.pop('dictize', False)
-    finite = utils.finitize(_INPUT) if finitize and _INPUT else _INPUT
-    funcs = funcs or get_broadcast_funcs(pieces, **kwargs)
-    inputs = imap(DotDict, finite) if finite and dictize else finite
-    return utils.broadcast(inputs, *funcs) if inputs else funcs
-
-
-@inlineCallbacks
-def asyncGetSplits(_INPUT, pieces=None, funcs=None, **kwargs):
-    _input = yield _INPUT
-    finitize = kwargs.pop('finitize', False)
-    dictize = kwargs.pop('dictize', False)
-    # asyncDict = partial(maybeDeferred, DotDict)
-    # inputs = yield asyncCmap(asyncDict, _input)
-    finite = utils.finitize(_input) if finitize and _input else _input
-    funcs = funcs or get_async_broadcast_funcs(pieces, **kwargs)
-    inputs = imap(DotDict, finite) if finite and dictize else finite
-
-    if inputs:
-        result = yield asyncBroadcast(inputs, *funcs)
-    else:
-        result = yield asyncReturn(funcs)
-
-    returnValue(result)
+def get_split(item, pieces=None, async=False, **kwargs):
+    dictize_input = kwargs.pop('dictize', False)
+    funcs = get_broadcast_funcs(pieces, async=async, **kwargs)
+    _input = DotDict(item) if item and dictize_input else item
+    return [func(_input) for func in funcs]
