@@ -280,7 +280,7 @@ def parse_conf(conf, item=None, parse_func=None, **kwargs):
 
 def parse_params(params):
     true_params = filter(all, params)
-    return dict(imap(lambda x: (x.key, x.value), true_params))
+    return dict((x.key, x.value) for x in true_params)
 
 
 def get_pass(item=None, test=None):

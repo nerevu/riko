@@ -56,11 +56,6 @@ class DotDict(FeedParserDict):
 
         return value or default
 
-    def _gen_first_keys(self, keys):
-        for key in keys:
-            subkeys = self._parse_key(key)
-            yield '.'.join(subkeys[:-1])
-
     def delete(self, key):
         keys = self._parse_key(key)
         last = keys[-1]
@@ -107,14 +102,16 @@ class DotDict(FeedParserDict):
         return value
 
     def update(self, dict=None):
-        if dict:
-            try:
-                keys_with_dots = filter(lambda k: '.' in k, dict)
-            except AttributeError:
-                list(starmap(self.set, dict))
-            else:
-                # remove key if a subkey redefines it
-                # i.e., 'author.name' has precedence over 'author'
-                to_delete = self._gen_first_keys(keys_with_dots)
-                [dict.pop(key, None) for key in to_delete]
-                list(starmap(self.set, dict.iteritems()))
+        if not dict:
+            return
+
+        try:
+            keys = ['.'.join(self._parse_key(k)[:-1]) for k in dict if '.' in k]
+        except AttributeError:
+            items = dict
+        else:
+            # skip key if a subkey redefines it
+            # i.e., 'author.name' has precedence over 'author'
+            items = ((k, v) for k, v in dict.iteritems() if k not in keys)
+
+        list(starmap(self.set, items))

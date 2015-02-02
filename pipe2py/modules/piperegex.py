@@ -13,7 +13,7 @@
 """
 
 from functools import partial
-from itertools import imap, starmap
+from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
@@ -30,7 +30,7 @@ convert_func = partial(utils.convert_rules, recompile=False)
 # Common functions
 def get_groups(rules, item):
     field_groups = utils.group_by(list(rules), 'field').iteritems()
-    return starmap(lambda f, r: (f, item.get(f) or '', r), field_groups)
+    return ((f, item.get(f) or '', r) for f, r in field_groups)
 
 
 # Async functions

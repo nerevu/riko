@@ -14,7 +14,7 @@ from pipe2py.lib import utils
 WORKERS = 50
 
 asyncNone = defer.succeed(None)
-asyncReturn = lambda result: defer.succeed(result)
+asyncReturn = partial(defer.succeed)
 
 
 def _get_work(asyncCallable, callback, map_func, *iterables):

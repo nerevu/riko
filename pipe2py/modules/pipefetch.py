@@ -75,7 +75,7 @@ def asyncPipeFetch(context=None, _INPUT=None, conf=None, **kwargs):
 # Synchronous functions
 def parse_result(urls, _, _pass):
     abs_urls = get_urls(urls)
-    contents = imap(lambda url: urlopen(url).read(), abs_urls)
+    contents = (urlopen(url).read() for url in abs_urls)
     parsed = imap(speedparser.parse, contents)
     entries = imap(utils.gen_entries, parsed)
     return utils.multiplex(entries)

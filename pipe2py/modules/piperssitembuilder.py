@@ -7,7 +7,7 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#RSSItemBuilder
 """
 from functools import partial
-from itertools import imap, starmap, ifilter
+from itertools import imap, starmap
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -50,7 +50,7 @@ def pipe_rssitembuilder(context=None, _INPUT=None, conf=None, **kwargs):
     get_RSS = lambda key, value: (RSS.get(key, key), value)
     get_YAHOO = lambda key, value: (YAHOO.get(key), value)
     make_dict = lambda func, conf: dict(starmap(func, conf.iteritems()))
-    clean_dict = lambda d: dict(ifilter(lambda t: all(t), d.items()))
+    clean_dict = lambda d: dict(i for i in d.items() if all(i))
     funcs = [partial(make_dict, get_RSS), partial(make_dict, get_YAHOO)]
 
     finite = utils.finitize(_INPUT)
