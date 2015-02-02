@@ -15,7 +15,7 @@ from functools import partial
 from itertools import imap, ifilter, starmap
 from urllib2 import urlopen
 from twisted.web.client import getPage
-from twisted.internet.threads import deferToThread
+# from twisted.internet.threads import deferToThread
 from twisted.internet.defer import inlineCallbacks, maybeDeferred, returnValue
 from . import get_splits, asyncGetSplits
 from pipe2py.lib import utils
@@ -79,6 +79,7 @@ def parse_result(urls, _, _pass):
     parsed = imap(speedparser.parse, contents)
     entries = imap(utils.gen_entries, parsed)
     return utils.multiplex(entries)
+
 
 def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
     """A source that fetches and parses one or more feeds to return the

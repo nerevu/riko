@@ -10,12 +10,11 @@
 
 from copy import copy
 from functools import partial
-from itertools import chain, imap, starmap
+from itertools import chain, starmap
 from twisted.internet.defer import inlineCallbacks, returnValue
 from . import get_splits, asyncGetSplits, _get_broadcast_funcs as get_funcs
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.lib.dotdict import DotDict
 from pipe2py.twisted.utils import asyncStarMap, asyncNone
 
 opts = {'ftype': 'pass', 'listize': False, 'parse': False, 'dictize': True}
@@ -87,7 +86,6 @@ def asyncParseResult(conf, item, _pass, asyncSubmodule):
     submodule = yield asyncNone if _pass else asyncSubmodule
     result = parse_result(conf, item, _pass, submodule)
     returnValue(result)
-
 
 
 @inlineCallbacks

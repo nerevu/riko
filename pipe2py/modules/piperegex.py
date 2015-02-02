@@ -19,8 +19,7 @@ from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import (
-    asyncStarMap, asyncReduce, asyncDispatch, asyncReturn)
+from pipe2py.twisted.utils import asyncDispatch
 
 opts = {'convert': False, 'ftype': 'pass'}
 substitute = utils.multi_substitute
