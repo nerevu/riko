@@ -61,9 +61,7 @@ def parse_result(conf, item, _pass, submodule):
     return result
 
 
-# Async functions
-@inlineCallbacks
-def asyncParseEmbed(item, context=None, conf=None, embed=None, **kwargs):
+def parse_embed(item, context=None, conf=None, embed=None, **kwargs):
     parsed_conf = get_funcs(conf, **cdicts(opts, kwargs))[0](item)
 
     try:
@@ -72,15 +70,14 @@ def asyncParseEmbed(item, context=None, conf=None, embed=None, **kwargs):
         embedded = parsed_conf['embed']
 
     embedded_conf = embedded.get('conf', {})
-    attrs = ['pass_if', 'pdictize']
-    embed_kwargs = {a: embedded[a] for a in attrs if a in embedded}
-    ekwargs = cdicts({'with': parsed_conf.get('with')}, embed_kwargs)
+    pairs = [('pass_if', kwargs), ('pdictize', embedded)]
+    true_pairs = ((x, y[x]) for x, y in pairs if x in y)
+    ekwargs = dict(chain([('with', parsed_conf.get('with'))], true_pairs))
     context.inputs = get_funcs(embedded_conf, **ekwargs)[0](item)
-    submodule = yield embed(context, iter([item]), embedded_conf, **ekwargs)
-    returnValue(submodule)
+    return embed(context, iter([item]), embedded_conf, **ekwargs)
 
 
-
+# Async functions
 @inlineCallbacks
 def asyncParseResult(conf, item, _pass, asyncSubmodule):
     submodule = yield asyncNone if _pass else asyncSubmodule
@@ -114,7 +111,7 @@ def asyncPipeLoop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    cust_func = get_cust_func(context, conf, embed, asyncParseEmbed, **kwargs)
+    cust_func = get_cust_func(context, conf, embed, parse_embed, **kwargs)
     opts.update({'cust_func': cust_func})
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     gathered = yield asyncStarMap(asyncParseResult, splits)
@@ -123,23 +120,6 @@ def asyncPipeLoop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
 
 
 # Synchronous functions
-def parse_embed(item, context=None, conf=None, embed=None, **kwargs):
-    parsed_conf = get_funcs(conf, **cdicts(opts, kwargs))[0](item)
-
-    try:
-        embedded = parsed_conf['embed'].get()
-    except TypeError:
-        embedded = parsed_conf['embed']
-
-    embedded_conf = embedded.get('conf', {})
-    pairs = [('pass_if', kwargs), ('pdictize', embedded)]
-    true_pairs = ((x, y[x]) for x, y in pairs if x in y)
-    ekwargs = dict(chain([('with', parsed_conf.get('with'))], true_pairs))
-    context.inputs = get_funcs(embedded_conf, **ekwargs)[0](item)
-    submodule = embed(context, iter([item]), embedded_conf, **ekwargs)
-    return submodule
-
-
 def pipe_loop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     """An operator that loops over the input and performs the embedded
     submodule. Not loopable.
