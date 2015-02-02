@@ -18,7 +18,7 @@ from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.lib.dotdict import DotDict
 from pipe2py.twisted.utils import asyncStarMap, asyncNone
 
-opts = {'ftype': 'pass', 'listize': False}
+opts = {'ftype': 'pass', 'listize': False, 'dictize': True}
 
 
 # Common functions

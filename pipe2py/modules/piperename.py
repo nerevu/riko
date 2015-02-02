@@ -14,7 +14,7 @@ from . import get_splits, asyncGetSplits
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap
 
-opts = {'ftype': 'pass'}
+opts = {'ftype': 'pass', 'dictize': True}
 
 
 # Common functions

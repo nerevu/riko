@@ -16,7 +16,7 @@ from . import get_splits, asyncGetSplits
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap
 
-opts = {'ftype': None, 'parse': False}
+opts = {'ftype': None, 'parse': False, 'dictize': True}
 parse_result = lambda parts, _, _pass: '' if _pass else ''.join(parts)
 
 
