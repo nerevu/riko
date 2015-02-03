@@ -12,30 +12,37 @@
 import speedparser
 
 from functools import partial
-from itertools import repeat, imap, ifilter
+from itertools import imap, ifilter, starmap
 from urllib2 import urlopen
 from twisted.web.client import getPage
+# from twisted.internet.threads import deferToThread
 from twisted.internet.defer import inlineCallbacks, maybeDeferred, returnValue
+from . import get_splits, asyncGetSplits
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
-from pipe2py.twisted.utils import asyncImap
+from pipe2py.lib.utils import combine_dicts as cdicts
+from pipe2py.twisted.utils import asyncImap, asyncStarMap
+
+opts = {'ftype': None, 'parse': False, 'finitize': True}
 
 
-# Common functions
-def get_urls(_INPUT, conf, **kwargs):
-    finite = utils.make_finite(_INPUT)
-    inputs = imap(DotDict, finite)
-    url_defs = map(DotDict, utils.listize(conf['URL']))
-    get_value = partial(utils.get_value, **kwargs)
-    get_urls = lambda i: imap(get_value, url_defs, repeat(i))
-    urls = imap(get_urls, inputs)
-    flat_urls = utils.multiplex(urls)
-    return ifilter(None, flat_urls)
+def get_urls(urls):
+    true_urls = ifilter(None, urls)
+    return imap(utils.get_abspath, true_urls)
+
 
 # Async functions
 # from http://blog.mekk.waw.pl/archives/
 # 14-Twisted-inlineCallbacks-and-deferredGenerator.html
 # http://code.activestate.com/recipes/277099/
+def asyncParseResult(urls, _, _pass):
+    # asyncParse = partial(deferToThread, speedparser.parse)
+    asyncParse = partial(maybeDeferred, speedparser.parse)
+    abs_urls = get_urls(urls)
+    contents = yield asyncImap(getPage, abs_urls)
+    parsed = yield asyncImap(asyncParse, contents)
+    entries = imap(utils.gen_entries, parsed)
+    items = utils.multiplex(entries)
+    returnValue(items)
 
 
 @inlineCallbacks
@@ -47,24 +54,33 @@ def asyncPipeFetch(context=None, _INPUT=None, conf=None, **kwargs):
     ----------
     context : pipe2py.Context object
     _INPUT : asyncPipe like object (twisted Deferred iterable of items)
-    conf : {'URL': [{'value': <url>, 'type': 'url'}]}
+    conf : {
+        'URL': [
+            {'type': 'url', 'value': <url1>},
+            {'type': 'url', 'value': <url2>},
+            {'type': 'url', 'value': <url3>},
+        ]
+    }
 
     Returns
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    _input = yield _INPUT
-    urls = get_urls(_input, conf, **kwargs)
-    asyncParse = partial(maybeDeferred, speedparser.parse)
-    abs_urls = imap(utils.get_abspath, urls)
-    contents = yield asyncImap(getPage, abs_urls)
-    parsed = yield asyncImap(asyncParse, contents)
-    items = imap(utils.gen_entries, parsed)
+    splits = yield asyncGetSplits(_INPUT, conf['URL'], **cdicts(opts, kwargs))
+    items = yield asyncStarMap(asyncParseResult, splits)
     _OUTPUT = utils.multiplex(items)
     returnValue(_OUTPUT)
 
 
 # Synchronous functions
+def parse_result(urls, _, _pass):
+    abs_urls = get_urls(urls)
+    contents = (urlopen(url).read() for url in abs_urls)
+    parsed = imap(speedparser.parse, contents)
+    entries = imap(utils.gen_entries, parsed)
+    return utils.multiplex(entries)
+
+
 def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
     """A source that fetches and parses one or more feeds to return the
     entries. Loopable.
@@ -73,16 +89,19 @@ def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
     ----------
     context : pipe2py.Context object
     _INPUT : pipeforever pipe or an iterable of items or fields
-    conf : {'URL': [{'value': <url>, 'type': 'url'}]}
+    conf : {
+        'URL': [
+            {'type': 'url', 'value': <url1>},
+            {'type': 'url', 'value': <url2>},
+            {'type': 'url', 'value': <url3>},
+        ]
+    }
 
     Returns
     -------
     _OUTPUT : generator of items
     """
-    urls = get_urls(_INPUT, conf, **kwargs)
-    abs_urls = imap(utils.get_abspath, urls)
-    contents = imap(lambda url: urlopen(url).read(), abs_urls)
-    parsed = imap(speedparser.parse, contents)
-    items = imap(utils.gen_entries, parsed)
+    splits = get_splits(_INPUT, conf['URL'], **cdicts(opts, kwargs))
+    items = starmap(parse_result, splits)
     _OUTPUT = utils.multiplex(items)
     return _OUTPUT

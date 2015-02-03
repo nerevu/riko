@@ -163,6 +163,54 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
 
+        example = {
+            u'author': {u'name': None, u'uri': None},
+            u'dc:creator': None,
+            u'id': 474310371L,
+            u'k:author': u'Homepage for a germansocial organization',
+            u'k:budget': 125.0,
+            u'k:budget_converted': 125.0,
+            u'k:budget_converted_w_sym': u'$125.00',
+            u'k:budget_full': u'$125.00',
+            u'k:budget_raw': u'0 - $250',
+            u'k:budget_raw1': u'0',
+            u'k:budget_raw1_code': u'',
+            u'k:budget_raw1_num': u'0',
+            u'k:budget_raw1_sym': u'',
+            u'k:budget_raw2': u'$250',
+            u'k:budget_raw2_code': u'',
+            u'k:budget_raw2_num': u'250',
+            u'k:budget_raw2_sym': u'$',
+            u'k:budget_sym': u'$',
+            u'k:budget_w_sym': u'$125.00',
+            u'k:client_location': u'unknown',
+            u'k:content': u' With this specification sheet we want to give you a request for implementing a website for a german...',
+            u'k:cur_code': u'USD',
+            u'k:due': u'unknown',
+            u'k:job_type': u'fixed',
+            u'k:job_type_code': u'1',
+            u'k:marketplace': u'guru.com',
+            u'k:posted': u'time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)',
+            u'k:rate': 1.0,
+            u'k:submissions': u'unknown',
+            u'k:tags': [
+                {'content': u'IT'},
+                {'content': u'Software'},
+                {'content': u'Web'}
+            ],
+            u'k:work_location': u' Worldwide',
+            u'link': u'http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595',
+            u'links': [{}],
+            u'loop:strregex': u'fixed',
+            u'pubDate': u'time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)',
+            u'summary': u'<span><b>Description:</b> With this specification sheet we want to give you a request for implementing a website for a german...<br><b>Category:</b> Web, Software &amp; IT<br><b>Required skills:</b> html, php<br><b>Fixed Price budget:</b> Under $250<br><b>Job type:</b> Public<br><b>Freelancer Location:</b> Worldwide<br></span>',
+            u'title': u'Homepage for a germansocial organization',
+            u'updated': u'Tue, 06 Jan 2015 17:13:47 GMT',
+            u'updated_parsed': u'time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)',
+            u'y:id': u'http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595'}
+
+        self.assertEqual(example, pipeline[0])
+
     def test_simplest(self):
         """Loads the RTW simple test pipeline and compiles and executes it to
             check the results

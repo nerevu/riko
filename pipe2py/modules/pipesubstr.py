@@ -13,7 +13,10 @@ from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
+
+opts = {'listize': False}
 
 
 # Common functions
@@ -42,7 +45,7 @@ def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : twisted.internet.defer.Deferred generator of substrings
     """
     conf['start'] = conf.pop('from', dict.get(conf, 'start'))
-    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     returnValue(iter(_OUTPUT))
@@ -66,7 +69,7 @@ def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : generator of substrings
     """
     conf['start'] = conf.pop('from', dict.get(conf, 'start'))
-    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs())
     _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT

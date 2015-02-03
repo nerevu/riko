@@ -9,6 +9,9 @@
 
 from itertools import islice
 from . import get_splits
+from pipe2py.lib.utils import combine_dicts as cdicts
+
+opts = {'ftype': None, 'listize': False}
 
 
 def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
@@ -26,7 +29,7 @@ def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    funcs = get_splits(None, conf, ftype=None, listize=False, **kwargs)
+    funcs = get_splits(None, conf, **cdicts(opts, kwargs))
     parsed, _pass = funcs[0](), funcs[2]()
     _OUTPUT = _INPUT if _pass else islice(_INPUT, int(parsed.count))
     return _OUTPUT

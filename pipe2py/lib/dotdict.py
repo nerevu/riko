@@ -8,6 +8,7 @@
 """
 
 from . import utils
+from itertools import starmap
 from feedparser import FeedParserDict
 
 
@@ -16,7 +17,6 @@ class DotDict(FeedParserDict):
     r = {'a': {'content': 'value'}}
     e.g. r['a.content'] -> ['a']['content']
 
-    TODO: make DotDict(dict)['field'] return a DotDict instance
     """
     def __init__(self, dict=None, **kwargs):
         super(DotDict, self).__init__(self, **kwargs)
@@ -56,11 +56,6 @@ class DotDict(FeedParserDict):
 
         return value or default
 
-    def _gen_first_keys(self, keys):
-        for key in keys:
-            subkeys = self._parse_key(key)
-            yield '.'.join(subkeys[:-1])
-
     def delete(self, key):
         keys = self._parse_key(key)
         last = keys[-1]
@@ -88,7 +83,11 @@ class DotDict(FeedParserDict):
             if not value:
                 break
 
-            key = int(key) if key.isdigit() else key
+            try:
+                key = int(key)
+            except ValueError:
+                pass
+
             value = self._parse_value(value, key, default)
 
         if hasattr(value, 'keys') and 'terminal' in value:
@@ -103,14 +102,16 @@ class DotDict(FeedParserDict):
         return value
 
     def update(self, dict=None):
-        if dict:
-            try:
-                keys_with_dots = filter(lambda k: '.' in k, dict.keys())
-            except AttributeError:
-                [self.set(k, v) for k, v in dict]
-            else:
-                # remove key if a subkey redefines it
-                # i.e., 'author.name' has precedence over 'author'
-                to_delete = self._gen_first_keys(keys_with_dots)
-                [dict.pop(key, None) for key in to_delete]
-                [self.set(k, v) for k, v in dict.items()]
+        if not dict:
+            return
+
+        try:
+            keys = ['.'.join(self._parse_key(k)[:-1]) for k in dict if '.' in k]
+        except AttributeError:
+            items = dict
+        else:
+            # skip key if a subkey redefines it
+            # i.e., 'author.name' has precedence over 'author'
+            items = ((k, v) for k, v in dict.iteritems() if k not in keys)
+
+        list(starmap(self.set, items))

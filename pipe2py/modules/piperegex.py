@@ -18,38 +18,26 @@ from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.twisted.utils import (
-    asyncStarMap, asyncReduce, asyncDispatch, asyncReturn)
+from pipe2py.lib.utils import combine_dicts as cdicts
+from pipe2py.twisted.utils import asyncDispatch
 
-func = utils.substitute
-convert_func = partial(utils.convert_rules, recompile=True)
+opts = {'convert': False, 'ftype': 'pass'}
+substitute = utils.multi_substitute
+convert_func = partial(utils.convert_rules, recompile=False)
 
 
 # Common functions
 def get_groups(rules, item):
-    field_groups = utils.group_by(list(rules), 'field').items()
-    groups = starmap(lambda f, r: (f, item.get(f) or '', r), field_groups)
-    return groups
+    field_groups = utils.group_by(list(rules), 'field').iteritems()
+    return ((f, item.get(f) or '', r) for f, r in field_groups)
 
 
 # Async functions
-def asyncGetParsed(splits, funcs, convert=True):
-    return asyncDispatch(splits, *funcs) if convert else asyncReturn(splits)
-
-
-@inlineCallbacks
-def asyncGetSubstitutions(field, word, rules):
-    asyncSubstitute = partial(maybeDeferred, func)
-    replacement = yield asyncReduce(asyncSubstitute, rules, word)
-    result = (field, replacement)
-    returnValue(result)
-
-
 @inlineCallbacks
 def asyncParseResult(rules, item, _pass):
     if not _pass:
         groups = get_groups(rules, item)
-        substitutions = yield asyncStarMap(asyncGetSubstitutions, groups)
+        substitutions = yield maybeDeferred(get_substitutions, groups)
         list(starmap(item.set, substitutions))
 
     returnValue(item)
@@ -83,32 +71,30 @@ def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
-    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **pkwargs)
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
     asyncConvert = partial(maybeDeferred, convert_func)
     asyncFuncs = get_async_dispatch_funcs('pass', asyncConvert)
-    parsed = yield asyncGetParsed(splits, asyncFuncs, convert=True)
-    _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
+    parsed = yield asyncDispatch(splits, *asyncFuncs)
+    _OUTPUT = yield maybeDeferred(parse_results, parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-def get_substitutions(field, word, rules):
-    replacement = reduce(func, rules, word)
-    return (field, replacement)
+def get_substitutions(groups):
+    for field, word, rules in groups:
+        values = utils.group_by(rules, 'flags').itervalues()
+        replacement = reduce(substitute, values, word) if word else word
+        yield (field, replacement)
 
 
-def parse_result(rules, item, _pass):
-    if not _pass:
-        groups = get_groups(rules, item)
-        substitutions = starmap(get_substitutions, groups)
-        list(starmap(item.set, substitutions))
+def parse_results(parsed):
+    for rules, item, _pass in parsed:
+        if not _pass:
+            groups = get_groups(rules, item)
+            substitutions = get_substitutions(groups)
+            list(starmap(item.set, substitutions))
 
-    return item
-
-
-def get_parsed(splits, funcs, convert=True):
-    return utils.dispatch(splits, *funcs) if convert else splits
+        yield item
 
 
 def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
@@ -137,8 +123,7 @@ def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of items
     """
-    pkwargs = utils.combine_dicts(kwargs, {'parse': False, 'ftype': 'pass'})
-    splits = get_splits(_INPUT, conf['RULE'], **pkwargs)
-    parsed = get_parsed(splits, get_dispatch_funcs('pass', convert_func))
-    _OUTPUT = starmap(parse_result, parsed)
+    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', convert_func))
+    _OUTPUT = parse_results(parsed)
     return _OUTPUT

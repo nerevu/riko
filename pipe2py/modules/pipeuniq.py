@@ -8,6 +8,9 @@
 """
 
 from . import get_splits
+from pipe2py.lib.utils import combine_dicts as cdicts
+
+opts = {'ftype': None, 'listize': False}
 
 
 def unique_items(items, field):
@@ -36,7 +39,7 @@ def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of unique items
     """
-    funcs = get_splits(None, conf, ftype=None, listize=False, **kwargs)
+    funcs = get_splits(None, conf, **cdicts(opts, kwargs))
     parsed, _pass = funcs[0](), funcs[2]()
     _OUTPUT = _INPUT if _pass else unique_items(_INPUT, parsed.field)
     return _OUTPUT

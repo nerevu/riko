@@ -8,18 +8,16 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Union
 """
 
-from itertools import chain, ifilter, starmap
+from itertools import chain
 from twisted.internet.defer import inlineCallbacks, returnValue
 from pipe2py.lib import utils
 
 
 # Common functions
 def get_output(_INPUT, **kwargs):
-    others_filter = lambda x: x[0].startswith('_OTHER')
-    others = ifilter(others_filter, kwargs.iteritems())
-    others_iter = starmap(lambda src, items: items, others)
-    others_items = utils.multiplex(others_iter)
-    input_items = utils.make_finite(_INPUT)
+    others = (v for k, v in kwargs.iteritems() if k.startswith('_OTHER'))
+    others_items = utils.multiplex(others)
+    input_items = utils.finitize(_INPUT)
     return chain(input_items, others_items)
 
 

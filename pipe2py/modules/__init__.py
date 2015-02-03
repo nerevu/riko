@@ -92,26 +92,32 @@ __all__ = [
 def _get_broadcast_funcs(pieces, ftype='with', **kwargs):
     test = kwargs.pop('pass_if', None)
     listize = kwargs.pop('listize', True)
-    d_index = kwargs.pop('d_index', None)
+    parse = kwargs.pop('parse', True)
+    pdictize = kwargs.pop('pdictize', True)
+    cust_func = kwargs.pop('cust_func', False)
     get_value = partial(utils.get_value, **kwargs)
     get_pass = partial(utils.get_pass, test=test)
     get_with = partial(utils.get_with, **kwargs)
-    parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
+
+    if parse:
+        get_func = partial(utils.parse_conf, parse_func=get_value, **kwargs)
+    else:
+        get_func = get_value
 
     if listize:
-        defs = map(DotDict, utils.listize(pieces))
-        piece_defs = map(lambda p: {d_index: p}, defs) if d_index else defs
-        get_pieces = lambda i: imap(parse_conf, piece_defs, repeat(i))
+        listed = utils.listize(pieces)
+        piece_defs = map(DotDict, listed) if pdictize else listed
+        get_pieces = lambda item: imap(get_func, piece_defs, repeat(item))
     else:
-        piece_defs = DotDict(pieces)
-        get_pieces = partial(parse_conf, piece_defs)
+        piece_defs = DotDict(pieces) if pdictize else pieces
+        get_pieces = partial(get_func, piece_defs)
 
-    return (get_pieces, get_with, get_pass)
+    return (get_pieces, get_with, get_pass, cust_func)
 
 
 def get_async_broadcast_funcs(pieces, ftype='with', **kwargs):
     funcs = _get_broadcast_funcs(pieces, ftype, **kwargs)
-    get_pieces, get_with, get_pass = funcs
+    get_pieces, get_with, get_pass, cust_func = funcs
 
     f = {
         'with': partial(maybeDeferred, get_with),
@@ -121,14 +127,14 @@ def get_async_broadcast_funcs(pieces, ftype='with', **kwargs):
 
     asyncGetPieces = partial(maybeDeferred, get_pieces)
     asyncGetPass = partial(maybeDeferred, get_pass)
-    return [asyncGetPieces, f[ftype], asyncGetPass]
+    return filter(None, [asyncGetPieces, f[ftype], asyncGetPass, cust_func])
 
 
 def get_broadcast_funcs(pieces, ftype='with', **kwargs):
     funcs = _get_broadcast_funcs(pieces, ftype, **kwargs)
-    get_pieces, get_with, get_pass = funcs
+    get_pieces, get_with, get_pass, cust_func = funcs
     f = {'with': get_with, 'pass': utils.passthrough, None: utils.passnone}
-    return [get_pieces, f[ftype], get_pass]
+    return filter(None, [get_pieces, f[ftype], get_pass, cust_func])
 
 
 def get_dispatch_funcs(ftype='word', first=utils.passthrough):
@@ -153,19 +159,25 @@ def get_async_dispatch_funcs(ftype='word', first=asyncReturn):
     return [first, f[ftype], asyncReturn]
 
 
-def get_splits(_INPUT, pieces, **kwargs):
-    inputs = imap(DotDict, _INPUT) if _INPUT else None
-    funcs = get_broadcast_funcs(pieces, **kwargs)
+def get_splits(_INPUT, pieces=None, funcs=None, **kwargs):
+    finitize = kwargs.pop('finitize', False)
+    dictize = kwargs.pop('dictize', False)
+    finite = utils.finitize(_INPUT) if finitize and _INPUT else _INPUT
+    funcs = funcs or get_broadcast_funcs(pieces, **kwargs)
+    inputs = imap(DotDict, finite) if finite and dictize else finite
     return utils.broadcast(inputs, *funcs) if inputs else funcs
 
 
 @inlineCallbacks
-def asyncGetSplits(_INPUT, pieces, **kwargs):
+def asyncGetSplits(_INPUT, pieces=None, funcs=None, **kwargs):
     _input = yield _INPUT
+    finitize = kwargs.pop('finitize', False)
+    dictize = kwargs.pop('dictize', False)
     # asyncDict = partial(maybeDeferred, DotDict)
     # inputs = yield asyncCmap(asyncDict, _input)
-    inputs = imap(DotDict, _input) if _input else None
-    funcs = get_async_broadcast_funcs(pieces, **kwargs)
+    finite = utils.finitize(_input) if finitize and _input else _input
+    funcs = funcs or get_async_broadcast_funcs(pieces, **kwargs)
+    inputs = imap(DotDict, finite) if finite and dictize else finite
 
     if inputs:
         result = yield asyncBroadcast(inputs, *funcs)

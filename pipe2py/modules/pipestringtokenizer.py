@@ -13,7 +13,10 @@ from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
+
+opts = {'listize': False, 'finitize': True}
 
 
 # Common functions
@@ -59,7 +62,7 @@ def asyncPipeStringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
     conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
-    splits = yield asyncGetSplits(_INPUT, conf, listize=False, **kwargs)
+    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
     items = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
     _OUTPUT = utils.multiplex(items)
@@ -86,7 +89,7 @@ def pipe_stringtokenizer(context=None, _INPUT=None, conf=None, **kwargs):
     _OUTPUT : generator of items
     """
     conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
-    splits = get_splits(_INPUT, conf, listize=False, **kwargs)
+    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs())
     items = starmap(parse_result, parsed)
     _OUTPUT = utils.multiplex(items)

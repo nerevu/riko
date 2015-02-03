@@ -8,16 +8,17 @@
 """
 
 from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
+    absolute_import, division, print_function)
 
 import string
 import re
 
-from collections import namedtuple
+# from pprint import pprint
 from datetime import datetime
 from functools import partial
 from itertools import (
-    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap)
+    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap, islice)
+from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
 from pipe2py import Context
@@ -55,10 +56,20 @@ ALTERNATIVE_DATE_FORMATS = (
 # leave option to substitute with multiprocessing
 _map_func = imap
 
-combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.items, d)))
+combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
 timeout = 60 * 60 * 1
-sub_rule = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
+
+
+class Objectify:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+    def __iter__(self):
+        return self.__dict__.itervalues()
+
+    def iteritems(self):
+        return self.__dict__.iteritems()
 
 
 def _apply_func(funcs, items, map_func=starmap):
@@ -105,11 +116,28 @@ def pythonise(id, encoding='ascii'):
 def group_by(iterable, attr, default=None):
     # like operator.itemgetter but fills in missing keys with a default value
     keyfunc = lambda item: lambda obj: obj.get(item, default)
-    sorted_iterable = sorted(iterable, key=keyfunc(attr))
+    data = list(iterable)
+    order = unique_everseen(data, keyfunc(attr))
+    sorted_iterable = sorted(data, key=keyfunc(attr))
     groups = groupby(sorted_iterable, keyfunc(attr))
     grouped = {str(k): list(v) for k, v in groups}
 
-    return grouped
+    # return groups in original order
+    ordered = {key: grouped[key] for key in order}
+    return ordered
+
+
+def unique_everseen(iterable, key=None):
+    # List unique elements, preserving order. Remember all elements ever seen
+    # unique_everseen('ABBCcAD', str.lower) --> a b c d
+    seen = set()
+
+    for element in iterable:
+        k = str(key(element))
+
+        if k not in seen:
+            seen.add(k)
+            yield k
 
 
 def _make_content(i, tag, new):
@@ -144,21 +172,21 @@ def etree_to_dict(element):
             new = child.tail.strip() if child.tail else None
             content = _make_content(i, tag, new)
             i.update({tag: content}) if content else None
-    elif content and not set(i.keys()).difference(['content']):
+    elif content and not set(i).difference(['content']):
         # element is leaf node and doesn't have attributes
         i = content
 
     return i
 
 
-def make_finite(_INPUT):
+def finitize(_INPUT):
     yield _INPUT.next()
 
     for i in takewhile(lambda i: not 'forever' in i, _INPUT):
         yield i
 
 
-def get_value(field, item=None, **kwargs):
+def get_value(field, item=None, force=False, **kwargs):
     item = item or {}
 
     OPS = {
@@ -177,10 +205,14 @@ def get_value(field, item=None, **kwargs):
     try:
         value = item.get(field['subkey'], **kwargs)
     except KeyError:
-        if not hasattr(field, 'delete'):
+        if field and not (hasattr(field, 'delete') or force):
             raise TypeError('field must be of type DotDict')
-        else:
+        elif force:
+            value = field
+        elif field:
             value = field.get(None, **kwargs)
+        else:
+            value = kwargs.get('default')
     except (TypeError, AttributeError):
         # field is already set to a value so use it or the default
         value = field or kwargs.get('default')
@@ -192,6 +224,23 @@ def get_value(field, item=None, **kwargs):
 
 
 def broadcast(_INPUT, *funcs, **kwargs):
+    """copies an iterable and delivers the items to multiple functions
+
+           /--> foo2bar(_INPUT) --> \
+          /                          \
+    _INPUT ---> foo2baz(_INPUT) ---> _OUTPUT
+          \                          /
+           \--> foo2qux(_INPUT) --> /
+
+    One way to construct such a flow in code would be::
+
+        _INPUT = repeat('foo', 3)
+        foo2bar = lambda word: word.replace('foo', 'bar')
+        foo2baz = lambda word: word.replace('foo', 'baz')
+        foo2qux = lambda word: word.replace('foo', 'quz')
+        _OUTPUT = broadcast(_INPUT, foo2bar, foo2baz, foo2qux)
+        _OUTPUT == repeat(('bar', 'baz', 'qux'), 3)
+    """
     map_func = kwargs.get('map_func', _map_func)
     apply_func = kwargs.get('apply_func', _apply_func)
     splits = izip(*tee(_INPUT, len(funcs)))
@@ -199,39 +248,39 @@ def broadcast(_INPUT, *funcs, **kwargs):
 
 
 def dispatch(splits, *funcs, **kwargs):
+    """takes multiple iterables (returned by dispatch or broadcast) and delivers
+    the items to multiple functions
+
+           /-----> _INPUT1 --> double(_INPUT1) --> \
+          /                                         \
+    splits ------> _INPUT2 --> triple(_INPUT2) ---> _OUTPUT
+          \                                         /
+           \--> _INPUT3 --> quadruple(_INPUT3) --> /
+
+    One way to construct such a flow in code would be::
+
+        splits = repeat(('bar', 'baz', 'qux'), 3)
+        double = lambda word: word * 2
+        triple = lambda word: word * 3
+        quadruple = lambda word: word * 4
+        _OUTPUT = dispatch(splits, double, triple, quadruple)
+        _OUTPUT == repeat(('barbar', 'bazbazbaz', 'quxquxquxqux'), 3)
+    """
     map_func = kwargs.get('map_func', _map_func)
     apply_func = kwargs.get('apply_func', _apply_func)
     return map_func(partial(apply_func, funcs), splits)
 
 
-def gather(splits, func, **kwargs):
-    map_func = kwargs.get('map_func', _map_func)
-    gather_func = lambda split: func(*list(split))
-    return map_func(gather_func, splits)
-
-
-def _parse_conf(conf, keys, func):
-    iterable = imap(lambda k: conf[k], keys)
-    return map(func, iterable)
-
-
 def parse_conf(conf, item=None, parse_func=None, **kwargs):
-    parse = kwargs.pop('parse', True)
-    keys = conf.keys()
-    values = _parse_conf(conf, keys, partial(parse_func, item=item))
-
-    if parse:
-        Conf = namedtuple('Conf', keys)
-        result = Conf(*values)
-    else:
-        result = dict(zip(keys, values))
-
-    return result
+    convert = kwargs.pop('convert', True)
+    values = map(partial(parse_func, item=item), imap(conf.__getitem__, conf))
+    result = dict(zip(conf, values))
+    return Objectify(**result) if convert else result
 
 
 def parse_params(params):
-    true_params = ifilter(all, params)
-    return dict(imap(lambda x: (x.key, x.value), true_params))
+    true_params = filter(all, params)
+    return dict((x.key, x.value) for x in true_params)
 
 
 def get_pass(item=None, test=None):
@@ -342,8 +391,113 @@ def listize(item):
     return item if listlike else [item]
 
 
+def _gen_words(match, splits):
+    groups = ifilter(None, match.groups())
+
+    for s in splits:
+        try:
+            num = int(s)
+        except ValueError:
+            word = s
+        else:
+            word = islice(groups, num, num + 1).next()
+
+        yield word
+
+
+def multi_substitute(word, rules):
+    """ Apply multiple regex rules to 'word'
+    http://code.activestate.com/recipes/
+    576710-multi-regex-single-pass-replace-of-multiple-regexe/
+    """
+    flags = rules[0]['flags']
+
+    # Create a combined regex from the rules
+    tuples = ((p, r['match']) for p, r in enumerate(rules))
+    regexes = ('(?P<match_%i>%s)' % (p, r) for p, r in tuples)
+    pattern = '|'.join(regexes)
+    regex = re.compile(pattern, flags)
+    resplit = re.compile('\$(\d+)')
+
+    # For each match, look-up corresponding replace value in dictionary
+    rules_in_series = ifilter(itemgetter('series'), rules)
+    rules_in_parallel = (r for r in rules if not r['series'])
+
+    try:
+        has_parallel = [rules_in_parallel.next()]
+    except StopIteration:
+        has_parallel = []
+
+    # print('================')
+    # pprint(rules)
+    # print('word:', word)
+    # print('pattern', pattern)
+    # print('flags', flags)
+
+    for i in chain(rules_in_series, has_parallel):
+        # print('~~~~~~~~~~~~~~~~')
+        # print('new round')
+        # print('word:', word)
+        # found = list(regex.finditer(word))
+        # matchitems = [match.groupdict().items() for match in found]
+        # pprint(matchitems)
+        prev_name = None
+        prev_is_series = None
+
+        for match in regex.finditer(word):
+            item = ifilter(itemgetter(1), match.groupdict().iteritems()).next()
+
+            # print('----------------')
+            # print('groupdict:', match.groupdict().items())
+            # print('item:', item)
+
+            if not item:
+                continue
+
+            name = item[0]
+            rule = rules[int(name[6:])]
+            series = rule.get('series')
+            kwargs = {'count': rule['count'], 'series': series}
+            is_previous = name is prev_name
+            singlematch = kwargs['count'] is 1
+            is_series = prev_is_series or kwargs['series']
+            isnt_previous = bool(prev_name) and not is_previous
+
+            if (is_previous and singlematch) or (isnt_previous and is_series):
+                continue
+
+            prev_name = name
+            prev_is_series = series
+
+            if resplit.findall(rule['replace']):
+                splits = resplit.split(rule['replace'])
+                words = _gen_words(match, splits)
+            else:
+                splits = rule['replace']
+                words = [word[:match.start()], splits, word[match.end():]]
+
+            word = ''.join(words)
+
+            # print('name:', name)
+            # print('prereplace:', rule['replace'])
+            # print('splits:', splits)
+            # print('resplits:', resplit.findall(rule['replace']))
+            # print('groups:', filter(None, match.groups()))
+            # print('words:', words)
+            # print('range:', match.start(), '-', match.end())
+            # print('replace:', word)
+
+    # print('substitution:', word)
+    return word
+
+
 def substitute(word, rule):
-    return rule['match'].sub(rule['replace'], word, rule['count'])
+    if word:
+        result = rule['match'].sub(rule['replace'], word, rule['count'])
+    else:
+        result = word
+
+    return result
 
 
 def fix_pattern(word, rule):
@@ -368,15 +522,22 @@ def get_new_rule(rule, recompile=False):
     # flag 'g' --> 0
     count = 0 if rule.get('globalmatch') else 1
     field = rule.get('field')
-    replace = fix_pattern(rule['replace'], sub_rule)
-    matchc = re.compile(rule['match'], flags) if recompile else rule['match']
+
+    if recompile:
+        fix = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
+        replace = fix_pattern(rule['replace'], fix)
+        matchc = re.compile(rule['match'], flags)
+    else:
+        replace = rule['replace']
+        matchc = rule['match']
 
     rule = {
         'match': matchc,
         'replace': replace,
         'field': field,
         'count': count,
-        'flags': flags
+        'flags': flags,
+        'series': rule.get('seriesmatch', True),
     }
 
     return rule

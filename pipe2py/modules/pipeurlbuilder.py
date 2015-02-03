@@ -8,16 +8,16 @@
 """
 
 import urllib
-from functools import partial
-from itertools import imap, ifilter, repeat, starmap
+from itertools import imap, ifilter, starmap
+from . import _get_broadcast_funcs as get_funcs, get_dispatch_funcs, get_splits
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.lib.utils import combine_dicts as cdicts
 
-timeout = 60 * 60 * 1
+opts = {'parse': False}
 
 
-@utils.memoize(timeout)
-def parse_base(base, paths, params):
+@utils.memoize(utils.timeout)
+def parse_result(params, paths, base):
     url = '%s/' % base if not base.endswith('/') else base
     url += '/'.join(imap(str, ifilter(None, paths)))
     url = url.rstrip('/')
@@ -34,40 +34,24 @@ def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
     context : pipe2py.Context object
     _INPUT : pipeforever pipe or an iterable of items or fields
     conf : {
+        'PARAM': [
+            {'key': {'value': <'order'>}, 'value': {'value': <'desc'>}},
+            {'key': {'value': <'page'>}, 'value': {'value': <'2'>}}
+        ]
         'PATH': {'type': 'text', 'value': <''>},
         'BASE': {'type': 'text', 'value': <'http://site.com/feed.xml'>},
-        'PARAM': [
-            {
-                'key': {'value': <'order'>},
-                'value': {'value': <'desc'>}
-            }, {
-                'key': {'value': <'page'>},
-                'value': {'value': <'2'>}
-            }
-        ]
     }
 
     Yields
     ------
     _OUTPUT : url
     """
-    conf = DotDict(conf)
-    param_defs = map(DotDict, utils.listize(conf['PARAM']))
-    get_value = partial(utils.get_value, **kwargs)
-    parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
-    get_base = partial(utils.get_value, conf['BASE'], **kwargs)
-    get_params = lambda i: imap(parse_conf, param_defs, repeat(i))
-    funcs = [utils.passthrough, utils.passthrough, utils.parse_params]
-
-    try:
-        path_defs = map(DotDict, utils.listize(conf['PATH']))
-    except KeyError:
-        get_paths = lambda i: []
-    else:
-        get_paths = lambda i: imap(get_value, path_defs, repeat(i))
-
-    inputs = imap(DotDict, _INPUT)
-    splits = utils.broadcast(inputs, get_base, get_paths, get_params)
-    parsed = utils.dispatch(splits, *funcs)
-    _OUTPUT = starmap(parse_base, parsed)
+    pkwargs = cdicts(opts, kwargs)
+    get_params = get_funcs(conf.get('PARAM', []), **kwargs)[0]
+    get_paths = get_funcs(conf.get('PATH', []), **pkwargs)[0]
+    get_base = get_funcs(conf['BASE'], listize=False, **pkwargs)[0]
+    parse_params = utils.parse_params
+    splits = get_splits(_INPUT, funcs=[get_params, get_paths, get_base])
+    parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', parse_params))
+    _OUTPUT = starmap(parse_result, parsed)
     return _OUTPUT
