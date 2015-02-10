@@ -19,8 +19,9 @@ opts = {'listize': False}
 
 # Common functions
 def parse_result(conf, word, _pass):
-    transformation = conf._fields[0]
-    return word if _pass else getattr(str, transformation)(word)
+    allowed = ['capitalize', 'lower', 'upper', 'swapcase', 'title']
+    _pass = _pass if conf.transformation in set(allowed) else True
+    return word if _pass else getattr(str, conf.transformation)(str(word))
 
 
 # Async functions
@@ -33,13 +34,7 @@ def asyncPipeStrtransform(context=None, _INPUT=None, conf=None, **kwargs):
     ----------
     context : pipe2py.Context object
     _INPUT : twisted Deferred iterable of items or strings
-    conf : {
-        'capitalize': {'type': 'bool', value': <1>},
-        'lower': {'type': 'bool', value': <1>},
-        'upper': {'type': 'bool', value': <1>},
-        'swapcase': {'type': 'bool', value': <1>},
-        'title': {'type': 'bool', value': <1>},
-    }
+    conf : {'transformation': {value': <'swapcase'>}}
 
     Returns
     -------
@@ -60,13 +55,7 @@ def pipe_strtransform(context=None, _INPUT=None, conf=None, **kwargs):
     ----------
     context : pipe2py.Context object
     _INPUT : iterable of items or strings
-    conf : {
-        'capitalize': {'type': 'bool', value': <1>},
-        'lower': {'type': 'bool', value': <1>},
-        'upper': {'type': 'bool', value': <1>},
-        'swapcase': {'type': 'bool', value': <1>},
-        'title': {'type': 'bool', value': <1>},
-    }
+    conf : {'transformation': {value': <'swapcase'>}}
 
     Returns
     -------
