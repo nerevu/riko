@@ -33,7 +33,7 @@ def pipe_uniq(context=None, _INPUT=None, conf=None, **kwargs):
     context : pipe2py.Context object
     _INPUT : pipe2py.modules pipe like object (iterable of items)
     kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf : {'field': {'type': 'text', value': <field to be unique>}}
+    conf : {'field': {'type': 'text', 'value': <field to be unique>}}
 
     Returns
     -------
