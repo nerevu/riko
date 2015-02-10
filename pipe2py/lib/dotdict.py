@@ -49,8 +49,7 @@ class DotDict(FeedParserDict):
         try:
             value = value[key]
         except (KeyError, TypeError):
-            contains = ['value', 'content', 'utime']
-            value = value if key in set(contains) else None
+            value = value if key in {'value', 'content', 'utime'} else None
 
         return value or default
 

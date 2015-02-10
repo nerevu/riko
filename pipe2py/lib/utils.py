@@ -274,7 +274,7 @@ def dispatch(splits, *funcs, **kwargs):
 
 def parse_conf(conf, item=None, parse_func=None, **kwargs):
     convert = kwargs.pop('convert', True)
-    values = map(partial(parse_func, item=item), imap(conf.__getitem__, conf))
+    values = map(partial(parse_func, item=item), (conf[c] for c in conf))
     result = dict(zip(conf, values))
     return Objectify(**result) if convert else result
 

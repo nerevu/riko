@@ -235,7 +235,7 @@ tokenizer_conf = make_tokenizer(',', True, True)
 substring1_conf = make_substring('0', '3')
 substring2_conf = make_substring('0', '1')
 currencyformat1_conf = {'currency': {'subkey': 'k:cur_code'}}
-exchangerate_conf = make_exchangerate(DEF_CUR_CODE, True)
+exchangerate_conf = make_exchangerate(DEF_CUR_CODE, False)
 currencyformat2_conf = {'currency': DEF_CUR_CODE}
 simplemath1_conf = make_simplemath('k:budget_raw2_num', 'mean')
 simplemath2_conf = make_simplemath('k:rate', 'multiply')
@@ -281,11 +281,7 @@ loop15_conf = make_loop(
     'k:budget_converted', 'k:budget_converted_w_sym', currencyformat2_conf, False)
 loop16_conf = make_loop('', 'k:budget_full', strconcat3_conf, False)
 loop17_conf = make_loop('', 'k:budget_full', strconcat4_conf, False)
-
 itembuilder_attrs = [{'key': k, 'value': v} for k, v in my_item.items()]
-
-def make_conf(source):
-    return {'value': source.values()[0], 'type': source.keys()[0]}
 
 sources = [
     {'url': 'http://feeds.feedburner.com/guru/all'}
@@ -300,10 +296,14 @@ sources = [
 
 abspath = p.abspath(p.join(PARENT, 'pipe2py', 'data', 'kazeeki.json'))
 url = "file://%s" % abspath
-fetchdata_conf = {'URL': url, 'path': 'items'}
-fetch_conf = {'URL': map(make_conf, sources)}
-itembuilder_conf = {'attrs': itembuilder_attrs}
+config = {
+    'fetch': {'conf': {'URL': [s['url'] for s in sources]}, 'type': 'fetch'},
+    'fetchdata': {'conf': {'URL': url, 'path': 'items'}, 'type': 'fetchdata'},
+    'itembuilder': {'conf': {'attrs': itembuilder_attrs}, 'type': 'itembuilder'},
+}
 
+c = config['fetch']
+skwargs = {'pdictize': False, 'conf': c['conf']}
 
 def parse_source(source):
     pipe = (
@@ -350,34 +350,29 @@ def print_content(output):
 #     size = write_file(data, path, True)
 
 
-def pipe_kazeeki(context=None, conf=fetchdata_conf, **kwargs):
+def pipe_kazeeki(context=None):
     if context and context.describe_input:
         output = []
 
     elif context and context.describe_dependencies:
         output = []
     else:
-        skwargs = {'pdictize': False, 'conf': conf, 'context': context}
-        # source = SyncPipe('fetch', **skwargs)
-        # source = SyncPipe('itembuilder', **skwargs)
-        source = SyncPipe('fetchdata', **skwargs)
+        source = SyncPipe(c['type'], context=context, **skwargs)
         output = parse_source(source)
 
     return output
 
 
-def asyncPipeKazeeki(reactor, context=None, conf=fetchdata_conf, **kwargs):
+def asyncPipeKazeeki(reactor, context=None):
     if context and context.describe_input:
         output = []
 
     elif context and context.describe_dependencies:
         output = []
     else:
-        skwargs = {'pdictize': False, 'conf': conf, 'context': context}
-        # source = AsyncPipe('fetch', **skwargs)
-        # source = AsyncPipe('itembuilder', **skwargs)
-        source = AsyncPipe('fetchdata', **skwargs)
+        source = AsyncPipe(c['type'], context=context, **skwargs)
         output = parse_source(source)
+
     output.addCallback(print_content)
     return output
 

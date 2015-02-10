@@ -19,8 +19,8 @@ opts = {'listize': False}
 
 # Common functions
 def parse_result(conf, word, _pass):
-    allowed = ['capitalize', 'lower', 'upper', 'swapcase', 'title']
-    _pass = _pass if conf.transformation in set(allowed) else True
+    allowed = {'capitalize', 'lower', 'upper', 'swapcase', 'title'}
+    _pass = _pass if conf.transformation in allowed else True
     return word if _pass else getattr(str, conf.transformation)(str(word))
 
 
