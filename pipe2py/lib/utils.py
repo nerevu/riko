@@ -481,6 +481,7 @@ def multi_substitute(word, rules):
                 words = [word[:start], splits, word[end:]]
                 i += rule['offset']
 
+            # words = list(words)
             word = ''.join(words)
 
             # print('name:', name)
@@ -488,6 +489,7 @@ def multi_substitute(word, rules):
             # print('splits:', splits)
             # print('resplits:', resplit.findall(rule['replace']))
             # print('groups:', filter(None, match.groups()))
+            # print('i:', i)
             # print('words:', words)
             # print('range:', match.start(), '-', match.end())
             # print('replace:', word)
