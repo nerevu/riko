@@ -7,17 +7,13 @@ from __future__ import (
 
 from os import path as p
 from pprint import pprint
-from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.task import react
 from pipe2py import Context
-from pipe2py.modules.pipeforever import pipe_forever
 from pipe2py.lib.utils import combine_dicts as cdict
 from pipe2py.lib.collections import SyncPipe
 from pipe2py.twisted.collections import AsyncPipe
 
 PARENT = p.dirname(p.dirname(p.dirname(__file__)))
-
-forever = pipe_forever()
 make_regex = lambda f, m, r: {'field': f, 'match': m, 'replace': r}
 
 
