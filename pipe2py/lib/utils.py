@@ -17,7 +17,8 @@ import re
 from datetime import datetime
 from functools import partial
 from itertools import (
-    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap, islice)
+    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap, islice,
+    dropwhile)
 from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
@@ -392,7 +393,7 @@ def listize(item):
 
 
 def _gen_words(match, splits):
-    groups = ifilter(None, match.groups())
+    groups = list(dropwhile(lambda x: not x, match.groups()))
 
     for s in splits:
         try:
@@ -434,7 +435,7 @@ def multi_substitute(word, rules):
     # print('pattern', pattern)
     # print('flags', flags)
 
-    for i in chain(rules_in_series, has_parallel):
+    for _ in chain(rules_in_series, has_parallel):
         # print('~~~~~~~~~~~~~~~~')
         # print('new round')
         # print('word:', word)
@@ -443,6 +444,7 @@ def multi_substitute(word, rules):
         # pprint(matchitems)
         prev_name = None
         prev_is_series = None
+        i = 0
 
         for match in regex.finditer(word):
             item = ifilter(itemgetter(1), match.groupdict().iteritems()).next()
@@ -474,7 +476,10 @@ def multi_substitute(word, rules):
                 words = _gen_words(match, splits)
             else:
                 splits = rule['replace']
-                words = [word[:match.start()], splits, word[match.end():]]
+                start = match.start() + i
+                end = match.end() + i
+                words = [word[:start], splits, word[end:]]
+                i += rule['offset']
 
             word = ''.join(words)
 
@@ -531,16 +536,17 @@ def get_new_rule(rule, recompile=False):
         replace = rule['replace']
         matchc = rule['match']
 
-    rule = {
+    nrule = {
         'match': matchc,
         'replace': replace,
         'field': field,
         'count': count,
         'flags': flags,
         'series': rule.get('seriesmatch', True),
+        'offset': int(rule.get('offset') or 0),
     }
 
-    return rule
+    return nrule
 
 
 def convert_rules(rules, recompile=False):
