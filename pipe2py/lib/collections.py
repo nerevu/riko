@@ -25,6 +25,9 @@ class PyPipe(object):
     def output(self):
         return self.pipeline(self.context, self.pipe_input, **self.kwargs)
 
+    @property
+    def list(self):
+        return list(self.output)
 
 class SyncPipe(PyPipe):
     """A synchronous PyPipe object"""
