@@ -27,18 +27,20 @@ opts = {'ftype': None, 'parse': False, 'finitize': True}
 
 def get_urls(urls):
     true_urls = ifilter(None, urls)
-    return imap(utils.get_abspath, true_urls)
+    abs_urls = imap(utils.get_abspath, true_urls)
+    return imap(str, abs_urls)
 
 
 # Async functions
 # from http://blog.mekk.waw.pl/archives/
 # 14-Twisted-inlineCallbacks-and-deferredGenerator.html
 # http://code.activestate.com/recipes/277099/
+@inlineCallbacks
 def asyncParseResult(urls, _, _pass):
     # asyncParse = partial(deferToThread, speedparser.parse)
     asyncParse = partial(maybeDeferred, speedparser.parse)
-    abs_urls = get_urls(urls)
-    contents = yield asyncImap(getPage, abs_urls)
+    str_urls = get_urls(urls)
+    contents = yield asyncImap(getPage, str_urls)
     parsed = yield asyncImap(asyncParse, contents)
     entries = imap(utils.gen_entries, parsed)
     items = utils.multiplex(entries)
@@ -74,8 +76,8 @@ def asyncPipeFetch(context=None, _INPUT=None, conf=None, **kwargs):
 
 # Synchronous functions
 def parse_result(urls, _, _pass):
-    abs_urls = get_urls(urls)
-    contents = (urlopen(url).read() for url in abs_urls)
+    str_urls = get_urls(urls)
+    contents = (urlopen(url).read() for url in str_urls)
     parsed = imap(speedparser.parse, contents)
     entries = imap(utils.gen_entries, parsed)
     return utils.multiplex(entries)

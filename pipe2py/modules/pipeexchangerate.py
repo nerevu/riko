@@ -14,7 +14,8 @@ from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
+from pipe2py.twisted.utils import (
+    asyncStarMap, asyncDispatch, asyncNone, asyncReturn)
 
 opts = {'listize': False}
 
@@ -57,11 +58,11 @@ def calc_rate(from_cur, to_cur, rates):
     return 1 / float(rate)
 
 
-def parse_request(r, offline):
+def parse_request(data, offline):
     if offline:
         fields = FIELDS
     else:
-        resources = r['list']['resources']
+        resources = data['list']['resources']
         fields = (r['resource']['fields'] for r in resources)
 
     return {i['name']: i['price'] for i in fields}
@@ -69,21 +70,22 @@ def parse_request(r, offline):
 
 @utils.memoize(utils.timeout)
 def get_rate_data():
-    return requests.get(EXCHANGE_API, params=PARAMS)
+    r = requests.get(EXCHANGE_API, params=PARAMS)
+    return r.json()
+
+
+def asyncGetRateData():
+    make_cache_key = utils.cache._memoize_make_cache_key(timeout=utils.timeout)
+    cached = utils.cache.get(make_cache_key(get_rate_data))
+    return asyncReturn(cached) if cached else deferToThread(get_rate_data)
 
 
 # Async functions
 @inlineCallbacks
 def asyncParseResult(conf, word, _pass):
     base, offline = get_base(conf, word)
-
-    if offline:
-        r = None
-    else:
-        data = yield deferToThread(get_rate_data)
-        r = data.json()
-
-    rates = parse_request(r, offline)
+    data = yield asyncNone if offline else asyncGetRateData()
+    rates = parse_request(data, offline)
     result = base if _pass else calc_rate(base, conf.quote, rates)
     returnValue(result)
 
@@ -116,8 +118,8 @@ def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
 # Synchronous functions
 def parse_result(conf, word, _pass):
     base, offline = get_base(conf, word)
-    r = None if offline else get_rate_data().json()
-    rates = parse_request(r, offline)
+    data = None if offline else get_rate_data()
+    rates = parse_request(data, offline)
     result = base if _pass else calc_rate(base, conf.quote, rates)
     return result
 
