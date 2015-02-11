@@ -49,10 +49,7 @@ class DotDict(FeedParserDict):
         try:
             value = value[key]
         except (KeyError, TypeError):
-            if key in ['value', 'content', 'utime']:
-                value = value
-            else:
-                value = None
+            value = value if key in {'value', 'content', 'utime'} else None
 
         return value or default
 

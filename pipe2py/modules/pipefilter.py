@@ -132,7 +132,7 @@ def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
     permit = conf.get('MODE', **kwargs) == 'permit'
     combine = conf.get('COMBINE', **kwargs)
 
-    if not combine in ['and', 'or']:
+    if not combine in {'and', 'or'}:
         raise Exception(
             "Invalid combine: %s. (Expected 'and' or 'or')" % combine)
 

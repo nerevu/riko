@@ -24,7 +24,7 @@ def parse_result(conf, word, _pass):
     if _pass:
         token = None
     else:
-        splits = word.split(conf.delimiter)
+        splits = filter(None, word.split(conf.delimiter))
 
         try:
             chunks = set(splits) if conf.dedupe else splits
@@ -36,7 +36,7 @@ def parse_result(conf, word, _pass):
         except AttributeError:
             chunks = chunks
 
-        token = ({'content': chunk} for chunk in chunks)
+        token = [{'content': chunk} for chunk in chunks] or [{}]
 
     return token
 

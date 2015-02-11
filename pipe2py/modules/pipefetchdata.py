@@ -24,15 +24,11 @@ from . import (
     get_splits, asyncGetSplits, get_dispatch_funcs, get_async_dispatch_funcs)
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncStarMap, asyncImap, asyncDispatch
+from pipe2py.twisted.utils import (
+    asyncStarMap, asyncImap, asyncDispatch, asyncReduce)
 
 opts = {'listize': False, 'ftype': None}
-
-
-# Common functions
-def parse_result(element, path, _):
-    func = lambda element, i: element.get(i) if element else None
-    return reduce(func, path, element)
+func = lambda element, i: element.get(i) if element else None
 
 
 def parse_conf(conf):
@@ -53,8 +49,10 @@ def get_element(url):
 
     return element
 
-
 # Async functions
+asyncParseResult = lambda element, path, _: asyncReduce(func, path, element)
+
+
 @inlineCallbacks
 def asyncGetParsed(_INPUT, asyncFunc):
     _input = yield _INPUT
@@ -71,13 +69,16 @@ def asyncGetParsed(_INPUT, asyncFunc):
 def asyncPipeFetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     asyncFuncs = yield asyncGetSplits(None, conf, **cdicts(opts, kwargs))
     parsed = yield asyncGetParsed(_INPUT, asyncFuncs[0])
-    results = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
+    results = yield asyncStarMap(asyncParseResult, parsed)
     items = imap(utils.gen_items, results)
     _OUTPUT = utils.multiplex(items)
     returnValue(_OUTPUT)
 
 
 # Synchronous functions
+parse_result = lambda element, path, _: reduce(func, path, element)
+
+
 def get_parsed(_INPUT, func):
     finite = utils.finitize(_INPUT)
     confs = imap(func, finite)
