@@ -29,6 +29,7 @@ class PyPipe(object):
     def list(self):
         return list(self.output)
 
+
 class SyncPipe(PyPipe):
     """A synchronous PyPipe object"""
     def __init__(self, name=None, context=None, **kwargs):
