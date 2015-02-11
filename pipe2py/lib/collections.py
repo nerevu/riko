@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.lib.collections
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~
 
     Provides methods for creating pipe2py pipes
 """

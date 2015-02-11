@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.twisted.collections
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Provides methods for creating asynchronous pipe2py pipes
 """
