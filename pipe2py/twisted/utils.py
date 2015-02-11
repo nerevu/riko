@@ -28,14 +28,14 @@ def _parallel(work, asyncCallable):
 
 
 # helper functions
-def coop(asyncCallable, callback, *iterables):
-    work = _get_work(asyncCallable, callback, imap, *iterables)
-    return coiterate(work)
+# def coop(asyncCallable, callback, *iterables):
+#     work = _get_work(asyncCallable, callback, imap, *iterables)
+#     return coiterate(work)
 
 
-def asyncParallel(asyncCallable, callback, *iterables):
-    work = _get_work(asyncCallable, callback, imap, *iterables)
-    return _parallel(work, asyncCallable)
+# def asyncParallel(asyncCallable, callback, *iterables):
+#     work = _get_work(asyncCallable, callback, imap, *iterables)
+#     return _parallel(work, asyncCallable)
 
 
 def coopStar(asyncCallable, callback, iterable):
