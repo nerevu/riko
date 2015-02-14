@@ -6,7 +6,6 @@
    Public domain, do with it as you will
 """
 
-
 def _gen_result(graph, ready, count):
     while ready:
         node = ready.pop(-1)
