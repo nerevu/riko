@@ -1,61 +1,100 @@
-# piperename.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.piperename
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from pipe2py import util
-from pipe2py.lib.dotdict import DotDict
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Rename
+"""
 
+from functools import partial
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import get_splits, asyncGetSplits
+from pipe2py.lib.utils import combine_dicts as cdicts
 
-def _gen_rules(rule_defs, **kwargs):
-    rule_defs = util.listize(rule_defs)
-
-    # todo: use subkey?
-    for rule_def in rule_defs:
-        rule_def = DotDict(rule_def)
-        op = rule_def.get('op', **kwargs)
-        newfield = {'subkey': rule_def.get('field')}
-        newval = rule_def.get('newval', **kwargs)
-        yield (op, newfield, newval)
+opts = {'ftype': 'pass', 'dictize': True}
 
 
-def _convert_item(rules, item, **kwargs):
-    for rule in rules:
-        value = util.get_value(rule[1], item, **kwargs)
+# Common functions
+def func(item, rule, **kwargs):
+    try:
+        item.set(rule.newval, item.get(rule.field, **kwargs))
+    except (IndexError):
+        # Catch error when 'newval' is blank (equivalent to deleting field)
+        pass
 
-        try:
-            # forces an exception if any part is not found
-            item.set(rule[2], value)
-        except AttributeError:
-            # ignore if the source doesn't have our field
-            # todo: issue a warning if debugging?
-            pass
-
-        if rule[0] == 'rename':
-            try:
-                item.delete(rule[1]['subkey'])
-            # TypeError catches pseudo subkeys, e.g. summary.content
-            except (KeyError, TypeError):
-                # ignore if the target doesn't have our field
-                # todo: issue a warning if debugging?
-                pass
+    if rule.op == 'rename':
+        item.delete(rule.field)
 
     return item
 
 
-def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
-    """This operator renames or copies fields in the input source.
+def parse_results(splits, **kwargs):
+    for rules, item, _pass in splits:
+        if _pass or not item:
+            result = item
+        else:
+            result = reduce(partial(func, **kwargs), rules, item)
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf:
-        RULE -- rules - each rule comprising (op, field, newval)
+        yield result
 
-    Yields (_OUTPUT):
-    source items after copying/renaming
+
+# Async functions
+@inlineCallbacks
+def asyncPipeRename(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that asynchronously renames or copies fields in the input
+    source. Not loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
+    conf : {
+        'RULE': [
+            {
+                'op': {'value': 'rename or copy'},
+                'field': {'value': 'old field'},
+                'newval': {'value': 'new field'}
+            }
+        ]
+    }
+
+    kwargs : other inputs, e.g., to feed terminals for rule values
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    conf = DotDict(conf)
-    rules = list(_gen_rules(conf['RULE'], **kwargs))
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    _OUTPUT = yield maybeDeferred(parse_results, splits, **kwargs)
+    returnValue(_OUTPUT)
 
-    for item in _INPUT:
-        yield _convert_item(rules, DotDict(item), **kwargs)
+
+# Synchronous functions
+def pipe_rename(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that renames or copies fields in the input source.
+    Not loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    conf : {
+        'RULE': [
+            {
+                'op': {'value': 'rename or copy'},
+                'field': {'value': 'old field'},
+                'newval': {'value': 'new field'}
+            }
+        ]
+    }
+
+    kwargs : other inputs, e.g., to feed terminals for rule values
+
+    Returns
+    -------
+    _OUTPUT : generator of items
+    """
+    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    _OUTPUT = parse_results(splits, **kwargs)
+    return _OUTPUT

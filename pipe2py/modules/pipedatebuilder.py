@@ -1,7 +1,13 @@
-# pipedatebuilder.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipedatebuilder
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from pipe2py import util
+    http://pipes.yahoo.com/docs?doc=date#DateBuilder
+"""
+
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 from datetime import timedelta, datetime as dt
 
@@ -17,22 +23,24 @@ SWITCH = {
 
 
 def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds a date and yields it forever.
+    """A date module that converts a text string into a datetime value. Useful
+    as terminal data. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- XXX
-    conf:
-        DATE -- date
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items
+    conf : {'DATE': {'type': 'datetime', 'value': '12/2/2014'}}
 
-    Yields (_OUTPUT):
-    date
+    Yields
+    ------
+    _OUTPUT : date timetuples
     """
     conf = DotDict(conf)
-    date_format = conf.get('format', **kwargs)
 
     for item in _INPUT:
-        date = util.get_value(conf['DATE'], DotDict(item), **kwargs).lower()
+        _input = DotDict(item)
+        date = utils.get_value(conf['DATE'], _input, **kwargs).lower()
 
         if date.endswith(' day') or date.endswith(' days'):
             count = int(date.split(' ')[0])
@@ -44,9 +52,9 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
             new_date = SWITCH.get(date)
 
         if not new_date:
-            new_date = util.get_date(date)
+            new_date = utils.get_date(date)
 
         if not new_date:
-            raise Exception('Unexpected date format: %s' % date_format)
+            raise Exception('Unrecognized date string: %s' % date)
 
         yield new_date.timetuple()

@@ -1,27 +1,34 @@
-# pipecsv.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipecsv
+    ~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchCSV
+"""
+
 from urllib2 import urlopen
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib import unicodecsv as csv
 from pipe2py.lib.dotdict import DotDict
 
 
 def _gen_fieldnames(conf, reader, item, **kwargs):
-    start = util.get_value(conf['col_row_start'], item, func=int, **kwargs)
-    end = util.get_value(conf['col_row_end'], item, func=int, **kwargs)
+    start = int(utils.get_value(conf['col_row_start'], item, **kwargs))
+    end = int(utils.get_value(conf['col_row_end'], item, **kwargs))
 
     for i in xrange((end - start) + 1):
         yield reader.next()
 
 
 def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source fetches and parses a csv file to yield items.
+    """A source that fetches and parses a csv file to yield items. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        URL -- url
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : URL -- url
         skip -- number of header rows to skip
         col_mode -- column name source: row=header row(s),
                     custom=defined in col_name
@@ -30,8 +37,9 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
         col_row_end -- last column header row
         separator -- column separator
 
-    Yields (_OUTPUT):
-    file entries
+    Yields
+    ------
+    _OUTPUT : items
 
     Note:
     Current restrictions:
@@ -46,11 +54,11 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
 
     for item in _INPUT:
         item = DotDict(item)
-        url = util.get_value(conf['URL'], item, **kwargs)
-        url = util.get_abspath(url)
-        separator = util.get_value(conf_sep, item, encode=True, **kwargs)
-        skip = util.get_value(conf['skip'], item, func=int, **kwargs)
-        col_mode = util.get_value(conf_mode, item, **kwargs)
+        url = utils.get_value(conf['URL'], item, **kwargs)
+        url = utils.get_abspath(url)
+        separator = utils.get_value(conf_sep, item, encode=True, **kwargs)
+        skip = int(utils.get_value(conf['skip'], item, **kwargs))
+        col_mode = utils.get_value(conf_mode, item, **kwargs)
 
         f = urlopen(url)
 

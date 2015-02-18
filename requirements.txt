@@ -7,3 +7,5 @@ six==1.7.3
 speedparser==0.1.8
 feedparser==5.1.3
 requests==2.4.3
+Twisted==14.0.2
+-e git+git://github.com/kazeeki/mezmorize.git@master#egg=mezmorize-0.14.0

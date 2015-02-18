@@ -1,29 +1,37 @@
-# pipefeedautodiscovery.py
-#
-from pipe2py import util
-from pipe2py.lib import autorss
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefeedautodiscovery
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FeedAutoDiscovery
+"""
+
+from pipe2py.lib import autorss, utils
 from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source search for feed links in a page
+    """A source that searches for and returns feed links found in a page.
+    Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        URL -- url
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : URL -- url
 
-    Yields (_OUTPUT):
-    feed entries
+    Yields
+    ------
+    _OUTPUT : items
     """
     conf = DotDict(conf)
-    urls = util.listize(conf['URL'])
+    urls = utils.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = util.get_abspath(url)
+            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = utils.get_abspath(url)
 
             if context and context.verbose:
                 print "pipe_feedautodiscovery loading:", url

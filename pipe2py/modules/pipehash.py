@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipesubstr
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    http://pipes.yahoo.com/pipes/docs?doc=string#SubString
+    pipe2py.modules.pipehash
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
+import ctypes
 from functools import partial
 from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
@@ -21,30 +20,23 @@ opts = {'listize': False}
 
 # Common functions
 def parse_result(conf, word, _pass):
-    start = int(conf.start)
-    end = int(conf.start + conf.length)
-    return word if _pass else word[start:end]
+    return word if _pass else ctypes.c_uint(hash(word)).value
 
 
 # Async functions
 @inlineCallbacks
-def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that asynchronously returns a substring. Loopable.
+def asyncPipeHash(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously hashes the given text. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
     _INPUT : twisted Deferred iterable of items or strings
-    conf : {
-        'from': {'type': 'number', value': <starting position>},
-        'length': {'type': 'number', 'value': <count of characters to return>}
-    }
 
-    returns
+    Returns
     -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of substrings
+    _OUTPUT : twisted.internet.defer.Deferred generator of hashed strings
     """
-    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
@@ -52,23 +44,18 @@ def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
 
 
 # Synchronous functions
-def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that returns a substring. Loopable.
+def pipe_hash(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that hashes the given text. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
     _INPUT : iterable of items or strings
-    conf : {
-        'from': {'type': 'number', value': <starting position>},
-        'length': {'type': 'number', 'value': <count of characters to return>}
-    }
 
     Returns
     -------
-    _OUTPUT : generator of substrings
+    _OUTPUT : generator of hashed strings
     """
-    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
     splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs())
     _OUTPUT = starmap(parse_result, parsed)

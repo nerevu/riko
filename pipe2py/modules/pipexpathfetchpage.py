@@ -1,37 +1,46 @@
-# pipexpathfetchpage.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipexpathfetchpage
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#XPathFetchPage
+"""
 
 from urllib2 import urlopen
 from lxml import html
 from lxml.html import html5parser
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
-    """XPath Fetch Page module
+    """A source that fetches the content of a given website as DOM nodes or a
+    string. Loopable.
 
-    _INPUT -- not used since this does not have inputs.
-
-    conf:
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : dict
        URL -- url object contain the URL to download
        xpath -- xpath to extract
        html5 -- use html5 parser?
        useAsString -- emit items as string?
 
-       Description: http://pipes.yahoo.com/pipes/docs?doc=sources#XPathFetchPage
-
        TODOS:
         - don't retrieve pages larger than 1.5MB
         - don't retrieve if page is not indexable.
+
+    Yields
+    ------
+    _OUTPUT : items
     """
     conf = DotDict(conf)
-    urls = util.listize(conf['URL'])
+    urls = utils.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = util.get_abspath(url)
+            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = utils.get_abspath(url)
             f = urlopen(url)
 
             # TODO: it seems that Yahoo! converts relative links to
@@ -55,7 +64,7 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
                 print 'XPathFetchPage: found count items:', len(items)
 
             for etree in items:
-                i = util.etree_to_dict(etree)
+                i = utils.etree_to_dict(etree)
 
                 if context and context.verbose:
                     print '--------------item data --------------------'
