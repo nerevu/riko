@@ -62,7 +62,7 @@ def get_graph_component(graph):
         graph should be a dictionary mapping node names to
         lists of successor nodes.
     """
-    components = map(partial(_visit, graph=graph), graph))
+    components = map(partial(_visit, graph=graph), graph)
     node_component = dict(_gen_node_component(components))
     graph_component = {component: [] for component in components}
     graph_component.update(
