@@ -10,7 +10,7 @@ from os import path as p, remove
 from importlib import import_module
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
-from pipe2py.util import extract_dependencies
+from pipe2py.lib.utils import extract_dependencies
 from pipe2py import Context
 
 try:
