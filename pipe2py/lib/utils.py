@@ -348,7 +348,7 @@ def get_word(item):
     except TypeError:
         word = None
 
-    return word or ''
+    return str(word.encode('utf-8')) if isinstance(word, unicode) else word
 
 
 def get_num(item):
