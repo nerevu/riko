@@ -21,7 +21,8 @@ opts = {'listize': False}
 def parse_result(conf, word, _pass):
     allowed = {'capitalize', 'lower', 'upper', 'swapcase', 'title'}
     _pass = _pass if conf.transformation in allowed else True
-    return word if _pass else getattr(str, conf.transformation)(str(word))
+    encoded = str(word.encode('utf-8'))
+    return word if _pass else getattr(str, conf.transformation)(encoded)
 
 
 # Async functions
