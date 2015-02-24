@@ -61,6 +61,7 @@ cache = Cache(**cache_config)
 memoize = cache.memoize
 timeout = 60 * 60 * 1
 
+encode = lambda w: w.encode('utf-8') if isinstance(w, unicode) else w
 
 class Objectify:
     def __init__(self, **entries):
@@ -189,8 +190,8 @@ def get_value(field, item=None, force=False, **kwargs):
     OPS = {
         'number': {'default': 0.0, 'func': float},
         'integer': {'default': 0, 'func': int},
-        'text': {'default': ''},
-        'unicode': {'default': '', 'func': unicode},
+        'text': {'default': '', 'func': lambda i: str(encode(i))},
+        'unicode': {'default': u'', 'func': unicode},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
     }
 
@@ -312,10 +313,8 @@ def get_input(context, conf):
         value = context.inputs.get(name, default)
     elif not context.test:
         # we skip user interaction during tests
-        value = raw_input(
-            "%s (default=%s) " % (
-                prompt.encode('utf-8'), default.encode('utf-8'))
-        ) or default
+        raw = raw_input("%s (default=%s) " % (encode(prompt), encode(default)))
+        value = raw or default
     else:
         value = default
 
@@ -345,7 +344,7 @@ def get_word(item):
     except TypeError:
         word = None
 
-    return str(word.encode('utf-8')) if isinstance(word, unicode) else word
+    return str(encode(word) or '')
 
 
 def get_num(item):
@@ -380,7 +379,7 @@ def url_quote(url):
     try:
         return quote(url, safe=URL_SAFE)
     except KeyError:
-        return quote(url.encode('utf-8'), safe=URL_SAFE)
+        return quote(encode(url), safe=URL_SAFE)
 
 
 def listize(item):
