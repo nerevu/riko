@@ -58,6 +58,7 @@ _map_func = imap
 
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
+memoize = cache.memoize
 timeout = 60 * 60 * 1
 
 
@@ -74,10 +75,6 @@ class Objectify:
 
 def _apply_func(funcs, items, map_func=starmap):
     return map_func(lambda item, func: func(item), izip(items, funcs))
-
-
-def memoize(*args, **kwargs):
-    return cache.memoize(*args, **kwargs)
 
 
 def extract_dependencies(pipe_def=None, pipe_generator=None):
