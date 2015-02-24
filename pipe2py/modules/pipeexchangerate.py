@@ -6,6 +6,7 @@
 """
 
 import requests
+import treq
 
 from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue
@@ -74,10 +75,11 @@ def get_rate_data():
     return r.json()
 
 
+@utils.memoize(utils.timeout)
 def asyncGetRateData():
-    make_cache_key = utils.cache._memoize_make_cache_key(timeout=utils.timeout)
-    cached = utils.cache.get(make_cache_key(get_rate_data))
-    return asyncReturn(cached) if cached else deferToThread(get_rate_data)
+    resp = treq.get(EXCHANGE_API, params=PARAMS)
+    resp.addCallback(treq.json_content)
+    return resp
 
 
 # Async functions
