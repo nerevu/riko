@@ -8,7 +8,7 @@
 import requests
 import treq
 
-from os.path import join
+from os import path as p
 from urllib2 import urlopen
 from itertools import starmap
 from json import loads
@@ -23,6 +23,11 @@ from pipe2py.twisted.utils import (
     asyncStarMap, asyncDispatch, asyncNone, asyncReturn)
 
 opts = {'listize': False}
+parent = p.dirname(p.dirname(__file__))
+abspath = p.abspath(p.join(parent, 'data', 'quote.json'))
+parent = p.dirname(p.dirname(__file__))
+abspath = p.abspath(p.join(parent, 'data', 'quote.json'))
+LOCAL_RATES_URL = 'file://%s' % abspath
 
 FIELDS = [
     {'name': 'USD/USD', 'price': 1},
@@ -90,9 +95,7 @@ def asyncGetDefaultRateData(err=None):
     else:
         logger.warning('Exchange rate data from %s was empty' % EXCHANGE_API)
 
-    path = join('..', 'data', 'quote.json')
-    url = utils.get_abspath(path)
-    resp = yield deferToThread(urlopen, url)
+    resp = yield deferToThread(urlopen, LOCAL_RATES_URL)
     json = loads(resp.read())
     returnValue(json)
 
