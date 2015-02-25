@@ -24,8 +24,8 @@ class LogFilter(logging.Filter):
         return record.levelno < self.level
 
 MIN_LEVEL = logging.DEBUG
-stdout_hdlr = StreamHandler(sys.stdout)
-stderr_hdlr = StreamHandler(sys.stderr)
+stdout_hdlr = logging.StreamHandler(sys.stdout)
+stderr_hdlr = logging.StreamHandler(sys.stderr)
 log_filter = LogFilter(logging.WARNING)
 stdout_hdlr.addFilter(log_filter)
 stdout_hdlr.setLevel(MIN_LEVEL)
