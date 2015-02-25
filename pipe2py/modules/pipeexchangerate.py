@@ -52,7 +52,10 @@ def calc_rate(from_cur, to_cur, rates):
     if from_cur == to_cur:
         rate = 1
     elif to_cur == 'USD':
-        rate = rates['USD/%s' % from_cur]
+        try:
+            rate = rates['USD/%s' % from_cur]
+        except KeyError:
+            rate = 1
     else:
         usd_to_given = rates['USD/%s' % from_cur]
         usd_to_default = rates['USD/%s' % to_cur]
