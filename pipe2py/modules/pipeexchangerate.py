@@ -9,6 +9,7 @@ import requests
 import treq
 
 from os.path import join
+from urllib2 import urlopen
 from itertools import starmap
 from json import loads
 from twisted.internet.defer import inlineCallbacks, returnValue
