@@ -16,6 +16,7 @@ from twisted.internet.threads import deferToThread
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
+from pipe2py.lib.log import logger
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import (
     asyncStarMap, asyncDispatch, asyncNone, asyncReturn)
@@ -52,7 +53,11 @@ def calc_rate(from_cur, to_cur, rates):
     if from_cur == to_cur:
         rate = 1
     elif to_cur == 'USD':
-        rate = rates['USD/%s' % from_cur]
+        try:
+            rate = rates['USD/%s' % from_cur]
+        except KeyError:
+            logger.warning('rate USD/%s not found in rates' % from_cur)
+            rate = 1
     else:
         usd_to_given = rates['USD/%s' % from_cur]
         usd_to_default = rates['USD/%s' % to_cur]
@@ -78,8 +83,8 @@ def get_rate_data():
 
 
 @inlineCallbacks
-# TODO: log how often this errback is called
 def asyncGetDefaultRateData(_):
+    logger.error('failed to load exchange rate data from %s' % EXCHANGE_API)
     path = join('..', 'data', 'quote.json')
     url = utils.get_abspath(path)
     resp = yield deferToThread(urlopen, url)
