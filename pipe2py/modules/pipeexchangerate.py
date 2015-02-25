@@ -84,8 +84,12 @@ def get_rate_data():
 
 
 @inlineCallbacks
-def asyncGetDefaultRateData(_=None):
-    logger.error('failed to load exchange rate data from %s' % EXCHANGE_API)
+def asyncGetDefaultRateData(err=None):
+    if err:
+        logger.error('Error loading exchange rate data from %s' % EXCHANGE_API)
+    else:
+        logger.warning('Exchange rate data from %s was empty' % EXCHANGE_API)
+
     path = join('..', 'data', 'quote.json')
     url = utils.get_abspath(path)
     resp = yield deferToThread(urlopen, url)
