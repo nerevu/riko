@@ -60,8 +60,8 @@ combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
 memoize = cache.memoize
 timeout = 60 * 60 * 1
-
 encode = lambda w: w.encode('utf-8') if isinstance(w, unicode) else w
+
 
 class Objectify:
     def __init__(self, **entries):
