@@ -8,7 +8,9 @@
 import requests
 import treq
 
+from os.path import join
 from itertools import starmap
+from json import loads
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.threads import deferToThread
 from . import (
@@ -75,10 +77,20 @@ def get_rate_data():
     return r.json()
 
 
+@inlineCallbacks
+# TODO: log how often this errback is called
+def asyncGetDefaultRateData(_):
+    path = join('..', 'data', 'quote.json')
+    url = utils.get_abspath(path)
+    resp = yield deferToThread(urlopen, url)
+    json = loads(resp.read())
+    returnValue(json)
+
+
 @utils.memoize(utils.timeout)
 def asyncGetRateData():
     resp = treq.get(EXCHANGE_API, params=PARAMS)
-    resp.addCallback(treq.json_content)
+    resp.addCallbacks(treq.json_content, asyncGetDefaultRateData)
     return resp
 
 
