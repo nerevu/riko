@@ -89,8 +89,8 @@ def get_rate_data():
 
 
 @inlineCallbacks
-def asyncGetDefaultRateData(err=None):
-    if err:
+def asyncGetDefaultRateData(*args, **kwargs):
+    if kwargs.get('err', True):
         logger.error('Error loading exchange rate data from %s' % EXCHANGE_API)
     else:
         logger.warning('Exchange rate data from %s was empty' % EXCHANGE_API)
@@ -114,7 +114,7 @@ def asyncParseResult(conf, word, _pass):
     data = yield asyncNone if offline else asyncGetRateData()
 
     if not (offline or data):
-        data = yield asyncGetDefaultRateData()
+        data = yield asyncGetDefaultRateData(err=False)
 
     rates = parse_request(data, offline)
     result = base if _pass else calc_rate(base, conf.quote, rates)
