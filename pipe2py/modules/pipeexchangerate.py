@@ -82,7 +82,7 @@ def parse_request(data, offline):
     return {i['name']: i['price'] for i in fields}
 
 
-@utils.memoize(utils.timeout)
+@utils.memoize(utils.half_day)
 def get_rate_data():
     r = requests.get(EXCHANGE_API, params=PARAMS)
     return r.json()
@@ -100,7 +100,7 @@ def asyncGetDefaultRateData(err=None):
     returnValue(json)
 
 
-@utils.memoize(utils.timeout)
+# @utils.memoize(utils.half_day)
 def asyncGetRateData():
     resp = treq.get(EXCHANGE_API, params=PARAMS)
     resp.addCallbacks(treq.json_content, asyncGetDefaultRateData)
