@@ -127,8 +127,7 @@ def group_by(iterable, attr, default=None):
     grouped = {str(k): list(v) for k, v in groups}
 
     # return groups in original order
-    ordered = {key: grouped[key] for key in order}
-    return ordered
+    return {key: grouped[key] for key in order}
 
 
 def unique_everseen(iterable, key=None):
