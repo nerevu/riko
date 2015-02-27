@@ -100,7 +100,7 @@ def asyncGetDefaultRateData(*args, **kwargs):
     returnValue(json)
 
 
-# @utils.memoize(utils.half_day)
+@utils.memoize(utils.half_day)
 def asyncGetRateData():
     resp = treq.get(EXCHANGE_API, params=PARAMS)
     resp.addCallbacks(treq.json_content, asyncGetDefaultRateData)
