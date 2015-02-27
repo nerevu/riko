@@ -22,6 +22,7 @@ from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
 from pipe2py import Context
+from pipe2py.lib.log import Logger
 from mezmorize import Cache
 
 if environ.get('DATABASE_URL'):  # HEROKU
@@ -78,6 +79,10 @@ class Objectify:
 def _apply_func(funcs, items, map_func=starmap):
     return map_func(lambda item, func: func(item), izip(items, funcs))
 
+
+def get_logger(context):
+    level = 'DEBUG' if context and context.verbose else 'INFO'
+    return Logger(level).logger
 
 def extract_dependencies(pipe_def=None, pipe_generator=None):
     """Extract modules used by a pipe"""

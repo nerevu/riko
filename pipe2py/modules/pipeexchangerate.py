@@ -17,7 +17,6 @@ from twisted.internet.threads import deferToThread
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
-from pipe2py.lib.log import logger
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import (
     asyncStarMap, asyncDispatch, asyncNone, asyncReturn)
@@ -27,6 +26,7 @@ parent = p.dirname(p.dirname(__file__))
 abspath = p.abspath(p.join(parent, 'data', 'quote.json'))
 parent = p.dirname(p.dirname(__file__))
 abspath = p.abspath(p.join(parent, 'data', 'quote.json'))
+logger = None
 LOCAL_RATES_URL = 'file://%s' % abspath
 
 FIELDS = [
@@ -140,6 +140,8 @@ def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of hashed strings
     """
+    global logger
+    logger = utils.get_logger(context)
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
     _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
