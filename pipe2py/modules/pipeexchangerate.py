@@ -11,6 +11,7 @@ import treq
 from os import path as p
 from urllib2 import urlopen
 from itertools import starmap
+from functools import partial
 from json import loads
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.threads import deferToThread
@@ -22,8 +23,6 @@ from pipe2py.twisted.utils import (
     asyncStarMap, asyncDispatch, asyncNone, asyncReturn)
 
 opts = {'listize': False}
-parent = p.dirname(p.dirname(__file__))
-abspath = p.abspath(p.join(parent, 'data', 'quote.json'))
 parent = p.dirname(p.dirname(__file__))
 abspath = p.abspath(p.join(parent, 'data', 'quote.json'))
 logger = None
@@ -72,53 +71,46 @@ def calc_rate(from_cur, to_cur, rates):
     return 1 / float(rate)
 
 
-def parse_request(data, offline):
-    if offline:
-        fields = FIELDS
-    else:
-        resources = data['list']['resources']
-        fields = (r['resource']['fields'] for r in resources)
-
+def parse_request(json):
+    resources = json['list']['resources']
+    fields = (r['resource']['fields'] for r in resources)
     return {i['name']: i['price'] for i in fields}
 
 
+def parse_result(conf, word, _pass, rates=None):
+    base = word or conf.default
+    return base if _pass else calc_rate(base, conf.quote, rates)
+
+
+# Async functions
 @utils.memoize(utils.half_day)
-def get_rate_data():
-    r = requests.get(EXCHANGE_API, params=PARAMS)
-    return r.json()
+def asyncGetOfflineRateData(*args, **kwargs):
+    logger.debug('loading offline data')
 
-
-@inlineCallbacks
-def asyncGetDefaultRateData(*args, **kwargs):
     if kwargs.get('err', True):
         logger.error('Error loading exchange rate data from %s' % EXCHANGE_API)
-    else:
-        logger.warning('Exchange rate data from %s was empty' % EXCHANGE_API)
 
-    resp = yield deferToThread(urlopen, LOCAL_RATES_URL)
-    json = loads(resp.read())
-    returnValue(json)
+    resp = deferToThread(urlopen, LOCAL_RATES_URL)
+    resp.addCallback(lambda r: loads(r.read()))
+    return resp
 
 
 @utils.memoize(utils.half_day)
 def asyncGetRateData():
+    logger.debug('asyncGetRateData')
     resp = treq.get(EXCHANGE_API, params=PARAMS)
-    resp.addCallbacks(treq.json_content, asyncGetDefaultRateData)
+    resp.addCallbacks(treq.json_content, asyncGetOfflineRateData)
     return resp
 
 
-# Async functions
-@inlineCallbacks
-def asyncParseResult(conf, word, _pass):
-    base, offline = get_base(conf, word)
-    data = yield asyncNone if offline else asyncGetRateData()
-
-    if not (offline or data):
-        data = yield asyncGetDefaultRateData(err=False)
-
-    rates = parse_request(data, offline)
-    result = base if _pass else calc_rate(base, conf.quote, rates)
-    returnValue(result)
+def asyncSetup(context=None, conf=None, **kwargs):
+    global logger
+    logger = utils.get_logger(context)
+    offline = conf.get('offline', {}).get('value')
+    kw = {'err': False}
+    # logger.debug('data type: ' % type(json))
+    # logger.debug('data len: ' % len(json))
+    return asyncGetOfflineRateData(**kw) if offline else asyncGetRateData()
 
 
 @inlineCallbacks
@@ -142,19 +134,34 @@ def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     """
     global logger
     logger = utils.get_logger(context)
+    rates = parse_request(kwargs['setup_output'])
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
-    _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
+    _OUTPUT = starmap(partial(parse_result, rates=rates), parsed)
     returnValue(iter(_OUTPUT))
 
 
 # Synchronous functions
-def parse_result(conf, word, _pass):
-    base, offline = get_base(conf, word)
-    data = None if offline else get_rate_data()
-    rates = parse_request(data, offline)
-    result = base if _pass else calc_rate(base, conf.quote, rates)
-    return result
+@utils.memoize(utils.half_day)
+def get_offline_rate_data(*args, **kwargs):
+    if kwargs.get('err', True):
+        logger.error('Error loading exchange rate data from %s' % EXCHANGE_API)
+    else:
+        logger.warning('Exchange rate data from %s was empty' % EXCHANGE_API)
+
+    return loads(urlopen(LOCAL_RATES_URL).read())
+
+
+@utils.memoize(utils.half_day)
+def get_rate_data():
+    r = requests.get(EXCHANGE_API, params=PARAMS)
+    return r.json()
+
+
+def setup(conf=None, **kwargs):
+    offline = conf.get('offline', {}).get('value')
+    kw = {'err': False}
+    return get_offline_rate_data(**kw) if offline else get_rate_data()
 
 
 def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
@@ -175,7 +182,8 @@ def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of hashed strings
     """
+    rates = parse_request(kwargs['setup_output'])
     splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs())
-    _OUTPUT = starmap(parse_result, parsed)
+    _OUTPUT = starmap(partial(parse_result, rates=rates), parsed)
     return _OUTPUT
