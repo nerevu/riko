@@ -70,7 +70,7 @@ def parse_embed(item, context=None, conf=None, embed=None, **kwargs):
         embedded = parsed_conf['embed']
 
     embedded_conf = embedded.get('conf', {})
-    pairs = [('pass_if', kwargs), ('pdictize', embedded)]
+    pairs = [('pass_if', kwargs), ('setup_output', kwargs), ('pdictize', embedded)]
     true_pairs = ((x, y[x]) for x, y in pairs if x in y)
     ekwargs = dict(chain([('with', parsed_conf.get('with'))], true_pairs))
     context.inputs = get_funcs(embedded_conf, **ekwargs)[0](item)
@@ -111,6 +111,10 @@ def asyncPipeLoop(context=None, _INPUT=None, conf=None, embed=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
+    if kwargs.get('setup'):
+        setup_output = yield kwargs['setup'](context, conf['embed']['conf'])
+        kwargs.update({'setup_output': setup_output})
+
     cust_func = get_cust_func(context, conf, embed, parse_embed, **kwargs)
     opts.update({'cust_func': cust_func})
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))

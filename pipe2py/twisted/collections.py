@@ -20,6 +20,11 @@ class AsyncPipe(PyPipe):
         self.pipeline = getattr(self.module, 'asyncPipe%s' % self.name.title())
         self.kwargs = kwargs
 
+        try:
+            self.setup = getattr(self.module, 'asyncSetup')
+        except AttributeError:
+            self.setup = None
+
     @property
     @inlineCallbacks
     def list(self):
@@ -30,5 +35,6 @@ class AsyncPipe(PyPipe):
         return AsyncPipe(name, self.context, input=self.output, **kwargs)
 
     def loop(self, name, **kwargs):
-        embed = AsyncPipe(name, self.context).pipeline
-        return self.pipe('loop', embed=embed, **kwargs)
+        async_pipe = AsyncPipe(name, self.context)
+        kwargs.update({'setup': async_pipe.setup})
+        return self.pipe('loop', embed=async_pipe.pipeline, **kwargs)

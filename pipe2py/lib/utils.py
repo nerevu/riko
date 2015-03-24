@@ -22,6 +22,7 @@ from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
 from pipe2py import Context
+from pipe2py.lib.log import Logger
 from mezmorize import Cache
 
 if environ.get('DATABASE_URL'):  # HEROKU
@@ -60,6 +61,7 @@ combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
 memoize = cache.memoize
 timeout = 60 * 60 * 1
+half_day = 60 * 60 * 12
 encode = lambda w: w.encode('utf-8') if isinstance(w, unicode) else w
 
 
@@ -77,6 +79,10 @@ class Objectify:
 def _apply_func(funcs, items, map_func=starmap):
     return map_func(lambda item, func: func(item), izip(items, funcs))
 
+
+def get_logger(context):
+    level = 'DEBUG' if context and context.verbose else 'INFO'
+    return Logger(level).logger
 
 def extract_dependencies(pipe_def=None, pipe_generator=None):
     """Extract modules used by a pipe"""
@@ -121,8 +127,7 @@ def group_by(iterable, attr, default=None):
     grouped = {str(k): list(v) for k, v in groups}
 
     # return groups in original order
-    ordered = {key: grouped[key] for key in order}
-    return ordered
+    return {key: grouped[key] for key in order}
 
 
 def unique_everseen(iterable, key=None):

@@ -21,7 +21,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncDispatch
 
-opts = {'convert': False, 'ftype': 'pass'}
+opts = {'convert': False, 'ftype': 'pass', 'dictize': True}
 substitute = utils.multi_substitute
 convert_func = partial(utils.convert_rules, recompile=False)
 

@@ -36,8 +36,16 @@ stderr_hdlr.setLevel(max(MIN_LEVEL, logging.WARNING))
 rootLogger = logging.getLogger()
 rootLogger.addHandler(stdout_hdlr)
 rootLogger.addHandler(stderr_hdlr)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+
+class Logger(object):
+    def __init__(self, level):
+        self.level = level
+
+    @property
+    def logger(self):
+        logger = logging.getLogger(__name__)
+        logger.setLevel(getattr(logging, self.level))
+        return logger
 
 # # Example Usage
 # logger.debug("A DEBUG message")
