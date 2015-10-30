@@ -1,25 +1,85 @@
-# pipetruncate.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipetruncate
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from pipe2py.lib.dotdict import DotDict
+    http://pipes.yahoo.com/pipes/docs?doc=operators
+"""
+
 from itertools import islice
+from . import get_splits, asyncGetSplits
+from twisted.internet.defer import inlineCallbacks, returnValue
+from pipe2py.lib.utils import combine_dicts as cdicts
+
+opts = {'ftype': None, 'listize': False}
 
 
-def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
-    """Returns a specified number of items from the top of a feed.
+# Async functions
+@inlineCallbacks
+def asyncPipeUniq(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that asynchronously returns a specified number of items from
+    the top of a feed. Not loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- terminal, if the truncation value is wired in
-    conf:
-        count -- length of the truncated feed, if specified literally
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : twisted Deferred iterable of items
+    conf : {
+        'start': {'type': 'number', value': <starting location>}
+        'count': {'type': 'number', value': <desired feed length>}
+    }
 
-    Yields (_OUTPUT):
-    truncated list of source items
+    returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of unique items
     """
-    conf = DotDict(conf)
-    limit = conf.get('count', func=int, **kwargs)
+    _input = yield _INPUT
+    asyncFuncs = yield asyncGetSplits(None, conf, **cdicts(opts, kwargs))
+    pieces = yield asyncFuncs[0]()
+    _pass = yield asyncFuncs[2]()
 
-    for item in islice(_INPUT, limit):
-        yield item
+    if _pass:
+        _OUTPUT = _input
+    else:
+        start = int(pieces.start)
+        stop = start + int(pieces.count)
+        _OUTPUT = islice(_input, start, stop)
+
+    returnValue(_OUTPUT)
+
+
+# Synchronous functions
+def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that returns a specified number of items from the top of a
+    feed. Not loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    kwargs -- terminal, if the truncation value is wired in
+    conf : {
+        'start': {'type': 'number', value': <starting location>}
+        'count': {'type': 'number', value': <desired feed length>}
+    }
+
+    Returns
+    -------
+    _OUTPUT : generator of items
+    """
+    funcs = get_splits(None, conf, **cdicts(opts, kwargs))
+    pieces, _pass = funcs[0](), funcs[2]()
+
+    if _pass:
+        _OUTPUT = _INPUT
+    else:
+        try:
+            start = int(pieces.start)
+        except AttributeError:
+            start = 0
+
+        stop = start + int(pieces.count)
+        _OUTPUT = islice(_INPUT, start, stop)
+
+    return _OUTPUT

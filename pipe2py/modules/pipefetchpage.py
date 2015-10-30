@@ -1,9 +1,18 @@
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipefetchpage
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchPage
+"""
+
 # Author: Gerrit Riessen, gerrit.riessen@open-source-consultants.de
 # Copyright (C) 2011 Gerrit Riessen
 # This code is licensed under the GNU Public License.
 
 from urllib2 import urlopen
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
@@ -39,11 +48,13 @@ def _parse_content(content, conf, **kwargs):
 
 
 def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
-    """Fetch Page module
+    """A source that fetches the content of a given web site as a string.
+    Loopable.
 
-    _INPUT -- not used since this does not have inputs.
+    context : pipe2py.Context object
+    _INPUT : pipeforever asyncPipe or an iterable of items or fields
 
-    conf:
+    conf : dict
        URL -- url object contain the URL to download
        from -- string from where to start the input
        to -- string to limit the input
@@ -57,15 +68,19 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
         - item delimiter removes the closing tag if using a HTML tag
           (not documented but happens)
         - items should be cleaned, i.e. stripped of HTML tags
+
+    Yields
+    ------
+    _OUTPUT : items
     """
     conf = DotDict(conf)
     split_token = conf.get('token', **kwargs)
-    urls = util.listize(conf['URL'])
+    urls = utils.listize(conf['URL'])
 
     for item in _INPUT:
         for item_url in urls:
-            url = util.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = util.get_abspath(url)
+            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
+            url = utils.get_abspath(url)
 
             if not url:
                 continue

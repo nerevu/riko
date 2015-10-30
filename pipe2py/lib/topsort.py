@@ -6,7 +6,6 @@
    Public domain, do with it as you will
 """
 
-
 def _gen_result(graph, ready, count):
     while ready:
         node = ready.pop(-1)
@@ -17,7 +16,7 @@ def _gen_result(graph, ready, count):
             ready.append(x) if count[x] == 0 else None
 
 
-def _visit(node, graph, low=None, stack=None):
+def _visit(node, graph=None, low=None, stack=None):
     low = low or {}
     stack = stack or []
 
@@ -34,7 +33,7 @@ def _visit(node, graph, low=None, stack=None):
         if num == low[node]:
             component = tuple(stack[position:])
             del stack[position:]
-            map(lambda x: low.update({x: len(graph)}), component)
+            [low.update({x: len(graph)}) for x in component]
             return component
 
 
@@ -63,7 +62,7 @@ def get_graph_component(graph):
         graph should be a dictionary mapping node names to
         lists of successor nodes.
     """
-    components = map(lambda x: _visit(x, graph), graph)
+    components = map(partial(_visit, graph=graph), graph)
     node_component = dict(_gen_node_component(components))
     graph_component = {component: [] for component in components}
     graph_component.update(
@@ -75,7 +74,7 @@ def get_graph_component(graph):
 def topological_sort(graph):
     count = {node: 0 for node in graph}
     set_count = lambda x: count.update({x: count[x] + 1})
-    map(lambda item: map(set_count, item[1]), graph.items())
+    [map(set_count, item[1]) for item in graph.items()]
     ready = [node for node in graph if count[node] == 0]
     return list(_gen_result(graph, ready, count))
 

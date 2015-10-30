@@ -1,5 +1,11 @@
-# implementation of yahoo pipes createrss operator,
-# see http://pipes.yahoo.com/pipes/docs?doc=operators#CreateRSS
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipecreaterss
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=operators#CreateRSS
+"""
 
 # Copyright (C) 2011  Nick Savchenko <nsavch@gmail.com>
 
@@ -32,6 +38,9 @@ RSS_FIELDS = {
 
 
 def pipe_createrss(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that converts a source into an RSS stream. Not loopable.
+
+    """
     conf = DotDict(conf)
 
     for item in _INPUT:

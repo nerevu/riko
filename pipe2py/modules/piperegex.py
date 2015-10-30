@@ -2,125 +2,128 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.modules.piperegex
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Provides methods for modifying fields in a feed using regular
     expressions, a powerful type of pattern matching.
     Think of it as search-and-replace on steroids.
     You can define multiple Regex rules.
-    Each has the general format: "In [field] replace [regex pattern] with
-    [text]".
 
     http://pipes.yahoo.com/pipes/docs?doc=operators#Regex
 """
 
-import re
-from pipe2py import util
-from pipe2py.lib.dotdict import DotDict
+from functools import partial
+from itertools import starmap
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import (
+    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
+from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
+from pipe2py.twisted.utils import asyncDispatch
+
+opts = {'convert': False, 'ftype': 'pass'}
+substitute = utils.multi_substitute
+convert_func = partial(utils.convert_rules, recompile=False)
 
 
-def _get_args(item, rule, sub_string, sub_func, key=False):
-    content = item[rule[0]]['content'] if key else item[rule[0]]
-    return (rule[0], re.sub(sub_string, sub_func, unicode(content)))
+# Common functions
+def get_groups(rules, item):
+    field_groups = utils.group_by(list(rules), 'field').iteritems()
+    return ((f, item.get(f) or '', r) for f, r in field_groups)
 
 
-def _gen_rules(rule_defs, **kwargs):
-    for rule in rule_defs:
-        rule = DotDict(rule)
+# Async functions
+@inlineCallbacks
+def asyncParseResult(rules, item, _pass):
+    if not _pass:
+        groups = get_groups(rules, item)
+        substitutions = yield maybeDeferred(get_substitutions, groups)
+        list(starmap(item.set, substitutions))
 
-        # flags = re.DOTALL # DOTALL was the default for pipe2py previously
-        # flag 'm'
-        flags = re.MULTILINE if 'multilinematch' in rule else 0
-
-        # flag 'i'; this name is reversed from its meaning
-        flags |= re.IGNORECASE if 'casematch' in rule else 0
-
-        # flag 's'
-        flags |= re.DOTALL if 'singlelinematch' in rule else 0
-
-        # todo: 'globalmatch' is the default in python
-        # todo: if set, re.sub() below would get count=0 and by default would
-        # get count=1
-
-        # todo: use subkey?
-        match = rule.get('match', **kwargs)
-
-        # compile for speed and we need to pass flags
-        matchc = re.compile(match, flags)
-
-        # todo: use subkey?
-        replace = rule.get('replace', **kwargs) or ''
-
-        # Convert regex to Python format
-        # todo: use a common routine for this
-        # map $1 to \1 etc.
-        # todo: also need to escape any existing \1 etc.
-        replace = re.sub('\$(\d+)', r'\\\1', replace)
-        yield (rule.get('filed'), matchc, replace)
+    returnValue(item)
 
 
-def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
-    """Applies regex rules to _INPUT items.
+@inlineCallbacks
+def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that asynchronously replaces text in items using regexes.
+    Each has the general format: "In [field] replace [match] with [replace]".
+    Not loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
-    conf: dict
-        {
-            'RULE': [
-                {
-                    'field': {'value': 'search field'},
-                    'match': {'value': 'regex'},
-                    'replace': {'value': 'replacement'}
-                }
-            ]
-        }
+    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
+    conf : {
+        'RULE': [
+            {
+                'field': {'value': <'search field'>},
+                'match': {'value': <'regex'>},
+                'replace': {'value': <'replacement'>},
+                'globalmatch': {'value': '1'},
+                'singlelinematch': {'value': '2'},
+                'multilinematch': {'value': '4'},
+                'casematch': {'value': '8'}
+            }
+        ]
+    }
 
-    Yields
-    ------
-    _OUTPUT : source pipe items post regexes application
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    rule_defs = util.listize(conf['RULE'])
+    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    asyncConvert = partial(maybeDeferred, convert_func)
+    asyncFuncs = get_async_dispatch_funcs('pass', asyncConvert)
+    parsed = yield asyncDispatch(splits, *asyncFuncs)
+    _OUTPUT = yield maybeDeferred(parse_results, parsed)
+    returnValue(iter(_OUTPUT))
 
-    # use list bc iterator gets used up if there are no matching feeds
-    rules = list(_gen_rules(rule_defs, **kwargs))
 
-    for item in _INPUT:
-        item = DotDict(item)
+# Synchronous functions
+def get_substitutions(groups):
+    for field, word, rules in groups:
+        values = utils.group_by(rules, 'flags').itervalues()
+        replacement = reduce(substitute, values, word) if word else word
+        yield (field, replacement)
 
-        def sub_fields(matchobj):
-            return item.get(matchobj.group(1), **kwargs)
 
-        for rule in rules:
-            # todo: do we ever need get_value here instead of item[]?
-            # when the subject being examined is an HTML node, not a
-            # string then the unicode() converts the dict representing the node
-            # to a dict literal, and then attempts to apply the pattern
-            # to the literal; as an HTML element node, it may have attributes
-            # which then appear in the literal. It should be only matching on
-            # (and replacing the value of) the `.content` subelement
-            # I'm not confident that what is below will work across the board
-            # nor if this is the right way to detect that we're looking at
-            # an HTML node and not a plain string
-            if rule[0] in item and item[rule[0]]:
-                sub_string = '\$\{(.+?)\}'
-
-                if (
-                    hasattr(item[rule[0]], 'keys')
-                    and 'content' in item[rule[0]]
-                ):
-                    # this looks like an HTML node, so only do substitution on
-                    # the content of the node possible gotcha: the content
-                    # might be a subtree, in which case we revert to modifying
-                    # the literal of the subtree dict
-                    args1 = _get_args(item, rule, rule[1], rule[2], 'content')
-                    args2 = _get_args(item, rule, sub_string, sub_fields)
-                else:
-                    args1 = _get_args(item, rule, rule[1], rule[2])
-                    args2 = _get_args(item, rule, sub_string, sub_fields)
-
-                item.set(*args1)
-                item.set(*args2)
+def parse_results(parsed):
+    for rules, item, _pass in parsed:
+        if not _pass:
+            groups = get_groups(rules, item)
+            substitutions = get_substitutions(groups)
+            list(starmap(item.set, substitutions))
 
         yield item
+
+
+def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that replaces text in items using regexes. Each has the
+    general format: "In [field] replace [match] with [replace]". Not loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipe2py.modules pipe like object (iterable of items)
+    conf : {
+        'RULE': [
+            {
+                'field': {'value': <'search field'>},
+                'match': {'value': <'regex'>},
+                'replace': {'value': <'replacement'>},
+                'globalmatch': {'value': '1'},
+                'singlelinematch': {'value': '2'},
+                'multilinematch': {'value': '4'},
+                'casematch': {'value': '8'}
+            }
+        ]
+    }
+
+    Returns
+    -------
+    _OUTPUT : generator of items
+    """
+    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
+    parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', convert_func))
+    _OUTPUT = parse_results(parsed)
+    return _OUTPUT

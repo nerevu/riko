@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipesimplemath
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    http://pipes.yahoo.com/pipes/docs?doc=number#SimpleMath
+    pipe2py.modules.pipecurrencyformat
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
 from functools import partial
 from itertools import starmap
-from math import pow
+from babel.numbers import format_currency
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
@@ -19,40 +17,27 @@ from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 opts = {'listize': False}
 
-OPS = {
-    'add': lambda x, y: x + y,
-    'subtract': lambda x, y: x - y,
-    'multiply': lambda x, y: x * y,
-    'mean': lambda x, y: (x + y) / 2.0,
-    'divide': lambda x, y: x / (y * 1.0),
-    'modulo': lambda x, y: x % y,
-    'power': lambda x, y: pow(x, y),
-}
-
 
 # Common functions
 def parse_result(conf, num, _pass):
-    return num if _pass else OPS[conf.OP](num, conf.OTHER)
+    return num if _pass else format_currency(num, conf.currency)
 
 
 # Async functions
 @inlineCallbacks
-def asyncPipeSimplemath(context=None, _INPUT=None, conf=None, **kwargs):
-    """A number module that asynchronously performs basic arithmetic, such as
-    addition and subtraction. Loopable.
+def asyncPipeCurrencyformat(context=None, _INPUT=None, conf=None, **kwargs):
+    """A number module that asynchronously formats a number to a given currency
+    string. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
     _INPUT : twisted Deferred iterable of items or numbers
-    conf : {
-        'OTHER': {'type': 'number', 'value': <'5'>},
-        'OP': {'type': 'text', 'value': <'modulo'>}
-    }
+    conf : {'currency': {'value': <'USD'>}}
 
     Returns
     -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of tokenized floats
+    _OUTPUT : twisted.internet.defer.Deferred generator of formatted currencies
     """
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs('num'))
@@ -61,23 +46,19 @@ def asyncPipeSimplemath(context=None, _INPUT=None, conf=None, **kwargs):
 
 
 # Synchronous functions
-def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
-    """A number module that performs basic arithmetic, such as addition and
-    subtraction. Loopable.
+def pipe_currencyformat(context=None, _INPUT=None, conf=None, **kwargs):
+    """A number module that formats a number to a given currency string.
+    Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
     _INPUT : iterable of items or numbers
-    kwargs -- other value, if wired in
-    conf : {
-        'OTHER': {'type': 'number', 'value': <'5'>},
-        'OP': {'type': 'text', 'value': <'modulo'>}
-    }
+    conf : {'currency': {'value': <'USD'>}}
 
     Returns
     -------
-    _OUTPUT : generator of tokenized floats
+    _OUTPUT : generator of formatted currencies
     """
     splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs('num'))

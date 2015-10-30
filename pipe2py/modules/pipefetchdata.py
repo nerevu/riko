@@ -2,11 +2,12 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.modules.pipefetchdata
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Provides methods for fetching XML and JSON data sources.
 
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchData
 """
+
 from lxml import objectify
 from lxml.etree import XMLSyntaxError
 from urllib2 import urlopen
@@ -16,33 +17,90 @@ try:
 except (ImportError, AttributeError):
     from simplejson import loads
 
-from pipe2py import util
-from pipe2py.lib.dotdict import DotDict
+from functools import partial
+from itertools import imap, starmap
+from twisted.internet.defer import inlineCallbacks, maybeDeferred, returnValue
+from . import (
+    get_splits, asyncGetSplits, get_dispatch_funcs, get_async_dispatch_funcs)
+from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
+from pipe2py.twisted.utils import (
+    asyncStarMap, asyncImap, asyncDispatch, asyncReduce)
+
+opts = {'listize': False, 'ftype': None}
+func = lambda element, i: element.get(i) if element else None
 
 
-def _parse_dict(split_path, element):
-    for i in split_path:
-        element = element.get(i) if element else None
+def parse_conf(conf):
+    url = utils.get_abspath(conf.URL)
+    path = conf.path.split('.') if conf.path else []
+    return (url, path, None)
+
+
+def get_element(url):
+    try:
+        tree = objectify.parse(urlopen(url))
+        root = tree.getroot()
+    except XMLSyntaxError:
+        element = loads(urlopen(url).read())
+    else:
+        # print etree.tostring(element, pretty_print=True)
+        element = utils.etree_to_dict(root)
 
     return element
 
+# Async functions
+asyncParseResult = lambda element, path, _: asyncReduce(func, path, element)
+
+
+@inlineCallbacks
+def asyncGetParsed(_INPUT, asyncFunc):
+    _input = yield _INPUT
+    finite = utils.finitize(_input)
+    confs = yield asyncImap(asyncFunc, finite)
+    splits = imap(parse_conf, confs)
+    asyncGetElement = partial(maybeDeferred, get_element)
+    asyncFuncs = get_async_dispatch_funcs('pass', asyncGetElement)
+    results = yield asyncDispatch(splits, *asyncFuncs)
+    returnValue(results)
+
+
+@inlineCallbacks
+def asyncPipeFetchdata(context=None, _INPUT=None, conf=None, **kwargs):
+    asyncFuncs = yield asyncGetSplits(None, conf, **cdicts(opts, kwargs))
+    parsed = yield asyncGetParsed(_INPUT, asyncFuncs[0])
+    results = yield asyncStarMap(asyncParseResult, parsed)
+    items = imap(utils.gen_items, results)
+    _OUTPUT = utils.multiplex(items)
+    returnValue(_OUTPUT)
+
+
+# Synchronous functions
+parse_result = lambda element, path, _: reduce(func, path, element)
+
+
+def get_parsed(_INPUT, func):
+    finite = utils.finitize(_INPUT)
+    confs = imap(func, finite)
+    splits = imap(parse_conf, confs)
+    return utils.dispatch(splits, *get_dispatch_funcs('pass', get_element))
+
 
 def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
-    """Fetches and parses an XML or JSON file.
+    """A source that fetches and parses an XML or JSON file. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
-    _INPUT : source generator of dicts
-    conf : dict
-        {
-            'URL': {'value': url},
-            'path': {'value': dot separated path to data list}
-        }
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : {
+        'URL': {'value': <url>},
+        'path': {'value': <dot separated path to data list>}
+    }
 
     Yields
     ------
-    _OUTPUT : pipe items fetched from source
+    _OUTPUT : items
 
     Examples
     --------
@@ -66,41 +124,9 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     ['appointment', 'reminder']
     """
     # todo: iCal and KML
-    conf = DotDict(conf)
-    urls = util.listize(conf['URL'])
-
-    for item in _INPUT:
-        for item_url in urls:
-            item = DotDict(item)
-            url = util.get_value(DotDict(item_url), item, **kwargs)
-            url = util.get_abspath(url)
-            f = urlopen(url)
-            path = util.get_value(conf['path'], item, **kwargs)
-            split_path = path.split(".") if path else []
-            res = {}
-
-            try:
-                tree = objectify.parse(f)
-                root = tree.getroot()
-            except XMLSyntaxError:
-                if context and context.verbose:
-                    print "pipe_fetchdata loading json:", url
-
-                f = urlopen(url)
-                element = loads(f.read())
-            else:
-                if context and context.verbose:
-                    print "pipe_fetchdata loading xml:", url
-
-                # print etree.tostring(element, pretty_print=True)
-                element = util.etree_to_dict(root)
-            finally:
-                res = _parse_dict(split_path, element) if element else None
-
-                for i in util.gen_items(res, True):
-                    yield i
-
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+    funcs = get_splits(None, conf, **cdicts(opts, kwargs))
+    parsed = get_parsed(_INPUT, funcs[0])
+    results = starmap(parse_result, parsed)
+    items = imap(utils.gen_items, results)
+    _OUTPUT = utils.multiplex(items)
+    return _OUTPUT

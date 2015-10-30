@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipesubstr
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    http://pipes.yahoo.com/pipes/docs?doc=string#SubString
+    pipe2py.modules.pipestrtransform
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
 from functools import partial
@@ -21,30 +19,27 @@ opts = {'listize': False}
 
 # Common functions
 def parse_result(conf, word, _pass):
-    start = int(conf.start)
-    end = int(conf.start + conf.length)
-    return word if _pass else word[start:end]
+    allowed = {'capitalize', 'lower', 'upper', 'swapcase', 'title'}
+    _pass = _pass if conf.transformation in allowed else True
+    return word if _pass else getattr(str, conf.transformation)(str(word))
 
 
 # Async functions
 @inlineCallbacks
-def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that asynchronously returns a substring. Loopable.
+def asyncPipeStrtransform(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously splits a string into tokens
+    delimited by separators. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
     _INPUT : twisted Deferred iterable of items or strings
-    conf : {
-        'from': {'type': 'number', value': <starting position>},
-        'length': {'type': 'number', 'value': <count of characters to return>}
-    }
+    conf : {'transformation': {value': <'swapcase'>}}
 
-    returns
+    Returns
     -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of substrings
+    _OUTPUT : twisted.internet.defer.Deferred generator of tokenized strings
     """
-    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
     _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
@@ -52,23 +47,20 @@ def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
 
 
 # Synchronous functions
-def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that returns a substring. Loopable.
+def pipe_strtransform(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that splits a string into tokens delimited by
+    separators. Loopable.
 
     Parameters
     ----------
     context : pipe2py.Context object
     _INPUT : iterable of items or strings
-    conf : {
-        'from': {'type': 'number', value': <starting position>},
-        'length': {'type': 'number', 'value': <count of characters to return>}
-    }
+    conf : {'transformation': {value': <'swapcase'>}}
 
     Returns
     -------
-    _OUTPUT : generator of substrings
+    _OUTPUT : generator of tokenized strings
     """
-    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
     splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs())
     _OUTPUT = starmap(parse_result, parsed)

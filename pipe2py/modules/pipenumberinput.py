@@ -1,24 +1,35 @@
-# pipenumberinput.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipenumberinput
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from pipe2py import util
+    http://pipes.yahoo.com/pipes/docs?doc=user_inputs#Number
+"""
+
+from pipe2py.lib import utils
 
 
 def pipe_numberinput(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source prompts the user for a number and yields it forever.
+    """An input that prompts the user for a number and yields it forever.
+    Not loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        name -- input parameter name
-        default -- default
-        prompt -- prompt
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : not used
+    conf : {
+        'name': {'value': 'parameter name'},
+        'prompt': {'value': 'User prompt'},
+        'default': {'value': 'default value'},
+        'debug': {'value': 'debug value'}
+    }
 
-    Yields (_OUTPUT):
-    text
+    Yields
+    ------
+    _OUTPUT : text
     """
-    value = util.get_input(context, conf)
+    value = utils.get_input(context, conf)
 
     try:
         value = int(value)

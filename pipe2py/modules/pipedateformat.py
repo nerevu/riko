@@ -1,41 +1,49 @@
-# pipedateformat.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipedateformat
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Provides methods to format datetime values.
+
+    http://pipes.yahoo.com/pipes/docs?doc=date#DateFormatter
+"""
 
 import time
 from pipe2py.lib.dotdict import DotDict
-from pipe2py import util
 
 
 def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source formats a date.
+    """Formats a datetime value. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        format -- date format
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipedatebuilder pipe like object (iterable of date timetuples)
+    conf : {
+        'format': {'value': <'%B %d, %Y'>},
+        'timezone': {'value': <'EST'>}
+    }
 
-    Yields (_OUTPUT):
-    formatted date
+    Yields
+    ------
+    _OUTPUT : formatted dates
     """
     conf = DotDict(conf)
+    loop_with = kwargs.pop('with', None)
     date_format = conf.get('format', **kwargs)
-    date = ()
+    # timezone = conf.get('timezone', **kwargs)
 
     for item in _INPUT:
-        if not hasattr(item, 'tm_year'):
-            date = util.get_date(item)
-
-        date = date.timetuple() if date else item
-
-        if not date:
-            raise Exception('Unexpected date format: %s' % date_format)
+        _with = item.get(loop_with, **kwargs) if loop_with else item
 
         try:
             # todo: check that all PHP formats are covered by Python
-            date_string = time.strftime(date_format, date)
-        except TypeError:
-            # silent error handling e.g. if item is not a date
+            date_string = time.strftime(date_format, _with)
+        except TypeError as e:
+            if context and context.verbose:
+                print 'Error formatting date: %s' % item
+                print e
+
             continue
         else:
             yield date_string

@@ -1,32 +1,70 @@
-# pipeunion.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipeunion
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
+    Provides methods for merging separate sources into a single list of items.
 
-from pipe2py import util
+    http://pipes.yahoo.com/pipes/docs?doc=operators#Union
+"""
+
+from itertools import chain
+from twisted.internet.defer import inlineCallbacks, returnValue
+from pipe2py.lib import utils
 
 
-def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
-    """Merges multiple source together.
+# Common functions
+def get_output(_INPUT, **kwargs):
+    others = (v for k, v in kwargs.iteritems() if k.startswith('_OTHER'))
+    others_items = utils.multiplex(others)
+    input_items = utils.finitize(_INPUT)
+    return chain(input_items, others_items)
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    kwargs -- _OTHER1 - another source generator
-              _OTHER2 etc.
 
-    Yields (_OUTPUT):
-    union of all source items
+# Async functions
+@inlineCallbacks
+def asyncPipeUnion(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that asynchronously merges multiple source together.
+    Not loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
+    conf : unused
+
+    Keyword arguments
+    -----------------
+    _OTHER1 : asyncPipe like object
+    _OTHER2 : etc.
+
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of items
     """
-    for item in _INPUT:
-        # this is being fed forever, i.e. not a real source so just use _OTHERs
-        if item.get('forever'):
-            break
+    _input = yield _INPUT
+    _OUTPUT = get_output(_input, **kwargs)
+    returnValue(_OUTPUT)
 
-        yield item
 
-    # todo: can the multiple sources should be pulled over multiple servers?
-    sources = (
-        items for src, items in kwargs.items() if src.startswith('_OTHER')
-    )
+# Synchronous functions
+def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
+    """An operator that merges multiple source together. Not loopable.
 
-    for item in util.multiplex(sources):
-        yield item
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT :  pipe2py.modules pipe like object (iterable of items)
+    conf : unused
+
+    Keyword arguments
+    -----------------
+    _OTHER1 : pipe2py.modules pipe like object
+    _OTHER2 : etc.
+
+    Returns
+    -------
+    _OUTPUT : generator of items
+    """
+    _OUTPUT = get_output(_INPUT, **kwargs)
+    return _OUTPUT
