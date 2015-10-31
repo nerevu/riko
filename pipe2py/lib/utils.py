@@ -31,15 +31,7 @@ if environ.get('DATABASE_URL'):  # HEROKU
         'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
         'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')}
 else:
-    try:
-        import pylibmc
-    except ImportError:
-        cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
-    else:
-        cache_config = {
-            'DEBUG': True,
-            'CACHE_TYPE': 'memcached',
-            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
+    cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
 
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
