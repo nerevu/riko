@@ -6,8 +6,11 @@
 """
 
 import requests
+import treq
 
+from os.path import join
 from itertools import starmap
+from json import loads
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.threads import deferToThread
 from . import (
@@ -49,7 +52,10 @@ def calc_rate(from_cur, to_cur, rates):
     if from_cur == to_cur:
         rate = 1
     elif to_cur == 'USD':
-        rate = rates['USD/%s' % from_cur]
+        try:
+            rate = rates['USD/%s' % from_cur]
+        except KeyError:
+            rate = 1
     else:
         usd_to_given = rates['USD/%s' % from_cur]
         usd_to_default = rates['USD/%s' % to_cur]
@@ -74,10 +80,21 @@ def get_rate_data():
     return r.json()
 
 
+@inlineCallbacks
+# TODO: log how often this errback is called
+def asyncGetDefaultRateData(_):
+    path = join('..', 'data', 'quote.json')
+    url = utils.get_abspath(path)
+    resp = yield deferToThread(urlopen, url)
+    json = loads(resp.read())
+    returnValue(json)
+
+
+@utils.memoize(utils.timeout)
 def asyncGetRateData():
-    make_cache_key = utils.cache._memoize_make_cache_key(timeout=utils.timeout)
-    cached = utils.cache.get(make_cache_key(get_rate_data))
-    return asyncReturn(cached) if cached else deferToThread(get_rate_data)
+    resp = treq.get(EXCHANGE_API, params=PARAMS)
+    resp.addCallbacks(treq.json_content, asyncGetDefaultRateData)
+    return resp
 
 
 # Async functions
