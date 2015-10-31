@@ -65,8 +65,7 @@ ALTERNATIVE_DATE_FORMATS = (
 # leave option to substitute with multiprocessing
 _map_func = imap
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
-cache = Cache(**cache_config)
-memoize = cache.memoize
+memoize = Cache(**cache_config).memoize
 timeout = 60 * 60 * 1
 half_day = 60 * 60 * 12
 encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
