@@ -83,7 +83,7 @@ def get_rate_data():
 
 @inlineCallbacks
 # TODO: log how often this errback is called
-def asyncGetDefaultRateData(_):
+def asyncGetDefaultRateData(_=None):
     path = join('..', 'data', 'quote.json')
     url = utils.get_abspath(path)
     resp = yield deferToThread(urlopen, url)
@@ -103,6 +103,10 @@ def asyncGetRateData():
 def asyncParseResult(conf, word, _pass):
     base, offline = get_base(conf, word)
     data = yield asyncNone if offline else asyncGetRateData()
+
+    if not (offline or data):
+        data = yield asyncGetDefaultRateData()
+
     rates = parse_request(data, offline)
     result = base if _pass else calc_rate(base, conf.quote, rates)
     returnValue(result)
