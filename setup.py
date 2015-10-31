@@ -56,7 +56,7 @@ setup(
     author='Greg Gaughan',
     author_email='gjgaughan@gmail.com',
     packages=find_packages(exclude=['tests']),
-    package_data={'templates': 'templates/*.txt'},
+    package_data={'templates': 'templates/*.txt', 'data': 'data/*'},
     include_package_data=True,
     classifiers=[],
     keywords='',
