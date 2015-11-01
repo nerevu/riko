@@ -572,13 +572,13 @@ def multiplex(sources):
 ############
 def gen_entries(parsed):
     for entry in parsed['entries']:
+        entry['pubDate'] = entry.get('updated_parsed')
+        entry['y:published'] = entry.get('updated_parsed')
         entry['dc:creator'] = entry.get('author')
         entry['author.uri'] = entry.get('author_detail', {}).get(
             'href')
         entry['author.name'] = entry.get('author_detail', {}).get(
             'name')
-        entry['pubDate'] = entry.get('updated_parsed')
-        entry['y:published'] = entry.get('updated_parsed')
         entry['y:title'] = entry.get('title')
         entry['y:id'] = entry.get('id')
         yield entry
