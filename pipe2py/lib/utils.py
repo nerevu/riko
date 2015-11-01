@@ -7,8 +7,7 @@
 
 """
 
-from __future__ import (
-    absolute_import, division, print_function)
+from __future__ import absolute_import, division, print_function
 
 import string
 import re
@@ -32,15 +31,7 @@ if environ.get('DATABASE_URL'):  # HEROKU
         'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
         'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')}
 else:
-    try:
-        import pylibmc
-    except ImportError:
-        cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
-    else:
-        cache_config = {
-            'DEBUG': True,
-            'CACHE_TYPE': 'memcached',
-            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
+    cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
 
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
@@ -59,7 +50,10 @@ _map_func = imap
 
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
+memoize = cache.memoize
 timeout = 60 * 60 * 1
+half_day = 60 * 60 * 12
+encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 
 
 class Objectify:
@@ -75,10 +69,6 @@ class Objectify:
 
 def _apply_func(funcs, items, map_func=starmap):
     return map_func(lambda item, func: func(item), izip(items, funcs))
-
-
-def memoize(*args, **kwargs):
-    return cache.memoize(*args, **kwargs)
 
 
 def extract_dependencies(pipe_def=None, pipe_generator=None):
@@ -193,8 +183,8 @@ def get_value(field, item=None, force=False, **kwargs):
     OPS = {
         'number': {'default': 0.0, 'func': float},
         'integer': {'default': 0, 'func': int},
-        'text': {'default': ''},
-        'unicode': {'default': '', 'func': unicode},
+        'text': {'default': '', 'func': lambda i: encode(i)},
+        'unicode': {'default': u'', 'func': unicode},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
     }
 
@@ -316,10 +306,8 @@ def get_input(context, conf):
         value = context.inputs.get(name, default)
     elif not context.test:
         # we skip user interaction during tests
-        value = raw_input(
-            "%s (default=%s) " % (
-                prompt.encode('utf-8'), default.encode('utf-8'))
-        ) or default
+        raw = raw_input("%s (default=%s) " % (encode(prompt), encode(default)))
+        value = raw or default
     else:
         value = default
 
@@ -343,13 +331,13 @@ def get_abspath(url):
 
 def get_word(item):
     try:
-        word = ''.join(item.itervalues())
+        raw = ''.join(item.itervalues())
     except AttributeError:
-        word = item
+        raw = item
     except TypeError:
-        word = None
+        raw = None
 
-    return word or ''
+    return encode(raw or '')
 
 
 def get_num(item):
@@ -384,7 +372,7 @@ def url_quote(url):
     try:
         return quote(url, safe=URL_SAFE)
     except KeyError:
-        return quote(url.encode('utf-8'), safe=URL_SAFE)
+        return quote(encode(url), safe=URL_SAFE)
 
 
 def listize(item):

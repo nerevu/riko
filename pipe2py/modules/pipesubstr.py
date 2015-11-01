@@ -23,7 +23,7 @@ opts = {'listize': False}
 def parse_result(conf, word, _pass):
     start = int(conf.start)
     end = int(conf.start + conf.length)
-    return word if _pass else word[start:end]
+    return word if _pass else word.decode('utf-8')[start:end]
 
 
 # Async functions

@@ -43,7 +43,7 @@ sys.dont_write_bytecode = True
 
 setup(
     name='pipe2py',
-    version='0.23.0',
+    version='0.23.7',
     description=(
         'A project to compile Yahoo! Pipes into Python. '
         'The pipe2py package can compile a Yahoo! Pipe into pure Python source'
@@ -56,7 +56,7 @@ setup(
     author='Greg Gaughan',
     author_email='gjgaughan@gmail.com',
     packages=find_packages(exclude=['tests']),
-    package_data={'templates': 'templates/*.txt'},
+    package_data={'templates': 'templates/*.txt', 'data': 'data/*'},
     include_package_data=True,
     classifiers=[],
     keywords='',

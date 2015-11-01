@@ -7,6 +7,7 @@
     Provides methods for creating asynchronous pipe2py pipes
 """
 
+from twisted.internet.defer import inlineCallbacks, returnValue
 from pipe2py.modules.pipeforever import asyncPipeForever
 from pipe2py.lib.collections import PyPipe
 
@@ -18,6 +19,12 @@ class AsyncPipe(PyPipe):
         self.pipe_input = kwargs.pop('input', asyncPipeForever())
         self.pipeline = getattr(self.module, 'asyncPipe%s' % self.name.title())
         self.kwargs = kwargs
+
+    @property
+    @inlineCallbacks
+    def list(self):
+        output = yield self.output
+        returnValue(list(output))
 
     def pipe(self, name, **kwargs):
         return AsyncPipe(name, self.context, input=self.output, **kwargs)

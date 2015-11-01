@@ -10,14 +10,17 @@
 # aka stringbuilder
 
 from functools import partial
-from itertools import starmap
+from itertools import starmap, imap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
 from . import get_splits, asyncGetSplits
-from pipe2py.lib.utils import combine_dicts as cdicts
+from pipe2py.lib.utils import combine_dicts as cdicts, encode
 from pipe2py.twisted.utils import asyncStarMap
 
 opts = {'ftype': None, 'parse': False, 'dictize': True}
-parse_result = lambda parts, _, _pass: '' if _pass else ''.join(parts)
+
+def parse_result (parts, _, _pass):
+    encoded = imap(encode, parts)
+    return '' if _pass else ''.join(encoded)
 
 
 # Async functions

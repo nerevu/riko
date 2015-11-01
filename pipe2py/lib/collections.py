@@ -25,10 +25,6 @@ class PyPipe(object):
     def output(self):
         return self.pipeline(self.context, self.pipe_input, **self.kwargs)
 
-    @property
-    def list(self):
-        return list(self.output)
-
 
 class SyncPipe(PyPipe):
     """A synchronous PyPipe object"""
@@ -37,6 +33,10 @@ class SyncPipe(PyPipe):
         self.pipe_input = kwargs.pop('input', pipe_forever())
         self.pipeline = getattr(self.module, 'pipe_%s' % self.name)
         self.kwargs = kwargs
+
+    @property
+    def list(self):
+        return list(self.output)
 
     def pipe(self, name, **kwargs):
         return SyncPipe(name, self.context, input=self.output, **kwargs)
