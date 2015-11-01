@@ -33,7 +33,10 @@ class SyncPipe(PyPipe):
         self.pipe_input = kwargs.pop('input', pipe_forever())
         self.pipeline = getattr(self.module, 'pipe_%s' % self.name)
         self.kwargs = kwargs
-        self.list = list(self.output)
+
+    @property
+    def list(self):
+        return list(self.output)
 
     def pipe(self, name, **kwargs):
         return SyncPipe(name, self.context, input=self.output, **kwargs)
