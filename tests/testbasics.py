@@ -65,8 +65,9 @@ class TestBasics(unittest.TestCase):
             pipe_generator = getattr(module, pipe_name)
             pydeps = extract_dependencies(pipe_generator=pipe_generator)
 
-        print 'pipeline length %s %i, but expected %s %i.' % (
-            switch.get(compared), value, switch.get(check), value)
+        if compared != check:
+            print 'pipeline length %s %i, but expected %s %i.' % (
+                switch.get(compared), value, switch.get(check), value)
 
         print 'Modules used in %s: %s' % (pipe_name, pydeps)
 
