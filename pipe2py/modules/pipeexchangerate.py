@@ -75,6 +75,22 @@ def parse_request(json):
     return {i['name']: i['price'] for i in fields}
 
 
+@inlineCallbacks
+def asyncGetDefaultRateData(err=False):
+    path = join('..', 'data', 'quote.json')
+    url = utils.get_abspath(path)
+    resp = yield deferToThread(urlopen, url)
+    json = loads(resp.read())
+    returnValue(json)
+
+
+@utils.memoize(utils.timeout)
+def asyncGetRateData():
+    resp = treq.get(EXCHANGE_API, params=PARAMS)
+    resp.addCallbacks(treq.json_content, asyncGetDefaultRateData)
+    return resp
+
+
 def parse_result(conf, word, _pass, rates=None):
     base = word or conf.default
     return base if _pass else calc_rate(base, conf.quote, rates)
@@ -99,7 +115,10 @@ def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : twisted.internet.defer.Deferred generator of hashed strings
     """
-    rates = parse_request(kwargs['setup_output'])
+    offline = conf.get('offline', {}).get('value')
+    # TODO add async rate data fetching
+    rate_data = get_offline_rate_data() if offline else get_rate_data()
+    rates = parse_request(rate_data)
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
     _OUTPUT = starmap(partial(parse_result, rates=rates), parsed)
@@ -123,12 +142,6 @@ def get_rate_data():
     return r.json()
 
 
-def setup(conf=None, **kwargs):
-    offline = conf.get('offline', {}).get('value')
-    kw = {'err': False}
-    return get_offline_rate_data(**kw) if offline else get_rate_data()
-
-
 def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that retrieves the current exchange rate for a given
     currency pair. Loopable.
@@ -147,7 +160,9 @@ def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of hashed strings
     """
-    rates = parse_request(kwargs['setup_output'])
+    offline = conf.get('offline', {}).get('value')
+    rate_data = get_offline_rate_data(err=False) if offline else get_rate_data()
+    rates = parse_request(rate_data)
     splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs())
     _OUTPUT = starmap(partial(parse_result, rates=rates), parsed)
