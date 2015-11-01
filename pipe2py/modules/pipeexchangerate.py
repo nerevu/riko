@@ -103,16 +103,6 @@ def asyncGetRateData():
     return resp
 
 
-def asyncSetup(context=None, conf=None, **kwargs):
-    global logger
-    logger = utils.get_logger(context)
-    offline = conf.get('offline', {}).get('value')
-    kw = {'err': False}
-    # logger.debug('data type: ' % type(json))
-    # logger.debug('data len: ' % len(json))
-    return asyncGetOfflineRateData(**kw) if offline else asyncGetRateData()
-
-
 @inlineCallbacks
 def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that asynchronously retrieves the current exchange rate
@@ -134,7 +124,14 @@ def asyncPipeExchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     """
     global logger
     logger = utils.get_logger(context)
-    rates = parse_request(kwargs['setup_output'])
+    offline = conf.get('offline', {}).get('value')
+
+    if offline:
+        rdata = yield asyncGetOfflineRateData(err=False)
+    else:
+        rdata = asyncGetRateData()
+
+    rates = parse_request(rdata)
     splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
     _OUTPUT = starmap(partial(parse_result, rates=rates), parsed)
@@ -158,12 +155,6 @@ def get_rate_data():
     return r.json()
 
 
-def setup(conf=None, **kwargs):
-    offline = conf.get('offline', {}).get('value')
-    kw = {'err': False}
-    return get_offline_rate_data(**kw) if offline else get_rate_data()
-
-
 def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     """A string module that retrieves the current exchange rate for a given
     currency pair. Loopable.
@@ -182,7 +173,9 @@ def pipe_exchangerate(context=None, _INPUT=None, conf=None, **kwargs):
     -------
     _OUTPUT : generator of hashed strings
     """
-    rates = parse_request(kwargs['setup_output'])
+    offline = conf.get('offline', {}).get('value')
+    rdata = get_offline_rate_data(err=False) if offline else get_rate_data()
+    rates = parse_request(rdata)
     splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
     parsed = utils.dispatch(splits, *get_dispatch_funcs())
     _OUTPUT = starmap(partial(parse_result, rates=rates), parsed)
