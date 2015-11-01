@@ -1,3 +1,5 @@
 recursive-include pipe2py/templates *.txt
+recursive-include pipe2py/data *
+recursive-include bin *
 recursive-include tests *
 include README.rst

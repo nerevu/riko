@@ -1,7 +1,7 @@
 """Unit tests using basic pipeline modules
 
-   Note: many of these tests simply make sure the module compiles and runs
-         - we need more extensive tests with stable data feeds!
+    Note: many of these tests simply make sure the module compiles and runs.
+    We need more extensive tests with stable data feeds!
 """
 
 import unittest
@@ -10,7 +10,7 @@ from os import path as p, remove
 from importlib import import_module
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
-from pipe2py.util import extract_dependencies
+from pipe2py.lib.utils import extract_dependencies
 from pipe2py import Context
 
 try:
@@ -65,8 +65,9 @@ class TestBasics(unittest.TestCase):
             pipe_generator = getattr(module, pipe_name)
             pydeps = extract_dependencies(pipe_generator=pipe_generator)
 
-        print 'pipeline length %s %i, but expected %s %i.' % (
-            switch.get(compared), value, switch.get(check), value)
+        if compared != check:
+            print 'pipeline length %s %i, but expected %s %i.' % (
+                switch.get(compared), value, switch.get(check), value)
 
         print 'Modules used in %s: %s' % (pipe_name, pydeps)
 
@@ -131,14 +132,7 @@ class TestBasics(unittest.TestCase):
         pipe_name = 'pipe_125e9fe8bb5f84526d21bebfec3ad116'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name, 1, 0)
-        base = 'http://ajax.googleapis.com/ajax/services/language/detect'
-        contains = {
-            u'description': None, u'language': None,
-            u'language-url': base + '?q=Guten+Tag&v=1.0',
-            u'title': u'Guten Tag'
-        }
-
-        [self.assertEqual(item, contains) for item in pipeline]
+        [self.assertEqual(i['info']['login'], u'defunkt') for i in pipeline]
 
     def test_urlbuilder(self):
         """Loads the RTW URL Builder test pipeline and compiles and executes it
@@ -148,9 +142,76 @@ class TestBasics(unittest.TestCase):
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
 
+    def test_input_override(self):
+        """Loads a pipeline with input override
+        """
+        self.context.inputs = {'textinput1': 'IBM'}
+        pipe_name = 'pipe_1LNyRuNS3BGdkTKaAsqenA'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+        sliced = islice(pipeline, 3)
+        contains = self.context.inputs['textinput1']
+        # check if the ticker is in the title of any of the first 3 items
+        self.assertIn(contains, ' '.join(item['title'] for item in sliced))
+
 ###############
 # Offline Tests
 ###############
+    def test_kazeeki(self):
+        """Loads the kazeeki simple test pipeline
+        """
+        pipe_name = 'pipe_kazeeki'
+        pipeline = self._get_pipeline(pipe_name)
+        self._load(pipeline, pipe_name)
+
+        example = {
+            u'author': {u'name': None, u'uri': None},
+            u'dc:creator': None,
+            u'id': 474310371L,
+            u'k:author': u'Homepage for a germansocial organization',
+            u'k:budget': 125.0,
+            u'k:budget_converted': 125.0,
+            u'k:budget_converted_w_sym': u'$125.00',
+            u'k:budget_full': u'$125.00',
+            u'k:budget_raw': u'0 - $250',
+            u'k:budget_raw1': u'0',
+            u'k:budget_raw1_code': u'',
+            u'k:budget_raw1_num': u'0',
+            u'k:budget_raw1_sym': u'',
+            u'k:budget_raw2': u'$250',
+            u'k:budget_raw2_code': u'',
+            u'k:budget_raw2_num': u'250',
+            u'k:budget_raw2_sym': u'$',
+            u'k:budget_sym': u'$',
+            u'k:budget_w_sym': u'$125.00',
+            u'k:client_location': u'unknown',
+            u'k:content': u' With this specification sheet we want to give you a request for implementing a website for a german...',
+            u'k:cur_code': u'USD',
+            u'k:due': u'unknown',
+            u'k:job_type': u'fixed',
+            u'k:job_type_code': u'1',
+            u'k:marketplace': u'guru.com',
+            u'k:posted': u'time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)',
+            u'k:rate': 1.0,
+            u'k:submissions': u'unknown',
+            u'k:tags': [
+                {'content': u'IT'},
+                {'content': u'Software'},
+                {'content': u'Web'}
+            ],
+            u'k:work_location': u' Worldwide',
+            u'link': u'http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595',
+            u'links': [{}],
+            u'loop:strregex': u'fixed',
+            u'pubDate': u'time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)',
+            u'summary': u'<span><b>Description:</b> With this specification sheet we want to give you a request for implementing a website for a german...<br><b>Category:</b> Web, Software &amp; IT<br><b>Required skills:</b> html, php<br><b>Fixed Price budget:</b> Under $250<br><b>Job type:</b> Public<br><b>Freelancer Location:</b> Worldwide<br></span>',
+            u'title': u'Homepage for a germansocial organization',
+            u'updated': u'Tue, 06 Jan 2015 17:13:47 GMT',
+            u'updated_parsed': u'time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)',
+            u'y:id': u'http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595'}
+
+        self.assertEqual(example, pipeline[0])
+
     def test_simplest(self):
         """Loads the RTW simple test pipeline and compiles and executes it to
             check the results
@@ -165,7 +226,7 @@ class TestBasics(unittest.TestCase):
 
             TODO: have these tests iterate over a number of test pipelines
         """
-        pipe_name = 'testpipe1'
+        pipe_name = 'pipe_testpipe1'
         pipeline = self._get_pipeline(pipe_name)
         self._load(pipeline, pipe_name)
         [self.assertIn('the', i.get('description')) for i in pipeline]
@@ -235,29 +296,29 @@ class TestBasics(unittest.TestCase):
 
         contains = [
             {
-                'media:thumbnail': {'url': u'http://example.com/a.jpg'},
-                u'link': u'http://example.com/test.php?this=that',
-                u'description': u'b', u'y:title': u'a', u'title': u'a'
+                'media:thumbnail': {'url': 'http://example.com/a.jpg'},
+                'link': 'http://example.com/test.php?this=that',
+                'description': 'b', 'y:title': 'a', 'title': 'a'
             },
             {
-                u'newtitle': u'NEWTITLE',
-                u'loop:itembuilder': [
+                'newtitle': 'NEWTITLE',
+                'loop:itembuilder': [
                     {
-                        u'description': {u'content': u'DESCRIPTION'},
-                        u'title': u'NEWTITLE',
+                        'description': {'content': 'DESCRIPTION'},
+                        'title': 'NEWTITLE',
                     }
                 ],
-                u'title': u'TITLE1',
+                'title': 'TITLE1',
             },
             {
-                u'newtitle': u'NEWTITLE',
-                u'loop:itembuilder': [
+                'newtitle': 'NEWTITLE',
+                'loop:itembuilder': [
                     {
-                        u'description': {u'content': u'DESCRIPTION'},
-                        u'title': u'NEWTITLE',
+                        'description': {'content': 'DESCRIPTION'},
+                        'title': 'NEWTITLE',
                     }
                 ],
-                u'title': u'TITLE2',
+                'title': 'TITLE2',
             }
         ]
 
@@ -408,18 +469,6 @@ class TestBasics(unittest.TestCase):
 
         self.assertEqual(
             pipeline, [{u'inputs': inputs, 'dependencies': dependencies}])
-
-    def test_input_override(self):
-        """Loads a pipeline with input override
-        """
-        self.context.inputs = {'textinput1': 'IBM'}
-        pipe_name = 'pipe_1LNyRuNS3BGdkTKaAsqenA'
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
-        sliced = islice(pipeline, 3)
-        contains = self.context.inputs['textinput1']
-        # check if the ticker is in the title of any of the first 3 items
-        self.assertIn(contains, ' '.join(item['title'] for item in sliced))
 
     def test_union_just_other(self):
         """Loads a pipeline containing a union with the first input unconnected

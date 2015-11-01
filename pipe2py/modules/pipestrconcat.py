@@ -1,38 +1,75 @@
-# pipestrconcat.py  #aka stringbuilder
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipestrconcat
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from pipe2py import util
-from pipe2py.lib.dotdict import DotDict
+    http://pipes.yahoo.com/pipes/docs?doc=string#StringBuilder
+"""
+
+# aka stringbuilder
+
+from functools import partial
+from itertools import starmap, imap
+from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import get_splits, asyncGetSplits
+from pipe2py.lib.utils import combine_dicts as cdicts, encode
+from pipe2py.twisted.utils import asyncStarMap
+
+opts = {'ftype': None, 'parse': False, 'dictize': True}
+
+def parse_result (parts, _, _pass):
+    encoded = imap(encode, parts)
+    return '' if _pass else ''.join(encoded)
 
 
-def _gen_string(parts, item, context=None, **kwargs):
-    for part in parts:
-        try:
-            yield util.get_value(DotDict(part), item, **kwargs)
-        except AttributeError:
-            # ignore if the item is referenced but doesn't have our source
-            # field
-            # todo: issue a warning if debugging?
-            continue
-        except TypeError:
-            if context and context.verbose:
-                print "pipe_strconcat: TypeError"
+# Async functions
+@inlineCallbacks
+def asyncPipeStrconcat(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that asynchronously builds a string. Loopable. No direct
+    input.
 
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
+    conf : {
+        'part': [
+            {'value': <'<img src="'>},
+            {'subkey': <'img.src'>},
+            {'value': <'">'>}
+        ]
+    }
 
-def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds a string.
-
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- source generator
-    conf:
-        part -- parts
-
-    Yields (_OUTPUT):
-    string
+    Returns
+    -------
+    _OUTPUT : twisted.internet.defer.Deferred generator of joined strings
     """
-    conf = DotDict(conf)
-    parts = util.listize(conf['part'])
+    splits = yield asyncGetSplits(_INPUT, conf['part'], **cdicts(opts, kwargs))
+    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), splits)
+    returnValue(iter(_OUTPUT))
 
-    for item in _INPUT:
-        yield ''.join(_gen_string(parts, DotDict(item), context, **kwargs))
+
+# Synchronous functions
+def pipe_strconcat(context=None, _INPUT=None, conf=None, **kwargs):
+    """A string module that builds a string. Loopable.
+
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items
+    conf : {
+        'part': [
+            {'value': '<img src="'},
+            {'subkey': 'img.src'},
+            {'value': '">'}
+        ]
+    }
+
+    Returns
+    -------
+    _OUTPUT : generator of joined strings
+    """
+    splits = get_splits(_INPUT, conf['part'], **cdicts(opts, kwargs))
+    _OUTPUT = starmap(parse_result, splits)
+    return _OUTPUT

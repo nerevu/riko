@@ -1,25 +1,32 @@
-# pipeyql.py
-#
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipeyql
+    ~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=sources
+"""
 
 import requests
 
 from lxml.etree import parse
-from pipe2py import util
+from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
 
 def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source issues YQL queries.
+    """A source that issues YQL queries. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        yqlquery -- YQL query
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : yqlquery -- YQL query
         # todo: handle envURL
 
-    Yields (_OUTPUT):
-    query results
+    Yields
+    ------
+    _OUTPUT : query results
     """
     # todo: get from a config/env file
     url = "http://query.yahooapis.com/v1/public/yql"
@@ -28,7 +35,7 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
 
     for item in _INPUT:
         item = DotDict(item)
-        yql = util.get_value(query, item, **kwargs)
+        yql = utils.get_value(query, item, **kwargs)
 
         # note: we use the default format of xml since json loses some
         # structure
@@ -49,7 +56,7 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
 
         # Convert xml into generation of dicts
         for element in results.getchildren():
-            yield util.etree_to_dict(element)
+            yield utils.etree_to_dict(element)
 
         if item.get('forever'):
             # _INPUT is pipeforever and not a loop,

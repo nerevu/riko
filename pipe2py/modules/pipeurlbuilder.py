@@ -1,52 +1,57 @@
-# pipeurlbuilder.py
+# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
+"""
+    pipe2py.modules.pipeurlbuilder
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    http://pipes.yahoo.com/pipes/docs?doc=url#URLBuilder
+"""
 
 import urllib
-from pipe2py import util
-from pipe2py.lib.dotdict import DotDict
+from itertools import imap, ifilter, starmap
+from . import _get_broadcast_funcs as get_funcs, get_dispatch_funcs, get_splits
+from pipe2py.lib import utils
+from pipe2py.lib.utils import combine_dicts as cdicts
+
+opts = {'parse': False}
 
 
-def _gen_params(param_defs, item, **kwargs):
-    for p in param_defs:
-        p = DotDict(p)
-        key = util.get_value(p['key'], item, **kwargs)
-        value = util.get_value(p['value'], item, **kwargs)
-        yield (key, value)
+@utils.memoize(utils.timeout)
+def parse_result(params, paths, base):
+    url = '%s/' % base if not base.endswith('/') else base
+    url += '/'.join(imap(str, ifilter(None, paths)))
+    url = url.rstrip('/')
+    url = utils.url_quote(url)  # Ensure url is valid
+    url += '?%s' % urllib.urlencode(params) if params and url else ''
+    return url
 
 
 def pipe_urlbuilder(context=None, _INPUT=None, conf=None, **kwargs):
-    """This source builds a url and yields it forever.
+    """A url module that builds a url. Loopable.
 
-    Keyword arguments:
-    context -- pipeline context
-    _INPUT -- not used
-    conf:
-        BASE -- base
-        PATH -- path elements
-        PARAM -- query parameters
+    Parameters
+    ----------
+    context : pipe2py.Context object
+    _INPUT : pipeforever pipe or an iterable of items or fields
+    conf : {
+        'PARAM': [
+            {'key': {'value': <'order'>}, 'value': {'value': <'desc'>}},
+            {'key': {'value': <'page'>}, 'value': {'value': <'2'>}}
+        ]
+        'PATH': {'type': 'text', 'value': <''>},
+        'BASE': {'type': 'text', 'value': <'http://site.com/feed.xml'>},
+    }
 
-    Yields (_OUTPUT):
-    url
+    Yields
+    ------
+    _OUTPUT : url
     """
-    conf = DotDict(conf)
-    paths = util.listize(conf.get('PATH'))  # use .get() incase 'PATH' isnt set
-    param_defs = util.listize(conf['PARAM'])
-    url = None
-
-    for item in _INPUT:
-        # if _INPUT is pipeforever and not a loop, get values from cache
-        if not url:
-            item = DotDict(item)
-            forever = item.get('forever')
-            url = conf.get('BASE', **kwargs)
-            url += '/' if not url.endswith('/') else url
-            url += "/".join(str(p) for p in paths if p)
-            url = url.rstrip("/")
-            url = util.url_quote(url)  # Ensure url is valid
-            params = dict(_gen_params(param_defs, item, **kwargs))
-
-            if params and params.keys() != [u'']:
-                url += "?" + urllib.urlencode(params)
-
-        yield url
-        url = url if forever else None
+    pkwargs = cdicts(opts, kwargs)
+    get_params = get_funcs(conf.get('PARAM', []), **kwargs)[0]
+    get_paths = get_funcs(conf.get('PATH', []), **pkwargs)[0]
+    get_base = get_funcs(conf['BASE'], listize=False, **pkwargs)[0]
+    parse_params = utils.parse_params
+    splits = get_splits(_INPUT, funcs=[get_params, get_paths, get_base])
+    parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', parse_params))
+    _OUTPUT = starmap(parse_result, parsed)
+    return _OUTPUT
