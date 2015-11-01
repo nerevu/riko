@@ -302,7 +302,7 @@ config = {
     'itembuilder': {'conf': {'attrs': itembuilder_attrs}, 'type': 'itembuilder'},
 }
 
-c = config['fetch']
+c = config['fetchdata']
 skwargs = {'pdictize': False, 'conf': c['conf']}
 
 def parse_source(source):

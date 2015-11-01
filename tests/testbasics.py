@@ -10,7 +10,7 @@ from os import path as p, remove
 from importlib import import_module
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
-from pipe2py.util import extract_dependencies
+from pipe2py.lib.utils import extract_dependencies
 from pipe2py import Context
 
 try:
@@ -65,8 +65,9 @@ class TestBasics(unittest.TestCase):
             pipe_generator = getattr(module, pipe_name)
             pydeps = extract_dependencies(pipe_generator=pipe_generator)
 
-        print 'pipeline length %s %i, but expected %s %i.' % (
-            switch.get(compared), value, switch.get(check), value)
+        if compared != check:
+            print 'pipeline length %s %i, but expected %s %i.' % (
+                switch.get(compared), value, switch.get(check), value)
 
         print 'Modules used in %s: %s' % (pipe_name, pydeps)
 

@@ -20,11 +20,6 @@ class AsyncPipe(PyPipe):
         self.pipeline = getattr(self.module, 'asyncPipe%s' % self.name.title())
         self.kwargs = kwargs
 
-        try:
-            self.setup = getattr(self.module, 'asyncSetup')
-        except AttributeError:
-            self.setup = None
-
     @property
     @inlineCallbacks
     def list(self):
