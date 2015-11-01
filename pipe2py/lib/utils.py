@@ -31,15 +31,7 @@ if environ.get('DATABASE_URL'):  # HEROKU
         'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
         'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')}
 else:
-    try:
-        import pylibmc
-    except ImportError:
-        cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
-    else:
-        cache_config = {
-            'DEBUG': True,
-            'CACHE_TYPE': 'memcached',
-            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
+    cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
 
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
@@ -61,7 +53,7 @@ cache = Cache(**cache_config)
 memoize = cache.memoize
 timeout = 60 * 60 * 1
 half_day = 60 * 60 * 12
-encode = lambda w: w.encode('utf-8') if isinstance(w, unicode) else w
+encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 
 
 class Objectify:
@@ -191,7 +183,7 @@ def get_value(field, item=None, force=False, **kwargs):
     OPS = {
         'number': {'default': 0.0, 'func': float},
         'integer': {'default': 0, 'func': int},
-        'text': {'default': '', 'func': lambda i: str(encode(i))},
+        'text': {'default': '', 'func': lambda i: encode(i)},
         'unicode': {'default': u'', 'func': unicode},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
     }
@@ -339,13 +331,13 @@ def get_abspath(url):
 
 def get_word(item):
     try:
-        word = ''.join(item.itervalues())
+        raw = ''.join(item.itervalues())
     except AttributeError:
-        word = item
+        raw = item
     except TypeError:
-        word = None
+        raw = None
 
-    return str(encode(word) or '')
+    return encode(raw or '')
 
 
 def get_num(item):
