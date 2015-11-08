@@ -51,10 +51,10 @@ setup(
         'pipes too.'
     ),
     long_description=read('README.rst'),
-    url='http://ggaughan.github.com/pipe2py/',
+    url='http://kazeeki.github.com/pipe2py/',
     license = 'GPL2',
-    author='Greg Gaughan',
-    author_email='gjgaughan@gmail.com',
+    author='Reuben Cummings',
+    author_email='reubano@gmail.com',
     packages=find_packages(exclude=['tests']),
     package_data={'templates': 'templates/*.txt', 'data': 'data/*'},
     include_package_data=True,
