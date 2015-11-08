@@ -22,16 +22,16 @@ def pipe_8NMkiTW32xGvMbDKruymrA(context=None, _INPUT=None, conf=None, **kwargs):
 
     sw_35 = pipe_fetch(
         context, forever, conf={'URL': [{'type': 'url', 'value': 'file://data/www.fourtitude.com_news_publish_rss.xml'}, {'type': 'url', 'value': 'file://data/feeds.gawker.com_jalopnik_full.xml'}, {'type': 'url', 'value': 'file://data/www.autoblog.com_rss.xml'}]})
-    
+
     sw_54 = pipe_filter(
         context, sw_35, conf={'COMBINE': {'type': 'text', 'value': 'or'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': [{'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'Porsche'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'Mercedes'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'BMW'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'Audi'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'VW'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'Lamborghini'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'Ferrari'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'Pagani'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'Aston'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'Lotus'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'TVR'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'AMG'}, 'op': {'type': 'text', 'value': 'contains'}}]})
-    
+
     sw_105 = pipe_sort(
         context, sw_54, conf={'KEY': [{'field': {'type': 'text', 'value': 'pubDate'}, 'dir': {'type': 'text', 'value': 'DESC'}}]})
-    
+
     _OUTPUT = pipe_output(
         context, sw_105, conf={})
-    
+
     return _OUTPUT
 
 

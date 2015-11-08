@@ -97,6 +97,7 @@ def get_logger(context):
     level = 'DEBUG' if context and context.verbose else 'INFO'
     return Logger(level).logger
 
+
 def extract_dependencies(pipe_def=None, pipe_generator=None):
     """Extract modules used by a pipe"""
     if pipe_def:

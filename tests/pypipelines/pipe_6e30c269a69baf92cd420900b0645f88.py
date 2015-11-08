@@ -27,31 +27,31 @@ def pipe_6e30c269a69baf92cd420900b0645f88(context=None, _INPUT=None, conf=None, 
 
     sw_135 = pipe_fetch(
         context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/rss.sueddeutsche.de_rss_Topthemen.xml'}})
-    
+
     sw_233 = pipe_fetch(
         context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/rss.sueddeutsche.de_rss_Politik.xml'}})
-    
+
     sw_154 = pipe_union(
         context, forever, _OTHER3=sw_233, conf={}, _OTHER=sw_135)
-    
+
     sw_173 = pipe_uniq(
         context, sw_154, conf={'field': {'type': 'text', 'value': 'title'}})
-    
+
     sw_180 = pipe_filter(
         context, sw_173, conf={'COMBINE': {'type': 'text', 'value': 'or'}, 'MODE': {'type': 'text', 'value': 'block'}, 'RULE': [{'field': {'type': 'text', 'value': 'link'}, 'value': {'type': 'text', 'value': '/sport/'}, 'op': {'type': 'text', 'value': 'contains'}}, {'field': {'type': 'text', 'value': 'title'}, 'value': {'type': 'text', 'value': 'Bildstrecke:'}, 'op': {'type': 'text', 'value': 'contains'}}]})
-    
+
     sw_210 = pipe_rename(
         context, sw_180, conf={'RULE': [{'field': {'type': 'text', 'value': 'y:id.value'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'link'}}]})
-    
+
     sw_195 = pipe_regex(
         context, sw_210, conf={'RULE': [{'singlelinematch': {'type': 'text', 'value': '2'}, 'globalmatch': {'type': 'text', 'value': '1'}, 'replace': {'type': 'text', 'value': ''}, 'field': {'type': 'text', 'value': 'description'}, 'casematch': {'type': 'text', 'value': '8'}, 'match': {'type': 'text', 'value': '</div>.*$'}}, {'field': {'type': 'text', 'value': 'link'}, 'match': {'type': 'text', 'value': '^(.*\\/.*)\\/'}, 'replace': {'type': 'text', 'value': '$1/2.220/'}}]})
-    
+
     sw_191 = pipe_sort(
         context, sw_195, conf={'KEY': [{'field': {'type': 'text', 'value': 'pubDate'}, 'dir': {'type': 'text', 'value': 'DESC'}}]})
-    
+
     _OUTPUT = pipe_output(
         context, sw_191, conf={})
-    
+
     return _OUTPUT
 
 

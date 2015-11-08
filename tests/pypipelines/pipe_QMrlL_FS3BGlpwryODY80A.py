@@ -26,28 +26,28 @@ def pipe_QMrlL_FS3BGlpwryODY80A(context=None, _INPUT=None, conf=None, **kwargs):
 
     sw_140 = pipe_fetch(
         context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/news.yahoo.com_rss_health.xml'}})
-    
+
     sw_108 = pipe_split(
         context, sw_140, splits=2, conf=None)
-    
+
     sw_159 = pipe_filter(
         context, sw_108, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'drug'}, 'op': {'type': 'text', 'value': 'contains'}}})
-    
+
     sw_204 = pipe_regex(
         context, sw_159, conf={'RULE': {'field': {'type': 'text', 'value': 'title'}, 'match': {'type': 'text', 'value': '(.+)'}, 'replace': {'type': 'text', 'value': '[Drugs] $1'}}})
-    
+
     sw_148 = pipe_filter(
         context, sw_108, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': {'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'weight'}, 'op': {'type': 'text', 'value': 'contains'}}})
-    
+
     sw_189 = pipe_regex(
         context, sw_148, conf={'RULE': {'field': {'type': 'text', 'value': 'title'}, 'match': {'type': 'text', 'value': '(.+)'}, 'replace': {'type': 'text', 'value': '[Weight] $1'}}})
-    
+
     sw_170 = pipe_union(
         context, forever, _OTHER3=sw_204, conf=None, _OTHER=sw_189)
-    
+
     _OUTPUT = pipe_output(
         context, sw_170, conf=None)
-    
+
     return _OUTPUT
 
 

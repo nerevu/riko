@@ -23,19 +23,19 @@ def pipe_404411a8d22104920f3fc1f428f33642(context=None, _INPUT=None, conf=None, 
 
     sw_502 = pipe_fetch(
         context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/feeds.delicious.com_v2_rss_popular?count=15.xml'}})
-    
+
     sw_561 = pipe_fetch(
         context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/feeds.delicious.com_v2_rss_popular?count=3.xml'}})
-    
+
     sw_569 = pipe_count(
         context, sw_561, conf={})
-    
+
     sw_583 = pipe_truncate(
         context, sw_502, count=sw_569, conf={'count': {'terminal': 'count', 'type': 'number'}})
-    
+
     _OUTPUT = pipe_output(
         context, sw_583, conf={})
-    
+
     return _OUTPUT
 
 

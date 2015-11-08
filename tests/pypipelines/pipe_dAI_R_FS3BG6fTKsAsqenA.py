@@ -27,19 +27,19 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_strconcat(
             context, _INPUT, conf={'part': [{'type': 'text', 'subkey': 'headline'}, {'type': 'text', 'value': ' ('}, {'type': 'text', 'subkey': 'severity'}, {'type': 'text', 'value': ')'}]})
-    
+
     sw_286 = pipe_fetchdata(
         context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/capnorth.oes.ca.gov_89509.xml'}, 'path': {'type': 'text', 'value': 'info'}})
-    
+
     sw_138 = pipe_loop(
         context, sw_286, embed=pipe_sw_298, conf={'assign_part': {'type': 'text', 'value': 'all'}, 'assign_to': {'type': 'text', 'value': 'title'}, 'emit_part': {'type': 'text', 'value': 'all'}, 'mode': {'type': 'text', 'value': 'assign'}, 'embed': {'type': 'module', 'value': {'type': 'strconcat', 'id': 'sw-298', 'conf': {'part': [{'type': 'text', 'subkey': 'headline'}, {'type': 'text', 'value': ' ('}, {'type': 'text', 'subkey': 'severity'}, {'type': 'text', 'value': ')'}]}}}, 'with': {'type': 'text', 'value': ''}})
-    
+
     sw_180 = pipe_rename(
         context, sw_138, conf={'RULE': [{'field': {'type': 'text', 'value': 'expires'}, 'op': {'type': 'text', 'value': 'rename'}, 'newval': {'type': 'text', 'value': 'pubDate'}}]})
-    
+
     _OUTPUT = pipe_output(
         context, sw_180, conf={})
-    
+
     return _OUTPUT
 
 

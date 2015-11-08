@@ -22,16 +22,16 @@ def pipe_bd0834cfe6cdacb0bea5569505d330b8(context=None, _INPUT=None, conf=None, 
 
     sw_606 = pipe_textinput(
         context, forever, conf={'debug': {'type': 'text', 'value': ''}, 'default': {'type': 'text', 'value': '1276'}, 'prompt': {'type': 'text', 'value': 'MP Guardian ID'}, 'name': {'type': 'text', 'value': 'gid'}, 'position': {'type': 'number', 'value': ''}})
-    
+
     sw_579 = pipe_urlbuilder(
         context, forever, _1_PATH=sw_606, conf={'PATH': [{'terminal': '1_PATH', 'type': 'text'}, {'type': 'text', 'value': 'json'}], 'BASE': {'type': 'text', 'value': ''}, 'PARAM': [{'value': {'type': 'text', 'value': ''}, 'key': {'type': 'text', 'value': ''}}]})
-    
+
     sw_610 = pipe_fetchdata(
         context, forever, URL=sw_579, conf={'URL': {'terminal': 'URL', 'type': 'url'}, 'path': {'type': 'text', 'value': 'person'}})
-    
+
     _OUTPUT = pipe_output(
         context, sw_610, conf={})
-    
+
     return _OUTPUT
 
 

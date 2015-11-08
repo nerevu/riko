@@ -22,16 +22,16 @@ def pipe_e519dd393f943315f7e4128d19db2eac(context=None, _INPUT=None, conf=None, 
 
     sw_552 = pipe_textinput(
         context, forever, conf={'debug': {'type': 'text', 'value': ''}, 'default': {'type': 'text', 'value': 'enterprise mashup'}, 'prompt': {'type': 'text', 'value': 'Search term:'}, 'name': {'type': 'text', 'value': 'q'}, 'position': {'type': 'number', 'value': ''}})
-    
+
     sw_492 = pipe_urlbuilder(
         context, forever, PARAM_5_value=sw_552, conf={'PATH': {'type': 'text', 'value': ''}, 'BASE': {'type': 'text', 'value': 'http://news.google.com/news'}, 'PARAM': [{'value': {'type': 'text', 'value': '1'}, 'key': {'type': 'text', 'value': 'pz'}}, {'value': {'type': 'text', 'value': 'all'}, 'key': {'type': 'text', 'value': 'cf'}}, {'value': {'type': 'text', 'value': 'uk'}, 'key': {'type': 'text', 'value': 'ned'}}, {'value': {'type': 'text', 'value': 'en'}, 'key': {'type': 'text', 'value': 'hl'}}, {'value': {'terminal': 'PARAM_5_value', 'type': 'text'}, 'key': {'type': 'text', 'value': 'q'}}, {'value': {'type': 'text', 'value': 'rss'}, 'key': {'type': 'text', 'value': 'output'}}]})
-    
+
     sw_481 = pipe_fetch(
         context, forever, _1_URL=sw_492, conf={'URL': {'terminal': '1_URL', 'type': 'url'}})
-    
+
     _OUTPUT = pipe_output(
         context, sw_481, conf={})
-    
+
     return _OUTPUT
 
 

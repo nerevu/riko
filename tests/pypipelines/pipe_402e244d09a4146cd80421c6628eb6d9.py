@@ -22,16 +22,16 @@ def pipe_402e244d09a4146cd80421c6628eb6d9(context=None, _INPUT=None, conf=None, 
 
     sw_572 = pipe_fetchdata(
         context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/www.bbc.co.uk_programmes_b006mvlc_episodes_player.xml'}, 'path': {'type': 'text', 'value': 'episode'}})
-    
+
     sw_587 = pipe_rename(
         context, sw_572, conf={'RULE': [{'field': {'type': 'text', 'value': 'programme.title'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'title'}}, {'field': {'type': 'text', 'value': 'programme.pid'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'link'}}, {'field': {'type': 'text', 'value': 'programme.short_synopsis'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'description'}}]})
-    
+
     sw_598 = pipe_regex(
         context, sw_587, conf={'RULE': [{'field': {'type': 'text', 'value': 'link'}, 'match': {'type': 'text', 'value': '(.*)'}, 'replace': {'type': 'text', 'value': 'http://www.bbc.co.uk/programmes/$1'}}]})
-    
+
     _OUTPUT = pipe_output(
         context, sw_598, conf={})
-    
+
     return _OUTPUT
 
 

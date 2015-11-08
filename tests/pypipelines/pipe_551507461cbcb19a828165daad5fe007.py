@@ -22,16 +22,16 @@ def pipe_551507461cbcb19a828165daad5fe007(context=None, _INPUT=None, conf=None, 
 
     sw_242 = pipe_urlinput(
         context, forever, conf={'debug': {'type': 'url', 'value': 'file://data/www.bbc.co.uk_news.html'}, 'default': {'type': 'url', 'value': 'file://data/www.bbc.co.uk_news.html'}, 'prompt': {'type': 'text', 'value': 'Enter a URL'}, 'name': {'type': 'text', 'value': 'urlinput1'}, 'position': {'type': 'number', 'value': ''}})
-    
+
     sw_234 = pipe_fetchsitefeed(
         context, forever, _1_URL=sw_242, conf={'URL': {'terminal': '1_URL', 'type': 'url'}})
-    
+
     sw_246 = pipe_truncate(
         context, sw_234, conf={'count': {'type': 'number', 'value': '5'}})
-    
+
     _OUTPUT = pipe_output(
         context, sw_246, conf={})
-    
+
     return _OUTPUT
 
 

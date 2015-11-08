@@ -28,22 +28,22 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(context=None, _INPUT=None, conf=None, 
         # todo: insert submodule description here
         return pipe_urlbuilder(
             context, forever, conf={'PATH': {'type': 'text', 'value': ''}, 'BASE': {'type': 'text', 'value': ''}, 'PARAM': [{'value': {'type': 'text', 'value': 'qr'}, 'key': {'type': 'text', 'value': 'cht'}}, {'value': {'type': 'text', 'value': '200x200'}, 'key': {'type': 'text', 'value': 'chs'}}, {'value': {'type': 'text', 'subkey': 'link'}, 'key': {'type': 'text', 'value': 'chl'}}]})
-    
+
     sw_565 = pipe_fetch(
         context, forever, conf={'URL': {'type': 'url', 'value': ''}})
-    
+
     sw_626 = pipe_loop(
         context, sw_565, embed=pipe_sw_634, conf={'assign_part': {'type': 'text', 'value': 'all'}, 'assign_to': {'type': 'text', 'value': 'media:content.url'}, 'emit_part': {'type': 'text', 'value': 'all'}, 'mode': {'type': 'text', 'value': 'assign'}, 'embed': {'type': 'module', 'value': {'type': 'urlbuilder', 'id': 'sw-634', 'conf': {'PATH': {'type': 'text', 'value': ''}, 'BASE': {'type': 'text', 'value': ''}, 'PARAM': [{'value': {'type': 'text', 'value': 'qr'}, 'key': {'type': 'text', 'value': 'cht'}}, {'value': {'type': 'text', 'value': '200x200'}, 'key': {'type': 'text', 'value': 'chs'}}, {'value': {'type': 'text', 'subkey': 'link'}, 'key': {'type': 'text', 'value': 'chl'}}]}}}, 'with': {'type': 'text', 'value': ''}})
-    
+
     sw_592 = pipe_rename(
         context, sw_626, conf={'RULE': [{'field': {'type': 'text', 'value': 'media:content.url'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'description'}}]})
-    
+
     sw_636 = pipe_regex(
         context, sw_592, conf={'RULE': [{'field': {'type': 'text', 'value': 'description'}, 'match': {'type': 'text', 'value': '(.*)'}, 'replace': {'type': 'text', 'value': '<img src="$1" alt="QRcode" /><br/>${title}'}}]})
-    
+
     _OUTPUT = pipe_output(
         context, sw_636, conf={})
-    
+
     return _OUTPUT
 
 

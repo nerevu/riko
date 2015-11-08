@@ -23,19 +23,19 @@ def pipe_b96287458de001ad62a637095df33ad5(context=None, _INPUT=None, conf=None, 
 
     sw_632 = pipe_itembuilder(
         context, forever, conf={'attrs': [{'value': {'type': 'text', 'value': 'VAL1'}, 'key': {'type': 'text', 'value': 'ATTR1'}}, {'value': {'type': 'text', 'value': 'VAL2'}, 'key': {'type': 'text', 'value': 'attrpath.attr2'}}]})
-    
+
     sw_605 = pipe_strconcat(
         context, forever, conf={'part': {'type': 'text', 'value': 'extVal'}})
-    
+
     sw_551 = pipe_itembuilder(
         context, forever, attrs_3_value=sw_605, conf={'attrs': [{'value': {'type': 'text', 'value': 'val1'}, 'key': {'type': 'text', 'value': 'attr1'}}, {'value': {'type': 'text', 'value': 'val2'}, 'key': {'type': 'text', 'value': 'attrpath.attr2'}}, {'value': {'terminal': 'attrs_3_value', 'type': 'text'}, 'key': {'type': 'text', 'value': 'attrpath.attr3'}}, {'value': {'type': 'text', 'value': 'val3'}, 'key': {'type': 'text', 'value': 'longpath.attrpath.attr3'}}]})
-    
+
     sw_613 = pipe_union(
         context, sw_551, _OTHER1=sw_632, conf={})
-    
+
     _OUTPUT = pipe_output(
         context, sw_613, conf={})
-    
+
     return _OUTPUT
 
 

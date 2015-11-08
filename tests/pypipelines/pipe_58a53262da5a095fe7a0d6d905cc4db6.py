@@ -26,28 +26,28 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(context=None, _INPUT=None, conf=None, 
 
     sw_550 = pipe_fetch(
         context, forever, conf={'URL': [{'type': 'url', 'value': 'file://data/blog.ouseful.info_feed.xml'}, {'type': 'url', 'value': 'file://data/feeds.feedburner.com_TheEdTechie.xml'}]})
-    
+
     sw_606 = pipe_urlbuilder(
         context, forever, conf={'PATH': {'type': 'text', 'value': ''}, 'BASE': {'type': 'text', 'value': 'file://data/www.greenhughes.com_rssfeed.xml'}, 'PARAM': [{'value': {'type': 'text', 'value': ''}, 'key': {'type': 'text', 'value': ''}}]})
-    
+
     sw_572 = pipe_fetch(
         context, forever, _1_URL=sw_606, conf={'URL': {'terminal': '1_URL', 'type': 'url'}})
-    
+
     sw_580 = pipe_union(
         context, sw_550, _OTHER=sw_572, conf={})
-    
+
     sw_565 = pipe_sort(
         context, sw_580, conf={'KEY': [{'field': {'type': 'text', 'value': 'title'}, 'dir': {'type': 'text', 'value': 'ASC'}}]})
-    
+
     sw_596 = pipe_truncate(
         context, sw_565, conf={'count': {'type': 'number', 'value': '3'}})
-    
+
     sw_625 = pipe_reverse(
         context, sw_596, conf={})
-    
+
     _OUTPUT = pipe_output(
         context, sw_625, conf={})
-    
+
     return _OUTPUT
 
 

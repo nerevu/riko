@@ -25,25 +25,25 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(context=None, _INPUT=None, conf=None, 
 
     sw_521 = pipe_urlinput(
         context, forever, conf={'debug': {'type': 'url', 'value': ''}, 'default': {'type': 'url', 'value': 'file://data/rsc-ne-scotland.org.uk_mashe_ititle_xml_jisc10bean.xml'}, 'prompt': {'type': 'text', 'value': 'Caption URL'}, 'name': {'type': 'text', 'value': 'url'}, 'position': {'type': 'number', 'value': ''}})
-    
+
     sw_572 = pipe_fetchdata(
         context, forever, URL=sw_521, conf={'URL': {'terminal': 'URL', 'type': 'url'}, 'path': {'type': 'text', 'value': 'body.div.p'}})
-    
+
     sw_621 = pipe_textinput(
         context, forever, conf={'debug': {'type': 'text', 'value': ''}, 'default': {'type': 'text', 'value': 'maverick'}, 'prompt': {'type': 'text', 'value': 'Caption search term'}, 'name': {'type': 'text', 'value': 'q'}, 'position': {'type': 'number', 'value': ''}})
-    
+
     sw_584 = pipe_filter(
         context, sw_572, RULE_1_value=sw_621, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': [{'field': {'type': 'text', 'value': 'content'}, 'value': {'terminal': 'RULE_1_value', 'type': 'text'}, 'op': {'type': 'text', 'value': 'contains'}}]})
-    
+
     sw_595 = pipe_rename(
         context, sw_584, conf={'RULE': [{'field': {'type': 'text', 'value': 'begin'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'ctime'}}, {'field': {'type': 'text', 'value': 'content'}, 'op': {'type': 'text', 'value': 'copy'}, 'newval': {'type': 'text', 'value': 'title'}}]})
-    
+
     sw_606 = pipe_regex(
         context, sw_595, conf={'RULE': [{'field': {'type': 'text', 'value': 'ctime'}, 'match': {'type': 'text', 'value': '(.*)'}, 'replace': {'type': 'text', 'value': '&time=$1'}}]})
-    
+
     _OUTPUT = pipe_output(
         context, sw_606, conf={})
-    
+
     return _OUTPUT
 
 

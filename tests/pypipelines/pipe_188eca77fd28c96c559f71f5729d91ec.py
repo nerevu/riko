@@ -27,19 +27,19 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(context=None, _INPUT=None, conf=None, 
         # todo: insert submodule description here
         return pipe_fetchpage(
             context, _INPUT, conf={'URL': {'type': 'url', 'subkey': 'url'}, 'to': {'type': 'text', 'value': '</tr>'}, 'token': {'type': 'text', 'value': '<td style="TEXT-ALIGN: center">'}, 'from': {'type': 'text', 'value': 'One Way</span>'}})
-    
+
     sw_163 = pipe_itembuilder(
         context, forever, conf={'attrs': {'value': {'type': 'text', 'value': 'file://data/www.caltrain.com_Fares_farechart.html'}, 'key': {'type': 'text', 'value': 'url'}}})
-    
+
     sw_111 = pipe_loop(
         context, sw_163, embed=pipe_sw_119, conf={'assign_part': {'type': 'text', 'value': 'all'}, 'assign_to': {'type': 'text', 'value': 'loop:fetchpage'}, 'emit_part': {'type': 'text', 'value': 'all'}, 'mode': {'type': 'text', 'value': 'EMIT'}, 'embed': {'type': 'module', 'value': {'type': 'fetchpage', 'id': 'sw-119', 'conf': {'URL': {'type': 'url', 'subkey': 'url'}, 'to': {'type': 'text', 'value': '</tr>'}, 'token': {'type': 'text', 'value': '<td style="TEXT-ALIGN: center">'}, 'from': {'type': 'text', 'value': 'One Way</span>'}}}}, 'with': {'type': 'text', 'value': ''}})
-    
+
     sw_287 = pipe_truncate(
         context, sw_111, conf={'count': {'type': 'number', 'value': '100'}})
-    
+
     _OUTPUT = pipe_output(
         context, sw_287, conf=None)
-    
+
     return _OUTPUT
 
 
