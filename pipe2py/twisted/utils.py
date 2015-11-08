@@ -75,7 +75,7 @@ def coopReduce(func, iterable, initializer=None):
 
 def asyncReduce(asyncCallable, iterable, initializer=None):
     it = iter(iterable)
-    x = next(it) if initializer is None else initializer
+    x = initializer or next(it)
 
     @inlineCallbacks
     def work(asyncCallable, it, x):

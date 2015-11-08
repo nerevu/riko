@@ -15,11 +15,7 @@ from __future__ import (
 from lxml import objectify
 from lxml.etree import XMLSyntaxError
 from urllib2 import urlopen
-
-try:
-    from json import loads
-except (ImportError, AttributeError):
-    from simplejson import loads
+from json import loads
 
 from functools import partial
 from itertools import imap, starmap

@@ -47,29 +47,24 @@ class LinkParser(SGMLParser):
 
 
 def getRSSLinkFromHTMLSource(html):
-    try:
-        parser = LinkParser()
-        parser.feed(html)
-        return parser.href
-    except:
-        return []
+    parser = LinkParser()
+    parser.feed(html)
+    return parser.href
 
 
 def getRSSLink(url):
-    try:
-        f = urlopen(url)
-        parser = LinkParser()
+    f = urlopen(url)
+    parser = LinkParser()
 
-        while True:
-            chunk = f.read(BUFFERSIZE)
-            parser.feed(chunk)
+    while True:
+        chunk = f.read(BUFFERSIZE)
+        parser.feed(chunk)
 
-            if parser.nomoretags or not chunk:
-                break
+        if parser.nomoretags or not chunk:
+            break
 
-        return [urljoin(url, href) for href in parser.href]
-    except:
-        return []
+    return [urljoin(url, href) for href in parser.href]
+
 
 if __name__ == '__main__':
     import sys
