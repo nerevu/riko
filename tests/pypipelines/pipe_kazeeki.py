@@ -9,6 +9,7 @@ from os import path as p
 from pprint import pprint
 from twisted.internet.task import react
 from pipe2py import Context
+from pipe2py.compile import write_file
 from pipe2py.lib.utils import combine_dicts as cdict
 from pipe2py.lib.collections import SyncPipe
 from pipe2py.twisted.collections import AsyncPipe
@@ -344,10 +345,10 @@ def print_content(output):
     print('count:', len(pipe))
 
 
-# def write_content(output, pipe_name='kazeeki'):
-#     path = p.join(PARENT, 'pipe2py', 'data', '%s.json' % pipe_name)
-#     data = {'items': list(output)}
-#     size = write_file(data, path, True)
+def write_content(output, pipe_name='kazeeki'):
+    path = p.join(PARENT, 'pipe2py', 'data', '%s.json' % pipe_name)
+    data = {'items': list(output)}
+    size = write_file(data, path, True)
 
 
 def pipe_kazeeki(context=None):
