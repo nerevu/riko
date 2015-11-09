@@ -24,11 +24,18 @@ from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 opts = {'listize': False}
 
+
+def mean(*nums):
+    try:
+        return sum(nums) / len(nums)
+    except ZeroDivisionError:
+        return 0.0
+
 OPS = {
     'add': lambda x, y: x + y,
     'subtract': lambda x, y: x - y,
     'multiply': lambda x, y: x * y,
-    'mean': lambda x, y: (x + y) / 2.0,
+    'mean': mean,
     'divide': lambda x, y: x / y,
     'modulo': lambda x, y: x % y,
     'power': lambda x, y: pow(x, y),
