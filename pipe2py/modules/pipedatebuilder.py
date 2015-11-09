@@ -62,3 +62,7 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
             raise Exception('Unrecognized date string: %s' % date)
 
         yield new_date.timetuple()
+
+        if item.get('forever'):
+            # _INPUT is infinite and not a loop, so just yield item once
+            break
