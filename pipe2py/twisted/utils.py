@@ -7,12 +7,17 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
+import itertools as it
+
+from functools import partial
 from twisted.internet import defer
 from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)
 from twisted.internet.task import coiterate, cooperate
 from functools import partial
 from itertools import ifilter, imap, starmap, repeat
+from twisted.internet.protocol import ProcessProtocol
+from twisted.internet.reactor import spawnProcess
 from pipe2py.lib import utils
 
 WORKERS = 50
@@ -27,33 +32,33 @@ def _get_work(asyncCallable, callback, map_func, *iterables):
 
 
 def _parallel(work, asyncCallable):
-    deferreds = repeat(coiterate(work), WORKERS)
+    deferreds = it.repeat(coiterate(work), WORKERS)
     return gatherResults(deferreds, consumeErrors=True)
 
 
 # helper functions
 # def coop(asyncCallable, callback, *iterables):
-#     work = _get_work(asyncCallable, callback, imap, *iterables)
+#     work = _get_work(asyncCallable, callback, it.imap, *iterables)
 #     return coiterate(work)
 
 
 # def asyncParallel(asyncCallable, callback, *iterables):
-#     work = _get_work(asyncCallable, callback, imap, *iterables)
+#     work = _get_work(asyncCallable, callback, it.imap, *iterables)
 #     return _parallel(work, asyncCallable)
 
 
 def coopStar(asyncCallable, callback, iterable):
-    work = _get_work(asyncCallable, callback, starmap, *[iterable])
+    work = _get_work(asyncCallable, callback, it.starmap, *[iterable])
     return coiterate(work)
 
 
 def asyncStarParallel(asyncCallable, callback, iterable):
-    work = _get_work(asyncCallable, callback, starmap, *[iterable])
+    work = _get_work(asyncCallable, callback, it.starmap, *[iterable])
     return _parallel(work, asyncCallable)
 
 
 def trueDeferreds(sources, filter_func=None):
-    return imap(partial(maybeDeferred, ifilter, filter_func), sources)
+    return it.imap(partial(maybeDeferred, it.ifilter, filter_func), sources)
 
 
 @inlineCallbacks
@@ -90,7 +95,7 @@ def asyncReduce(asyncCallable, iterable, initializer=None):
 def asyncImap(asyncCallable, *iterables):
     """itertools.imap for deferred callables
     """
-    deferreds = imap(asyncCallable, *iterables)
+    deferreds = it.imap(asyncCallable, *iterables)
     return gatherResults(deferreds, consumeErrors=True)
 
 
@@ -116,7 +121,7 @@ def asyncStarPmap(asyncCallable, iterable):
 def asyncStarMap(asyncCallable, iterable):
     """itertools.starmap for deferred callables
     """
-    deferreds = starmap(asyncCallable, iterable)
+    deferreds = it.starmap(asyncCallable, iterable)
     return gatherResults(deferreds, consumeErrors=True)
 
 
