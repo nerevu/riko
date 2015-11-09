@@ -38,7 +38,10 @@ else:
     try:
         import pylibmc
     except ImportError:
-        cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
+        cache_config = {
+            'DEBUG': True,
+            'CACHE_TYPE': 'simple',
+            'CACHE_THRESHOLD': 25}
     else:
         cache_config = {
             'DEBUG': True,
