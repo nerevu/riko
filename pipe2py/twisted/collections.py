@@ -13,7 +13,7 @@ from __future__ import (
 
 from twisted.internet.defer import inlineCallbacks, returnValue
 from pipe2py.modules.pipeforever import asyncPipeForever
-from pipe2py.lib.collections import PyPipe
+from pipe2py.lib.collections import PyPipe, PyCollection
 
 
 class AsyncPipe(PyPipe):
@@ -36,3 +36,21 @@ class AsyncPipe(PyPipe):
     def loop(self, name, **kwargs):
         embed = AsyncPipe(name, self.context).pipeline
         return self.pipe('loop', embed=embed, **kwargs)
+
+
+class AsyncCollection(PyCollection):
+    """An asynchronous PyCollection object"""
+    @inlineCallbacks
+    def asyncFetchAll(self):
+        """Fetch all source urls"""
+        src_pipes = self.gen_pipes(AsyncPipe)
+        first_pipe = src_pipes.next()
+        kwargs = self.make_kwargs(src_pipes)
+
+        if kwargs:
+            kwargs.update({'input': first_pipe})
+            result = yield AsyncPipe('union', **kwargs).output
+        else:
+            result = yield first_pipe
+
+        returnValue(result)

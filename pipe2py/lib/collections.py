@@ -48,3 +48,45 @@ class SyncPipe(PyPipe):
     def loop(self, name, **kwargs):
         embed = SyncPipe(name, self.context).pipeline
         return self.pipe('loop', embed=embed, **kwargs)
+
+
+def make_conf(value, conf_type='text'):
+    return {'value': value, 'type': conf_type}
+
+
+class PyCollection(object):
+    """A pipe2py bulk url fetching object"""
+    def __init__(self, sources):
+        self.sources = sources
+
+    @staticmethod
+    def make_kwargs(src_pipes):
+
+       iterator = enumerate(src_pipes)
+       return dict(('_OTHER%i' % k, pipe) for k, pipe in iterator)
+
+    def gen_pipes(self, pipe):
+        groups = utils.group_by(self.sources, 'type', PIPETYPE)
+
+        for pipe_type, values in groups.iteritems():
+            urls = [make_conf(s['url'], 'url') for s in values]
+            conf = {'URL': urls}
+            conf.update(values[0].get('conf', {}))  # TODO: groupby conf
+            yield pipe(pipe_type, conf=conf).output
+
+
+class SyncCollection(PyCollection):
+    """A synchronous PyCollection object"""
+    def fetch_all(self):
+        """Fetch all source urls"""
+        src_pipes = self.gen_pipes(SyncPipe)
+        first_pipe = src_pipes.next()
+        kwargs = self.make_kwargs(src_pipes)
+
+        if kwargs:
+            kwargs.update({'input': first_pipe})
+            result = SyncPipe('union', **kwargs).output
+        else:
+            result = first_pipe
+
+        return result
