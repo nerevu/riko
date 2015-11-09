@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=number#SimpleMath
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from functools import partial
 from itertools import starmap
 from math import pow
@@ -24,7 +28,7 @@ OPS = {
     'subtract': lambda x, y: x - y,
     'multiply': lambda x, y: x * y,
     'mean': lambda x, y: (x + y) / 2.0,
-    'divide': lambda x, y: x / (y * 1.0),
+    'divide': lambda x, y: x / y,
     'modulo': lambda x, y: x % y,
     'power': lambda x, y: pow(x, y),
 }

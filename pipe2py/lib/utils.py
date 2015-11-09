@@ -7,7 +7,9 @@
 
 """
 
-from __future__ import absolute_import, division, print_function
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
 
 import string
 import re
@@ -196,8 +198,8 @@ def get_value(field, item=None, force=False, **opts):
     switch = {
         'number': {'default': 0.0, 'func': float},
         'integer': {'default': 0, 'func': int},
-        'text': {'default': '', 'func': lambda i: encode(i)},
-        'unicode': {'default': u'', 'func': unicode},
+        'text': {'default': '', 'func': encode},
+        'unicode': {'default': '', 'func': unicode},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
     }
 
@@ -323,7 +325,7 @@ def get_input(context, conf):
         value = context.inputs.get(name, default)
     elif not context.test:
         # we skip user interaction during tests
-        raw = raw_input("%s (default=%s) " % (encode(prompt), encode(default)))
+        raw = raw_input("%s (default=%s) " % (prompt, default))
         value = raw or default
     else:
         value = default
@@ -354,7 +356,7 @@ def get_word(item):
     except TypeError:
         raw = None
 
-    return encode(raw or '')
+    return raw or ''
 
 
 def get_num(item):
@@ -386,10 +388,7 @@ def rreplace(s, find, replace, count=None):
 
 def url_quote(url):
     """Ensure url is valid"""
-    try:
-        return quote(url, safe=URL_SAFE)
-    except KeyError:
-        return quote(encode(url), safe=URL_SAFE)
+    return quote(url, safe=URL_SAFE)
 
 
 def listize(item):

@@ -7,6 +7,9 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Reverse
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
 
 def pipe_reverse(context=None, _INPUT=None, conf=None, **kwargs):
     """An operator that reverses the order of source items. Not loopable. Not

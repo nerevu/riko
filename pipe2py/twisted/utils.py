@@ -3,6 +3,10 @@
 
 """Twisted utility functions"""
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from twisted.internet import defer
 from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)

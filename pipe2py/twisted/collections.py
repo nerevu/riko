@@ -7,6 +7,10 @@
     Provides methods for creating asynchronous pipe2py pipes
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from twisted.internet.defer import inlineCallbacks, returnValue
 from pipe2py.modules.pipeforever import asyncPipeForever
 from pipe2py.lib.collections import PyPipe

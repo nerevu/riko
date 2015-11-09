@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=url#URLBuilder
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import urllib
 from itertools import imap, ifilter, starmap
 from . import _get_broadcast_funcs as get_funcs, get_dispatch_funcs, get_splits

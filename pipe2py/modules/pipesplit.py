@@ -9,6 +9,10 @@
 
 # contributed by https://github.com/tuukka
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from itertools import tee, imap
 from copy import deepcopy
 

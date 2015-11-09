@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#ItemBuilder
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from itertools import imap
 from twisted.internet.defer import inlineCallbacks, returnValue
 from . import get_splits, asyncGetSplits

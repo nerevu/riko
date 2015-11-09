@@ -6,6 +6,11 @@
    Public domain, do with it as you will
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
+
 def _gen_result(graph, ready, count):
     while ready:
         node = ready.pop(-1)
@@ -82,4 +87,4 @@ def topological_sort(graph):
 if __name__ == '__main__':
     graph = {0: [1], 1: [2], 2: [1, 3], 3: [3]}
     graph_component = get_graph_component(graph)
-    print topological_sort(graph_component)
+    print(topological_sort(graph_component))

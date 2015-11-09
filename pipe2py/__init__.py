@@ -3,6 +3,10 @@
 
 #See LICENSE file for license details
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 
 class Context(object):
     """The context of a pipeline

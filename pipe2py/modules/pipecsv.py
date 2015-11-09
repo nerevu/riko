@@ -7,11 +7,21 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchCSV
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import unicodecsv as csv
 
 from urllib2 import urlopen
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
+
+
+class DictReader(csv.DictReader):
+    def __init__(self, *args, **kwargs):
+        strings = {k: str(v) for k, v in kwargs.items()}
+        csv.DictReader.__init__(self, *args, **strings)
 
 
 def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
@@ -59,12 +69,12 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
             fieldnames = None
 
         if context and context.verbose:
-            print "pipe_csv loading:", url
+            print("pipe_csv loading:", url)
 
         for i in xrange(skip):
             f.next()
 
-        reader = csv.DictReader(
+        reader = DictReader(
             f, fieldnames, encoding='utf-8', delimiter=separator)
 
         for row in reader:

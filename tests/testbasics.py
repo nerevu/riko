@@ -4,19 +4,19 @@
     We need more extensive tests with stable data feeds!
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import unittest
 
+from json import loads
 from os import path as p, remove
 from importlib import import_module
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
 from pipe2py.lib.utils import extract_dependencies
 from pipe2py import Context
-
-try:
-    from json import loads
-except (ImportError, AttributeError):
-    from simplejson import loads
 
 
 class TestBasics(unittest.TestCase):
@@ -66,10 +66,10 @@ class TestBasics(unittest.TestCase):
             pydeps = extract_dependencies(pipe_generator=pipe_generator)
 
         if compared != check:
-            print 'pipeline length %s %i, but expected %s %i.' % (
-                switch.get(compared), value, switch.get(check), value)
+            print('pipeline length %s %i, but expected %s %i.' % (
+                switch.get(compared), value, switch.get(check), value))
 
-        print 'Modules used in %s: %s' % (pipe_name, pydeps)
+        print('Modules used in %s: %s' % (pipe_name, pydeps))
 
         # assert that pipeline length is as expected
         return self.assertEqual(compared, check)

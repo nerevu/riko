@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#FeedAutoDiscovery
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from pipe2py.lib import autorss, utils
 from pipe2py.lib.dotdict import DotDict
 
@@ -34,7 +38,7 @@ def pipe_feedautodiscovery(context=None, _INPUT=None, conf=None, **kwargs):
             url = utils.get_abspath(url)
 
             if context and context.verbose:
-                print "pipe_feedautodiscovery loading:", url
+                print("pipe_feedautodiscovery loading:", url)
 
             for entry in autorss.getRSSLink(url.encode('utf-8')):
                 yield {'link': entry}

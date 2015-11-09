@@ -7,6 +7,10 @@
     Provides methods for creating pipe2py pipes
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from importlib import import_module
 from pipe2py import Context
 from pipe2py.modules.pipeforever import pipe_forever

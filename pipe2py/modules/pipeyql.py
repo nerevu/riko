@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import requests
 
 from lxml.etree import parse
@@ -47,7 +51,7 @@ def pipe_yql(context=None, _INPUT=None, conf=None, **kwargs):
         tree = parse(r.raw)
 
         if context and context.verbose:
-            print "pipe_yql loading xml:", yql
+            print("pipe_yql loading xml:", yql)
 
         root = tree.getroot()
 

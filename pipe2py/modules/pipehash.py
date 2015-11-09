@@ -5,6 +5,10 @@
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import ctypes
 from functools import partial
 from itertools import starmap

@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#SubElement
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 
