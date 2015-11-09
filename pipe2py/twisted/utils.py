@@ -9,15 +9,15 @@ from __future__ import (
 
 import itertools as it
 
+from os import environ
+from sys import executable
 from functools import partial
+
 from twisted.internet import defer
 from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)
 from twisted.internet.task import coiterate, cooperate
-from functools import partial
-from itertools import ifilter, imap, starmap, repeat
-from twisted.internet.protocol import ProcessProtocol
-from twisted.internet.reactor import spawnProcess
+from twisted.internet.utils import getProcessOutput
 from pipe2py.lib import utils
 
 WORKERS = 50
@@ -37,14 +37,14 @@ def _parallel(work, asyncCallable):
 
 
 # helper functions
-# def coop(asyncCallable, callback, *iterables):
-#     work = _get_work(asyncCallable, callback, it.imap, *iterables)
-#     return coiterate(work)
+def coop(asyncCallable, callback, *iterables):
+    work = _get_work(asyncCallable, callback, it.imap, *iterables)
+    return coiterate(work)
 
 
-# def asyncParallel(asyncCallable, callback, *iterables):
-#     work = _get_work(asyncCallable, callback, it.imap, *iterables)
-#     return _parallel(work, asyncCallable)
+def asyncParallel(asyncCallable, callback, *iterables):
+    work = _get_work(asyncCallable, callback, it.imap, *iterables)
+    return _parallel(work, asyncCallable)
 
 
 def coopStar(asyncCallable, callback, iterable):
@@ -55,6 +55,14 @@ def coopStar(asyncCallable, callback, iterable):
 def asyncStarParallel(asyncCallable, callback, iterable):
     work = _get_work(asyncCallable, callback, it.starmap, *[iterable])
     return _parallel(work, asyncCallable)
+
+
+# End user functions
+def deferToProcess(source, function, *args, **kwargs):
+    command = "from %s import %s\n%s(*%s, **%s)" % (
+        source, function, function, args, kwargs)
+
+    return getProcessOutput(executable, ['-c', command], environ)
 
 
 def trueDeferreds(sources, filter_func=None):
@@ -90,6 +98,25 @@ def asyncReduce(asyncCallable, iterable, initializer=None):
         returnValue(x)
 
     return work(asyncCallable, it, x)
+
+
+@inlineCallbacks
+def asyncCmap(asyncCallable, *iterables):
+    """itertools.imap for deferred callables using cooperative multitasking
+    """
+    results = []
+    yield coop(asyncCallable, results.append, *iterables)
+    returnValue(results)
+
+
+@inlineCallbacks
+def asyncPmap(asyncCallable, *iterables):
+    """itertools.imap for deferred callables using parallel cooperative
+    multitasking
+    """
+    results = []
+    yield asyncParallel(asyncCallable, results.append, *iterables)
+    returnValue(results)
 
 
 def asyncImap(asyncCallable, *iterables):
