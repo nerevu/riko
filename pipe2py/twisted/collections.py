@@ -34,6 +34,5 @@ class AsyncPipe(PyPipe):
         return AsyncPipe(name, self.context, input=self.output, **kwargs)
 
     def loop(self, name, **kwargs):
-        async_pipe = AsyncPipe(name, self.context)
-        kwargs.update({'setup': async_pipe.setup})
-        return self.pipe('loop', embed=async_pipe.pipeline, **kwargs)
+        embed = AsyncPipe(name, self.context).pipeline
+        return self.pipe('loop', embed=embed, **kwargs)
