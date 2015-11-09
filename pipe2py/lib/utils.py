@@ -81,6 +81,11 @@ class Objectify:
 def _apply_func(funcs, items, map_func=starmap):
     return map_func(lambda item, func: func(item), izip(items, funcs))
 
+# http://api.stackexchange.com/2.2/tags?
+# page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
+# http://api.stackexchange.com/2.2/tags?
+# page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
+
 
 def get_logger(context):
     level = 'DEBUG' if context and context.verbose else 'INFO'

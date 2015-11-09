@@ -35,8 +35,8 @@ def get_urls(urls):
 
 
 # Async functions
-# from http://blog.mekk.waw.pl/archives/
-# 14-Twisted-inlineCallbacks-and-deferredGenerator.html
+# http://blog.mekk.waw.pl/archives/
+# https://github.com/steder/ng-images/blob/master/natgeo.py
 # http://code.activestate.com/recipes/277099/
 @inlineCallbacks
 def asyncParseResult(urls, _, _pass):
