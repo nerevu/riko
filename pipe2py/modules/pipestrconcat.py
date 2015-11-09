@@ -9,18 +9,31 @@
 
 # aka stringbuilder
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from functools import partial
 from itertools import starmap, imap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+
 from . import get_splits, asyncGetSplits
-from pipe2py.lib.utils import combine_dicts as cdicts, encode
+from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted.utils import asyncStarMap
 
 opts = {'ftype': None, 'parse': False, 'dictize': True}
 
-def parse_result (parts, _, _pass):
-    encoded = imap(encode, parts)
-    return '' if _pass else ''.join(encoded)
+
+def parse_result(parts, _, _pass):
+    parts = list(parts)
+
+    try:
+        parsed = '' if _pass else ''.join(parts)
+    except UnicodeDecodeError:
+        decoded = [p.decode('utf-8') for p in parts]
+        parsed = ''.join(decoded)
+
+    return parsed
 
 
 # Async functions

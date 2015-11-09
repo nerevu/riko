@@ -8,14 +8,14 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchData
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from lxml import objectify
 from lxml.etree import XMLSyntaxError
 from urllib2 import urlopen
-
-try:
-    from json import loads
-except (ImportError, AttributeError):
-    from simplejson import loads
+from json import loads
 
 from functools import partial
 from itertools import imap, starmap
@@ -44,7 +44,7 @@ def get_element(url):
     except XMLSyntaxError:
         element = loads(urlopen(url).read())
     else:
-        # print etree.tostring(element, pretty_print=True)
+        # print(etree.tostring(element, pretty_print=True))
         element = utils.etree_to_dict(root)
 
     return element
@@ -118,10 +118,10 @@ def pipe_fetchdata(context=None, _INPUT=None, conf=None, **kwargs):
     >>> url = "file://%s" % abspath
     >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
     >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
-    ['alarmTime', 'begin', 'duration', 'places', 'subject', 'uid']
+    [u'alarmTime', u'begin', u'duration', u'places', u'subject', u'uid']
     >>> conf = {'URL': {'value': url}, 'path': {'value': ''}}
     >>> sorted(pipe_fetchdata(_INPUT=pipe_forever(), conf=conf).next().keys())
-    ['appointment', 'reminder']
+    [u'appointment', 'reminder']
     """
     # todo: iCal and KML
     funcs = get_splits(None, conf, **cdicts(opts, kwargs))

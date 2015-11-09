@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Sort
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from operator import itemgetter
 from functools import partial
 from itertools import imap

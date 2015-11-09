@@ -4,19 +4,19 @@
     We need more extensive tests with stable data feeds!
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import unittest
 
+from json import loads
 from os import path as p, remove
 from importlib import import_module
 from itertools import islice
 from pipe2py.compile import parse_pipe_def, build_pipeline, stringify_pipe
 from pipe2py.lib.utils import extract_dependencies
 from pipe2py import Context
-
-try:
-    from json import loads
-except (ImportError, AttributeError):
-    from simplejson import loads
 
 
 class TestBasics(unittest.TestCase):
@@ -66,10 +66,10 @@ class TestBasics(unittest.TestCase):
             pydeps = extract_dependencies(pipe_generator=pipe_generator)
 
         if compared != check:
-            print 'pipeline length %s %i, but expected %s %i.' % (
-                switch.get(compared), value, switch.get(check), value)
+            print('pipeline length %s %i, but expected %s %i.' % (
+                switch.get(compared), value, switch.get(check), value))
 
-        print 'Modules used in %s: %s' % (pipe_name, pydeps)
+        print('Modules used in %s: %s' % (pipe_name, pydeps))
 
         # assert that pipeline length is as expected
         return self.assertEqual(compared, check)
@@ -107,6 +107,7 @@ class TestBasics(unittest.TestCase):
             parent, 'pipe2py', 'pypipelines', '%s.py' % pipe_name)
 
         remove(pipe_file_name)
+
 
 ##############
 # Online Tests
@@ -153,6 +154,7 @@ class TestBasics(unittest.TestCase):
         contains = self.context.inputs['textinput1']
         # check if the ticker is in the title of any of the first 3 items
         self.assertIn(contains, ' '.join(item['title'] for item in sliced))
+
 
 ###############
 # Offline Tests
@@ -621,7 +623,6 @@ class TestBasics(unittest.TestCase):
     #     pipe_name = 'pipe_e65397e116d7754da0dd23425f1f0af1'
     #     pipeline = self._get_pipeline(pipe_name)
     #     self._load(pipeline, pipe_name)
-
 
 if __name__ == '__main__':
     unittest.main()

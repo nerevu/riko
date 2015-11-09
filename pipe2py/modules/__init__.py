@@ -4,6 +4,10 @@
 # Note: each module name must match the name used internally by Yahoo, preceded
 # by pipe
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from functools import partial
 from itertools import imap, repeat
 from twisted.internet.defer import maybeDeferred, inlineCallbacks, returnValue

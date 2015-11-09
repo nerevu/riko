@@ -5,6 +5,9 @@
     ~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
 
 def pipe_output(context=None, _INPUT=None, conf=None, **kwargs):
     """Outputs the input source, i.e. does nothing (for now).

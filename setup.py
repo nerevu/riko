@@ -43,7 +43,7 @@ sys.dont_write_bytecode = True
 
 setup(
     name='pipe2py',
-    version='0.25.1',
+    version='0.26.0',
     description=(
         'A project to compile Yahoo! Pipes into Python. '
         'The pipe2py package can compile a Yahoo! Pipe into pure Python source'
@@ -51,16 +51,16 @@ setup(
         'pipes too.'
     ),
     long_description=read('README.rst'),
-    url='http://ggaughan.github.com/pipe2py/',
+    url='http://kazeeki.github.com/pipe2py/',
     license = 'GPL2',
-    author='Greg Gaughan',
-    author_email='gjgaughan@gmail.com',
+    author='Reuben Cummings',
+    author_email='reubano@gmail.com',
     packages=find_packages(exclude=['tests']),
     package_data={'templates': 'templates/*.txt', 'data': 'data/*'},
     include_package_data=True,
     classifiers=[],
     keywords='',
-    scripts=[p.join('bin', 'compile')],
+    scripts=[p.join('bin', 'compile'), p.join('bin', 'run')],
     install_requires=parse_requirements('requirements.txt'),
     dependency_links=list(parse_requirements('requirements.txt', dep=True)),
 )

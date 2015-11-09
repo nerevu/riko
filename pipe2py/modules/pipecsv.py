@@ -7,18 +7,21 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchCSV
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
+import unicodecsv as csv
+
 from urllib2 import urlopen
 from pipe2py.lib import utils
-from pipe2py.lib import unicodecsv as csv
 from pipe2py.lib.dotdict import DotDict
 
 
-def _gen_fieldnames(conf, reader, item, **kwargs):
-    start = int(utils.get_value(conf['col_row_start'], item, **kwargs))
-    end = int(utils.get_value(conf['col_row_end'], item, **kwargs))
-
-    for i in xrange((end - start) + 1):
-        yield reader.next()
+class DictReader(csv.DictReader):
+    def __init__(self, *args, **kwargs):
+        strings = {k: str(v) for k, v in kwargs.items()}
+        csv.DictReader.__init__(self, *args, **strings)
 
 
 def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
@@ -29,12 +32,10 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
     context : pipe2py.Context object
     _INPUT : pipeforever pipe or an iterable of items or fields
     conf : URL -- url
-        skip -- number of header rows to skip
-        col_mode -- column name source: row=header row(s),
+        skip -- number of initial rows to skip
+        col_mode -- column name source: row=header row,
                     custom=defined in col_name
         col_name -- list of custom column names
-        col_row_start -- first column header row
-        col_row_end -- last column header row
         separator -- column separator
 
     Yields
@@ -62,22 +63,22 @@ def pipe_csv(context=None, _INPUT=None, conf=None, **kwargs):
 
         f = urlopen(url)
 
+        if col_mode == 'custom':
+            fieldnames = [DotDict(x).get() for x in col_name]
+        else:
+            fieldnames = None
+
         if context and context.verbose:
-            print "pipe_csv loading:", url
+            print("pipe_csv loading:", url)
 
         for i in xrange(skip):
             f.next()
 
-        reader = csv.UnicodeReader(f, delimiter=separator)
-        fieldnames = []
+        reader = DictReader(
+            f, fieldnames, encoding='utf-8', delimiter=separator)
 
-        if col_mode == 'custom':
-            fieldnames = [DotDict(x).get() for x in col_name]
-        else:
-            fieldnames = _gen_fieldnames(conf, reader, item, **kwargs)
-
-        for rows in reader:
-            yield dict(zip(fieldnames, rows))
+        for row in reader:
+            yield row
 
         f.close()
 

@@ -7,9 +7,14 @@
     http://pipes.yahoo.com/pipes/docs?doc=string#SubString
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from functools import partial
 from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
@@ -23,7 +28,13 @@ opts = {'listize': False}
 def parse_result(conf, word, _pass):
     start = int(conf.start)
     end = int(conf.start + conf.length)
-    return word if _pass else word.decode('utf-8')[start:end]
+
+    try:
+        parsed = word if _pass else word[start:end]
+    except UnicodeDecodeError:
+        parsed = word.decode('utf-8')[start:end]
+
+    return parsed
 
 
 # Async functions

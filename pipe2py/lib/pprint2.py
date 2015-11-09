@@ -1,6 +1,10 @@
 # pprint2.py
 #
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 
 class Id(object):
     """An object that is not quoted as literal by repr"""

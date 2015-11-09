@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#FetchSiteFeed
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import speedparser
 
 from urllib2 import urlopen
@@ -38,7 +42,7 @@ def pipe_fetchsitefeed(context=None, _INPUT=None, conf=None, **kwargs):
             url = utils.get_abspath(url)
 
             if context and context.verbose:
-                print "pipe_fetchsitefeed loading:", url
+                print("pipe_fetchsitefeed loading:", url)
 
             for link in autorss.getRSSLink(url.encode('utf-8')):
                 parsed = speedparser.parse(urlopen(link).read())

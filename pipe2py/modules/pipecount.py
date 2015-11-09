@@ -8,6 +8,11 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Count
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
+
 
 def pipe_count(context=None, _INPUT=None, conf=None, **kwargs):
     """An operator that counts the number of _INPUT items and yields it

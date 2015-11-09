@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=operator
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from collections import deque
 from pipe2py.lib.dotdict import DotDict
 

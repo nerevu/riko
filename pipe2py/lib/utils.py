@@ -7,7 +7,9 @@
 
 """
 
-from __future__ import absolute_import, division, print_function
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
 
 import string
 import re
@@ -21,6 +23,7 @@ from itertools import (
 from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
+from collections import defaultdict
 from pipe2py import Context
 from pipe2py.lib.log import Logger
 from mezmorize import Cache
@@ -35,8 +38,13 @@ else:
     try:
         import pylibmc
     except ImportError:
-        cache_config = {'DEBUG': True, 'CACHE_TYPE': 'simple'}
+        print('simplecache')
+        cache_config = {
+            'DEBUG': True,
+            'CACHE_TYPE': 'simple',
+            'CACHE_THRESHOLD': 25}
     else:
+        print('memcached')
         cache_config = {
             'DEBUG': True,
             'CACHE_TYPE': 'memcached',
@@ -56,7 +64,6 @@ ALTERNATIVE_DATE_FORMATS = (
 
 # leave option to substitute with multiprocessing
 _map_func = imap
-
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
 memoize = cache.memoize
@@ -78,6 +85,11 @@ class Objectify:
 
 def _apply_func(funcs, items, map_func=starmap):
     return map_func(lambda item, func: func(item), izip(items, funcs))
+
+# http://api.stackexchange.com/2.2/tags?
+# page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
+# http://api.stackexchange.com/2.2/tags?
+# page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
 
 
 def get_logger(context):
@@ -189,21 +201,25 @@ def finitize(_INPUT):
         yield i
 
 
-def get_value(field, item=None, force=False, **kwargs):
+def get_value(field, item=None, force=False, **opts):
     item = item or {}
 
-    OPS = {
+    switch = {
         'number': {'default': 0.0, 'func': float},
         'integer': {'default': 0, 'func': int},
-        'text': {'default': '', 'func': lambda i: encode(i)},
-        'unicode': {'default': u'', 'func': unicode},
+        'text': {'default': '', 'func': encode},
+        'unicode': {'default': '', 'func': unicode},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
     }
 
     try:
-        kwargs.update(OPS.get(field.get('type', 'text'), {}))
+        defaults = switch.get(field.get('type', 'text'), {})
     except AttributeError:
-        kwargs.update(OPS['text'])
+        defaults = switch['text']
+
+    kwargs = defaultdict(str, **defaults)
+    kwargs.update(opts)
+    default = kwargs['default']
 
     try:
         value = item.get(field['subkey'], **kwargs)
@@ -213,15 +229,15 @@ def get_value(field, item=None, force=False, **kwargs):
         elif force:
             value = field
         elif field:
-            value = field.get(None, **kwargs)
+            value = field.get(**kwargs)
         else:
-            value = kwargs.get('default')
+            value = default
     except (TypeError, AttributeError):
         # field is already set to a value so use it or the default
-        value = field or kwargs.get('default')
+        value = field or default
     except (ValueError):
         # error converting subkey value with OPS['func'] so use the default
-        value = kwargs.get('default')
+        value = default
 
     return value
 
@@ -318,7 +334,7 @@ def get_input(context, conf):
         value = context.inputs.get(name, default)
     elif not context.test:
         # we skip user interaction during tests
-        raw = raw_input("%s (default=%s) " % (encode(prompt), encode(default)))
+        raw = raw_input("%s (default=%s) " % (prompt, default))
         value = raw or default
     else:
         value = default
@@ -349,7 +365,7 @@ def get_word(item):
     except TypeError:
         raw = None
 
-    return encode(raw or '')
+    return raw or ''
 
 
 def get_num(item):
@@ -381,10 +397,7 @@ def rreplace(s, find, replace, count=None):
 
 def url_quote(url):
     """Ensure url is valid"""
-    try:
-        return quote(url, safe=URL_SAFE)
-    except KeyError:
-        return quote(encode(url), safe=URL_SAFE)
+    return quote(url, safe=URL_SAFE)
 
 
 def listize(item):
@@ -567,13 +580,13 @@ def multiplex(sources):
 ############
 def gen_entries(parsed):
     for entry in parsed['entries']:
+        entry['pubDate'] = entry.get('updated_parsed')
+        entry['y:published'] = entry.get('updated_parsed')
         entry['dc:creator'] = entry.get('author')
         entry['author.uri'] = entry.get('author_detail', {}).get(
             'href')
         entry['author.name'] = entry.get('author_detail', {}).get(
             'name')
-        entry['pubDate'] = entry.get('updated_parsed')
-        entry['y:published'] = entry.get('updated_parsed')
         entry['y:title'] = entry.get('title')
         entry['y:id'] = entry.get('id')
         yield entry

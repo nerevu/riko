@@ -7,8 +7,13 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Rename
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from functools import partial
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+
 from . import get_splits, asyncGetSplits
 from pipe2py.lib.utils import combine_dicts as cdicts
 

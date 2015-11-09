@@ -13,3 +13,4 @@ treq==0.2.1
 pylibmc==1.3.0
 Babel==1.3
 chardet==2.3.0
+unicodecsv==0.9.4

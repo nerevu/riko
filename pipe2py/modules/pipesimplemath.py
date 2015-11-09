@@ -7,10 +7,15 @@
     http://pipes.yahoo.com/pipes/docs?doc=number#SimpleMath
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from functools import partial
 from itertools import starmap
 from math import pow
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
@@ -19,12 +24,19 @@ from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
 
 opts = {'listize': False}
 
+
+def mean(*nums):
+    try:
+        return sum(nums) / len(nums)
+    except ZeroDivisionError:
+        return 0.0
+
 OPS = {
     'add': lambda x, y: x + y,
     'subtract': lambda x, y: x - y,
     'multiply': lambda x, y: x * y,
-    'mean': lambda x, y: (x + y) / 2.0,
-    'divide': lambda x, y: x / (y * 1.0),
+    'mean': mean,
+    'divide': lambda x, y: x / y,
     'modulo': lambda x, y: x % y,
     'power': lambda x, y: pow(x, y),
 }

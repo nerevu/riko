@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=operators#Unique
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from . import get_splits, asyncGetSplits
 from twisted.internet.defer import inlineCallbacks, returnValue
 from pipe2py.lib.utils import combine_dicts as cdicts

@@ -11,6 +11,10 @@
 # Copyright (C) 2011 Gerrit Riessen
 # This code is licensed under the GNU Public License.
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from urllib2 import urlopen
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
@@ -93,21 +97,21 @@ def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
             content = unicode(f.read(), 'utf-8')
 
             if context and context.verbose:
-                print '............Content .................'
-                print content
-                print '...............EOF...................'
+                print('............Content .................')
+                print(content)
+                print('...............EOF...................')
 
             parsed = _parse_content(content, conf, **kwargs)
             items = parsed.split(split_token) if split_token else [parsed]
 
             if context and context.verbose:
-                print "FetchPage: found count items:", len(items)
+                print("FetchPage: found count items:", len(items))
 
             for i in items:
                 if context and context.verbose:
-                    print "--------------item data --------------------"
-                    print i
-                    print "--------------EOF item data ----------------"
+                    print("--------------item data --------------------")
+                    print(i)
+                    print("--------------EOF item data ----------------")
 
                 yield {"content": i}
 

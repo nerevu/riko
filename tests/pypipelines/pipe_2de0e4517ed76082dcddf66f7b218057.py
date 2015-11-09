@@ -20,10 +20,10 @@ def pipe_2de0e4517ed76082dcddf66f7b218057(context=None, _INPUT=None, conf=None, 
 
     sw_478 = pipe_fetch(
         context, forever, conf={'URL': {'type': 'url', 'value': 'file://data/feeds.feedburner.com_ouseful.xml'}})
-    
+
     _OUTPUT = pipe_output(
         context, sw_478, conf={})
-    
+
     return _OUTPUT
 
 

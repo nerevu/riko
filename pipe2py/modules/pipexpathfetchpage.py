@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=sources#XPathFetchPage
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from urllib2 import urlopen
 from lxml import html
 from lxml.html import html5parser
@@ -49,9 +53,9 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
             content = unicode(f.read(), 'utf-8')
 
             if context and context.verbose:
-                print '............Content .................'
-                print content
-                print '...............EOF...................'
+                print('............Content .................')
+                print(content)
+                print('...............EOF...................')
 
             xpath = conf.get('xpath', **kwargs)
             html5 = conf.get('html5', **kwargs) == 'true'
@@ -61,15 +65,15 @@ def pipe_xpathfetchpage(context=None, _INPUT=None, conf=None, **kwargs):
             items = root.xpath(xpath)
 
             if context and context.verbose:
-                print 'XPathFetchPage: found count items:', len(items)
+                print('XPathFetchPage: found count items:', len(items))
 
             for etree in items:
                 i = utils.etree_to_dict(etree)
 
                 if context and context.verbose:
-                    print '--------------item data --------------------'
-                    print i
-                    print '--------------EOF item data ----------------'
+                    print('--------------item data --------------------')
+                    print(i)
+                    print('--------------EOF item data ----------------')
 
                 if use_as_string:
                     yield {'content': unicode(i)}

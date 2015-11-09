@@ -5,9 +5,14 @@
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from functools import partial
 from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils
@@ -21,8 +26,7 @@ opts = {'listize': False}
 def parse_result(conf, word, _pass):
     allowed = {'capitalize', 'lower', 'upper', 'swapcase', 'title'}
     _pass = _pass if conf.transformation in allowed else True
-    encoded = str(word.encode('utf-8')) if isinstance(word, unicode) else word
-    return word if _pass else getattr(str, conf.transformation)(encoded)
+    return word if _pass else getattr(str, conf.transformation)(word)
 
 
 # Async functions

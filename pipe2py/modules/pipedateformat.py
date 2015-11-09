@@ -8,6 +8,10 @@
     http://pipes.yahoo.com/pipes/docs?doc=date#DateFormatter
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import time
 from pipe2py.lib.dotdict import DotDict
 
@@ -41,8 +45,8 @@ def pipe_dateformat(context=None, _INPUT=None, conf=None, **kwargs):
             date_string = time.strftime(date_format, _with)
         except TypeError as e:
             if context and context.verbose:
-                print 'Error formatting date: %s' % item
-                print e
+                print('Error formatting date: %s' % item)
+                print(e)
 
             continue
         else:

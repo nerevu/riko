@@ -7,9 +7,14 @@
     http://pipes.yahoo.com/pipes/docs?doc=string
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from functools import partial
 from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+
 from . import (
     get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
 from pipe2py.lib import utils

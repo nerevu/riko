@@ -5,6 +5,10 @@
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 import requests
 import treq
 
@@ -37,6 +41,10 @@ FIELDS = [
     {'name': 'USD/SGD', 'price': 1.34},
 ]
 
+# EXCHANGE_API = 'https://openexchangerates.org/api/latest.json'
+# APP_ID = '2cf54880fb304905a75ebd4542de749c'
+# PARAMS = {'app_id': APP_ID}
+# FIELDS = r.json()['rates'][cur_code]
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
 PARAMS = {'format': 'json'}

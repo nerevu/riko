@@ -7,6 +7,10 @@
     http://pipes.yahoo.com/docs?doc=date#DateBuilder
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from pipe2py.lib import utils
 from pipe2py.lib.dotdict import DotDict
 from datetime import timedelta, datetime as dt
@@ -58,3 +62,7 @@ def pipe_datebuilder(context=None, _INPUT=None, conf=None, **kwargs):
             raise Exception('Unrecognized date string: %s' % date)
 
         yield new_date.timetuple()
+
+        if item.get('forever'):
+            # _INPUT is infinite and not a loop, so just yield item once
+            break

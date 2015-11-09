@@ -15,7 +15,7 @@
         pipe_def = json.loads(pjson)
         pipe = parse_pipe_def(pipe_def, pipe_name)
         pipeline = build_pipeline(Context(), pipe)
-        print list(pipeline)
+        print(list(pipeline))
 
     Instead of passing a filename, a pipe id can be passed (-p) to fetch the
     JSON from Yahoo, e.g.
@@ -32,7 +32,8 @@
    License: see LICENSE file
 """
 from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
 
 from json import dumps, JSONEncoder
 from codecs import open
@@ -104,7 +105,7 @@ def _gen_string_modules(context, pipe, zipped):
             conf_kwargs = filter(lambda x: x[0] == 'conf', pykwargs.items())
             all_args = chain(con_args, nconf_kwargs, conf_kwargs)
 
-            print (
+            print(
                 '%s = %s(%s)' % (
                     module_id, pipe_name, str_args(all_args)
                 )

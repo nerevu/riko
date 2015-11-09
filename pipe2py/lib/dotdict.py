@@ -7,6 +7,10 @@
     Provides methods for creating dicts using dot notation
 """
 
+from __future__ import (
+    absolute_import, division, print_function, with_statement,
+    unicode_literals)
+
 from . import utils
 from itertools import starmap
 from feedparser import FeedParserDict
@@ -73,7 +77,6 @@ class DotDict(FeedParserDict):
     def get(self, key=None, default=None, **kwargs):
         keys = self._parse_key(key)
         value = DotDict(self.copy())
-        encode = kwargs.pop('encode', None)
         func = kwargs.pop('func', None)
 
         for key in keys:
@@ -93,7 +96,6 @@ class DotDict(FeedParserDict):
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 
-        value = value.encode('utf-8') if value and encode else value
         value = func(value) if value and func else value
         value = DotDict(value) if hasattr(value, 'keys') else value
         return value
