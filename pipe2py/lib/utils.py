@@ -59,7 +59,6 @@ ALTERNATIVE_DATE_FORMATS = (
 
 # leave option to substitute with multiprocessing
 _map_func = imap
-
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
 cache = Cache(**cache_config)
 memoize = cache.memoize

@@ -108,6 +108,7 @@ class TestBasics(unittest.TestCase):
 
         remove(pipe_file_name)
 
+
 ##############
 # Online Tests
 ##############
@@ -153,6 +154,7 @@ class TestBasics(unittest.TestCase):
         contains = self.context.inputs['textinput1']
         # check if the ticker is in the title of any of the first 3 items
         self.assertIn(contains, ' '.join(item['title'] for item in sliced))
+
 
 ###############
 # Offline Tests
@@ -621,7 +623,6 @@ class TestBasics(unittest.TestCase):
     #     pipe_name = 'pipe_e65397e116d7754da0dd23425f1f0af1'
     #     pipeline = self._get_pipeline(pipe_name)
     #     self._load(pipeline, pipe_name)
-
 
 if __name__ == '__main__':
     unittest.main()

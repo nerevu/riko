@@ -10,6 +10,7 @@ from __future__ import (
     unicode_literals)
 
 import ctypes
+
 from functools import partial
 from itertools import starmap
 from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred

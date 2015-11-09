@@ -12,6 +12,7 @@ from __future__ import (
     unicode_literals)
 
 from itertools import islice
+
 from . import get_splits, asyncGetSplits
 from twisted.internet.defer import inlineCallbacks, returnValue
 from pipe2py.lib.utils import combine_dicts as cdicts
