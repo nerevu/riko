@@ -62,6 +62,8 @@ ALTERNATIVE_DATE_FORMATS = (
     # todo more: whatever Yahoo can accept
 )
 
+TIMEOUT = 60 * 60 * 1
+
 # leave option to substitute with multiprocessing
 _map_func = imap
 combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
@@ -519,6 +521,7 @@ def substitute(word, rule):
     return result
 
 
+# @memoize(TIMEOUT)
 def fix_pattern(word, rule):
     if '$' in word:
         pattern = rule['match'].sub(rule['replace'], word, rule['count'])
@@ -528,6 +531,7 @@ def fix_pattern(word, rule):
     return pattern
 
 
+# @memoize(TIMEOUT)
 def get_new_rule(rule, recompile=False):
     # flag 'i' --> 2
     flags = re.IGNORECASE if rule.get('ignorecase') else 0
