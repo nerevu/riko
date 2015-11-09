@@ -23,7 +23,7 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_298(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_298(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_strconcat(
             context, _INPUT, conf={'part': [{'type': 'text', 'subkey': 'headline'}, {'type': 'text', 'value': ' ('}, {'type': 'text', 'subkey': 'severity'}, {'type': 'text', 'value': ')'}]})

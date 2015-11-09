@@ -23,7 +23,7 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(context=None, _INPUT=None, conf=None, 
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_119(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_119(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_fetchpage(
             context, _INPUT, conf={'URL': {'type': 'url', 'subkey': 'url'}, 'to': {'type': 'text', 'value': '</tr>'}, 'token': {'type': 'text', 'value': '<td style="TEXT-ALIGN: center">'}, 'from': {'type': 'text', 'value': 'One Way</span>'}})

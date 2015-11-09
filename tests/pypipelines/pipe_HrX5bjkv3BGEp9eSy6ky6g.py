@@ -24,7 +24,7 @@ def pipe_HrX5bjkv3BGEp9eSy6ky6g(context=None, _INPUT=None, conf=None, **kwargs):
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_165(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_165(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_fetch(
             context, _INPUT, conf={'URL': {'type': 'url', 'subkey': 'link'}})

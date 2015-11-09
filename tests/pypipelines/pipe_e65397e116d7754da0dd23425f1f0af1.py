@@ -24,7 +24,7 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(context=None, _INPUT=None, conf=None, 
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_634(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_634(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_urlbuilder(
             context, forever, conf={'PATH': {'type': 'text', 'value': ''}, 'BASE': {'type': 'text', 'value': ''}, 'PARAM': [{'value': {'type': 'text', 'value': 'qr'}, 'key': {'type': 'text', 'value': 'cht'}}, {'value': {'type': 'text', 'value': '200x200'}, 'key': {'type': 'text', 'value': 'chs'}}, {'value': {'type': 'text', 'subkey': 'link'}, 'key': {'type': 'text', 'value': 'chl'}}]})

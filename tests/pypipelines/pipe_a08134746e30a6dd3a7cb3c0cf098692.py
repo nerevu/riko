@@ -24,7 +24,7 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(context=None, _INPUT=None, conf=None, 
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_515(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_515(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_strconcat(
             context, forever, conf={'part': [{'type': 'text', 'value': '<img src="'}, {'type': 'text', 'subkey': 'img.src'}, {'type': 'text', 'value': '">'}]})

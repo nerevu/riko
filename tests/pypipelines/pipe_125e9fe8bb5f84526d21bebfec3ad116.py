@@ -26,13 +26,13 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(context=None, _INPUT=None, conf=None, 
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_72(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_72(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_urlbuilder(context, _INPUT, conf=conf)
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_150(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_150(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_fetchdata(context, _INPUT, conf=conf)
 

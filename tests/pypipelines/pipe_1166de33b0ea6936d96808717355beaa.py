@@ -28,14 +28,14 @@ def pipe_1166de33b0ea6936d96808717355beaa(context=None, _INPUT=None, conf=None, 
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_710(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_710(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_itembuilder(
             context, _INPUT, conf={'attrs': [{'value': {'type': 'text', 'subkey': 'newtitle'}, 'key': {'type': 'text', 'value': 'title'}}, {'value': {'type': 'text', 'value': 'DESCRIPTION'}, 'key': {'type': 'text', 'value': 'description.content'}}]})
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_696(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_696(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_itembuilder(
             context, _INPUT, conf={'attrs': [{'value': {'type': 'text', 'value': 'NEWTITLE'}, 'key': {'type': 'text', 'value': 'newtitle'}}, {'value': {'type': 'text', 'subkey': 'title'}, 'key': {'type': 'text', 'value': 'title'}}]})

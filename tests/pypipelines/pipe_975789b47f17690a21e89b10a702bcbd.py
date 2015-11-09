@@ -27,7 +27,7 @@ def pipe_975789b47f17690a21e89b10a702bcbd(context=None, _INPUT=None, conf=None, 
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_478(context=None, _INPUT=None, conf=None, **kwargs):
+    def pipe_sw_478(context=None, item=None, conf=None, **kwargs):
         # todo: insert submodule description here
         return pipe_stringtokenizer(
             context, _INPUT, conf={'to-str': {'type': 'text', 'value': ' '}})
