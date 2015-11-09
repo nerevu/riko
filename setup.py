@@ -60,7 +60,7 @@ setup(
     include_package_data=True,
     classifiers=[],
     keywords='',
-    scripts=[p.join('bin', 'compile')],
+    scripts=[p.join('bin', 'compile'), p.join('bin', 'run')],
     install_requires=parse_requirements('requirements.txt'),
     dependency_links=list(parse_requirements('requirements.txt', dep=True)),
 )
