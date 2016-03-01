@@ -16,7 +16,6 @@ class Context(object):
         test = takes input values from default (skips the console prompt)
         inputs = a dictionary of values that overrides the defaults
             e.g. {'name one': 'test value1'}
-        submodule = takes input values from inputs (or default)
     """
     def __init__(self, **kwargs):
         self.verbose = kwargs.get('verbose', False)
@@ -24,4 +23,3 @@ class Context(object):
         self.describe_input = kwargs.get('describe_input', False)
         self.describe_dependencies = kwargs.get('describe_dependencies', False)
         self.inputs = kwargs.get('inputs', {})
-        self.submodule = kwargs.get('submodule', False)

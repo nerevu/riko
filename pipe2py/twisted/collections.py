@@ -12,7 +12,6 @@ from __future__ import (
     unicode_literals)
 
 from twisted.internet.defer import inlineCallbacks, returnValue
-from pipe2py.modules.pipeforever import asyncPipeForever
 from pipe2py.lib.collections import PyPipe, PyCollection
 from functools import partial
 from itertools import imap

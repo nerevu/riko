@@ -271,7 +271,7 @@ def get_date(date_string):
 
 def get_input(context, conf):
     """Gets a user parameter, either from the console or from an outer
-        submodule/system
+    system
 
        Assumes conf has name, default, prompt and debug
     """
@@ -279,10 +279,9 @@ def get_input(context, conf):
     prompt = conf['prompt']['value']
     default = conf['default']['value'] or conf['debug']['value']
 
-    if context.submodule or context.inputs:
+    if context.inputs:
         value = context.inputs.get(name, default)
     elif not context.test:
-        # we skip user interaction during tests
         raw = raw_input("%s (default=%s) " % (prompt, default))
         value = raw or default
     else:

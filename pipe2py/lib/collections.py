@@ -55,10 +55,9 @@ class SyncPipe(PyPipe):
             return SyncPipe(name, source=self.name, input=self.data)
 
     def __call__(self, **kwargs):
-        embed = self.embed(**kwargs)
-        func = partial(SyncPipe, self.name, self.context, embed=embed, **kwargs)
-        map_func = lambda item: func(item=item).data
-        item = self.map(map_func, self.input)
+        pipe = partial(SyncPipe, self.name, self.context, **kwargs)
+        get_data = lambda item: pipe(item=item).data
+        item = self.map(get_data, self.input)
         return SyncPipe('output', item=item)
 
     @property
@@ -68,16 +67,9 @@ class SyncPipe(PyPipe):
     def pipe(self, name, **kwargs):
         return SyncPipe(name, self.context, input=self.output, **kwargs)
 
-    def embed(self, ename=None, **kwargs):
-        return SyncPipe(ename, self.context).pipeline if ename else ename
-
-    def loop(self, name, **kwargs):
-        return self.pipe('loop', embed=self.embed(name), **kwargs)
-
     def reducer(self, item, arg):
         name, kwargs = arg
-        embed = self.embed(**kwargs)
-        pkwargs = cdicts(kwargs, {'item': item, 'embed': embed})
+        pkwargs = cdicts(kwargs, {'item': item})
         return SyncPipe(name, self.context, **pkwargs).data
 
     def dispatch(self, *args, **kwargs):
