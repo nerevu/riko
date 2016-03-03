@@ -12,12 +12,16 @@ import itertools as it
 from os import environ
 from sys import executable
 from functools import partial
+from StringIO import StringIO
 
 from twisted.internet import defer
 from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)
 from twisted.internet.task import coiterate, cooperate
 from twisted.internet.utils import getProcessOutput
+from twisted.protocols.basic import FileSender
+from twisted.web.client import getPage
+from twisted.test.proto_helpers import AccumulatingProtocol, StringTransport
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 
@@ -27,6 +31,66 @@ WORKERS = 50
 
 asyncNone = defer.succeed(None)
 asyncReturn = partial(defer.succeed)
+urlRead = lambda url: getPage(url) if url.startswith('http') else readFile(url, StringTransport())
+
+
+# http://stackoverflow.com/q/26314586/408556
+# http://stackoverflow.com/q/8157197/408556
+# http://stackoverflow.com/a/33708936/408556
+class FileReader(AccumulatingProtocol):
+    def __init__(self, filename, transform=None):
+        self.f = open(filename, 'rb')
+        self.transform = transform
+        self.producer = FileSender()
+
+    def cleanup(self, *args):
+        self.f.close()
+        self.producer.stopProducing()
+
+    def connectionLost(self, reason):
+        logger.debug('connectionLost: %s', reason)
+        self.cleanup()
+
+    def connectionMade(self):
+        logger.debug('Connection made from %s', self.transport.getPeer())
+        args = (self.f, self.transport, self.transform)
+        self.d = self.closedDeferred = self.producer.beginFileTransfer(*args)
+
+        while not self.d.called:
+            self.producer.resumeProducing()
+
+        self.d.addErrback(logger.error)
+        self.d.addBoth(self.cleanup)
+
+
+@inlineCallbacks
+def readFile(filename, transport, protocol=FileReader):
+    proto = protocol(filename.replace('file://', ''))
+    proto.makeConnection(transport)
+    yield proto.d
+    # returnValue(proto.data)
+    returnValue(proto.transport.value())
+
+
+@inlineCallbacks
+def getFile(filename, transport, protocol=FileReader):
+    proto = protocol(filename.replace('file://', ''))
+    proto.makeConnection(transport)
+    yield proto.d
+    proto.transport.io.seek(0)
+    returnValue(proto.transport.io)
+
+
+@inlineCallbacks
+def urlOpen(url):
+    if url.startswith('http'):
+        f = StringIO()
+        yield downloadPage(url, f)
+        f.seek(0)
+    else:
+        f = yield getFile(url, StringTransport())
+
+    returnValue(f)
 
 
 def _get_work(asyncCallable, callback, map_func, *iterables):
