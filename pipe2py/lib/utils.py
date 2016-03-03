@@ -72,8 +72,26 @@ encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 
 
 class Objectify:
-    def __init__(self, **entries):
-        self.__dict__.update(entries)
+    def __init__(self, kwargs, **defaults):
+        """ Objectify constructor
+
+        Args:
+            kwargs (dict): The attributes to set
+            defaults (dict): The default attributes
+
+        Examples:
+            >>> kwargs = {'one': 1, 'two': 2}
+            >>> defaults = {'two': 5, 'three': 3}
+            >>> kw = Objectify(kwargs, **defaults)
+            >>> kw.one
+            1
+            >>> kw.two
+            2
+            >>> kw.three
+            3
+        """
+        defaults.update(kwargs)
+        self.__dict__.update(defaults)
 
     def __iter__(self):
         return self.__dict__.itervalues()
