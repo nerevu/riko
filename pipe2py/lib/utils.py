@@ -120,8 +120,6 @@ class Objectify:
     def keys(self):
         return self.__dict__.keys()
 
-def _apply_func(funcs, items, map_func=starmap):
-    return map_func(lambda item, func: func(item), izip(items, funcs))
 
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
@@ -385,14 +383,6 @@ def get_num(item):
         num = 0.0
 
     return num
-
-
-def passthrough(item):
-    return item
-
-
-def passnone(item):
-    return None
 
 
 def rreplace(s, find, replace, count=None):

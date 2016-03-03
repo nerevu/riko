@@ -270,10 +270,6 @@ def deferToProcess(source, function, *args, **kwargs):
     return getProcessOutput(executable, ['-c', command], environ)
 
 
-def trueDeferreds(sources, filter_func=None):
-    return it.imap(partial(maybeDeferred, it.ifilter, filter_func), sources)
-
-
 @inlineCallbacks
 def coopReduce(func, iterable, initializer=None):
     it = iter(iterable)
