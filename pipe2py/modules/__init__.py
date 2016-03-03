@@ -8,6 +8,7 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
+from os import path as p
 from functools import partial, wraps
 from itertools import imap, repeat, chain
 from operator import itemgetter
@@ -107,6 +108,17 @@ __outputs__ = [
 ]
 
 __all__ = __sources__ + __inputs__ + __operators__ + __loopings__ + __outputs__
+
+parent = p.join(p.abspath(p.dirname(p.dirname(p.dirname(__file__)))), 'data')
+parts = [
+    'feed.xml', 'blog.ouseful.info_feed.xml', 'gigs.json', 'places.xml',
+    'www.bbc.co.uk_news.html', 'edition.cnn.html']
+
+FEEDS = [
+    'http://feeds.feedburner.com/TechCrunch/',
+    'http://feeds.arstechnica.com/arstechnica/index']
+
+FILES = ['file://%s' % p.join(parent, x) for x in parts]
 
 
 def get_sync_funcs(**kwargs):

@@ -1,121 +1,127 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipefetchpage
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipefetchpage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Fetches web pages.
 
-    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchPage
+Fetches the source of a given web site as a string. This data can then be
+converted into an RSS feed or merged with other data in your Pipe using the
+`regex` module.
 """
-
-# Author: Gerrit Riessen, gerrit.riessen@open-source-consultants.de
-# Copyright (C) 2011 Gerrit Riessen
-# This code is licensed under the GNU Public License.
 
 from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
 from urllib2 import urlopen
+from twisted.internet.defer import inlineCallbacks, returnValue
+from twisted.web.client import getPage
+
+from . import processor, FEEDS, FILES
 from pipe2py.lib import utils
+from pipe2py.lib.log import Logger
 from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted import utils as tu
+
+OPTS = {'emit': True}
+logger = Logger(__name__).logger
 
 
-def _parse_content(content, conf, **kwargs):
-    from_delimiter = conf.get("from", **kwargs)
-    to_delimiter = conf.get("to", **kwargs)
-
-    # determine from location, i.e. from where to start reading
-    # content
-    from_location = 0
-
-    if from_delimiter != "":
-        from_location = content.find(from_delimiter)
-        # Yahoo! does not strip off the from_delimiter.
-        # if from_location > 0:
-        # from_location += len(from_delimiter)
-
-    # determine to location, i.e. where to stop reading content
-    to_location = 0
-
-    if to_delimiter != "":
-        to_location = content.find(to_delimiter, from_location)
-
-    # reduce the content depended on the to/from locations
-    if from_location > 0 and to_location > 0:
-        parsed = content[from_location:to_location]
-    elif from_location > 0:
-        parsed = content[from_location:]
-    elif to_location > 0:
-        parsed = content[:to_location]
-
-    return parsed
+def get_string(content, from_, to):
+    # TODO: convert relative links to absolute
+    # TODO: remove the closing tag if using an HTML tag
+    # TODO: stripped of HTML tags
+    # TODO: respect robots.txt
+    content = content.decode('utf-8')
+    from_location = content.find(from_) if from_ else 0
+    right = content[from_location:] if from_location > 0 else content
+    to_location = right[1:].find(to) + 1 if to else len(right)
+    return right[:to_location] if to_location > 0 else right
 
 
-def pipe_fetchpage(context=None, item=None, conf=None, **kwargs):
-    """A source that fetches the content of a given web site as a string.
-    Loopable.
+@inlineCallbacks
+def asyncParser(_, objconf, skip, **kwargs):
+    if skip:
+        tokens = None
+    else:
+        url = utils.get_abspath(objconf.url)
+        content = yield tu.urlRead(url)
+        parsed = get_string(content, objconf.from_, objconf.to)
+        splits = parsed.split(objconf.token) if objconf.token else [parsed]
+        tokens = ({objconf.assign: chunk} for chunk in splits)
 
-    context : pipe2py.Context object
-    _INPUT : pipeforever asyncPipe or an iterable of items or fields
+    result = (tokens, skip)
+    returnValue(result)
 
-    conf : dict
-       URL -- url object contain the URL to download
-       from -- string from where to start the input
-       to -- string to limit the input
-       token -- if present, split the input on this token to generate items
 
-       Description: http://pipes.yahoo.com/pipes/docs?doc=sources#FetchPage
+def parser(_, objconf, skip, **kwargs):
+    if skip:
+        tokens = None
+    else:
+        url = utils.get_abspath(objconf.url)
+        content = urlopen(url).read()
+        parsed = get_string(content, objconf.from_, objconf.to)
+        splits = parsed.split(objconf.token) if objconf.token else [parsed]
+        tokens = ({objconf.assign: chunk} for chunk in splits)
 
-       TODOS:
-        - don't retrieve pages larger than 200k
-        - don't retrieve if page is not indexable.
-        - item delimiter removes the closing tag if using a HTML tag
-          (not documented but happens)
-        - items should be cleaned, i.e. stripped of HTML tags
+    return tokens, skip
 
-    Yields
-    ------
-    _OUTPUT : items
+
+@processor(async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A source that asynchronously fetches the content of a given web site as
+    a string.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration
+
+    Returns:
+        dict: twisted.internet.defer.Deferred item with feeds
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next())
+        ...     path = 'value.items'
+        ...     conf = {'url': FILES[4], 'from_': 'DOCTYPE', 'to': 'http'}
+        ...     d = asyncPipe(conf=conf)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'content': u'DOCTYPE html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
     """
-    conf = DotDict(conf)
-    split_token = conf.get('token', **kwargs)
-    urls = utils.listize(conf['URL'])
+    return asyncParser(*args, **kwargs)
 
-    for item in _INPUT:
-        for item_url in urls:
-            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = utils.get_abspath(url)
 
-            if not url:
-                continue
+@processor(**OPTS)
+def pipe(*args, **kwargs):
+    """A source that fetches the content of a given web site as a string.
 
-            f = urlopen(url)
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-            # TODO: it seems that Yahoo! converts relative links to
-            # absolute. This needs to be done on the content but seems to
-            # be a non-trival task python?
-            content = unicode(f.read(), 'utf-8')
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration
 
-            if context and context.verbose:
-                print('............Content .................')
-                print(content)
-                print('...............EOF...................')
+    Returns:
+        dict: an item with feeds
 
-            parsed = _parse_content(content, conf, **kwargs)
-            items = parsed.split(split_token) if split_token else [parsed]
-
-            if context and context.verbose:
-                print("FetchPage: found count items:", len(items))
-
-            for i in items:
-                if context and context.verbose:
-                    print("--------------item data --------------------")
-                    print(i)
-                    print("--------------EOF item data ----------------")
-
-                yield {"content": i}
-
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+    Examples:
+        >>> conf = {'url': FILES[4], 'from_': 'DOCTYPE', 'to': 'http'}
+        >>> pipe(conf=conf).next()
+        {u'content': u'DOCTYPE html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
+    """
+    return parser(*args, **kwargs)

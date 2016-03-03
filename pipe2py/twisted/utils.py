@@ -13,6 +13,7 @@ from os import environ
 from sys import executable
 from functools import partial
 from StringIO import StringIO
+from zope.interface import implementer
 
 from twisted.internet import defer
 from twisted.internet.defer import (
@@ -22,6 +23,10 @@ from twisted.internet.utils import getProcessOutput
 from twisted.protocols.basic import FileSender
 from twisted.web.client import getPage
 from twisted.test.proto_helpers import AccumulatingProtocol, StringTransport
+from twisted.internet.fdesc import readFromFD, setNonBlocking
+from twisted.internet.interfaces import IReactorCore
+from twisted.test.proto_helpers import MemoryReactor
+
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 
@@ -117,6 +122,83 @@ class FakeScheduler(object):
 scheduler=FakeScheduler()
 cooperator = Cooperator(scheduler=scheduler, terminationPredicateFactory=lambda: lambda: True)
 coiterate, cooperate = cooperator.coiterate, cooperator.cooperate
+
+
+@implementer(IReactorCore)
+class FakeReactor(MemoryReactor):
+    """
+    A fake reactor to be used in tests.  This reactor doesn't actually do
+    much that's useful yet.  It accepts TCP connection setup attempts, but
+    they will never succeed.
+
+    Examples:
+        >>> import sys
+        >>> from twisted.internet.abstract import FileDescriptor
+        >>> # reactor = proto_helpers.FakeReactor()
+        >>> reactor = FakeReactor()
+        >>> f = FileDescriptor(reactor)
+        >>> f.fileno = sys.__stdout__.fileno
+        >>> fd = f.fileno()
+        >>> setNonBlocking(fd)
+        >>> readFromFD(fd, print)
+    """
+    def __init__(self):
+        super(FakeReactor, self).__init__()
+        self.running = False
+
+    def resolve(self, *args, **kw):
+        """
+        Return a L{twisted.internet.defer.Deferred} that will resolve a hostname.
+        """
+        pass
+
+    def run(self):
+        """
+        Fake L{IReactorCore.run}.
+        """
+        self.running = True
+
+    def stop(self):
+        """
+        Fake L{IReactorCore.stop}.
+        """
+        self.running = False
+
+    def crash(self):
+        """
+        Fake L{IReactorCore.crash}.
+        """
+        self.running = False
+
+    def iterate(self, *args, **kw):
+        """
+        Fake L{IReactorCore.iterate}.
+        """
+        pass
+
+    def fireSystemEvent(self, *args, **kw):
+        """
+        Fake L{IReactorCore.fireSystemEvent}.
+        """
+        pass
+
+    def addSystemEventTrigger(self, *args, **kw):
+        """
+        Fake L{IReactorCore.addSystemEventTrigger}.
+        """
+        pass
+
+    def removeSystemEventTrigger(self, *args, **kw):
+        """
+        Fake L{IReactorCore.removeSystemEventTrigger}.
+        """
+        pass
+
+    def callWhenRunning(self, *args, **kw):
+        """
+        Fake L{IReactorCore.callWhenRunning}.
+        """
+        pass
 
 
 @inlineCallbacks
