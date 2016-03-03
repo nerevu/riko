@@ -17,7 +17,7 @@ from StringIO import StringIO
 from twisted.internet import defer
 from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)
-from twisted.internet.task import coiterate, cooperate
+from twisted.internet.task import Cooperator
 from twisted.internet.utils import getProcessOutput
 from twisted.protocols.basic import FileSender
 from twisted.web.client import getPage
@@ -61,6 +61,61 @@ class FileReader(AccumulatingProtocol):
 
         self.d.addErrback(logger.error)
         self.d.addBoth(self.cleanup)
+
+
+class FakeDelayedCall(object):
+    """
+    Fake delayed call which lets us simulate the scheduler.
+    """
+    def __init__(self, func):
+        """
+        A function to run, later.
+        """
+        logger.debug('FakeDelayedCall')
+        self.func = func
+        self.cancelled = False
+
+    def cancel(self):
+        """
+        Don't run my function later.
+        """
+        self.cancelled = True
+
+
+class FakeScheduler(object):
+    """
+    A fake scheduler for testing against.
+    """
+    def __init__(self):
+        """
+        Create a fake scheduler with a list of work to do.
+        """
+        logger.debug('FakeScheduler')
+        self.work = []
+
+    def __call__(self, thunk):
+        """
+        Schedule a unit of work to be done later.
+        """
+        logger.debug('call')
+        unit = FakeDelayedCall(thunk)
+        self.work.append(unit)
+        return unit
+
+    def pump(self):
+        """
+        Do all of the work that is currently available to be done.
+        """
+        logger.debug('pump')
+        work, self.work = self.work, []
+
+        for unit in work:
+            if not unit.cancelled:
+                unit.func()
+
+scheduler=FakeScheduler()
+cooperator = Cooperator(scheduler=scheduler, terminationPredicateFactory=lambda: lambda: True)
+coiterate, cooperate = cooperator.coiterate, cooperator.cooperate
 
 
 @inlineCallbacks
@@ -140,17 +195,22 @@ def trueDeferreds(sources, filter_func=None):
 def coopReduce(func, iterable, initializer=None):
     it = iter(iterable)
     x = initializer or next(it)
+    results = []
 
-    def cooperator(func, it, x):
+    def work(func, it, x):
         for y in it:
             x = func(x, y)
-            yield
+            results.append(x)
+            yield None
 
-        returnValue(x)
+    task = cooperate(work(func, it, x))
+    d = task.whenDone()
 
-    task = cooperate(cooperator(func, it, x))
-    result = yield task.whenDone()
-    returnValue(result)
+    while cooperator._tasks:
+        task._cooperator._scheduler.pump()
+
+    yield d
+    returnValue(results.pop())
 
 
 def asyncReduce(asyncCallable, iterable, initializer=None):
