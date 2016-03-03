@@ -13,13 +13,11 @@ from __future__ import (
 
 import string
 import re
+import itertools as it
 
 # from pprint import pprint
 from datetime import datetime
 from functools import partial
-from itertools import (
-    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap, islice,
-    dropwhile)
 from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
@@ -67,7 +65,7 @@ ALTERNATIVE_DATE_FORMATS = (
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
 
-combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
+combine_dicts = lambda *d: dict(it.chain.from_iterable(it.imap(dict.iteritems, d)))
 encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 
 
@@ -152,7 +150,7 @@ def group_by(iterable, attr, default=None):
     data = list(iterable)
     order = unique_everseen(data, keyfunc(attr))
     sorted_iterable = sorted(data, key=keyfunc(attr))
-    groups = groupby(sorted_iterable, keyfunc(attr))
+    groups = it.groupby(sorted_iterable, keyfunc(attr))
     grouped = {str(k): list(v) for k, v in groups}
 
     # return groups in original order
@@ -401,7 +399,7 @@ def listize(item):
 
 
 def _gen_words(match, splits):
-    groups = list(dropwhile(lambda x: not x, match.groups()))
+    groups = list(it.dropwhile(lambda x: not x, match.groups()))
 
     for s in splits:
         try:
@@ -409,7 +407,7 @@ def _gen_words(match, splits):
         except ValueError:
             word = s
         else:
-            word = islice(groups, num, num + 1).next()
+            word = it.islice(groups, num, num + 1).next()
 
         yield word
 
@@ -429,7 +427,7 @@ def multi_substitute(word, rules):
     resplit = re.compile('\$(\d+)')
 
     # For each match, look-up corresponding replace value in dictionary
-    rules_in_series = ifilter(itemgetter('series'), rules)
+    rules_in_series = it.ifilter(itemgetter('series'), rules)
     rules_in_parallel = (r for r in rules if not r['series'])
 
     try:
@@ -443,7 +441,7 @@ def multi_substitute(word, rules):
     # print('pattern', pattern)
     # print('flags', flags)
 
-    for _ in chain(rules_in_series, has_parallel):
+    for _ in it.chain(rules_in_series, has_parallel):
         # print('~~~~~~~~~~~~~~~~')
         # print('new round')
         # print('word:', word)
@@ -455,7 +453,7 @@ def multi_substitute(word, rules):
         i = 0
 
         for match in regex.finditer(word):
-            item = ifilter(itemgetter(1), match.groupdict().iteritems()).next()
+            item = it.ifilter(itemgetter(1), match.groupdict().iteritems()).next()
 
             # print('----------------')
             # print('groupdict:', match.groupdict().items())
@@ -564,12 +562,12 @@ def get_new_rule(rule, recompile=False):
 def convert_rules(rules, recompile=False):
     # Convert replace pattern to Python/Linux format
     rule_func = partial(get_new_rule, recompile=recompile)
-    return imap(rule_func, rules)
+    return it.imap(rule_func, rules)
 
 
 def multiplex(sources):
     """Combine multiple generators into one"""
-    return chain.from_iterable(sources)
+    return it.chain.from_iterable(sources)
 
 
 ############

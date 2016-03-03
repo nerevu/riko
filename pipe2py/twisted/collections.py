@@ -11,10 +11,11 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-from pipe2py.lib.collections import PyPipe, PyCollection
 from functools import partial
+
 from twisted.internet.defer import inlineCallbacks, returnValue
-from pipe2py.lib.collections import PyPipe
+
+from pipe2py.lib.collections import PyPipe, PyCollection
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted import utils as tu
 

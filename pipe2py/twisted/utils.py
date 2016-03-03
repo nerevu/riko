@@ -20,12 +20,11 @@ from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)
 from twisted.internet.task import Cooperator
 from twisted.internet.utils import getProcessOutput
-from twisted.protocols.basic import FileSender
-from twisted.web.client import getPage
-from twisted.test.proto_helpers import AccumulatingProtocol, StringTransport
 from twisted.internet.fdesc import readFromFD, setNonBlocking
 from twisted.internet.interfaces import IReactorCore
-from twisted.test.proto_helpers import MemoryReactor
+from twisted.protocols.basic import FileSender
+from twisted.web.client import getPage
+from twisted.test.proto_helpers import MemoryReactor, AccumulatingProtocol, StringTransport
 
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
