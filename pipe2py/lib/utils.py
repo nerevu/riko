@@ -133,6 +133,9 @@ def memoize(*args, **kwargs):
     return Cache(**cache_config).memoize(*args, **kwargs)
 
 
+def remove_keys (content, *args):
+    """Remove keys from a dict and return new dict"""
+    return {k: v for k, v in content.items() if k not in args}
 
 
 
@@ -210,7 +213,7 @@ def etree_to_dict(element):
     return i
 
 
-def get_value(field, item=None, force=False, **opts):
+def get_value(item, conf=None, force=False, **opts):
     item = item or {}
 
     switch = {
@@ -222,7 +225,7 @@ def get_value(field, item=None, force=False, **opts):
     }
 
     try:
-        defaults = switch.get(field.get('type', 'text'), {})
+        defaults = switch.get(conf.get('type', 'text'), {})
     except AttributeError:
         defaults = switch['text']
 
@@ -231,19 +234,19 @@ def get_value(field, item=None, force=False, **opts):
     default = kwargs['default']
 
     try:
-        value = item.get(field['subkey'], **kwargs)
+        value = item.get(conf['subkey'], **kwargs)
     except KeyError:
-        if field and not (hasattr(field, 'delete') or force):
-            raise TypeError('field must be of type DotDict')
+        if conf and not (hasattr(conf, 'delete') or force):
+            raise TypeError('conf must be of type DotDict')
         elif force:
-            value = field
-        elif field:
-            value = field.get(**kwargs)
+            value = conf
+        elif conf:
+            value = conf.get(**kwargs)
         else:
             value = default
     except (TypeError, AttributeError):
-        # field is already set to a value so use it or the default
-        value = field or default
+        # conf is already set to a value so use it or the default
+        value = conf or default
     except (ValueError):
         # error converting subkey value with OPS['func'] so use the default
         value = default
@@ -251,15 +254,14 @@ def get_value(field, item=None, force=False, **opts):
     return value
 
 
-def dispatch(split, *funcs, **kwargs):
-    """takes a tuple of items (returned by dispatch or broadcast) and delivers
-    each item to different function
+def dispatch(split, *funcs):
+    """takes a tuple of items and delivers each item to a different function
 
-           /----> item1 --> double(item1) --> \
-          /                                    \
-    split ----> item2 --> triple(item2) ---> _OUTPUT
-          \                                    /
-           \-> item3 --> quadruple(item3) --> /
+           /--> item1 --> double(item1) -----> \
+          /                                     \
+    split ----> item2 --> triple(item2) -----> _OUTPUT
+          \                                     /
+           \--> item3 --> quadruple(item3) --> /
 
     One way to construct such a flow in code would be::
 
@@ -270,30 +272,50 @@ def dispatch(split, *funcs, **kwargs):
         _OUTPUT = dispatch(split, double, triple, quadruple)
         _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
     """
-    map_func = kwargs.get('map_func', starmap)
-    return map_func(lambda item, func: func(item), izip(split, funcs))
+    return [func(item) for item, func in it.izip(split, funcs)]
 
 
-def parse_conf(conf, item=None, parse_func=None, **kwargs):
-    convert = kwargs.pop('convert', True)
-    values = map(partial(parse_func, item=item), (conf[c] for c in conf))
-    result = dict(zip(conf, values))
-    return Objectify(**result) if convert else result
+def broadcast(item, *funcs):
+    """delivers the same item to different functions
+
+           /--> item --> double(item) -----> \
+          /                                   \
+    item -----> item --> triple(item) -----> _OUTPUT
+          \                                   /
+           \--> item --> quadruple(item) --> /
+
+    One way to construct such a flow in code would be::
+
+        double = lambda word: word * 2
+        triple = lambda word: word * 3
+        quadruple = lambda word: word * 4
+        _OUTPUT = broadcast('bar', double, triple, quadruple)
+        _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
+    """
+    return [func(item) for func in funcs]
 
 
-def parse_params(params):
-    true_params = filter(all, params)
-    return dict((x.key, x.value) for x in true_params)
+def parse_conf(item, **kwargs):
+    kw = Objectify(kwargs, defaults={}, conf={})
+    # TODO: fix so .items() returns DotDict instance
+    # parsed = {k: get_value(item, v) for k, v in kw.conf.items()}
+    parsed = {k: get_value(item, kw.conf[k]) for k in kw.conf}
+    result = combine_dicts(kw.defaults, parsed)
+    return Objectify(result) if kw.objectify else result
 
 
-def get_pass(item=None, test=None):
+def parse_params(item, conf=None, **kwargs):
+    parsed = {k: get_value(item, conf[k]) for k in conf}
+    return {parsed['key']: parsed['value']}
+
+
+def get_skip(item, skip_if=None, **kwargs):
     item = item or {}
-    return test and test(item)
+    return skip_if and skip_if(item)
 
 
-def get_with(item, **kwargs):
-    loop_with = kwargs.pop('with', None)
-    return item.get(loop_with, **kwargs) if loop_with else item
+def get_field(item, field=None, **kwargs):
+    return item.get(field, **kwargs) if field else item
 
 
 def get_date(date_string):

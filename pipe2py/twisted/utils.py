@@ -32,6 +32,7 @@ WORKERS = 50
 asyncNone = defer.succeed(None)
 asyncReturn = partial(defer.succeed)
 urlRead = lambda url: getPage(url) if url.startswith('http') else readFile(url, StringTransport())
+asyncPartial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
 
 # http://stackoverflow.com/q/26314586/408556
