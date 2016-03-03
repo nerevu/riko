@@ -83,22 +83,42 @@ class Objectify:
             >>> kwargs = {'one': 1, 'two': 2}
             >>> defaults = {'two': 5, 'three': 3}
             >>> kw = Objectify(kwargs, **defaults)
+            >>> kw
+            Objectify(one=1, three=3, two=2)
+            >>> str(kw)
+            '<Objectify instance>'
+            >>> sorted(kw.keys()) == ['one', 'three', 'two']
+            True
             >>> kw.one
             1
             >>> kw.two
             2
             >>> kw.three
             3
+            >>> kw.four
         """
         defaults.update(kwargs)
         self.__dict__.update(defaults)
 
+    def __str__(self):
+        return '<%s instance>' % (self.__class__.__name__)
+
+    def __repr__(self):
+        items = sorted(self.__dict__.items())
+        args = ', '.join('%s=%s' % item for item in items)
+        return '%s(%s)' % (self.__class__.__name__, args)
+
     def __iter__(self):
         return self.__dict__.itervalues()
+
+    def __getattr__(self, name):
+        return None
 
     def iteritems(self):
         return self.__dict__.iteritems()
 
+    def keys(self):
+        return self.__dict__.keys()
 
 def _apply_func(funcs, items, map_func=starmap):
     return map_func(lambda item, func: func(item), izip(items, funcs))
