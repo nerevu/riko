@@ -1,4 +1,3 @@
-
 <!DOCTYPE HTML>
 <html lang="en-US">
 <head>
@@ -500,7 +499,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 	</div>
 	<div id="asiaMarket" class="tab pmOn">
 	<ul>
-			<li class="market-1"> 
+			<li class="market-1">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/world_markets/hang_seng" target="new">Hang Seng</a></span>
 			        <span class="marketIndex">25,055.70</span>
@@ -514,7 +513,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 			        </div>
 			    </div>
 			</li>
-			<li class="market-2"> 
+			<li class="market-2">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/world_markets/nikkei225" target="new">Nikkei</a></span>
 			        <span class="marketIndex">15,521.10</span>
@@ -528,7 +527,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 			        </div>
 			    </div>
 			</li>
-			<li class="market-3"> 
+			<li class="market-3">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/world_markets/asx100" target="new">ASX 100</a></span>
 			        <span class="marketIndex">5,641.80</span>
@@ -546,7 +545,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 	</div>
 	<div id="eurMarket" class="tab pmOff">
 	<ul>
-			<li class="market-1 closed"> 
+			<li class="market-1 closed">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/world_markets/ftse100" target="new">FTSE 100</a></span>
 			        <span class="marketIndex">6,822.76</span>
@@ -561,7 +560,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 			        </div>
 			    </div>
 			</li>
-			<li class="market-2 closed"> 
+			<li class="market-2 closed">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/world_markets/cac40" target="new">CAC 40</a></span>
 			        <span class="marketIndex">4,393.41</span>
@@ -576,7 +575,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 			        </div>
 			    </div>
 			</li>
-			<li class="market-3 closed"> 
+			<li class="market-3 closed">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/world_markets/dax" target="new">DAX</a></span>
 			        <span class="marketIndex">9,588.15</span>
@@ -595,7 +594,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 	</div>
 	<div id="usMarket" class="tab pmOff">
 	<ul>
-			<li class="market-1 closed"> 
+			<li class="market-1 closed">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/markets/dow" target="new">Dow</a></span>
 			        <span class="marketIndex">17,106.70</span>
@@ -610,7 +609,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 			        </div>
 			    </div>
 			</li>
-			<li class="market-2 closed"> 
+			<li class="market-2 closed">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/markets/nasdaq" target="new">Nasdaq</a></span>
 			        <span class="marketIndex">4,570.64</span>
@@ -625,7 +624,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 			        </div>
 			    </div>
 			</li>
-			<li class="market-3 closed"> 
+			<li class="market-3 closed">
 			    <div class="marketInfo-left"> <!-- left side -->
 			        <span class="marketName"><a href="http://money.cnn.com/data/markets/sandp" target="new">S&P 500</a></span>
 			        <span class="marketIndex">2,000.02</span>
@@ -642,7 +641,7 @@ CNNHMPAGE.pmod.cnntv.init((5 * 1000));
 			</li>
 	</ul>
 	</div>
-					
+
                 <div id="moneySponsor" style="width:175px"></div>
 
 </div>
@@ -930,24 +929,24 @@ cnnad_registerSpace("829f0c0880ff40d6","88","31");
 
 	var qv_submitted_66959;
 	function qvSubmitVote_66959() { qv_submitted_66959 = 1;$('qv_poll_66959').submit();qvGetResults_66959(); }
-	function qvGetResults_66959() { 
-	
+	function qvGetResults_66959() {
+
 			CSIManager.getInstance().call('http:/\/www.cnn.com/POLLSERVER/results/66959.content.html', '', 'cnnQV_Content_66959', cnn_qvBPHTML_66959, true);
-	
+
 	}
-	
+
 	function cnn_qvBPHTML_66959(obj, id, configObj) {
-	
+
 		var qvtemp_arr = new Array();
 		for(i=1;i <= qvq_count;i++) { qvtemp_arr[(i - 1)] = { 'a_txt' : $('cnnPoll_Q1L' + i).innerHTML, 'vote_c' : parseInt(obj.poll_values[i].vote_count), 'vote_p' : parseInt(obj.poll_values[i].vote_percent) }; }
 		qvtemp_arr.sort(cnn_qvCompRes);
 		return cnn_qvBResHTML(obj, qvtemp_arr, '66959');
-		
+
 	}
-	
-	
+
+
 	function cnn_qvBResHTML(obj, qv_arr, poll_id) {
-	
+
 		var qvtemp_html = '<div class="cnn_qvbv14">';
 		qvtemp_html += '<div class="cnn_qvbv16">';
 		qvtemp_html += '<h5>' + $('cnnQV_quesTxT').innerHTML + '</h5>';
@@ -955,12 +954,12 @@ cnnad_registerSpace("829f0c0880ff40d6","88","31");
 		qvtemp_html += '</div>';
 		qvtemp_html += '<div class="cnn_qvbv15">This is not a scientific poll</div>';
 		qvtemp_html += '</div>';
-		
+
 		qvtemp_html += '<div class="cnn_qvbv6">';
 
 
 		for(i=0;i < qv_arr.length;i++) {
-		
+
 			qvtemp_html += '<div class="cnn_qvbv7';
 			if(i == 0) { qvtemp_html += ' cnn_qvbvactv'; }
 			qvtemp_html += '">';
@@ -974,18 +973,18 @@ cnnad_registerSpace("829f0c0880ff40d6","88","31");
 			qvtemp_html += '</div>';
 
 		}
-		
+
 		qvtemp_html += '<div class="cnn_qvbv12">Total votes: ' + obj.total_vote_count + '</div>';
 		qvtemp_html += '<div class="cnn_qvbv13">This is not a scientific poll</div>';
-		
+
 		qvtemp_html += '</div>';
 
 		return qvtemp_html;
-		
+
 	}
-	
+
 	function cnn_qvCompRes(a, b) { return b.vote_c - a.vote_c; }
-	
+
 </script>
  </div> <div class="cnn_clear"></div> </div> <div class="cnn_clear"></div> <div class="cnn_shdcafooter"></div> <div class="cnn_pad2top cnn_shdspc"></div> </div> </div> <div class="cnn_contentarea cnn_shdsectbin cnn_sbaltadbin"> <div class="cnn_sbalternate"> <div class="cnn_sdbx"><div class="cnn_sdbx1"><div class="cnn_sdbx2"><div class="cnn_sdbx3"><div class="cnn_sdbx4"><div class="cnn_sdbx5"><div class="cnn_sdbxcntnt"> <div> <div class="cnn_adcntr728x90"> <div class="cnn_adspc728x90"> <div> <!-- CALLOUT|http://ads.cnn.com/html.ng/site=cnn_international&cnn_intl_pagetype=main&cnn_intl_position=728x90_bot&cnn_intl_rollup=homepage&page.allowcompete=no&params.styles=fs|CALLOUT -->
 <!-- ADSPACE: homepage/main/bot.728x90 -->
