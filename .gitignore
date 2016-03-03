@@ -1,5 +1,42 @@
-*.wpu
-*.pyc
-wingdbstub.py
-pipe2py/pipelines/*.json
-pipe2py/pypipelines/*.py
+*.py[cod]
+
+# C extensions
+*.so
+
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+var
+sdist
+develop-eggs
+.installed.cfg
+lib
+lib64
+
+# Installer logs
+pip-log.txt
+
+# Unit test / coverage reports
+.coverage
+.tox
+.noseids
+nosetests.xml
+
+# Translations
+*.mo
+
+# Mr Developer
+.mr.developer.cfg
+.project
+.pydevproject
+
+# Complexity
+output/*.html
+output/*/index.html
+
+# Sphinx
+docs/_build
