@@ -28,6 +28,8 @@ from pipe2py import Context
 from pipe2py.lib.log import Logger
 from mezmorize import Cache
 
+logger = Logger(__name__).logger
+
 if environ.get('DATABASE_URL'):  # HEROKU
     cache_config = {
         'CACHE_TYPE': 'saslmemcached',
@@ -38,13 +40,13 @@ else:
     try:
         import pylibmc
     except ImportError:
-        print('simplecache')
+        logger.debug('simplecache')
         cache_config = {
             'DEBUG': True,
             'CACHE_TYPE': 'simple',
             'CACHE_THRESHOLD': 25}
     else:
-        print('memcached')
+        logger.debug('memcached')
         cache_config = {
             'DEBUG': True,
             'CACHE_TYPE': 'memcached',
@@ -87,11 +89,6 @@ def _apply_func(funcs, items, map_func=starmap):
 # page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
-
-
-def get_logger(context):
-    level = 'DEBUG' if context and context.verbose else 'INFO'
-    return Logger(level).logger
 
 
 def memoize(*args, **kwargs):

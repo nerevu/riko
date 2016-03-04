@@ -21,37 +21,35 @@ class LogFilter(logging.Filter):
         self.level = level
 
     def filter(self, record):
-        # "<" instead of "<=": since logger.setLevel is inclusive, this should
-        # be exclusive
         return record.levelno < self.level
 
-MIN_LEVEL = logging.DEBUG
-stdout_hdlr = logging.StreamHandler(sys.stdout)
-stderr_hdlr = logging.StreamHandler(sys.stderr)
-log_filter = LogFilter(logging.WARNING)
-stdout_hdlr.addFilter(log_filter)
-stdout_hdlr.setLevel(MIN_LEVEL)
-stderr_hdlr.setLevel(max(MIN_LEVEL, logging.WARNING))
-# messages lower than WARNING go to stdout
-# messages >= WARNING (and >= STDOUT_LOG_LEVEL) go to stderr
-
-rootLogger = logging.getLogger()
-rootLogger.addHandler(stdout_hdlr)
-rootLogger.addHandler(stderr_hdlr)
 
 class Logger(object):
-    def __init__(self, level):
-        self.level = level
+    """
+    # logger = Logger('name', 'DEBUG').logger
+    # logger.debug("A DEBUG message")
+    # logger.info("An INFO message")
+    # logger.warning("A WARNING message")
+    # logger.error("An ERROR message")
+    # logger.critical("A CRITICAL message")
+    """
+    def __init__(self, name, level='INFO', context=None):
+        level = 'DEBUG' if context and context.verbose else level
+        self.level = getattr(logging, level)
+        self.name = name
 
     @property
     def logger(self):
-        logger = logging.getLogger(__name__)
-        logger.setLevel(getattr(logging, self.level))
-        return logger
+        # messages < level go to stdout
+        # messages >= level (and >= logging.WARNING) go to stderr
+        stdout_hdlr = logging.StreamHandler(sys.stdout)
+        stderr_hdlr = logging.StreamHandler(sys.stderr)
+        log_filter = LogFilter(self.level)
+        stdout_hdlr.addFilter(log_filter)
+        stdout_hdlr.setLevel(self.level)
+        stderr_hdlr.setLevel(max(self.level, logging.WARNING))
 
-# # Example Usage
-# logger.debug("A DEBUG message")
-# logger.info("An INFO message")
-# logger.warning("A WARNING message")
-# logger.error("An ERROR message")
-# logger.critical("A CRITICAL message")
+        logger = logging.getLogger(self.name)
+        logger.addHandler(stdout_hdlr)
+        logger.addHandler(stderr_hdlr)
+        return logger

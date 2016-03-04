@@ -19,6 +19,9 @@ from twisted.internet.defer import (
 from twisted.internet.task import coiterate, cooperate
 from twisted.internet.utils import getProcessOutput
 from pipe2py.lib import utils
+from pipe2py.lib.log import Logger
+
+logger = Logger(__name__).logger
 
 WORKERS = 50
 
