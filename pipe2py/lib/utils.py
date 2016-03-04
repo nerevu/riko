@@ -170,41 +170,42 @@ def unique_everseen(iterable, key=None):
             yield k
 
 
-def _make_content(i, tag, new):
+def _make_content(i, value=None, tag='content', append=True):
     content = i.get(tag)
 
-    if content and new:
-        content = listize(content)
-        content.append(new)
-    elif new:
-        content = new
+    try:
+        value.strip() if value else None
+    except AttributeError:
+        pass
 
-    return content
+    if content and value and append:
+        content = listize(content)
+        content.append(value)
+    elif content and value:
+        content = ''.join([content, value])
+    elif value:
+        content = value
+
+    return {tag: content} if content else {}
 
 
 def etree_to_dict(element):
-    """Convert an eTree xml into dict imitating how Yahoo Pipes does it.
+    """Convert an lxml element into a dict imitating how Yahoo Pipes does it.
 
     todo: further investigate white space and multivalue handling
     """
     i = dict(element.items())
-    content = element.text.strip() if element.text else None
-    i.update({'content': content}) if content else None
+    i.update(_make_content(i, element.text))
 
     if len(element.getchildren()):
         for child in element.iterchildren():
             tag = child.tag.split('}', 1)[-1]
-            new = etree_to_dict(child)
-            content = _make_content(i, tag, new)
-            i.update({tag: content}) if content else None
-
-            tag = 'content'
-            new = child.tail.strip() if child.tail else None
-            content = _make_content(i, tag, new)
-            i.update({tag: content}) if content else None
-    elif content and not set(i).difference(['content']):
+            value = etree_to_dict(child)
+            i.update(_make_content(i, value, tag))
+            i.update(_make_content(i, child.tail))
+    elif element.text and not set(i).difference(['content']):
         # element is leaf node and doesn't have attributes
-        i = content
+        i = i['content']
 
     return i
 
@@ -394,7 +395,7 @@ def url_quote(url):
 
 
 def listize(item):
-    listlike = set(['append', 'next']).intersection(dir(item))
+    listlike = set(['append', 'next', '__reversed__']).intersection(dir(item))
     return item if listlike else [item]
 
 

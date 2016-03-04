@@ -3,11 +3,23 @@
 """
 pipe2py.modules.pipefetchpage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Fetches web pages.
+Provides functions for fetching web pages.
 
 Fetches the source of a given web site as a string. This data can then be
 converted into an RSS feed or merged with other data in your Pipe using the
 `regex` module.
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipefetchpage import pipe
+        >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        >>> pipe(conf=conf).next()['content']  # doctest: +ELLIPSIS
+        u'CNN.com International - Breaking, World..., Entertainment and Video News'
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
@@ -28,44 +40,98 @@ OPTS = {'emit': True}
 logger = Logger(__name__).logger
 
 
-def get_string(content, from_, to):
+def get_string(content, start, end):
     # TODO: convert relative links to absolute
-    # TODO: remove the closing tag if using an HTML tag
-    # TODO: stripped of HTML tags
-    # TODO: respect robots.txt
+    # TODO: remove the closing tag if using an HTML tag stripped of HTML tags
+    # TODO: clean html with Tidy
     content = content.decode('utf-8')
-    from_location = content.find(from_) if from_ else 0
-    right = content[from_location:] if from_location > 0 else content
-    to_location = right[1:].find(to) + 1 if to else len(right)
-    return right[:to_location] if to_location > 0 else right
+    start_location = content.find(start) if start else 0
+    right = content[start_location + len(start):]
+    end_location = right[1:].find(end) + 1 if end else len(right)
+    return right[:end_location] if end_location > 0 else right
 
 
 @inlineCallbacks
 def asyncParser(_, objconf, skip, **kwargs):
+    """ Asynchronously parses the pipe content
+
+    Args:
+        _ (dict): The item (ignored)
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword argurments
+
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (dict): The original item
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0].next()['content'][:32])
+        ...     conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        ...     conf['assign'] = 'content'
+        ...     objconf = Objectify(conf)
+        ...     kwargs = {'feed': {}}
+        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        CNN.com International - Breaking
+    """
     if skip:
-        tokens = None
+        feed = kwargs['feed']
     else:
         url = utils.get_abspath(objconf.url)
         content = yield tu.urlRead(url)
-        parsed = get_string(content, objconf.from_, objconf.to)
+        parsed = get_string(content, objconf.start, objconf.end)
         splits = parsed.split(objconf.token) if objconf.token else [parsed]
-        tokens = ({objconf.assign: chunk} for chunk in splits)
+        feed = ({objconf.assign: chunk} for chunk in splits)
 
-    result = (tokens, skip)
+    result = (feed, skip)
     returnValue(result)
 
 
 def parser(_, objconf, skip, **kwargs):
+    """ Parses the pipe content
+
+    Args:
+        _ (dict): The item (ignored)
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        >>> conf['assign'] = 'content'
+        >>> objconf = Objectify(conf)
+        >>> kwargs = {'feed': {}}
+        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> result.next()['content'][:32]
+        u'CNN.com International - Breaking'
+    """
     if skip:
-        tokens = None
+        feed = kwargs['feed']
     else:
         url = utils.get_abspath(objconf.url)
         content = urlopen(url).read()
-        parsed = get_string(content, objconf.from_, objconf.to)
+        parsed = get_string(content, objconf.start, objconf.end)
         splits = parsed.split(objconf.token) if objconf.token else [parsed]
-        tokens = ({objconf.assign: chunk} for chunk in splits)
+        feed = ({objconf.assign: chunk} for chunk in splits)
 
-    return tokens, skip
+    return feed, skip
 
 
 @processor(async=True, **OPTS)
@@ -79,7 +145,17 @@ def asyncPipe(*args, **kwargs):
 
     Kwargs:
         context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the keys 'start', 'end', 'token', or 'assign'.
+
+            url (str): The web site to fetch
+            start (str): The starting string to fetch (exclusive, default: None).
+            end (str): The ending string to fetch (exclusive, default: None).
+            token (str): The tokenizer delimiter string (default: None).
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
 
     Returns:
         dict: twisted.internet.defer.Deferred item with feeds
@@ -90,7 +166,7 @@ def asyncPipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next())
         ...     path = 'value.items'
-        ...     conf = {'url': FILES[4], 'from_': 'DOCTYPE', 'to': 'http'}
+        ...     conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -99,7 +175,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'content': u'DOCTYPE html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
+        {u'content': u'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
     """
     return asyncParser(*args, **kwargs)
 
@@ -114,14 +190,24 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the keys 'start', 'end', 'token', or 'assign'.
 
-    Returns:
-        dict: an item with feeds
+            url (str): The web site to fetch
+            start (str): The starting string to fetch (exclusive, default: None).
+            end (str): The ending string to fetch (exclusive, default: None).
+            token (str): The tokenizer delimiter string (default: None).
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
+
+    Yield:
+        dict: an item on the feed
 
     Examples:
-        >>> conf = {'url': FILES[4], 'from_': 'DOCTYPE', 'to': 'http'}
+        >>> conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
         >>> pipe(conf=conf).next()
-        {u'content': u'DOCTYPE html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
+        {u'content': u'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
     """
     return parser(*args, **kwargs)

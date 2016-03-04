@@ -13,6 +13,7 @@ from os import environ
 from sys import executable
 from functools import partial
 from StringIO import StringIO
+from htmlentitydefs import entitydefs, name2codepoint
 from zope.interface import implementer
 
 from twisted.internet import defer
@@ -25,9 +26,10 @@ from twisted.internet.interfaces import IReactorCore
 from twisted.protocols.basic import FileSender
 from twisted.web.client import getPage
 from twisted.test.proto_helpers import MemoryReactor, AccumulatingProtocol, StringTransport
+from twisted.web.microdom import Text, EntityReference
 
-from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
+from pipe2py.lib.utils import _make_content
 
 logger = Logger(__name__).logger
 
@@ -219,7 +221,8 @@ def getFile(filename, transport, protocol=FileReader):
 
 
 @inlineCallbacks
-def urlOpen(url):
+def urlOpen(url, timeout=None):
+    # TODO: implement timeout kwarg
     if url.startswith('http'):
         f = StringIO()
         yield downloadPage(url, f)
@@ -363,3 +366,54 @@ def asyncDispatch(split, *asyncCallables, **kwargs):
 
 def asyncBroadcast(item, *asyncCallables, **kwargs):
     return asyncDispatch(it.repeat(item), *asyncCallables, **kwargs)
+
+
+def def2unicode(entitydef):
+    """Convert an HTML entity reference into unicode.
+    """
+    def2name = {v: k for k, v in entitydefs.items()}
+    name = def2name[entitydef]
+    cp = name2codepoint[name]
+    return unichr(cp)
+
+
+def elementToDict(element, tag='content'):
+    """Convert a microdom element into a dict imitating how Yahoo Pipes does it.
+
+    TODO: checkout twisted.words.xish
+    """
+    try:
+        i = dict(element.attributes)
+    except AttributeError:
+        i = {}
+
+    value = element.nodeValue if hasattr(element, 'nodeValue') else None
+
+    if isinstance(element, EntityReference):
+        value = def2unicode(value)
+
+    i.update(_make_content(i, value, tag))
+
+    if element.hasChildNodes():
+        for child in element.childNodes:
+            try:
+                tag = child.tagName
+            except AttributeError:
+                tag = 'content'
+
+            value = elementToDict(child, tag)
+
+            # try to join the content first since microdom likes to split up
+            # elements that contain a mix of text and entity reference
+            try:
+                i.update(_make_content(i, value, tag, append=False))
+            except TypeError:
+                i.update(_make_content(i, value, tag))
+
+
+    if ('content' in i) and not set(i).difference(['content']):
+        # element is leaf node and doesn't have attributes
+        i = i['content']
+
+
+    return i

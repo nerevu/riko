@@ -1,44 +1,132 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipecount
-    ~~~~~~~~~~~~~~~~~~~~~~~~~
-    Provides methods for counting the number of items in a feed.
+pipe2py.modules.pipecount
+~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for counting the number of items in a feed.
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators#Count
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipecount import pipe
+        >>> pipe({'x': x} for x in xrange(5)).next()
+        {u'content': 5}
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
+
 
 from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
+from twisted.internet.defer import maybeDeferred
+
+from . import operator, FEEDS, FILES
+from pipe2py.lib.log import Logger
+
+# disable `dictize` since we do not need to access the configuration
+OPTS = {'dictize': False}
+logger = Logger(__name__).logger
 
 
-def pipe_count(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that counts the number of _INPUT items and yields it
-    forever. Not loopable.
+def parser(tuples, **kwargs):
+    """ Parses the pipe content
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : pipe2py.modules pipe like object (iterable of items)
-    conf : not used
+    Args:
+        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
+            `item` is an element in the source feed and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the `feed`
+            iterator, so consuming it will consume `feed` as well.
 
-    Yields
-    ------
-    _OUTPUT : number of items in the feed
+        kwargs (dict): Keyword arguments.
 
-    Examples
-    --------
-    >>> generator = (x for x in xrange(5))
-    >>> count = pipe_count(_INPUT=generator)
-    >>> count  #doctest: +ELLIPSIS
-    <generator object pipe_count at 0x...>
-    >>> count.next()
-    5
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
+
+    Returns:
+        dict: The output
+
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> from itertools import repeat, izip
+        >>>
+        >>> kwargs = {'assign': 'content'}
+        >>> objconf = Objectify(kwargs)
+        >>> items = ({'x': x} for x in xrange(5))
+        >>> tuples = izip(items, repeat(objconf))
+        >>> parser(tuples, **kwargs)
+        {u'content': 5}
     """
+    return {kwargs['assign']: len([t[0] for t in tuples])}
 
-    count = len(list(_INPUT))
-    # todo: check all operators (not placeable in loops)
-    while True:
-        yield count
+
+@operator(async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """An aggregator that asynchronously counts the number of items in a feed.
+
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. May contain the key 'assign'.
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
+
+    Returns:
+        Deferred: twisted.internet.defer.Deferred iterator of the number of counted items
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next())
+        ...     items = ({'x': x} for x in xrange(5))
+        ...     d = asyncPipe(items)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'content': 5}
+    """
+    return parser(*args, **kwargs)
+
+
+@operator(**OPTS)
+def pipe(*args, **kwargs):
+    """An aggregator that counts the number of items in a feed.
+
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. May contain the key 'assign'.
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
+
+    Yields:
+        dict: the number of counted items
+
+    Examples:
+        >>> items = ({'x': x} for x in xrange(5))
+        >>> pipe(items).next()['content']
+        5
+    """
+    return parser(*args, **kwargs)
+

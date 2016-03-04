@@ -3,7 +3,7 @@
 """
 pipe2py.modules.pipefetchdata
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Provides methods for fetching XML and JSON data sources.
+Provides functions for fetching XML and JSON data sources.
 
 Accesses and extracts data from XML and JSON data sources on the web. This data
 can then be converted into an RSS feed or merged with other data in your Pipe.
@@ -62,14 +62,14 @@ def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
-        _ : Ignored.
+        _ (dict): The item (ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword argurments
 
     Kwargs:
-        assign (str):
-        feed ():
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (dict): The original item
 
     Returns:
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
@@ -119,9 +119,13 @@ def parser(_, objconf, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
-        _ : Ignored.
+        _ (dict): The item (ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
+        kwargs (dict): Keyword argurments
+
+    Kwargs:
+        feed (dict): The original item
 
     Returns:
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
@@ -168,9 +172,18 @@ def asyncPipe(*args, **kwargs):
     Kwargs:
         context (obj): pipe2py.Context object
         conf (dict): The pipe configuration
+            url (str): The web site to fetch
+            path (str): The path to extract (default: None, i.e., return entire
+                page)
+
+            html5 (bool): Use the HTML5 parser (default: False)
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
 
     Returns:
-        dict: twisted.internet.defer.Deferred item with feeds
+        Deferred: twisted.internet.defer.Deferred feed of items
 
     Examples:
         >>> from twisted.internet.task import react
@@ -204,6 +217,15 @@ def pipe(*args, **kwargs):
     Kwargs:
         context (obj): pipe2py.Context object
         conf (dict): The pipe configuration
+            url (str): The web site to fetch
+            path (str): The path to extract (default: None, i.e., return entire
+                page)
+
+            html5 (bool): Use the HTML5 parser (default: False)
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
 
     Returns:
         dict: an iterator of items

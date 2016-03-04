@@ -55,7 +55,7 @@ class DotDict(FeedParserDict):
         except (KeyError, TypeError):
             value = value if key in {'value', 'content', 'utime'} else None
 
-        return value or default
+        return default if value is None else value
 
     def delete(self, key):
         keys = self._parse_key(key)

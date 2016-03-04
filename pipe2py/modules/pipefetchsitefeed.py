@@ -1,10 +1,35 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipefetchsitefeed
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipefetchsitefeed
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for fetching the first RSS or Atom feed discovered in a web
+site.
 
-    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchSiteFeed
+Uses a web site's auto-discovery information to find an RSS or Atom feed. If
+multiple feeds are discovered, only the first one is fetched. If a site changes
+their feed URL in the future, this module can discover the new URL for you (as
+long as the site updates their auto-discovery links). For sites with only one
+feed, this module provides a good alternative to the Fetch Feed module.
+
+Also note that not all sites provide auto-discovery links on their web site's
+home page.
+
+This module provides a simpler alternative to the Feed Auto-Discovery Module.
+The latter returns a list of information about all the feeds discovered in a
+site, but (unlike this module) doesn't fetch the feed data itself.
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipefetchsitefeed import pipe
+        >>> conf = {'url': {'value': FILES[4]}, 'path': 'value.items'}
+        >>> pipe(conf=conf).next()['title']
+        u'Using NFC tags in the car'
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
@@ -14,43 +39,173 @@ from __future__ import (
 import speedparser
 
 from urllib2 import urlopen
-from pipe2py.lib import autorss
-from pipe2py.lib import utils
+from itertools import imap
+from twisted.internet.defer import inlineCallbacks, returnValue
+from twisted.web.client import getPage
+
+from . import processor, FEEDS, FILES
+from pipe2py.lib import utils, autorss
+from pipe2py.lib.log import Logger
 from pipe2py.lib.dotdict import DotDict
+from pipe2py.twisted import utils as tu
+
+OPTS = {'emit': True, 'listize': True, 'extract': 'url'}
+logger = Logger(__name__).logger
 
 
-def pipe_fetchsitefeed(context=None, item=None, conf=None, **kwargs):
-    """A source that fetches and parses the first feed found on one or more
-    sites. Loopable.
+@inlineCallbacks
+def asyncParser(_, urls, skip, **kwargs):
+    """ Asynchronously parses the pipe content
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : pipeforever pipe or an iterable of items or fields
-    conf : URL -- url
+    Args:
+        _ (dict): The item (ignored)
+        urls (List[str]): The urls to parse
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword argurments
 
-    Yields
-    ------
-    _OUTPUT : items
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (dict): The original item
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0].next()['title'])
+        ...     kwargs = {'feed': {}}
+        ...     d = asyncParser(None, [FILES[4]], False, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        Using NFC tags in the car
     """
-    conf = DotDict(conf)
-    urls = utils.listize(conf['URL'])
+    if skip:
+        feed = kwargs['feed']
+    else:
+        abs_urls = imap(utils.get_abspath, urls)
+        rss = yield tu.asyncImap(autorss.asyncGetRSS, abs_urls)
+        abs_rss = (utils.get_abspath(links.next()) for links in rss)
+        contents = yield tu.asyncImap(tu.urlRead, abs_rss)
+        parsed = imap(speedparser.parse, contents)
+        entries = imap(utils.gen_entries, parsed)
+        feed = utils.multiplex(entries)
 
-    for item in _INPUT:
-        for item_url in urls:
-            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = utils.get_abspath(url)
+    result = (feed, skip)
+    returnValue(result)
 
-            if context and context.verbose:
-                print("pipe_fetchsitefeed loading:", url)
 
-            for link in autorss.getRSSLink(url.encode('utf-8')):
-                parsed = speedparser.parse(urlopen(link).read())
+def parser(_, urls, skip, **kwargs):
+    """ Parses the pipe content
 
-                for entry in utils.gen_entries(parsed):
-                    yield entry
+    Args:
+        _ (dict): The item (ignored)
+        urls (List[str]): The urls to fetch
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword argurments
 
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (dict): The original item
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> kwargs = {'feed': {}}
+        >>> result, skip = parser(None, [FILES[4]], False, **kwargs)
+        >>> result.next()['title']
+        u'Using NFC tags in the car'
+    """
+    if skip:
+        feed = kwargs['feed']
+    else:
+        abs_urls = imap(utils.get_abspath, urls)
+        rss = imap(autorss.get_rss, abs_urls)
+        abs_rss = (utils.get_abspath(links.next()) for links in rss)
+        contents = (urlopen(link).read() for link in abs_rss)
+        parsed = imap(speedparser.parse, contents)
+        entries = imap(utils.gen_entries, parsed)
+        feed = utils.multiplex(entries)
+
+    return feed, skip
+
+
+@processor(async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A source that fetches and parses the first feed found on one or more
+    sites.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the key 'assign'.
+
+            url (str): The web site to fetch
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
+
+    Returns:
+        dict: twisted.internet.defer.Deferred an iterator of items
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next()['title'])
+        ...     d = asyncPipe(conf={'url': {'value': FILES[4]}})
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ...     pass
+        ... except SystemExit:
+        ...     pass
+        ...
+        Using NFC tags in the car
+    """
+    return parser(*args, **kwargs)
+
+
+@processor(**OPTS)
+def pipe(*args, **kwargs):
+    """A source that fetches and parses the first feed found on one or more
+    sites.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the key 'assign'.
+
+            url (str): The web site to fetch
+            assign (str): Attribute to (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
+
+    Yields:
+        dict: an item of the feed
+
+    Examples:
+        >>> pipe(conf={'url': {'value': FILES[4]}}).next()['title']
+        u'Using NFC tags in the car'
+    """
+    return parser(*args, **kwargs)
+

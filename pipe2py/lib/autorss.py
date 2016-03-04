@@ -1,71 +1,67 @@
-"""Find RSS feed from site's LINK tag
-
-   Modified by Greg Gaughan to yield a list of possible links
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+pipe2py.lib.autorss
+~~~~~~~~~~~~~~~~~~~
+Provides functions for finding RSS feeds from a site's LINK tags
 """
 
-__author__ = "Mark Pilgrim (f8dy@diveintomark.org)"
-__copyright__ = "Copyright 2002, Mark Pilgrim"
-__license__ = "Python"
-
-try:
-    import timeoutsocket  # http://www.timo-tasi.org/python/timeoutsocket.py
-except ImportError:
-    pass
-else:
-    timeoutsocket.setDefaultSocketTimeout(10)
 
 from urllib2 import urlopen
-from urlparse import urljoin
-from sgmllib import SGMLParser
+from HTMLParser import HTMLParser
+from itertools import chain
 
-BUFFERSIZE = 1024
+from twisted.internet.defer import inlineCallbacks, returnValue
+
+from pipe2py.twisted.utils import urlOpen
+
+TIMEOUT = 10
 
 
-class LinkParser(SGMLParser):
+class LinkParser(HTMLParser):
     def reset(self):
-        SGMLParser.reset(self)
+        HTMLParser.reset(self)
         self.href = []
 
-    def do_link(self, attrs):
-        if not ('rel', 'alternate') in attrs:
-            return
+    def handle_starttag(self, tag, attrs):
+        keys = [('rel', 'alternate'), ('type', 'application/rss+xml')]
 
-        if not ('type', 'application/rss+xml') in attrs:
-            return
+        if any(key in attrs for key in keys):
+            self.href = chain(self.href, (e[1] for e in attrs if e[0] == 'href'))
 
-        hreflist = [e[1] for e in attrs if e[0] == 'href']
-
-        if hreflist:
-            self.href.extend(hreflist)
-
-        self.setnomoretags()
-
-    def end_head(self, attrs):
-        self.setnomoretags()
-
-    start_body = end_head
+from pipe2py.lib.log import Logger
+logger = Logger(__name__).logger
 
 
-def getRSSLinkFromHTMLSource(html):
-    parser = LinkParser()
-    parser.feed(html)
-    return parser.href
-
-
-def getRSSLink(url):
-    f = urlopen(url)
+@inlineCallbacks
+def asyncGetRSS(url):
+    # TODO: implement via an async parser, maybe get twisted.web.microdom.parse
+    # working for HTML
     parser = LinkParser()
 
-    while True:
-        chunk = f.read(BUFFERSIZE)
-        parser.feed(chunk)
+    try:
+        f = yield urlOpen(url, timeout=TIMEOUT)
+    except ValueError:
+        f = filter(None, url.splitlines())
 
-        if parser.nomoretags or not chunk:
-            break
+    # TODO: figure out how to stream the links as they are parsed
+    for line in f:
+        parser.feed(line)
 
-    return [urljoin(url, href) for href in parser.href]
+    returnValue(parser.href)
 
 
-if __name__ == '__main__':
-    import sys
-    print getRSSLink(sys.argv[1])
+def get_rss(url):
+    parser = LinkParser()
+
+    try:
+        f = urlopen(url, timeout=TIMEOUT)
+    except ValueError:
+        f = filter(None, url.splitlines())
+
+    for line in f:
+        parser.feed(line)
+
+        for href in parser.href:
+            yield href
+

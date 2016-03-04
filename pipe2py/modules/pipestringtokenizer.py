@@ -1,101 +1,133 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipestringtokenizer
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipestringtokenizer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for spliting a string into an array of strings.
 
-    http://pipes.yahoo.com/pipes/docs?doc=string#StringTokenizer
+A delimiter string (often just a single character) tells the module where to
+split the input string. The delimiter string doesn't appear in the output.
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipestringtokenizer import pipe
+        >>> pipe( {'content': 'Once,twice,thrice'}).next()
+        {u'content': u'Once'}
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-from functools import partial
-from itertools import starmap
-from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-
-from . import (
-    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
-from pipe2py.lib import utils
+from twisted.internet.defer import maybeDeferred
+from . import processor
 from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
+from pipe2py.lib.log import Logger
 
-opts = {'listize': False, 'finitize': True}
+OPTS = {'ftype': 'text', 'emit': True}
+DEFAULTS = {'delimiter': ',', 'dedupe': False, 'sort': False}
+logger = Logger(__name__).logger
 
 
-# Common functions
-def parse_result(conf, word, _pass):
-    if _pass:
-        token = None
+def parser(content, objconf, skip, **kwargs):
+    """ Parses the pipe content
+
+    Args:
+        objconf (obj): An Objectify instance
+        content (str): The content to tokenize
+        skip (bool): Don't parse the content
+
+    Returns:
+        List(dict): the tokenized content
+
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> objconf = Objectify({'delimiter': '//', 'assign': 'token'})
+        >>> content = 'Once//twice//thrice//no more'
+        >>> result, skip = parser(content, objconf, False)
+        >>> result.next()
+        {u'token': u'Once'}
+    """
+    if skip:
+        tokens = None
     else:
-        splits = filter(None, word.split(conf.delimiter))
+        splits = filter(None, content.split(objconf.delimiter))
+        deduped = set(splits) if objconf.dedupe else splits
+        chunks = sorted(deduped, key=unicode.lower) if objconf.sort else deduped
+        tokens = ({objconf.assign: chunk} for chunk in chunks)
 
-        try:
-            chunks = set(splits) if conf.dedupe else splits
-        except AttributeError:
-            chunks = splits
-
-        try:
-            chunks = sorted(chunks) if conf.sort else chunks
-        except AttributeError:
-            chunks = chunks
-
-        token = [{'content': chunk} for chunk in chunks] or [{}]
-
-    return token
+    return tokens, skip
 
 
-# Async functions
-@inlineCallbacks
-def asyncPipeStringtokenizer(context=None, item=None, conf=None, **kwargs):
-    """A string module that asynchronously splits a string into tokens
-    delimited by separators. Loopable.
+@processor(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A processor module that asynchronously splits a string by a delimiter.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : twisted Deferred iterable of items or strings
-    conf : {
-        'to-str': {'value': <delimiter>},
-        'dedupe': {'type': 'bool', value': <1>},
-        'sort': {'type': 'bool', value': <1>}
-    }
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-    Returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of items
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration
+
+    Returns:
+        dict: an item with tokenized content
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next())
+        ...     item = {'content': 'Once,twice,thrice,no more'}
+        ...     d = asyncPipe(item)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'content': u'Once'}
     """
-    conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
-    split = yield asyncGetSplit(item, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncDispatch(split, *get_async_dispatch_funcs())
-    items = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
-    _OUTPUT = utils.multiplex(items)
-    returnValue(_OUTPUT)
+    return parser(*args, **kwargs)
 
 
-# Synchronous functions
-def pipe_stringtokenizer(context=None, item=None, conf=None, **kwargs):
-    """A string module that splits a string into tokens delimited by
-    separators. Loopable.
+@processor(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
+    """A processor that splits a string by a delimiter.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : iterable of items or strings
-    conf : {
-        'to-str': {'value': <delimiter>},
-        'dedupe': {'type': 'bool', value': <1>},
-        'sort': {'type': 'bool', value': <1>}
-    }
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-    Returns
-    -------
-    _OUTPUT : generator of items
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. May contain the keys 'delimeter',
+            'dedupe', 'sort', or 'assign'.
+
+            delimeter (str): the delimiter string (default: ',')
+            dedupe (bool): Remove duplicates (default: False).
+            sort (bool): Sort tokens (default: False)
+            assign (str): Attribute to (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
+
+    Returns:
+        dict: an item with tokenized content
+
+    Examples:
+        >>> item = {'description': 'Once//twice//thrice//no more'}
+        >>> conf = {'delimiter': '//', 'assign': 'token', 'sort': True}
+        >>> kwargs = {'field': 'description'}
+        >>> pipe(item, conf=conf, **kwargs).next()
+        {u'token': u'no more'}
     """
-    conf['delimiter'] = conf.pop('to-str', dict.get(conf, 'delimiter'))
-    split = get_split(item, conf, **cdicts(opts, kwargs))
-    parsed = utils.dispatch(split, *get_dispatch_funcs())
-    items = starmap(parse_result, parsed)
-    _OUTPUT = utils.multiplex(items)
-    return _OUTPUT
+    return parser(*args, **kwargs)

@@ -3,7 +3,7 @@
 """
 pipe2py.modules.pipefetch
 ~~~~~~~~~~~~~~~~~~~~~~~~~
-Provides methods for fetching RSS feeds.
+Provides functions for fetching RSS feeds.
 
 Lets you specify one or more RSS news feeds as input to your Pipe. The module
 understands feeds in RSS, Atom, and RDF formats. Feeds contain one or more
@@ -47,12 +47,43 @@ logger = Logger(__name__).logger
 # http://code.activestate.com/recipes/277099/
 @inlineCallbacks
 def asyncParser(_, urls, skip, **kwargs):
-    logger.debug(urls)
+    """ Asynchronously parses the pipe content
+
+    Args:
+        _ (dict): The item (ignored)
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword argurments
+
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (dict): The original item
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0].next()['title'])
+        ...     objconf = Objectify({'url': FILES[0]})
+        ...     kwargs = {'feed': {}}
+        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        Donations
+    """
     if skip:
         feed = kwargs['feed']
     else:
-        abs_urls = (utils.get_abspath(url) for url in urls if url)
-        logger.debug(abs_urls)
+        abs_urls = imap(utils.get_abspath, urls)
         contents = yield tu.asyncImap(tu.urlRead, abs_urls)
         parsed = imap(speedparser.parse, contents)
         entries = imap(utils.gen_entries, parsed)
@@ -66,26 +97,23 @@ def parser(_, urls, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
+        _ (dict): The item (ignored)
         urls (List[str]): The urls to fetch
-        _ : Ignored
         skip (bool): Don't parse the content
 
     Returns:
         List(dict): the tokenized content
 
     Examples:
-        >>> result, skip = parser(None, FILES, False)
-        >>> result.next().keys() == [
-        ...     'updated', 'updated_parsed', u'pubDate', 'author',
-        ...     u'y:published', 'title', 'comments', 'summary', 'content',
-        ...     'link', u'y:title', u'dc:creator', u'author.uri',
-        ...     u'author.name', 'id', u'y:id']
-        True
+        >>> kwargs = {'feed': {}}
+        >>> result, skip = parser(None, FILES, False, **kwargs)
+        >>> result.next()['title']
+        u'Donations'
     """
     if skip:
-        feed = None
+        feed = kwargs['feed']
     else:
-        abs_urls = [utils.get_abspath(url) for url in urls if url]
+        abs_urls = imap(utils.get_abspath, urls)
         contents = (urlopen(url).read() for url in abs_urls)
         parsed = imap(speedparser.parse, contents)
         entries = imap(utils.gen_entries, parsed)
@@ -105,7 +133,14 @@ def asyncPipe(*args, **kwargs):
 
     Kwargs:
         context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the key 'assign'.
+
+            url (str): The web site to fetch
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
 
     Returns:
         dict: twisted.internet.defer.Deferred item with feeds
@@ -142,7 +177,14 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the key 'assign'.
+
+            url (str): The web site to fetch
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
 
     Returns:
         dict: an iterator of items

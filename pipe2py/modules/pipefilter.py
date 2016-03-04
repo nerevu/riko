@@ -1,12 +1,31 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipefilter
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipefilter
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for filtering (including or excluding) items from a feed.
 
-    Provides methods for filtering (including or excluding) items from a feed.
+With Filter you create rules that compare feed elements to values you specify.
+So, for example, you may create a rule that says "permit items where the
+item.description contains 'kittens'". Or a rule that says "omit any items where
+the item.y:published is before yesterday".
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators#Filter
+A single Filter module can contain multiple rules. You can choose whether those
+rules will Permit or Block items that match those rules. Finally, you can choose
+whether an item must match all the rules, or if it can just match any rule.
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipefilter import pipe
+        >>> items = ({'x': x} for x in xrange(5))
+        >>> rule = {'field': 'x', 'op': 'is', 'value': 3}
+        >>> pipe(items, conf={'rule': rule}).next()
+        {u'x': 3}
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
@@ -17,16 +36,17 @@ import re
 
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
-from functools import partial
-from itertools import imap, repeat, ifilter, starmap
-from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
 
+from . import operator, FEEDS, FILES
+from pipe2py.lib import utils
+from pipe2py.lib.log import Logger
+
+OPTS = {'listize': True, 'extract': 'rule', 'parser': 'conf'}
+DEFAULTS = {'combine': 'and', 'mode': 'permit'}
+logger = Logger(__name__).logger
 
 COMBINE_BOOLEAN = {'and': all, 'or': any}
 SWITCH = {
-    # todo: check which of these should be case insensitive
-    # todo: use regex?
     'contains': lambda x, y: x and x.lower() in y.lower(),
     'doesnotcontain': lambda x, y: x and x.lower() not in y.lower(),
     'matches': lambda x, y: re.search(x, y),
@@ -36,17 +56,6 @@ SWITCH = {
     'after': lambda x, y: cmp(x, y) is -1,
     'before': lambda x, y: cmp(x, y) is 1,
 }
-
-
-def parse_result(result, item, _pass, permit=True):
-    if _pass:
-        _output = item
-    elif not ((result and permit) or (not result and not permit)):
-        _output = None
-    else:
-        _output = item
-
-    return _output
 
 
 def parse_rule(rule, item, **kwargs):
@@ -76,81 +85,163 @@ def parse_rule(rule, item, **kwargs):
     return result
 
 
-def parse_rules(rules, item, _pass, **kwargs):
-    results = imap(partial(parse_rule, **kwargs), rules, repeat(item))
-    return (results, item, _pass)
+def parser(tuples, **kwargs):
+    """ Parses the pipe content
 
+    Args:
+        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, rules)
+            `item` is an element in the source feed (a DotDict instance)
+            and `rules` is the rule configuration (an Objectify instance).
+            Note: this shares the `feed` iterator, so consuming it will
+            consume `feed` as well.
 
-def pipe_filter(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that filters for source items matching the given rules.
-    Not loopable.
+        kwargs (dict): Keyword arguments.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : pipe2py.modules pipe like object (iterable of items)
-    conf : {
-        'MODE': {'value': <'permit' or 'block'>},
-        'COMBINE': {'value': <'and' or 'or'>}
-        'RULE': [
-            {
-                'field': {'value': 'search field'},
-                'op': {'value': 'one of SWITCH above'},
-                'value': {'value': 'search term'}
-            }
-        ]
-    }
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
 
-    kwargs : other inputs, e.g., to feed terminals for rule values
+    Yield:
+        dict: The output
 
-    Returns
-    -------
-    _OUTPUT : generator of filtered items
-
-    Examples
-    --------
-    >>> import os.path as p
-    >>> from pipe2py.modules.pipeforever import pipe_forever
-    >>> from pipe2py.modules.pipefetchdata import pipe_fetchdata
-    >>> parent = p.dirname(p.dirname(__file__))
-    >>> file_name = p.abspath(p.join(parent, 'data', 'gigs.json'))
-    >>> path = 'value.items'
-    >>> url = 'file://%s' % file_name
-    >>> conf = {'URL': {'value': url}, 'path': {'value': path}}
-    >>> input = pipe_fetchdata(_INPUT=pipe_forever(), conf=conf)
-    >>> mode = {'value': 'permit'}
-    >>> combine = {'value': 'and'}
-    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, \
-'value': {'value': 'web'}}]
-    >>> conf = {'MODE': mode, 'COMBINE': combine, 'RULE': rule}
-    >>> pipe_filter(_INPUT=input, conf=conf).next()['title']
-    u'E-Commerce Website Developer | Elance Job'
-    >>> rule = [{'field': {'value': 'title'}, 'op': {'value': 'contains'}, \
-'value': {'value': 'kjhlked'}}]
-    >>> conf = {'MODE': mode, 'COMBINE': combine, 'RULE': rule}
-    >>> list(pipe_filter(_INPUT=input, conf=conf))
-    []
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> from pipe2py.lib.dotdict import DotDict
+        >>> from itertools import repeat, izip
+        >>>
+        >>> conf = DotDict({'mode': 'permit', 'combine': 'and'})
+        >>> kwargs = {'conf': conf}
+        >>> rule = {'field': 'ex', 'op': 'greater', 'value': 3}
+        >>> objrule = [Objectify(rule)]
+        >>> items = (DotDict({'ex': x}) for x in xrange(5))
+        >>> tuples = izip(items, repeat(objrule))
+        >>> parser(tuples, **kwargs).next()
+        {u'ex': 4}
     """
-    conf = DotDict(conf)
-    test = kwargs.pop('pass_if', None)
-    permit = conf.get('MODE', **kwargs) == 'permit'
-    combine = conf.get('COMBINE', **kwargs)
+    conf = kwargs['conf']
+    # TODO: only parse conf once if it isn't a function of the item
+    # dynamic = is_func_of_item(conf)
+    dynamic = True
+    objconf = False
 
-    if not combine in {'and', 'or'}:
-        raise Exception(
-            "Invalid combine: %s. (Expected 'and' or 'or')" % combine)
+    for item, rules in tuples:
+        if dynamic:
+            objconf = utils.parse_conf(item, conf=conf, objectify=True)
 
-    rule_defs = map(DotDict, utils.listize(conf['RULE']))
-    get_pass = partial(utils.get_pass, test=test)
-    get_value = partial(utils.get_value, **kwargs)
-    parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
-    get_rules = lambda i: imap(parse_conf, rule_defs, repeat(i))
-    funcs = [COMBINE_BOOLEAN[combine], utils.passthrough, utils.passthrough]
+        permit = objconf.mode == 'permit'
+        results = (parse_rule(rule, item, **kwargs) for rule in rules)
 
-    inputs = imap(DotDict, _INPUT)
-    splits = utils.broadcast(inputs, get_rules, utils.passthrough, get_pass)
-    outputs = starmap(partial(parse_rules, **kwargs), splits)
-    parsed = utils.dispatch(outputs, *funcs)
-    gathered = starmap(partial(parse_result, permit=permit), parsed)
-    _OUTPUT = ifilter(None, gathered)
-    return _OUTPUT
+        try:
+            result = COMBINE_BOOLEAN[objconf.combine](results)
+        except KeyError:
+            raise Exception(
+                "Invalid combine: %s. (Expected 'and' or 'or')" % objconf.combine)
+
+        if (result and permit) or not (result or permit):
+            yield item
+
+
+@operator(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """An operator that asynchronously filters for source items matching
+    the given rules.
+
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. Must contain the key 'rule'. May
+            contain the keys 'mode', 'combine', or 'assign'.
+
+            mode (str): returns the matches if set to 'permit', otherwise returns
+                the non-matches (default: 'permit').
+
+            rule (dict): can be either a dict or list of dicts. Must contain
+                the keys 'field', 'op', and 'value'.
+
+                field (str): the item field to search.
+                op (str): the operation, must be one of 'contains', 'doesnotcontain',
+                    'matches', 'is', 'greater', 'less', 'after', or 'before'.
+
+                value (scalar): the value to compare the item's field to.
+
+            combine (str): determines how to interpret multiple rules and must be
+                either 'and' or 'or'. 'and' means all rules must pass, and 'or'
+                means any rule must pass (default: 'and')
+
+            assign (str): Attribute to assign parsed content (default: content)
+
+    Returns:
+        Deferred: twisted.internet.defer.Deferred iterator of the filtered items
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next())
+        ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
+        ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
+        ...     d = asyncPipe(items, conf={'rule': rule})
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'title': u'Website Developer'}
+    """
+    return parser(*args, **kwargs)
+
+
+@operator(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
+    """An operator that filters for source items matching the given rules.
+
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. Must contain the key 'rule'. May
+            contain the keys 'mode', 'combine', or 'assign'.
+
+            mode (str): returns the matches if set to 'permit', otherwise returns
+                the non-matches (default: 'permit').
+
+            rule (dict): can be either a dict or list of dicts. Must contain
+                the keys 'field', 'op', and 'value'.
+
+                field (str): the item field to search.
+                op (str): the operation, must be one of 'contains', 'doesnotcontain',
+                    'matches', 'is', 'greater', 'less', 'after', or 'before'.
+
+                value (scalar): the value to compare the item's field to.
+
+            combine (str): determines how to interpret multiple rules and must be
+                either 'and' or 'or'. 'and' means all rules must pass, and 'or'
+                means any rule must pass (default: 'and')
+
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
+
+    Yields:
+        dict: the filtered items
+
+    Examples:
+        >>> items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
+        >>> rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
+        >>> pipe(items, conf={'rule': rule}).next()
+        {u'title': u'Website Developer'}
+        >>> rule['value'] = 'kjhlked'
+        >>> any(pipe(items, conf={'rule': [rule]}))
+        False
+    """
+    return parser(*args, **kwargs)

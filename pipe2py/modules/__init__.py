@@ -354,7 +354,6 @@ class processor(object):
                 asyncFunc = inlineCallbacks(dispatch)
                 parsed, orig_item = yield asyncFunc(_input, funcs, bfuncs, **kw)
                 r = pipe(*parsed, feed=orig_item, **kwargs)
-                logger.debug(r)
                 feed, skip = yield r
             else:
                 parsed, orig_item = dispatch(_input, funcs, bfuncs, **kw).next()
@@ -366,6 +365,225 @@ class processor(object):
                 output = assignment
             elif not skip:
                 output = assign(_input, assignment, one=one, **combined)
+
+            if self.async:
+                returnValue(output)
+            else:
+                for o in output:
+                    yield o
+
+        return inlineCallbacks(wrapper) if self.async else wrapper
+
+
+class operator(object):
+    def __init__(self, defaults=None, async=False, **opts):
+        """Creates a sync/async pipe that processes an entire feed of items
+
+        Args:
+            defaults (dict): The entry to process
+            opts (dict): The keyword arguments passed to the wrapper
+
+        Kwargs:
+            context (obj): pipe2py.Context object
+            conf (dict): The pipe configuration
+            ftype (str):
+            extract (str):
+            listize (bool):
+            pdictize (bool):
+            emit (bool):
+
+        Examples:
+            >>> from twisted.internet.defer import Deferred
+            >>> from twisted.internet.task import react
+            >>>
+            >>> # operators can't skip items, and emit is True by default
+            >>> @operator(emit=False)
+            ... def pipe1(tuples, **kwargs):
+            ...     for item, objconf in reversed(list(tuples)):
+            ...         yield 'say "%s" %s times!' % (item['content'], objconf.times)
+            ...
+            >>> @operator(emit=False)
+            ... def pipe2(tuples, **kwargs):
+            ...     return sum(len(t[0]['content'].split()) for t in tuples)
+            ...
+            >>> # this is an admittedly contrived example to show how you would
+            >>> # call an async function
+            >>> @operator(async=True, emit=False)
+            ... @inlineCallbacks
+            ... def asyncPipe1(tuples, **kwargs):
+            ...     for item, objconf in reversed(list(tuples)):
+            ...         content = yield tu.asyncReturn(item['content'])
+            ...         value = 'say "%s" %s times!' % (content, objconf.times)
+            ...         returnValue(value)
+            ...
+            >>> # async pipes don't have to return a deffered,
+            >>> # they work fine either way
+            >>> @operator(async=True, emit=False)
+            ... def asyncPipe2(tuples, **kwargs):
+            ...     return sum(len(t[0]['content'].split()) for t in tuples)
+            ...
+            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
+            >>> pipe1(items, conf={'times': 'three'}).next()
+            {u'content': u'say "bye world" three times!'}
+            >>> pipe2(items, conf={'times': 'three'}).next()
+            {u'content': 4}
+            >>>
+            >>> @inlineCallbacks
+            ... def run(reactor):
+            ...     r1 = yield asyncPipe1(items, conf={'times': 'three'})
+            ...     print(r1.next())
+            ...     r2 = yield asyncPipe2(items, conf={'times': 'three'})
+            ...     print(r2.next())
+            ...
+            >>> try:
+            ...     react(run, _reactor=tu.FakeReactor())
+            ... except SystemExit:
+            ...     pass
+            ...
+            {u'content': u'say "bye world" three times!'}
+            {u'content': 4}
+        """
+        self.defaults = defaults or {}
+        self.defaults.setdefault('assign', 'content')
+        self.defaults.setdefault('count', 'all')
+        logger.debug(defaults)
+        self.opts = opts
+        self.async = async
+
+    def __call__(self, pipe):
+        """Creates a sync/async pipe that processes an entire feed of items
+
+        Args:
+            defaults (dict): The entry to process
+            opts (dict): The keyword arguments passed to the wrapper
+
+        Kwargs:
+            context (obj): pipe2py.Context object
+            conf (dict): The pipe configuration
+
+        Yields:
+            dict: twisted.internet.defer.Deferred item with feeds
+
+        Examples:
+            >>> from twisted.internet.defer import Deferred
+            >>> from twisted.internet.task import react
+            >>>
+            >>> kwargs = {
+            ...     'ftype': 'text', 'extract': 'times', 'listize': True,
+            ...     'pdictize': False, 'emit': True}
+            ...
+            >>> @operator(**kwargs)
+            ... def pipe1(tuples, **kwargs):
+            ...     for content, times in reversed(list(tuples)):
+            ...         value = 'say "%s" %s times!' % (content, times[0])
+            ...         yield {kwargs['assign']: value}
+            ...
+            >>> @operator(**kwargs)
+            ... def pipe2(tuples, **kwargs):
+            ...     word_cnt = sum(len(t[0].split()) for t in tuples)
+            ...     return {kwargs['assign']: word_cnt}
+            ...
+            >>> # async pipes don't have to return a deffered,
+            >>> # they work fine either way
+            >>> @operator(async=True, **kwargs)
+            ... def asyncPipe1(tuples, **kwargs):
+            ...     for content, times in reversed(list(tuples)):
+            ...         value = 'say "%s" %s times!' % (content, times[0])
+            ...         yield {kwargs['assign']: value}
+            ...
+            >>> # this is an admittedly contrived example to show how you would
+            >>> # call an async function
+            >>> @operator(async=True, **kwargs)
+            ... @inlineCallbacks
+            ... def asyncPipe2(tuples, **kwargs):
+            ...     words = (len(t[0].split()) for t in tuples)
+            ...     word_cnt = yield maybeDeferred(sum, words)
+            ...     returnValue({kwargs['assign']: word_cnt})
+            ...
+            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
+            >>> conf = {'times': 'three'}
+            >>> pipe1(items, conf=conf).next()
+            {u'content': u'say "bye world" three times!'}
+            >>> pipe2(items, conf=conf).next()
+            {u'content': 4}
+            >>>
+            >>> @inlineCallbacks
+            ... def run(reactor):
+            ...     r1 = yield asyncPipe1(items, conf=conf)
+            ...     print(r1.next())
+            ...     r2 = yield asyncPipe2(items, conf=conf)
+            ...     print(r2.next())
+            ...
+            >>> try:
+            ...     react(run, _reactor=tu.FakeReactor())
+            ... except SystemExit:
+            ...     pass
+            ...
+            {u'content': u'say "bye world" three times!'}
+            {u'content': 4}
+        """
+        @wraps(pipe)
+        def wrapper(items=None, **kwargs):
+            combined = {
+                    'dictize': True, 'pdictize': True, 'ftype': 'pass',
+                    'objectify': True, 'emit': True}
+
+            combined.update(cdicts(self.defaults, self.opts, kwargs))
+            combined.setdefault('parser', 'value' if combined.get('extract') else 'conf')
+            kwargs.setdefault('assign', combined['assign'])
+            combined['defaults'] = {k: v for k, v in combined.items() if k in self.defaults}
+            items = items or iter([])
+            _INPUT = imap(DotDict, items) if combined.get('dictize') else items
+
+            if self.async:
+                funcs = get_async_funcs(**combined)
+            else:
+                funcs = get_sync_funcs(**combined)
+
+            bfuncs = get_broadcast_funcs(funcs, **combined)
+
+            # replace conf with dictized version so we can access its
+            # attributes even if we already extracted a value
+            conf = combined['defaults']
+            conf.update(kwargs.get('conf', {}))
+            kwargs.update({'conf': DotDict(conf)})
+
+            if combined['ftype'] != 'pass':
+                dfuncs = get_dispatch_funcs(funcs, **combined)
+            else:
+                dfuncs = None
+
+            kw = {'dfuncs': dfuncs, 'async': self.async}
+            args = (funcs, bfuncs)
+
+            if self.async:
+                asyncFunc = inlineCallbacks(dispatch)
+                pairs = yield tu.asyncImap(lambda i: asyncFunc(i, *args, **kw), _INPUT)
+            else:
+                pairs = (dispatch(item, *args, **kw).next() for item in _INPUT)
+
+            # - operators can't skip items
+            # - purposely setting both variables to maps of the same iterable
+            #   since only one is intended to be used at any given time
+            # - `tuples` is an iterator of tuples of the first two `parsed`
+            #   elements
+            tuples = ((p[0][0], p[0][1]) for p in pairs)
+            orig_feed = imap(itemgetter(1), pairs)
+
+            if self.async:
+                feed = yield pipe(tuples, feed=orig_feed, **kwargs)
+            else:
+                feed = pipe(tuples, feed=orig_feed, **kwargs)
+
+            # operators can only assign one value per item and can't skip items
+            _, assignment = get_assignment(feed, False, **combined)
+
+            if combined.get('emit'):
+                output = assignment
+            else:
+                singles = (iter([v]) for v in assignment)
+                assigned = (assign({}, s, one=True, **combined) for s in singles)
+                output = utils.multiplex(assigned)
 
             if self.async:
                 returnValue(output)
@@ -407,7 +625,7 @@ def get_broadcast_funcs(funcs, **kwargs):
         pfuncs = [funcs['partial'](funcs[kw.parser], conf=conf) for conf in piece_defs]
         get_pieces = lambda item: funcs['broadcast'](item, *pfuncs)
     else:
-        conf = DotDict(pieces) if kw.pdictize else pieces
+        conf = DotDict(pieces) if kw.pdictize and pieces else pieces
         get_pieces = funcs['partial'](funcs[kw.parser], conf=conf)
 
     return (funcs['field'], get_pieces, funcs['skip'])
