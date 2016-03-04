@@ -97,8 +97,7 @@ class DotDict(FeedParserDict):
             value = value['value']
 
         value = func(value) if value and func else value
-        value = DotDict(value) if hasattr(value, 'keys') else value
-        return value
+        return DotDict(value) if hasattr(value, 'keys') else value
 
     def update(self, dict=None):
         if not dict:

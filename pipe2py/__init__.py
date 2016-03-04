@@ -18,8 +18,8 @@ class Context(object):
             e.g. {'name one': 'test value1'}
     """
     def __init__(self, **kwargs):
-        self.verbose = kwargs.get('verbose', False)
-        self.test = kwargs.get('test', False)
-        self.describe_input = kwargs.get('describe_input', False)
-        self.describe_dependencies = kwargs.get('describe_dependencies', False)
+        self.verbose = kwargs.get('verbose')
+        self.test = kwargs.get('test')
+        self.describe_input = kwargs.get('describe_input')
+        self.describe_dependencies = kwargs.get('describe_dependencies')
         self.inputs = kwargs.get('inputs', {})
