@@ -1,10 +1,34 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.lib.collections
-    ~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.lib.collections
+~~~~~~~~~~~~~~~~~~~~~~~
+Provides methods for creating pipe2py pipes
 
-    Provides methods for creating pipe2py pipes
+Examples:
+    basic usage::
+
+        >>> from pipe2py.lib.collections import SyncPipe
+        >>> from pipe2py import get_url
+        >>>
+        >>> conf = {'url': get_url('gigs.json'), 'path': 'value.items'}
+        >>> skwargs = {'field': 'description', 'delimeter': '<br>'}
+        >>> (SyncPipe('fetchdata', conf=conf)
+        ...     .sort().stringtokenizer(**skwargs).count().list)
+        [{u'content': 343}]
+        >>> (SyncPipe('fetchdata', conf=conf, parallel=True)
+        ...     .sort().stringtokenizer(**skwargs).count().list)
+        [{u'content': 343}]
+        >>> (SyncPipe('fetchdata', conf=conf, parallel=True, threads=False)
+        ...     .sort().stringtokenizer(**skwargs).count().list)
+        [{u'content': 343}]
+        >>> conf['type'] = 'fetchdata'
+        >>> sources = [{'url': get_url('feed.xml')}, conf]
+        >>> len(SyncCollection(sources).list)
+        56
+        >>> len(SyncCollection(sources, parallel=True).list)
+        56
+
 """
 
 from __future__ import (
@@ -19,64 +43,132 @@ except ImportError:
     import __builtin__ as builtins
 
 from functools import partial
-from itertools import imap
+from itertools import imap, izip, repeat
 from importlib import import_module
+from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing import Pool, cpu_count
+
 from pipe2py import Context, modules
-from pipe2py.lib.utils import combine_dicts as cdicts
+from pipe2py.lib.utils import combine_dicts as cdicts, multiplex, remove_keys, group_by
+from pipe2py.lib.log import Logger
+
+logger = Logger(__name__).logger
 
 
 class PyPipe(object):
     """A pipe2py module fetching object"""
-    def __init__(self, name, context=None):
+    def __init__(self, name, source=None, context=None, **kwargs):
         self.name = name
-        self.context = context or Context()
-        self.module = import_module('pipe2py.modules.pipe%s' % self.name)
 
-    @property
-    def output(self):
-        return self.pipeline(self.context, self.pipe_input, **self.kwargs)
+        if kwargs.pop('listize', False) and source:
+            self.source = list(source)
+        else:
+            self.source = source
+
+        self.context = context or Context()
+        self.parallel = kwargs.pop('parallel', False)
+        self.threads = kwargs.pop('threads', True)
+        self.kwargs = kwargs
 
 
 class SyncPipe(PyPipe):
-    """A synchronous PyPipe object"""
-    def __init__(self, name, context=None, parallel=False, **kwargs):
-        super(SyncPipe, self).__init__(name, context)
-        self.input = kwargs.pop('input', None)
-        self.source = kwargs.pop('source', None)
-        self.item = kwargs.pop('item', None)
-        self.map = pmap(workers, **kwargs) if parallel else imap
-        self.pipeline = getattr(self.module, 'pipe_%s' % self.name)
-        self.kwargs = kwargs
+    """A synchronous Pipe object"""
+    def __init__(self, name, workers=None, chunksize=None, pool=None, **kwargs):
+        super(SyncPipe, self).__init__(name, **kwargs)
+        self.module = import_module('pipe2py.modules.pipe%s' % self.name)
+        self.pipe = self.module.pipe
+        self.processor = self.pipe.func_dict.get('sub_type') == 'processor'
+        self.reuse_pool = kwargs.get('reuse_pool', True)
+
+        if self.parallel:
+            ordered = kwargs.get('ordered')
+            funcs = (len, lambda x: getattr(x, '__length_hint__')())
+            errors = (TypeError, AttributeError)
+            zipped = zip(funcs, errors)
+            length = multi_try(self.source, zipped, default=50)
+            def_pool = ThreadPool if self.threads else Pool
+
+            self.workers = workers or get_worker_cnt(length, self.threads)
+            self.chunksize = chunksize or get_chunksize(length, self.workers)
+            self.pool = pool or def_pool(self.workers)
+            self.map = self.pool.imap if ordered else self.pool.imap_unordered
+        else:
+            self.workers = workers
+            self.chunksize = chunksize
+            self.pool = pool
+            self.map = imap
 
     def __getattr__(self, name):
-        if name is 'data':
-            return self.pipeline(self.context, self.item, **self.kwargs)
-        else:
-            return SyncPipe(name, source=self.name, input=self.data)
+        kwargs = {
+            'parallel': self.parallel,
+            'threads': self.threads,
+            'pool': self.pool if self.reuse_pool else None,
+            'reuse_pool': self.reuse_pool,
+            'workers': self.workers}
 
-    def __call__(self, **kwargs):
-        pipe = partial(SyncPipe, self.name, self.context, **kwargs)
-        get_data = lambda item: pipe(item=item).data
-        item = self.map(get_data, self.input)
-        return SyncPipe('output', item=item)
+        return SyncPipe(name, context=self.context, source=self.output, **kwargs)
+
+    def __call__(self, context=None, **kwargs):
+        self.context = context or self.context
+        self.kwargs = kwargs
+        return self
+
+    @property
+    def output(self):
+        pipeline = partial(self.pipe, context=self.context, **self.kwargs)
+
+        if self.processor and self.parallel and self.threads:
+            mapped = self.map(pipeline, self.source, chunksize=self.chunksize)
+        elif self.processor and self.parallel:
+            source = izip(self.source, repeat(pipeline))
+            mapped = self.map(listpipe, source, chunksize=self.chunksize)
+        elif self.processor:
+            mapped = self.map(pipeline, self.source)
+
+        if self.parallel and not self.reuse_pool:
+            self.pool.close()
+            self.pool.join()
+
+        return multiplex(mapped) if self.processor else pipeline(self.source)
 
     @property
     def list(self):
         return list(self.output)
 
-    def pipe(self, name, **kwargs):
-        return SyncPipe(name, self.context, input=self.output, **kwargs)
 
-    def reducer(self, item, arg):
-        name, kwargs = arg
-        pkwargs = cdicts(kwargs, {'item': item})
-        return SyncPipe(name, self.context, **pkwargs).data
+class PyCollection(object):
+    """A pipe2py bulk url fetching object"""
+    def __init__(self, sources, parallel=False, thread_cnt=None):
+        self.sources = sources
+        self.parallel = parallel
+        self.thread_cnt = thread_cnt
 
-    def dispatch(self, *args, **kwargs):
-        map_func = lambda item: reduce(self.reducer, args, item)
-        item = self.map(map_func, self.data)
-        return SyncPipe('output', item=item)
 
+
+class SyncCollection(PyCollection):
+    """A synchronous PyCollection object"""
+    def __init__(self, *args, **kwargs):
+        super(SyncCollection, self).__init__(*args, **kwargs)
+
+        if self.parallel:
+            length = len(self.sources)
+            workers = self.thread_cnt or get_worker_cnt(length)
+            self.chunksize = get_chunksize(length, workers)
+            self.pool = ThreadPool(workers)
+            self.map = self.pool.imap_unordered
+
+    def fetch(self):
+        """Fetch all source urls"""
+        if self.parallel:
+            mapped = self.map(get_pipe, self.sources, chunksize=self.chunksize)
+        else:
+            mapped = imap(get_pipe, self.sources)
+
+        return multiplex(mapped)
+
+    @property
+    def list(self):
+        return list(self.fetch())
 
 class Chainable(object):
     def __init__(self, data, method=None):
@@ -85,14 +177,9 @@ class Chainable(object):
         self.list = list(data)
 
     def __getattr__(self, name):
-        try:
-            method = getattr(self.data, name)
-        except AttributeError:
-            try:
-                method = getattr(builtins, name)
-            except AttributeError:
-                method = getattr(itertools, name)
-
+        funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
+        zipped = izip(funcs, repeat(AttributeError))
+        method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)
 
     def __call__(self, *args, **kwargs):
@@ -106,39 +193,36 @@ def make_conf(value, conf_type='text'):
     return {'value': value, 'type': conf_type}
 
 
-class PyCollection(object):
-    """A pipe2py bulk url fetching object"""
-    def __init__(self, sources):
-        self.sources = sources
-
-    @staticmethod
-    def make_kwargs(src_pipes):
-
-       iterator = enumerate(src_pipes)
-       return dict(('_OTHER%i' % k, pipe) for k, pipe in iterator)
-
-    def gen_pipes(self, pipe):
-        groups = utils.group_by(self.sources, 'type', PIPETYPE)
-
-        for pipe_type, values in groups.iteritems():
-            urls = [make_conf(s['url'], 'url') for s in values]
-            conf = {'URL': urls}
-            conf.update(values[0].get('conf', {}))  # TODO: groupby conf
-            yield pipe(pipe_type, conf=conf).output
+def get_chunksize(length, workers):
+    return (length // (workers * 4)) + 1
 
 
-class SyncCollection(PyCollection):
-    """A synchronous PyCollection object"""
-    def fetch_all(self):
-        """Fetch all source urls"""
-        src_pipes = self.gen_pipes(SyncPipe)
-        first_pipe = src_pipes.next()
-        kwargs = self.make_kwargs(src_pipes)
+def get_worker_cnt(length, threads=True):
+    multiplier = 1.5 if threads else 1
+    return int(max(length / 4, cpu_count() * multiplier))
 
-        if kwargs:
-            kwargs.update({'input': first_pipe})
-            result = SyncPipe('union', **kwargs).output
+
+def multi_try(source, zipped, default=None):
+    value = None
+
+    for func, error in zipped:
+        try:
+            value = func(source)
+        except error:
+            pass
         else:
-            result = first_pipe
+            return value
+    else:
+        return default
 
-        return result
+
+def listpipe(args):
+    source, pipeline = args
+    return list(pipeline(source))
+
+
+def get_pipe(source, pipe=SyncPipe):
+    ptype = source.get('type', 'fetch')
+    conf = {k: make_conf(v) for k, v in source.items()}
+    return pipe(ptype, conf=conf).list
+
