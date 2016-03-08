@@ -112,7 +112,7 @@ __all__ = __sources__ + __inputs__ + __operators__ + __loopings__ + __outputs__
 parent = p.join(p.abspath(p.dirname(p.dirname(p.dirname(__file__)))), 'data')
 parts = [
     'feed.xml', 'blog.ouseful.info_feed.xml', 'gigs.json', 'places.xml',
-    'www.bbc.co.uk_news.html', 'edition.cnn.html']
+    'www.bbc.co.uk_news.html', 'edition.cnn.html', 'google_spreadsheet.csv']
 
 FEEDS = [
     'http://feeds.feedburner.com/TechCrunch/',
@@ -396,21 +396,23 @@ class operator(object):
             >>> from twisted.internet.defer import Deferred
             >>> from twisted.internet.task import react
             >>>
-            >>> # operators can't skip items, and emit is True by default
+            >>> # emit is True by default
+            >>> # and operators can't skip items, so the pipe is passed an
+            >>> # item dependent version of objconf as the 3rd arg
             >>> @operator(emit=False)
-            ... def pipe1(tuples, **kwargs):
+            ... def pipe1(feed, objconf, tuples, **kwargs):
             ...     for item, objconf in reversed(list(tuples)):
             ...         yield 'say "%s" %s times!' % (item['content'], objconf.times)
             ...
             >>> @operator(emit=False)
-            ... def pipe2(tuples, **kwargs):
-            ...     return sum(len(t[0]['content'].split()) for t in tuples)
+            ... def pipe2(feed, objconf, tuples, **kwargs):
+            ...     return sum(len(item['content'].split()) for item in feed)
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
             >>> @operator(async=True, emit=False)
             ... @inlineCallbacks
-            ... def asyncPipe1(tuples, **kwargs):
+            ... def asyncPipe1(feed, objconf, tuples, **kwargs):
             ...     for item, objconf in reversed(list(tuples)):
             ...         content = yield tu.asyncReturn(item['content'])
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
@@ -419,8 +421,8 @@ class operator(object):
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @operator(async=True, emit=False)
-            ... def asyncPipe2(tuples, **kwargs):
-            ...     return sum(len(t[0]['content'].split()) for t in tuples)
+            ... def asyncPipe2(feed, objconf, tuples, **kwargs):
+            ...     return sum(len(item['content'].split()) for item in feed)
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> pipe1(items, conf={'times': 'three'}).next()
@@ -473,20 +475,20 @@ class operator(object):
             ...     'pdictize': False, 'emit': True}
             ...
             >>> @operator(**kwargs)
-            ... def pipe1(tuples, **kwargs):
+            ... def pipe1(feed, objconf, tuples, **kwargs):
             ...     for content, times in reversed(list(tuples)):
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
             >>> @operator(**kwargs)
-            ... def pipe2(tuples, **kwargs):
-            ...     word_cnt = sum(len(t[0].split()) for t in tuples)
+            ... def pipe2(feed, objconf, tuples, **kwargs):
+            ...     word_cnt = sum(len(content.split()) for content in feed)
             ...     return {kwargs['assign']: word_cnt}
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @operator(async=True, **kwargs)
-            ... def asyncPipe1(tuples, **kwargs):
+            ... def asyncPipe1(feed, objconf, tuples, **kwargs):
             ...     for content, times in reversed(list(tuples)):
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
@@ -495,8 +497,8 @@ class operator(object):
             >>> # call an async function
             >>> @operator(async=True, **kwargs)
             ... @inlineCallbacks
-            ... def asyncPipe2(tuples, **kwargs):
-            ...     words = (len(t[0].split()) for t in tuples)
+            ... def asyncPipe2(feed, objconf, tuples, **kwargs):
+            ...     words = (len(content.split()) for content in feed)
             ...     word_cnt = yield maybeDeferred(sum, words)
             ...     returnValue({kwargs['assign']: word_cnt})
             ...
@@ -559,8 +561,10 @@ class operator(object):
             if self.async:
                 asyncFunc = inlineCallbacks(dispatch)
                 pairs = yield tu.asyncImap(lambda i: asyncFunc(i, *args, **kw), _INPUT)
+                parsed, _ = yield asyncFunc({}, funcs, bfuncs, **kw)
             else:
                 pairs = (dispatch(item, *args, **kw).next() for item in _INPUT)
+                parsed, _ = dispatch(DotDict(), funcs, bfuncs, **kw).next()
 
             # - operators can't skip items
             # - purposely setting both variables to maps of the same iterable
@@ -568,12 +572,16 @@ class operator(object):
             # - `tuples` is an iterator of tuples of the first two `parsed`
             #   elements
             tuples = ((p[0][0], p[0][1]) for p in pairs)
-            orig_feed = imap(itemgetter(1), pairs)
+            orig_feed = (p[0][0] for p in pairs)
+            objconf = parsed[1]
 
             if self.async:
-                feed = yield pipe(tuples, feed=orig_feed, **kwargs)
+                feed = yield pipe(orig_feed, objconf, tuples, **kwargs)
             else:
-                feed = pipe(tuples, feed=orig_feed, **kwargs)
+                feed = pipe(orig_feed, objconf, tuples, **kwargs)
+
+            sub_type = 'aggregator' if hasattr(feed, 'keys') else 'operator'
+            wrapper.__dict__['sub_type'] = sub_type
 
             # operators can only assign one value per item and can't skip items
             _, assignment = get_assignment(feed, False, **combined)
@@ -616,8 +624,8 @@ def dispatch(item, funcs, bfuncs, dfuncs=None, async=False):
 
 
 def get_broadcast_funcs(funcs, **kwargs):
-    kw = utils.Objectify(kwargs, conf={})
-    pieces = kw.conf[kw.extract] if kw.conf and kw.extract else kw.conf
+    kw = utils.Objectify(kwargs, conf=kwargs['defaults'])
+    pieces = kw.conf[kw.extract] if kw.extract else kw.conf
 
     if kw.listize:
         listed = utils.listize(pieces)

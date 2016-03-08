@@ -39,6 +39,7 @@ from decimal import Decimal, InvalidOperation
 
 from . import operator, FEEDS, FILES
 from pipe2py.lib import utils
+from pipe2py.lib.utils import parse_conf
 from pipe2py.lib.log import Logger
 
 OPTS = {'listize': True, 'extract': 'rule', 'parser': 'conf'}
@@ -85,10 +86,15 @@ def parse_rule(rule, item, **kwargs):
     return result
 
 
-def parser(tuples, **kwargs):
+def parser(feed, rules, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
+        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
+
+        rules (List[obj]): the item independent rules (Objectify instances).
+
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, rules)
             `item` is an element in the source feed (a DotDict instance)
             and `rules` is the rule configuration (an Objectify instance).
@@ -99,8 +105,6 @@ def parser(tuples, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: content)
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
 
     Yield:
         dict: The output
@@ -113,21 +117,19 @@ def parser(tuples, **kwargs):
         >>> conf = DotDict({'mode': 'permit', 'combine': 'and'})
         >>> kwargs = {'conf': conf}
         >>> rule = {'field': 'ex', 'op': 'greater', 'value': 3}
-        >>> objrule = [Objectify(rule)]
-        >>> items = (DotDict({'ex': x}) for x in xrange(5))
-        >>> tuples = izip(items, repeat(objrule))
-        >>> parser(tuples, **kwargs).next()
+        >>> objrule = Objectify(rule)
+        >>> feed = (DotDict({'ex': x}) for x in xrange(5))
+        >>> tuples = izip(feed, repeat(objrule))
+        >>> parser(feed, [objrule], tuples, **kwargs).next()
         {u'ex': 4}
     """
     conf = kwargs['conf']
-    # TODO: only parse conf once if it isn't a function of the item
-    # dynamic = is_func_of_item(conf)
-    dynamic = True
-    objconf = False
+    dynamic = any('subkey' in v for v in conf.itervalues())
+    objconf = None if dynamic else parse_conf({}, conf=conf, objectify=True)
 
-    for item, rules in tuples:
+    for item in feed:
         if dynamic:
-            objconf = utils.parse_conf(item, conf=conf, objectify=True)
+            objconf = parse_conf(item, conf=conf, objectify=True)
 
         permit = objconf.mode == 'permit'
         results = (parse_rule(rule, item, **kwargs) for rule in rules)

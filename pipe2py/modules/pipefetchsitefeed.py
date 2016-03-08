@@ -92,8 +92,8 @@ def asyncParser(_, urls, skip, **kwargs):
     else:
         abs_urls = imap(utils.get_abspath, urls)
         rss = yield tu.asyncImap(autorss.asyncGetRSS, abs_urls)
-        abs_rss = (utils.get_abspath(links.next()) for links in rss)
-        contents = yield tu.asyncImap(tu.urlRead, abs_rss)
+        links = (utils.get_abspath(entries.next()['link']) for entries in rss)
+        contents = yield tu.asyncImap(tu.urlRead, links)
         parsed = imap(speedparser.parse, contents)
         entries = imap(utils.gen_entries, parsed)
         feed = utils.multiplex(entries)
@@ -129,8 +129,8 @@ def parser(_, urls, skip, **kwargs):
     else:
         abs_urls = imap(utils.get_abspath, urls)
         rss = imap(autorss.get_rss, abs_urls)
-        abs_rss = (utils.get_abspath(links.next()) for links in rss)
-        contents = (urlopen(link).read() for link in abs_rss)
+        links = (utils.get_abspath(entries.next()['link']) for entries in rss)
+        contents = (urlopen(link).read() for link in links)
         parsed = imap(speedparser.parse, contents)
         entries = imap(utils.gen_entries, parsed)
         feed = utils.multiplex(entries)

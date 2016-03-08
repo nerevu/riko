@@ -32,10 +32,15 @@ OPTS = {'dictize': False}
 logger = Logger(__name__).logger
 
 
-def parser(tuples, **kwargs):
+def parser(feed, objconf, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
+        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
+
+        objconf (obj): the item independent configuration (an Objectify instance).
+
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
             `item` is an element in the source feed and `objconf` is the item
             configuration (an Objectify instance). Note: this shares the `feed`
@@ -45,8 +50,6 @@ def parser(tuples, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: content)
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
 
     Returns:
         dict: The output
@@ -57,12 +60,12 @@ def parser(tuples, **kwargs):
         >>>
         >>> kwargs = {'assign': 'content'}
         >>> objconf = Objectify(kwargs)
-        >>> items = ({'x': x} for x in xrange(5))
-        >>> tuples = izip(items, repeat(objconf))
-        >>> parser(tuples, **kwargs)
+        >>> feed = ({'x': x} for x in xrange(5))
+        >>> tuples = izip(feed, repeat(objconf))
+        >>> parser(feed, objconf, tuples, **kwargs)
         {u'content': 5}
     """
-    return {kwargs['assign']: len([t[0] for t in tuples])}
+    return {kwargs['assign']: len(list(feed))}
 
 
 @operator(async=True, **OPTS)

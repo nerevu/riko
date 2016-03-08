@@ -112,6 +112,12 @@ class Objectify:
     def __getattr__(self, name):
         return None
 
+    def to_dict(self):
+        return self.__dict__
+
+    def items(self):
+        return self.__dict__.items()
+
     def iteritems(self):
         return self.__dict__.iteritems()
 
