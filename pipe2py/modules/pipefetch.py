@@ -38,7 +38,7 @@ from pipe2py.lib import utils
 from pipe2py.twisted import utils as tu
 from pipe2py.lib.log import Logger
 
-OPTS = {'listize': True, 'extract': 'url', 'emit': True}
+OPTS = {'listize': True, 'extract': 'url', 'emit': True, 'ftype': 'none'}
 logger = Logger(__name__).logger
 
 
@@ -50,7 +50,7 @@ def asyncParser(_, urls, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
-        _ (dict): The item (ignored)
+        _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword argurments
@@ -97,7 +97,7 @@ def parser(_, urls, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
-        _ (dict): The item (ignored)
+        _ (None): Ignored
         urls (List[str]): The urls to fetch
         skip (bool): Don't parse the content
 

@@ -39,7 +39,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
 
-OPTS = {'emit': True}
+OPTS = {'emit': True, 'ftype': 'none'}
 reducer = lambda element, i: element.get(i) if element else None
 json2dict = lambda f: loads(f.read())
 logger = Logger(__name__).logger
@@ -62,7 +62,7 @@ def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
-        _ (dict): The item (ignored)
+        _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword argurments
@@ -119,7 +119,7 @@ def parser(_, objconf, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
-        _ (dict): The item (ignored)
+        _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword argurments

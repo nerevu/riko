@@ -49,7 +49,7 @@ from pipe2py.lib.log import Logger
 from pipe2py.lib.dotdict import DotDict
 from pipe2py.twisted import utils as tu
 
-OPTS = {'emit': True, 'listize': True, 'extract': 'url'}
+OPTS = {'emit': True, 'listize': True, 'extract': 'url', 'ftype': 'none'}
 logger = Logger(__name__).logger
 
 
@@ -58,7 +58,7 @@ def asyncParser(_, urls, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
-        _ (dict): The item (ignored)
+        _ (None): Ignored
         urls (List[str]): The urls to parse
         skip (bool): Don't parse the content
         kwargs (dict): Keyword argurments
@@ -106,7 +106,7 @@ def parser(_, urls, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
-        _ (dict): The item (ignored)
+        _ (None): Ignored
         urls (List[str]): The urls to fetch
         skip (bool): Don't parse the content
         kwargs (dict): Keyword argurments

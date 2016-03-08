@@ -137,7 +137,7 @@ def get_sync_funcs(**kwargs):
         'value': partial(utils.get_value, **no_conf),
         'skip': partial(utils.get_skip, **kwargs),
         'partial': partial,
-        None: lambda item: None,
+        'none': lambda item: None,
     }
 
     return funcs
@@ -159,7 +159,7 @@ def get_async_funcs(**kwargs):
         'value': tu.asyncPartial(utils.get_value, **no_conf),
         'skip': tu.asyncPartial(utils.get_skip, **kwargs),
         'partial': tu.asyncPartial,
-        None: lambda item: tu.asyncNone,
+        'none': lambda item: tu.asyncNone,
     }
 
     return funcs
@@ -343,7 +343,7 @@ class processor(object):
 
             bfuncs = get_broadcast_funcs(funcs, **combined)
 
-            if combined['ftype'] != 'pass':
+            if combined['ftype'] not in {'pass', 'none'}:
                 dfuncs = get_dispatch_funcs(funcs, **combined)
             else:
                 dfuncs = None
@@ -550,7 +550,7 @@ class operator(object):
             conf.update(kwargs.get('conf', {}))
             kwargs.update({'conf': DotDict(conf)})
 
-            if combined['ftype'] != 'pass':
+            if combined['ftype'] not in {'pass', 'none'}:
                 dfuncs = get_dispatch_funcs(funcs, **combined)
             else:
                 dfuncs = None
@@ -636,7 +636,8 @@ def get_broadcast_funcs(funcs, **kwargs):
         conf = DotDict(pieces) if kw.pdictize and pieces else pieces
         get_pieces = funcs['partial'](funcs[kw.parser], conf=conf)
 
-    return (funcs['field'], get_pieces, funcs['skip'])
+    get_field = funcs['none'] if kw.ftype == 'none' else funcs['field']
+    return (get_field, get_pieces, funcs['skip'])
 
 
 def get_dispatch_funcs(funcs, **kwargs):
