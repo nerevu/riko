@@ -1,74 +1,133 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipeunion
-    ~~~~~~~~~~~~~~~~~~~~~~~~~
-    Provides methods for merging separate sources into a single list of items.
+pipe2py.modules.pipeunion
+~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for merging separate sources into a single feed of items.
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators#Union
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipeunion import pipe
+        >>> items = ({'x': x} for x in xrange(5))
+        >>> other1 = ({'x': x + 5} for x in xrange(5))
+        >>> other2 = ({'x': x + 10} for x in xrange(5))
+        >>> len(list(pipe(items, others=[other1, other2])))
+        15
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 from itertools import chain
-from twisted.internet.defer import inlineCallbacks, returnValue
-from pipe2py.lib import utils
+
+from . import operator
+from pipe2py.lib.log import Logger
+from pipe2py.lib.utils import multiplex
+
+# disable `dictize` since we do not need to access the configuration
+OPTS = {'dictize': False}
+logger = Logger(__name__).logger
 
 
-# Common functions
-def get_output(_INPUT, **kwargs):
-    others = (v for k, v in kwargs.iteritems() if k.startswith('_OTHER'))
-    others_items = utils.multiplex(others)
-    input_items = utils.finitize(_INPUT)
-    return chain(input_items, others_items)
+def parser(feed, objconf, tuples, **kwargs):
+    """ Parses the pipe content
 
+    Args:
+        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
 
-# Async functions
-@inlineCallbacks
-def asyncPipeUnion(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that asynchronously merges multiple source together.
-    Not loopable.
+        objconf (obj): the item independent configuration (an Objectify instance).
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
-    conf : unused
+        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
+            `item` is an element in the source feed and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the `feed`
+            iterator, so consuming it will consume `feed` as well.
 
-    Keyword arguments
-    -----------------
-    _OTHER1 : asyncPipe like object
-    _OTHER2 : etc.
+        kwargs (dict): Keyword arguments.
 
-    Returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of items
+    Kwargs:
+        others (List[Iter(dict)]): List of feeds to join
+
+    Returns:
+        Iter(dict): The output feed
+
+    Examples:
+        >>> from itertools import repeat, izip
+        >>>
+        >>> feed = ({'x': x} for x in xrange(5))
+        >>> other1 = ({'x': x + 5} for x in xrange(5))
+        >>> other2 = ({'x': x + 10} for x in xrange(5))
+        >>> kwargs = {'others': [other1, other2]}
+        >>> tuples = izip(feed, repeat(None))
+        >>> len(list(parser(feed, None, tuples, **kwargs)))
+        15
     """
-    _input = yield _INPUT
-    _OUTPUT = get_output(_input, **kwargs)
-    returnValue(_OUTPUT)
+    return chain(feed, multiplex(kwargs['others']))
 
 
-# Synchronous functions
-def pipe_union(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that merges multiple source together. Not loopable.
+@operator(async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """An aggregator that asynchronously merges multiple source feeds together.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT :  pipe2py.modules pipe like object (iterable of items)
-    conf : unused
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-    Keyword arguments
-    -----------------
-    _OTHER1 : pipe2py.modules pipe like object
-    _OTHER2 : etc.
+    Kwargs:
+        context (obj): pipe2py.Context object
+        others (List[Iter(dict)]): List of feeds to join
 
-    Returns
-    -------
-    _OUTPUT : generator of items
+    Returns:
+        Deferred: twisted.internet.defer.Deferred iterator of the merged feeds
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(len(list(x)))
+        ...     items = ({'x': x} for x in xrange(5))
+        ...     other1 = ({'x': x + 5} for x in xrange(5))
+        ...     other2 = ({'x': x + 10} for x in xrange(5))
+        ...     d = asyncPipe(items, others=[other1, other2])
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        15
     """
-    _OUTPUT = get_output(_INPUT, **kwargs)
-    return _OUTPUT
+    return parser(*args, **kwargs)
+
+
+@operator(**OPTS)
+def pipe(*args, **kwargs):
+    """An operator that merges multiple source feeds together.
+
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        others (List[Iter(dict)]): List of feeds to join
+
+    Yields:
+        dict: a merged feed item
+
+    Examples:
+        >>> items = ({'x': x} for x in xrange(5))
+        >>> other1 = ({'x': x + 5} for x in xrange(5))
+        >>> other2 = ({'x': x + 10} for x in xrange(5))
+        >>> len(list(pipe(items, others=[other1, other2])))
+        15
+    """
+    return parser(*args, **kwargs)
+
