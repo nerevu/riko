@@ -358,8 +358,8 @@ class processor(object):
         @wraps(pipe)
         def wrapper(item=None, **kwargs):
             combined = {
-                    'dictize': True, 'pdictize': True, 'ftype': 'pass',
-                    'objectify': True}
+                'dictize': True, 'pdictize': True, 'ftype': 'pass',
+                'objectify': True}
 
             combined.update(cdicts(self.defaults, self.opts, kwargs))
             combined.setdefault('parser', 'value' if combined.get('extract') else 'conf')
@@ -463,7 +463,6 @@ class operator(object):
                 attribute (default: True).
 
         Examples:
-            >>> from twisted.internet.defer import Deferred
             >>> from twisted.internet.task import react
             >>>
             >>> # emit is True by default
@@ -537,7 +536,6 @@ class operator(object):
             dict: twisted.internet.defer.Deferred item with feeds
 
         Examples:
-            >>> from twisted.internet.defer import Deferred
             >>> from twisted.internet.task import react
             >>>
             >>> kwargs = {
@@ -597,8 +595,8 @@ class operator(object):
         @wraps(pipe)
         def wrapper(items=None, **kwargs):
             combined = {
-                    'dictize': True, 'pdictize': True, 'ftype': 'pass',
-                    'objectify': True, 'emit': True}
+                'dictize': True, 'pdictize': True, 'ftype': 'pass',
+                'objectify': True, 'emit': True}
 
             combined.update(cdicts(self.defaults, self.opts, kwargs))
             combined.setdefault('parser', 'value' if combined.get('extract') else 'conf')
