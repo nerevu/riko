@@ -82,9 +82,9 @@ class Objectify:
             >>> defaults = {'two': 5, 'three': 3}
             >>> kw = Objectify(kwargs, **defaults)
             >>> kw
-            Objectify(one=1, three=3, two=2)
+            Objectify({u'three': 3, u'two': 2, u'one': 1})
             >>> str(kw)
-            '<Objectify instance>'
+            'Objectify(one=1, three=3, two=2)'
             >>> sorted(kw.keys()) == ['one', 'three', 'two']
             True
             >>> kw.one
@@ -99,12 +99,12 @@ class Objectify:
         self.__dict__.update(defaults)
 
     def __str__(self):
-        return '<%s instance>' % (self.__class__.__name__)
-
-    def __repr__(self):
         items = sorted(self.__dict__.items())
         args = ', '.join('%s=%s' % item for item in items)
         return '%s(%s)' % (self.__class__.__name__, args)
+
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__, self.__dict__)
 
     def __iter__(self):
         return self.__dict__.itervalues()
