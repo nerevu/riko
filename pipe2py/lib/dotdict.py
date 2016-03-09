@@ -22,9 +22,9 @@ class DotDict(FeedParserDict):
     e.g. r['a.content'] -> ['a']['content']
 
     """
-    def __init__(self, dict=None, **kwargs):
+    def __init__(self, data=None, **kwargs):
         super(DotDict, self).__init__(self, **kwargs)
-        self.update(dict)
+        self.update(data)
 
     def __getitem__(self, key):
         try:
@@ -99,17 +99,19 @@ class DotDict(FeedParserDict):
         value = func(value) if value and func else value
         return DotDict(value) if hasattr(value, 'keys') else value
 
-    def update(self, dict=None):
-        if not dict:
+    def update(self, data=None):
+        if not data:
             return
 
-        try:
-            keys = ['.'.join(self._parse_key(k)[:-1]) for k in dict if '.' in k]
-        except AttributeError:
-            items = dict
-        else:
+        _dict = dict(data)
+        dot_keys = [k for k in _dict if '.' in k]
+
+        if dot_keys:
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
-            items = ((k, v) for k, v in dict.iteritems() if k not in keys)
+            keys = ['.'.join(self._parse_key(k)[:-1]) for k in dot_keys]
+            items = ((k, v) for k, v in _dict.iteritems() if k not in keys)
+        else:
+            items = _dict.iteritems()
 
-        list(starmap(self.set, items))
+        [self.set(key, value) for key, value in items]
