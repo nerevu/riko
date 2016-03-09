@@ -1,68 +1,248 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipeyql
-    ~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipeyql
+~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for fetching the result of a
+[YQL](http://developer.yahoo.com/yql) query.
 
-    http://pipes.yahoo.com/pipes/docs?doc=sources
+YQL exposes a SQL-like SELECT syntax that is both familiar to developers and
+expressive enough for getting the right data. To use YQL, simply enter a YQL
+statement, e.g., `select * from feed where url='http://digg.com/rss/index.xml'`.
+To drill down further into the result set you can use either the sub-element
+module or projection in a YQL statement. For example:
+`select title from feed where url='http://digg.com/rss/index.xml'` returns only
+the titles from the Digg RSS feed.
+
+The YQL module has 2 viewing modes: Results only or Diagnostics and results.
+Diagnostics provides additional data such as: count, language type and more.
+A more complex query that finds Flickr photos tagged "fog" in San Francisco:
+
+    select * from flickr.photos.info where photo_id in (
+        select id from flickr.photos.search where woe_id in (
+            select woeid from geo.places where text="san francisco, ca")
+        and tags = "fog")
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipeyql import pipe
+        >>> from urllib2 import urlopen
+        >>>
+        >>> conf = {'query': "select * from feed where url='%s'" % FEEDS[0]}
+        >>> pipe(conf=conf, response=urlopen(FILES[7])).next()['title']
+        'Bring pizza home'
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 import requests
+import treq
 
+from itertools import imap
 from lxml.etree import parse
+from twisted.web import microdom
+from twisted.internet.defer import inlineCallbacks, returnValue
+
+from . import processor, FEEDS, FILES
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.lib.log import Logger
+from pipe2py.twisted import utils as tu
+
+OPTS = {'ftype': 'none', 'emit': True}
+DEFAULTS = {'url': 'http://query.yahooapis.com/v1/public/yql', 'debug': False}
+logger = Logger(__name__).logger
 
 
-def pipe_yql(context=None, item=None, conf=None, **kwargs):
-    """A source that issues YQL queries. Loopable.
+@inlineCallbacks
+def asyncParser(_, objconf, skip, **kwargs):
+    """ Asynchronously parses the pipe content
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : pipeforever pipe or an iterable of items or fields
-    conf : yqlquery -- YQL query
-        # todo: handle envURL
+    Args:
+        _ (None): Ignored
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword argurments
 
-    Yields
-    ------
-    _OUTPUT : query results
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (dict): The original item
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.lib.utils import Objectify
+        >>> from urllib2 import urlopen
+        >>>
+        >>> url = 'http://query.yahooapis.com/v1/public/yql'
+        >>> query = "select * from feed where url='%s'" % FEEDS[0]
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0].next()['title'])
+        ...     conf = {'query': query, 'url': url, 'debug': False}
+        ...     objconf = Objectify(conf)
+        ...     kwargs = {'feed': {}, 'response': urlopen(FILES[7])}
+        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        Bring pizza home
     """
-    # todo: get from a config/env file
-    url = "http://query.yahooapis.com/v1/public/yql"
-    conf = DotDict(conf)
-    query = conf['yqlquery']
-
-    for item in _INPUT:
-        item = DotDict(item)
-        yql = utils.get_value(query, item, **kwargs)
-
-        # note: we use the default format of xml since json loses some
-        # structure
-        # todo: diagnostics=true e.g. if context.test
+    if skip:
+        feed = kwargs['feed']
+    else:
+        # we use the default format of xml since json loses some structure
         # todo: consider paging for large result sets
-        r = requests.get(url, params={'q': yql}, stream=True)
+        f = kwargs.get('response')
 
-        # Parse the response
-        tree = parse(r.raw)
+        if not f:
+            params = {'q': objconf.query, 'diagnostics': objconf.debug}
+            r = yield treq.get(objconf.url, params=params)
+            f = treq.content(r)
 
-        if context and context.verbose:
-            print("pipe_yql loading xml:", yql)
+        root = yield microdom.parse(f)
+        results = root.getElementsByTagName('results')[0]
+        logger.debug(results)
+        feed = imap(tu.elementToDict, results.childNodes)
 
+    result = (feed, skip)
+    returnValue(result)
+
+
+def parser(_, objconf, skip, **kwargs):
+    """ Parses the pipe content
+
+    Args:
+        _ (None): Ignored
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> from urllib2 import urlopen
+        >>>
+        >>> url = 'http://query.yahooapis.com/v1/public/yql'
+        >>> query = "select * from feed where url='%s'" % FEEDS[0]
+        >>> conf = {'query': query, 'url': url, 'debug': False}
+        >>> objconf = Objectify(conf)
+        >>> kwargs = {'feed': {}, 'response': urlopen(FILES[7])}
+        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> result.next()['title']
+        'Bring pizza home'
+    """
+    if skip:
+        feed = kwargs['feed']
+    else:
+        # we use the default format of xml since json loses some structure
+        # todo: consider paging for large result sets
+        f = kwargs.get('response')
+
+        if not f:
+            params = {'q': objconf.query, 'diagnostics': objconf.debug}
+            r = requests.get(objconf.url, params=params, stream=True)
+            f = r.raw
+
+        tree = parse(f)
         root = tree.getroot()
-
-        # note: query also has row count
         results = root.find('results')
+        feed = imap(utils.etree_to_dict, results.getchildren())
 
-        # Convert xml into generation of dicts
-        for element in results.getchildren():
-            yield utils.etree_to_dict(element)
+    return feed, skip
 
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+
+@processor(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A source that asynchronously fetches the content of a given website as
+    DOM nodes or a string.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the keys 'xpath', 'html5', 'stringify', or 'assign'.
+
+            url (str): The web site to fetch
+            xpath (str): The XPATH to extract (default: None, i.e., return
+                entire page)
+
+            html5 (bool): Use the HTML5 parser (default: False)
+            stringify (bool): Return the web site as a string (default: False)
+            assign (str): Attribute to assign parsed content (default: content)
+
+    Returns:
+        dict: twisted.internet.defer.Deferred item with feeds
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from urllib2 import urlopen
+        >>>
+        >>> url = 'http://query.yahooapis.com/v1/public/yql'
+        >>> query = "select * from feed where url='%s'" % FEEDS[0]
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next()['title'])
+        ...     d = asyncPipe(conf={'query': query}, response=urlopen(FILES[7]))
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        Bring pizza home
+    """
+    return asyncParser(*args, **kwargs)
+
+
+@processor(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
+    """A source that fetches the result of a given YQL query.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        context (obj): pipe2py.Context object
+        conf (dict): The pipe configuration. Must contain the key 'query'. May
+            contain the keys 'url' or 'debug'.
+
+            url (str): The API to query (default:
+                'http://query.yahooapis.com/v1/public/yql')
+
+            query (str): The API query
+            debug (bool): Enable diagnostics mode (default: False)
+
+        response (str): The API query response (used for offline testing)
+
+    Yields:
+        dict: an item of the result
+
+    Examples:
+        >>> from urllib2 import urlopen
+        >>> conf = {'query': "select * from feed where url='%s'" % FEEDS[0]}
+        >>> result = pipe(conf=conf, response=urlopen(FILES[7])).next()
+        >>> sorted(result.keys())
+        ['alarmTime', 'begin', 'duration', 'place', 'title', 'uid']
+        >>> result['title']
+        'Bring pizza home'
+    """
+    return parser(*args, **kwargs)
+

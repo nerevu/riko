@@ -375,11 +375,7 @@ def elementToDict(element, tag='content'):
 
     TODO: checkout twisted.words.xish
     """
-    try:
-        i = dict(element.attributes)
-    except AttributeError:
-        i = {}
-
+    i = dict(element.attributes) if hasattr(element, 'attributes') else {}
     value = element.nodeValue if hasattr(element, 'nodeValue') else None
 
     if isinstance(element, EntityReference):
@@ -387,26 +383,19 @@ def elementToDict(element, tag='content'):
 
     i.update(_make_content(i, value, tag))
 
-    if element.hasChildNodes():
-        for child in element.childNodes:
-            try:
-                tag = child.tagName
-            except AttributeError:
-                tag = 'content'
+    for child in element.childNodes:
+        tag = child.tagName if hasattr(child, 'tagName') else 'content'
+        value = elementToDict(child, tag)
 
-            value = elementToDict(child, tag)
-
-            # try to join the content first since microdom likes to split up
-            # elements that contain a mix of text and entity reference
-            try:
-                i.update(_make_content(i, value, tag, append=False))
-            except TypeError:
-                i.update(_make_content(i, value, tag))
-
+        # try to join the content first since microdom likes to split up
+        # elements that contain a mix of text and entity reference
+        try:
+            i.update(_make_content(i, value, tag, append=False))
+        except TypeError:
+            i.update(_make_content(i, value, tag))
 
     if ('content' in i) and not set(i).difference(['content']):
         # element is leaf node and doesn't have attributes
         i = i['content']
-
 
     return i

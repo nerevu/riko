@@ -193,11 +193,11 @@ def unique_everseen(iterable, key=None):
             yield k
 
 
-def _make_content(i, value=None, tag='content', append=True):
+def _make_content(i, value=None, tag='content', append=True, strip=False):
     content = i.get(tag)
 
     try:
-        value.strip() if value else None
+        value = value.strip() if value and strip else value
     except AttributeError:
         pass
 
@@ -218,15 +218,14 @@ def etree_to_dict(element):
     todo: further investigate white space and multivalue handling
     """
     i = dict(element.items())
-    i.update(_make_content(i, element.text))
+    i.update(_make_content(i, element.text, strip=True))
 
-    if len(element.getchildren()):
-        for child in element.iterchildren():
-            tag = child.tag.split('}', 1)[-1]
-            value = etree_to_dict(child)
-            i.update(_make_content(i, value, tag))
-            i.update(_make_content(i, child.tail))
-    elif element.text and not set(i).difference(['content']):
+    for child in element.iterchildren():
+        tag = child.tag
+        value = etree_to_dict(child)
+        i.update(_make_content(i, value, tag))
+
+    if element.text and not set(i).difference(['content']):
         # element is leaf node and doesn't have attributes
         i = i['content']
 

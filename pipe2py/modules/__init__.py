@@ -107,7 +107,8 @@ __all__ = __sources__ + __inputs__ + __operators__ + __processors__ + __aggregat
 parent = p.join(p.abspath(p.dirname(p.dirname(p.dirname(__file__)))), 'data')
 parts = [
     'feed.xml', 'blog.ouseful.info_feed.xml', 'gigs.json', 'places.xml',
-    'www.bbc.co.uk_news.html', 'edition.cnn.html', 'google_spreadsheet.csv']
+    'www.bbc.co.uk_news.html', 'edition.cnn.html', 'google_spreadsheet.csv',
+    'yql.xml']
 
 FEEDS = [
     'http://feeds.feedburner.com/TechCrunch/',
