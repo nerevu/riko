@@ -90,8 +90,7 @@ class FakeDelayedCall(object):
 
 @implementer(IReactorCore)
 class FakeReactor(MemoryReactor):
-    """
-    A fake reactor to be used in tests.  This reactor doesn't actually do
+    """A fake reactor to be used in tests.  This reactor doesn't actually do
     much that's useful yet.  It accepts TCP connection setup attempts, but
     they will never succeed.
 
@@ -112,8 +111,7 @@ class FakeReactor(MemoryReactor):
         self.running = False
 
     def resolve(self, *args, **kw):
-        """
-        Return a L{twisted.internet.defer.Deferred} that will resolve a hostname.
+        """Return a L{twisted.internet.defer.Deferred} that will resolve a hostname.
         """
         pass
 
@@ -125,44 +123,37 @@ class FakeReactor(MemoryReactor):
         self.running = True
 
     def stop(self):
-        """
-        Fake L{IReactorCore.stop}.
+        """Fake L{IReactorCore.stop}.
         """
         self.running = False
 
     def crash(self):
-        """
-        Fake L{IReactorCore.crash}.
+        """Fake L{IReactorCore.crash}.
         """
         self.running = False
 
     def iterate(self, *args, **kw):
-        """
-        Fake L{IReactorCore.iterate}.
+        """Fake L{IReactorCore.iterate}.
         """
         pass
 
     def fireSystemEvent(self, *args, **kw):
-        """
-        Fake L{IReactorCore.fireSystemEvent}.
+        """Fake L{IReactorCore.fireSystemEvent}.
         """
         pass
 
     def addSystemEventTrigger(self, *args, **kw):
-        """
-        Fake L{IReactorCore.addSystemEventTrigger}.
+        """Fake L{IReactorCore.addSystemEventTrigger}.
         """
         pass
 
     def removeSystemEventTrigger(self, *args, **kw):
-        """
-        Fake L{IReactorCore.removeSystemEventTrigger}.
+        """Fake L{IReactorCore.removeSystemEventTrigger}.
         """
         pass
 
     def callWhenRunning(self, *args, **kw):
-        """
-        Fake L{IReactorCore.callWhenRunning}.
+        """Fake L{IReactorCore.callWhenRunning}.
         """
         pass
 

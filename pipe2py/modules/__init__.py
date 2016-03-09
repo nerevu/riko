@@ -1,8 +1,9 @@
-# pipe2py modules package
-# Author: Greg Gaughan
-
-# Note: each module name must match the name used internally by Yahoo, preceded
-# by pipe
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+pipe2py.modules
+~~~~~~~~~~~~~~~
+"""
 
 from __future__ import (
     absolute_import, division, print_function, with_statement,
@@ -40,39 +41,43 @@ __sources__ = [
 
 __inputs__ = [
     # User Input Modules
-    'pipenumberinput',
     'pipeprivateinput',
     'pipetextinput',
-    'pipeurlinput',
-    # 'pipedateinput',
-    # 'pipelocationinput',
-    # 'pipeprivateinput',
+]
+
+__aggregators__ = [
+    # Aggregator Modules
+    'pipecount',
+    # 'pipemean',
+    # 'pipemin',
+    # 'pipemax',
+    # 'pipesum',
 ]
 
 __operators__ = [
-    # Operator Modules
-    'pipecount',
-    'pipecreaterss',
     'pipefilter',
-    'piperegex',
-    'piperename',
     'pipereverse',
     'pipesort',
     'pipesplit',
-    'pipesubelement',
     'pipetail',
     'pipetruncate',
     'pipeunion',
     'pipeuniq',
     # 'pipewebservice',
-    # 'pipelocationextractor',
 ]
 
-__loopings__ = [
-    # URL Modules
+__processors__ = [
+    # 'pipecreaterss',
+    'piperegex',
+    'piperename',
+    'pipesubelement',
+    # 'pipelocationextractor',
+    'pipenumberinput',
+    'pipeurlinput',
+    # 'pipedateinput',
+    # 'pipelocationinput',
+    # 'pipeprivateinput',
     'pipeurlbuilder',
-
-    # String Modules
     'pipeexchangerate',
     'pipehash',
     'pipestrconcat',
@@ -85,21 +90,11 @@ __loopings__ = [
     # 'pipetranslate',
     # 'pipeyahooshortcuts',
     # 'pipestrprivate',
-
-    # Date Modules
     'pipedatebuilder',
     'pipedateformat',
-
-    # Location Modules
     # 'pipelocationbuilder',
-
-    # Number Modules
     'pipesimplemath',
     'pipecurrencyformat',
-]
-
-__outputs__ = [
-    # Output Modules
     'pipeoutput',
     # 'pipeoutputjson',
     # 'pipeoutputical',
@@ -107,7 +102,7 @@ __outputs__ = [
     # 'pipeoutputcsv',
 ]
 
-__all__ = __sources__ + __inputs__ + __operators__ + __loopings__ + __outputs__
+__all__ = __sources__ + __inputs__ + __operators__ + __processors__ + __aggregators__
 
 parent = p.join(p.abspath(p.dirname(p.dirname(p.dirname(__file__)))), 'data')
 parts = [
@@ -166,10 +161,6 @@ def get_async_funcs(**kwargs):
 
 
 def get_assignment(result, skip, **kwargs):
-    # conf : {
-    #     'assign': {'value': <assigned field name>},
-    #     'count': {'value': <all or first>},
-    # }
     result = iter(utils.listize(result))
 
     if skip:
@@ -202,16 +193,58 @@ class processor(object):
     def __init__(self, defaults=None, async=False, **opts):
         """Creates a sync/async pipe that processes individual items
 
-        Args:
-            defaults (dict): The entry to process
+            defaults (dict): Default `conf` values.
+            async (bool): Wrap an async pipe (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
-            context (obj): pipe2py.Context object
+            context (obj): The pipe context (a pipe2py.Context object)
             conf (dict): The pipe configuration
+            extract (str): The key with which to get a value from `conf`. If set,
+                the wrapped pipe will receive this value instead of `conf`
+                (default: None).
+
+            listize (bool): Ensure that the value returned from an `extract` is
+                list-like (default: False)
+
+            pdictize (bool): Convert `conf` or an `extract` to a
+                pipe2py.lib.dotdict.DotDict instance (default: True)
+
+            objectify (bool):Convert `conf` to a pipe2py.lib.utils.Objectify
+                instance (default: True, ignored unless `parser` is set to
+                'conf').
+
+            parser (str): The `conf` parse function. Must be one of 'conf',
+                'value', or 'params' (default: 'value' if `extract` is set else
+                'conf')
+
+            dictize (bool): Convert the input `item` to a DotDict instance
+                (default: True)
+
+            field (str): The key with which to get a value from the input
+                `item`. If set, the wrapped pipe will receive this value
+                instead of `item` (default: None).
+
+            ftype (str): Used to convert the input `item` to a specific type.
+                Performs conversion after obtaining the `field` value above.
+                If set, the wrapped pipe will receive this value instead of
+                `item`. Must be one of 'pass', 'none', 'text', or 'num' (
+                default: 'pass', i.e., return the item as is)
+
+            count (str): Output count. Must be either 'first' or 'all'
+                (default: 'all', i.e., output all results).
+
+            assign (str): Attribute to assign output (default: content)
+
+            emit (bool): Return the output as is and don't assign it to an item
+                attribute (default: False).
+
+            skip_if (func): A function that takes the `item` and should return
+                True if processing should be skipped, or False otherwise. If
+                processing is skipped, the resulting output will be the original
+                input `item`.
 
         Examples:
-            >>> from twisted.internet.defer import Deferred
             >>> from twisted.internet.task import react
             >>>
             >>> @processor()
@@ -278,7 +311,6 @@ class processor(object):
             Deferred: twisted.internet.defer.Deferred generator of items
 
         Examples:
-            >>> from twisted.internet.defer import Deferred
             >>> from twisted.internet.task import react
             >>>
             >>> kwargs = {
@@ -384,17 +416,51 @@ class operator(object):
         """Creates a sync/async pipe that processes an entire feed of items
 
         Args:
-            defaults (dict): The entry to process
+            defaults (dict): Default `conf` values.
+            async (bool): Wrap an async pipe (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
-            context (obj): pipe2py.Context object
+            context (obj): The pipe context (a pipe2py.Context object)
             conf (dict): The pipe configuration
-            ftype (str):
-            extract (str):
-            listize (bool):
-            pdictize (bool):
-            emit (bool):
+            extract (str): The key with which to get values from `conf`. If set,
+                the wrapped pipe will receive these value instead of `conf`
+                (default: None).
+
+            listize (bool): Ensure that the value returned from an `extract` is
+                list-like (default: False)
+
+            pdictize (bool): Convert `conf` or an `extract` to a
+                pipe2py.lib.dotdict.DotDict instance (default: True)
+
+            objectify (bool):Convert `conf` to a pipe2py.lib.utils.Objectify
+                instance (default: True, ignored unless `parser` is set to
+                'conf').
+
+            parser (str): The `conf` parse function. Must be one of 'conf',
+                'value', or 'params' (default: 'value' if `extract` is set else
+                'conf')
+
+            dictize (bool): Convert the input `items` to DotDict instances
+                (default: True)
+
+            field (str): The key with which to get values from the input
+                `items`. If set, the wrapped pipe will receive these values
+                instead of `items` (default: None).
+
+            ftype (str): Used to convert the input `items` to a specific type.
+                Performs conversion after obtaining the `field` values above.
+                If set, the wrapped pipe will receive these values instead of
+                `items`. Must be one of 'pass', 'none', 'text', or 'num' (
+                default: 'pass', i.e., return the item as is)
+
+            count (str): Output count. Must be either 'first' or 'all'
+                (default: 'all').
+
+            assign (str): Attribute to assign output (default: content)
+
+            emit (bool): return the output as is and don't assign it to an item
+                attribute (default: True).
 
         Examples:
             >>> from twisted.internet.defer import Deferred

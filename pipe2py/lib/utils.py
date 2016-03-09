@@ -300,7 +300,7 @@ def broadcast(item, *funcs):
 
 def parse_conf(item, **kwargs):
     kw = Objectify(kwargs, defaults={}, conf={})
-    # TODO: fix so .items() returns DotDict instance
+    # TODO: fix so .items() returns a DotDict instance
     # parsed = {k: get_value(item, v) for k, v in kw.conf.items()}
     parsed = {k: get_value(item, kw.conf[k]) for k in kw.conf}
     result = combine_dicts(kw.defaults, parsed)

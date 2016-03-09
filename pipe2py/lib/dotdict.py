@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.lib.dotdict
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~
 
     Provides methods for creating dicts using dot notation
 """
