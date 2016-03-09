@@ -372,6 +372,10 @@ class processor(object):
                 for o in output:
                     yield o
 
+        wrapper.__dict__ = {
+            'type': 'processor',
+            'sub_type': 'source' if self.opts.get('ftype') == 'none' else 'processor'}
+
         return inlineCallbacks(wrapper) if self.async else wrapper
 
 
@@ -599,6 +603,7 @@ class operator(object):
                 for o in output:
                     yield o
 
+        wrapper.__dict__['type'] = 'operator',
         return inlineCallbacks(wrapper) if self.async else wrapper
 
 

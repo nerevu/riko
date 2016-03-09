@@ -19,7 +19,7 @@ from zope.interface import implementer
 from twisted.internet import defer
 from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue)
-from twisted.internet.task import Cooperator
+from twisted.internet.task import Cooperator, coiterate, cooperate
 from twisted.internet.utils import getProcessOutput
 from twisted.internet.fdesc import readFromFD, setNonBlocking
 from twisted.internet.interfaces import IReactorCore
@@ -33,13 +33,13 @@ from pipe2py.lib.utils import _make_content
 
 logger = Logger(__name__).logger
 
-WORKERS = 50
-
 asyncNone = defer.succeed(None)
 asyncReturn = partial(defer.succeed)
 urlRead = lambda url: getPage(url) if url.startswith('http') else readFile(url, StringTransport())
 asyncPartial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
+global FAKE_REACTOR
+FAKE_REACTOR = False
 
 # http://stackoverflow.com/q/26314586/408556
 # http://stackoverflow.com/q/8157197/408556
@@ -78,7 +78,6 @@ class FakeDelayedCall(object):
         """
         A function to run, later.
         """
-        logger.debug('FakeDelayedCall')
         self.func = func
         self.cancelled = False
 
@@ -87,42 +86,6 @@ class FakeDelayedCall(object):
         Don't run my function later.
         """
         self.cancelled = True
-
-
-class FakeScheduler(object):
-    """
-    A fake scheduler for testing against.
-    """
-    def __init__(self):
-        """
-        Create a fake scheduler with a list of work to do.
-        """
-        logger.debug('FakeScheduler')
-        self.work = []
-
-    def __call__(self, thunk):
-        """
-        Schedule a unit of work to be done later.
-        """
-        logger.debug('call')
-        unit = FakeDelayedCall(thunk)
-        self.work.append(unit)
-        return unit
-
-    def pump(self):
-        """
-        Do all of the work that is currently available to be done.
-        """
-        logger.debug('pump')
-        work, self.work = self.work, []
-
-        for unit in work:
-            if not unit.cancelled:
-                unit.func()
-
-scheduler=FakeScheduler()
-cooperator = Cooperator(scheduler=scheduler, terminationPredicateFactory=lambda: lambda: True)
-coiterate, cooperate = cooperator.coiterate, cooperator.cooperate
 
 
 @implementer(IReactorCore)
@@ -145,6 +108,7 @@ class FakeReactor(MemoryReactor):
     """
     def __init__(self):
         super(FakeReactor, self).__init__()
+        self.work = []
         self.running = False
 
     def resolve(self, *args, **kw):
@@ -154,9 +118,10 @@ class FakeReactor(MemoryReactor):
         pass
 
     def run(self):
+        """Fake L{IReactorCore.run}.
         """
-        Fake L{IReactorCore.run}.
-        """
+        global FAKE_REACTOR
+        FAKE_REACTOR = True
         self.running = True
 
     def stop(self):
@@ -201,6 +166,37 @@ class FakeReactor(MemoryReactor):
         """
         pass
 
+    def getDelayedCalls(self):
+        """Return all the outstanding delayed calls in the system.
+        """
+        return (x for x in self.work if not x.cancelled)
+
+    def callLater(self, func):
+        """Schedule a unit of work to be done later.
+        """
+        unit = FakeDelayedCall(func)
+        self.work = it.chain(self.work, [unit])
+        self.pump()
+        return unit
+
+    def pump(self):
+        """Perform scheduled work
+        """
+        for unit in self.getDelayedCalls():
+            try:
+                unit.func()
+            except Exception as e:
+                logger.error(e)
+
+        return
+
+cooperator = Cooperator(scheduler=FakeReactor().callLater)
+
+def cleanup(*args):
+    if FAKE_REACTOR and cooperator._delayedCall:
+        cooperator._delayedCall.cancel()
+        cooperator._delayedCall = None
+
 
 @inlineCallbacks
 def readFile(filename, transport, protocol=FileReader):
@@ -238,30 +234,39 @@ def _get_work(asyncCallable, callback, map_func, *iterables):
     return map_func(func, *iterables)
 
 
-def _parallel(work, asyncCallable):
-    deferreds = it.repeat(coiterate(work), WORKERS)
-    return gatherResults(deferreds, consumeErrors=True)
+def _parallel(work, asyncCallable, workers):
+    coiterate = cooperator.coiterate if FAKE_REACTOR else coiterate
+    deferreds = it.repeat(coiterate(work), workers)
+    d = gatherResults(deferreds, consumeErrors=True)
+    d.addCallbacks(cleanup, logger.error)
+    return d
 
 
 # helper functions
 def coop(asyncCallable, callback, *iterables):
+    coiterate = cooperator.coiterate if FAKE_REACTOR else coiterate
     work = _get_work(asyncCallable, callback, it.imap, *iterables)
-    return coiterate(work)
-
-
-def asyncParallel(asyncCallable, callback, *iterables):
-    work = _get_work(asyncCallable, callback, it.imap, *iterables)
-    return _parallel(work, asyncCallable)
+    d = coiterate(work)
+    d.addCallbacks(cleanup, logger.error)
+    return d
 
 
 def coopStar(asyncCallable, callback, iterable):
+    coiterate = cooperator.coiterate if FAKE_REACTOR else coiterate
     work = _get_work(asyncCallable, callback, it.starmap, *[iterable])
-    return coiterate(work)
+    d = coiterate(work)
+    d.addCallbacks(cleanup, logger.error)
+    return d
 
 
-def asyncStarParallel(asyncCallable, callback, iterable):
+def asyncParallel(asyncCallable, callback, *iterables, **kwargs):
+    work = _get_work(asyncCallable, callback, it.imap, *iterables)
+    return _parallel(work, asyncCallable, kwargs.get('workers', 0))
+
+
+def asyncStarParallel(asyncCallable, callback, iterable, workers=0):
     work = _get_work(asyncCallable, callback, it.starmap, *[iterable])
-    return _parallel(work, asyncCallable)
+    return _parallel(work, asyncCallable, workers)
 
 
 # End user functions
@@ -274,24 +279,20 @@ def deferToProcess(source, function, *args, **kwargs):
 
 @inlineCallbacks
 def coopReduce(func, iterable, initializer=None):
+    cooperate = cooperator.cooperate if FAKE_REACTOR else cooperate
     it = iter(iterable)
     x = initializer or next(it)
-    results = []
+    result = {}
 
     def work(func, it, x):
         for y in it:
-            x = func(x, y)
-            results.append(x)
-            yield None
+            result['value'] = x = func(x, y)
+            yield
 
     task = cooperate(work(func, it, x))
-    d = task.whenDone()
-
-    while cooperator._tasks:
-        task._cooperator._scheduler.pump()
-
-    yield d
-    returnValue(results.pop())
+    yield task.whenDone()
+    cleanup()
+    returnValue(result['value'])
 
 
 def asyncReduce(asyncCallable, iterable, initializer=None):
@@ -309,21 +310,22 @@ def asyncReduce(asyncCallable, iterable, initializer=None):
 
 
 @inlineCallbacks
+@inlineCallbacks
+def asyncPmap(asyncCallable, *iterables, **kwargs):
+    """itertools.imap for deferred callables using parallel cooperative
+    multitasking
+    """
+    results = []
+    yield asyncParallel(asyncCallable, results.append, *iterables, **kwargs)
+    returnValue(results)
+
+
+@inlineCallbacks
 def asyncCmap(asyncCallable, *iterables):
     """itertools.imap for deferred callables using cooperative multitasking
     """
     results = []
     yield coop(asyncCallable, results.append, *iterables)
-    returnValue(results)
-
-
-@inlineCallbacks
-def asyncPmap(asyncCallable, *iterables):
-    """itertools.imap for deferred callables using parallel cooperative
-    multitasking
-    """
-    results = []
-    yield asyncParallel(asyncCallable, results.append, *iterables)
     returnValue(results)
 
 
@@ -344,12 +346,12 @@ def asyncStarCmap(asyncCallable, iterable):
 
 
 @inlineCallbacks
-def asyncStarPmap(asyncCallable, iterable):
+def asyncStarPmap(asyncCallable, iterable, workers=0):
     """itertools.starmap for deferred callables using parallel cooperative
     multitasking
     """
     results = []
-    yield asyncStarParallel(asyncCallable, results.append, iterable)
+    yield asyncStarParallel(asyncCallable, results.append, iterable, workers=workers)
     returnValue(results)
 
 

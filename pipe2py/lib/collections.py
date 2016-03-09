@@ -28,7 +28,6 @@ Examples:
         56
         >>> len(SyncCollection(sources, parallel=True).list)
         56
-
 """
 
 from __future__ import (
@@ -49,7 +48,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool, cpu_count
 
 from pipe2py import Context, modules
-from pipe2py.lib.utils import combine_dicts as cdicts, multiplex, remove_keys, group_by
+from pipe2py.lib.utils import multiplex
 from pipe2py.lib.log import Logger
 
 logger = Logger(__name__).logger
@@ -57,30 +56,31 @@ logger = Logger(__name__).logger
 
 class PyPipe(object):
     """A pipe2py module fetching object"""
-    def __init__(self, name, source=None, context=None, **kwargs):
+    def __init__(self, name, context=None, parallel=False, **kwargs):
         self.name = name
+        self.context = context or Context()
+        self.parallel = parallel
+        self.kwargs = kwargs
+
+
+class SyncPipe(PyPipe):
+    """A synchronous Pipe object"""
+    def __init__(self, name, source=None, workers=None, chunksize=None, **kwargs):
+        super(SyncPipe, self).__init__(name, **kwargs)
 
         if kwargs.pop('listize', False) and source:
             self.source = list(source)
         else:
             self.source = source
 
-        self.context = context or Context()
-        self.parallel = kwargs.pop('parallel', False)
-        self.threads = kwargs.pop('threads', True)
-        self.kwargs = kwargs
-
-
-class SyncPipe(PyPipe):
-    """A synchronous Pipe object"""
-    def __init__(self, name, workers=None, chunksize=None, pool=None, **kwargs):
-        super(SyncPipe, self).__init__(name, **kwargs)
+        self.threads = kwargs.get('threads', True)
+        self.reuse_pool = kwargs.get('reuse_pool', True)
+        self.pool = kwargs.get('pool')
         self.module = import_module('pipe2py.modules.pipe%s' % self.name)
         self.pipe = self.module.pipe
         self.processor = self.pipe.func_dict.get('sub_type') == 'processor'
-        self.reuse_pool = kwargs.get('reuse_pool', True)
 
-        if self.parallel:
+        if self.parallel and self.processor:
             ordered = kwargs.get('ordered')
             funcs = (len, lambda x: getattr(x, '__length_hint__')())
             errors = (TypeError, AttributeError)
@@ -90,12 +90,11 @@ class SyncPipe(PyPipe):
 
             self.workers = workers or get_worker_cnt(length, self.threads)
             self.chunksize = chunksize or get_chunksize(length, self.workers)
-            self.pool = pool or def_pool(self.workers)
+            self.pool = self.pool or def_pool(self.workers)
             self.map = self.pool.imap if ordered else self.pool.imap_unordered
         else:
             self.workers = workers
             self.chunksize = chunksize
-            self.pool = pool
             self.map = imap
 
     def __getattr__(self, name):
@@ -117,15 +116,13 @@ class SyncPipe(PyPipe):
     def output(self):
         pipeline = partial(self.pipe, context=self.context, **self.kwargs)
 
-        if self.processor and self.parallel and self.threads:
-            mapped = self.map(pipeline, self.source, chunksize=self.chunksize)
-        elif self.processor and self.parallel:
-            source = izip(self.source, repeat(pipeline))
-            mapped = self.map(listpipe, source, chunksize=self.chunksize)
+        if self.parallel and self.processor:
+            zipped = izip(self.source, repeat(pipeline))
+            mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
         elif self.processor:
             mapped = self.map(pipeline, self.source)
 
-        if self.parallel and not self.reuse_pool:
+        if self.parallel and self.processor and not self.reuse_pool:
             self.pool.close()
             self.pool.join()
 
@@ -138,11 +135,10 @@ class SyncPipe(PyPipe):
 
 class PyCollection(object):
     """A pipe2py bulk url fetching object"""
-    def __init__(self, sources, parallel=False, thread_cnt=None):
+    def __init__(self, sources, parallel=False, workers=None, **kwargs):
         self.sources = sources
         self.parallel = parallel
-        self.thread_cnt = thread_cnt
-
+        self.workers = workers
 
 
 class SyncCollection(PyCollection):
@@ -152,18 +148,17 @@ class SyncCollection(PyCollection):
 
         if self.parallel:
             length = len(self.sources)
-            workers = self.thread_cnt or get_worker_cnt(length)
+            workers = self.workers or get_worker_cnt(length)
             self.chunksize = get_chunksize(length, workers)
             self.pool = ThreadPool(workers)
             self.map = self.pool.imap_unordered
+        else:
+            self.map = imap
 
     def fetch(self):
         """Fetch all source urls"""
-        if self.parallel:
-            mapped = self.map(get_pipe, self.sources, chunksize=self.chunksize)
-        else:
-            mapped = imap(get_pipe, self.sources)
-
+        kwargs = {'chunksize': self.chunksize} if self.parallel else {}
+        mapped = self.map(getpipe, self.sources, **kwargs)
         return multiplex(mapped)
 
     @property
@@ -199,7 +194,8 @@ def get_chunksize(length, workers):
 
 def get_worker_cnt(length, threads=True):
     multiplier = 1.5 if threads else 1
-    return int(max(length / 4, cpu_count() * multiplier))
+    count = int(min(length / 4, cpu_count() * multiplier))
+    return count or 1
 
 
 def multi_try(source, zipped, default=None):
@@ -221,7 +217,7 @@ def listpipe(args):
     return list(pipeline(source))
 
 
-def get_pipe(source, pipe=SyncPipe):
+def getpipe(source, pipe=SyncPipe):
     ptype = source.get('type', 'fetch')
     conf = {k: make_conf(v) for k, v in source.items()}
     return pipe(ptype, conf=conf).list
