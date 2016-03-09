@@ -517,7 +517,6 @@ class operator(object):
         self.defaults = defaults or {}
         self.defaults.setdefault('assign', 'content')
         self.defaults.setdefault('count', 'all')
-        logger.debug(defaults)
         self.opts = opts
         self.async = async
 

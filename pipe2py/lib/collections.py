@@ -165,25 +165,6 @@ class SyncCollection(PyCollection):
     def list(self):
         return list(self.fetch())
 
-class Chainable(object):
-    def __init__(self, data, method=None):
-        self.data = data
-        self.method = method
-        self.list = list(data)
-
-    def __getattr__(self, name):
-        funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
-        zipped = izip(funcs, repeat(AttributeError))
-        method = multi_try(name, zipped, default=None)
-        return Chainable(self.data, method)
-
-    def __call__(self, *args, **kwargs):
-        try:
-            return Chainable(self.method(self.data, *args, **kwargs))
-        except TypeError:
-            return Chainable(self.method(args[0], self.data, **kwargs))
-
-
 def make_conf(value, conf_type='text'):
     return {'value': value, 'type': conf_type}
 

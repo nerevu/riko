@@ -125,12 +125,29 @@ class Objectify:
         return self.__dict__.keys()
 
 
+class Chainable(object):
+    def __init__(self, data, method=None):
+        self.data = data
+        self.method = method
+        self.list = list(data)
+
+    def __getattr__(self, name):
+        funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
+        zipped = izip(funcs, repeat(AttributeError))
+        method = multi_try(name, zipped, default=None)
+        return Chainable(self.data, method)
+
+    def __call__(self, *args, **kwargs):
+        try:
+            return Chainable(self.method(self.data, *args, **kwargs))
+        except TypeError:
+            return Chainable(self.method(args[0], self.data, **kwargs))
+
+
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
-
-
 def memoize(*args, **kwargs):
     return Cache(**cache_config).memoize(*args, **kwargs)
 
