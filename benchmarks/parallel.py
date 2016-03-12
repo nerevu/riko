@@ -1,15 +1,27 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
-import time
-
 from os import path as p
 from itertools import imap
+from functools import partial
 from collections import defaultdict
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool
+from time import time, sleep
 
-from pipe2py.lib.collections import SyncPipe, SyncCollection, get_chunksize, get_worker_cnt
+from twisted.internet.defer import inlineCallbacks, returnValue
+from twisted.internet.task import react
+
+from pipe2py.lib.collections import (
+    SyncPipe, SyncCollection, get_chunksize, get_worker_cnt, make_conf)
+
+from pipe2py.twisted.collections import AsyncPipe, AsyncCollection
+from pipe2py.twisted.utils import asyncImap, asyncSleep
+from pipe2py.modules.pipefetch import pipe, asyncPipe
 from pipe2py.lib.utils import get_abspath
+
+NUMBER = 3
+LOOPS = 3
+DELAY = 0.2
 
 parent = p.join(p.abspath(p.dirname(p.dirname(__file__))), 'data')
 files = [
@@ -30,50 +42,62 @@ files = [
     'www.slideshare.net_rss_user_psychemedia.xml']
 
 get_url = lambda name: 'file://%s' % p.join(parent, name)
-
-
-class SleepyDict(dict):
-    """A dict like object that sleeps for a specified amount of time before
-    returning a key
-    """
-    def __init__(self, *args, **kwargs):
-        self.sleep_time = kwargs.pop('sleep_time', 0.2)
-        super(SleepyDict, self).__init__(*args, **kwargs)
-
-    def get(self, key, default=None):
-        time.sleep(self.sleep_time)
-        return super(SleepyDict, self).get(key, default)
-
-sources = [SleepyDict(url=get_url(f)) for f in files]
+sources = [{'url': get_url(f)} for f in files]
 length = len(files)
-iterable = [0.2 for x in files]
+conf = {'url': [make_conf(get_url(f)) for f in files], 'sleep': DELAY}
+iterable = [DELAY for x in files]
 
 
 def baseline_sync():
-    return list(imap(time.sleep, iterable))
+    return map(sleep, iterable)
 
 
 def baseline_threads():
     workers = get_worker_cnt(length)
     chunksize =  get_chunksize(length, workers)
     pool = ThreadPool(workers)
-    return list(pool.imap_unordered(time.sleep, iterable, chunksize=chunksize))
+    return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
 
 
 def baseline_procs():
     workers = get_worker_cnt(length, False)
-    chunksize =  get_chunksize(length, workers)
+    chunksize = get_chunksize(length, workers)
     pool = Pool(workers)
-
-    return list(pool.imap_unordered(time.sleep, iterable, chunksize=chunksize))
-
-
-def test_sync():
-    return SyncCollection(sources).list
+    return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
 
 
-def test_threads():
-    return SyncCollection(sources, parallel=True).list
+def sync_pipeline():
+    return list(pipe(conf=conf))
+
+
+def sync_pipe():
+    return SyncPipe('fetch', conf=conf).list
+
+
+def sync_collection():
+    return SyncCollection(sources, sleep=DELAY).list
+
+
+def par_sync_collection():
+    return SyncCollection(sources, parallel=True, sleep=DELAY).list
+
+
+def baseline_async():
+    return asyncImap(asyncSleep, iterable)
+
+
+def async_pipeline():
+    d = asyncPipe(conf=conf)
+    d.addCallbacks(list, print)
+    return d
+
+
+def async_pipe():
+    return AsyncPipe('fetch', conf=conf).list
+
+
+def async_collection():
+    return AsyncCollection(sources, sleep=DELAY).list
 
 
 def parse_results(results):
@@ -87,35 +111,49 @@ def parse_results(results):
 
     return round(best * factor, 2), switch[places]
 
+
+def print_time(test, max_chars, run_time, units):
+    padded = test.zfill(max_chars).replace('0', ' ')
+    msg = '%s - %i repetitions/loop, best of %i loops: %s %s'
+    print(msg % (padded, NUMBER, LOOPS, run_time, units))
+
+
+@inlineCallbacks
+def run_async(reactor, tests, max_chars):
+    for num, test in enumerate(tests):
+        results = []
+
+        for i in xrange(LOOPS):
+            loop = 0
+
+            for j in xrange(NUMBER):
+                start = time()
+                result = yield test()
+                loop += time() - start
+
+            results.append(loop)
+
+        run_time, units = parse_results(results)
+        print_time(test.func_name, max_chars, run_time, units)
+
+    returnValue(None)
+
 if __name__ == '__main__':
     from timeit import repeat
 
-    NUMBER = 3
-    REPEAT = 3
-    msg = '%s - %i repetitions, best of %i loops: %s %s'
+    run = partial(repeat, repeat=LOOPS, number=NUMBER)
+    sync_tests = [
+        'baseline_sync', 'baseline_threads', 'baseline_procs', 'sync_pipeline',
+        'sync_pipe', 'sync_collection', 'par_sync_collection']
 
-    setup = ("from __main__ import baseline_sync")
-    results = repeat('baseline_sync()', setup=setup, repeat=REPEAT, number=NUMBER)
-    frmttd, unit = parse_results(results)
-    print(msg % ('baseline_sync', NUMBER, REPEAT, frmttd, unit))
+    async_tests = [baseline_async, async_pipeline, async_pipe, async_collection]
+    combined_tests = sync_tests + [f.func_name for f in async_tests]
+    max_chars = max(map(len, combined_tests))
 
-    setup = ("from __main__ import baseline_threads")
-    results = repeat('baseline_threads()', setup=setup, repeat=REPEAT, number=NUMBER)
-    frmttd, unit = parse_results(results)
-    print(msg % ('baseline_threads', NUMBER, REPEAT, frmttd, unit))
+    for test in sync_tests:
+        results = run('%s()' % test, setup='from __main__ import %s' % test)
+        run_time, units = parse_results(results)
+        print_time(test, max_chars, run_time, units)
 
-    setup = ("from __main__ import baseline_procs")
-    results = repeat('baseline_procs()', setup=setup, repeat=REPEAT, number=NUMBER)
-    frmttd, unit = parse_results(results)
-    print(msg % ('baseline_procs', NUMBER, REPEAT, frmttd, unit))
-
-    setup = ("from __main__ import test_sync")
-    results = repeat('test_sync()', setup=setup, repeat=REPEAT, number=NUMBER)
-    frmttd, unit = parse_results(results)
-    print(msg % ('test_sync', NUMBER, REPEAT, frmttd, unit))
-
-    setup = ("from __main__ import test_threads")
-    results = repeat('test_threads()', setup=setup, repeat=REPEAT, number=NUMBER)
-    frmttd, unit = parse_results(results)
-    print(msg % ('test_threads', NUMBER, REPEAT, frmttd, unit))
+    react(run_async, [async_tests, max_chars])
 

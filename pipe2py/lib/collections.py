@@ -82,10 +82,7 @@ class SyncPipe(PyPipe):
 
         if self.parallel and self.processor:
             ordered = kwargs.get('ordered')
-            funcs = (len, lambda x: getattr(x, '__length_hint__')())
-            errors = (TypeError, AttributeError)
-            zipped = zip(funcs, errors)
-            length = multi_try(self.source, zipped, default=50)
+            length = lenish(self.source)
             def_pool = ThreadPool if self.threads else Pool
 
             self.workers = workers or get_worker_cnt(length, self.threads)
@@ -139,6 +136,10 @@ class PyCollection(object):
         self.sources = sources
         self.parallel = parallel
         self.workers = workers
+        self.sleep = kwargs.get('sleep', 0)
+        self.zargs = izip(self.sources, repeat(self.sleep))
+        self.length = lenish(self.sources)
+        self.workers = workers or get_worker_cnt(self.length)
 
 
 class SyncCollection(PyCollection):
@@ -147,10 +148,8 @@ class SyncCollection(PyCollection):
         super(SyncCollection, self).__init__(*args, **kwargs)
 
         if self.parallel:
-            length = len(self.sources)
-            workers = self.workers or get_worker_cnt(length)
-            self.chunksize = get_chunksize(length, workers)
-            self.pool = ThreadPool(workers)
+            self.chunksize = get_chunksize(self.length, self.workers)
+            self.pool = ThreadPool(self.workers)
             self.map = self.pool.imap_unordered
         else:
             self.map = imap
@@ -158,25 +157,25 @@ class SyncCollection(PyCollection):
     def fetch(self):
         """Fetch all source urls"""
         kwargs = {'chunksize': self.chunksize} if self.parallel else {}
-        mapped = self.map(getpipe, self.sources, **kwargs)
+        mapped = self.map(getpipe, self.zargs, **kwargs)
         return multiplex(mapped)
 
     @property
     def list(self):
         return list(self.fetch())
 
+
 def make_conf(value, conf_type='text'):
     return {'value': value, 'type': conf_type}
 
 
 def get_chunksize(length, workers):
-    return (length // (workers * 4)) + 1
+    return (length // (workers * 4)) or 1
 
 
 def get_worker_cnt(length, threads=True):
-    multiplier = 1.5 if threads else 1
-    count = int(min(length / 4, cpu_count() * multiplier))
-    return count or 1
+    multiplier = 2 if threads else 1
+    return min(length or 1, cpu_count() * multiplier)
 
 
 def multi_try(source, zipped, default=None):
@@ -192,14 +191,22 @@ def multi_try(source, zipped, default=None):
     else:
         return default
 
+def lenish(source, default=50):
+    funcs = (len, lambda x: getattr(x, '__length_hint__')())
+    errors = (TypeError, AttributeError)
+    zipped = zip(funcs, errors)
+    return multi_try(source, zipped, default)
+
 
 def listpipe(args):
     source, pipeline = args
     return list(pipeline(source))
 
 
-def getpipe(source, pipe=SyncPipe):
+def getpipe(args, pipe=SyncPipe):
+    source, sleep = args
     ptype = source.get('type', 'fetch')
     conf = {k: make_conf(v) for k, v in source.items()}
+    conf['sleep'] = make_conf(sleep, 'int')
     return pipe(ptype, conf=conf).list
 

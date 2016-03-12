@@ -14,6 +14,7 @@ from __future__ import (
 import string
 import re
 import itertools as it
+import time
 
 # from pprint import pprint
 from datetime import datetime
@@ -123,6 +124,23 @@ class Objectify:
 
     def keys(self):
         return self.__dict__.keys()
+
+
+class SleepyDict(dict):
+    """A dict like object that sleeps for a specified amount of time before
+    returning a key or during truth value testing
+    """
+    def __init__(self, *args, **kwargs):
+        self.delay = kwargs.pop('delay', 0)
+        super(SleepyDict, self).__init__(*args, **kwargs)
+
+    def __len__(self):
+        time.sleep(self.delay)
+        return super(SleepyDict, self).__len__()
+
+    def get(self, key, default=None):
+        time.sleep(self.delay)
+        return super(SleepyDict, self).get(key, default)
 
 
 class Chainable(object):

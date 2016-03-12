@@ -17,11 +17,13 @@ from zope.interface import implementer
 
 from twisted.internet import defer
 from twisted.internet.defer import (
-    inlineCallbacks, maybeDeferred, gatherResults, returnValue)
-from twisted.internet.task import Cooperator, coiterate, cooperate
+    inlineCallbacks, maybeDeferred, gatherResults, returnValue, Deferred)
+from twisted.internet.task import (
+    Cooperator, coiterate as _coiterate, cooperate as _cooperate)
 from twisted.internet.utils import getProcessOutput
 from twisted.internet.fdesc import readFromFD, setNonBlocking
 from twisted.internet.interfaces import IReactorCore
+from twisted.internet.reactor import callLater
 from twisted.protocols.basic import FileSender
 from twisted.web.client import getPage
 from twisted.test.proto_helpers import MemoryReactor, AccumulatingProtocol, StringTransport
@@ -34,7 +36,6 @@ logger = Logger(__name__).logger
 
 asyncNone = defer.succeed(None)
 asyncReturn = partial(defer.succeed)
-urlRead = lambda url: getPage(url) if url.startswith('http') else readFile(url, StringTransport())
 asyncPartial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
 global FAKE_REACTOR
@@ -44,14 +45,32 @@ FAKE_REACTOR = False
 # http://stackoverflow.com/q/8157197/408556
 # http://stackoverflow.com/a/33708936/408556
 class FileReader(AccumulatingProtocol):
-    def __init__(self, filename, transform=None):
+    def __init__(self, filename, transform=None, delay=0):
         self.f = open(filename, 'rb')
         self.transform = transform
+        self.delay = delay
         self.producer = FileSender()
 
     def cleanup(self, *args):
         self.f.close()
         self.producer.stopProducing()
+
+    def resumeProducing(self):
+        chunk = ''
+        if self.file:
+            chunk = self.file.read(self.CHUNK_SIZE)
+
+        if not chunk:
+            self.file = None
+            self.consumer.unregisterProducer()
+
+            if self.deferred and self.delay:
+                callLater(seconds, self.deferred.callback, self.lastSent)
+            elif self.deferred:
+                self.deferred.callback(self.lastSent)
+
+            self.deferred = None
+            return
 
     def connectionLost(self, reason):
         logger.debug('connectionLost: %s', reason)
@@ -186,9 +205,15 @@ def cleanup(*args):
         cooperator._delayedCall = None
 
 
+def asyncSleep(seconds):
+    d = Deferred()
+    callLater(seconds, d.callback, None)
+    return d
+
+
 @inlineCallbacks
-def readFile(filename, transport, protocol=FileReader):
-    proto = protocol(filename.replace('file://', ''))
+def readFile(filename, transport, protocol=FileReader, **kwargs):
+    proto = protocol(filename.replace('file://', ''), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
     # returnValue(proto.data)
@@ -196,8 +221,8 @@ def readFile(filename, transport, protocol=FileReader):
 
 
 @inlineCallbacks
-def getFile(filename, transport, protocol=FileReader):
-    proto = protocol(filename.replace('file://', ''))
+def getFile(filename, transport, protocol=FileReader, **kwargs):
+    proto = protocol(filename.replace('file://', ''), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
     proto.transport.io.seek(0)
@@ -205,57 +230,24 @@ def getFile(filename, transport, protocol=FileReader):
 
 
 @inlineCallbacks
-def urlOpen(url, timeout=None):
-    # TODO: implement timeout kwarg
+def urlOpen(url, timeout=0, **kwargs):
     if url.startswith('http'):
         f = StringIO()
-        yield downloadPage(url, f)
+        yield downloadPage(url, f, timeout=timeout)
         f.seek(0)
     else:
-        f = yield getFile(url, StringTransport())
+        f = yield getFile(url, StringTransport(), **kwargs)
 
     returnValue(f)
 
 
-def _get_work(asyncCallable, callback, map_func, *iterables):
-    func = lambda *args: asyncCallable(*args).addCallback(callback)
-    return map_func(func, *iterables)
+def urlRead(url, timeout=0, **kwargs):
+    if url.startswith('http'):
+        content = getPage(url, timeout=timeout)
+    else:
+        content = readFile(url, StringTransport(), **kwargs)
 
-
-def _parallel(work, asyncCallable, workers):
-    coiterate = cooperator.coiterate if FAKE_REACTOR else coiterate
-    deferreds = it.repeat(coiterate(work), workers)
-    d = gatherResults(deferreds, consumeErrors=True)
-    d.addCallbacks(cleanup, logger.error)
-    return d
-
-
-# helper functions
-def coop(asyncCallable, callback, *iterables):
-    coiterate = cooperator.coiterate if FAKE_REACTOR else coiterate
-    work = _get_work(asyncCallable, callback, it.imap, *iterables)
-    d = coiterate(work)
-    d.addCallbacks(cleanup, logger.error)
-    return d
-
-
-def coopStar(asyncCallable, callback, iterable):
-    coiterate = cooperator.coiterate if FAKE_REACTOR else coiterate
-    work = _get_work(asyncCallable, callback, it.starmap, *[iterable])
-    d = coiterate(work)
-    d.addCallbacks(cleanup, logger.error)
-    return d
-
-
-def asyncParallel(asyncCallable, callback, *iterables, **kwargs):
-    work = _get_work(asyncCallable, callback, it.imap, *iterables)
-    return _parallel(work, asyncCallable, kwargs.get('workers', 0))
-
-
-def asyncStarParallel(asyncCallable, callback, iterable, workers=0):
-    work = _get_work(asyncCallable, callback, it.starmap, *[iterable])
-    return _parallel(work, asyncCallable, workers)
-
+    return content
 
 # End user functions
 def deferToProcess(source, function, *args, **kwargs):
@@ -267,7 +259,7 @@ def deferToProcess(source, function, *args, **kwargs):
 
 @inlineCallbacks
 def coopReduce(func, iterable, initializer=None):
-    cooperate = cooperator.cooperate if FAKE_REACTOR else cooperate
+    cooperate = cooperator.cooperate if FAKE_REACTOR else _cooperate
     iterable = iter(iterable)
     x = initializer or next(iterable)
     result = {}
@@ -298,49 +290,29 @@ def asyncReduce(asyncCallable, iterable, initializer=None):
 
 
 @inlineCallbacks
-@inlineCallbacks
-def asyncPmap(asyncCallable, *iterables, **kwargs):
-    """itertools.imap for deferred callables using parallel cooperative
+def pMap(func, iterable, workers=1):
+    """map for synchronous callables using parallel cooperative
     multitasking
     """
+    coiterate = cooperator.coiterate if FAKE_REACTOR else _coiterate
     results = []
-    yield asyncParallel(asyncCallable, results.append, *iterables, **kwargs)
-    returnValue(results)
 
+    def work():
+        for x in iterable:
+            results.append(func(x))
+            yield
 
-@inlineCallbacks
-def asyncCmap(asyncCallable, *iterables):
-    """itertools.imap for deferred callables using cooperative multitasking
-    """
-    results = []
-    yield coop(asyncCallable, results.append, *iterables)
+    deferreds = it.repeat(coiterate(work()), workers)
+    yield gatherResults(deferreds, consumeErrors=True)
+    cleanup()
     returnValue(results)
 
 
 def asyncImap(asyncCallable, *iterables):
-    """itertools.imap for deferred callables
+    """map for deferred callables
     """
     deferreds = it.imap(asyncCallable, *iterables)
     return gatherResults(deferreds, consumeErrors=True)
-
-
-@inlineCallbacks
-def asyncStarCmap(asyncCallable, iterable):
-    """itertools.starmap for deferred callables using cooperative multitasking
-    """
-    results = []
-    yield coopStar(asyncCallable, results.append, iterable)
-    returnValue(results)
-
-
-@inlineCallbacks
-def asyncStarPmap(asyncCallable, iterable, workers=0):
-    """itertools.starmap for deferred callables using parallel cooperative
-    multitasking
-    """
-    results = []
-    yield asyncStarParallel(asyncCallable, results.append, iterable, workers=workers)
-    returnValue(results)
 
 
 def asyncStarMap(asyncCallable, iterable):

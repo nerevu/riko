@@ -376,6 +376,12 @@ class processor(object):
 
             bfuncs = get_broadcast_funcs(funcs, **combined)
 
+            # replace conf with dictized version so we can access its
+            # attributes even if we already extracted a value
+            conf = combined['defaults']
+            conf.update(kwargs.get('conf', {}))
+            kwargs.update({'conf': DotDict(conf)})
+
             if combined['ftype'] not in {'pass', 'none'}:
                 dfuncs = get_dispatch_funcs(funcs, **combined)
             else:

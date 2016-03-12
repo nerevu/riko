@@ -39,6 +39,7 @@ from pipe2py.twisted import utils as tu
 from pipe2py.lib.log import Logger
 
 OPTS = {'listize': True, 'extract': 'url', 'emit': True, 'ftype': 'none'}
+DEFAULTS = {'sleep': 0}
 logger = Logger(__name__).logger
 
 
@@ -64,13 +65,12 @@ def asyncParser(_, urls, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0].next()['title'])
-        ...     objconf = Objectify({'url': FILES[0]})
-        ...     kwargs = {'feed': {}}
-        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     conf = {'url': FILES}
+        ...     kwargs = {'feed': {}, 'conf': conf}
+        ...     d = asyncParser(None, conf['url'], False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -83,8 +83,10 @@ def asyncParser(_, urls, skip, **kwargs):
     if skip:
         feed = kwargs['feed']
     else:
+        sleep = kwargs['conf'].get('sleep', 0)
+        read = partial(tu.urlRead, delay=sleep)
         abs_urls = imap(utils.get_abspath, urls)
-        contents = yield tu.asyncImap(tu.urlRead, abs_urls)
+        contents = yield tu.asyncImap(read, abs_urls)
         parsed = imap(speedparser.parse, contents)
         entries = imap(utils.gen_entries, parsed)
         feed = utils.multiplex(entries)
@@ -105,16 +107,19 @@ def parser(_, urls, skip, **kwargs):
         List(dict): the tokenized content
 
     Examples:
-        >>> kwargs = {'feed': {}}
-        >>> result, skip = parser(None, FILES, False, **kwargs)
+        >>> conf = {'url': FILES}
+        >>> kwargs = {'feed': {}, 'conf': conf}
+        >>> result, skip = parser(None, conf['url'], False, **kwargs)
         >>> result.next()['title']
         u'Donations'
     """
     if skip:
         feed = kwargs['feed']
     else:
+        sleep = kwargs['conf'].get('sleep', 0)
+        context = utils.SleepyDict(delay=sleep)
         abs_urls = imap(utils.get_abspath, urls)
-        contents = (urlopen(url).read() for url in abs_urls)
+        contents = (urlopen(url, context=context).read() for url in abs_urls)
         parsed = imap(speedparser.parse, contents)
         entries = imap(utils.gen_entries, parsed)
         feed = utils.multiplex(entries)
@@ -122,7 +127,7 @@ def parser(_, urls, skip, **kwargs):
     return feed, skip
 
 
-@processor(async=True, **OPTS)
+@processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches and parses one or more feeds to
     return the feed entries.
@@ -166,7 +171,7 @@ u'author.uri', u'author.name', 'id', u'y:id']
     return asyncParser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A source that fetches and parses one or more feeds to return the
     entries.
