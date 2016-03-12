@@ -711,3 +711,4 @@ def get_broadcast_funcs(funcs, **kwargs):
 
 def get_dispatch_funcs(funcs, **kwargs):
     return [funcs[kwargs.get('ftype')], funcs['pass'], funcs['pass']]
+

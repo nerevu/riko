@@ -8,7 +8,6 @@ from __future__ import (
     unicode_literals)
 
 import itertools as it
-
 from os import environ
 from sys import executable
 from functools import partial
@@ -71,19 +70,16 @@ class FileReader(AccumulatingProtocol):
 
 
 class FakeDelayedCall(object):
-    """
-    Fake delayed call which lets us simulate the scheduler.
+    """Fake delayed call which lets us simulate the scheduler.
     """
     def __init__(self, func):
-        """
-        A function to run, later.
+        """A function to run, later.
         """
         self.func = func
         self.cancelled = False
 
     def cancel(self):
-        """
-        Don't run my function later.
+        """Don't run my function later.
         """
         self.cancelled = True
 
@@ -183,6 +179,7 @@ class FakeReactor(MemoryReactor):
 
 cooperator = Cooperator(scheduler=FakeReactor().callLater)
 
+
 def cleanup(*args):
     if FAKE_REACTOR and cooperator._delayedCall:
         cooperator._delayedCall.cancel()
@@ -271,8 +268,8 @@ def deferToProcess(source, function, *args, **kwargs):
 @inlineCallbacks
 def coopReduce(func, iterable, initializer=None):
     cooperate = cooperator.cooperate if FAKE_REACTOR else cooperate
-    it = iter(iterable)
-    x = initializer or next(it)
+    iterable = iter(iterable)
+    x = initializer or next(iterable)
     result = {}
 
     def work(func, it, x):
@@ -280,7 +277,7 @@ def coopReduce(func, iterable, initializer=None):
             result['value'] = x = func(x, y)
             yield
 
-    task = cooperate(work(func, it, x))
+    task = cooperate(work(func, iterable, x))
     yield task.whenDone()
     cleanup()
     returnValue(result['value'])
