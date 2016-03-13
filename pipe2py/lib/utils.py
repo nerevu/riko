@@ -17,15 +17,18 @@ import itertools as it
 import time
 
 # from pprint import pprint
-from datetime import datetime
+from datetime import timedelta, datetime as dt
 from functools import partial
 from operator import itemgetter
 from urllib2 import quote
 from os import path as p, environ
 from collections import defaultdict
-from pipe2py import Context
-from pipe2py.lib.log import Logger
+from calendar import timegm
+
 from mezmorize import Cache
+from dateutil.parser import parse
+
+from pipe2py.lib.log import Logger
 
 logger = Logger(__name__).logger
 
@@ -54,17 +57,16 @@ else:
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
-ALTERNATIVE_DATE_FORMATS = (
-    "%m-%d-%Y",
-    "%m/%d/%y",
-    "%m/%d/%Y",
-    "%m-%d-%y",
-    "%Y-%m-%dt%H:%M:%Sz",
-    # todo more: whatever Yahoo can accept
-)
-
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
+TODAY = dt.utcnow()
+
+DATES = {
+    'today': TODAY,
+    'now': TODAY,
+    'tomorrow': TODAY + timedelta(days=1),
+    'yesterday': TODAY - timedelta(days=1),
+}
 
 combine_dicts = lambda *d: dict(it.chain.from_iterable(it.imap(dict.iteritems, d)))
 encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
@@ -250,25 +252,61 @@ def etree_to_dict(element):
     return i
 
 
-def get_value(item, conf=None, force=False, **opts):
-    item = item or {}
+def cast_date(date_str):
+    words = date_str.split(' ')
+    mathish = set(words).intersection(
+        {'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years'})
 
+    textish = set(words).intersection(
+        {'last', 'next', 'week', 'month', 'year'})
+
+    if date_str[0] in {'+', '-'} and len(mathish) == 1:
+        op = sub if date_str.startswith('-') else add
+        new_date = get_date(mathish, words[0][1:], op)
+    elif len(textish) == 2:
+        op = add if date_str.startswith('last') else add
+        new_date = get_date('%ss' % words[1], 1, op)
+    elif date_str in DATES:
+        new_date = DATES.get(date_str)
+    else:
+        new_date = parse(date_str)
+
+    return new_date
+
+
+def datify(date):
+    keys = (
+        'year', 'month', 'day', 'hour', 'minute', 'second', 'day_of_week',
+        'day_of_year', 'daylight_savings')
+
+    tt = date.timetuple()
+
+    # Make Sunday the first day of the week
+    day_of_w = 0 if tt[6] == 6 else tt[6] + 1
+    isdst = None if tt[8] == -1 else bool(tt[8])
+    result = {'utime': timegm(tt), 'timezone': 'UTC', 'date': date}
+    result.update(zip(keys, tt))
+    result.update({'day_of_week': day_of_w, 'daylight_savings': isdst})
+    return result
+
+
+def cast(content, _type='text'):
     switch = {
-        'number': {'default': 0.0, 'func': float},
-        'integer': {'default': 0, 'func': int},
+        'float': {'default': 0.0, 'func': float},
+        'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': encode},
         'unicode': {'default': '', 'func': unicode},
+        'date': {'default': TODAY, 'func': cast_date},
+        'url':  {'default': '', 'func': url_quote},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
     }
 
-    try:
-        defaults = switch.get(conf.get('type', 'text'), {})
-    except AttributeError:
-        defaults = switch['text']
+    switched = switch[_type]
+    return switched['func'](content) if content else switched['default']
 
-    kwargs = defaultdict(str, **defaults)
-    kwargs.update(opts)
-    default = kwargs['default']
+
+def get_value(item, conf=None, force=False, default=None, **kwargs):
+    item = item or {}
 
     try:
         value = item.get(conf['subkey'], **kwargs)
@@ -355,33 +393,19 @@ def get_field(item, field=None, **kwargs):
     return item.get(field, **kwargs) if field else item
 
 
-def get_date(date_string):
-    for date_format in ALTERNATIVE_DATE_FORMATS:
-        try:
-            return datetime.strptime(date_string, date_format)
-        except ValueError:
-            pass
+def get_date(unit, count, op):
+    dates = {
+        'seconds': op(TODAY, timedelta(seconds=count)),
+        'minutes': op(TODAY, timedelta(minutes=count)),
+        'hours': op(TODAY, timedelta(hours=count)),
+        'days': op(TODAY, timedelta(days=count)),
+        'weeks': op(TODAY, timedelta(weeks=count)),
+        # TODO: fix for when new month is not in 1..12
+        'months': TODAY.replace(month=op(TODAY.month, count)),
+        'years': TODAY.replace(year=op(TODAY.year, count)),
+    }
 
-
-def get_input(context, conf):
-    """Gets a user parameter, either from the console or from an outer
-    system
-
-       Assumes conf has name, default, prompt and debug
-    """
-    name = conf['name']['value']
-    prompt = conf['prompt']['value']
-    default = conf['default']['value'] or conf['debug']['value']
-
-    if context.inputs:
-        value = context.inputs.get(name, default)
-    elif not context.test:
-        raw = raw_input("%s (default=%s) " % (prompt, default))
-        value = raw or default
-    else:
-        value = default
-
-    return value
+    return dates[unit]
 
 
 def get_abspath(url):
@@ -399,29 +423,6 @@ def get_abspath(url):
     return url
 
 
-def get_word(item):
-    try:
-        raw = ''.join(item.itervalues())
-    except AttributeError:
-        raw = item
-    except TypeError:
-        raw = None
-
-    return raw or ''
-
-
-def get_num(item):
-    try:
-        joined = ''.join(item.itervalues())
-    except AttributeError:
-        joined = item
-
-    try:
-        num = float(joined)
-    except (ValueError, TypeError):
-        num = 0.0
-
-    return num
 
 
 def rreplace(s, find, replace, count=None):

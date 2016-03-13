@@ -77,7 +77,6 @@ class DotDict(FeedParserDict):
     def get(self, key=None, default=None, **kwargs):
         keys = self._parse_key(key)
         value = DotDict(self.copy())
-        func = kwargs.pop('func', None)
 
         for key in keys:
             if not value:
@@ -96,7 +95,6 @@ class DotDict(FeedParserDict):
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 
-        value = func(value) if value and func else value
         return DotDict(value) if hasattr(value, 'keys') else value
 
     def update(self, data=None):

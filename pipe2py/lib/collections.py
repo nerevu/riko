@@ -47,7 +47,7 @@ from importlib import import_module
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool, cpu_count
 
-from pipe2py import Context, modules
+from pipe2py import modules
 from pipe2py.lib.utils import multiplex
 from pipe2py.lib.log import Logger
 
@@ -56,9 +56,8 @@ logger = Logger(__name__).logger
 
 class PyPipe(object):
     """A pipe2py module fetching object"""
-    def __init__(self, name, context=None, parallel=False, **kwargs):
+    def __init__(self, name, parallel=False, **kwargs):
         self.name = name
-        self.context = context or Context()
         self.parallel = parallel
         self.kwargs = kwargs
 
@@ -102,16 +101,15 @@ class SyncPipe(PyPipe):
             'reuse_pool': self.reuse_pool,
             'workers': self.workers}
 
-        return SyncPipe(name, context=self.context, source=self.output, **kwargs)
+        return SyncPipe(name, source=self.output, **kwargs)
 
-    def __call__(self, context=None, **kwargs):
-        self.context = context or self.context
+    def __call__(self, **kwargs):
         self.kwargs = kwargs
         return self
 
     @property
     def output(self):
-        pipeline = partial(self.pipe, context=self.context, **self.kwargs)
+        pipeline = partial(self.pipe, **self.kwargs)
 
         if self.parallel and self.processor:
             zipped = izip(self.source, repeat(pipeline))

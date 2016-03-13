@@ -62,10 +62,9 @@ class AsyncPipe(PyPipe):
         self.source = source
 
     def __getattr__(self, name):
-        return AsyncPipe(name, context=self.context, source=self.output)
+        return AsyncPipe(name, source=self.output)
 
-    def __call__(self, context=None, **kwargs):
-        self.context = context or self.context
+    def __call__(self, **kwargs):
         self.kwargs = kwargs
         return self
 
@@ -73,7 +72,7 @@ class AsyncPipe(PyPipe):
     @inlineCallbacks
     def output(self):
         source = yield self.source
-        asyncPipeline = partial(self.asyncPipe, context=self.context, **self.kwargs)
+        asyncPipeline = partial(self.asyncPipe, **self.kwargs)
 
         if self.processor:
             mapped = yield tu.asyncImap(asyncPipeline, source)

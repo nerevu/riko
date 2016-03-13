@@ -8,7 +8,6 @@ from __future__ import (
 from os import path as p
 from pprint import pprint
 from twisted.internet.task import react
-from pipe2py import Context
 from pipe2py.lib.utils import combine_dicts as cdict
 from pipe2py.lib.collections import SyncPipe
 from pipe2py.twisted.collections import AsyncPipe
@@ -223,6 +222,6 @@ def asyncPipeKazeeki(reactor, context=None):
     return output
 
 if __name__ == "__main__":
-    # output = pipe_kazeeki(Context())
+    # output = pipe_kazeeki()
     # print_content(output)
-    react(asyncPipeKazeeki, [Context()])
+    react(asyncPipeKazeeki)

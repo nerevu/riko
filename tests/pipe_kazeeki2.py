@@ -9,7 +9,6 @@ from os import path as p
 from pprint import pprint
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.task import react
-from pipe2py import Context
 from pipe2py.lib.collections import SyncPipe
 from itertools import chain, imap
 
@@ -339,5 +338,5 @@ def pipe_kazeeki2(context=None, conf=itembuilder_conf, **kwargs):
     return output
 
 if __name__ == "__main__":
-    output = pipe_kazeeki(Context())
+    output = pipe_kazeeki()
     print_content(output)

@@ -122,8 +122,8 @@ def get_sync_funcs(**kwargs):
     no_conf = remove_keys(kwargs, 'conf')
 
     funcs = {
-        'text': utils.get_word,
-        'num': utils.get_num,
+        'text': partial(utils.cast, _type='text'),
+        'int': partial(utils.cast, _type='int'),
         'pass': lambda item: item,
         'broadcast': utils.broadcast,
         'dispatch': utils.dispatch,
@@ -144,8 +144,8 @@ def get_async_funcs(**kwargs):
     no_conf = remove_keys(kwargs, 'conf')
 
     funcs = {
-        'text': tu.asyncPartial(utils.get_word),
-        'num': tu.asyncPartial(utils.get_num),
+        'text': tu.asyncPartial(utils.cast, _type='text'),
+        'int': tu.asyncPartial(utils.cast, _type='int'),
         'pass': tu.asyncReturn,
         'broadcast': tu.asyncBroadcast,
         'dispatch': tu.asyncDispatch,
@@ -185,9 +185,9 @@ def get_assignment(result, skip, **kwargs):
     return one, iter([first_result]) if one else result
 
 
-def assign(item, assignment, one=False, **kwargs):
+def assign(item, assignment, key, one=False):
     value = assignment.next() if one else list(assignment)
-    yield DotDict(cdicts(item, {kwargs['assign']: value}))
+    yield DotDict(cdicts(item, {key: value}))
 
 
 class processor(object):
@@ -316,7 +316,7 @@ class processor(object):
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'pdictize': False, 'emit': True}
+            ...     'pdictize': False, 'emit': True, 'field': 'content'}
             ...
             >>> @processor(**kwargs)
             ... def pipe(content, times, skip, **kwargs):
@@ -360,7 +360,7 @@ class processor(object):
         def wrapper(item=None, **kwargs):
             combined = {
                 'dictize': True, 'pdictize': True, 'ftype': 'pass',
-                'objectify': True}
+                'objectify': True, 'ptype': 'pass'}
 
             combined.update(cdicts(self.defaults, self.opts, kwargs))
             combined.setdefault('parser', 'value' if combined.get('extract') else 'conf')
@@ -403,7 +403,8 @@ class processor(object):
             if skip or combined.get('emit'):
                 output = assignment
             elif not skip:
-                output = assign(_input, assignment, one=one, **combined)
+                key = conf.get('assign')
+                output = assign(_input, assignment, key, one=one)
 
             if self.async:
                 returnValue(output)
@@ -546,7 +547,7 @@ class operator(object):
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'pdictize': False, 'emit': True}
+            ...     'pdictize': False, 'emit': True, 'field': 'content'}
             ...
             >>> @operator(**kwargs)
             ... def pipe1(feed, objconf, tuples, **kwargs):
@@ -635,7 +636,7 @@ class operator(object):
             if self.async:
                 asyncFunc = inlineCallbacks(dispatch)
                 pairs = yield tu.asyncImap(lambda i: asyncFunc(i, *args, **kw), _INPUT)
-                parsed, _ = yield asyncFunc({}, funcs, bfuncs, **kw)
+                parsed, _ = yield asyncFunc(DotDict(), funcs, bfuncs, **kw)
             else:
                 pairs = (dispatch(item, *args, **kw).next() for item in _INPUT)
                 parsed, _ = dispatch(DotDict(), funcs, bfuncs, **kw).next()
@@ -664,7 +665,8 @@ class operator(object):
                 output = assignment
             else:
                 singles = (iter([v]) for v in assignment)
-                assigned = (assign({}, s, one=True, **combined) for s in singles)
+                key = conf.get('assign')
+                assigned = (assign({}, s, key, one=True) for s in singles)
                 output = utils.multiplex(assigned)
 
             if self.async:
