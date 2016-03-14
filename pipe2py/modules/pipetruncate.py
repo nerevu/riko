@@ -13,7 +13,7 @@ Examples:
 
         >>> from pipe2py.modules.pipetruncate import pipe
         >>> items = ({'x': x} for x in xrange(5))
-        >>> len(list(pipe(items, conf={'count': 4})))
+        >>> len(list(pipe(items, conf={'count': '4'})))
         4
 
 Attributes:
@@ -29,7 +29,7 @@ from itertools import islice
 from . import operator
 from pipe2py.lib.log import Logger
 
-OPTS = {}
+OPTS = {'ptype': 'int'}
 DEFAULTS = {'start': 0}
 logger = Logger(__name__).logger
 
@@ -64,8 +64,8 @@ def parser(feed, objconf, tuples, **kwargs):
         >>> len(list(parser(feed, objconf, tuples, **kwargs)))
         4
     """
-    start = int(objconf.start)
-    stop = start + int(objconf.count)
+    start = objconf.start
+    stop = start + objconf.count
     return islice(feed, start, stop)
 
 
@@ -130,9 +130,9 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> items = [{'x': x} for x in xrange(5)]
-        >>> len(list(pipe(items, conf={'count': 4})))
+        >>> len(list(pipe(items, conf={'count': '4'})))
         4
-        >>> feed = pipe(items, conf={'count': 2, 'start': 2})
+        >>> feed = pipe(items, conf={'count': '2', 'start': '2'})
         >>> feed.next()
         {u'x': 2}
     """

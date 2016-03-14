@@ -30,7 +30,7 @@ from copy import deepcopy
 from . import operator
 from pipe2py.lib.log import Logger
 
-OPTS = {'extract': 'splits', 'pdictize': False}
+OPTS = {'extract': 'splits', 'ptype': 'int'}
 DEFAULTS = {'splits': 2}
 logger = Logger(__name__).logger
 
@@ -130,13 +130,16 @@ def pipe(*args, **kwargs):
         dict: a feed containing item
 
     Examples:
-        >>> feeds = list(pipe({'x': x} for x in xrange(5)))
+        >>> items = [{'x': x} for x in xrange(5)]
+        >>> feeds = list(pipe(items))
         >>> [feed['feed'] for feed in feeds]  # doctest: +ELLIPSIS
         [<itertools.imap object at 0x...>, <itertools.imap object at 0x...>]
         >>> [feed['title'] for feed in feeds]
         [u'feed 1 of 2', u'feed 2 of 2']
         >>> feeds[0]['feed'].next()
         {u'x': 0}
+        >>> len(list(pipe(items, conf={'splits': '3'})))
+        3
     """
     return parser(*args, **kwargs)
 

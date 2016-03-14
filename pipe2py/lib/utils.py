@@ -73,8 +73,8 @@ combine_dicts = lambda *d: dict(it.chain.from_iterable(it.imap(dict.iteritems, d
 encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 
 
-class Objectify:
-    def __init__(self, kwargs, **defaults):
+class Objectify(object):
+    def __init__(self, kwargs, func=None, **defaults):
         """ Objectify constructor
 
         Args:
@@ -86,7 +86,7 @@ class Objectify:
             >>> defaults = {'two': 5, 'three': 3}
             >>> kw = Objectify(kwargs, **defaults)
             >>> kw
-            Objectify({u'three': 3, u'two': 2, u'one': 1})
+            Objectify({u'one': 1, u'two': 2, u'three': 3})
             >>> str(kw)
             'Objectify(one=1, three=3, two=2)'
             >>> sorted(kw.keys()) == ['one', 'three', 'two']
@@ -101,32 +101,39 @@ class Objectify:
         """
         defaults.update(kwargs)
         self.__dict__.update(defaults)
+        self.func = func
+        self.attrs = defaults
 
     def __str__(self):
-        items = sorted(self.__dict__.items())
+        items = sorted(self.attrs.items())
         args = ', '.join('%s=%s' % item for item in items)
         return '%s(%s)' % (self.__class__.__name__, args)
 
     def __repr__(self):
-        return '%s(%s)' % (self.__class__.__name__, self.__dict__)
+        return '%s(%s)' % (self.__class__.__name__, self.attrs)
 
     def __iter__(self):
         return self.__dict__.itervalues()
+
+    def __getattribute__(self, name):
+        attr = object.__getattribute__(self, name)
+        blacklist = {'func', '__dict__'}
+        return self.func(attr) if name not in blacklist and self.func else attr
 
     def __getattr__(self, name):
         return None
 
     def to_dict(self):
-        return self.__dict__
+        return self.attrs
 
     def items(self):
-        return self.__dict__.items()
+        return self.attrs.items()
 
     def iteritems(self):
-        return self.__dict__.iteritems()
+        return self.attrs.iteritems()
 
     def keys(self):
-        return self.__dict__.keys()
+        return self.attrs.keys()
 
 
 class SleepyDict(dict):
