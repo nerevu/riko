@@ -123,6 +123,8 @@ def get_sync_funcs(**kwargs):
 
     funcs = {
         'text': partial(utils.cast, _type='text'),
+        'decimal': partial(utils.cast, _type='decimal'),
+        'number': partial(utils.cast, _type='float'),
         'int': partial(utils.cast, _type='int'),
         'pass': lambda item: item,
         'broadcast': utils.broadcast,
@@ -145,6 +147,8 @@ def get_async_funcs(**kwargs):
 
     funcs = {
         'text': tu.asyncPartial(utils.cast, _type='text'),
+        'decimal': tu.asyncPartial(utils.cast, _type='decimal'),
+        'number': tu.asyncPartial(utils.cast, _type='float'),
         'int': tu.asyncPartial(utils.cast, _type='int'),
         'pass': tu.asyncReturn,
         'broadcast': tu.asyncBroadcast,

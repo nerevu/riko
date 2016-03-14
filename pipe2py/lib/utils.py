@@ -24,6 +24,7 @@ from urllib2 import quote
 from os import path as p, environ
 from collections import defaultdict
 from calendar import timegm
+from decimal import Decimal
 
 from mezmorize import Cache
 from dateutil.parser import parse
@@ -269,7 +270,10 @@ def cast_date(date_str):
     elif date_str in DATES:
         new_date = DATES.get(date_str)
     else:
-        new_date = parse(date_str)
+        try:
+            new_date = parse(date_str)
+        except AttributeError:
+            new_date = time.gmtime(date_str)
 
     return new_date
 
@@ -284,7 +288,9 @@ def datify(date):
     # Make Sunday the first day of the week
     day_of_w = 0 if tt[6] == 6 else tt[6] + 1
     isdst = None if tt[8] == -1 else bool(tt[8])
-    result = {'utime': timegm(tt), 'timezone': 'UTC', 'date': date}
+    result = {
+        'utime': timegm(tt), 'timezone': 'UTC', 'date': date, 'timetuple': tt}
+
     result.update(zip(keys, tt))
     result.update({'day_of_week': day_of_w, 'daylight_savings': isdst})
     return result
@@ -293,6 +299,7 @@ def datify(date):
 def cast(content, _type='text'):
     switch = {
         'float': {'default': 0.0, 'func': float},
+        'decimal': {'default': Decimal(0), 'func': Decimal},
         'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': encode},
         'unicode': {'default': '', 'func': unicode},

@@ -66,17 +66,17 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't prompt for input
 
     Returns:
-        scalar: the casted user input
+        Tuple(dict, bool): Tuple of (the casted user input, skip)
 
     Examples:
         >>> from pipe2py.lib.utils import Objectify
+        >>>
         >>> inputs = {'age': '30'}
         >>> conf = {
         ...     'prompt': 'How old are you?', 'inputs': inputs, 'type': 'int',
         ...     'assign': 'age'}
         >>> objconf = Objectify(conf)
-        >>> result, skip = parser(None, objconf, False, **conf)
-        >>> result
+        >>> parser(None, objconf, False, **conf)[0]
         {u'age': 30}
     """
     if kwargs['inputs']:
