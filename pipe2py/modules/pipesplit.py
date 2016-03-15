@@ -30,7 +30,7 @@ from copy import deepcopy
 from . import operator
 from pipe2py.lib.log import Logger
 
-OPTS = {'extract': 'splits', 'ptype': 'int'}
+OPTS = {'extract': 'splits', 'ptype': 'int', 'objectify': False}
 DEFAULTS = {'splits': 2}
 logger = Logger(__name__).logger
 

@@ -12,7 +12,7 @@ from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.task import react
 
 from pipe2py.lib.collections import (
-    SyncPipe, SyncCollection, get_chunksize, get_worker_cnt, make_conf)
+    SyncPipe, SyncCollection, get_chunksize, get_worker_cnt)
 
 from pipe2py.twisted.collections import AsyncPipe, AsyncCollection
 from pipe2py.twisted.utils import asyncImap, asyncSleep
@@ -44,7 +44,7 @@ files = [
 get_url = lambda name: 'file://%s' % p.join(parent, name)
 sources = [{'url': get_url(f)} for f in files]
 length = len(files)
-conf = {'url': [make_conf(get_url(f)) for f in files], 'sleep': DELAY}
+conf = {'url': [{'value': get_url(f)} for f in files], 'sleep': DELAY}
 iterable = [DELAY for x in files]
 
 

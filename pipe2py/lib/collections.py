@@ -11,19 +11,19 @@ Examples:
         >>> from pipe2py.lib.collections import SyncPipe
         >>> from pipe2py import get_url
         >>>
-        >>> conf = {'url': get_url('gigs.json'), 'path': 'value.items'}
-        >>> skwargs = {'field': 'description', 'delimeter': '<br>'}
+        >>> conf = {'url': {'value': get_url('gigs.json')}, 'path': 'value.items'}
+        >>> skwargs = {'field': 'description', 'delimeter': '<br>', 'emit': True}
         >>> (SyncPipe('fetchdata', conf=conf)
         ...     .sort().stringtokenizer(**skwargs).count().list)
-        [{u'content': 343}]
+        [{u'count': 343}]
         >>> (SyncPipe('fetchdata', conf=conf, parallel=True)
         ...     .sort().stringtokenizer(**skwargs).count().list)
-        [{u'content': 343}]
+        [{u'count': 343}]
         >>> (SyncPipe('fetchdata', conf=conf, parallel=True, threads=False)
         ...     .sort().stringtokenizer(**skwargs).count().list)
-        [{u'content': 343}]
+        [{u'count': 343}]
         >>> conf['type'] = 'fetchdata'
-        >>> sources = [{'url': get_url('feed.xml')}, conf]
+        >>> sources = [{'url': {'value': get_url('feed.xml')}}, conf]
         >>> len(SyncCollection(sources).list)
         56
         >>> len(SyncCollection(sources, parallel=True).list)
@@ -163,10 +163,6 @@ class SyncCollection(PyCollection):
         return list(self.fetch())
 
 
-def make_conf(value, conf_type='text'):
-    return {'value': value, 'type': conf_type}
-
-
 def get_chunksize(length, workers):
     return (length // (workers * 4)) or 1
 
@@ -204,7 +200,7 @@ def listpipe(args):
 def getpipe(args, pipe=SyncPipe):
     source, sleep = args
     ptype = source.get('type', 'fetch')
-    conf = {k: make_conf(v) for k, v in source.items()}
-    conf['sleep'] = make_conf(sleep, 'int')
-    return pipe(ptype, conf=conf).list
+    conf = {'sleep': sleep}
+    conf.update(source)
+    return pipe(ptype, conf=source).list
 

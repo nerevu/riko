@@ -49,7 +49,7 @@ from pipe2py.lib.log import Logger
 from pipe2py.lib.dotdict import DotDict
 from pipe2py.twisted import utils as tu
 
-OPTS = {'emit': True, 'listize': True, 'extract': 'url', 'ftype': 'none'}
+OPTS = {'listize': True, 'extract': 'url', 'ftype': 'none'}
 logger = Logger(__name__).logger
 
 

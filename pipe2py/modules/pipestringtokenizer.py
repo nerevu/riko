@@ -12,7 +12,7 @@ Examples:
     basic usage::
 
         >>> from pipe2py.modules.pipestringtokenizer import pipe
-        >>> pipe( {'content': 'Once,twice,thrice'}).next()
+        >>> pipe({'content': 'Once,twice,thrice'}).next()['stringtokenizer'][0]
         {u'content': u'Once'}
 
 Attributes:
@@ -29,8 +29,10 @@ from . import processor
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.lib.log import Logger
 
-OPTS = {'ftype': 'text', 'emit': True}
-DEFAULTS = {'delimiter': ',', 'dedupe': False, 'sort': False}
+OPTS = {'ftype': 'text', 'field': 'content'}
+DEFAULTS = {
+    'delimiter': ',', 'dedupe': False, 'sort': False, 'token_key': 'content'}
+
 logger = Logger(__name__).logger
 
 
@@ -47,21 +49,21 @@ def parser(content, objconf, skip, **kwargs):
 
     Examples:
         >>> from pipe2py.lib.utils import Objectify
-        >>> objconf = Objectify({'delimiter': '//', 'assign': 'token'})
+        >>> objconf = Objectify({'delimiter': '//', 'token_key': 'token'})
         >>> content = 'Once//twice//thrice//no more'
         >>> result, skip = parser(content, objconf, False)
         >>> result.next()
         {u'token': u'Once'}
     """
     if skip:
-        tokens = None
+        feed = kwargs['feed']
     else:
         splits = filter(None, content.split(objconf.delimiter))
         deduped = set(splits) if objconf.dedupe else splits
         chunks = sorted(deduped, key=unicode.lower) if objconf.sort else deduped
-        tokens = ({objconf.assign: chunk} for chunk in chunks)
+        feed = ({objconf.token_key: chunk} for chunk in chunks)
 
-    return tokens, skip
+    return feed, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
@@ -84,7 +86,7 @@ def asyncPipe(*args, **kwargs):
         >>> from pipe2py.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
+        ...     callback = lambda x: print(x.next()['stringtokenizer'][0])
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     d = asyncPipe(item)
         ...     return d.addCallbacks(callback, logger.error)
@@ -125,8 +127,12 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> item = {'description': 'Once//twice//thrice//no more'}
-        >>> conf = {'delimiter': '//', 'assign': 'token', 'sort': True}
-        >>> kwargs = {'field': 'description'}
+        >>> conf = {'delimiter': '//', 'sort': True}
+        >>> kwargs = {'field': 'description', 'assign': 'tokens'}
+        >>> pipe(item, conf=conf, **kwargs).next()['tokens'][0]
+        {u'content': u'no more'}
+        >>> kwargs.update({'emit': True})
+        >>> conf.update({'token_key': 'token'})
         >>> pipe(item, conf=conf, **kwargs).next()
         {u'token': u'no more'}
     """

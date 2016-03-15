@@ -261,12 +261,16 @@ def etree_to_dict(element):
 
 
 def cast_date(date_str):
-    words = date_str.split(' ')
-    mathish = set(words).intersection(
-        {'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years'})
-
-    textish = set(words).intersection(
-        {'last', 'next', 'week', 'month', 'year'})
+    try:
+        words = date_str.split(' ')
+    except AttributeError:
+        return date_str
+    else:
+        math_words = {
+            'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years'}
+        text_words = {'last', 'next', 'week', 'month', 'year'}
+        mathish = set(words).intersection(math_words)
+        textish = set(words).intersection(text_words)
 
     if date_str[0] in {'+', '-'} and len(mathish) == 1:
         op = sub if date_str.startswith('-') else add
@@ -295,9 +299,7 @@ def datify(date):
     # Make Sunday the first day of the week
     day_of_w = 0 if tt[6] == 6 else tt[6] + 1
     isdst = None if tt[8] == -1 else bool(tt[8])
-    result = {
-        'utime': timegm(tt), 'timezone': 'UTC', 'date': date, 'timetuple': tt}
-
+    result = {'utime': timegm(tt), 'timezone': 'UTC', 'date': date}
     result.update(zip(keys, tt))
     result.update({'day_of_week': day_of_w, 'daylight_savings': isdst})
     return result
@@ -313,10 +315,16 @@ def cast(content, _type='text'):
         'date': {'default': TODAY, 'func': cast_date},
         'url':  {'default': '', 'func': url_quote},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
+        'pass': {'default': None, 'func': lambda i: i},
+        'none': {'default': None, 'func': lambda _: None},
     }
 
-    switched = switch[_type]
-    return switched['func'](content) if content else switched['default']
+    if content is None:
+        value = switch[_type]['default']
+    else:
+        value = switch[_type]['func'](content)
+
+    return value
 
 
 def get_value(item, conf=None, force=False, default=None, **kwargs):
@@ -335,7 +343,7 @@ def get_value(item, conf=None, force=False, default=None, **kwargs):
             value = default
     except (TypeError, AttributeError):
         # conf is already set to a value so use it or the default
-        value = conf or default
+        value = default if conf is None else conf
     except (ValueError):
         # error converting subkey value with OPS['func'] so use the default
         value = default
@@ -388,14 +396,17 @@ def parse_conf(item, **kwargs):
     kw = Objectify(kwargs, defaults={}, conf={})
     # TODO: fix so .items() returns a DotDict instance
     # parsed = {k: get_value(item, v) for k, v in kw.conf.items()}
-    parsed = {k: get_value(item, kw.conf[k]) for k in kw.conf}
-    result = combine_dicts(kw.defaults, parsed)
-    return Objectify(result) if kw.objectify else result
+    sentinel = {'subkey', 'value', 'terminal'}
+    not_dict = not hasattr(kw.conf, 'keys')
 
+    if not_dict or (len(kw.conf) == 1 and sentinel.intersection(kw.conf)):
+        objectified = get_value(item, **kwargs)
+    else:
+        parsed = {k: get_value(item, kw.conf[k]) for k in kw.conf}
+        result = combine_dicts(kw.defaults, parsed)
+        objectified = Objectify(result) if kw.objectify else result
 
-def parse_params(item, conf=None, **kwargs):
-    parsed = {k: get_value(item, conf[k]) for k in conf}
-    return {parsed['key']: parsed['value']}
+    return objectified
 
 
 def get_skip(item, skip_if=None, **kwargs):

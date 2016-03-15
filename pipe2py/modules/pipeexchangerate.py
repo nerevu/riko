@@ -12,7 +12,7 @@ Examples:
         >>> from pipe2py.modules.pipeexchangerate import pipe
         >>>
         >>> url = get_url('quote.json')
-        >>> pipe({'base': 'GBP'}, conf={'url': url}).next()['content']
+        >>> pipe({'base': 'GBP'}, conf={'url': url}).next()['exchangerate']
         Decimal('1.545801')
 
 Attributes:
@@ -39,10 +39,9 @@ from pipe2py.twisted import utils as tu
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
 
-OPTS = {'emit': True}
+OPTS = {'field': 'base', 'ftype': 'text'}
 DEFAULTS = {
     'currency': 'USD',
-    'field': 'base',
     'sleep': 0,
     'memoize': False,
     'precision': 6,
@@ -89,7 +88,7 @@ def asyncParser(base, objconf, skip, **kwargs):
         kwargs (dict): Keyword argurments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
+        assign (str): Attribute to assign parsed content (default: exchangerate)
         feed (dict): The original item
 
     Returns:
@@ -101,7 +100,7 @@ def asyncParser(base, objconf, skip, **kwargs):
         >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0]['content'])
+        ...     callback = lambda x: print(x[0])
         ...     url = get_url('quote.json')
         ...     conf = {'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
         ...     item = {'base': 'GBP'}
@@ -130,8 +129,7 @@ def asyncParser(base, objconf, skip, **kwargs):
     places = Decimal(10) ** -objconf.precision
     rates = parse_response(json)
     rate = calc_rate(base, objconf.currency, rates, places=places)
-    item = {kwargs['assign']: rate}
-    result = (item, skip)
+    result = (rate, skip)
     returnValue(result)
 
 
@@ -145,7 +143,7 @@ def parser(base, objconf, skip, **kwargs):
         kwargs (dict): Keyword argurments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
+        assign (str): Attribute to assign parsed content (default: exchangerate)
         feed (dict): The original item
 
     Returns:
@@ -161,7 +159,7 @@ def parser(base, objconf, skip, **kwargs):
         >>> objconf = Objectify(conf)
         >>> kwargs = {'feed': item, 'assign': 'content'}
         >>> result, skip = parser(item['base'], objconf, False, **kwargs)
-        >>> result['content']
+        >>> result
         Decimal('1.545801')
     """
     if skip:
@@ -182,8 +180,7 @@ def parser(base, objconf, skip, **kwargs):
     places = Decimal(10) ** -objconf.precision
     rates = parse_response(json)
     rate = calc_rate(base, objconf.currency, rates, places=places)
-    item = {kwargs['assign']: rate}
-    return item, skip
+    return rate, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
@@ -212,7 +209,7 @@ def asyncPipe(*args, **kwargs):
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'content')
 
-            assign (str): Attribute to assign parsed content (default: content)
+            assign (str): Attribute to assign parsed content (default: exchangerate)
 
     Returns:
         dict: twisted.internet.defer.Deferred feed of items
@@ -222,7 +219,7 @@ def asyncPipe(*args, **kwargs):
         >>> from pipe2py import get_url
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['content'])
+        ...     callback = lambda x: print(x.next()['exchangerate'])
         ...     url = get_url('quote.json')
         ...     d = asyncPipe({'base': 'GBP'}, conf={'url': url})
         ...     return d.addCallbacks(callback, logger.error)
@@ -263,7 +260,7 @@ def pipe(*args, **kwargs):
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'content')
 
-            assign (str): Attribute to assign parsed content (default: content)
+            assign (str): Attribute to assign parsed content (default: exchangerate)
 
     Yields:
         dict: an item of the result
@@ -271,16 +268,16 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from pipe2py import get_url
         >>> url = get_url('quote.json')
-        >>> rate = pipe({'base': 'GBP'}, conf={'url': url}).next()['content']
+        >>> rate = pipe({'base': 'GBP'}, conf={'url': url}).next()['exchangerate']
         >>> rate
         Decimal('1.545801')
         >>> 'There are %#.2f GBPs per USD' % rate
         u'There are 1.55 GBPs per USD'
         >>> conf = {'url': url, 'currency': 'TZS', 'precision': 3}
-        >>> pipe({'base': 'USD'}, conf=conf).next()['content']
+        >>> pipe({'base': 'USD'}, conf=conf).next()['exchangerate']
         Decimal('1825.850')
         >>> conf = {'url': url, 'currency': 'XYZ'}
-        >>> pipe({'base': 'USD'}, conf=conf).next()['content']
+        >>> pipe({'base': 'USD'}, conf=conf).next()['exchangerate']
         Decimal('NaN')
     """
     return parser(*args, **kwargs)

@@ -28,8 +28,8 @@ from . import operator
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
 
-OPTS = {'listize': True, 'extract': 'rule', 'parser': 'conf'}
-DEFAULTS = {'sort_dir': 'asc', 'sort_key': 'title', 'rule': {}}
+OPTS = {'listize': True, 'extract': 'rule'}
+DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'title'}}
 logger = Logger(__name__).logger
 
 
@@ -192,11 +192,17 @@ def pipe(*args, **kwargs):
         dict: a feed item
 
     Examples:
-        >>> items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]
-        >>> pipe(items, conf={'rule': {'sort_key': 'rank'}}).next()
-        {u'rank': u'a'}
-        >>> pipe(items, conf={'rule': {'sort_key': 'rank', 'sort_dir': 'desc'}}).next()
-        {u'rank': u'c'}
+        >>> items = [
+        ...     {'rank': 'b', 'name': 'adam'},
+        ...     {'rank': 'a', 'name': 'sue'},
+        ...     {'rank': 'c', 'name': 'bill'}]
+        >>> pipe(items, conf={'rule': {'sort_key': 'rank'}}).next()['rank']
+        u'a'
+        >>> pipe(items, conf={'rule': {'sort_key': 'name'}}).next()['name']
+        u'adam'
+        >>> rule = {'sort_key': 'name', 'sort_dir': 'desc'}
+        >>> pipe(items, conf={'rule': rule}).next()['name']
+        u'sue'
     """
     return parser(*args, **kwargs)
 

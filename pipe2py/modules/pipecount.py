@@ -10,7 +10,7 @@ Examples:
 
         >>> from pipe2py.modules.pipecount import pipe
         >>> pipe({'x': x} for x in xrange(5)).next()
-        {u'content': 5}
+        {u'count': 5}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -28,41 +28,37 @@ from . import operator, FEEDS, FILES
 from pipe2py.lib.log import Logger
 
 # disable `dictize` since we do not need to access the configuration
-OPTS = {'dictize': False}
+OPTS = {'dictize': False, 'ptype': 'none'}
 logger = Logger(__name__).logger
 
 
-def parser(feed, objconf, tuples, **kwargs):
+def parser(feed, _, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
         feed (Iter[dict]): The source feed. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        objconf (obj): the item independent configuration (an Objectify instance).
+        _ (None): Ignored.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source feed and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the `feed`
-            iterator, so consuming it will consume `feed` as well.
+        tuples (Iter[(dict, None)]): Iterable of tuples of (item, None)
+            `item` is an element in the source feed. Note: this shares the
+            `feed` iterator, so consuming it will consume `feed` as well.
 
         kwargs (dict): Keyword arguments.
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
+        conf (dict): The pipe configuration.
 
     Returns:
         dict: The output
 
     Examples:
-        >>> from pipe2py.lib.utils import Objectify
         >>> from itertools import repeat, izip
         >>>
-        >>> kwargs = {'assign': 'content'}
-        >>> objconf = Objectify(kwargs)
         >>> feed = ({'x': x} for x in xrange(5))
-        >>> tuples = izip(feed, repeat(objconf))
-        >>> parser(feed, objconf, tuples, **kwargs)
+        >>> tuples = izip(feed, repeat(None))
+        >>> parser(feed, None, tuples, assign='content')
         {u'content': 5}
     """
     return {kwargs['assign']: len(list(feed))}
@@ -102,7 +98,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'content': 5}
+        {u'count': 5}
     """
     return parser(*args, **kwargs)
 
@@ -128,7 +124,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> items = ({'x': x} for x in xrange(5))
-        >>> pipe(items).next()['content']
+        >>> pipe(items).next()['count']
         5
     """
     return parser(*args, **kwargs)

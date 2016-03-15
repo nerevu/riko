@@ -42,7 +42,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.utils import parse_conf
 from pipe2py.lib.log import Logger
 
-OPTS = {'listize': True, 'extract': 'rule', 'parser': 'conf'}
+OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'combine': 'and', 'mode': 'permit'}
 logger = Logger(__name__).logger
 

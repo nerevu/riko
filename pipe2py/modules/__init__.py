@@ -117,29 +117,6 @@ FEEDS = [
 FILES = ['file://%s' % p.join(parent, x) for x in parts]
 
 
-def get_funcs(**kwargs):
-    # remove conf so a func can be called later with a conf keyword
-    no_conf = remove_keys(kwargs, 'conf')
-
-    funcs = {
-        'text': partial(utils.cast, _type='text'),
-        'decimal': partial(utils.cast, _type='decimal'),
-        'number': partial(utils.cast, _type='float'),
-        'int': partial(utils.cast, _type='int'),
-        'pass': lambda item: item,
-        'broadcast': utils.broadcast,
-        'dispatch': utils.dispatch,
-        'field': partial(utils.get_field, **kwargs),
-        'conf': partial(utils.parse_conf, **no_conf),
-        'params': partial(utils.parse_params, **no_conf),
-        'value': partial(utils.get_value, **no_conf),
-        'skip': partial(utils.get_skip, **kwargs),
-        'none': lambda item: None,
-    }
-
-    return funcs
-
-
 def get_assignment(result, skip, **kwargs):
     result = iter(utils.listize(result))
 
@@ -191,13 +168,8 @@ class processor(object):
                 pipe2py.lib.dotdict.DotDict instance (default: True if either
                 `extract` is False or both `listize` and `extract` are True)
 
-            parser (str): The `conf` parse function. Must be one of 'conf',
-                'value', or 'params'. Default: 'value' if `extract` is set, else
-                'conf'.
-
-            objectify (bool): Convert the parsed `conf` to a
-                pipe2py.lib.utils.Objectify instance (default: True, ignored
-                unless `parser` is set to 'conf').
+            objectify (bool): Convert the `conf` to a
+                pipe2py.lib.utils.Objectify instance (default: True).
 
             ptype (str): Used to convert `conf` items to a specific type.
                 Performs conversion after obtaining the `objectify` value above.
@@ -222,7 +194,8 @@ class processor(object):
             count (str): Output count. Must be either 'first' or 'all'
                 (default: 'all', i.e., output all results).
 
-            assign (str): Attribute to assign output (default: content)
+            assign (str): Attribute to assign output (default: 'content' if
+                `ftype` is 'none', pipe name otherwise)
 
             emit (bool): Return the output as is and don't assign it to an item
                 attribute (default: False).
@@ -260,12 +233,13 @@ class processor(object):
             ...     returnValue(result)
             ...
             >>> item = {'content': 'hello world'}
-            >>> pipe(item, conf={'times': 'three'}).next()
+            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
+            >>> pipe(item, **kwargs).next()
             {u'content': u'say "hello world" three times!'}
             >>>
             >>> def run(reactor):
             ...     callback = lambda x: print(x.next())
-            ...     d = asyncPipe(item, conf={'times': 'three'})
+            ...     d = asyncPipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
             >>> try:
@@ -276,8 +250,6 @@ class processor(object):
             {u'content': u'say "hello world" three times!'}
         """
         self.defaults = defaults or {}
-        self.defaults.setdefault('assign', 'content')
-        self.defaults.setdefault('count', 'all')
         self.opts = opts
         self.async = async
 
@@ -303,7 +275,7 @@ class processor(object):
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'pdictize': False, 'emit': True, 'field': 'content'}
+            ...     'pdictize': False, 'emit': True, 'field': 'content', 'objectify': False}
             ...
             >>> @processor(**kwargs)
             ... def pipe(content, times, skip, **kwargs):
@@ -328,12 +300,13 @@ class processor(object):
             ...     return output, skip
             ...
             >>> item = {'content': 'hello world'}
-            >>> pipe(item, conf={'times': 'three'}).next()
+            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
+            >>> pipe(item, **kwargs).next()
             {u'content': u'say "hello world" three times!'}
             >>>
             >>> def run(reactor):
             ...     callback = lambda x: print(x.next())
-            ...     d = asyncPipe(item, conf={'times': 'three'})
+            ...     d = asyncPipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
             >>> try:
@@ -345,34 +318,42 @@ class processor(object):
         """
         @wraps(pipe)
         def wrapper(item=None, **kwargs):
-            combined = {
+            module_name = wrapper.__module__.split('.')[-1].replace('pipe', '')
+            wrapper.__dict__['name'] = module_name
+
+            defaults = {
                 'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
                 'objectify': True}
 
-            combined.update(cdicts(self.defaults, self.opts, kwargs))
-            combined.setdefault('parser', 'value' if 'extract' in combined else 'conf')
-            pdictize = combined.get('listize') if 'extract' in combined else True
+            combined = cdicts(self.defaults, defaults, self.opts, kwargs)
+            is_source = combined['ftype'] == 'none'
+            def_assign = 'content' if is_source else module_name
+            extracted = 'extract' in combined
+            pdictize = combined.get('listize') if extracted else True
+
+            combined.setdefault('assign', def_assign)
+            combined.setdefault('emit', is_source)
             combined.setdefault('pdictize', pdictize)
-            kwargs.setdefault('assign', combined['assign'])
-            combined['defaults'] = {k: v for k, v in combined.items() if k in self.defaults}
-            item = item or {}
-            _input = DotDict(item) if combined.get('dictize') else item
-            funcs = get_funcs(**combined)
-            bfuncs = get_broadcast_funcs(funcs, **combined)
+            conf = {k: combined[k] for k in self.defaults}
+            conf.update(kwargs.get('conf', {}))
+            combined.update({'conf': conf})
 
             # replace conf with dictized version so we can access its
             # attributes even if we already extracted a value
-            conf = combined['defaults']
-            conf.update(kwargs.get('conf', {}))
-            kwargs.update({'conf': DotDict(conf)})
+            updates = {'conf': DotDict(conf), 'assign': combined.get('assign')}
+            kwargs.update(updates)
+
+            item = item or {}
+            _input = DotDict(item) if combined.get('dictize') else item
+            bfuncs = get_broadcast_funcs(**combined)
             types = {combined['ftype'], combined['ptype']}
 
             if types.difference({'pass', 'none'}):
-                dfuncs = get_dispatch_funcs(funcs, **combined)
+                dfuncs = get_dispatch_funcs(**combined)
             else:
                 dfuncs = None
 
-            parsed, orig_item = dispatch(_input, funcs, bfuncs, dfuncs=dfuncs)
+            parsed, orig_item = dispatch(_input, bfuncs, dfuncs=dfuncs)
 
             if self.async:
                 r = pipe(*parsed, feed=orig_item, **kwargs)
@@ -385,7 +366,7 @@ class processor(object):
             if skip or combined.get('emit'):
                 output = assignment
             elif not skip:
-                key = conf.get('assign')
+                key = combined.get('assign')
                 output = assign(_input, assignment, key, one=one)
 
             if self.async:
@@ -394,10 +375,9 @@ class processor(object):
                 for o in output:
                     yield o
 
-        wrapper.__dict__ = {
-            'type': 'processor',
-            'sub_type': 'source' if self.opts.get('ftype') == 'none' else 'processor'}
-
+        is_source = self.opts.get('ftype') == 'none'
+        wrapper.__dict__['type'] = 'processor'
+        wrapper.__dict__['sub_type'] = 'source' if is_source else 'processor'
         return inlineCallbacks(wrapper) if self.async else wrapper
 
 
@@ -424,13 +404,8 @@ class operator(object):
                 pipe2py.lib.dotdict.DotDict instance (default: True if either
                 `extract` is False or both `listize` and `extract` are True)
 
-            parser (str): The `conf` parse function. Must be one of 'conf',
-                'value', or 'params'. Default: 'value' if `extract` is set else
-                'conf'.
-
             objectify (bool):Convert `conf` to a pipe2py.lib.utils.Objectify
-                instance (default: True, ignored unless `parser` is set to
-                'conf').
+                instance (default: True).
 
             ptype (str): Used to convert `conf` items to a specific type.
                 Performs conversion after obtaining the `objectify` value above.
@@ -455,7 +430,7 @@ class operator(object):
             count (str): Output count. Must be either 'first' or 'all'
                 (default: 'all').
 
-            assign (str): Attribute to assign output (default: content)
+            assign (str): Attribute to assign output (default: the pipe name)
 
             emit (bool): return the output as is and don't assign it to an item
                 attribute (default: True).
@@ -492,16 +467,17 @@ class operator(object):
             ...     return sum(len(item['content'].split()) for item in feed)
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
-            >>> pipe1(items, conf={'times': 'three'}).next()
+            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
+            >>> pipe1(items, **kwargs).next()
             {u'content': u'say "bye world" three times!'}
-            >>> pipe2(items, conf={'times': 'three'}).next()
+            >>> pipe2(items, **kwargs).next()
             {u'content': 4}
             >>>
             >>> @inlineCallbacks
             ... def run(reactor):
-            ...     r1 = yield asyncPipe1(items, conf={'times': 'three'})
+            ...     r1 = yield asyncPipe1(items, **kwargs)
             ...     print(r1.next())
-            ...     r2 = yield asyncPipe2(items, conf={'times': 'three'})
+            ...     r2 = yield asyncPipe2(items, **kwargs)
             ...     print(r2.next())
             ...
             >>> try:
@@ -513,8 +489,6 @@ class operator(object):
             {u'content': 4}
         """
         self.defaults = defaults or {}
-        self.defaults.setdefault('assign', 'content')
-        self.defaults.setdefault('count', 'all')
         self.opts = opts
         self.async = async
 
@@ -535,24 +509,24 @@ class operator(object):
         Examples:
             >>> from twisted.internet.task import react
             >>>
-            >>> kwargs = {
+            >>> opts = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'pdictize': False, 'emit': True, 'field': 'content'}
+            ...     'pdictize': False, 'emit': True, 'field': 'content', 'objectify': False}
             ...
-            >>> @operator(**kwargs)
+            >>> @operator(**opts)
             ... def pipe1(feed, objconf, tuples, **kwargs):
             ...     for content, times in reversed(list(tuples)):
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
-            >>> @operator(**kwargs)
+            >>> @operator(**opts)
             ... def pipe2(feed, objconf, tuples, **kwargs):
             ...     word_cnt = sum(len(content.split()) for content in feed)
             ...     return {kwargs['assign']: word_cnt}
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
-            >>> @operator(async=True, **kwargs)
+            >>> @operator(async=True, **opts)
             ... def asyncPipe1(feed, objconf, tuples, **kwargs):
             ...     for content, times in reversed(list(tuples)):
             ...         value = 'say "%s" %s times!' % (content, times[0])
@@ -560,7 +534,7 @@ class operator(object):
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
-            >>> @operator(async=True, **kwargs)
+            >>> @operator(async=True, **opts)
             ... @inlineCallbacks
             ... def asyncPipe2(feed, objconf, tuples, **kwargs):
             ...     words = (len(content.split()) for content in feed)
@@ -568,17 +542,17 @@ class operator(object):
             ...     returnValue({kwargs['assign']: word_cnt})
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
-            >>> conf = {'times': 'three'}
-            >>> pipe1(items, conf=conf).next()
+            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
+            >>> pipe1(items, **kwargs).next()
             {u'content': u'say "bye world" three times!'}
-            >>> pipe2(items, conf=conf).next()
+            >>> pipe2(items, **kwargs).next()
             {u'content': 4}
             >>>
             >>> @inlineCallbacks
             ... def run(reactor):
-            ...     r1 = yield asyncPipe1(items, conf=conf)
+            ...     r1 = yield asyncPipe1(items, **kwargs)
             ...     print(r1.next())
-            ...     r2 = yield asyncPipe2(items, conf=conf)
+            ...     r2 = yield asyncPipe2(items, **kwargs)
             ...     print(r2.next())
             ...
             >>> try:
@@ -591,36 +565,39 @@ class operator(object):
         """
         @wraps(pipe)
         def wrapper(items=None, **kwargs):
-            combined = {
-                'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
-                'objectify': True, 'emit': True}
+            module_name = wrapper.__module__.split('.')[-1].replace('pipe', '')
+            wrapper.__dict__['name'] = module_name
 
-            combined.update(cdicts(self.defaults, self.opts, kwargs))
-            combined.setdefault('parser', 'value' if 'extract' in combined else 'conf')
-            pdictize = combined.get('listize') if 'extract' in combined else True
+            defaults = {
+                'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
+                'objectify': True, 'emit': True, 'assign': module_name}
+
+            combined = cdicts(self.defaults, defaults, self.opts, kwargs)
+            extracted = 'extract' in combined
+            pdictize = combined.get('listize') if extracted else True
+
             combined.setdefault('pdictize', pdictize)
-            kwargs.setdefault('assign', combined['assign'])
-            combined['defaults'] = {k: v for k, v in combined.items() if k in self.defaults}
-            items = items or iter([])
-            _INPUT = imap(DotDict, items) if combined.get('dictize') else items
-            funcs = get_funcs(**combined)
-            bfuncs = get_broadcast_funcs(funcs, **combined)
+            conf = {k: combined[k] for k in self.defaults}
+            conf.update(kwargs.get('conf', {}))
+            combined.update({'conf': conf})
 
             # replace conf with dictized version so we can access its
             # attributes even if we already extracted a value
-            conf = combined['defaults']
-            conf.update(kwargs.get('conf', {}))
-            kwargs.update({'conf': DotDict(conf)})
+            updates = {'conf': DotDict(conf), 'assign': combined.get('assign')}
+            kwargs.update(updates)
+
+            items = items or iter([])
+            _INPUT = imap(DotDict, items) if combined.get('dictize') else items
+            bfuncs = get_broadcast_funcs(**combined)
             types = {combined['ftype'], combined['ptype']}
 
             if types.difference({'pass', 'none'}):
-                dfuncs = get_dispatch_funcs(funcs, **combined)
+                dfuncs = get_dispatch_funcs(**combined)
             else:
                 dfuncs = None
 
-            args = (funcs, bfuncs)
-            pairs = (dispatch(item, *args, dfuncs=dfuncs) for item in _INPUT)
-            parsed, _ = dispatch(DotDict(), funcs, bfuncs, dfuncs=dfuncs)
+            pairs = (dispatch(item, bfuncs, dfuncs=dfuncs) for item in _INPUT)
+            parsed, _ = dispatch(DotDict(), bfuncs, dfuncs=dfuncs)
 
             # - operators can't skip items
             # - purposely setting both variables to maps of the same iterable
@@ -646,7 +623,7 @@ class operator(object):
                 output = assignment
             else:
                 singles = (iter([v]) for v in assignment)
-                key = conf.get('assign')
+                key = combined.get('assign')
                 assigned = (assign({}, s, key, one=True) for s in singles)
                 output = utils.multiplex(assigned)
 
@@ -656,43 +633,45 @@ class operator(object):
                 for o in output:
                     yield o
 
-        wrapper.__dict__['type'] = 'operator',
+        wrapper.__dict__['type'] = 'operator'
         return inlineCallbacks(wrapper) if self.async else wrapper
 
 
-def dispatch(item, funcs, bfuncs, dfuncs=None):
-    split = funcs['broadcast'](item, *bfuncs)
-    parsed = funcs['dispatch'](split, *dfuncs) if dfuncs else split
+def dispatch(item, bfuncs, dfuncs=None):
+    split = utils.broadcast(item, *bfuncs)
+    parsed = utils.dispatch(split, *dfuncs) if dfuncs else split
     return parsed, item
 
 
-def get_broadcast_funcs(funcs, **kwargs):
-    kw = utils.Objectify(kwargs, conf=kwargs['defaults'])
+def get_broadcast_funcs(**kwargs):
+    kw = utils.Objectify(kwargs, conf={})
     pieces = kw.conf[kw.extract] if kw.extract else kw.conf
+    no_conf = remove_keys(kwargs, 'conf')
 
     if kw.listize:
         listed = utils.listize(pieces)
         piece_defs = map(DotDict, listed) if kw.pdictize else listed
-        pfuncs = [partial(funcs[kw.parser], conf=conf) for conf in piece_defs]
-        get_pieces = lambda item: funcs['broadcast'](item, *pfuncs)
+        parser = partial(utils.parse_conf, **no_conf)
+        pfuncs = [partial(parser, conf=conf) for conf in piece_defs]
+        get_pieces = lambda item: utils.broadcast(item, *pfuncs)
     else:
         conf = DotDict(pieces) if kw.pdictize and pieces else pieces
-        get_pieces = partial(funcs[kw.parser], conf=conf)
+        get_pieces = partial(utils.parse_conf, conf=conf, **no_conf)
 
-    get_field = funcs['none'] if kw.ftype == 'none' else funcs['field']
-    return (get_field, get_pieces, funcs['skip'])
+    noop = partial(utils.cast, _type='none')
+    gfunc = partial(utils.get_field, **kwargs)
+    get_field = noop if kw.ftype == 'none' else gfunc
+    return (get_field, get_pieces, partial(utils.get_skip, **kwargs))
 
 
-def get_dispatch_funcs(funcs, **kwargs):
-    pfunc = funcs[kwargs.get('ptype')]
-    field_dispatch = funcs[kwargs.get('ftype')]
+def get_dispatch_funcs(**kwargs):
+    pfunc =  partial(utils.cast, _type=kwargs['ptype'])
+    field_dispatch = partial(utils.cast, _type=kwargs['ftype'])
 
-    if kwargs['objectify'] and kwargs['parser'] == 'conf':
+    if kwargs['objectify']:
         piece_dispatch = lambda p: utils.Objectify(p.items(), func=pfunc)
-    elif kwargs['parser'] == 'conf':
-        piece_dispatch = lambda p: {k: pfunc(p[k]) for k in p}
     else:
         piece_dispatch = pfunc
 
-    return [field_dispatch, piece_dispatch, funcs['pass']]
+    return [field_dispatch, piece_dispatch, partial(utils.cast, _type='pass')]
 

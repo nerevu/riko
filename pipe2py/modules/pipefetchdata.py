@@ -39,7 +39,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
 
-OPTS = {'emit': True, 'ftype': 'none'}
+OPTS = {'ftype': 'none'}
 reducer = lambda element, i: element.get(i) if element else None
 json2dict = lambda f: loads(f.read())
 logger = Logger(__name__).logger

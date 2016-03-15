@@ -57,7 +57,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
 
-OPTS = {'emit': True, 'ftype': 'none'}
+OPTS = {'ftype': 'none'}
 logger = Logger(__name__).logger
 
 

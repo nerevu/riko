@@ -52,7 +52,7 @@ from . import processor
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 
-OPTS = {'ftype': 'none', 'emit': True}
+OPTS = {'ftype': 'none'}
 DEFAULTS = {'type': 'text'}
 logger = Logger(__name__).logger
 
@@ -72,15 +72,13 @@ def parser(_, objconf, skip, **kwargs):
         >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> inputs = {'age': '30'}
-        >>> conf = {
-        ...     'prompt': 'How old are you?', 'inputs': inputs, 'type': 'int',
-        ...     'assign': 'age'}
+        >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> objconf = Objectify(conf)
-        >>> parser(None, objconf, False, **conf)[0]
+        >>> parser(None, objconf, False, inputs=inputs, assign='age')[0]
         {u'age': 30}
     """
     if kwargs['inputs']:
-        value = kwargs['inputs'].get(objconf.assign, objconf.default)
+        value = kwargs['inputs'].get(kwargs['assign'], objconf.default)
     elif objconf.test or skip:
         value = objconf.default
     else:
@@ -92,7 +90,7 @@ def parser(_, objconf, skip, **kwargs):
     if objconf.type == 'date':
         result = utils.datify(casted)
     else:
-        result = {objconf.assign: casted}
+        result = {kwargs['assign']: casted}
 
     return result, skip
 

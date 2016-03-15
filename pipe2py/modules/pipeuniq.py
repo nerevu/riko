@@ -29,7 +29,7 @@ from __future__ import (
 from . import operator
 from pipe2py.lib.log import Logger
 
-OPTS = {'extract': 'uniq_key', 'pdictize': False}
+OPTS = {'extract': 'uniq_key'}
 DEFAULTS = {'uniq_key': 'title'}
 logger = Logger(__name__).logger
 

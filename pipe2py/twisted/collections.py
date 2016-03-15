@@ -12,8 +12,8 @@ Examples:
         >>> from pipe2py.twisted.collections import AsyncPipe, AsyncCollection
         >>> from pipe2py import get_url
         >>>
-        >>> conf = {'url': get_url('gigs.json'), 'path': 'value.items'}
-        >>> skwargs = {'field': 'description', 'delimeter': '<br>'}
+        >>> conf = {'url': {'value': get_url('gigs.json')}, 'path': 'value.items'}
+        >>> skwargs = {'field': 'description', 'delimeter': '<br>', 'emit': True}
         >>>
         >>> @inlineCallbacks
         ... def run(reactor):
@@ -22,7 +22,7 @@ Examples:
         ...     print(d1)
         ...
         ...     conf['type'] = 'fetchdata'
-        ...     sources = [{'url': get_url('feed.xml')}, conf]
+        ...     sources = [{'url': {'value': get_url('feed.xml')}}, conf]
         ...     d2 = yield AsyncCollection(sources).list
         ...     print(len(d2))
         ...
@@ -31,7 +31,7 @@ Examples:
         ... except SystemExit:
         ...     pass
         ...
-        [{u'content': 343}]
+        [{u'count': 343}]
         56
 """
 

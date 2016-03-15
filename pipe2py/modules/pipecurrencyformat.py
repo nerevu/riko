@@ -9,7 +9,7 @@ Examples:
     basic usage::
 
         >>> from pipe2py.modules.pipecurrencyformat import pipe
-        >>> pipe({'content': '100'}).next()['content']
+        >>> pipe({'content': '100'}).next()['currencyformat']
         u'$100.00'
 
 Attributes:
@@ -24,8 +24,8 @@ from babel.numbers import format_currency
 from . import processor
 from pipe2py.lib.log import Logger
 
-OPTS = {'ftype': 'decimal'}
-DEFAULTS = {'currency': 'USD', 'field': 'content'}
+OPTS = {'ftype': 'decimal', 'field': 'content'}
+DEFAULTS = {'currency': 'USD'}
 logger = Logger(__name__).logger
 
 
@@ -71,7 +71,7 @@ def asyncPipe(*args, **kwargs):
             'assign', or 'field'.
 
             currency (str): The currency ISO abbreviation (default: USD).
-            assign (str): Attribute to assign parsed content (default: content)
+            assign (str): Attribute to assign parsed content (default: currencyformat)
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'content')
 
@@ -84,7 +84,7 @@ def asyncPipe(*args, **kwargs):
         >>> from pipe2py.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['content'])
+        ...     callback = lambda x: print(x.next()['currencyformat'])
         ...     d = asyncPipe({'content': '10.33'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -111,7 +111,7 @@ def pipe(*args, **kwargs):
             'assign', or 'field'.
 
             currency (str): The currency ISO abbreviation (default: USD).
-            assign (str): Attribute to assign parsed content (default: content)
+            assign (str): Attribute to assign parsed content (default: currencyformat)
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'content')
 
@@ -119,10 +119,11 @@ def pipe(*args, **kwargs):
         dict: an item with formatted date string
 
     Examples:
-        >>> pipe({'content': '10.33'}).next()['content']
+        >>> pipe({'content': '10.33'}).next()['currencyformat']
         u'$10.33'
         >>> conf = {'currency': 'GBP'}
-        >>> pipe({'content': '100'}, conf=conf).next()['content'] == '£100.00'
+        >>> result = pipe({'content': '100'}, conf=conf).next()
+        >>> result['currencyformat'] == '£100.00'
         True
     """
     return parser(*args, **kwargs)

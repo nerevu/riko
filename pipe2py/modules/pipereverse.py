@@ -54,14 +54,12 @@ def parser(feed, objconf, tuples, **kwargs):
         Iter(dict): The output feed
 
     Examples:
-        >>> from pipe2py.lib.utils import Objectify
         >>> from itertools import repeat, izip
         >>>
-        >>> kwargs = {'assign': 'content'}
-        >>> objconf = Objectify(kwargs)
+        >>> kwargs = {}
         >>> feed = ({'x': x} for x in xrange(5))
-        >>> tuples = izip(feed, repeat(objconf))
-        >>> parser(feed, objconf, tuples, **kwargs).next()
+        >>> tuples = izip(feed, repeat(None))
+        >>> parser(feed, None, tuples, **kwargs).next()
         {u'x': 4}
     """
     return reversed(list(feed))

@@ -36,7 +36,7 @@ from pipe2py.lib.log import Logger
 from pipe2py.lib.dotdict import DotDict
 from pipe2py.twisted import utils as tu
 
-OPTS = {'emit': True, 'ftype': 'none'}
+OPTS = {'ftype': 'none'}
 logger = Logger(__name__).logger
 
 
@@ -75,9 +75,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0].next()['content'][:32])
         ...     conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
-        ...     conf['assign'] = 'content'
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'feed': {}}
+        ...     kwargs = {'feed': {}, 'assign': 'content'}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -95,7 +94,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         content = yield tu.urlRead(url)
         parsed = get_string(content, objconf.start, objconf.end)
         splits = parsed.split(objconf.token) if objconf.token else [parsed]
-        feed = ({objconf.assign: chunk} for chunk in splits)
+        feed = ({kwargs['assign']: chunk} for chunk in splits)
 
     result = (feed, skip)
     returnValue(result)
@@ -115,9 +114,8 @@ def parser(_, objconf, skip, **kwargs):
     Examples:
         >>> from pipe2py.lib.utils import Objectify
         >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
-        >>> conf['assign'] = 'content'
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'feed': {}}
+        >>> kwargs = {'feed': {}, 'assign': 'content'}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> result.next()['content'][:32]
         u'CNN.com International - Breaking'
@@ -129,7 +127,7 @@ def parser(_, objconf, skip, **kwargs):
         content = urlopen(url).read()
         parsed = get_string(content, objconf.start, objconf.end)
         splits = parsed.split(objconf.token) if objconf.token else [parsed]
-        feed = ({objconf.assign: chunk} for chunk in splits)
+        feed = ({kwargs['assign']: chunk} for chunk in splits)
 
     return feed, skip
 

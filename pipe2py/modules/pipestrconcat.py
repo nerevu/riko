@@ -14,7 +14,7 @@ Examples:
         >>> from pipe2py.modules.pipestrconcat import pipe
         >>> item = {'word': 'hello'}
         >>> part = [{'subkey': 'word'}, {'value': ' world'}]
-        >>> pipe(item, conf={'part': part}).next()['content']
+        >>> pipe(item, conf={'part': part}).next()['strconcat']
         u'hello world'
 
 Attributes:
@@ -90,7 +90,7 @@ def asyncPipe(*args, **kwargs):
                 subkey (str): The item attribute from which to obtain a
                     substring
 
-            assign (str): Attribute to assign parsed content (default: content)
+            assign (str): Attribute to assign parsed content (default: strconcat)
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
@@ -103,7 +103,7 @@ def asyncPipe(*args, **kwargs):
         >>> from pipe2py.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['content'])
+        ...     callback = lambda x: print(x.next()['strconcat'])
         ...     item = {'title': 'Hello world'}
         ...     part = [{'subkey': 'title'}, {'value': 's'}]
         ...     d = asyncPipe(item, conf={'part': part})
@@ -139,7 +139,7 @@ def pipe(*args, **kwargs):
                 subkey (str): The item attribute from which to obtain a
                     substring
 
-            assign (str): Attribute to assign parsed content (default: content)
+            assign (str): Attribute to assign parsed content (default: strconcat)
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
@@ -152,7 +152,7 @@ def pipe(*args, **kwargs):
         >>> part = [
         ...     {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
         ... ]
-        >>> pipe(item, conf={'part': part}).next()['content']
+        >>> pipe(item, conf={'part': part}).next()['strconcat']
         u'<img src="http://www.site.com">'
         >>> pipe(item, conf={'part': part}, assign='result').next()['result']
         u'<img src="http://www.site.com">'

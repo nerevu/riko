@@ -3,7 +3,7 @@
 """
 pipe2py.modules.pipedateformat
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for formatting timetuples.
+Provides functions for formatting dates.
 
 A wide range of format specifiers can be used to create the output text string.
 The specifiers all begin with a percent sign followed by a single character.
@@ -24,7 +24,7 @@ Examples:
 
         >>> from pipe2py.modules.pipedateformat import pipe
         >>> from datetime import date
-        >>> pipe({'tuple': date(2015, 5, 4).timetuple()}).next()['content']
+        >>> pipe({'date': date(2015, 5, 4)}).next()['dateformat']
         '05/04/2015 00:00:00'
 
 Attributes:
@@ -39,16 +39,16 @@ from time import strftime
 from . import processor
 from pipe2py.lib.log import Logger
 
-OPTS = {}
-DEFAULTS = {'format': '%m/%d/%Y %H:%M:%S', 'field': 'tuple'}
+OPTS = {'field': 'date', 'ftype': 'date'}
+DEFAULTS = {'format': '%m/%d/%Y %H:%M:%S'}
 logger = Logger(__name__).logger
 
 
-def parser(timetuple, objconf, skip, **kwargs):
+def parser(date, objconf, skip, **kwargs):
     """ Obtains the user input
 
     Args:
-        timetuple (obj): datime.timetuple
+        date (obj): date-like object
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
 
@@ -59,18 +59,18 @@ def parser(timetuple, objconf, skip, **kwargs):
         >>> from datetime import date
         >>> from pipe2py.lib.utils import Objectify
         >>>
-        >>> timetuple = date(2015, 5, 4).timetuple()
         >>> objconf = Objectify({'format': '%m/%d/%Y'})
-        >>> parser(timetuple, objconf, False)[0]
+        >>> parser(date(2015, 5, 4), objconf, False)[0]
         '05/04/2015'
     """
+    timetuple = date.timetuple()
     parsed = kwargs['feed'] if skip else strftime(objconf.format, timetuple)
     return parsed, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A processor module that asynchronously formats a timetuple.
+    """A processor module that asynchronously formats a date.
 
     Args:
         item (dict): The entry to process
@@ -83,7 +83,7 @@ def asyncPipe(*args, **kwargs):
             format (str): Format string passed to time.strftime (default:
                 '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')
 
-            assign (str): Attribute to assign parsed content (default: content)
+            assign (str): Attribute to assign parsed content (default: dateformat)
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'tuple')
 
@@ -96,9 +96,8 @@ def asyncPipe(*args, **kwargs):
         >>> from pipe2py.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['content'])
-        ...     item = {'tuple': date(2015, 5, 4).timetuple()}
-        ...     d = asyncPipe(item)
+        ...     callback = lambda x: print(x.next()['dateformat'])
+        ...     d = asyncPipe({'date': date(2015, 5, 4)})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -113,7 +112,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor module that formats a timetuple.
+    """A processor module that formats a date.
 
     Args:
         item (dict): The entry to process
@@ -126,7 +125,7 @@ def pipe(*args, **kwargs):
             format (str): Format string passed to time.strftime (default:
                 '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')
 
-            assign (str): Attribute to assign parsed content (default: content)
+            assign (str): Attribute to assign parsed content (default: dateformat)
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'tuple')
 
@@ -135,11 +134,13 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from datetime import date
-        >>> item = {'tuple': date(2015, 5, 4).timetuple()}
-        >>> pipe(item).next()['content']
+        >>> item = {'date': date(2015, 5, 4)}
+        >>> pipe(item).next()['dateformat']
         '05/04/2015 00:00:00'
-        >>> pipe(item, conf={'format': '%Y'}).next()['content']
+        >>> pipe(item, conf={'format': '%Y'}).next()['dateformat']
         '2015'
+        >>> pipe({'date': '05/04/2015'}).next()['dateformat']
+        '05/04/2015 00:00:00'
     """
     return parser(*args, **kwargs)
 

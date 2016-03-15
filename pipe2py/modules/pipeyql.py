@@ -54,7 +54,7 @@ from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
 
-OPTS = {'ftype': 'none', 'emit': True}
+OPTS = {'ftype': 'none'}
 DEFAULTS = {'url': 'http://query.yahooapis.com/v1/public/yql', 'debug': False}
 logger = Logger(__name__).logger
 

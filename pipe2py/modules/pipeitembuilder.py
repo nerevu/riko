@@ -41,7 +41,7 @@ from pipe2py.twisted import utils as tu
 from pipe2py.lib.dotdict import DotDict
 from pipe2py.lib.utils import combine_dicts as cdicts
 
-OPTS = {'listize': True, 'extract': 'attrs', 'emit': True, 'parser': 'params'}
+OPTS = {'listize': True, 'extract': 'attrs', 'ftype': 'none'}
 logger = Logger(__name__).logger
 
 
@@ -49,7 +49,7 @@ def parser(_, attrs, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
-        _ (dict): The item (ignored)
+        _ (None): Ignored
         attrs (List[dict]): Attributes
         skip (bool): Don't parse the content
         kwargs (dict): Keyword argurments
@@ -62,12 +62,16 @@ def parser(_, attrs, skip, **kwargs):
         Tuple[Iter(dict), bool]: Tuple of (feed, skip)
 
     Examples:
-        >>> attrs = [{'title': 'the title'}, {'desc': 'the desc'}]
-        >>> result, skip = parser(None, attrs, False)
-        >>> result.next() == {'title': 'the title', 'desc': 'the desc'}
+        >>> from pipe2py.lib.utils import Objectify
+        >>> attrs = [
+        ...     {'key': 'title', 'value': 'the title'},
+        ...     {'key': 'desc', 'value': 'the desc'}]
+        >>> result, skip = parser(None, map(Objectify, attrs), False)
+        >>> result == {'title': 'the title', 'desc': 'the desc'}
         True
     """
-    feed = kwargs['feed'] if skip else iter([DotDict(cdicts(*attrs))])
+    dicts = [{a.key: a.value} for a in attrs]
+    feed = kwargs['feed'] if skip else DotDict(cdicts(*dicts))
     return feed, skip
 
 

@@ -38,7 +38,7 @@ from pipe2py.lib import utils
 from pipe2py.twisted import utils as tu
 from pipe2py.lib.log import Logger
 
-OPTS = {'listize': True, 'extract': 'url', 'emit': True, 'ftype': 'none'}
+OPTS = {'listize': True, 'extract': 'url', 'ftype': 'none'}
 DEFAULTS = {'sleep': 0}
 logger = Logger(__name__).logger
 
