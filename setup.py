@@ -52,7 +52,7 @@ setup(
     ),
     long_description=read('README.rst'),
     url='http://kazeeki.github.com/pipe2py/',
-    license = 'GPL2',
+    license = 'MIT',
     author='Reuben Cummings',
     author_email='reubano@gmail.com',
     packages=find_packages(exclude=['tests']),
