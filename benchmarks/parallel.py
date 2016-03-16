@@ -120,7 +120,7 @@ def print_time(test, max_chars, run_time, units):
 
 @inlineCallbacks
 def run_async(reactor, tests, max_chars):
-    for num, test in enumerate(tests):
+    for test in tests:
         results = []
 
         for i in xrange(LOOPS):

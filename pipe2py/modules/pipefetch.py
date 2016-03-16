@@ -223,7 +223,7 @@ def pipe(*args, **kwargs):
         ...     u'author.name', 'id', u'y:id']
         >>> pipe(conf={'url': url}).next().keys() == keys
         True
-        >>> result = pipe({'url': FILES[0]}, conf={'url': [{'subkey': 'url'}]})
+        >>> result = pipe({'url': FILES[0]}, conf={'url': {'subkey': 'url'}})
         >>> result.next().keys() == keys
         True
     """

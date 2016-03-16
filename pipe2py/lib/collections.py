@@ -14,16 +14,16 @@ Examples:
         >>> url = {'value': get_url('gigs.json')}
         >>> conf = {'url': url, 'path': 'value.items'}
         >>> skwargs = {
-        ...     'field': 'description', 'delimiter': ',', 'emit': True}
+        ...     'field': 'description', 'delimiter': '<br>', 'emit': True}
         >>> (SyncPipe('fetchdata', conf=conf)
         ...     .sort().stringtokenizer(**skwargs).count().list)
-        [{u'count': 343}]
+        [{u'count': 169}]
         >>> (SyncPipe('fetchdata', conf=conf, parallel=True)
         ...     .sort().stringtokenizer(**skwargs).count().list)
-        [{u'count': 343}]
+        [{u'count': 169}]
         >>> (SyncPipe('fetchdata', conf=conf, parallel=True, threads=False)
         ...     .sort().stringtokenizer(**skwargs).count().list)
-        [{u'count': 343}]
+        [{u'count': 169}]
         >>> conf['type'] = 'fetchdata'
         >>> sources = [{'url': {'value': get_url('feed.xml')}}, conf]
         >>> len(SyncCollection(sources).list)

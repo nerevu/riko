@@ -35,6 +35,8 @@ from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
 from pipe2py.lib.log import Logger
+from pipe2py.lib.dotdict import DotDict
+from pipe2py.lib.utils import combine_dicts as cdicts, remove_keys
 from pipe2py.twisted import utils as tu
 
 OPTS = {'extract': 'rule', 'listize': True, 'emit': True}
@@ -43,9 +45,9 @@ logger = Logger(__name__).logger
 
 
 def reducer(item, rule):
-    item.set(rule.newval, item.get(rule.field)) if rule.newval else None
-    None if rule.copy else item.delete(rule.field)
-    return item
+    new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
+    old_dict = item if rule.copy else remove_keys(item, rule.field)
+    return DotDict(cdicts(old_dict, new_dict))
 
 
 @inlineCallbacks

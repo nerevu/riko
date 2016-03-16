@@ -33,7 +33,6 @@ from __future__ import (
 from . import processor
 from pipe2py.lib.log import Logger
 from pipe2py.lib.dotdict import DotDict
-from pipe2py.lib.utils import combine_dicts as cdicts
 
 OPTS = {'listize': True, 'extract': 'attrs', 'ftype': 'none'}
 logger = Logger(__name__).logger
@@ -63,8 +62,8 @@ def parser(_, attrs, skip, **kwargs):
         >>> result == {'title': 'the title', 'desc': 'the desc'}
         True
     """
-    dicts = [{a.key: a.value} for a in attrs]
-    feed = kwargs['feed'] if skip else DotDict(cdicts(*dicts))
+    items = ((a.key, a.value) for a in attrs)
+    feed = kwargs['feed'] if skip else DotDict(items)
     return feed, skip
 
 

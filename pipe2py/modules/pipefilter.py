@@ -33,8 +33,8 @@ from __future__ import (
     unicode_literals)
 
 import re
+import operator as op
 
-from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 
 from . import operator
@@ -48,35 +48,41 @@ logger = Logger(__name__).logger
 
 COMBINE_BOOLEAN = {'and': all, 'or': any}
 SWITCH = {
-    'contains': lambda x, y: x and x.lower() in y.lower(),
-    'doesnotcontain': lambda x, y: x and x.lower() not in y.lower(),
+    'contains': lambda x, y: x and y.lower() in x.lower(),
+    'doesnotcontain': lambda x, y: x and y.lower() not in x.lower(),
     'matches': lambda x, y: re.search(x, y),
-    'is': lambda x, y: cmp(x, y) is 0,
-    'greater': lambda x, y: cmp(x, y) is -1,
-    'less': lambda x, y: cmp(x, y) is 1,
-    'after': lambda x, y: cmp(x, y) is -1,
-    'before': lambda x, y: cmp(x, y) is 1,
+    'is': op.eq,
+    'greater': op.gt,
+    'after': op.gt,
+    'less': op.lt,
+    'before': op.lt,
 }
 
 
 def parse_rule(rule, item, **kwargs):
-    if not rule.value:
+    if rule.value is None:
         result = True
     else:
-        try:
-            x = Decimal(rule.value)
-            y = Decimal(item.get(rule.field, **kwargs))
-        except InvalidOperation:
-            x = rule.value
-            y = item.get(rule.field)
+        result = None
+        x = item.get(rule.field, **kwargs)
+        y = rule.value
 
-        if y is None:
-            result = False
-        elif isinstance(y, basestring):
+    if not result and y is None:
+        result = False
+    else:
+        try:
+            _x = Decimal(x)
+            _y = Decimal(y)
+        except InvalidOperation:
             try:
-                y = dt.strptime(y, utils.DATE_FORMAT).timetuple()
+                _x = utils.cast_date(x)
+                _y = utils.cast_date(y)
             except ValueError:
                 pass
+            else:
+                x, y = _x, _y
+        else:
+            x, y = _x, _y
 
         try:
             result = SWITCH.get(rule.op)(x, y)
@@ -121,6 +127,7 @@ def parser(feed, rules, tuples, **kwargs):
         {u'ex': 4}
     """
     conf = kwargs['conf']
+    # TODO: add terminal check
     dynamic = any('subkey' in v for v in conf.itervalues())
     objconf = None if dynamic else parse_conf({}, conf=conf, objectify=True)
 

@@ -122,8 +122,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         f = yield tu.urlOpen(url)
 
         if ext == 'xml':
-            tree = yield microdom.parse(f)
-            elements = genXPATH(tree, objconf.xpath)
+            root = yield microdom.parse(f)
+            elements = genXPATH(root, objconf.xpath)
             items = imap(tu.elementToDict, elements)
         elif ext == 'html':
             tree = html5parser.parse(f) if objconf.html5 else html.parse(f)

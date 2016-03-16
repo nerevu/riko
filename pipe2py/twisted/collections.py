@@ -15,7 +15,7 @@ Examples:
         >>> url = {'value': get_url('gigs.json')}
         >>> conf = {'url': url, 'path': 'value.items'}
         >>> skwargs = {
-        ...     'field': 'description', 'delimiter': ',', 'emit': True}
+        ...     'field': 'description', 'delimiter': '<br>', 'emit': True}
         >>>
         >>> @inlineCallbacks
         ... def run(reactor):
@@ -33,7 +33,7 @@ Examples:
         ... except SystemExit:
         ...     pass
         ...
-        [{u'count': 343}]
+        [{u'count': 169}]
         56
 """
 
