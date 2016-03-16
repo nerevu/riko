@@ -55,7 +55,6 @@ def asyncParser(feed, rules, tuples, **kwargs):
         kwargs (dict): Keyword arguments.
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
         conf (dict): The pipe configuration.
 
     Returns:
@@ -102,7 +101,6 @@ def parser(feed, rules, tuples, **kwargs):
         kwargs (dict): Keyword arguments.
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
         conf (dict): The pipe configuration.
 
     Returns:
@@ -124,15 +122,14 @@ def parser(feed, rules, tuples, **kwargs):
 
 @operator(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """An aggregator that asynchronously sorts the input source according to
-    a specified key. Note that this pipe is not lazy.
+    """An aggregator that asynchronously and eagerly sorts the input source
+    according to a specified key. Note that this pipe is not lazy.
 
     Args:
         items (Iter[dict]): The source feed.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the key 'rule'
 
             rule (dict): The sort configuration, can be either a dict or list
@@ -169,24 +166,23 @@ def asyncPipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that sorts the input source according to a specified key.
+    """An operator that eagerly sorts the input source according to a specified key.
+    Note that this pipe is not lazy.
 
     Args:
         items (Iter[dict]): The source feed.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the key 'rule'
 
             rule (dict): The sort configuration, can be either a dict or list
-            of dicts. May contain the keys 'sort_key' or 'dir'.
+                of dicts (default: {'sort_dir': 'asc', 'sort_key': 'title'}).
+                Must contain the key 'sort_key'. May contain the key 'sort_dir'.
 
-                sort_key (str): Item attribute on which to sort by (default:
-                    'title').
-
-                sort_dir (str): The sort direction. Must be either 'asc' or 'desc'
-                    (default: 'asc').
+                sort_key (str): Item attribute on which to sort by.
+                sort_dir (str): The sort direction. Must be either 'asc' or
+                    'desc'.
 
     Yields:
         dict: a feed item

@@ -66,8 +66,8 @@ def parser(feed, splits, tuples, **kwargs):
         <itertools.imap object at 0x...>
     """
     source = list(feed)
-    # deepcopy each item passed along so that changes in one branch don't
-    # affect the other branch
+
+    # deepcopy each item so that each split is independent
     for num in xrange(splits):
         title = 'feed %i of %i' % (num + 1, splits)
         yield {'title': title, 'feed': imap(deepcopy, source)}
@@ -83,7 +83,6 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the key 'splits'.
 
             splits (int): the number of copies to create (default: 2).
@@ -121,7 +120,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the key 'splits'.
 
             splits (int): the number of copies to create (default: 2).

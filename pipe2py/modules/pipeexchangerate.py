@@ -85,7 +85,7 @@ def asyncParser(base, objconf, skip, **kwargs):
         base (str): The base currency (exchanging from)
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: exchangerate)
@@ -142,7 +142,7 @@ def parser(base, objconf, skip, **kwargs):
         base (str): The base currency (exchanging from)
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: exchangerate)
@@ -197,7 +197,6 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the keys 'url',
             'params', 'currency', 'sleep', 'memoize', 'field', or 'assign'.
 
@@ -248,7 +247,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the keys 'url',
             'params', 'currency', 'sleep', 'memoize', 'field', or 'assign'.
 

@@ -67,14 +67,14 @@ def asyncParser(_, objconf, skip, **kwargs):
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: content)
         feed (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Deferred: twisted.internet.defer.Deferred Tuple of (feed, skip)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -128,6 +128,11 @@ def parser(_, objconf, skip, **kwargs):
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
+
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (dict): The original item
 
     Returns:
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
@@ -175,7 +180,6 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'. May
             contain the keys 'xpath', 'html5', 'stringify', or 'assign'.
 
@@ -188,7 +192,7 @@ def asyncPipe(*args, **kwargs):
             assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
-        dict: twisted.internet.defer.Deferred item with feeds
+        dict: twisted.internet.defer.Deferred feed of items
 
     Examples:
         >>> from twisted.internet.task import react
@@ -221,7 +225,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'query'. May
             contain the keys 'url' or 'debug'.
 

@@ -59,7 +59,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: content)
@@ -142,7 +142,6 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'. May
             contain the keys 'start', 'end', 'token', or 'assign'.
 
@@ -151,9 +150,6 @@ def asyncPipe(*args, **kwargs):
             end (str): The ending string to fetch (exclusive, default: None).
             token (str): The tokenizer delimiter string (default: None).
             assign (str): Attribute to assign parsed content (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Returns:
         dict: twisted.internet.defer.Deferred item with feeds
@@ -187,7 +183,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'. May
             contain the keys 'start', 'end', 'token', or 'assign'.
 
@@ -200,7 +195,7 @@ def pipe(*args, **kwargs):
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
 
-    Yield:
+    Yields:
         dict: an item on the feed
 
     Examples:

@@ -65,10 +65,9 @@ def asyncParser(_, objconf, skip, **kwargs):
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
         feed (dict): The original item
 
     Returns:
@@ -122,7 +121,7 @@ def parser(_, objconf, skip, **kwargs):
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         feed (dict): The original item
@@ -170,17 +169,14 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the keys 'path' or 'html5'.
+
             url (str): The web site to fetch
             path (str): The path to extract (default: None, i.e., return entire
                 page)
 
             html5 (bool): Use the HTML5 parser (default: False)
-            assign (str): Attribute to assign parsed content (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred feed of items
@@ -215,17 +211,14 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the keys 'path' or 'html5'.
+
             url (str): The web site to fetch
             path (str): The path to extract (default: None, i.e., return entire
                 page)
 
             html5 (bool): Use the HTML5 parser (default: False)
-            assign (str): Attribute to assign parsed content (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Returns:
         dict: an iterator of items

@@ -52,13 +52,13 @@ def asyncParser(_, urls, skip, **kwargs):
 
     Args:
         _ (None): Ignored
-        objconf (obj): The pipe configuration (an Objectify instance)
+        urls (List[str]): The urls to fetch
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
         feed (dict): The original item
+        conf (dict): The pipe configuration
 
     Returns:
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
@@ -102,9 +102,14 @@ def parser(_, urls, skip, **kwargs):
         _ (None): Ignored
         urls (List[str]): The urls to fetch
         skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
+
+    Kwargs:
+        feed (dict): The original item
+        conf (dict): The pipe configuration
 
     Returns:
-        List(dict): the tokenized content
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
 
     Examples:
         >>> conf = {'url': FILES}
@@ -137,15 +142,20 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'assign'.
+            contain the key 'sleep'.
 
-            url (str): The web site to fetch
-            assign (str): Attribute to assign parsed content (default: content)
+            url (str): The web site to fetch. Can be either a dict or list of
+                dicts. Must contain one of the following keys: 'value',
+                'subkey', or 'terminal'.
 
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
+                value (str): The url value
+                subkey (str): An item attribute from which to obtain the value
+                terminal (str): The id of a pipe from which to obtain the value
+
+            sleep (flt): Amount of time to sleep (in secs) before fetching the
+                url. Useful for simulating network latency. Default: 0.
+
 
     Returns:
         dict: twisted.internet.defer.Deferred item with feeds
@@ -181,15 +191,19 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'assign'.
+            contain the key 'sleep'.
 
-            url (str): The web site to fetch
-            assign (str): Attribute to assign parsed content (default: content)
+            url (str): The web site to fetch. Can be either a dict or list of
+                dicts. Must contain one of the following keys: 'value',
+                'subkey', or 'terminal'.
 
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
+                value (str): The url value
+                subkey (str): An item attribute from which to obtain the value
+                terminal (str): The id of a pipe from which to obtain the value
+
+            sleep (flt): Amount of time to sleep (in secs) before fetching the
+                url. Useful for simulating network latency. Default: 0.
 
     Returns:
         dict: an iterator of items

@@ -66,19 +66,16 @@ def parser(feed, _, tuples, **kwargs):
 
 @operator(async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """An aggregator that asynchronously counts the number of items in a feed.
+    """An aggregator that asynchronously and eagerly counts the number of items
+    in a feed. Note that this pipe is not lazy.
 
     Args:
         items (Iter[dict]): The source feed.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the key 'assign'.
-            assign (str): Attribute to assign parsed content (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
+            assign (str): Attribute to assign parsed content (default: count)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the number of counted items
@@ -105,19 +102,16 @@ def asyncPipe(*args, **kwargs):
 
 @operator(**OPTS)
 def pipe(*args, **kwargs):
-    """An aggregator that counts the number of items in a feed.
+    """An aggregator that eagerly counts the number of items in a feed.
+    Note that this pipe is not lazy.
 
     Args:
         items (Iter[dict]): The source feed.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the key 'assign'.
             assign (str): Attribute to assign parsed content (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Yields:
         dict: the number of counted items

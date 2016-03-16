@@ -3,7 +3,7 @@
 """
 pipe2py.modules.pipestrconcat
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for concatenating strings
+Provides functions for concatenating strings (aka stringbuilder).
 
 Useful when you need to build a string from multiple substrings, some coded
 into the pipe, other parts supplied when the pipe is run.
@@ -21,8 +21,6 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
-# aka stringbuilder
 
 from __future__ import (
     absolute_import, division, print_function, with_statement,
@@ -48,13 +46,13 @@ def parser(_, parts, skip, **kwargs):
         _ (dict): The item (ignored)
         parts (List[dict]): The content to concatenate
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         feed (dict): The original item
 
     Returns:
-        str: the concatenated string
+        Tuple(str, bool): Tuple of (the concatenated string, skip)
 
     Examples:
         >>> result, skip = parser(None, ['one', 'two'], False)
@@ -79,9 +77,7 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration. Must contain the key 'part'. May
-            contain the key 'assign'.
+        conf (dict): The pipe configuration. Must contain the key 'part'.
 
             part (dict): can be either a dict or list of dicts. Must contain
                 either the key 'value' or 'subkey'.
@@ -90,8 +86,7 @@ def asyncPipe(*args, **kwargs):
                 subkey (str): The item attribute from which to obtain a
                     substring
 
-            assign (str): Attribute to assign parsed content (default: strconcat)
-
+        assign (str): Attribute to assign parsed content (default: strconcat)
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
 
@@ -128,9 +123,7 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration. Must contain the key 'part'. May
-            contain the key 'assign'.
+        conf (dict): The pipe configuration. Must contain the key 'part'.
 
             part (dict): can be either a dict or list of dicts. Must contain
                 either the key 'value' or 'subkey'.
@@ -139,8 +132,7 @@ def pipe(*args, **kwargs):
                 subkey (str): The item attribute from which to obtain a
                     substring
 
-            assign (str): Attribute to assign parsed content (default: strconcat)
-
+        assign (str): Attribute to assign parsed content (default: strconcat)
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
 

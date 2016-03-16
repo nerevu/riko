@@ -87,7 +87,6 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the key 'uniq_key'.
 
             uniq_key (str): Item attribute which should be unique (default:
@@ -126,7 +125,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. May contain the key 'uniq_key'.
 
             uniq_key (str): Item attribute which should be unique (default:

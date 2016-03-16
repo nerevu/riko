@@ -52,10 +52,9 @@ def parser(_, attrs, skip, **kwargs):
         _ (None): Ignored
         attrs (List[dict]): Attributes
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
         feed (dict): The original item
 
     Returns:
@@ -84,20 +83,13 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration. Must contain the key 'attrs'. May
-            contain the key 'assign'.
+        conf (dict): The pipe configuration. Must contain the key 'attrs'.
 
             attrs (dict): can be either a dict or list of dicts. Must contain
                 the keys 'key' and 'value'.
 
                 key (str): the attribute name
                 value (str): the attribute value
-
-            assign (str): Attribute to assign parsed content (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Returns:
         dict: twisted.internet.defer.Deferred an iterator of items
@@ -134,20 +126,13 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration. Must contain the key 'attrs'. May
-            contain the key 'assign'.
+        conf (dict): The pipe configuration. Must contain the key 'attrs'.
 
             attrs (dict): can be either a dict or list of dicts. Must contain
                 the keys 'key' and 'value'.
 
                 key (str): the attribute name
                 value (str): the attribute value
-
-            assign (str): Attribute to assign parsed content (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Yields:
         dict: an item

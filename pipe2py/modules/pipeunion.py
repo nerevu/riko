@@ -79,7 +79,6 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         others (List[Iter(dict)]): List of feeds to join
 
     Returns:
@@ -116,7 +115,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         others (List[Iter(dict)]): List of feeds to join
 
     Yields:

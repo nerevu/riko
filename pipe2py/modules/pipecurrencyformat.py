@@ -67,13 +67,13 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'currency',
-            'assign', or 'field'.
+        conf (dict): The pipe configuration. May contain the key 'currency'.
 
             currency (str): The currency ISO abbreviation (default: USD).
-            assign (str): Attribute to assign parsed content (default: currencyformat)
-            field (str): Item attribute from which to obtain the string to be
-                formatted (default: 'content')
+
+        assign (str): Attribute to assign parsed content (default: currencyformat)
+        field (str): Item attribute from which to obtain the string to be
+            formatted (default: 'content')
 
     Returns:
         Deferred: twisted.internet.defer.Deferred item with formatted currency
@@ -107,13 +107,13 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'currency',
-            'assign', or 'field'.
+        conf (dict): The pipe configuration. May contain the key 'currency'.
 
             currency (str): The currency ISO abbreviation (default: USD).
-            assign (str): Attribute to assign parsed content (default: currencyformat)
-            field (str): Item attribute from which to obtain the string to be
-                formatted (default: 'content')
+
+        assign (str): Attribute to assign parsed content (default: currencyformat)
+        field (str): Item attribute from which to obtain the string to be
+            formatted (default: 'content')
 
     Returns:
         dict: an item with formatted date string

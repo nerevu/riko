@@ -79,12 +79,11 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'count'.
             May contain the key 'start'.
 
-            start (int): starting location (default: 0)
             count (int): desired feed length
+            start (int): starting location (default: 0)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred truncated feed
@@ -118,7 +117,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'count'.
             May contain the key 'start'.
 

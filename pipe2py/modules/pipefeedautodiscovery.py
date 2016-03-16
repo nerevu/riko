@@ -60,7 +60,7 @@ def asyncParser(_, urls, skip, **kwargs):
         _ (None): Ignored
         urls (List[str]): The urls to parse
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         feed (dict): The original item
@@ -103,7 +103,7 @@ def parser(_, urls, skip, **kwargs):
         _ (None): Ignored
         urls (List[str]): The urls to fetch
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         feed (dict): The original item
@@ -137,7 +137,6 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper.
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'.
 
             url (str): The web site to fetch
@@ -174,7 +173,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'.
 
             url (str): The web site to fetch

@@ -60,10 +60,9 @@ def asyncParser(_, urls, skip, **kwargs):
         _ (None): Ignored
         urls (List[str]): The urls to parse
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
         feed (dict): The original item
 
     Returns:
@@ -108,10 +107,9 @@ def parser(_, urls, skip, **kwargs):
         _ (None): Ignored
         urls (List[str]): The urls to fetch
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
         feed (dict): The original item
 
     Returns:
@@ -143,19 +141,13 @@ def asyncPipe(*args, **kwargs):
     sites.
 
     Args:
-        item (dict): The entry to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (dict): The entry to process (not used)
+        kwargs (dict): The keyword arguments passed to the wrapper.
 
     Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'assign'.
+        conf (dict): The pipe configuration. Must contain the key 'url'.
 
             url (str): The web site to fetch
-            assign (str): Attribute to assign parsed content (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Returns:
         dict: twisted.internet.defer.Deferred an iterator of items
@@ -185,19 +177,13 @@ def pipe(*args, **kwargs):
     sites.
 
     Args:
-        item (dict): The entry to process
+        item (dict): The entry to process (not used)
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'assign'.
+        conf (dict): The pipe configuration. Must contain the key 'url'.
 
             url (str): The web site to fetch
-            assign (str): Attribute to (default: content)
-
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Yields:
         dict: an item of the feed

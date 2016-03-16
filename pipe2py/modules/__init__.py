@@ -148,14 +148,17 @@ def assign(item, assignment, key, one=False):
 
 class processor(object):
     def __init__(self, defaults=None, async=False, **opts):
-        """Creates a sync/async pipe that processes individual items
+        """Creates a sync/async pipe that processes individual items. These
+        pipes are classified with as `type: processor` and as either
+        `sub_type: processor` or `subtype: source`. To be recognized as
+        `subtype: source`, the pipes `ftype` must be set to 'none'.
 
+        Args:
             defaults (dict): Default `conf` values.
             async (bool): Wrap an async pipe (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
-            context (obj): The pipe context (a pipe2py.Context object)
             conf (dict): The pipe configuration
             extract (str): The key with which to get a value from `conf`. If set,
                 the wrapped pipe will receive this value instead of `conf`
@@ -165,18 +168,19 @@ class processor(object):
                 list-like (default: False)
 
             pdictize (bool): Convert `conf` or an `extract` to a
-                pipe2py.lib.dotdict.DotDict instance (default: True if either
-                `extract` is False or both `listize` and `extract` are True)
+                pipe2py.lib.dotdict.DotDict instance (default: True unless
+                `listize` is False and `extract` is True)
 
-            objectify (bool): Convert the `conf` to a
-                pipe2py.lib.utils.Objectify instance (default: True).
+            objectify (bool): Convert `conf` to a pipe2py.lib.utils.Objectify
+                instance (default: True unless  `ptype` is 'none').
 
             ptype (str): Used to convert `conf` items to a specific type.
                 Performs conversion after obtaining the `objectify` value above.
                 If set, objectified `conf` items will be converted upon
                 attribute retrieval, and normal `conf` items will be converted
                 immediately. Must be one of 'pass', 'none', 'text', or 'num'.
-                Default: 'pass', i.e., return `conf` as is.
+                Default: 'pass', i.e., return `conf` as is. Note: setting to
+                'none' automatically disables `objectify`.
 
             dictize (bool): Convert the input `item` to a DotDict instance
                 (default: True)
@@ -188,8 +192,9 @@ class processor(object):
             ftype (str): Used to convert the input `item` to a specific type.
                 Performs conversion after obtaining the `field` value above.
                 If set, the wrapped pipe will receive this value instead of
-                `item`. Must be one of 'pass', 'none', 'text', or 'num' (
-                default: 'pass', i.e., return the item as is)
+                `item`. Must be one of 'pass', 'none', 'text', 'int', 'number',
+                or 'decimal'. Default: 'pass', i.e., return the item as is.
+                Note: setting to 'none' automatically enables `emit`.
 
             count (str): Output count. Must be either 'first' or 'all'
                 (default: 'all', i.e., output all results).
@@ -198,7 +203,8 @@ class processor(object):
                 `ftype` is 'none', pipe name otherwise)
 
             emit (bool): Return the output as is and don't assign it to an item
-                attribute (default: False).
+                attribute (default: True if `ftype` is set to 'none', False
+                otherwise).
 
             skip_if (func): A function that takes the `item` and should return
                 True if processing should be skipped, or False otherwise. If
@@ -257,12 +263,7 @@ class processor(object):
         """Creates a sync/async pipe that processes individual items
 
         Args:
-            defaults (dict): The entry to process
-            opts (dict): The keyword arguments passed to the wrapper
-
-        Kwargs:
-            context (obj): pipe2py.Context object
-            conf (dict): The pipe configuration
+            pipe (Iter[dict]): The entry to process
 
         Yields:
             dict: item
@@ -390,7 +391,6 @@ class operator(object):
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
-            context (obj): The pipe context (a pipe2py.Context object)
             conf (dict): The pipe configuration
             extract (str): The key with which to get values from `conf`. If set,
                 the wrapped pipe will receive these value instead of `conf`
@@ -403,15 +403,16 @@ class operator(object):
                 pipe2py.lib.dotdict.DotDict instance (default: True if either
                 `extract` is False or both `listize` and `extract` are True)
 
-            objectify (bool):Convert `conf` to a pipe2py.lib.utils.Objectify
-                instance (default: True).
+            objectify (bool): Convert `conf` to a pipe2py.lib.utils.Objectify
+                instance (default: True unless  `ptype` is 'none').
 
             ptype (str): Used to convert `conf` items to a specific type.
                 Performs conversion after obtaining the `objectify` value above.
                 If set, objectified `conf` items will be converted upon
                 attribute retrieval, and normal `conf` items will be converted
                 immediately. Must be one of 'pass', 'none', 'text', or 'num'.
-                Default: 'pass', i.e., return `conf` as is.
+                Default: 'pass', i.e., return `conf` as is. Note: setting to
+                'none' automatically disables `objectify`.
 
             dictize (bool): Convert the input `items` to DotDict instances
                 (default: True)
@@ -495,15 +496,13 @@ class operator(object):
         """Creates a sync/async pipe that processes an entire feed of items
 
         Args:
-            defaults (dict): The entry to process
-            opts (dict): The keyword arguments passed to the wrapper
-
-        Kwargs:
-            context (obj): pipe2py.Context object
-            conf (dict): The pipe configuration
+            pipe (Iter[dict]): The entry to process
 
         Yields:
             dict: twisted.internet.defer.Deferred item with feeds
+
+        Returns:
+            Deferred: twisted.internet.defer.Deferred generator of items
 
         Examples:
             >>> from twisted.internet.task import react

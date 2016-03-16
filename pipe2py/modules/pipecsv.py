@@ -47,7 +47,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
-        kwargs (dict): Keyword argurments
+        kwargs (dict): Keyword arguments
 
     Kwargs:
         feed (dict): The original item
@@ -129,7 +129,6 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'. May
             contain the keys 'delimiter', 'quotechar', 'encoding', 'skip_rows',
             'sanitize', 'dedupe', 'col_names', or 'has_header'.
@@ -178,7 +177,6 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'url'. May
             contain the keys 'delimiter', 'quotechar', 'encoding', 'skip_rows',
             'sanitize', 'dedupe', 'col_names', or 'has_header'.

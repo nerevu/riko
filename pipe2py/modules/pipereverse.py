@@ -45,11 +45,6 @@ def parser(feed, objconf, tuples, **kwargs):
 
         kwargs (dict): Keyword arguments.
 
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
-
     Returns:
         Iter(dict): The output feed
 
@@ -73,11 +68,6 @@ def asyncPipe(*args, **kwargs):
     Args:
         items (Iter[dict]): The source feed.
         kwargs (dict): The keyword arguments passed to the wrapper
-
-    Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration. May contain the key 'assign'.
-            assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the number of counted items
@@ -109,11 +99,6 @@ def pipe(*args, **kwargs):
     Args:
         items (Iter[dict]): The source feed.
         kwargs (dict): The keyword arguments passed to the wrapper
-
-    Kwargs:
-        context (obj): pipe2py.Context object
-        conf (dict): The pipe configuration. May contain the key 'assign'.
-            assign (str): Attribute to assign parsed content (default: content)
 
     Yields:
         dict: a feed item

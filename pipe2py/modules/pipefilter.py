@@ -103,10 +103,7 @@ def parser(feed, rules, tuples, **kwargs):
 
         kwargs (dict): Keyword arguments.
 
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: content)
-
-    Yield:
+    Yields:
         dict: The output
 
     Examples:
@@ -154,9 +151,8 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'mode', 'combine', or 'assign'.
+            contain the keys 'mode', or 'combine'.
 
             mode (str): returns the matches if set to 'permit', otherwise returns
                 the non-matches (default: 'permit').
@@ -173,8 +169,6 @@ def asyncPipe(*args, **kwargs):
             combine (str): determines how to interpret multiple rules and must be
                 either 'and' or 'or'. 'and' means all rules must pass, and 'or'
                 means any rule must pass (default: 'and')
-
-            assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the filtered items
@@ -209,9 +203,8 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        context (obj): pipe2py.Context object
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'mode', 'combine', or 'assign'.
+            contain the keys 'mode', or 'combine'.
 
             mode (str): returns the matches if set to 'permit', otherwise returns
                 the non-matches (default: 'permit').
@@ -228,8 +221,6 @@ def pipe(*args, **kwargs):
             combine (str): determines how to interpret multiple rules and must be
                 either 'and' or 'or'. 'and' means all rules must pass, and 'or'
                 means any rule must pass (default: 'and')
-
-            assign (str): Attribute to assign parsed content (default: content)
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
