@@ -18,7 +18,7 @@ the structure as shown in this (abbreviated) example.
         'stanzas': [
             {
                 'id': 'st1',
-                'verses': ["So is it not with me...", "Stirr'd by a painted...,"]
+                'verses': ["So is it not with me...", "Stirr'd by a paint...,"]
             }, {
                 'id': 'st2',
                 ...
@@ -113,7 +113,8 @@ def asyncPipe(*args, **kwargs):
             contain the key 'token_key'.
 
             path (str): Path to the element to extract
-            token_key (str): Attribute to assign individual tokens (default: content)
+            token_key (str): Attribute to assign individual tokens (default:
+                content)
 
     Returns:
        Deferred: twisted.internet.defer.Deferred sub-element item
@@ -152,7 +153,8 @@ def pipe(*args, **kwargs):
             contain the key 'token_key'.
 
             path (str): Path to the element to extract
-            token_key (str): Attribute to assign individual tokens (default: content)
+            token_key (str): Attribute to assign individual tokens (default:
+                content)
 
     Yields:
         dict: a sub-element item
@@ -179,4 +181,3 @@ def pipe(*args, **kwargs):
         {u'verse': u'st1v1'}
     """
     return parser(*args, **kwargs)
-

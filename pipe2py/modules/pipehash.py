@@ -24,7 +24,6 @@ import ctypes
 
 from . import processor
 from pipe2py.lib.log import Logger
-from pipe2py.twisted import utils as tu
 
 OPTS = {'ftype': 'text', 'ptype': 'none', 'field': 'content'}
 DEFAULTS = {}
@@ -77,6 +76,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['hash'])
@@ -117,4 +117,3 @@ def pipe(*args, **kwargs):
         4090572397L
     """
     return parser(*args, **kwargs)
-

@@ -26,6 +26,7 @@ A more complex query that finds Flickr photos tagged "fog" in San Francisco:
 Examples:
     basic usage::
 
+        >>> from . import FEEDS, FILES
         >>> from pipe2py.modules.pipeyql import pipe
         >>> from urllib2 import urlopen
         >>>
@@ -49,7 +50,7 @@ from lxml.etree import parse
 from twisted.web import microdom
 from twisted.internet.defer import inlineCallbacks, returnValue
 
-from . import processor, FEEDS, FILES
+from . import processor
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
@@ -78,6 +79,7 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import processor, FEEDS, FILES
         >>> from pipe2py.lib.utils import Objectify
         >>> from urllib2 import urlopen
         >>>
@@ -138,8 +140,9 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
 
     Examples:
-        >>> from pipe2py.lib.utils import Objectify
         >>> from urllib2 import urlopen
+        >>> from . import processor, FEEDS, FILES
+        >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
         >>> query = "select * from feed where url='%s'" % FEEDS[0]
@@ -195,8 +198,9 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred feed of items
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from urllib2 import urlopen
+        >>> from . import processor, FEEDS, FILES
+        >>> from twisted.internet.task import react
         >>>
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
         >>> query = "select * from feed where url='%s'" % FEEDS[0]
@@ -241,6 +245,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from urllib2 import urlopen
+        >>> from . import processor, FEEDS, FILES
+        >>>
         >>> conf = {'query': "select * from feed where url='%s'" % FEEDS[0]}
         >>> result = pipe(conf=conf, response=urlopen(FILES[7])).next()
         >>> sorted(result.keys())
@@ -249,4 +255,3 @@ def pipe(*args, **kwargs):
         'Bring pizza home'
     """
     return parser(*args, **kwargs)
-

@@ -13,6 +13,7 @@ items from the individual feeds.
 Examples:
     basic usage::
 
+        >>> from . import FILES
         >>> from pipe2py.modules.pipefetch import pipe
         >>> pipe(conf={'url': {'value': FILES[0]}}).next()['title']
         u'Donations'
@@ -23,8 +24,7 @@ Attributes:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 import speedparser
 
@@ -33,7 +33,7 @@ from itertools import imap
 from urllib2 import urlopen
 from twisted.internet.defer import inlineCallbacks, returnValue
 
-from . import processor, FEEDS, FILES
+from . import processor
 from pipe2py.lib import utils
 from pipe2py.twisted import utils as tu
 from pipe2py.lib.log import Logger
@@ -65,6 +65,7 @@ def asyncParser(_, urls, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0].next()['title'])
@@ -112,6 +113,8 @@ def parser(_, urls, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
 
     Examples:
+        >>> from . import FILES
+        >>>
         >>> conf = {'url': FILES}
         >>> kwargs = {'feed': {}, 'conf': conf}
         >>> result, skip = parser(None, conf['url'], False, **kwargs)
@@ -162,6 +165,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next().keys())
@@ -209,6 +213,8 @@ def pipe(*args, **kwargs):
         dict: an iterator of items
 
     Examples:
+        >>> from . import FILES
+        >>>
         >>> url = [{'value': FILES[0]}, {'value': FILES[1]}]
         >>> keys = [
         ...     'updated', 'updated_parsed', u'pubDate', 'author',

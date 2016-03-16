@@ -36,7 +36,8 @@ def parser(feed, objconf, tuples, **kwargs):
         feed (Iter[dict]): The source feed. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        objconf (obj): the item independent configuration (an Objectify instance).
+        objconf (obj): the item independent configuration (an Objectify
+            instance).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
             `item` is an element in the source feed and `objconf` is the item
@@ -62,15 +63,16 @@ def parser(feed, objconf, tuples, **kwargs):
 
 @operator(async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """An aggregator that asynchronously reverses the order of source items in a feed.
-    Note that this pipe is not lazy.
+    """An aggregator that asynchronously reverses the order of source items in
+    a feed. Note that this pipe is not lazy.
 
     Args:
         items (Iter[dict]): The source feed.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the number of counted items
+        Deferred: twisted.internet.defer.Deferred iterator of the number of
+            counted items
 
     Examples:
         >>> from twisted.internet.task import react
@@ -109,4 +111,3 @@ def pipe(*args, **kwargs):
         {u'x': 4}
     """
     return parser(*args, **kwargs)
-

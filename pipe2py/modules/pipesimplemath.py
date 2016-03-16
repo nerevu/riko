@@ -155,4 +155,3 @@ def pipe(*args, **kwargs):
         Decimal('2')
     """
     return parser(*args, **kwargs)
-

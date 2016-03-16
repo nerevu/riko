@@ -18,4 +18,3 @@ parts = [
 
 def get_url(name):
     return 'file://%s' % p.join('data', name)
-

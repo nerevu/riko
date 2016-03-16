@@ -19,7 +19,9 @@ returns the content from the first discovered feed.
 Examples:
     basic usage::
 
+        >>> from . import FILES
         >>> from pipe2py.modules.pipefeedautodiscovery import pipe
+        >>>
         >>> entry = pipe(conf={'url': {'value': FILES[4]}}).next()
         >>> sorted(entry.keys())
         ['href', 'hreflang', 'link', 'rel', 'tag']
@@ -35,17 +37,12 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-import speedparser
-
-from urllib2 import urlopen
 from itertools import imap
 from twisted.internet.defer import inlineCallbacks, returnValue
-from twisted.web.client import getPage
 
-from . import processor, FEEDS, FILES
+from . import processor
 from pipe2py.lib import utils, autorss
 from pipe2py.lib.log import Logger
-from pipe2py.lib.dotdict import DotDict
 from pipe2py.twisted import utils as tu
 
 OPTS = {'listize': True, 'extract': 'url', 'ftype': 'none'}
@@ -70,6 +67,7 @@ def asyncParser(_, urls, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -112,6 +110,8 @@ def parser(_, urls, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
 
     Examples:
+        >>> from . import FILES
+        >>>
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, [FILES[4]], False, **kwargs)
         >>> result.next()['link']
@@ -146,6 +146,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['link'])
@@ -181,9 +182,8 @@ def pipe(*args, **kwargs):
         dict: an item of the feed
 
     Examples:
+        >>> from . import FILES
         >>> pipe(conf={'url': {'value': FILES[4]}}).next()['link']
         'file://data/www.greenhughes.com_rssfeed.xml'
     """
     return parser(*args, **kwargs)
-
-

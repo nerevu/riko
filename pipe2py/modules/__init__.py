@@ -11,15 +11,12 @@ from __future__ import (
 
 from os import path as p
 from functools import partial, wraps
-from itertools import imap, repeat, chain
-from operator import itemgetter
+from itertools import imap, chain
 
-from twisted.internet import defer as df
-from twisted.internet.defer import inlineCallbacks, maybeDeferred, returnValue
+from twisted.internet.defer import inlineCallbacks, returnValue
 
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
-from pipe2py.twisted import utils as tu
 from pipe2py.lib.dotdict import DotDict
 from pipe2py.lib.utils import combine_dicts as cdicts, remove_keys
 
@@ -37,10 +34,6 @@ __sources__ = [
     'piperssitembuilder',
     'pipexpathfetchpage',
     'pipeyql',
-]
-
-__inputs__ = [
-    # User Input Modules
     'pipeprivateinput',
     'pipetextinput',
 ]
@@ -102,7 +95,7 @@ __processors__ = [
     # 'pipeoutputcsv',
 ]
 
-__all__ = __sources__ + __inputs__ + __operators__ + __processors__ + __aggregators__
+__all__ = __sources__ + __operators__ + __processors__ + __aggregators__
 
 parent = p.join(p.abspath(p.dirname(p.dirname(p.dirname(__file__)))), 'data')
 parts = [
@@ -160,8 +153,8 @@ class processor(object):
 
         Kwargs:
             conf (dict): The pipe configuration
-            extract (str): The key with which to get a value from `conf`. If set,
-                the wrapped pipe will receive this value instead of `conf`
+            extract (str): The key with which to get a value from `conf`. If
+                set, the wrapped pipe will receive this value instead of `conf`
                 (default: None).
 
             listize (bool): Ensure that the value returned from an `extract` is
@@ -213,6 +206,7 @@ class processor(object):
 
         Examples:
             >>> from twisted.internet.task import react
+            >>> from pipe2py.twisted import utils as tu
             >>>
             >>> @processor()
             ... def pipe(item, objconf, skip, **kwargs):
@@ -273,10 +267,12 @@ class processor(object):
 
         Examples:
             >>> from twisted.internet.task import react
+            >>> from pipe2py.twisted import utils as tu
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'pdictize': False, 'emit': True, 'field': 'content', 'objectify': False}
+            ...     'pdictize': False, 'emit': True, 'field': 'content',
+            ...     'objectify': False}
             ...
             >>> @processor(**kwargs)
             ... def pipe(content, times, skip, **kwargs):
@@ -338,7 +334,6 @@ class processor(object):
             conf = {k: combined[k] for k in self.defaults}
             conf.update(kwargs.get('conf', {}))
             combined.update({'conf': conf})
-
             # replace conf with dictized version so we can access its
             # attributes even if we already extracted a value
             updates = {'conf': DotDict(conf), 'assign': combined.get('assign')}
@@ -437,6 +432,7 @@ class operator(object):
 
         Examples:
             >>> from twisted.internet.task import react
+            >>> from pipe2py.twisted import utils as tu
             >>>
             >>> # emit is True by default
             >>> # and operators can't skip items, so the pipe is passed an
@@ -444,7 +440,8 @@ class operator(object):
             >>> @operator(emit=False)
             ... def pipe1(feed, objconf, tuples, **kwargs):
             ...     for item, objconf in reversed(list(tuples)):
-            ...         yield 'say "%s" %s times!' % (item['content'], objconf.times)
+            ...         s = 'say "%s" %s times!'
+            ...         yield s % (item['content'], objconf.times)
             ...
             >>> @operator(emit=False)
             ... def pipe2(feed, objconf, tuples, **kwargs):
@@ -506,10 +503,13 @@ class operator(object):
 
         Examples:
             >>> from twisted.internet.task import react
+            >>> from pipe2py.twisted import utils as tu
+            >>> from twisted.internet.defer import maybeDeferred
             >>>
             >>> opts = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'pdictize': False, 'emit': True, 'field': 'content', 'objectify': False}
+            ...     'pdictize': False, 'emit': True, 'field': 'content',
+            ...     'objectify': False}
             ...
             >>> @operator(**opts)
             ... def pipe1(feed, objconf, tuples, **kwargs):
@@ -665,7 +665,7 @@ def get_broadcast_funcs(**kwargs):
 
 
 def get_dispatch_funcs(**kwargs):
-    pfunc =  partial(utils.cast, _type=kwargs['ptype'])
+    pfunc = partial(utils.cast, _type=kwargs['ptype'])
     field_dispatch = partial(utils.cast, _type=kwargs['ftype'])
 
     if kwargs['objectify'] and kwargs['ptype'] not in {'none', 'pass'}:
@@ -674,4 +674,3 @@ def get_dispatch_funcs(**kwargs):
         piece_dispatch = pfunc
 
     return [field_dispatch, piece_dispatch, partial(utils.cast, _type='pass')]
-

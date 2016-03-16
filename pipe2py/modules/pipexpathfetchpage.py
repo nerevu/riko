@@ -27,7 +27,9 @@ checking the "Use HTML5 parser" checkbox to use the HTML5 parser.
 Examples:
     basic usage::
 
+        >>> from . import FILES
         >>> from pipe2py.modules.pipexpathfetchpage import pipe
+        >>>
         >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
         >>> title = 'Running “Native” Data Wrangling Applications in the Browser'
         >>> pipe(conf=conf).next()['title'][:59] == title
@@ -39,8 +41,7 @@ Attributes:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 from urllib2 import urlopen
 from os.path import splitext
@@ -49,10 +50,9 @@ from itertools import imap
 from lxml import objectify, html
 from lxml.html import html5parser
 from twisted.internet.defer import inlineCallbacks, returnValue
-from twisted.web.client import getPage
 from twisted.web import microdom
 
-from . import processor, FEEDS, FILES
+from . import processor
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
@@ -96,11 +96,13 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0].next()['title'][:59])
-        ...     objconf = Objectify({'url': FILES[1], 'xpath': '/rss/channel/item'})
+        ...     xpath = '/rss/channel/item'
+        ...     objconf = Objectify({'url': FILES[1], 'xpath': xpath})
         ...     kwargs = {'feed': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -131,7 +133,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         else:
             raise TypeError('Invalid file type %s' % ext)
 
-        feed = ({kwargs['assign']: unicode(i)} for i in items) if objconf.stringify else items
+        strigified = ({kwargs['assign']: unicode(i)} for i in items)
+        feed = strigified if objconf.stringify else items
 
     result = (feed, skip)
     returnValue(result)
@@ -150,6 +153,8 @@ def parser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from pipe2py.lib.utils import Objectify
+        >>> from . import FILES
+        >>>
         >>> objconf = Objectify({'url': FILES[1], 'xpath': '/rss/channel/item'})
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
@@ -172,7 +177,8 @@ def parser(_, objconf, skip, **kwargs):
         root = tree.getroot()
         elements = root.xpath(objconf.xpath)
         items = imap(utils.etree_to_dict, elements)
-        feed = ({kwargs['assign']: unicode(i)} for i in items) if objconf.stringify else items
+        strigified = ({kwargs['assign']: unicode(i)} for i in items)
+        feed = strigified if objconf.stringify else items
 
     return feed, skip
 
@@ -203,6 +209,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['guid']['content'])
@@ -245,6 +252,7 @@ def pipe(*args, **kwargs):
         dict: an item of the feed
 
     Examples:
+        >>> from . import FILES
         >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
         >>> pipe(conf=conf).next()['guid']['content']
         'http://blog.ouseful.info/?p=12065'

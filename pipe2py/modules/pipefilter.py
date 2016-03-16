@@ -37,7 +37,7 @@ import re
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 
-from . import operator, FEEDS, FILES
+from . import operator
 from pipe2py.lib import utils
 from pipe2py.lib.utils import parse_conf
 from pipe2py.lib.log import Logger
@@ -134,8 +134,8 @@ def parser(feed, rules, tuples, **kwargs):
         try:
             result = COMBINE_BOOLEAN[objconf.combine](results)
         except KeyError:
-            raise Exception(
-                "Invalid combine: %s. (Expected 'and' or 'or')" % objconf.combine)
+            msg = "Invalid combine: %s. (Expected 'and' or 'or')"
+            raise Exception(msg % objconf.combine)
 
         if (result and permit) or not (result or permit):
             yield item
@@ -154,21 +154,22 @@ def asyncPipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
             contain the keys 'mode', or 'combine'.
 
-            mode (str): returns the matches if set to 'permit', otherwise returns
-                the non-matches (default: 'permit').
+            mode (str): returns the matches if set to 'permit', otherwise
+                returns the non-matches (default: 'permit').
 
             rule (dict): can be either a dict or list of dicts. Must contain
                 the keys 'field', 'op', and 'value'.
 
                 field (str): the item field to search.
-                op (str): the operation, must be one of 'contains', 'doesnotcontain',
-                    'matches', 'is', 'greater', 'less', 'after', or 'before'.
+                op (str): the operation, must be one of 'contains',
+                    'doesnotcontain', 'matches', 'is', 'greater', 'less',
+                    'after', or 'before'.
 
                 value (scalar): the value to compare the item's field to.
 
-            combine (str): determines how to interpret multiple rules and must be
-                either 'and' or 'or'. 'and' means all rules must pass, and 'or'
-                means any rule must pass (default: 'and')
+            combine (str): determines how to interpret multiple rules and must
+                be either 'and' or 'or'. 'and' means all rules must pass, and
+                'or' means any rule must pass (default: 'and')
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the filtered items
@@ -206,21 +207,22 @@ def pipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
             contain the keys 'mode', or 'combine'.
 
-            mode (str): returns the matches if set to 'permit', otherwise returns
-                the non-matches (default: 'permit').
+            mode (str): returns the matches if set to 'permit', otherwise
+                returns the non-matches (default: 'permit').
 
             rule (dict): can be either a dict or list of dicts. Must contain
                 the keys 'field', 'op', and 'value'.
 
                 field (str): the item field to search.
-                op (str): the operation, must be one of 'contains', 'doesnotcontain',
-                    'matches', 'is', 'greater', 'less', 'after', or 'before'.
+                op (str): the operation, must be one of 'contains',
+                    'doesnotcontain', 'matches', 'is', 'greater', 'less',
+                    'after', or 'before'.
 
                 value (scalar): the value to compare the item's field to.
 
-            combine (str): determines how to interpret multiple rules and must be
-                either 'and' or 'or'. 'and' means all rules must pass, and 'or'
-                means any rule must pass (default: 'and')
+            combine (str): determines how to interpret multiple rules and must
+                be either 'and' or 'or'. 'and' means all rules must pass, and
+                'or' means any rule must pass (default: 'and')
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)

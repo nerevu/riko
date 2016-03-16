@@ -17,14 +17,11 @@ Attributes:
     DEFAULTS (dict): The default parser options
 """
 
-
 from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-from twisted.internet.defer import maybeDeferred
-
-from . import operator, FEEDS, FILES
+from . import operator
 from pipe2py.lib.log import Logger
 
 # disable `dictize` since we do not need to access the configuration
@@ -78,7 +75,8 @@ def asyncPipe(*args, **kwargs):
             assign (str): Attribute to assign parsed content (default: count)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the number of counted items
+        Deferred: twisted.internet.defer.Deferred iterator of the number of
+            counted items
 
     Examples:
         >>> from twisted.internet.task import react
@@ -122,4 +120,3 @@ def pipe(*args, **kwargs):
         5
     """
     return parser(*args, **kwargs)
-

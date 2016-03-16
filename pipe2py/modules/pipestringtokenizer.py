@@ -21,12 +21,9 @@ Attributes:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
-from twisted.internet.defer import maybeDeferred
 from . import processor
-from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.lib.log import Logger
 
 OPTS = {'ftype': 'text', 'field': 'content'}
@@ -75,14 +72,17 @@ def asyncPipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'delimeter',
+        conf (dict): The pipe configuration. May contain the keys 'delimiter',
             'dedupe', 'sort', 'assign', or 'token_key'.
 
-            delimeter (str): the delimiter string (default: ',')
+            delimiter (str): the delimiter string (default: ',')
             dedupe (bool): Remove duplicates (default: False).
             sort (bool): Sort tokens (default: False)
-            assign (str): Attribute to assign parsed content (default: stringtokenizer)
-            token_key (str): Attribute to assign individual tokens (default: content)
+            assign (str): Attribute to assign parsed content (default:
+                stringtokenizer)
+
+            token_key (str): Attribute to assign individual tokens (default:
+                content)
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: 'content')
@@ -119,14 +119,16 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'delimeter',
+        conf (dict): The pipe configuration. May contain the keys 'delimiter',
             'dedupe', 'sort', 'assign', or 'token_key'.
 
-            delimeter (str): the delimiter string (default: ',')
+            delimiter (str): the delimiter string (default: ',')
             dedupe (bool): Remove duplicates (default: False).
             sort (bool): Sort tokens (default: False)
-            assign (str): Attribute to assign parsed content (default: stringtokenizer)
-            token_key (str): Attribute to assign individual tokens (default: content)
+            assign (str): Attribute to assign parsed content (default:
+                stringtokenizer)
+            token_key (str): Attribute to assign individual tokens (default:
+                content)
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)

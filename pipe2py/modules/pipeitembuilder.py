@@ -28,16 +28,10 @@ Attributes:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
-from itertools import imap
-from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-
-from . import processor, FEEDS, FILES
-from pipe2py.lib import utils
+from . import processor
 from pipe2py.lib.log import Logger
-from pipe2py.twisted import utils as tu
 from pipe2py.lib.dotdict import DotDict
 from pipe2py.lib.utils import combine_dicts as cdicts
 
@@ -96,6 +90,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['title'])
@@ -146,4 +141,3 @@ def pipe(*args, **kwargs):
         True
     """
     return parser(*args, **kwargs)
-

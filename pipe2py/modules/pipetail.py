@@ -5,7 +5,8 @@ pipe2py.modules.pipetail
 ~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for truncating a feed to the last N items.
 
-Contrast this with the Truncate module, which limits the output to the first N items.
+Contrast this with the Truncate module, which limits the output to the first N
+items.
 
 Examples:
     basic usage::
@@ -39,7 +40,8 @@ def parser(feed, objconf, tuples, **kwargs):
         feed (Iter[dict]): The source feed. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        objconf (obj): the item independent configuration (an Objectify instance).
+        objconf (obj): the item independent configuration (an Objectify
+            instance).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
             `item` is an element in the source feed and `objconf` is the item
@@ -123,4 +125,3 @@ def pipe(*args, **kwargs):
         {u'x': 3}
     """
     return parser(*args, **kwargs)
-

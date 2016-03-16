@@ -83,7 +83,9 @@ def asyncPipe(*args, **kwargs):
             format (str): Format string passed to time.strftime (default:
                 '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')
 
-            assign (str): Attribute to assign parsed content (default: dateformat)
+            assign (str): Attribute to assign parsed content (default:
+                dateformat)
+
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'tuple')
 
@@ -125,7 +127,9 @@ def pipe(*args, **kwargs):
             format (str): Format string passed to time.strftime (default:
                 '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')
 
-            assign (str): Attribute to assign parsed content (default: dateformat)
+            assign (str): Attribute to assign parsed content (default:
+                dateformat)
+
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'tuple')
 
@@ -143,4 +147,3 @@ def pipe(*args, **kwargs):
         '05/04/2015 00:00:00'
     """
     return parser(*args, **kwargs)
-

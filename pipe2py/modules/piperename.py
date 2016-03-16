@@ -199,4 +199,3 @@ def pipe(*args, **kwargs):
         [u'content', u'greeting']
     """
     return parser(*args, **kwargs)
-

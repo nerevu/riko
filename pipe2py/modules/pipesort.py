@@ -138,8 +138,8 @@ def asyncPipe(*args, **kwargs):
                 sort_key (str): Item attribute on which to sort by (default:
                     'title').
 
-                sort_dir (str): The sort direction. Must be either 'asc' or 'desc'
-                    (default: 'asc').
+                sort_dir (str): The sort direction. Must be either 'asc' or
+                    'desc' (default: 'asc').
 
     Returns:
         Deferred: twisted.internet.defer.Deferred feed
@@ -166,8 +166,8 @@ def asyncPipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly sorts the input source according to a specified key.
-    Note that this pipe is not lazy.
+    """An operator that eagerly sorts the input source according to a specified
+    key. Note that this pipe is not lazy.
 
     Args:
         items (Iter[dict]): The source feed.
@@ -201,4 +201,3 @@ def pipe(*args, **kwargs):
         u'sue'
     """
     return parser(*args, **kwargs)
-

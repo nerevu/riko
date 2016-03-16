@@ -11,6 +11,11 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
+
 import string
 import re
 import itertools as it
@@ -19,10 +24,9 @@ import time
 # from pprint import pprint
 from datetime import timedelta, datetime as dt
 from functools import partial
-from operator import itemgetter
+from operator import itemgetter, add, sub
 from urllib2 import quote
 from os import path as p, environ
-from collections import defaultdict
 from calendar import timegm
 from decimal import Decimal
 from urllib import urlencode
@@ -70,7 +74,6 @@ DATES = {
     'yesterday': TODAY - timedelta(days=1),
 }
 
-combine_dicts = lambda *d: dict(it.chain.from_iterable(it.imap(dict.iteritems, d)))
 encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 
 
@@ -169,8 +172,8 @@ class Chainable(object):
         self.list = list(data)
 
     def __getattr__(self, name):
-        funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
-        zipped = izip(funcs, repeat(AttributeError))
+        funcs = (partial(getattr, x) for x in [self.data, builtins, it])
+        zipped = it.izip(funcs, it.repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)
 
@@ -181,6 +184,24 @@ class Chainable(object):
             return Chainable(self.method(args[0], self.data, **kwargs))
 
 
+def combine_dicts(*dicts):
+    return dict(it.chain.from_iterable(it.imap(dict.iteritems, dicts)))
+
+
+def multi_try(source, zipped, default=None):
+    value = None
+
+    for func, error in zipped:
+        try:
+            value = func(source)
+        except error:
+            pass
+        else:
+            return value
+    else:
+        return default
+
+
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
 # http://api.stackexchange.com/2.2/tags?
@@ -189,7 +210,7 @@ def memoize(*args, **kwargs):
     return Cache(**cache_config).memoize(*args, **kwargs)
 
 
-def remove_keys (content, *args):
+def remove_keys(content, *args):
     """Remove keys from a dict and return new dict"""
     return {k: v for k, v in content.items() if k not in args}
 
@@ -322,7 +343,7 @@ def cast(content, _type='text'):
         'text': {'default': '', 'func': encode},
         'unicode': {'default': u'', 'func': unicode},
         'date': {'default': TODAY, 'func': cast_date},
-        'url':  {'default': '', 'func': url_quote},
+        'url': {'default': '', 'func': url_quote},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
         'pass': {'default': None, 'func': lambda i: i},
         'none': {'default': None, 'func': lambda _: None},
@@ -525,7 +546,8 @@ def multi_substitute(word, rules):
         i = 0
 
         for match in regex.finditer(word):
-            item = it.ifilter(itemgetter(1), match.groupdict().iteritems()).next()
+            items = match.groupdict().iteritems()
+            item = it.ifilter(itemgetter(1), items).next()
 
             # print('----------------')
             # print('groupdict:', match.groupdict().items())

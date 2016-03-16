@@ -28,7 +28,9 @@ from . import processor
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
 
-OPTS = {'listize': True, 'ftype': 'unicode', 'field': 'content', 'extract': 'rule'}
+OPTS = {
+    'listize': True, 'ftype': 'unicode', 'field': 'content', 'extract': 'rule'}
+
 DEFAULTS = {}
 logger = Logger(__name__).logger
 
@@ -213,4 +215,3 @@ def pipe(*args, **kwargs):
         2
     """
     return parser(*args, **kwargs)
-

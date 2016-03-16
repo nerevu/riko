@@ -11,8 +11,10 @@ Examples:
         >>> from pipe2py.lib.collections import SyncPipe
         >>> from pipe2py import get_url
         >>>
-        >>> conf = {'url': {'value': get_url('gigs.json')}, 'path': 'value.items'}
-        >>> skwargs = {'field': 'description', 'delimeter': '<br>', 'emit': True}
+        >>> url = {'value': get_url('gigs.json')}
+        >>> conf = {'url': url, 'path': 'value.items'}
+        >>> skwargs = {
+        ...     'field': 'description', 'delimiter': ',', 'emit': True}
         >>> (SyncPipe('fetchdata', conf=conf)
         ...     .sort().stringtokenizer(**skwargs).count().list)
         [{u'count': 343}]
@@ -34,21 +36,13 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-import itertools
-
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
-
 from functools import partial
 from itertools import imap, izip, repeat
 from importlib import import_module
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool, cpu_count
 
-from pipe2py import modules
-from pipe2py.lib.utils import multiplex
+from pipe2py.lib.utils import multiplex, multi_try
 from pipe2py.lib.log import Logger
 
 logger = Logger(__name__).logger
@@ -64,8 +58,9 @@ class PyPipe(object):
 
 class SyncPipe(PyPipe):
     """A synchronous Pipe object"""
-    def __init__(self, name, source=None, workers=None, chunksize=None, **kwargs):
+    def __init__(self, name, source=None, workers=None, **kwargs):
         super(SyncPipe, self).__init__(name, **kwargs)
+        chunksize = kwargs.get('chunksize')
 
         if kwargs.pop('listize', False) and source:
             self.source = list(source)
@@ -172,19 +167,6 @@ def get_worker_cnt(length, threads=True):
     return min(length or 1, cpu_count() * multiplier)
 
 
-def multi_try(source, zipped, default=None):
-    value = None
-
-    for func, error in zipped:
-        try:
-            value = func(source)
-        except error:
-            pass
-        else:
-            return value
-    else:
-        return default
-
 def lenish(source, default=50):
     funcs = (len, lambda x: getattr(x, '__length_hint__')())
     errors = (TypeError, AttributeError)
@@ -203,4 +185,3 @@ def getpipe(args, pipe=SyncPipe):
     conf = {'sleep': sleep}
     conf.update(source)
     return pipe(ptype, conf=source).list
-

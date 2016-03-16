@@ -71,7 +71,9 @@ def asyncPipe(*args, **kwargs):
 
             currency (str): The currency ISO abbreviation (default: USD).
 
-        assign (str): Attribute to assign parsed content (default: currencyformat)
+        assign (str): Attribute to assign parsed content (default:
+            currencyformat)
+
         field (str): Item attribute from which to obtain the string to be
             formatted (default: 'content')
 
@@ -111,7 +113,9 @@ def pipe(*args, **kwargs):
 
             currency (str): The currency ISO abbreviation (default: USD).
 
-        assign (str): Attribute to assign parsed content (default: currencyformat)
+        assign (str): Attribute to assign parsed content (default:
+            currencyformat)
+
         field (str): Item attribute from which to obtain the string to be
             formatted (default: 'content')
 
@@ -127,4 +131,3 @@ def pipe(*args, **kwargs):
         True
     """
     return parser(*args, **kwargs)
-

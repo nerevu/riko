@@ -145,4 +145,3 @@ def pipe(*args, **kwargs):
         [1, 2, 3, 4]
     """
     return parser(*args, **kwargs)
-

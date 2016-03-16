@@ -8,6 +8,7 @@ Provides functions for fetching csv files.
 Examples:
     basic usage::
 
+        >>> from . import FILES
         >>> from pipe2py.modules.pipecsv import pipe
         >>> pipe(conf={'url': FILES[6]}).next()['mileage']
         u'7213'
@@ -26,7 +27,7 @@ from urllib2 import urlopen
 from meza.io import read_csv
 from twisted.internet.defer import inlineCallbacks, returnValue
 
-from . import processor, FEEDS, FILES
+from . import processor
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
@@ -57,6 +58,7 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -79,7 +81,9 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         f = yield tu.urlOpen(url)
-        odd = {'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
+        odd = {
+            'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
+
         rkwargs = utils.combine_dicts(objconf.to_dict(), odd)
         feed = read_csv(f, **rkwargs)
 
@@ -99,7 +103,9 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
 
     Examples:
+        >>> from . import FILES
         >>> from pipe2py.lib.utils import Objectify
+        >>>
         >>> conf = {'url': FILES[6], 'sanitize': True, 'skip_rows': 0}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'feed': {}}
@@ -112,7 +118,8 @@ def parser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         f = urlopen(url)
-        odd = {'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
+        odd = {
+            'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
         rkwargs = utils.combine_dicts(objconf.to_dict(), odd)
         feed = read_csv(f, **rkwargs)
 
@@ -138,8 +145,8 @@ def asyncPipe(*args, **kwargs):
             quotechar (str): Quote character (default: '"').
             encoding (str): File encoding (default: 'utf-8').
             has_header (bool): Has header row (default: True).
-            skip_rows (int): Number of initial rows to skip (zero based, default:
-                0).
+            skip_rows (int): Number of initial rows to skip (zero based,
+                default: 0).
 
             sanitize (bool): Underscorify and lowercase field names
                 (default: False).
@@ -152,6 +159,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['mileage'])
@@ -186,8 +194,8 @@ def pipe(*args, **kwargs):
             quotechar (str): Quote character (default: '"').
             encoding (str): File encoding (default: 'utf-8').
             has_header (bool): Has header row (default: True).
-            skip_rows (int): Number of initial rows to skip (zero based, default:
-                0).
+            skip_rows (int): Number of initial rows to skip (zero based,
+                default: 0).
 
             sanitize (bool): Underscorify and lowercase field names
                 (default: False).
@@ -199,8 +207,8 @@ def pipe(*args, **kwargs):
         dict: an item on the feed
 
     Examples:
+        >>> from . import FILES
         >>> pipe(conf={'url': FILES[6]}).next()['mileage']
         u'7213'
     """
     return parser(*args, **kwargs)
-

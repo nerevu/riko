@@ -102,7 +102,8 @@ def asyncParser(base, objconf, skip, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0])
         ...     url = get_url('quote.json')
-        ...     conf = {'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
+        ...     conf = {
+        ...         'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
         ...     item = {'base': 'GBP'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'feed': item, 'assign': 'content'}
@@ -204,7 +205,9 @@ def asyncPipe(*args, **kwargs):
                 http://finance.yahoo.com...)
 
             params (dict): The API url parameters (default: {'format': 'json'})
-            currency: The (exchanging to) currency ISO abbreviation (default: USD).
+            currency: The (exchanging to) currency ISO abbreviation (default:
+                USD).
+
             sleep (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
@@ -212,7 +215,8 @@ def asyncPipe(*args, **kwargs):
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'content')
 
-            assign (str): Attribute to assign parsed content (default: exchangerate)
+            assign (str): Attribute to assign parsed content (default:
+                exchangerate)
 
     Returns:
         dict: twisted.internet.defer.Deferred feed of items
@@ -254,7 +258,9 @@ def pipe(*args, **kwargs):
                 http://finance.yahoo.com...)
 
             params (dict): The API url parameters (default: {'format': 'json'})
-            currency: The (exchanging to) currency ISO abbreviation (default: USD).
+            currency: The (exchanging to) currency ISO abbreviation (default:
+                USD).
+
             sleep (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
@@ -262,7 +268,8 @@ def pipe(*args, **kwargs):
             field (str): Item attribute from which to obtain the string to be
                 formatted (default: 'content')
 
-            assign (str): Attribute to assign parsed content (default: exchangerate)
+            assign (str): Attribute to assign parsed content (default:
+                exchangerate)
 
     Yields:
         dict: an item of the result
@@ -270,7 +277,8 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from pipe2py import get_url
         >>> url = get_url('quote.json')
-        >>> rate = pipe({'base': 'GBP'}, conf={'url': url}).next()['exchangerate']
+        >>> conf = {'url': url}
+        >>> rate = pipe({'base': 'GBP'}, conf=conf).next()['exchangerate']
         >>> rate
         Decimal('1.545801')
         >>> 'There are %#.2f GBPs per USD' % rate
@@ -283,4 +291,3 @@ def pipe(*args, **kwargs):
         Decimal('NaN')
     """
     return parser(*args, **kwargs)
-

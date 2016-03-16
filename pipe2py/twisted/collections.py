@@ -12,8 +12,10 @@ Examples:
         >>> from pipe2py.twisted.collections import AsyncPipe, AsyncCollection
         >>> from pipe2py import get_url
         >>>
-        >>> conf = {'url': {'value': get_url('gigs.json')}, 'path': 'value.items'}
-        >>> skwargs = {'field': 'description', 'delimeter': '<br>', 'emit': True}
+        >>> url = {'value': get_url('gigs.json')}
+        >>> conf = {'url': url, 'path': 'value.items'}
+        >>> skwargs = {
+        ...     'field': 'description', 'delimiter': ',', 'emit': True}
         >>>
         >>> @inlineCallbacks
         ... def run(reactor):
@@ -40,11 +42,10 @@ from __future__ import (
 
 from functools import partial
 from importlib import import_module
-from itertools import izip, repeat
 
 from twisted.internet.defer import inlineCallbacks, returnValue
 
-from pipe2py.lib.collections import PyPipe, PyCollection, multi_try, getpipe
+from pipe2py.lib.collections import PyPipe, PyCollection, getpipe
 from pipe2py.lib.utils import multiplex
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
@@ -114,4 +115,3 @@ def asyncListPipe(args):
 def asyncGetPipe(args):
     source, sleep = args
     return getpipe((source, sleep), pipe=AsyncPipe)
-

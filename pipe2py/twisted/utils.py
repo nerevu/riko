@@ -25,9 +25,10 @@ from twisted.internet.fdesc import readFromFD, setNonBlocking
 from twisted.internet.interfaces import IReactorCore
 from twisted.internet.reactor import callLater
 from twisted.protocols.basic import FileSender
-from twisted.web.client import getPage
-from twisted.test.proto_helpers import MemoryReactor, AccumulatingProtocol, StringTransport
-from twisted.web.microdom import Text, EntityReference
+from twisted.web.client import getPage, downloadPage
+from twisted.web.microdom import EntityReference
+from twisted.test.proto_helpers import (
+    MemoryReactor, AccumulatingProtocol, StringTransport)
 
 from pipe2py.lib.log import Logger
 from pipe2py.lib.utils import _make_content
@@ -40,6 +41,7 @@ asyncPartial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
 global FAKE_REACTOR
 FAKE_REACTOR = False
+
 
 # http://stackoverflow.com/q/26314586/408556
 # http://stackoverflow.com/q/8157197/408556

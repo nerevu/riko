@@ -31,7 +31,6 @@ from __future__ import (
 
 from . import processor
 from pipe2py.lib.log import Logger
-from pipe2py.twisted import utils as tu
 
 OPTS = {'ftype': 'unicode', 'ptype': 'int', 'field': 'content'}
 DEFAULTS = {'start': 0, 'length': 0}
@@ -93,6 +92,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['substr'])

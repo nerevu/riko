@@ -13,9 +13,11 @@ Examples:
     basic usage::
 
         >>> from pipe2py.modules.pipefetchpage import pipe
+        >>> from . import FILES
+        >>>
         >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
         >>> pipe(conf=conf).next()['content']  # doctest: +ELLIPSIS
-        u'CNN.com International - Breaking, World..., Entertainment and Video News'
+        u'CNN.com International - Breaking, World..., Entertainment and...'
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -28,12 +30,10 @@ from __future__ import (
 
 from urllib2 import urlopen
 from twisted.internet.defer import inlineCallbacks, returnValue
-from twisted.web.client import getPage
 
-from . import processor, FEEDS, FILES
+from . import processor
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
-from pipe2py.lib.dotdict import DotDict
 from pipe2py.twisted import utils as tu
 
 OPTS = {'ftype': 'none'}
@@ -70,6 +70,7 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -113,6 +114,8 @@ def parser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from pipe2py.lib.utils import Objectify
+        >>> from . import FILES
+        >>>
         >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'feed': {}, 'assign': 'content'}
@@ -146,7 +149,9 @@ def asyncPipe(*args, **kwargs):
             contain the keys 'start', 'end', 'token', or 'assign'.
 
             url (str): The web site to fetch
-            start (str): The starting string to fetch (exclusive, default: None).
+            start (str): The starting string to fetch (exclusive, default:
+                None).
+
             end (str): The ending string to fetch (exclusive, default: None).
             token (str): The tokenizer delimiter string (default: None).
             assign (str): Attribute to assign parsed content (default: content)
@@ -156,6 +161,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next())
@@ -187,7 +193,9 @@ def pipe(*args, **kwargs):
             contain the keys 'start', 'end', 'token', or 'assign'.
 
             url (str): The web site to fetch
-            start (str): The starting string to fetch (exclusive, default: None).
+            start (str): The starting string to fetch (exclusive, default:
+                None).
+
             end (str): The ending string to fetch (exclusive, default: None).
             token (str): The tokenizer delimiter string (default: None).
             assign (str): Attribute to assign parsed content (default: content)
@@ -199,6 +207,7 @@ def pipe(*args, **kwargs):
         dict: an item on the feed
 
     Examples:
+        >>> from . import FILES
         >>> conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
         >>> pipe(conf=conf).next()
         {u'content': u'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}

@@ -23,16 +23,9 @@ Attributes:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
-
-from functools import partial
-from itertools import starmap, imap
-from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+    absolute_import, division, print_function, unicode_literals)
 
 from . import processor
-from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncStarMap
 from pipe2py.lib.log import Logger
 
 OPTS = {'listize': True, 'extract': 'part'}
@@ -55,8 +48,7 @@ def parser(_, parts, skip, **kwargs):
         Tuple(str, bool): Tuple of (the concatenated string, skip)
 
     Examples:
-        >>> result, skip = parser(None, ['one', 'two'], False)
-        >>> result
+        >>> parser(None, ['one', 'two'], False)[0]
         u'onetwo'
     """
     try:
@@ -150,4 +142,3 @@ def pipe(*args, **kwargs):
         u'<img src="http://www.site.com">'
     """
     return parser(*args, **kwargs)
-

@@ -12,7 +12,6 @@ from __future__ import (
     unicode_literals)
 
 from . import utils, log
-from itertools import starmap
 from feedparser import FeedParserDict
 
 logger = log.Logger(__name__).logger

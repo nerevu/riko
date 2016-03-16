@@ -68,4 +68,3 @@ def get_rss(url):
         f = ifilter(None, url.splitlines())
 
     return gen_entries(f, parser)
-

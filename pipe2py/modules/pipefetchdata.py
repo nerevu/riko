@@ -11,7 +11,9 @@ can then be converted into an RSS feed or merged with other data in your Pipe.
 Examples:
     basic usage::
 
+        >>> from . import FILES
         >>> from pipe2py.modules.pipefetchdata import pipe
+        >>>
         >>> conf = {'url': FILES[2], 'path': 'value.items'}
         >>> pipe(conf=conf).next()['title']
         u'Business System Analyst'
@@ -22,19 +24,16 @@ Attributes:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 from lxml import objectify, html
 from lxml.html import html5parser
-from lxml.etree import XMLSyntaxError, ParseError
 from urllib2 import urlopen
 from json import loads
 from os.path import splitext
-from functools import partial
 from twisted.internet.defer import inlineCallbacks, returnValue
 
-from . import processor, FEEDS, FILES
+from . import processor
 from pipe2py.lib import utils
 from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
@@ -75,6 +74,7 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -130,7 +130,9 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (feed, skip)
 
     Examples:
+        >>> from . import FILES
         >>> from pipe2py.lib.utils import Objectify
+        >>>
         >>> objconf = Objectify({'url': FILES[2], 'path': 'value.items'})
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
@@ -183,6 +185,7 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
+        >>> from . import FILES
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['title'])
@@ -224,6 +227,8 @@ def pipe(*args, **kwargs):
         dict: an iterator of items
 
     Examples:
+        >>> from . import FILES
+        >>>
         >>> path = 'value.items'
         >>> conf = {'url': {'value': FILES[2]}, 'path': {'value': path}}
         >>> pipe(conf=conf).next()['title']
