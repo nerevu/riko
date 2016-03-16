@@ -646,6 +646,7 @@ def get_broadcast_funcs(**kwargs):
     kw = utils.Objectify(kwargs, conf={})
     pieces = kw.conf[kw.extract] if kw.extract else kw.conf
     no_conf = remove_keys(kwargs, 'conf')
+    noop = partial(utils.cast, _type='none')
 
     if kw.listize:
         listed = utils.listize(pieces)
@@ -653,13 +654,14 @@ def get_broadcast_funcs(**kwargs):
         parser = partial(utils.parse_conf, **no_conf)
         pfuncs = [partial(parser, conf=conf) for conf in piece_defs]
         get_pieces = lambda item: utils.broadcast(item, *pfuncs)
-    else:
+    elif kw.ptype != 'none':
         conf = DotDict(pieces) if kw.pdictize and pieces else pieces
         get_pieces = partial(utils.parse_conf, conf=conf, **no_conf)
+    else:
+        get_pieces = noop
 
-    noop = partial(utils.cast, _type='none')
-    gfunc = partial(utils.get_field, **kwargs)
-    get_field = noop if kw.ftype == 'none' else gfunc
+    ffunc = partial(utils.get_field, **kwargs)
+    get_field = noop if kw.ftype == 'none' else ffunc
     return (get_field, get_pieces, partial(utils.get_skip, **kwargs))
 
 
@@ -667,7 +669,7 @@ def get_dispatch_funcs(**kwargs):
     pfunc =  partial(utils.cast, _type=kwargs['ptype'])
     field_dispatch = partial(utils.cast, _type=kwargs['ftype'])
 
-    if kwargs['objectify']:
+    if kwargs['objectify'] and kwargs['ptype'] not in {'none', 'pass'}:
         piece_dispatch = lambda p: utils.Objectify(p.items(), func=pfunc)
     else:
         piece_dispatch = pfunc

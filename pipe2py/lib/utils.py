@@ -25,6 +25,7 @@ from os import path as p, environ
 from collections import defaultdict
 from calendar import timegm
 from decimal import Decimal
+from urllib import urlencode
 
 from mezmorize import Cache
 from dateutil.parser import parse
@@ -98,6 +99,8 @@ class Objectify(object):
             >>> kw.three
             3
             >>> kw.four
+            >>> kw.get('one')
+            1
         """
         defaults.update(kwargs)
         self.__dict__.update(defaults)
@@ -122,6 +125,12 @@ class Objectify(object):
 
     def __getattr__(self, name):
         return None
+
+    def __getitem__(self, key):
+        return self.attrs[key]
+
+    def get(self, key, default=None):
+        return self.attrs.get(key, default)
 
     def to_dict(self):
         return self.attrs
@@ -201,11 +210,11 @@ def group_by(iterable, attr, default=None):
     data = list(iterable)
     order = unique_everseen(data, keyfunc(attr))
     sorted_iterable = sorted(data, key=keyfunc(attr))
-    groups = it.groupby(sorted_iterable, keyfunc(attr))
-    grouped = {str(k): list(v) for k, v in groups}
+    grouped = it.groupby(sorted_iterable, keyfunc(attr))
+    groups = {str(k): list(v) for k, v in grouped}
 
     # return groups in original order
-    return {key: grouped[key] for key in order}
+    return ((key, groups[key]) for key in order)
 
 
 def unique_everseen(iterable, key=None):
@@ -311,7 +320,7 @@ def cast(content, _type='text'):
         'decimal': {'default': Decimal(0), 'func': Decimal},
         'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': encode},
-        'unicode': {'default': '', 'func': unicode},
+        'unicode': {'default': u'', 'func': unicode},
         'date': {'default': TODAY, 'func': cast_date},
         'url':  {'default': '', 'func': url_quote},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
@@ -448,16 +457,12 @@ def get_abspath(url):
     return url
 
 
-
-
-def rreplace(s, find, replace, count=None):
-    li = s.rsplit(find, count)
-    return replace.join(li)
-
-
-def url_quote(url):
+def url_quote(url, params=None):
     """Ensure url is valid"""
-    return quote(url, safe=URL_SAFE)
+    stripped = url.rstrip('/')
+    quoted = quote(stripped, safe=URL_SAFE)
+    quoted += '?%s' % urlencode(params) if params and url else ''
+    return quoted
 
 
 def listize(item):
@@ -554,7 +559,6 @@ def multi_substitute(word, rules):
                 words = [word[:start], splits, word[end:]]
                 i += rule['offset']
 
-            # words = list(words)
             word = ''.join(words)
 
             # print('name:', name)
@@ -580,43 +584,23 @@ def substitute(word, rule):
     return result
 
 
-# @memoize(TIMEOUT)
-def fix_pattern(word, rule):
-    if '$' in word:
-        pattern = rule['match'].sub(rule['replace'], word, rule['count'])
-    else:
-        pattern = word
-
-    return pattern
-
-
-# @memoize(TIMEOUT)
 def get_new_rule(rule, recompile=False):
-    # flag 'i' --> 2
-    flags = re.IGNORECASE if rule.get('ignorecase') else 0
-
-    # flag 'm' --> 8
-    flags |= re.MULTILINE if rule.get('multilinematch') else 0
-
-    # flag 's' --> 16
-    flags |= re.DOTALL if rule.get('singlelinematch') else 0
-
-    # flag 'g' --> 0
+    flags = 0 if rule.get('casematch') else re.IGNORECASE
+    flags |= 0 if rule.get('singlelinematch') else re.MULTILINE
+    flags |= re.DOTALL if rule.get('dotall') else 0
     count = 0 if rule.get('globalmatch') else 1
-    field = rule.get('field')
 
-    if recompile:
-        fix = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
-        replace = fix_pattern(rule['replace'], fix)
-        matchc = re.compile(rule['match'], flags)
+    if recompile and '$' in rule['replace']:
+        replace = re.sub('\$(\d+)', r'\\\1', rule['replace'], 0)
     else:
         replace = rule['replace']
-        matchc = rule['match']
+
+    match = re.compile(rule['match'], flags) if recompile else rule['match']
 
     nrule = {
-        'match': matchc,
+        'match': match,
         'replace': replace,
-        'field': field,
+        'field': rule.get('field'),
         'count': count,
         'flags': flags,
         'series': rule.get('seriesmatch', True),
@@ -624,12 +608,6 @@ def get_new_rule(rule, recompile=False):
     }
 
     return nrule
-
-
-def convert_rules(rules, recompile=False):
-    # Convert replace pattern to Python/Linux format
-    rule_func = partial(get_new_rule, recompile=recompile)
-    return it.imap(rule_func, rules)
 
 
 def multiplex(sources):
@@ -654,11 +632,10 @@ def gen_entries(parsed):
         yield entry
 
 
-def gen_items(item, yield_if_none=False):
-    if item and hasattr(item, 'append'):
-        for nested_item in item:
-            yield nested_item
-    elif item:
-        yield item
-    elif yield_if_none:
-        yield
+def gen_items(content, key):
+    if hasattr(content, 'append'):
+        for nested in content:
+            for i in gen_items(nested, key):
+                yield i
+    elif content:
+        yield {key: content}

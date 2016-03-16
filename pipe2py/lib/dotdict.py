@@ -11,9 +11,11 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-from . import utils
+from . import utils, log
 from itertools import starmap
 from feedparser import FeedParserDict
+
+logger = log.Logger(__name__).logger
 
 
 class DotDict(FeedParserDict):
@@ -42,7 +44,6 @@ class DotDict(FeedParserDict):
 
     def _parse_key(self, key=None):
         try:
-            # remove any trailing '.'
             keys = key.rstrip('.').split('.') if key else []
         except AttributeError:
             keys = [key['subkey']] if key else []
@@ -51,11 +52,16 @@ class DotDict(FeedParserDict):
 
     def _parse_value(self, value, key, default=None):
         try:
-            value = value[key]
-        except (KeyError, TypeError):
-            value = value if key in {'value', 'content', 'utime'} else None
+            parsed = value[key]
+        except KeyError:
+            parsed = value['value'] if 'value' in value else default
+        except (TypeError, IndexError):
+            if hasattr(value, 'append'):
+                parsed = [v[key] for v in value]
+            else:
+                parsed = value
 
-        return default if value is None else value
+        return default if parsed is None else parsed
 
     def delete(self, key):
         keys = self._parse_key(key)
@@ -79,7 +85,7 @@ class DotDict(FeedParserDict):
         value = DotDict(self.copy())
 
         for key in keys:
-            if not value:
+            if key == 'value':
                 break
 
             try:

@@ -2,7 +2,6 @@
 
 from pipe2py.modules import pipefetch
 from pipe2py.modules import pipefilter
-from pipe2py.modules.pipeoutput import pipe_output
 
 
 def pipe_testpipe1(context=None, _INPUT=None, conf=None, **kwargs):
@@ -16,10 +15,8 @@ def pipe_testpipe1(context=None, _INPUT=None, conf=None, **kwargs):
     sw_90 = pipefetch.pipe(
         context=context, conf={'URL': {'type': 'url', 'value': 'file://data/feed.xml'}})
 
-    sw_102 = pipefilter.pipe(
+    _OUTPUT = pipefilter.pipe(
         sw_90, context=context, conf={'COMBINE': {'type': 'text', 'value': 'and'}, 'MODE': {'type': 'text', 'value': 'permit'}, 'RULE': [{'field': {'type': 'text', 'value': 'description'}, 'value': {'type': 'text', 'value': 'the'}, 'op': {'type': 'text', 'value': 'contains'}}]})
-
-    _OUTPUT = pipe_output(context, sw_102, conf=[])
 
     return _OUTPUT
 

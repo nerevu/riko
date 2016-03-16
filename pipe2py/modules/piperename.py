@@ -1,114 +1,204 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.piperename
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.piperename
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for renaming, copying, and deleting elements of a feed item.
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators#Rename
+There are several cases when this is useful, for example when the input data is
+not in RSS format (e.g., elements are not named title, link, description, etc.)
+and you want to output it as RSS, or when the input data contains geographic
+data but their element names aren't recognized by the Location Extractor
+module.
+
+You rename an element by creating a mapping between the original name and a new
+element name. You delete an element by not supplying a new element name. You
+copy an element by setting the `copy` field to True.
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.piperename import pipe
+        >>> conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
+        >>> pipe({'content': 'hello world'}, conf=conf).next()
+        {u'greeting': u'hello world'}
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
-from functools import partial
 from twisted.internet.defer import inlineCallbacks, returnValue
-from . import get_split, get_dispatch_funcs
-from pipe2py.lib.utils import combine_dicts as cdicts
+
+from . import processor
+from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
 
-opts = {'ftype': 'pass', 'dictize': True}
+OPTS = {'extract': 'rule', 'listize': True, 'emit': True}
+DEFAULTS = {}
+logger = Logger(__name__).logger
 
 
-# Common functions
-def func(item, rule, **kwargs):
-    try:
-        item.set(rule.newval, item.get(rule.field, **kwargs))
-    except (IndexError):
-        # Catch error when 'newval' is blank (equivalent to deleting field)
-        pass
-
-    if rule.op == 'rename':
-        item.delete(rule.field)
-
+def reducer(item, rule):
+    item.set(rule.newval, item.get(rule.field)) if rule.newval else None
+    None if rule.copy else item.delete(rule.field)
     return item
 
 
-# Async functions
-def asyncParseResult(rules, item, _pass, **kwargs):
-    reduce_func = partial(func, **kwargs)
-    if _pass:
-        # return tu.asyncReturn(item)
-        result = tu.asyncReturn(item)
-        return result
-    else:
-        result = tu.coopReduce(reduce_func, rules, item)
-        return result
-
-
 @inlineCallbacks
-def asyncPipeRename(context=None, item=None, conf=None, **kwargs):
-    """An operator that asynchronously renames or copies fields in the input
-    source. Not loopable.
+def asyncParser(item, rules, skip, **kwargs):
+    """ Asynchronously parses the pipe content
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    item : asyncPipe like object (twisted Deferred iterable of items)
-    conf : {
-        'RULE': [
-            {
-                'op': {'value': 'rename or copy'},
-                'field': {'value': 'old field'},
-                'newval': {'value': 'new field'}
-            }
-        ]
-    }
+    Args:
+        item (obj): The entry to process (a DotDict instance)
+        rules (List[obj]): the parsed rules (Objectify instances).
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
 
-    kwargs : other inputs, e.g., to feed terminals for rule values
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: exchangerate)
+        feed (dict): The original item
 
-    Returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of items
+    Returns:
+        Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.lib.dotdict import DotDict
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0])
+        ...     item = DotDict({'content': 'hello world'})
+        ...     rule = {'field': 'content', 'newval': 'greeting'}
+        ...     kwargs = {'feed': item}
+        ...     d = asyncParser(item, [Objectify(rule)], False, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'greeting': u'hello world'}
     """
-    pkwargs = cdicts(opts, kwargs, {'async': False})
-    split = get_split(item, conf['RULE'], **pkwargs)
-    # asyncFuncs = get_dispatch_funcs('pass', async=True)
-    # parsed = yield tu.asyncDispatch(split, *asyncFuncs)
-    _OUTPUT = yield asyncParseResult(*split, **kwargs)
-    # print _OUTPUT
-    returnValue(_OUTPUT)
+    if skip:
+        item = kwargs['feed']
+    else:
+        item = yield tu.coopReduce(reducer, rules, item)
+
+    result = (item, skip)
+    returnValue(result)
 
 
-# Synchronous functions
-def parse_result(rules, item, _pass, **kwargs):
-    reduce_func = partial(func, **kwargs)
-    return item if _pass or not item else reduce(reduce_func, rules, item)
+def parser(item, rules, skip, **kwargs):
+    """ Parsers the pipe content
 
+    Args:
+        item (obj): The entry to process (a DotDict instance)
+        rules (List[obj]): the parsed rules (Objectify instances).
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
 
-def pipe_rename(context=None, item=None, conf=None, **kwargs):
-    """An operator that renames or copies item fields. Not loopable.
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: exchangerate)
+        feed (dict): The original item
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    item : dict
-    conf : {
-        'RULE': [
-            {
-                'op': {'value': 'rename or copy'},
-                'field': {'value': 'old field'},
-                'newval': {'value': 'new field'}
-            }
-        ]
-    }
+    Returns:
+        Tuple (dict, bool): Tuple of (item, skip)
 
-    kwargs : other inputs, e.g., to feed terminals for rule values
-
-    Returns
-    -------
-    _OUTPUT : item
+    Examples:
+        >>> from pipe2py.lib.dotdict import DotDict
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> item = DotDict({'content': 'hello world'})
+        >>> rule = {'field': 'content', 'newval': 'greeting'}
+        >>> kwargs = {'feed': item}
+        >>> parser(item, [Objectify(rule)], False, **kwargs)[0]
+        {u'greeting': u'hello world'}
     """
-    split = get_split(item, conf['RULE'], **cdicts(opts, kwargs))
-    _OUTPUT = parse_result(*split, **kwargs)
-    return _OUTPUT
+    item = kwargs['feed'] if skip else reduce(reducer, rules, item)
+    return item, skip
+
+
+@processor(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A processor module that asynchronously renames or copies fields in a
+    feed item.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'rule'.
+
+            rule (dict): can be either a dict or list of dicts. Must contain
+                the key 'field'.
+
+                field (str): The item attribute to rename
+                newval (str): The new item attribute name
+                copy (bool): Copy the item attribute instead of renaming it
+                    (default: False)
+
+    Returns:
+       Deferred: twisted.internet.defer.Deferred item with concatenated content
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next())
+        ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
+        ...     d = asyncPipe({'content': 'hello world'}, conf=conf)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'greeting': u'hello world'}
+    """
+    return asyncParser(*args, **kwargs)
+
+
+@processor(**OPTS)
+def pipe(*args, **kwargs):
+    """A processor that renames or copies fields in a feed item.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'rule'.
+
+            rule (dict): can be either a dict or list of dicts. Must contain
+                the key 'field'.
+
+                field (str): The item attribute to rename
+                newval (str): The new item attribute name
+                copy (bool): Copy the item attribute instead of renaming it
+                    (default: False)
+
+    Yields:
+        dict: an item with concatenated content
+
+    Examples:
+        >>> rule = {'field': 'content', 'newval': 'greeting'}
+        >>> pipe({'content': 'hello world'}, conf={'rule': rule}).next()
+        {u'greeting': u'hello world'}
+        >>> conf = {'rule': {'field': 'content'}}
+        >>> pipe({'content': 'hello world'}, conf=conf).next()
+        {}
+        >>> rule['copy'] = True
+        >>> result = pipe({'content': 'hello world'}, conf={'rule': rule})
+        >>> sorted(result.next().keys())
+        [u'content', u'greeting']
+    """
+    return parser(*args, **kwargs)
+
