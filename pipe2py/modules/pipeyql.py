@@ -106,14 +106,15 @@ def asyncParser(_, objconf, skip, **kwargs):
         # todo: consider paging for large result sets
         f = kwargs.get('response')
 
-        if not f:
+        if f:
+            root = yield microdom.parse(f)
+        else:
             params = {'q': objconf.query, 'diagnostics': objconf.debug}
             r = yield treq.get(objconf.url, params=params)
-            f = treq.content(r)
+            content = yield treq.content(r)
+            root = yield microdom.parseString(content)
 
-        root = yield microdom.parse(f)
         results = root.getElementsByTagName('results')[0]
-        logger.debug(results)
         feed = imap(tu.elementToDict, results.childNodes)
 
     result = (feed, skip)

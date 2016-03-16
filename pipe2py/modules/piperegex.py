@@ -20,14 +20,13 @@ from functools import partial
 from itertools import starmap
 from twisted.internet import defer as df
 from twisted.internet.defer import inlineCallbacks, returnValue
-from . import get_dispatch_funcs, get_split
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
 from pipe2py.twisted import utils as tu
 
 opts = {'convert': False, 'ftype': 'pass', 'dictize': True}
 substitute = utils.multi_substitute
-convert_func = partial(utils.convert_rules, recompile=False)
+convert_func = partial(utils.get_new_rule, recompile=False)
 
 
 # Common functions

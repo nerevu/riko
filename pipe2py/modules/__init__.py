@@ -250,7 +250,7 @@ class processor(object):
             {u'content': u'say "hello world" three times!'}
         """
         self.defaults = defaults or {}
-        self.opts = opts
+        self.opts = opts or {}
         self.async = async
 
     def __call__(self, pipe):
@@ -356,7 +356,6 @@ class processor(object):
             parsed, orig_item = dispatch(_input, bfuncs, dfuncs=dfuncs)
 
             if self.async:
-                r = pipe(*parsed, feed=orig_item, **kwargs)
                 feed, skip = yield pipe(*parsed, feed=orig_item, **kwargs)
             else:
                 feed, skip = pipe(*parsed, feed=orig_item, **kwargs)
@@ -489,7 +488,7 @@ class operator(object):
             {u'content': 4}
         """
         self.defaults = defaults or {}
-        self.opts = opts
+        self.opts = opts or {}
         self.async = async
 
     def __call__(self, pipe):

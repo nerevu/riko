@@ -23,8 +23,7 @@ Examples:
     basic usage::
 
         >>> from pipe2py.modules.pipefetchsitefeed import pipe
-        >>> conf = {'url': {'value': FILES[4]}, 'path': 'value.items'}
-        >>> pipe(conf=conf).next()['title']
+        >>> pipe(conf={'url': {'value': FILES[4]}}).next()['title']
         u'Using NFC tags in the car'
 
 Attributes:
@@ -177,7 +176,7 @@ def asyncPipe(*args, **kwargs):
         ...
         Using NFC tags in the car
     """
-    return parser(*args, **kwargs)
+    return asyncParser(*args, **kwargs)
 
 
 @processor(**OPTS)

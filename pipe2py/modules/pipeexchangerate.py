@@ -117,7 +117,7 @@ def asyncParser(base, objconf, skip, **kwargs):
         1.545801
     """
     if skip:
-        item = kwargs['feed']
+        rate = kwargs['feed']
     elif objconf.url.startswith('http'):
         r = yield treq.get(objconf.url, params=objconf.params)
         json = yield treq.json_content(r)
@@ -126,9 +126,11 @@ def asyncParser(base, objconf, skip, **kwargs):
         content = yield tu.urlRead(abs_url, delay=objconf.sleep)
         json = loads(content)
 
-    places = Decimal(10) ** -objconf.precision
-    rates = parse_response(json)
-    rate = calc_rate(base, objconf.currency, rates, places=places)
+    if not skip:
+        places = Decimal(10) ** -objconf.precision
+        rates = parse_response(json)
+        rate = calc_rate(base, objconf.currency, rates, places=places)
+
     result = (rate, skip)
     returnValue(result)
 
@@ -163,7 +165,7 @@ def parser(base, objconf, skip, **kwargs):
         Decimal('1.545801')
     """
     if skip:
-        item = kwargs['feed']
+        rate = kwargs['feed']
     elif objconf.memoize:
         get = utils.memoize(utils.HALF_DAY)(requests.get)
         r = get(objconf.url, params=objconf.params)
@@ -177,9 +179,11 @@ def parser(base, objconf, skip, **kwargs):
         content = urlopen(abs_url, context=context).read()
         json = loads(content)
 
-    places = Decimal(10) ** -objconf.precision
-    rates = parse_response(json)
-    rate = calc_rate(base, objconf.currency, rates, places=places)
+    if not skip:
+        places = Decimal(10) ** -objconf.precision
+        rates = parse_response(json)
+        rate = calc_rate(base, objconf.currency, rates, places=places)
+
     return rate, skip
 
 

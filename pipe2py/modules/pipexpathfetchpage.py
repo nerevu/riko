@@ -210,7 +210,6 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['guid']['content'])
-        ...     path = 'value.items'
         ...     conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
