@@ -1,121 +1,215 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipefetchpage
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipefetchpage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for fetching web pages.
 
-    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchPage
+Fetches the source of a given web site as a string. This data can then be
+converted into an RSS feed or merged with other data in your Pipe using the
+`regex` module.
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipefetchpage import pipe
+        >>> from . import FILES
+        >>>
+        >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        >>> pipe(conf=conf).next()['content']  # doctest: +ELLIPSIS
+        u'CNN.com International - Breaking, World..., Entertainment and...'
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
-
-# Author: Gerrit Riessen, gerrit.riessen@open-source-consultants.de
-# Copyright (C) 2011 Gerrit Riessen
-# This code is licensed under the GNU Public License.
 
 from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
 from urllib2 import urlopen
+from twisted.internet.defer import inlineCallbacks, returnValue
+
+from . import processor
 from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+from pipe2py.lib.log import Logger
+from pipe2py.twisted import utils as tu
+
+OPTS = {'ftype': 'none'}
+logger = Logger(__name__).logger
 
 
-def _parse_content(content, conf, **kwargs):
-    from_delimiter = conf.get("from", **kwargs)
-    to_delimiter = conf.get("to", **kwargs)
-
-    # determine from location, i.e. from where to start reading
-    # content
-    from_location = 0
-
-    if from_delimiter != "":
-        from_location = content.find(from_delimiter)
-        # Yahoo! does not strip off the from_delimiter.
-        # if from_location > 0:
-        # from_location += len(from_delimiter)
-
-    # determine to location, i.e. where to stop reading content
-    to_location = 0
-
-    if to_delimiter != "":
-        to_location = content.find(to_delimiter, from_location)
-
-    # reduce the content depended on the to/from locations
-    if from_location > 0 and to_location > 0:
-        parsed = content[from_location:to_location]
-    elif from_location > 0:
-        parsed = content[from_location:]
-    elif to_location > 0:
-        parsed = content[:to_location]
-
-    return parsed
+def get_string(content, start, end):
+    # TODO: convert relative links to absolute
+    # TODO: remove the closing tag if using an HTML tag stripped of HTML tags
+    # TODO: clean html with Tidy
+    content = content.decode('utf-8')
+    start_location = content.find(start) if start else 0
+    right = content[start_location + len(start):]
+    end_location = right[1:].find(end) + 1 if end else len(right)
+    return right[:end_location] if end_location > 0 else right
 
 
-def pipe_fetchpage(context=None, _INPUT=None, conf=None, **kwargs):
-    """A source that fetches the content of a given web site as a string.
-    Loopable.
+@inlineCallbacks
+def asyncParser(_, objconf, skip, **kwargs):
+    """ Asynchronously parses the pipe content
 
-    context : pipe2py.Context object
-    _INPUT : pipeforever asyncPipe or an iterable of items or fields
+    Args:
+        _ (None): Ignored
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
 
-    conf : dict
-       URL -- url object contain the URL to download
-       from -- string from where to start the input
-       to -- string to limit the input
-       token -- if present, split the input on this token to generate items
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: content)
+        feed (dict): The original item
 
-       Description: http://pipes.yahoo.com/pipes/docs?doc=sources#FetchPage
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
 
-       TODOS:
-        - don't retrieve pages larger than 200k
-        - don't retrieve if page is not indexable.
-        - item delimiter removes the closing tag if using a HTML tag
-          (not documented but happens)
-        - items should be cleaned, i.e. stripped of HTML tags
-
-    Yields
-    ------
-    _OUTPUT : items
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from . import FILES
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0].next()['content'][:32])
+        ...     conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        ...     objconf = Objectify(conf)
+        ...     kwargs = {'feed': {}, 'assign': 'content'}
+        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        CNN.com International - Breaking
     """
-    conf = DotDict(conf)
-    split_token = conf.get('token', **kwargs)
-    urls = utils.listize(conf['URL'])
+    if skip:
+        feed = kwargs['feed']
+    else:
+        url = utils.get_abspath(objconf.url)
+        content = yield tu.urlRead(url)
+        parsed = get_string(content, objconf.start, objconf.end)
+        splits = parsed.split(objconf.token) if objconf.token else [parsed]
+        feed = ({kwargs['assign']: chunk} for chunk in splits)
 
-    for item in _INPUT:
-        for item_url in urls:
-            url = utils.get_value(DotDict(item_url), DotDict(item), **kwargs)
-            url = utils.get_abspath(url)
+    result = (feed, skip)
+    returnValue(result)
 
-            if not url:
-                continue
 
-            f = urlopen(url)
+def parser(_, objconf, skip, **kwargs):
+    """ Parses the pipe content
 
-            # TODO: it seems that Yahoo! converts relative links to
-            # absolute. This needs to be done on the content but seems to
-            # be a non-trival task python?
-            content = unicode(f.read(), 'utf-8')
+    Args:
+        _ (None): Ignored
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
 
-            if context and context.verbose:
-                print('............Content .................')
-                print(content)
-                print('...............EOF...................')
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
 
-            parsed = _parse_content(content, conf, **kwargs)
-            items = parsed.split(split_token) if split_token else [parsed]
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> from . import FILES
+        >>>
+        >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        >>> objconf = Objectify(conf)
+        >>> kwargs = {'feed': {}, 'assign': 'content'}
+        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> result.next()['content'][:32]
+        u'CNN.com International - Breaking'
+    """
+    if skip:
+        feed = kwargs['feed']
+    else:
+        url = utils.get_abspath(objconf.url)
+        content = urlopen(url).read()
+        parsed = get_string(content, objconf.start, objconf.end)
+        splits = parsed.split(objconf.token) if objconf.token else [parsed]
+        feed = ({kwargs['assign']: chunk} for chunk in splits)
 
-            if context and context.verbose:
-                print("FetchPage: found count items:", len(items))
+    return feed, skip
 
-            for i in items:
-                if context and context.verbose:
-                    print("--------------item data --------------------")
-                    print(i)
-                    print("--------------EOF item data ----------------")
 
-                yield {"content": i}
+@processor(async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A source that asynchronously fetches the content of a given web site as
+    a string.
 
-        if item.get('forever'):
-            # _INPUT is pipeforever and not a loop,
-            # so we just yield our item once
-            break
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the keys 'start', 'end', 'token', or 'assign'.
+
+            url (str): The web site to fetch
+            start (str): The starting string to fetch (exclusive, default:
+                None).
+
+            end (str): The ending string to fetch (exclusive, default: None).
+            token (str): The tokenizer delimiter string (default: None).
+            assign (str): Attribute to assign parsed content (default: content)
+
+    Returns:
+        dict: twisted.internet.defer.Deferred item with feeds
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from . import FILES
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next())
+        ...     path = 'value.items'
+        ...     conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
+        ...     d = asyncPipe(conf=conf)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'content': u'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
+    """
+    return asyncParser(*args, **kwargs)
+
+
+@processor(**OPTS)
+def pipe(*args, **kwargs):
+    """A source that fetches the content of a given web site as a string.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the keys 'start', 'end', 'token', or 'assign'.
+
+            url (str): The web site to fetch
+            start (str): The starting string to fetch (exclusive, default:
+                None).
+
+            end (str): The ending string to fetch (exclusive, default: None).
+            token (str): The tokenizer delimiter string (default: None).
+            assign (str): Attribute to assign parsed content (default: content)
+
+        field (str): Item attribute from which to obtain the string to be
+            tokenized (default: content)
+
+    Yields:
+        dict: an item on the feed
+
+    Examples:
+        >>> from . import FILES
+        >>> conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
+        >>> pipe(conf=conf).next()
+        {u'content': u'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
+    """
+    return parser(*args, **kwargs)

@@ -1,99 +1,212 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipestrreplace
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipestrreplace
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for string search-and-replace.
 
-    http://pipes.yahoo.com/pipes/docs?doc=string#StringReplace
+You provide the module with the text string to search for, and what to replace
+it with. Multiple search-and-replace pairs can be added. You can specify to
+replace all occurrences of the search string, just the first occurrence, or the
+last occurrence.
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipestrreplace import pipe
+        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        >>> pipe({'content': 'hello world'}, conf=conf).next()['strreplace']
+        u'bye world'
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
-from itertools import starmap
-from functools import partial
-from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from twisted.internet.defer import inlineCallbacks, returnValue
 
-from . import (
-    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
-from pipe2py.lib import utils
-from pipe2py.twisted.utils import (
-    asyncStarMap, asyncDispatch, asyncReturn, asyncReduce)
+from . import processor
+from pipe2py.lib.log import Logger
+from pipe2py.twisted import utils as tu
 
-SWITCH = {
-    '1': lambda word, rule: word.replace(rule.find, rule.replace, 1),
-    '2': lambda word, rule: utils.rreplace(word, rule.find, rule.replace, 1),
-    '3': lambda word, rule: word.replace(rule.find, rule.replace),
-    # todo: else assertion
+OPTS = {
+    'listize': True, 'ftype': 'unicode', 'field': 'content', 'extract': 'rule'}
+
+DEFAULTS = {}
+logger = Logger(__name__).logger
+
+PARAMS = {
+    'first': lambda word, rule: word.replace(rule.find, rule.replace, 1),
+    'last': lambda word, rule: rule.replace.join(word.rsplit(rule.find, 1)),
+    'every': lambda word, rule: word.replace(rule.find, rule.replace),
 }
 
-# Common functions
-func = lambda word, rule: SWITCH.get(rule.param)(word, rule)
 
-
-# Async functions
-def asyncParseResult(rules, word, _pass):
-    # asyncSubstitute = coopReduce(func, rules, word)
-    asyncSubstitute = asyncReduce(partial(maybeDeferred, func), rules, word)
-    return asyncReturn(word) if _pass else asyncSubstitute
+def reducer(word, rule):
+    return PARAMS.get(rule.param, PARAMS['every'])(word, rule)
 
 
 @inlineCallbacks
-def asyncPipeStrreplace(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that asynchronously replaces text. Loopable.
+def asyncParser(word, rules, skip, **kwargs):
+    """ Asynchronously parses the pipe content
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : twisted Deferred iterable of items or strings
-    conf : {
-        'RULE': [
-            {
-                'param': {'value': <match type: 1=first, 2=last, 3=every>},
-                'find': {'value': <text to find>},
-                'replace': {'value': <replacement>}
-            }
-        ]
-    }
+    Args:
+        word (str): The string to transform
+        rules (List[obj]): the parsed rules (Objectify instances).
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
 
-    Returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of replaced strings
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: exchangerate)
+        feed (dict): The original item
+
+    Returns:
+        Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0])
+        ...     item = {'content': 'hello world'}
+        ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        ...     rule = Objectify(conf['rule'])
+        ...     kwargs = {'feed': item, 'conf': conf}
+        ...     d = asyncParser(item['content'], [rule], False, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        bye world
     """
-    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **kwargs)
-    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
-    _OUTPUT = yield asyncStarMap(asyncParseResult, parsed)
-    returnValue(iter(_OUTPUT))
+    if skip:
+        value = kwargs['feed']
+    else:
+        value = yield tu.coopReduce(reducer, rules, word)
+
+    result = (value, skip)
+    returnValue(result)
 
 
-# Synchronous functions
-def parse_result(rules, word, _pass):
-    return word if _pass or not word else reduce(func, rules, word)
+def parser(word, rules, skip, **kwargs):
+    """ Parses the pipe content
 
+    Args:
+        word (str): The string to transform
+        rules (List[obj]): the parsed rules (Objectify instances).
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
 
-def pipe_strreplace(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that replaces text. Loopable.
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: strtransform)
+        feed (dict): The original item
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : iterable of items or strings
-    conf : {
-        'RULE': [
-            {
-                'param': {'value': <match type: 1=first, 2=last, 3=every>},
-                'find': {'value': <text to find>},
-                'replace': {'value': <replacement>}
-            }
-        ]
-    }
+    Returns:
+        Tuple(dict, bool): Tuple of (item, skip)
 
-    Returns
-    -------
-    _OUTPUT : generator of replaced strings
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> item = {'content': 'hello world'}
+        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        >>> rule = Objectify(conf['rule'])
+        >>> kwargs = {'feed': item, 'conf': conf}
+        >>> parser(item['content'], [rule], False, **kwargs)[0]
+        u'bye world'
     """
-    splits = get_splits(_INPUT, conf['RULE'], **kwargs)
-    parsed = utils.dispatch(splits, *get_dispatch_funcs())
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    value = kwargs['feed'] if skip else reduce(reducer, rules, word)
+    return value, skip
+
+
+@processor(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A processor module that asynchronously replaces the text of a field of a
+    feed item.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'rule'.
+
+            rule (dict): can be either a dict or list of dicts. Must contain
+                the keys 'find' and 'replace'. May contain the key 'param'.
+
+                find (str): The string to find.
+                replace (str): The string replacement.
+                param (str): The type of replacement. Must be one of: 'first',
+                    'last', or 'every' (default: 'every').
+
+        assign (str): Attribute to assign parsed content (default: strreplace)
+        field (str): Item attribute from which to obtain the first number to
+            operate on (default: 'content')
+
+    Returns:
+       Deferred: twisted.internet.defer.Deferred item with replaced content
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next()['strreplace'])
+        ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        ...     d = asyncPipe({'content': 'hello world'}, conf=conf)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        bye world
+    """
+    return asyncParser(*args, **kwargs)
+
+
+@processor(**OPTS)
+def pipe(*args, **kwargs):
+    """A processor that replaces the text of a field of a feed item.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'rule'.
+
+            rule (dict): can be either a dict or list of dicts. Must contain
+                the keys 'find' and 'replace'. May contain the key 'param'.
+
+                find (str): The string to find.
+                replace (str): The string replacement.
+                param (str): The type of replacement. Must be one of: 'first',
+                    'last', or 'every' (default: 'every').
+
+        assign (str): Attribute to assign parsed content (default: strreplace)
+        field (str): Item attribute from which to obtain the first number to
+            operate on (default: 'content')
+
+    Yields:
+        dict: an item with replaced content
+
+    Examples:
+        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        >>> pipe({'content': 'hello world'}, conf=conf).next()['strreplace']
+        u'bye world'
+        >>> rules = [
+        ...     {'find': 'Gr', 'replace': 'M'},
+        ...     {'find': 'e', 'replace': 'a', 'param': 'last'}]
+        >>> conf = {'rule': rules}
+        >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
+        >>> pipe({'title': 'Greetings'}, **kwargs).next()['result']
+        u'Meatings'
+    """
+    return parser(*args, **kwargs)

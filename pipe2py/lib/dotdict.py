@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
     pipe2py.lib.dotdict
-    ~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~~~~~
 
     Provides methods for creating dicts using dot notation
 """
@@ -11,9 +11,10 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
-from . import utils
-from itertools import starmap
+from . import utils, log
 from feedparser import FeedParserDict
+
+logger = log.Logger(__name__).logger
 
 
 class DotDict(FeedParserDict):
@@ -22,9 +23,9 @@ class DotDict(FeedParserDict):
     e.g. r['a.content'] -> ['a']['content']
 
     """
-    def __init__(self, dict=None, **kwargs):
+    def __init__(self, data=None, **kwargs):
         super(DotDict, self).__init__(self, **kwargs)
-        self.update(dict)
+        self.update(data)
 
     def __getitem__(self, key):
         try:
@@ -42,7 +43,6 @@ class DotDict(FeedParserDict):
 
     def _parse_key(self, key=None):
         try:
-            # remove any trailing '.'
             keys = key.rstrip('.').split('.') if key else []
         except AttributeError:
             keys = [key['subkey']] if key else []
@@ -51,11 +51,16 @@ class DotDict(FeedParserDict):
 
     def _parse_value(self, value, key, default=None):
         try:
-            value = value[key]
-        except (KeyError, TypeError):
-            value = value if key in {'value', 'content', 'utime'} else None
+            parsed = value[key]
+        except KeyError:
+            parsed = value['value'] if 'value' in value else default
+        except (TypeError, IndexError):
+            if hasattr(value, 'append'):
+                parsed = [v[key] for v in value]
+            else:
+                parsed = value
 
-        return value or default
+        return default if parsed is None else parsed
 
     def delete(self, key):
         keys = self._parse_key(key)
@@ -77,10 +82,9 @@ class DotDict(FeedParserDict):
     def get(self, key=None, default=None, **kwargs):
         keys = self._parse_key(key)
         value = DotDict(self.copy())
-        func = kwargs.pop('func', None)
 
         for key in keys:
-            if not value:
+            if key == 'value':
                 break
 
             try:
@@ -96,21 +100,21 @@ class DotDict(FeedParserDict):
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 
-        value = func(value) if value and func else value
-        value = DotDict(value) if hasattr(value, 'keys') else value
-        return value
+        return DotDict(value) if hasattr(value, 'keys') else value
 
-    def update(self, dict=None):
-        if not dict:
+    def update(self, data=None):
+        if not data:
             return
 
-        try:
-            keys = ['.'.join(self._parse_key(k)[:-1]) for k in dict if '.' in k]
-        except AttributeError:
-            items = dict
-        else:
+        _dict = dict(data)
+        dot_keys = [k for k in _dict if '.' in k]
+
+        if dot_keys:
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
-            items = ((k, v) for k, v in dict.iteritems() if k not in keys)
+            keys = ['.'.join(self._parse_key(k)[:-1]) for k in dot_keys]
+            items = ((k, v) for k, v in _dict.iteritems() if k not in keys)
+        else:
+            items = _dict.iteritems()
 
-        list(starmap(self.set, items))
+        [self.set(key, value) for key, value in items]

@@ -1,28 +1,37 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipesimplemath
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipesimplemath
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for performing simple mathematical operations, e.g.,
+addition, substraction, multiplication, division, modulo, averages, etc.
 
-    http://pipes.yahoo.com/pipes/docs?doc=number#SimpleMath
+Examples:
+    basic usage::
+
+        >>> from decimal import Decimal
+        >>> from pipe2py.modules.pipesimplemath import pipe
+        >>>
+        >>> conf = {'op': 'divide', 'other': '5'}
+        >>> pipe({'content': '10'}, conf=conf).next()['simplemath']
+        Decimal('2')
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
-from functools import partial
-from itertools import starmap
-from math import pow
-from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+import operator
 
-from . import (
-    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
-from pipe2py.lib import utils
-from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
+from . import processor
+from pipe2py.lib.log import Logger
 
-opts = {'listize': False}
+OPTS = {'ftype': 'decimal', 'ptype': 'decimal', 'field': 'content'}
+DEFAULTS = {}
+logger = Logger(__name__).logger
 
 
 def mean(*nums):
@@ -32,66 +41,117 @@ def mean(*nums):
         return 0.0
 
 OPS = {
-    'add': lambda x, y: x + y,
-    'subtract': lambda x, y: x - y,
-    'multiply': lambda x, y: x * y,
+    'add': operator.add,
+    'subtract': operator.sub,
+    'multiply': operator.mul,
     'mean': mean,
-    'divide': lambda x, y: x / y,
-    'modulo': lambda x, y: x % y,
-    'power': lambda x, y: pow(x, y),
+    'divide': operator.div,
+    'floor': operator.floordiv,
+    'modulo': operator.mod,
+    'power': operator.pow,
 }
 
 
-# Common functions
-def parse_result(conf, num, _pass):
-    return num if _pass else OPS[conf.OP](num, conf.OTHER)
+def parser(num, objconf, skip, **kwargs):
+    """ Parsers the pipe content
 
+    Args:
+        num (Decimal): The first number to operate on
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
 
-# Async functions
-@inlineCallbacks
-def asyncPipeSimplemath(context=None, _INPUT=None, conf=None, **kwargs):
-    """A number module that asynchronously performs basic arithmetic, such as
-    addition and subtraction. Loopable.
+    Returns:
+        Tuple(dict, bool): Tuple of (the formatted , skip)
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : twisted Deferred iterable of items or numbers
-    conf : {
-        'OTHER': {'type': 'number', 'value': <'5'>},
-        'OP': {'type': 'text', 'value': <'modulo'>}
-    }
-
-    Returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of tokenized floats
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> conf = {'op': 'divide', 'other': 5}
+        >>> objconf = Objectify(conf)
+        >>> parser(10, objconf, False, conf=conf)[0]
+        2
     """
-    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs('num'))
-    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
-    returnValue(iter(_OUTPUT))
+    operation = OPS[kwargs['conf']['op']]
+    parsed = kwargs['feed'] if skip else operation(num, objconf.other)
+    return parsed, skip
 
 
-# Synchronous functions
-def pipe_simplemath(context=None, _INPUT=None, conf=None, **kwargs):
-    """A number module that performs basic arithmetic, such as addition and
-    subtraction. Loopable.
+@processor(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A processor module that asynchronously performs basic arithmetic, such
+    as addition and subtraction.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : iterable of items or numbers
-    kwargs -- other value, if wired in
-    conf : {
-        'OTHER': {'type': 'number', 'value': <'5'>},
-        'OP': {'type': 'text', 'value': <'modulo'>}
-    }
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-    Returns
-    -------
-    _OUTPUT : generator of tokenized floats
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the keys 'other'
+            and 'op'.
+
+            other (number): The second number to operate on.
+            op (str): The math operation. Must be one of 'addition',
+                'substraction', 'multiplication', 'division', 'modulo',
+                'floor', 'power', or 'mean'.
+
+        assign (str): Attribute to assign parsed content (default: simplemath)
+        field (str): Item attribute from which to obtain the first number to
+            operate on (default: 'content')
+
+    Returns:
+        Deferred: twisted.internet.defer.Deferred item with formatted currency
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next()['simplemath'])
+        ...     conf = {'op': 'divide', 'other': '5'}
+        ...     d = asyncPipe({'content': '10'}, conf=conf)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        2
     """
-    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs('num'))
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    return parser(*args, **kwargs)
+
+
+@processor(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
+    """A processor module that  performs basic arithmetic, such as addition and
+    subtraction.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the keys 'other'
+            and 'op'.
+
+            other (number): The second number to operate on.
+            op (str): The math operation. Must be one of 'addition',
+                'substraction', 'multiplication', 'division', 'modulo',
+                'floor', 'power', or 'mean'.
+
+        assign (str): Attribute to assign parsed content (default: simplemath)
+        field (str): Item attribute from which to obtain the first number to
+            operate on (default: 'content')
+
+    Returns:
+        dict: an item with math result
+
+    Examples:
+        >>> from decimal import Decimal
+        >>> conf = {'op': 'divide', 'other': '5'}
+        >>> pipe({'content': '10'}, conf=conf).next()['simplemath']
+        Decimal('2')
+        >>> kwargs = {'conf': conf, 'field': 'num', 'assign': 'result'}
+        >>> pipe({'num': '10'}, **kwargs).next()['result']
+        Decimal('2')
+    """
+    return parser(*args, **kwargs)

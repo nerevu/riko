@@ -1,90 +1,138 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipetruncate
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipetruncate
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for returning a specified number of items from a feed.
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators
+Contrast this with the Tail module, which also limits the number of feed items,
+but returns items from the bottom of the feed.
+
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipetruncate import pipe
+        >>> items = ({'x': x} for x in xrange(5))
+        >>> len(list(pipe(items, conf={'count': '4'})))
+        4
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 from itertools import islice
 
-from . import get_splits, asyncGetSplits
-from twisted.internet.defer import inlineCallbacks, returnValue
-from pipe2py.lib.utils import combine_dicts as cdicts
+from . import operator
+from pipe2py.lib.log import Logger
 
-opts = {'ftype': None, 'listize': False}
+OPTS = {'ptype': 'int'}
+DEFAULTS = {'start': 0}
+logger = Logger(__name__).logger
 
 
-# Async functions
-@inlineCallbacks
-def asyncPipeUniq(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that asynchronously returns a specified number of items from
-    the top of a feed. Not loopable.
+def parser(feed, objconf, tuples, **kwargs):
+    """ Parses the pipe content
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : twisted Deferred iterable of items
-    conf : {
-        'start': {'type': 'number', value': <starting location>}
-        'count': {'type': 'number', value': <desired feed length>}
-    }
+    Args:
+        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
 
-    returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of unique items
+        objconf (obj): the item independent configuration (an Objectify
+            instance).
+
+        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
+            `item` is an element in the source feed and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the `feed`
+            iterator, so consuming it will consume `feed` as well.
+
+        kwargs (dict): Keyword arguments.
+
+    Returns:
+        Iter(dict): The output feed
+
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> from itertools import repeat, izip
+        >>>
+        >>> kwargs = {'count': 4, 'start': 0}
+        >>> objconf = Objectify(kwargs)
+        >>> feed = ({'x': x} for x in xrange(5))
+        >>> tuples = izip(feed, repeat(objconf))
+        >>> len(list(parser(feed, objconf, tuples, **kwargs)))
+        4
     """
-    _input = yield _INPUT
-    asyncFuncs = yield asyncGetSplits(None, conf, **cdicts(opts, kwargs))
-    pieces = yield asyncFuncs[0]()
-    _pass = yield asyncFuncs[2]()
-
-    if _pass:
-        _OUTPUT = _input
-    else:
-        start = int(pieces.start)
-        stop = start + int(pieces.count)
-        _OUTPUT = islice(_input, start, stop)
-
-    returnValue(_OUTPUT)
+    start = objconf.start
+    stop = start + objconf.count
+    return islice(feed, start, stop)
 
 
-# Synchronous functions
-def pipe_truncate(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that returns a specified number of items from the top of a
-    feed. Not loopable.
+@operator(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """An aggregator that asynchronously returns a specified number of items
+    from a feed.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : pipe2py.modules pipe like object (iterable of items)
-    kwargs -- terminal, if the truncation value is wired in
-    conf : {
-        'start': {'type': 'number', value': <starting location>}
-        'count': {'type': 'number', value': <desired feed length>}
-    }
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-    Returns
-    -------
-    _OUTPUT : generator of items
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'count'.
+            May contain the key 'start'.
+
+            count (int): desired feed length
+            start (int): starting location (default: 0)
+
+    Returns:
+        Deferred: twisted.internet.defer.Deferred truncated feed
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(len(list(x)))
+        ...     items = ({'x': x} for x in xrange(5))
+        ...     d = asyncPipe(items, conf={'count': 4})
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        4
     """
-    funcs = get_splits(None, conf, **cdicts(opts, kwargs))
-    pieces, _pass = funcs[0](), funcs[2]()
+    return parser(*args, **kwargs)
 
-    if _pass:
-        _OUTPUT = _INPUT
-    else:
-        try:
-            start = int(pieces.start)
-        except AttributeError:
-            start = 0
 
-        stop = start + int(pieces.count)
-        _OUTPUT = islice(_INPUT, start, stop)
+@operator(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
+    """An operator that returns a specified number of items from a feed.
 
-    return _OUTPUT
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'count'.
+            May contain the key 'start'.
+
+            start (int): starting location (default: 0)
+            count (int): desired feed length
+
+    Yields:
+        dict: a feed item
+
+    Examples:
+        >>> items = [{'x': x} for x in xrange(5)]
+        >>> len(list(pipe(items, conf={'count': '4'})))
+        4
+        >>> feed = pipe(items, conf={'count': '2', 'start': '2'})
+        >>> feed.next()
+        {u'x': 2}
+    """
+    return parser(*args, **kwargs)

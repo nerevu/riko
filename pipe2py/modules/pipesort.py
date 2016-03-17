@@ -1,10 +1,21 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipesort
-    ~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipesort
+~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for sorting a feed by an item field.
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators#Sort
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipesort import pipe
+        >>> items = [{'title': 'b'}, {'title': 'a'}, {'title': 'c'}]
+        >>> pipe(items).next()
+        {u'title': u'a'}
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
@@ -12,65 +23,181 @@ from __future__ import (
     unicode_literals)
 
 from operator import itemgetter
-from functools import partial
-from itertools import imap
-from pipe2py.lib import utils
-from pipe2py.lib.dotdict import DotDict
+
+from . import operator
+from pipe2py.lib.log import Logger
+from pipe2py.twisted import utils as tu
+
+OPTS = {'listize': True, 'extract': 'rule'}
+DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'title'}}
+logger = Logger(__name__).logger
 
 
-def get_comparer(x):
-    if x.startswith('-'):
-        result = (itemgetter(x[1:].strip()), -1)
-    else:
-        result = (itemgetter(x.strip()), 1)
-
-    return result
+def reducer(feed, rule):
+    reverse = rule.sort_dir == 'desc'
+    return sorted(feed, key=itemgetter(rule.sort_key), reverse=reverse)
 
 
-def multikeysort(left, right, comparers=None):
-    for func, multiplier in comparers:
-        try:
-            result = cmp(func(left), func(right))
-        except (KeyError, TypeError):
-            # todo: perhaps care more if only one side has the missing key
-            # todo: handle bool better?
-            pass
-        else:
-            return multiplier * result
+def asyncParser(feed, rules, tuples, **kwargs):
+    """ Asynchronously parses the pipe content
 
-    return 0
+    Args:
+        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
 
+        keys (List[obj]): the item independent keys (Objectify instances).
 
-def pipe_sort(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that sorts the input source according to the specified key.
-    Not loopable. Not lazy.
+        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
+            `item` is an element in the source feed and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the `feed`
+            iterator, so consuming it will consume `feed` as well.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : pipe2py.modules pipe like object (iterable of items)
-    kwargs -- other inputs, e.g. to feed terminals for rule values
-    conf : {
-        'KEY': [
-            {
-                'field': {'type': 'text', 'value': 'title'},
-                'dir': {'type': 'text', 'value': 'DESC'}
-            }
-        ]
-    }
+        kwargs (dict): Keyword arguments.
 
-    Returns
-    -------
-    _OUTPUT : generator of sorted items
+    Kwargs:
+        conf (dict): The pipe configuration.
+
+    Returns:
+        List(dict): Deferred output feed
+
+    Examples:
+        >>> from itertools import repeat, izip
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0])
+        ...     kwargs = {'sort_key': 'title', 'sort_dir': 'desc'}
+        ...     rule = Objectify(kwargs)
+        ...     feed = ({'title': x} for x in xrange(5))
+        ...     tuples = izip(feed, repeat(rule))
+        ...     d = asyncParser(feed, [rule], tuples, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'title': 4}
     """
-    test = kwargs.pop('pass_if', None)
-    _pass = utils.get_pass(test=test)
-    key_defs = imap(DotDict, utils.listize(conf['KEY']))
-    get_value = partial(utils.get_value, **kwargs)
-    parse_conf = partial(utils.parse_conf, parse_func=get_value, **kwargs)
-    keys = imap(parse_conf, key_defs)
-    order = ('%s%s' % ('-' if k.dir == 'DESC' else '', k.field) for k in keys)
-    comparers = map(get_comparer, order)
-    cmp_func = partial(multikeysort, comparers=comparers)
-    _OUTPUT = _INPUT if _pass else iter(sorted(_INPUT, cmp=cmp_func))
-    return _OUTPUT
+    return tu.asyncReduce(reducer, rules, feed)
+
+
+def parser(feed, rules, tuples, **kwargs):
+    """ Parses the pipe content
+
+    Args:
+        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
+
+        keys (List[obj]): the item independent keys (Objectify instances).
+
+        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
+            `item` is an element in the source feed and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the `feed`
+            iterator, so consuming it will consume `feed` as well.
+
+        kwargs (dict): Keyword arguments.
+
+    Kwargs:
+        conf (dict): The pipe configuration.
+
+    Returns:
+        List(dict): The output feed
+
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>> from itertools import repeat, izip
+        >>>
+        >>> kwargs = {'sort_key': 'title', 'sort_dir': 'desc'}
+        >>> rule = Objectify(kwargs)
+        >>> feed = ({'title': x} for x in xrange(5))
+        >>> tuples = izip(feed, repeat(rule))
+        >>> parser(feed, [rule], tuples, **kwargs)[0]
+        {u'title': 4}
+    """
+    return reduce(reducer, rules, feed)
+
+
+@operator(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """An aggregator that asynchronously and eagerly sorts the input source
+    according to a specified key. Note that this pipe is not lazy.
+
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. May contain the key 'rule'
+
+            rule (dict): The sort configuration, can be either a dict or list
+            of dicts. May contain the keys 'sort_key' or 'dir'.
+
+                sort_key (str): Item attribute on which to sort by (default:
+                    'title').
+
+                sort_dir (str): The sort direction. Must be either 'asc' or
+                    'desc' (default: 'asc').
+
+    Returns:
+        Deferred: twisted.internet.defer.Deferred feed
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next())
+        ...     items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]
+        ...     d = asyncPipe(items, conf={'rule': {'sort_key': 'rank'}})
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        {u'rank': u'a'}
+    """
+    return parser(*args, **kwargs)
+
+
+@operator(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
+    """An operator that eagerly sorts the input source according to a specified
+    key. Note that this pipe is not lazy.
+
+    Args:
+        items (Iter[dict]): The source feed.
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. May contain the key 'rule'
+
+            rule (dict): The sort configuration, can be either a dict or list
+                of dicts (default: {'sort_dir': 'asc', 'sort_key': 'title'}).
+                Must contain the key 'sort_key'. May contain the key 'sort_dir'.
+
+                sort_key (str): Item attribute on which to sort by.
+                sort_dir (str): The sort direction. Must be either 'asc' or
+                    'desc'.
+
+    Yields:
+        dict: a feed item
+
+    Examples:
+        >>> items = [
+        ...     {'rank': 'b', 'name': 'adam'},
+        ...     {'rank': 'a', 'name': 'sue'},
+        ...     {'rank': 'c', 'name': 'bill'}]
+        >>> pipe(items, conf={'rule': {'sort_key': 'rank'}}).next()['rank']
+        u'a'
+        >>> pipe(items, conf={'rule': {'sort_key': 'name'}}).next()['name']
+        u'adam'
+        >>> rule = {'sort_key': 'name', 'sort_dir': 'desc'}
+        >>> pipe(items, conf={'rule': rule}).next()['name']
+        u'sue'
+    """
+    return parser(*args, **kwargs)

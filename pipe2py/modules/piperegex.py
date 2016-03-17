@@ -1,134 +1,148 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.piperegex
-    ~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.piperegex
+~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for modifying the content of a field of a feed item using
+regular expressions, a powerful type of pattern matching.
 
-    Provides methods for modifying fields in a feed using regular
-    expressions, a powerful type of pattern matching.
-    Think of it as search-and-replace on steroids.
-    You can define multiple Regex rules.
+Think of it as search-and-replace on steriods. You can define multiple Regex
+rules. Each has the general format: "In [field] replace [regex pattern] with
+[text]".
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators#Regex
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.piperegex import pipe
+        >>>
+        >>> match = r'(\w+)\s(\w+)'
+        >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
+        >>> conf = {'rule': rule}
+        >>> pipe({'content': 'hello world'}, conf=conf).next()['content']
+        u'worldwide'
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
-from functools import partial
-from itertools import starmap
-from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
-
-from . import (
-    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
+from . import processor
 from pipe2py.lib import utils
 from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncDispatch
+from pipe2py.lib.log import Logger
+from pipe2py.twisted import utils as tu
+from pipe2py.lib.dotdict import DotDict
 
-opts = {'convert': False, 'ftype': 'pass', 'dictize': True}
-substitute = utils.multi_substitute
-convert_func = partial(utils.convert_rules, recompile=False)
-
-
-# Common functions
-def get_groups(rules, item):
-    field_groups = utils.group_by(list(rules), 'field').iteritems()
-    return ((f, item.get(f) or '', r) for f, r in field_groups)
+OPTS = {'listize': True, 'extract': 'rule', 'emit': True}
+DEFAULTS = {'convert': True, 'multi': False}
+logger = Logger(__name__).logger
 
 
-# Async functions
-@inlineCallbacks
-def asyncParseResult(rules, item, _pass):
-    if not _pass:
-        groups = get_groups(rules, item)
-        substitutions = yield maybeDeferred(get_substitutions, groups)
-        list(starmap(item.set, substitutions))
+def parser(item, rules, skip, **kwargs):
+    """ Parsers the pipe content
 
-    returnValue(item)
+    Args:
+        item (obj): The entry to process (a DotDict instance)
+        rules (List[obj]): the parsed rules (Objectify instances).
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
 
+    Kwargs:
+        feed (dict): The original item
 
-@inlineCallbacks
-def asyncPipeRegex(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that asynchronously replaces text in items using regexes.
-    Each has the general format: "In [field] replace [match] with [replace]".
-    Not loopable.
+    Returns:
+        Tuple (dict, bool): Tuple of (item, skip)
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
-    conf : {
-        'RULE': [
-            {
-                'field': {'value': <'search field'>},
-                'match': {'value': <'regex'>},
-                'replace': {'value': <'replacement'>},
-                'globalmatch': {'value': '1'},
-                'singlelinematch': {'value': '2'},
-                'multilinematch': {'value': '4'},
-                'casematch': {'value': '8'}
-            }
-        ]
-    }
-
-    Returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of items
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
+        >>> match = r'(\w+)\s(\w+)'
+        >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
+        >>> conf = {'rule': rule, 'multi': False, 'convert': True}
+        >>> rules = [Objectify(rule)]
+        >>> kwargs = {'feed': item, 'conf': conf}
+        >>> regexed, skip = parser(item, rules, False, **kwargs)
+        >>> regexed == {'content': 'worldwide', 'title': 'greeting'}
+        True
+        >>> conf['multi'] = True
+        >>> parser(item, rules, False, **kwargs)[0] == regexed
+        True
     """
-    splits = yield asyncGetSplits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
-    asyncConvert = partial(maybeDeferred, convert_func)
-    asyncFuncs = get_async_dispatch_funcs('pass', asyncConvert)
-    parsed = yield asyncDispatch(splits, *asyncFuncs)
-    _OUTPUT = yield maybeDeferred(parse_results, parsed)
-    returnValue(iter(_OUTPUT))
+    multi = kwargs['conf']['multi']
+    recompile = not multi
+
+    def meta_reducer(item, rules):
+        field = rules[0]['field']
+        word = item.get(field, **kwargs)
+        grouped = utils.group_by(rules, 'flags')
+        group_rules = [g[1] for g in grouped] if multi else rules
+        reducer = utils.multi_substitute if multi else utils.substitute
+        replacement = reduce(reducer, group_rules, word)
+        return DotDict(cdicts(item, {field: replacement}))
+
+    if skip:
+        item = kwargs['feed']
+    else:
+        new_rules = [utils.get_new_rule(r, recompile=recompile) for r in rules]
+        grouped = utils.group_by(new_rules, 'field')
+        field_rules = [g[1] for g in grouped]
+        item = reduce(meta_reducer, field_rules, item)
+
+    return item, skip
 
 
-# Synchronous functions
-def get_substitutions(groups):
-    for field, word, rules in groups:
-        values = utils.group_by(rules, 'flags').itervalues()
-        replacement = reduce(substitute, values, word) if word else word
-        yield (field, replacement)
+@processor(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
+    """A processor that replaces text in fields of a feed item using regexes.
 
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-def parse_results(parsed):
-    for rules, item, _pass in parsed:
-        if not _pass:
-            groups = get_groups(rules, item)
-            substitutions = get_substitutions(groups)
-            list(starmap(item.set, substitutions))
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'rule'. May
+            contain the keys 'multi' or 'convert'.
 
-        yield item
+            rule (dict): can be either a dict or list of dicts. Must contain
+                the key 'field'.
 
+                field (str): The item attribute to search
+                match (str): The regex to apply
+                replace (str): The string replacement
+                globalmatch (bool): Find all matches (default: False)
+                dotall (bool): Match newlines with '.' (default: False)
+                singlelinematch (bool): Don't search across newlines with '^'
+                    and '$' (default: False)
+                casematch (bool): Perform case sensitive match (default: False)
 
-def pipe_regex(context=None, _INPUT=None, conf=None, **kwargs):
-    """An operator that replaces text in items using regexes. Each has the
-    general format: "In [field] replace [match] with [replace]". Not loopable.
+            multi (bool): Efficiently combine multiple regexes (default: False)
+            convert (bool): Convert regex into a Python compatible format
+                (default: True)
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : pipe2py.modules pipe like object (iterable of items)
-    conf : {
-        'RULE': [
-            {
-                'field': {'value': <'search field'>},
-                'match': {'value': <'regex'>},
-                'replace': {'value': <'replacement'>},
-                'globalmatch': {'value': '1'},
-                'singlelinematch': {'value': '2'},
-                'multilinematch': {'value': '4'},
-                'casematch': {'value': '8'}
-            }
-        ]
-    }
+    Yields:
+        dict: an item with concatenated content
 
-    Returns
-    -------
-    _OUTPUT : generator of items
+    Examples:
+        >>> item = {'content': 'hello world', 'title': 'greeting'}
+        >>> match = r'(\w+)\s(\w+)'
+        >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
+        >>> conf = {'rule': rule, 'multi': False, 'convert': True}
+        >>> result = pipe(item, conf=conf).next()
+        >>> result == {'content': u'worldwide', 'title': 'greeting'}
+        True
+        >>> conf['multi'] = True
+        >>> pipe(item, conf=conf).next() == result
+        True
+        >>> item = {'content': 'Hello hello?'}
+        >>> rule.update({'match': r'hello.+', 'replace': 'bye'})
+        >>> pipe(item, conf=conf).next()['content']
+        u'bye'
+        >>> rule['casematch'] = True
+        >>> pipe(item, conf=conf).next()['content']
+        u'Hello bye'
     """
-    splits = get_splits(_INPUT, conf['RULE'], **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs('pass', convert_func))
-    _OUTPUT = parse_results(parsed)
-    return _OUTPUT
+    return parser(*args, **kwargs)

@@ -22,8 +22,7 @@ def _load_json(json):
     return loaded
 
 
-def print_content(output):
-    pipe = list(output)
+def print_content(pipe):
     pprint(pipe[0])
     print('count:', len(pipe))
 
@@ -52,4 +51,4 @@ if __name__ == '__main__':
         generator_name = pipe_name
         pipe_generator = getattr(module, generator_name)
         output = pipe_generator(context)
-        print_content(output)
+        print_content(output.list)

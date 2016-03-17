@@ -1,112 +1,230 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipefetch
-    ~~~~~~~~~~~~~~~~~~~~~~~~~
-    Provides methods for fetching RSS feeds.
+pipe2py.modules.pipefetch
+~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for fetching RSS feeds.
 
-    http://pipes.yahoo.com/pipes/docs?doc=sources#FetchFeed
+Lets you specify one or more RSS news feeds as input to your Pipe. The module
+understands feeds in RSS, Atom, and RDF formats. Feeds contain one or more
+items. When you add more feed URLs, you get a single feed combining all the
+items from the individual feeds.
+
+Examples:
+    basic usage::
+
+        >>> from . import FILES
+        >>> from pipe2py.modules.pipefetch import pipe
+        >>> pipe(conf={'url': {'value': FILES[0]}}).next()['title']
+        u'Donations'
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 import speedparser
 
 from functools import partial
-from itertools import imap, ifilter, starmap
+from itertools import imap
 from urllib2 import urlopen
-from twisted.web.client import getPage
-# from twisted.internet.threads import deferToThread
-from twisted.internet.defer import inlineCallbacks, maybeDeferred, returnValue
-from . import get_splits, asyncGetSplits
+from twisted.internet.defer import inlineCallbacks, returnValue
+
+from . import processor
 from pipe2py.lib import utils
-from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncImap, asyncStarMap
+from pipe2py.twisted import utils as tu
+from pipe2py.lib.log import Logger
 
-opts = {'ftype': None, 'parse': False, 'finitize': True}
-
-
-def get_urls(urls):
-    true_urls = ifilter(None, urls)
-    abs_urls = imap(utils.get_abspath, true_urls)
-    return imap(str, abs_urls)
+OPTS = {'listize': True, 'extract': 'url', 'ftype': 'none'}
+DEFAULTS = {'sleep': 0}
+logger = Logger(__name__).logger
 
 
-# Async functions
 # http://blog.mekk.waw.pl/archives/
 # https://github.com/steder/ng-images/blob/master/natgeo.py
 # http://code.activestate.com/recipes/277099/
 @inlineCallbacks
-def asyncParseResult(urls, _, _pass):
-    # asyncParse = partial(deferToThread, speedparser.parse)
-    asyncParse = partial(maybeDeferred, speedparser.parse)
-    str_urls = get_urls(urls)
-    contents = yield asyncImap(getPage, str_urls)
-    parsed = yield asyncImap(asyncParse, contents)
-    entries = imap(utils.gen_entries, parsed)
-    items = utils.multiplex(entries)
-    returnValue(items)
+def asyncParser(_, urls, skip, **kwargs):
+    """ Asynchronously parses the pipe content
+
+    Args:
+        _ (None): Ignored
+        urls (List[str]): The urls to fetch
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
+
+    Kwargs:
+        feed (dict): The original item
+        conf (dict): The pipe configuration
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from . import FILES
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x[0].next()['title'])
+        ...     conf = {'url': FILES}
+        ...     kwargs = {'feed': {}, 'conf': conf}
+        ...     d = asyncParser(None, conf['url'], False, **kwargs)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        Donations
+    """
+    if skip:
+        feed = kwargs['feed']
+    else:
+        sleep = kwargs['conf'].get('sleep', 0)
+        read = partial(tu.urlRead, delay=sleep)
+        abs_urls = imap(utils.get_abspath, urls)
+        contents = yield tu.asyncImap(read, abs_urls)
+        parsed = imap(speedparser.parse, contents)
+        entries = imap(utils.gen_entries, parsed)
+        feed = utils.multiplex(entries)
+
+    result = (feed, skip)
+    returnValue(result)
 
 
-@inlineCallbacks
-def asyncPipeFetch(context=None, _INPUT=None, conf=None, **kwargs):
+def parser(_, urls, skip, **kwargs):
+    """ Parses the pipe content
+
+    Args:
+        _ (None): Ignored
+        urls (List[str]): The urls to fetch
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
+
+    Kwargs:
+        feed (dict): The original item
+        conf (dict): The pipe configuration
+
+    Returns:
+        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+
+    Examples:
+        >>> from . import FILES
+        >>>
+        >>> conf = {'url': FILES}
+        >>> kwargs = {'feed': {}, 'conf': conf}
+        >>> result, skip = parser(None, conf['url'], False, **kwargs)
+        >>> result.next()['title']
+        u'Donations'
+    """
+    if skip:
+        feed = kwargs['feed']
+    else:
+        sleep = kwargs['conf'].get('sleep', 0)
+        context = utils.SleepyDict(delay=sleep)
+        abs_urls = imap(utils.get_abspath, urls)
+        contents = (urlopen(url, context=context).read() for url in abs_urls)
+        parsed = imap(speedparser.parse, contents)
+        entries = imap(utils.gen_entries, parsed)
+        feed = utils.multiplex(entries)
+
+    return feed, skip
+
+
+@processor(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches and parses one or more feeds to
-    return the feed entries. Loopable.
+    return the feed entries.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : asyncPipe like object (twisted Deferred iterable of items)
-    conf : {
-        'URL': [
-            {'type': 'url', 'value': <url1>},
-            {'type': 'url', 'value': <url2>},
-            {'type': 'url', 'value': <url3>},
-        ]
-    }
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-    Returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of items
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the key 'sleep'.
+
+            url (str): The web site to fetch. Can be either a dict or list of
+                dicts. Must contain one of the following keys: 'value',
+                'subkey', or 'terminal'.
+
+                value (str): The url value
+                subkey (str): An item attribute from which to obtain the value
+                terminal (str): The id of a pipe from which to obtain the value
+
+            sleep (flt): Amount of time to sleep (in secs) before fetching the
+                url. Useful for simulating network latency. Default: 0.
+
+
+    Returns:
+        dict: twisted.internet.defer.Deferred item with feeds
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from . import FILES
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next().keys())
+        ...     urls = [{'value': FILES[0]}, {'value': FILES[1]}]
+        ...     d = asyncPipe(conf={'url': urls})
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        ['updated', 'updated_parsed', u'pubDate', 'author', u'y:published', \
+'title', 'comments', 'summary', 'content', 'link', u'y:title', u'dc:creator', \
+u'author.uri', u'author.name', 'id', u'y:id']
     """
-    splits = yield asyncGetSplits(_INPUT, conf['URL'], **cdicts(opts, kwargs))
-    items = yield asyncStarMap(asyncParseResult, splits)
-    _OUTPUT = utils.multiplex(items)
-    returnValue(_OUTPUT)
+    return asyncParser(*args, **kwargs)
 
 
-# Synchronous functions
-def parse_result(urls, _, _pass):
-    str_urls = get_urls(urls)
-    contents = (urlopen(url).read() for url in str_urls)
-    parsed = imap(speedparser.parse, contents)
-    entries = imap(utils.gen_entries, parsed)
-    return utils.multiplex(entries)
-
-
-def pipe_fetch(context=None, _INPUT=None, conf=None, **kwargs):
+@processor(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
     """A source that fetches and parses one or more feeds to return the
-    entries. Loopable.
+    entries.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : pipeforever pipe or an iterable of items or fields
-    conf : {
-        'URL': [
-            {'type': 'url', 'value': <url1>},
-            {'type': 'url', 'value': <url2>},
-            {'type': 'url', 'value': <url3>},
-        ]
-    }
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-    Returns
-    -------
-    _OUTPUT : generator of items
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'url'. May
+            contain the key 'sleep'.
+
+            url (str): The web site to fetch. Can be either a dict or list of
+                dicts. Must contain one of the following keys: 'value',
+                'subkey', or 'terminal'.
+
+                value (str): The url value
+                subkey (str): An item attribute from which to obtain the value
+                terminal (str): The id of a pipe from which to obtain the value
+
+            sleep (flt): Amount of time to sleep (in secs) before fetching the
+                url. Useful for simulating network latency. Default: 0.
+
+    Returns:
+        dict: an iterator of items
+
+    Examples:
+        >>> from . import FILES
+        >>>
+        >>> url = [{'value': FILES[0]}, {'value': FILES[1]}]
+        >>> keys = [
+        ...     'updated', 'updated_parsed', u'pubDate', 'author',
+        ...     u'y:published', 'title', 'comments', 'summary', 'content',
+        ...     'link', u'y:title', u'dc:creator', u'author.uri',
+        ...     u'author.name', 'id', u'y:id']
+        >>> pipe(conf={'url': url}).next().keys() == keys
+        True
+        >>> result = pipe({'url': FILES[0]}, conf={'url': {'subkey': 'url'}})
+        >>> result.next().keys() == keys
+        True
     """
-    splits = get_splits(_INPUT, conf['URL'], **cdicts(opts, kwargs))
-    items = starmap(parse_result, splits)
-    _OUTPUT = utils.multiplex(items)
-    return _OUTPUT
+    return parser(*args, **kwargs)

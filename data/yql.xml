@@ -1,0 +1,21 @@
+<?xml version="1.0" ?>
+<root>
+    <results>
+        <item>
+            <begin>1181251680</begin>
+            <uid>040000008200E000</uid>
+            <alarmTime>1181572063</alarmTime>
+            <place>Wisconsin</place>
+            <duration>1800</duration>
+            <title>Bring pizza home</title>
+        </item>
+        <item>
+            <begin>1234360800</begin>
+            <uid>604f4792-eb89-478b-a14f-dd34d3cc6c21-1234360800</uid>
+            <alarmTime>1181572063</alarmTime>
+            <place>Nairobi</place>
+            <duration>1800</duration>
+            <title>Check MS Office website for updates</title>
+        </item>
+    </results>
+</root>

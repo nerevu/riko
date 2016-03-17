@@ -42,21 +42,16 @@ sys.dont_write_bytecode = True
 
 
 setup(
-    name='pipe2py',
-    version='0.26.0',
-    description=(
-        'A project to compile Yahoo! Pipes into Python. '
-        'The pipe2py package can compile a Yahoo! Pipe into pure Python source'
-        ' code, or it can interpret the pipe on-the-fly. It supports embedded '
-        'pipes too.'
-    ),
+    name='bomba',
+    version='0.27.0',
+    description=('A stream processor modeled after Yahoo! Pipes.'),
     long_description=read('README.rst'),
-    url='http://kazeeki.github.com/pipe2py/',
-    license = 'GPL2',
+    url='http://kazeeki.github.com/bomba/',
+    license = 'MIT',
     author='Reuben Cummings',
     author_email='reubano@gmail.com',
     packages=find_packages(exclude=['tests']),
-    package_data={'templates': 'templates/*.txt', 'data': 'data/*'},
+    package_data={'data': 'data/*'},
     include_package_data=True,
     classifiers=[],
     keywords='',

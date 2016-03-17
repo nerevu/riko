@@ -1,86 +1,144 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    pipe2py.modules.pipesubstr
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+pipe2py.modules.pipesubstr
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for obtaining a portion of a string.
 
-    http://pipes.yahoo.com/pipes/docs?doc=string#SubString
+You enter two numbers to tell the module the starting character position and
+the length of the resulting substring. If your input string is "ABCDEFG", then
+a From value of 2 and length of 4 gives you a resulting string of "CDEF".
+Notice that the first character in the original string is 0, not 1.
+
+If you enter too long a length, the module just returns a substring to the end
+of the input string, so if you enter a From of 3 and a length of 100, you'll
+get a result of "DEFG".
+Examples:
+    basic usage::
+
+        >>> from pipe2py.modules.pipesubstr import pipe
+        >>> conf = {'start': '3', 'length': '4'}
+        >>> pipe({'content': 'hello world'}, conf=conf).next()['substr']
+        u'lo w'
+
+Attributes:
+    OPTS (dict): The default pipe options
+    DEFAULTS (dict): The default parser options
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
-from functools import partial
-from itertools import starmap
-from twisted.internet.defer import inlineCallbacks, returnValue, maybeDeferred
+from . import processor
+from pipe2py.lib.log import Logger
 
-from . import (
-    get_dispatch_funcs, get_async_dispatch_funcs, get_splits, asyncGetSplits)
-from pipe2py.lib import utils
-from pipe2py.lib.utils import combine_dicts as cdicts
-from pipe2py.twisted.utils import asyncStarMap, asyncDispatch
-
-opts = {'listize': False}
+OPTS = {'ftype': 'unicode', 'ptype': 'int', 'field': 'content'}
+DEFAULTS = {'start': 0, 'length': 0}
+logger = Logger(__name__).logger
 
 
-# Common functions
-def parse_result(conf, word, _pass):
-    start = int(conf.start)
-    end = int(conf.start + conf.length)
+def parser(word, objconf, skip, **kwargs):
+    """ Parses the pipe content
 
-    try:
-        parsed = word if _pass else word[start:end]
-    except UnicodeDecodeError:
-        parsed = word.decode('utf-8')[start:end]
+    Args:
+        word (str): The string to parse
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
 
-    return parsed
+    Kwargs:
+        assign (str): Attribute to assign parsed content (default: strtransform)
+        feed (dict): The original item
 
+    Returns:
+        Tuple(dict, bool): Tuple of (item, skip)
 
-# Async functions
-@inlineCallbacks
-def asyncPipeSubstr(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that asynchronously returns a substring. Loopable.
-
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : twisted Deferred iterable of items or strings
-    conf : {
-        'from': {'type': 'number', value': <starting position>},
-        'length': {'type': 'number', 'value': <count of characters to return>}
-    }
-
-    returns
-    -------
-    _OUTPUT : twisted.internet.defer.Deferred generator of substrings
+    Examples:
+        >>> from pipe2py.lib.utils import Objectify
+        >>>
+        >>> item = {'content': 'hello world'}
+        >>> conf = {'start': 3, 'length': 4}
+        >>> kwargs = {'feed': item, 'conf': conf}
+        >>> parser(item['content'], Objectify(conf), False, **kwargs)[0]
+        u'lo w'
     """
-    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
-    splits = yield asyncGetSplits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = yield asyncDispatch(splits, *get_async_dispatch_funcs())
-    _OUTPUT = yield asyncStarMap(partial(maybeDeferred, parse_result), parsed)
-    returnValue(iter(_OUTPUT))
+    end = objconf.start + objconf.length if objconf.length else None
+    value = kwargs['feed'] if skip else word[objconf.start:end]
+    return value, skip
 
 
-# Synchronous functions
-def pipe_substr(context=None, _INPUT=None, conf=None, **kwargs):
-    """A string module that returns a substring. Loopable.
+@processor(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A processor module that asynchronously returns a substring of a field
+    of a feed item.
 
-    Parameters
-    ----------
-    context : pipe2py.Context object
-    _INPUT : iterable of items or strings
-    conf : {
-        'from': {'type': 'number', value': <starting position>},
-        'length': {'type': 'number', 'value': <count of characters to return>}
-    }
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
 
-    Returns
-    -------
-    _OUTPUT : generator of substrings
+    Kwargs:
+        conf (dict): The pipe configuration. May contain the keys 'start' or
+            'length'.
+
+            start (int): starting position (default: 0)
+            length (int): count of characters to return (default: 0, i.e., all)
+
+        assign (str): Attribute to assign parsed content (default: substr)
+        field (str): Item attribute from which to obtain the first number to
+            operate on (default: 'content')
+
+    Returns:
+       Deferred: twisted.internet.defer.Deferred item with transformed content
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next()['substr'])
+        ...     conf = {'start': '3', 'length': '4'}
+        ...     d = asyncPipe({'content': 'hello world'}, conf=conf)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        lo w
     """
-    conf['start'] = conf.pop('from', dict.get(conf, 'start'))
-    splits = get_splits(_INPUT, conf, **cdicts(opts, kwargs))
-    parsed = utils.dispatch(splits, *get_dispatch_funcs())
-    _OUTPUT = starmap(parse_result, parsed)
-    return _OUTPUT
+    return parser(*args, **kwargs)
+
+
+@processor(**OPTS)
+def pipe(*args, **kwargs):
+    """A processor that returns a substring of a field of a feed item.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. May contain the keys 'start' or
+            'length'.
+
+            start (int): starting position (default: 0)
+            length (int): count of characters to return (default: 0, i.e., all)
+
+        assign (str): Attribute to assign parsed content (default: substr)
+        field (str): Item attribute from which to obtain the first number to
+            operate on (default: 'content')
+
+    Yields:
+        dict: an item with the substring
+
+    Examples:
+        >>> conf = {'start': '3', 'length': '4'}
+        >>> pipe({'content': 'hello world'}, conf=conf).next()['substr']
+        u'lo w'
+        >>> conf = {'start': '3'}
+        >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
+        >>> pipe({'title': 'Greetings'}, **kwargs).next()['result']
+        u'etings'
+    """
+    return parser(*args, **kwargs)

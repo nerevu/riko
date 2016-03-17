@@ -11,22 +11,32 @@ from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
 
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
+
 import string
 import re
+import itertools as it
+import time
 
 # from pprint import pprint
-from datetime import datetime
+from datetime import timedelta, datetime as dt
 from functools import partial
-from itertools import (
-    groupby, chain, izip, tee, takewhile, ifilter, imap, starmap, islice,
-    dropwhile)
-from operator import itemgetter
+from operator import itemgetter, add, sub
 from urllib2 import quote
 from os import path as p, environ
-from collections import defaultdict
-from pipe2py import Context
-from pipe2py.lib.log import Logger
+from calendar import timegm
+from decimal import Decimal
+from urllib import urlencode
+
 from mezmorize import Cache
+from dateutil.parser import parse
+
+from pipe2py.lib.log import Logger
+
+logger = Logger(__name__).logger
 
 if environ.get('DATABASE_URL'):  # HEROKU
     cache_config = {
@@ -38,13 +48,13 @@ else:
     try:
         import pylibmc
     except ImportError:
-        print('simplecache')
+        logger.debug('simplecache')
         cache_config = {
             'DEBUG': True,
             'CACHE_TYPE': 'simple',
             'CACHE_THRESHOLD': 25}
     else:
-        print('memcached')
+        logger.debug('memcached')
         cache_config = {
             'DEBUG': True,
             'CACHE_TYPE': 'memcached',
@@ -53,71 +63,157 @@ else:
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
-ALTERNATIVE_DATE_FORMATS = (
-    "%m-%d-%Y",
-    "%m/%d/%y",
-    "%m/%d/%Y",
-    "%m-%d-%y",
-    "%Y-%m-%dt%H:%M:%Sz",
-    # todo more: whatever Yahoo can accept
-)
+TIMEOUT = 60 * 60 * 1
+HALF_DAY = 60 * 60 * 12
+TODAY = dt.utcnow()
 
-# leave option to substitute with multiprocessing
-_map_func = imap
-combine_dicts = lambda *d: dict(chain.from_iterable(imap(dict.iteritems, d)))
-cache = Cache(**cache_config)
-memoize = cache.memoize
-timeout = 60 * 60 * 1
-half_day = 60 * 60 * 12
+DATES = {
+    'today': TODAY,
+    'now': TODAY,
+    'tomorrow': TODAY + timedelta(days=1),
+    'yesterday': TODAY - timedelta(days=1),
+}
+
 encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 
 
-class Objectify:
-    def __init__(self, **entries):
-        self.__dict__.update(entries)
+class Objectify(object):
+    def __init__(self, kwargs, func=None, **defaults):
+        """ Objectify constructor
+
+        Args:
+            kwargs (dict): The attributes to set
+            defaults (dict): The default attributes
+
+        Examples:
+            >>> kwargs = {'one': 1, 'two': 2}
+            >>> defaults = {'two': 5, 'three': 3}
+            >>> kw = Objectify(kwargs, **defaults)
+            >>> kw
+            Objectify({u'one': 1, u'two': 2, u'three': 3})
+            >>> str(kw)
+            'Objectify(one=1, three=3, two=2)'
+            >>> sorted(kw.keys()) == ['one', 'three', 'two']
+            True
+            >>> kw.one
+            1
+            >>> kw.two
+            2
+            >>> kw.three
+            3
+            >>> kw.four
+            >>> kw.get('one')
+            1
+        """
+        defaults.update(kwargs)
+        self.__dict__.update(defaults)
+        self.func = func
+        self.attrs = defaults
+
+    def __str__(self):
+        items = sorted(self.attrs.items())
+        args = ', '.join('%s=%s' % item for item in items)
+        return '%s(%s)' % (self.__class__.__name__, args)
+
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__, self.attrs)
 
     def __iter__(self):
         return self.__dict__.itervalues()
 
+    def __getattribute__(self, name):
+        attr = object.__getattribute__(self, name)
+        blacklist = {'func', '__dict__'}
+        return self.func(attr) if name not in blacklist and self.func else attr
+
+    def __getattr__(self, name):
+        return None
+
+    def __getitem__(self, key):
+        return self.attrs[key]
+
+    def get(self, key, default=None):
+        return self.attrs.get(key, default)
+
+    def to_dict(self):
+        return self.attrs
+
+    def items(self):
+        return self.attrs.items()
+
     def iteritems(self):
-        return self.__dict__.iteritems()
+        return self.attrs.iteritems()
+
+    def keys(self):
+        return self.attrs.keys()
 
 
-def _apply_func(funcs, items, map_func=starmap):
-    return map_func(lambda item, func: func(item), izip(items, funcs))
+class SleepyDict(dict):
+    """A dict like object that sleeps for a specified amount of time before
+    returning a key or during truth value testing
+    """
+    def __init__(self, *args, **kwargs):
+        self.delay = kwargs.pop('delay', 0)
+        super(SleepyDict, self).__init__(*args, **kwargs)
+
+    def __len__(self):
+        time.sleep(self.delay)
+        return super(SleepyDict, self).__len__()
+
+    def get(self, key, default=None):
+        time.sleep(self.delay)
+        return super(SleepyDict, self).get(key, default)
+
+
+class Chainable(object):
+    def __init__(self, data, method=None):
+        self.data = data
+        self.method = method
+        self.list = list(data)
+
+    def __getattr__(self, name):
+        funcs = (partial(getattr, x) for x in [self.data, builtins, it])
+        zipped = it.izip(funcs, it.repeat(AttributeError))
+        method = multi_try(name, zipped, default=None)
+        return Chainable(self.data, method)
+
+    def __call__(self, *args, **kwargs):
+        try:
+            return Chainable(self.method(self.data, *args, **kwargs))
+        except TypeError:
+            return Chainable(self.method(args[0], self.data, **kwargs))
+
+
+def combine_dicts(*dicts):
+    return dict(it.chain.from_iterable(it.imap(dict.iteritems, dicts)))
+
+
+def multi_try(source, zipped, default=None):
+    value = None
+
+    for func, error in zipped:
+        try:
+            value = func(source)
+        except error:
+            pass
+        else:
+            return value
+    else:
+        return default
+
 
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
+def memoize(*args, **kwargs):
+    return Cache(**cache_config).memoize(*args, **kwargs)
 
 
-def get_logger(context):
-    level = 'DEBUG' if context and context.verbose else 'INFO'
-    return Logger(level).logger
+def remove_keys(content, *args):
+    """Remove keys from a dict and return new dict"""
+    return {k: v for k, v in content.items() if k not in args}
 
-def extract_dependencies(pipe_def=None, pipe_generator=None):
-    """Extract modules used by a pipe"""
-    if pipe_def:
-        pydeps = gen_dependencies(pipe_def)
-    elif pipe_generator:
-        pydeps = pipe_generator(Context(describe_dependencies=True))
-    else:
-        raise Exception('Must supply at least one kwarg!')
-
-    return sorted(set(pydeps))
-
-
-def extract_input(pipe_def=None, pipe_generator=None):
-    """Extract inputs required by a pipe"""
-    if pipe_def:
-        pyinput = gen_input(pipe_def)
-    elif pipe_generator:
-        pyinput = pipe_generator(Context(describe_input=True))
-    else:
-        raise Exception('Must supply at least one kwarg!')
-
-    return sorted(list(pyinput))
 
 
 def pythonise(id, encoding='ascii'):
@@ -135,11 +231,11 @@ def group_by(iterable, attr, default=None):
     data = list(iterable)
     order = unique_everseen(data, keyfunc(attr))
     sorted_iterable = sorted(data, key=keyfunc(attr))
-    groups = groupby(sorted_iterable, keyfunc(attr))
-    grouped = {str(k): list(v) for k, v in groups}
+    grouped = it.groupby(sorted_iterable, keyfunc(attr))
+    groups = {str(k): list(v) for k, v in grouped}
 
     # return groups in original order
-    return {key: grouped[key] for key in order}
+    return ((key, groups[key]) for key in order)
 
 
 def unique_everseen(iterable, key=None):
@@ -155,86 +251,129 @@ def unique_everseen(iterable, key=None):
             yield k
 
 
-def _make_content(i, tag, new):
+def _make_content(i, value=None, tag='content', append=True, strip=False):
     content = i.get(tag)
 
-    if content and new:
-        content = listize(content)
-        content.append(new)
-    elif new:
-        content = new
+    try:
+        value = value.strip() if value and strip else value
+    except AttributeError:
+        pass
 
-    return content
+    if content and value and append:
+        content = listize(content)
+        content.append(value)
+    elif content and value:
+        content = ''.join([content, value])
+    elif value:
+        content = value
+
+    return {tag: content} if content else {}
 
 
 def etree_to_dict(element):
-    """Convert an eTree xml into dict imitating how Yahoo Pipes does it.
+    """Convert an lxml element into a dict imitating how Yahoo Pipes does it.
 
     todo: further investigate white space and multivalue handling
     """
     i = dict(element.items())
-    content = element.text.strip() if element.text else None
-    i.update({'content': content}) if content else None
+    i.update(_make_content(i, element.text, strip=True))
 
-    if len(element.getchildren()):
-        for child in element.iterchildren():
-            tag = child.tag.split('}', 1)[-1]
-            new = etree_to_dict(child)
-            content = _make_content(i, tag, new)
-            i.update({tag: content}) if content else None
+    for child in element.iterchildren():
+        tag = child.tag
+        value = etree_to_dict(child)
+        i.update(_make_content(i, value, tag))
 
-            tag = 'content'
-            new = child.tail.strip() if child.tail else None
-            content = _make_content(i, tag, new)
-            i.update({tag: content}) if content else None
-    elif content and not set(i).difference(['content']):
+    if element.text and not set(i).difference(['content']):
         # element is leaf node and doesn't have attributes
-        i = content
+        i = i['content']
 
     return i
 
 
-def finitize(_INPUT):
-    yield _INPUT.next()
+def cast_date(date_str):
+    try:
+        words = date_str.split(' ')
+    except AttributeError:
+        return date_str
+    else:
+        math_words = {
+            'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years'}
+        text_words = {'last', 'next', 'week', 'month', 'year'}
+        mathish = set(words).intersection(math_words)
+        textish = set(words).intersection(text_words)
 
-    for i in takewhile(lambda i: not 'forever' in i, _INPUT):
-        yield i
+    if date_str[0] in {'+', '-'} and len(mathish) == 1:
+        op = sub if date_str.startswith('-') else add
+        new_date = get_date(mathish, words[0][1:], op)
+    elif len(textish) == 2:
+        op = add if date_str.startswith('last') else add
+        new_date = get_date('%ss' % words[1], 1, op)
+    elif date_str in DATES:
+        new_date = DATES.get(date_str)
+    else:
+        try:
+            new_date = parse(date_str)
+        except AttributeError:
+            new_date = time.gmtime(date_str)
+
+    return new_date
 
 
-def get_value(field, item=None, force=False, **opts):
-    item = item or {}
+def datify(date):
+    keys = (
+        'year', 'month', 'day', 'hour', 'minute', 'second', 'day_of_week',
+        'day_of_year', 'daylight_savings')
 
+    tt = date.timetuple()
+
+    # Make Sunday the first day of the week
+    day_of_w = 0 if tt[6] == 6 else tt[6] + 1
+    isdst = None if tt[8] == -1 else bool(tt[8])
+    result = {'utime': timegm(tt), 'timezone': 'UTC', 'date': date}
+    result.update(zip(keys, tt))
+    result.update({'day_of_week': day_of_w, 'daylight_savings': isdst})
+    return result
+
+
+def cast(content, _type='text'):
     switch = {
-        'number': {'default': 0.0, 'func': float},
-        'integer': {'default': 0, 'func': int},
+        'float': {'default': 0.0, 'func': float},
+        'decimal': {'default': Decimal(0), 'func': Decimal},
+        'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': encode},
-        'unicode': {'default': '', 'func': unicode},
+        'unicode': {'default': u'', 'func': unicode},
+        'date': {'default': TODAY, 'func': cast_date},
+        'url': {'default': '', 'func': url_quote},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
+        'pass': {'default': None, 'func': lambda i: i},
+        'none': {'default': None, 'func': lambda _: None},
     }
 
-    try:
-        defaults = switch.get(field.get('type', 'text'), {})
-    except AttributeError:
-        defaults = switch['text']
+    if content is None:
+        value = switch[_type]['default']
+    else:
+        value = switch[_type]['func'](content)
 
-    kwargs = defaultdict(str, **defaults)
-    kwargs.update(opts)
-    default = kwargs['default']
+    return value
+
+
+def get_value(item, conf=None, force=False, default=None, **kwargs):
+    item = item or {}
 
     try:
-        value = item.get(field['subkey'], **kwargs)
+        value = item.get(conf['subkey'], **kwargs)
     except KeyError:
-        if field and not (hasattr(field, 'delete') or force):
-            raise TypeError('field must be of type DotDict')
+        if conf and not (hasattr(conf, 'delete') or force):
+            raise TypeError('conf must be of type DotDict')
         elif force:
-            value = field
-        elif field:
-            value = field.get(**kwargs)
+            value = conf
+        elif conf:
+            value = conf.get(**kwargs)
         else:
             value = default
     except (TypeError, AttributeError):
-        # field is already set to a value so use it or the default
-        value = field or default
+        # conf is already set to a value so use it or the default
+        value = default if conf is None else conf
     except (ValueError):
         # error converting subkey value with OPS['func'] so use the default
         value = default
@@ -242,104 +381,86 @@ def get_value(field, item=None, force=False, **opts):
     return value
 
 
-def broadcast(_INPUT, *funcs, **kwargs):
-    """copies an iterable and delivers the items to multiple functions
+def dispatch(split, *funcs):
+    """takes a tuple of items and delivers each item to a different function
 
-           /--> foo2bar(_INPUT) --> \
-          /                          \
-    _INPUT ---> foo2baz(_INPUT) ---> _OUTPUT
-          \                          /
-           \--> foo2qux(_INPUT) --> /
-
-    One way to construct such a flow in code would be::
-
-        _INPUT = repeat('foo', 3)
-        foo2bar = lambda word: word.replace('foo', 'bar')
-        foo2baz = lambda word: word.replace('foo', 'baz')
-        foo2qux = lambda word: word.replace('foo', 'quz')
-        _OUTPUT = broadcast(_INPUT, foo2bar, foo2baz, foo2qux)
-        _OUTPUT == repeat(('bar', 'baz', 'qux'), 3)
-    """
-    map_func = kwargs.get('map_func', _map_func)
-    apply_func = kwargs.get('apply_func', _apply_func)
-    splits = izip(*tee(_INPUT, len(funcs)))
-    return map_func(partial(apply_func, funcs), splits)
-
-
-def dispatch(splits, *funcs, **kwargs):
-    """takes multiple iterables (returned by dispatch or broadcast) and delivers
-    the items to multiple functions
-
-           /-----> _INPUT1 --> double(_INPUT1) --> \
-          /                                         \
-    splits ------> _INPUT2 --> triple(_INPUT2) ---> _OUTPUT
-          \                                         /
-           \--> _INPUT3 --> quadruple(_INPUT3) --> /
+           /--> item1 --> double(item1) -----> \
+          /                                     \
+    split ----> item2 --> triple(item2) -----> _OUTPUT
+          \                                     /
+           \--> item3 --> quadruple(item3) --> /
 
     One way to construct such a flow in code would be::
 
-        splits = repeat(('bar', 'baz', 'qux'), 3)
+        split = ('bar', 'baz', 'qux')
         double = lambda word: word * 2
         triple = lambda word: word * 3
         quadruple = lambda word: word * 4
-        _OUTPUT = dispatch(splits, double, triple, quadruple)
-        _OUTPUT == repeat(('barbar', 'bazbazbaz', 'quxquxquxqux'), 3)
+        _OUTPUT = dispatch(split, double, triple, quadruple)
+        _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
     """
-    map_func = kwargs.get('map_func', _map_func)
-    apply_func = kwargs.get('apply_func', _apply_func)
-    return map_func(partial(apply_func, funcs), splits)
+    return [func(item) for item, func in it.izip(split, funcs)]
 
 
-def parse_conf(conf, item=None, parse_func=None, **kwargs):
-    convert = kwargs.pop('convert', True)
-    values = map(partial(parse_func, item=item), (conf[c] for c in conf))
-    result = dict(zip(conf, values))
-    return Objectify(**result) if convert else result
+def broadcast(item, *funcs):
+    """delivers the same item to different functions
 
+           /--> item --> double(item) -----> \
+          /                                   \
+    item -----> item --> triple(item) -----> _OUTPUT
+          \                                   /
+           \--> item --> quadruple(item) --> /
 
-def parse_params(params):
-    true_params = filter(all, params)
-    return dict((x.key, x.value) for x in true_params)
+    One way to construct such a flow in code would be::
 
-
-def get_pass(item=None, test=None):
-    item = item or {}
-    return test and test(item)
-
-
-def get_with(item, **kwargs):
-    loop_with = kwargs.pop('with', None)
-    return item.get(loop_with, **kwargs) if loop_with else item
-
-
-def get_date(date_string):
-    for date_format in ALTERNATIVE_DATE_FORMATS:
-        try:
-            return datetime.strptime(date_string, date_format)
-        except ValueError:
-            pass
-
-
-def get_input(context, conf):
-    """Gets a user parameter, either from the console or from an outer
-        submodule/system
-
-       Assumes conf has name, default, prompt and debug
+        double = lambda word: word * 2
+        triple = lambda word: word * 3
+        quadruple = lambda word: word * 4
+        _OUTPUT = broadcast('bar', double, triple, quadruple)
+        _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
     """
-    name = conf['name']['value']
-    prompt = conf['prompt']['value']
-    default = conf['default']['value'] or conf['debug']['value']
+    return [func(item) for func in funcs]
 
-    if context.submodule or context.inputs:
-        value = context.inputs.get(name, default)
-    elif not context.test:
-        # we skip user interaction during tests
-        raw = raw_input("%s (default=%s) " % (prompt, default))
-        value = raw or default
+
+def parse_conf(item, **kwargs):
+    kw = Objectify(kwargs, defaults={}, conf={})
+    # TODO: fix so .items() returns a DotDict instance
+    # parsed = {k: get_value(item, v) for k, v in kw.conf.items()}
+    sentinel = {'subkey', 'value', 'terminal'}
+    not_dict = not hasattr(kw.conf, 'keys')
+
+    if not_dict or (len(kw.conf) == 1 and sentinel.intersection(kw.conf)):
+        objectified = get_value(item, **kwargs)
     else:
-        value = default
+        parsed = {k: get_value(item, kw.conf[k]) for k in kw.conf}
+        result = combine_dicts(kw.defaults, parsed)
+        objectified = Objectify(result) if kw.objectify else result
 
-    return value
+    return objectified
+
+
+def get_skip(item, skip_if=None, **kwargs):
+    item = item or {}
+    return skip_if and skip_if(item)
+
+
+def get_field(item, field=None, **kwargs):
+    return item.get(field, **kwargs) if field else item
+
+
+def get_date(unit, count, op):
+    dates = {
+        'seconds': op(TODAY, timedelta(seconds=count)),
+        'minutes': op(TODAY, timedelta(minutes=count)),
+        'hours': op(TODAY, timedelta(hours=count)),
+        'days': op(TODAY, timedelta(days=count)),
+        'weeks': op(TODAY, timedelta(weeks=count)),
+        # TODO: fix for when new month is not in 1..12
+        'months': TODAY.replace(month=op(TODAY.month, count)),
+        'years': TODAY.replace(year=op(TODAY.year, count)),
+    }
+
+    return dates[unit]
 
 
 def get_abspath(url):
@@ -349,7 +470,7 @@ def get_abspath(url):
         # already have an abspath
         pass
     elif url and url.startswith('file://'):
-        parent = p.dirname(p.dirname(__file__))
+        parent = p.dirname(p.dirname(p.dirname(__file__)))
         rel_path = url[7:]
         abspath = p.abspath(p.join(parent, rel_path))
         url = 'file://%s' % abspath
@@ -357,56 +478,21 @@ def get_abspath(url):
     return url
 
 
-def get_word(item):
-    try:
-        raw = ''.join(item.itervalues())
-    except AttributeError:
-        raw = item
-    except TypeError:
-        raw = None
-
-    return raw or ''
-
-
-def get_num(item):
-    try:
-        joined = ''.join(item.itervalues())
-    except AttributeError:
-        joined = item
-
-    try:
-        num = float(joined)
-    except (ValueError, TypeError):
-        num = 0.0
-
-    return num
-
-
-def passthrough(item):
-    return item
-
-
-def passnone(item):
-    return None
-
-
-def rreplace(s, find, replace, count=None):
-    li = s.rsplit(find, count)
-    return replace.join(li)
-
-
-def url_quote(url):
+def url_quote(url, params=None):
     """Ensure url is valid"""
-    return quote(url, safe=URL_SAFE)
+    stripped = url.rstrip('/')
+    quoted = quote(stripped, safe=URL_SAFE)
+    quoted += '?%s' % urlencode(params) if params and url else ''
+    return quoted
 
 
 def listize(item):
-    listlike = set(['append', 'next']).intersection(dir(item))
+    listlike = set(['append', 'next', '__reversed__']).intersection(dir(item))
     return item if listlike else [item]
 
 
 def _gen_words(match, splits):
-    groups = list(dropwhile(lambda x: not x, match.groups()))
+    groups = list(it.dropwhile(lambda x: not x, match.groups()))
 
     for s in splits:
         try:
@@ -414,7 +500,7 @@ def _gen_words(match, splits):
         except ValueError:
             word = s
         else:
-            word = islice(groups, num, num + 1).next()
+            word = it.islice(groups, num, num + 1).next()
 
         yield word
 
@@ -434,7 +520,7 @@ def multi_substitute(word, rules):
     resplit = re.compile('\$(\d+)')
 
     # For each match, look-up corresponding replace value in dictionary
-    rules_in_series = ifilter(itemgetter('series'), rules)
+    rules_in_series = it.ifilter(itemgetter('series'), rules)
     rules_in_parallel = (r for r in rules if not r['series'])
 
     try:
@@ -448,7 +534,7 @@ def multi_substitute(word, rules):
     # print('pattern', pattern)
     # print('flags', flags)
 
-    for _ in chain(rules_in_series, has_parallel):
+    for _ in it.chain(rules_in_series, has_parallel):
         # print('~~~~~~~~~~~~~~~~')
         # print('new round')
         # print('word:', word)
@@ -460,7 +546,8 @@ def multi_substitute(word, rules):
         i = 0
 
         for match in regex.finditer(word):
-            item = ifilter(itemgetter(1), match.groupdict().iteritems()).next()
+            items = match.groupdict().iteritems()
+            item = it.ifilter(itemgetter(1), items).next()
 
             # print('----------------')
             # print('groupdict:', match.groupdict().items())
@@ -494,7 +581,6 @@ def multi_substitute(word, rules):
                 words = [word[:start], splits, word[end:]]
                 i += rule['offset']
 
-            # words = list(words)
             word = ''.join(words)
 
             # print('name:', name)
@@ -520,41 +606,23 @@ def substitute(word, rule):
     return result
 
 
-def fix_pattern(word, rule):
-    if '$' in word:
-        pattern = rule['match'].sub(rule['replace'], word, rule['count'])
-    else:
-        pattern = word
-
-    return pattern
-
-
 def get_new_rule(rule, recompile=False):
-    # flag 'i' --> 2
-    flags = re.IGNORECASE if rule.get('ignorecase') else 0
-
-    # flag 'm' --> 8
-    flags |= re.MULTILINE if rule.get('multilinematch') else 0
-
-    # flag 's' --> 16
-    flags |= re.DOTALL if rule.get('singlelinematch') else 0
-
-    # flag 'g' --> 0
+    flags = 0 if rule.get('casematch') else re.IGNORECASE
+    flags |= 0 if rule.get('singlelinematch') else re.MULTILINE
+    flags |= re.DOTALL if rule.get('dotall') else 0
     count = 0 if rule.get('globalmatch') else 1
-    field = rule.get('field')
 
-    if recompile:
-        fix = {'match': re.compile('\$(\d+)'), 'replace': r'\\\1', 'count': 0}
-        replace = fix_pattern(rule['replace'], fix)
-        matchc = re.compile(rule['match'], flags)
+    if recompile and '$' in rule['replace']:
+        replace = re.sub('\$(\d+)', r'\\\1', rule['replace'], 0)
     else:
         replace = rule['replace']
-        matchc = rule['match']
+
+    match = re.compile(rule['match'], flags) if recompile else rule['match']
 
     nrule = {
-        'match': matchc,
+        'match': match,
         'replace': replace,
-        'field': field,
+        'field': rule.get('field'),
         'count': count,
         'flags': flags,
         'series': rule.get('seriesmatch', True),
@@ -564,15 +632,9 @@ def get_new_rule(rule, recompile=False):
     return nrule
 
 
-def convert_rules(rules, recompile=False):
-    # Convert replace pattern to Python/Linux format
-    rule_func = partial(get_new_rule, recompile=recompile)
-    return imap(rule_func, rules)
-
-
 def multiplex(sources):
     """Combine multiple generators into one"""
-    return chain.from_iterable(sources)
+    return it.chain.from_iterable(sources)
 
 
 ############
@@ -592,99 +654,10 @@ def gen_entries(parsed):
         yield entry
 
 
-def gen_items(item, yield_if_none=False):
-    if item and hasattr(item, 'append'):
-        for nested_item in item:
-            yield nested_item
-    elif item:
-        yield item
-    elif yield_if_none:
-        yield
-
-
-def gen_dependencies(pipe_def):
-    for module in pipe_def['modules']:
-        yield 'pipe%s' % module['type']
-
-        try:
-            yield 'pipe%s' % module['conf']['embed']['value']['type']
-        except (KeyError, TypeError):
-            pass
-
-
-def gen_input(pipe_def):
-    fields = ['position', 'name', 'prompt']
-
-    for module in pipe_def['modules']:
-        # Note: there seems to be no need to recursively collate inputs
-        # from subpipelines
-        try:
-            module_confs = [module['conf'][x]['value'] for x in fields]
-        except (KeyError, TypeError):
-            pass
-        else:
-            values = ['type', 'value']
-            module_confs.extend((module['conf']['default'][x] for x in values))
-            yield tuple(module_confs)
-
-
-def gen_names(module_ids, pipe, ntype='module'):
-    for module_id in module_ids:
-        module_type = pipe['modules'][module_id]['type']
-
-        if module_type.startswith('pipe:'):
-            name = pythonise(module_type)
-        elif ntype == 'module':
-            name = 'pipe%s' % module_type
-        elif ntype == 'pipe':
-            name = 'pipe_%s' % module_type
-        else:
-            raise Exception(
-                "Invalid type: %s. (Expected 'module' or 'pipe')" % ntype)
-
-        yield name
-
-
-def gen_modules(pipe_def):
-    for module in listize(pipe_def['modules']):
-        yield (pythonise(module['id']), module)
-
-
-def gen_embedded_modules(pipe_def):
-    for module in listize(pipe_def['modules']):
-        if module['type'] == 'loop':
-            embed = module['conf']['embed']['value']
-            yield (pythonise(embed['id']), embed)
-
-
-def gen_wires(pipe_def):
-    for wire in listize(pipe_def['wires']):
-        yield (pythonise(wire['id']), wire)
-
-
-def gen_graph1(pipe_def):
-    for module in listize(pipe_def['modules']):
-        yield (pythonise(module['id']), [])
-
-        # make the loop dependent on its embedded module
-        if module['type'] == 'loop':
-            embed = module['conf']['embed']['value']
-            yield (pythonise(embed['id']), [pythonise(module['id'])])
-
-
-def gen_graph2(pipe_def):
-    for wire in listize(pipe_def['wires']):
-        src_id = pythonise(wire['src']['moduleid'])
-        tgt_id = pythonise(wire['tgt']['moduleid'])
-        yield (src_id, tgt_id)
-
-
-def gen_graph3(graph):
-    # Remove any orphan nodes
-    values = graph.values()
-
-    for node, value in graph.iteritems():
-        targetted = (node in v for v in values)
-
-        if value or any(targetted):
-            yield (node, value)
+def gen_items(content, key):
+    if hasattr(content, 'append'):
+        for nested in content:
+            for i in gen_items(nested, key):
+                yield i
+    elif content:
+        yield {key: content}
