@@ -189,6 +189,10 @@ def pipe(*args, **kwargs):
         >>> 24 > td.total_seconds() / 3600 > 23
         True
         >>>
+        >>> # bool
+        >>> pipe(conf={'type': 'bool'}, inputs={'content': 'true'}).next()
+        {u'content': True}
+        >>>
         >>> # url
         >>> inputs = {'content': 'google.com'}
         >>> result = pipe(conf={'type': 'url'}, inputs=inputs).next()

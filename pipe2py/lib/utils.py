@@ -31,6 +31,7 @@ from calendar import timegm
 from decimal import Decimal
 from urllib import urlencode
 from urlparse import urlparse
+from json import loads
 
 from mezmorize import Cache
 from dateutil.parser import parse
@@ -362,10 +363,10 @@ def cast(content, _type='text'):
         'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': encode},
         'unicode': {'default': u'', 'func': unicode},
-        'bool': {'default': False, 'func': lambda i: bool(int(i))},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
         'url': {'default': {}, 'func': cast_url},
         'location': {'default': {}, 'func': cast_location},
+        'bool': {'default': False, 'func': lambda i: bool(loads(i))},
         'pass': {'default': None, 'func': lambda i: i},
         'none': {'default': None, 'func': lambda _: None},
     }
