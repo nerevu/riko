@@ -13,18 +13,20 @@ Examples:
         >>> from pipe2py import get_url
         >>>
         >>> url = {'value': get_url('gigs.json')}
-        >>> conf = {'url': url, 'path': 'value.items'}
-        >>> skwargs = {
-        ...     'field': 'description', 'delimiter': '<br>', 'emit': True}
+        >>> fconf = {'url': url, 'path': 'value.items'}
+        >>> sconf = {'delimiter': '<br>'}
+        >>> skwargs = {'field': 'description', 'emit': True}
         >>>
         >>> @inlineCallbacks
         ... def run(reactor):
-        ...     d1 = yield (AsyncPipe('fetchdata', conf=conf)
-        ...         .sort().stringtokenizer(**skwargs).count().list)
+        ...     d1 = yield (AsyncPipe('fetchdata', conf=fconf)
+        ...     .sort()
+        ...     .stringtokenizer(conf=sconf, **skwargs)
+        ...     .count().list)
         ...     print(d1)
         ...
-        ...     conf['type'] = 'fetchdata'
-        ...     sources = [{'url': {'value': get_url('feed.xml')}}, conf]
+        ...     fconf['type'] = 'fetchdata'
+        ...     sources = [{'url': {'value': get_url('feed.xml')}}, fconf]
         ...     d2 = yield AsyncCollection(sources).list
         ...     print(len(d2))
         ...

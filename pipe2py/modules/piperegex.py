@@ -252,6 +252,7 @@ def pipe(*args, **kwargs):
         dict: an item with concatenated content
 
     Examples:
+        >>> # default matching
         >>> item = {'content': 'hello world', 'title': 'greeting'}
         >>> match = r'(\w+)\s(\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
@@ -259,13 +260,16 @@ def pipe(*args, **kwargs):
         >>> result = pipe(item, conf=conf).next()
         >>> result == {'content': u'worldwide', 'title': 'greeting'}
         True
+        >>> # multiple regex mode
         >>> conf['multi'] = True
         >>> pipe(item, conf=conf).next() == result
         True
-        >>> item = {'content': 'Hello hello?'}
-        >>> rule.update({'match': r'hello.+', 'replace': 'bye'})
+        >>> # case insensitive matching
+        >>> item = {'content': 'Hello hello'}
+        >>> rule.update({'match': r'hello.*', 'replace': 'bye'})
         >>> pipe(item, conf=conf).next()['content']
         u'bye'
+        >>> # case sensitive matching
         >>> rule['casematch'] = True
         >>> pipe(item, conf=conf).next()['content']
         u'Hello bye'

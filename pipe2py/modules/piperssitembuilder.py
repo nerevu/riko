@@ -163,14 +163,17 @@ def pipe(*args, **kwargs):
         dict: an item
 
     Examples:
+        >>> # conf based
         >>> conf = {'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
         >>> rss = pipe(conf=conf).next()
         >>> rss['media:thumbnail']
         {u'url': u'image.png'}
         >>> sorted(rss.keys())
         [u'media:thumbnail', u'pubDate', u'y:id', u'y:title']
-        >>> item = {'heading': 'Hi', 'id': 'a1', 'thumbnail': 'image.png'}
+        >>>
+        >>> # source based
         >>> # TODO: look into subkey
+        >>> item = {'heading': 'Hi', 'id': 'a1', 'thumbnail': 'image.png'}
         >>> conf = {'title': 'heading', 'guid': 'id', 'mediaThumbURL': 'thumbnail'}
         >>> pipe(item, conf=conf).next() == rss
         True

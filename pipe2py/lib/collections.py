@@ -12,20 +12,26 @@ Examples:
         >>> from pipe2py import get_url
         >>>
         >>> url = {'value': get_url('gigs.json')}
-        >>> conf = {'url': url, 'path': 'value.items'}
-        >>> skwargs = {
-        ...     'field': 'description', 'delimiter': '<br>', 'emit': True}
-        >>> (SyncPipe('fetchdata', conf=conf)
-        ...     .sort().stringtokenizer(**skwargs).count().list)
+        >>> fconf = {'url': url, 'path': 'value.items'}
+        >>> sconf = {'delimiter': '<br>'}
+        >>> skwargs = {'field': 'description', 'emit': True}
+        >>> (SyncPipe('fetchdata', conf=fconf)
+        ...     .sort()
+        ...     .stringtokenizer(conf=sconf, **skwargs)
+        ...     .count().list)
         [{u'count': 169}]
-        >>> (SyncPipe('fetchdata', conf=conf, parallel=True)
-        ...     .sort().stringtokenizer(**skwargs).count().list)
+        >>> (SyncPipe('fetchdata', conf=fconf, parallel=True)
+        ...     .sort()
+        ...     .stringtokenizer(conf=sconf, **skwargs)
+        ...     .count().list)
         [{u'count': 169}]
-        >>> (SyncPipe('fetchdata', conf=conf, parallel=True, threads=False)
-        ...     .sort().stringtokenizer(**skwargs).count().list)
+        >>> (SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
+        ...     .sort()
+        ...     .stringtokenizer(conf=sconf, **skwargs)
+        ...     .count().list)
         [{u'count': 169}]
-        >>> conf['type'] = 'fetchdata'
-        >>> sources = [{'url': {'value': get_url('feed.xml')}}, conf]
+        >>> fconf['type'] = 'fetchdata'
+        >>> sources = [{'url': {'value': get_url('feed.xml')}}, fconf]
         >>> len(SyncCollection(sources).list)
         56
         >>> len(SyncCollection(sources, parallel=True).list)
