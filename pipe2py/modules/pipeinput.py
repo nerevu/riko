@@ -189,9 +189,21 @@ def pipe(*args, **kwargs):
         >>> 24 > td.total_seconds() / 3600 > 23
         True
         >>>
+        >>> # float
+        >>> pipe(conf={'type': 'float'}, inputs={'content': '1'}).next()
+        {u'content': 1.0}
+        >>>
         >>> # bool
         >>> pipe(conf={'type': 'bool'}, inputs={'content': 'true'}).next()
         {u'content': True}
+        >>>
+        >>> # text
+        >>> pipe(conf={'type': 'text'}, inputs={'content': 'hello'}).next()
+        {u'content': 'hello'}
+        >>>
+        >>> # unicode
+        >>> pipe(conf={'type': 'unicode'}, inputs={'content': 'hello'}).next()
+        {u'content': u'hello'}
         >>>
         >>> # url
         >>> inputs = {'content': 'google.com'}
