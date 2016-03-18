@@ -86,12 +86,7 @@ def parser(_, objconf, skip, **kwargs):
         value = raw or objconf.default
 
     casted = utils.cast(value, objconf.type)
-
-    if objconf.type == 'date':
-        result = utils.datify(casted)
-    else:
-        result = {kwargs['assign']: casted}
-
+    result = casted if hasattr(casted, 'keys') else {kwargs['assign']: casted}
     return result, skip
 
 
@@ -172,12 +167,22 @@ def pipe(*args, **kwargs):
        dict: item of user input
 
     Examples:
-        >>> import datetime
+        >>> # int
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> pipe(conf=conf, inputs={'content': '30'}).next()
         {u'content': 30}
+        >>>
+        >>> # date
+        >>> import datetime
+        >>>
         >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
-        >>> pipe(conf=conf, inputs={'content': '5/4/82'}).next()['date']
+        >>> result = pipe(conf=conf, inputs={'content': '5/4/82'}).next()
+        >>> sorted(result.keys()) == [
+        ...     u'date', u'day', u'day_of_week', u'day_of_year',
+        ...     u'daylight_savings', u'hour', u'minute', u'month',
+        ...     u'second', u'timezone', u'utime', u'year']
+        True
+        >>> result['date']
         datetime.datetime(1982, 5, 4, 0, 0)
         >>> d = pipe(conf=conf, inputs={'content': 'tomorrow'}).next()['date']
         >>> td = d - datetime.datetime.utcnow()

@@ -294,32 +294,31 @@ def cast_date(date_str):
     try:
         words = date_str.split(' ')
     except AttributeError:
-        return date_str
+        date = date_str
     else:
+        date = None
         math_words = {
             'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years'}
         text_words = {'last', 'next', 'week', 'month', 'year'}
         mathish = set(words).intersection(math_words)
         textish = set(words).intersection(text_words)
 
-    if date_str[0] in {'+', '-'} and len(mathish) == 1:
+    if date:
+        pass
+    elif date_str[0] in {'+', '-'} and len(mathish) == 1:
         op = sub if date_str.startswith('-') else add
-        new_date = get_date(mathish, words[0][1:], op)
+        date = get_date(mathish, words[0][1:], op)
     elif len(textish) == 2:
         op = add if date_str.startswith('last') else add
-        new_date = get_date('%ss' % words[1], 1, op)
+        date = get_date('%ss' % words[1], 1, op)
     elif date_str in DATES:
-        new_date = DATES.get(date_str)
+        date = DATES.get(date_str)
     else:
         try:
-            new_date = parse(date_str)
+            date = parse(date_str)
         except AttributeError:
-            new_date = time.gmtime(date_str)
+            date = time.gmtime(date_str)
 
-    return new_date
-
-
-def datify(date):
     keys = (
         'year', 'month', 'day', 'hour', 'minute', 'second', 'day_of_week',
         'day_of_year', 'daylight_savings')
@@ -342,9 +341,9 @@ def cast(content, _type='text'):
         'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': encode},
         'unicode': {'default': u'', 'func': unicode},
-        'date': {'default': TODAY, 'func': cast_date},
         'url': {'default': '', 'func': url_quote},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
+        'date': {'default': {'date': TODAY}, 'func': cast_date},
         'pass': {'default': None, 'func': lambda i: i},
         'none': {'default': None, 'func': lambda _: None},
     }

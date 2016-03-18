@@ -48,7 +48,7 @@ def parser(date, objconf, skip, **kwargs):
     """ Obtains the user input
 
     Args:
-        date (obj): date-like object
+        date (dict): Must have key 'date' with a date-like object value
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
 
@@ -60,10 +60,10 @@ def parser(date, objconf, skip, **kwargs):
         >>> from pipe2py.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'format': '%m/%d/%Y'})
-        >>> parser(date(2015, 5, 4), objconf, False)[0]
+        >>> parser({'date': date(2015, 5, 4)}, objconf, False)[0]
         '05/04/2015'
     """
-    timetuple = date.timetuple()
+    timetuple = date['date'].timetuple()
     parsed = kwargs['feed'] if skip else strftime(objconf.format, timetuple)
     return parsed, skip
 
