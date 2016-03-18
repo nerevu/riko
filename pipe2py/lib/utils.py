@@ -80,7 +80,7 @@ encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
 
-class Objectify(object):
+class Objectify(dict):
     def __init__(self, kwargs, func=None, **defaults):
         """ Objectify constructor
 
@@ -92,11 +92,9 @@ class Objectify(object):
             >>> kwargs = {'one': 1, 'two': 2}
             >>> defaults = {'two': 5, 'three': 3}
             >>> kw = Objectify(kwargs, **defaults)
-            >>> kw
-            Objectify({u'one': 1, u'two': 2, u'three': 3})
-            >>> str(kw)
-            'Objectify(one=1, three=3, two=2)'
             >>> sorted(kw.keys()) == ['one', 'three', 'two']
+            True
+            >>> kw == {u'three': 3, u'two': 2, u'one': 1}
             True
             >>> kw.one
             1
@@ -109,46 +107,18 @@ class Objectify(object):
             1
         """
         defaults.update(kwargs)
-        self.__dict__.update(defaults)
+        super(Objectify, self).__init__(defaults)
         self.func = func
-        self.attrs = defaults
-
-    def __str__(self):
-        items = sorted(self.attrs.items())
-        args = ', '.join('%s=%s' % item for item in items)
-        return '%s(%s)' % (self.__class__.__name__, args)
-
-    def __repr__(self):
-        return '%s(%s)' % (self.__class__.__name__, self.attrs)
-
-    def __iter__(self):
-        return self.__dict__.itervalues()
+        self.__setattr__ = dict.__setitem__
+        self.__delattr__ = dict.__delitem__
 
     def __getattribute__(self, name):
-        attr = object.__getattribute__(self, name)
-        blacklist = {'func', '__dict__'}
-        return self.func(attr) if name not in blacklist and self.func else attr
+        if name in {'get', 'pop', 'keys', 'items', 'iteritems', 'func'}:
+            return object.__getattribute__(self, name)
+        else:
+            attr = self.get(name)
+            return self.func(attr) if self.func else attr
 
-    def __getattr__(self, name):
-        return None
-
-    def __getitem__(self, key):
-        return self.attrs[key]
-
-    def get(self, key, default=None):
-        return self.attrs.get(key, default)
-
-    def to_dict(self):
-        return self.attrs
-
-    def items(self):
-        return self.attrs.items()
-
-    def iteritems(self):
-        return self.attrs.iteritems()
-
-    def keys(self):
-        return self.attrs.keys()
 
 
 class SleepyDict(dict):

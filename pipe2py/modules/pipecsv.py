@@ -84,7 +84,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         odd = {
             'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
 
-        rkwargs = utils.combine_dicts(objconf.to_dict(), odd)
+        rkwargs = utils.combine_dicts(objconf, odd)
         feed = read_csv(f, **rkwargs)
 
     result = (feed, skip)
@@ -120,7 +120,7 @@ def parser(_, objconf, skip, **kwargs):
         f = urlopen(url)
         odd = {
             'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
-        rkwargs = utils.combine_dicts(objconf.to_dict(), odd)
+        rkwargs = utils.combine_dicts(objconf, odd)
         feed = read_csv(f, **rkwargs)
 
     return feed, skip
