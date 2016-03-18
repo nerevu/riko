@@ -46,7 +46,7 @@ Examples:
         >>> path = [{'value': 'rss'}, {'value': 'headline'}]
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
-        >>> pipe(conf=conf).next()['urlbuilder']
+        >>> pipe(conf=conf).next()['url']
         u'http://finance.yahoo.com/rss/headline?s=gm'
 
 Attributes:
@@ -57,12 +57,15 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+from urlparse import urljoin
+from urllib import urlencode
+
 from . import processor
 from pipe2py.lib.log import Logger
 from pipe2py.lib.dotdict import DotDict
-from pipe2py.lib.utils import url_quote, get_value
+from pipe2py.lib.utils import get_value, cast_url
 
-OPTS = {'extract': 'params', 'listize': True}
+OPTS = {'extract': 'params', 'listize': True, 'emit': True}
 DEFAULTS = {}
 logger = Logger(__name__).logger
 
@@ -91,7 +94,10 @@ def parser(item, params, skip, **kwargs):
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
         >>> kwargs = {'feed': item, 'conf': conf}
-        >>> parser(item, [Objectify(params)], False, **kwargs)[0]
+        >>> result = parser(item, [Objectify(params)], False, **kwargs)[0]
+        >>> sorted(result.keys())
+        ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
+        >>> result['url']
         u'http://finance.yahoo.com/rss/headline?s=gm'
     """
     if skip:
@@ -99,9 +105,9 @@ def parser(item, params, skip, **kwargs):
     else:
         conf = kwargs.pop('conf')
         paths = (get_value(item, DotDict(p), **kwargs) for p in conf.get('path'))
-        url = '%s/%s' % (conf.get('base', '').rstrip('/'),  '/'.join(paths))
-        params = [(p.key, p.value) for p in params]
-        feed = url_quote(url, params=params)
+        params = urlencode([(p.key, p.value) for p in params])
+        url = '%s?%s' % (urljoin(conf['base'],  '/'.join(paths)), params)
+        feed = cast_url(url)
 
     return feed, skip
 
@@ -126,8 +132,6 @@ def pipe(*args, **kwargs):
                 key (str): the parameter name
                 value (str): the parameter value
 
-        assign (str): Attribute to assign parsed content (default: urlbuilder)
-
     Yields:
         dict: a url
 
@@ -136,7 +140,10 @@ def pipe(*args, **kwargs):
         >>> path = [{'value': 'rss'}, {'value': 'headline'}]
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
-        >>> pipe(conf=conf).next()['urlbuilder']
+        >>> result = pipe(conf=conf).next()
+        >>> sorted(result.keys())
+        ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
+        >>> result['url']
         u'http://finance.yahoo.com/rss/headline?s=gm'
     """
     return parser(*args, **kwargs)

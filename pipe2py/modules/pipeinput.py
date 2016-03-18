@@ -188,5 +188,13 @@ def pipe(*args, **kwargs):
         >>> td = d - datetime.datetime.utcnow()
         >>> 24 > td.total_seconds() / 3600 > 23
         True
+        >>>
+        >>> # url
+        >>> inputs = {'content': 'google.com'}
+        >>> result = pipe(conf={'type': 'url'}, inputs=inputs).next()
+        >>> sorted(result.keys())
+        ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
+        >>> result['url']
+        u'http://google.com'
     """
     return parser(*args, **kwargs)

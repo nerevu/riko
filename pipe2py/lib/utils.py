@@ -30,6 +30,7 @@ from os import path as p, environ
 from calendar import timegm
 from decimal import Decimal
 from urllib import urlencode
+from urlparse import urlparse
 
 from mezmorize import Cache
 from dateutil.parser import parse
@@ -75,6 +76,7 @@ DATES = {
 }
 
 encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
+url_quote = lambda url: quote(url, safe=URL_SAFE)
 
 
 class Objectify(object):
@@ -334,6 +336,15 @@ def cast_date(date_str):
     return result
 
 
+def cast_url(url_str):
+    url = 'http://%s' % url_str if '://' not in url_str else url_str
+    quoted = url_quote(url)
+    parsed = urlparse(url)
+    response = parsed._asdict()
+    response['url'] = parsed.geturl()
+    return response
+
+
 def cast(content, _type='text'):
     switch = {
         'float': {'default': 0.0, 'func': float},
@@ -341,9 +352,9 @@ def cast(content, _type='text'):
         'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': encode},
         'unicode': {'default': u'', 'func': unicode},
-        'url': {'default': '', 'func': url_quote},
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
+        'url': {'default': {}, 'func': cast_url},
         'pass': {'default': None, 'func': lambda i: i},
         'none': {'default': None, 'func': lambda _: None},
     }
@@ -477,16 +488,14 @@ def get_abspath(url):
     return url
 
 
-def url_quote(url, params=None):
-    """Ensure url is valid"""
-    stripped = url.rstrip('/')
-    quoted = quote(stripped, safe=URL_SAFE)
-    quoted += '?%s' % urlencode(params) if params and url else ''
-    return quoted
 
 
 def listize(item):
-    listlike = set(['append', 'next', '__reversed__']).intersection(dir(item))
+    if hasattr(item, 'keys'):
+        listlike = False
+    else:
+        listlike = {'append', 'next', '__reversed__'}.intersection(dir(item))
+
     return item if listlike else [item]
 
 
