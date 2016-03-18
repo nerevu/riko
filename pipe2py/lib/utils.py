@@ -345,6 +345,16 @@ def cast_url(url_str):
     return response
 
 
+def cast_location(location_str):
+    # TODO: Fix this for real!
+    location = {
+        'lat': 0, 'lon': 0, 'quality': 0, 'country': 'US', 'admin1': 'state',
+        'admin2': 'county', 'admin3': 'city', 'city': 'city',
+        'street': 'street', 'postal': '61605'}
+
+    return location
+
+
 def cast(content, _type='text'):
     switch = {
         'float': {'default': 0.0, 'func': float},
@@ -355,6 +365,7 @@ def cast(content, _type='text'):
         'bool': {'default': False, 'func': lambda i: bool(int(i))},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
         'url': {'default': {}, 'func': cast_url},
+        'location': {'default': {}, 'func': cast_location},
         'pass': {'default': None, 'func': lambda i: i},
         'none': {'default': None, 'func': lambda _: None},
     }

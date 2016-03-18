@@ -196,5 +196,15 @@ def pipe(*args, **kwargs):
         ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
         >>> result['url']
         u'http://google.com'
+        >>>
+        >>> # location
+        >>> inputs = {'content': 'palo alto, ca'}
+        >>> result = pipe(conf={'type': 'location'}, inputs=inputs).next()
+        >>> sorted(result.keys()) == [
+        ...     u'admin1', u'admin2', u'admin3', u'city', u'country', u'lat',
+        ...     u'lon', u'postal', u'quality', u'street']
+        True
+        >>> result['city']
+        u'city'
     """
     return parser(*args, **kwargs)
