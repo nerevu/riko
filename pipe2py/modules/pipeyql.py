@@ -56,6 +56,8 @@ from pipe2py.lib.log import Logger
 from pipe2py.twisted import utils as tu
 
 OPTS = {'ftype': 'none'}
+
+# we use the default format of xml since json loses some structure
 DEFAULTS = {'url': 'http://query.yahooapis.com/v1/public/yql', 'debug': False}
 logger = Logger(__name__).logger
 
@@ -104,8 +106,6 @@ def asyncParser(_, objconf, skip, **kwargs):
     if skip:
         feed = kwargs['feed']
     else:
-        # we use the default format of xml since json loses some structure
-        # todo: consider paging for large result sets
         f = kwargs.get('response')
 
         if f:
@@ -156,8 +156,6 @@ def parser(_, objconf, skip, **kwargs):
     if skip:
         feed = kwargs['feed']
     else:
-        # we use the default format of xml since json loses some structure
-        # todo: consider paging for large result sets
         f = kwargs.get('response')
 
         if not f:
@@ -165,6 +163,7 @@ def parser(_, objconf, skip, **kwargs):
             r = requests.get(objconf.url, params=params, stream=True)
             f = r.raw
 
+        # todo: consider paging for large result sets
         tree = parse(f)
         root = tree.getroot()
         results = root.find('results')

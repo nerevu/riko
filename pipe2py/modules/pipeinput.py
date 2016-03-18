@@ -105,8 +105,9 @@ def asyncPipe(*args, **kwargs):
 
             prompt (str): User command line prompt
             default (scalar): Default value
-            type (str): Expectd value type. Must be one of 'text', 'int',
-                'float', 'bool', 'unicode', 'url', or 'date'. Default: 'text'.
+            type (str): Expected value type. Must be one of 'text', 'int',
+                'float', 'bool', 'unicode', 'url', 'location', or 'date'.
+                Default: 'text'.
             assign (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values that overrides the defaults e.g.
@@ -153,8 +154,9 @@ def pipe(*args, **kwargs):
 
             prompt (str): User command line prompt
             default (scalar): Default value
-            type (str): Expectd value type. Must be one of 'text', 'int',
-                'float', 'bool', 'unicode', 'url', or 'date'. Default: 'text'.
+            type (str): Expected value type. Must be one of 'text', 'int',
+                'float', 'bool', 'unicode', 'url', 'location', or 'date'.
+                Default: 'text'.
             assign (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values that overrides the defaults e.g.
@@ -184,8 +186,8 @@ def pipe(*args, **kwargs):
         True
         >>> result['date']
         datetime.datetime(1982, 5, 4, 0, 0)
-        >>> d = pipe(conf=conf, inputs={'content': 'tomorrow'}).next()['date']
-        >>> td = d - datetime.datetime.utcnow()
+        >>> d = pipe(conf=conf, inputs={'content': 'tomorrow'}).next()
+        >>> td = d['date'] - datetime.datetime.utcnow()
         >>> 24 > td.total_seconds() / 3600 > 23
         True
         >>>
