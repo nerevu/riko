@@ -112,6 +112,53 @@ def parser(item, params, skip, **kwargs):
     return feed, skip
 
 
+@processor(DEFAULTS, async=True, **OPTS)
+def asyncPipe(*args, **kwargs):
+    """A source that asynchronously builds a url.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. Must contain the key 'base'. May
+            contain the keys 'params' or 'path'.
+
+            base (str): the sever name
+            path (str): the resource path
+            params (dict): can be either a dict or list of dicts. Must contain
+                the keys 'key' and 'value'.
+
+                key (str): the parameter name
+                value (str): the parameter value
+
+    Returns:
+        dict: twisted.internet.defer.Deferred an iterator of items
+
+    Examples:
+        >>> from twisted.internet.task import react
+        >>> from pipe2py.twisted import utils as tu
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(x.next()['url'])
+        ...     params = {'key': 's', 'value': 'gm'}
+        ...     path = [{'value': 'rss'}, {'value': 'headline'}]
+        ...     base = 'http://finance.yahoo.com'
+        ...     conf = {'base': base, 'path': path, 'params': params}
+        ...     d = asyncPipe(conf=conf)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=tu.FakeReactor())
+        ...     pass
+        ... except SystemExit:
+        ...     pass
+        ...
+        http://finance.yahoo.com/rss/headline?s=gm
+    """
+    return parser(*args, **kwargs)
+
+
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A source that builds a url.
