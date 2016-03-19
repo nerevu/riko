@@ -97,7 +97,7 @@ def asyncPipe(*args, **kwargs):
 
 @operator(**OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly counts the number of items in a feed.
+    """An operator that eagerly reverses the order of source items in a feed.
 
     Args:
         items (Iter[dict]): The source feed.

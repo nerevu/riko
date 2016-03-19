@@ -267,11 +267,12 @@ def pipe(*args, **kwargs):
                 url. Useful for simulating network latency. Default: 0.
 
             memoize: Cache the exchange rate API response (default: False).
-            field (str): Item attribute from which to obtain the string to be
-                formatted (default: 'content')
 
-            assign (str): Attribute to assign parsed content (default:
-                exchangerate)
+        field (str): Item attribute from which to obtain the string to be
+            formatted (default: 'content')
+
+        assign (str): Attribute to assign parsed content (default:
+            exchangerate)
 
     Yields:
         dict: an item of the result

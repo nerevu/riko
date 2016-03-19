@@ -63,7 +63,7 @@ def asyncParser(_, urls, skip, **kwargs):
         conf (dict): The pipe configuration
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Deferred: twisted.internet.defer.Deferred Tuple(Iter[dict], bool)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -163,7 +163,7 @@ def asyncPipe(*args, **kwargs):
 
 
     Returns:
-        dict: twisted.internet.defer.Deferred item with feeds
+        Deferred: twisted.internet.defer.Deferred iterator of items
 
     Examples:
         >>> from twisted.internet.task import react

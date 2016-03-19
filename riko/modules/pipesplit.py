@@ -3,7 +3,7 @@
 """
 riko.modules.pipesplit
 ~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for spliting a feed into identical copies
+Provides functions for splitting a feed into identical copies
 
 Use split when you want to perform different operations on data from the same
 feed. The Union module is the reverse of Split, it merges multiple input feeds
@@ -88,7 +88,6 @@ def asyncPipe(*args, **kwargs):
         conf (dict): The pipe configuration. May contain the key 'splits'.
 
             splits (int): the number of copies to create (default: 2).
-
 
     Returns:
         Deferred: twisted.internet.defer.Deferred feed of feeds

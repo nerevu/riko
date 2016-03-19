@@ -179,10 +179,12 @@ def pipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'rule'.
 
             rule (dict): can be either a dict or list of dicts. Must contain
-                the key 'field'.
+                the key 'field'. May contain the keys 'newval' or 'copy'.
 
                 field (str): The item attribute to rename
-                newval (str): The new item attribute name
+                newval (str): The new item attribute name (default: None). If
+                    blank, the field will be deleted.
+
                 copy (bool): Copy the item attribute instead of renaming it
                     (default: False)
 

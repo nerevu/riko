@@ -104,7 +104,7 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: simplemath)
+        assign (str): Attribute to assign parsed content (default: hash)
         field (str): Item attribute from which to obtain the first number to
             operate on (default: 'content')
 

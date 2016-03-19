@@ -90,7 +90,7 @@ def asyncPipe(*args, **kwargs):
                 dateformat)
 
             field (str): Item attribute from which to obtain the string to be
-                formatted (default: 'tuple')
+                formatted (default: 'date')
 
     Returns:
         Deferred: twisted.internet.defer.Deferred item with formatted date
@@ -130,11 +130,11 @@ def pipe(*args, **kwargs):
             format (str): Format string passed to time.strftime (default:
                 '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')
 
-            assign (str): Attribute to assign parsed content (default:
-                dateformat)
+        assign (str): Attribute to assign parsed content (default:
+            dateformat)
 
-            field (str): Item attribute from which to obtain the string to be
-                formatted (default: 'tuple')
+        field (str): Item attribute from which to obtain the string to be
+            formatted (default: 'date')
 
     Returns:
         dict: an item with formatted date string

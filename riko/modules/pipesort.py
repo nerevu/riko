@@ -167,7 +167,7 @@ def asyncPipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly sorts the input source according to a specified
+    """An operator that eagerly sorts a feed according to a specified
     key. Note that this pipe is not lazy.
 
     Args:

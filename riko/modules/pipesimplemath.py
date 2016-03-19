@@ -124,7 +124,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor module that  performs basic arithmetic, such as addition and
+    """A processor module that performs basic arithmetic, such as addition and
     subtraction.
 
     Args:

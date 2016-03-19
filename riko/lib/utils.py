@@ -245,8 +245,6 @@ def _make_content(i, value=None, tag='content', append=True, strip=False):
 
 def etree_to_dict(element):
     """Convert an lxml element into a dict imitating how Yahoo Pipes does it.
-
-    todo: further investigate white space and multivalue handling
     """
     i = dict(element.items())
     i.update(_make_content(i, element.text, strip=True))

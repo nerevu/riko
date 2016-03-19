@@ -155,7 +155,8 @@ def asyncPipe(*args, **kwargs):
 
             end (str): The ending string to fetch (exclusive, default: None).
             token (str): The tokenizer delimiter string (default: None).
-            assign (str): Attribute to assign parsed content (default: content)
+
+        assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
         dict: twisted.internet.defer.Deferred item with feeds
@@ -199,10 +200,8 @@ def pipe(*args, **kwargs):
 
             end (str): The ending string to fetch (exclusive, default: None).
             token (str): The tokenizer delimiter string (default: None).
-            assign (str): Attribute to assign parsed content (default: content)
 
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
+        assign (str): Attribute to assign parsed content (default: content)
 
     Yields:
         dict: an item on the feed

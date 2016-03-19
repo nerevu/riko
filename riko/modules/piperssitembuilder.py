@@ -162,7 +162,7 @@ def pipe(*args, **kwargs):
             mediaThumbWidth (str): The item media thumbnail width
 
     Yields:
-        dict: an item
+        dict: an rss item
 
     Examples:
         >>> # conf based

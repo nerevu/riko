@@ -55,7 +55,7 @@ from riko.lib import utils
 from riko.lib.log import Logger
 
 OPTS = {'ftype': 'none'}
-DEFAULTS = {'type': 'text'}
+DEFAULTS = {'type': 'text', 'default': ''}
 logger = Logger(__name__).logger
 
 
@@ -112,7 +112,7 @@ def asyncPipe(*args, **kwargs):
                 Default: 'text'.
             assign (str): Attribute to assign parsed content (default: content)
 
-        inputs (dict): values that overrides the defaults e.g.
+        inputs (dict): values to be used in place of prompting the user e.g.
             {'name': 'value1'}
 
         test (bool): Take input values from default (skip the console prompt)
@@ -152,16 +152,17 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'prompt',
-            'default', 'type', 'assign'.
+            'default', 'type'.
 
             prompt (str): User command line prompt
             default (scalar): Default value
             type (str): Expected value type. Must be one of 'text', 'int',
                 'float', 'bool', 'unicode', 'url', 'location', or 'date'.
                 Default: 'text'.
-            assign (str): Attribute to assign parsed content (default: content)
 
-        inputs (dict): values that overrides the defaults e.g.
+        assign (str): Attribute to assign parsed content (default: content)
+
+        inputs (dict): values to be used in place of prompting the user e.g.
             {'name': 'value1'}
 
         test (bool): Take input values from default (skip the console prompt)

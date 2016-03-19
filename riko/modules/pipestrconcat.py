@@ -81,8 +81,6 @@ def asyncPipe(*args, **kwargs):
                     substring
 
         assign (str): Attribute to assign parsed content (default: strconcat)
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with concatenated content
@@ -127,8 +125,6 @@ def pipe(*args, **kwargs):
                     substring
 
         assign (str): Attribute to assign parsed content (default: strconcat)
-        field (str): Item attribute from which to obtain the string to be
-            tokenized (default: content)
 
     Yields:
         dict: an item with concatenated content

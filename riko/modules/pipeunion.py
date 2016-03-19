@@ -111,7 +111,7 @@ def asyncPipe(*args, **kwargs):
 
 @operator(**OPTS)
 def pipe(*args, **kwargs):
-    """An operator that merges multiple source feeds together.
+    """An operator that merges multiple feeds together.
 
     Args:
         items (Iter[dict]): The source feed.

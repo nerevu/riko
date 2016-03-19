@@ -3,7 +3,7 @@
 """
 riko.modules.pipestringtokenizer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for spliting a string into an array of strings.
+Provides functions for splitting a string into an array of strings.
 
 A delimiter string (often just a single character) tells the module where to
 split the input string. The delimiter string doesn't appear in the output.
@@ -134,6 +134,8 @@ def pipe(*args, **kwargs):
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
+
+        emit (bool):
 
     Returns:
         dict: an item with tokenized content

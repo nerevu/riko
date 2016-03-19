@@ -182,7 +182,7 @@ def pipe(*args, **kwargs):
                 value (str): the parameter value
 
     Yields:
-        dict: a url
+        dict: a url item
 
     Examples:
         >>> params = {'key': 's', 'value': 'gm'}

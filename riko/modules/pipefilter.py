@@ -205,7 +205,7 @@ def asyncPipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that filters for source items matching the given rules.
+    """An operator that extracts items matching the given rules.
 
     Args:
         items (Iter[dict]): The source feed.

@@ -178,7 +178,7 @@ def asyncPipe(*args, **kwargs):
             contain the keys 'multi' or 'convert'.
 
             rule (dict): can be either a dict or list of dicts. Must contain
-                the key 'field'.
+                the keys 'field', 'match', and 'replace'.
 
                 field (str): The item attribute to search
                 match (str): The regex to apply
@@ -234,7 +234,7 @@ def pipe(*args, **kwargs):
             contain the keys 'multi' or 'convert'.
 
             rule (dict): can be either a dict or list of dicts. Must contain
-                the key 'field'.
+                the keys 'field', 'match', and 'replace'.
 
                 field (str): The item attribute to search
                 match (str): The regex to apply
