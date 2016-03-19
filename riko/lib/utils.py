@@ -8,14 +8,9 @@
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
-
+import __builtin__
 import string
 import re
 import itertools as it
@@ -33,6 +28,7 @@ from urllib import urlencode
 from urlparse import urlparse
 from json import loads
 
+from builtins import *
 from mezmorize import Cache
 from dateutil.parser import parse
 
@@ -113,7 +109,11 @@ class Objectify(dict):
         self.__delattr__ = dict.__delitem__
 
     def __getattribute__(self, name):
-        if name in {'get', 'pop', 'keys', 'items', 'iteritems', 'func'}:
+        good = {
+            'get', 'pop', 'keys', 'items', 'iteritems', 'func', 'viewitems',
+            'viewkeys'}
+
+        if name in good:
             return object.__getattribute__(self, name)
         else:
             attr = self.get(name)
@@ -145,7 +145,7 @@ class Chainable(object):
         self.list = list(data)
 
     def __getattr__(self, name):
-        funcs = (partial(getattr, x) for x in [self.data, builtins, it])
+        funcs = (partial(getattr, x) for x in [self.data, __builtin__, it])
         zipped = it.izip(funcs, it.repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)

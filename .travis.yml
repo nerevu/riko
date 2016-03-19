@@ -2,7 +2,10 @@ sudo: false
 language: python
 python:
   - "2.7"
+  - "3.4"
+  - "3.5"
   - "pypy"
+  - "pypy3"
 
 cache:
   directories:
@@ -27,6 +30,8 @@ before_install:
 
 install:
   - pip install -r dev-requirements.txt
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then pip install future==0.15.2; fi
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "pypy" ]]; then pip install future==0.15.2; fi
 
 script:
   - manage lint

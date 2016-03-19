@@ -31,6 +31,8 @@ from lxml.html import html5parser
 from urllib2 import urlopen
 from json import loads
 from os.path import splitext
+
+from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor

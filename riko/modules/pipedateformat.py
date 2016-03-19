@@ -36,6 +36,9 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from time import strftime
+
+from builtins import *
+
 from . import processor
 from riko.lib.log import Logger
 

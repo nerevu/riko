@@ -31,6 +31,8 @@ import speedparser
 from functools import partial
 from itertools import imap
 from urllib2 import urlopen
+
+from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor

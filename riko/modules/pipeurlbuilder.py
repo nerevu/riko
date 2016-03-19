@@ -60,6 +60,8 @@ from __future__ import (
 from urlparse import urljoin
 from urllib import urlencode
 
+from builtins import *
+
 from . import processor
 from riko.lib.log import Logger
 from riko.lib.dotdict import DotDict

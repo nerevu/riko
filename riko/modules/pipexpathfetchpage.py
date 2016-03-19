@@ -47,6 +47,7 @@ from urllib2 import urlopen
 from os.path import splitext
 from itertools import imap
 
+from builtins import *
 from lxml import objectify, html
 from lxml.html import html5parser
 from twisted.internet.defer import inlineCallbacks, returnValue

@@ -8,11 +8,12 @@
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
+
+from builtins import *
+from feedparser import FeedParserDict
 
 from . import utils, log
-from feedparser import FeedParserDict
 
 logger = log.Logger(__name__).logger
 

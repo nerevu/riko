@@ -26,6 +26,8 @@ from __future__ import (
 
 from datetime import datetime as dt
 
+from builtins import *
+
 from . import processor
 from riko.lib.log import Logger
 from riko.lib.dotdict import DotDict

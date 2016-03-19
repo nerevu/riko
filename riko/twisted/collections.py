@@ -45,6 +45,7 @@ from __future__ import (
 from functools import partial
 from importlib import import_module
 
+from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from riko.lib.collections import PyPipe, PyCollection, getpipe

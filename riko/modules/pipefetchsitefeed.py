@@ -33,13 +33,14 @@ Attributes:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 import speedparser
 
 from urllib2 import urlopen
 from itertools import imap
+
+from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor

@@ -20,7 +20,9 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+from builtins import *
 from babel.numbers import format_currency
+
 from . import processor
 from riko.lib.log import Logger
 

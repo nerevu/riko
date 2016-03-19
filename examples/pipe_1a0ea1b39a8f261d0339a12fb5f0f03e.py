@@ -1,3 +1,6 @@
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
+
 from riko import modules as mod
 from riko.lib.collections import SyncPipe
 
@@ -23,7 +26,6 @@ def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(**kwargs):
 
     return p393
 
-
 if __name__ == "__main__":
     for i in pipe_1a0ea1b39a8f261d0339a12fb5f0f03e():
-        print i
+        print(i)

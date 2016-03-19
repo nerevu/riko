@@ -30,7 +30,9 @@ from json import loads
 from urllib2 import urlopen
 from decimal import Decimal
 
+from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
+
 from . import processor
 from riko.lib import utils
 from riko.lib.log import Logger

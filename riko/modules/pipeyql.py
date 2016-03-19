@@ -46,6 +46,8 @@ import requests
 import treq
 
 from itertools import imap
+
+from builtins import *
 from lxml.etree import parse
 from twisted.web import microdom
 from twisted.internet.defer import inlineCallbacks, returnValue

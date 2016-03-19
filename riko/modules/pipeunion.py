@@ -25,6 +25,8 @@ from __future__ import (
 
 from itertools import chain
 
+from builtins import *
+
 from . import operator
 from riko.lib.log import Logger
 from riko.lib.utils import multiplex

@@ -39,14 +39,15 @@ Examples:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 from functools import partial
 from itertools import imap, izip, repeat
 from importlib import import_module
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool, cpu_count
+
+from builtins import *
 
 from riko.lib.utils import multiplex, multi_try
 from riko.lib.log import Logger

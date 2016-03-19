@@ -26,6 +26,8 @@ from __future__ import (
 
 from collections import deque
 
+from builtins import *
+
 from . import operator
 from riko.lib.log import Logger
 

@@ -4,8 +4,7 @@
 """Twisted utility functions"""
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 import itertools as it
 from os import environ
@@ -13,8 +12,9 @@ from sys import executable
 from functools import partial
 from StringIO import StringIO
 from htmlentitydefs import entitydefs, name2codepoint
-from zope.interface import implementer
 
+from builtins import *
+from zope.interface import implementer
 from twisted.internet import defer
 from twisted.internet.defer import (
     inlineCallbacks, maybeDeferred, gatherResults, returnValue, Deferred)

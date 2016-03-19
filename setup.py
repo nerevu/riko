@@ -1,8 +1,14 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+from __future__ import (
+    absolute_import, division, print_function, with_statement)
 
 import sys
 import riko as module
 import pkutils
+
+from builtins import *
 
 try:
     from setuptools import setup, find_packages
@@ -10,7 +16,9 @@ except ImportError:
     from distutils.core import setup, find_packages
 
 sys.dont_write_bytecode = True
-requirements = sorted(pkutils.parse_requirements('requirements.txt'))
+py2_requirements = sorted(pkutils.parse_requirements('py2-requirements.txt'))
+py3_requirements = sorted(pkutils.parse_requirements('requirements.txt'))
+dev_requirements = sorted(pkutils.parse_requirements('dev-requirements.txt'))
 readme = pkutils.read('README.rst')
 changes = pkutils.read('CHANGES.rst').replace('.. :changelog:', '')
 license = module.__license__
@@ -19,6 +27,14 @@ project = module.__title__
 description = module.__description__
 user = 'reubano'
 
+# Conditional sdist dependencies:
+if 'bdist_wheel' not in sys.argv and sys.version_info.major == 2:
+    requirements = py2_requirements
+else:
+    requirements = py3_requirements
+
+# Conditional bdist_wheel dependencies:
+extras_require = sorted(set(py2_requirements).difference(py3_requirements))
 
 setup(
     name=project,
@@ -39,6 +55,7 @@ setup(
         'examples': ['examples/*']
     },
     install_requires=requirements,
+    extras_require={'python_version<3.0': extras_require},
     setup_requires=['pkutils>=0.12.4,<0.13.0'],
     test_suite='nose.collector',
     tests_require=dev_requirements,
@@ -51,7 +68,11 @@ setup(
         'Natural Language :: English',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: Implementation :: PyPy',
+        'Programming Language :: Python :: Implementation :: PyPy3',
         'Environment :: Console',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Intended Audience :: Developers',

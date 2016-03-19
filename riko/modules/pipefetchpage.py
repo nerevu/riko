@@ -25,10 +25,11 @@ Attributes:
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 from urllib2 import urlopen
+
+from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor

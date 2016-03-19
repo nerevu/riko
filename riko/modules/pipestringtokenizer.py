@@ -13,7 +13,7 @@ Examples:
 
         >>> from riko.modules.pipestringtokenizer import pipe
         >>> pipe({'content': 'Once,twice,thrice'}).next()['stringtokenizer'][0]
-        {u'content': u'Once'}
+        {u'content': 'Once'}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -22,6 +22,8 @@ Attributes:
 
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
+
+from builtins import *
 
 from . import processor
 from riko.lib.log import Logger
@@ -105,7 +107,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'content': u'Once'}
+        {u'content': 'Once'}
     """
     return parser(*args, **kwargs)
 
@@ -141,10 +143,10 @@ def pipe(*args, **kwargs):
         >>> conf = {'delimiter': '//', 'sort': True}
         >>> kwargs = {'field': 'description', 'assign': 'tokens'}
         >>> pipe(item, conf=conf, **kwargs).next()['tokens'][0]
-        {u'content': u'no more'}
+        {u'content': 'no more'}
         >>> kwargs.update({'emit': True})
         >>> conf.update({'token_key': 'token'})
         >>> pipe(item, conf=conf, **kwargs).next()
-        {u'token': u'no more'}
+        {u'token': 'no more'}
     """
     return parser(*args, **kwargs)
