@@ -188,7 +188,6 @@ def remove_keys(content, *args):
     return {k: v for k, v in content.items() if k not in args}
 
 
-
 def pythonise(id, encoding='ascii'):
     """Return a Python-friendly id"""
     replace = {'-': '_', ':': '_', '/': '_'}
