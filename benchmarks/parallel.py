@@ -11,13 +11,13 @@ from time import time, sleep
 from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.task import react
 
-from pipe2py.lib.collections import (
+from riko.lib.collections import (
     SyncPipe, SyncCollection, get_chunksize, get_worker_cnt)
 
-from pipe2py.twisted.collections import AsyncPipe, AsyncCollection
-from pipe2py.twisted.utils import asyncImap, asyncSleep
-from pipe2py.modules.pipefetch import pipe, asyncPipe
-from pipe2py.lib.utils import get_abspath
+from riko.twisted.collections import AsyncPipe, AsyncCollection
+from riko.twisted.utils import asyncImap, asyncSleep
+from riko.modules.pipefetch import pipe, asyncPipe
+from riko.lib.utils import get_abspath
 
 NUMBER = 3
 LOOPS = 3

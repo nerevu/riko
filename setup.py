@@ -42,11 +42,11 @@ sys.dont_write_bytecode = True
 
 
 setup(
-    name='bomba',
+    name='riko',
     version='0.27.0',
     description=('A stream processor modeled after Yahoo! Pipes.'),
     long_description=read('README.rst'),
-    url='http://kazeeki.github.com/bomba/',
+    url='http://kazeeki.github.com/riko/',
     license = 'MIT',
     author='Reuben Cummings',
     author_email='reubano@gmail.com',

@@ -1,5 +1,5 @@
-from pipe import modules as mod
-from pipe2py.lib.collections import SyncPipe
+from riko import modules as mod
+from riko.lib.collections import SyncPipe
 
 
 def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(**kwargs):
