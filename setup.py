@@ -1,61 +1,63 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import re
-
-from os import path as p
+import riko as module
+import pkutils
 
 try:
     from setuptools import setup, find_packages
 except ImportError:
     from distutils.core import setup, find_packages
 
-
-def read(filename, parent=None):
-    parent = (parent or __file__)
-
-    try:
-        with open(p.join(p.dirname(parent), filename)) as f:
-            return f.read()
-    except IOError:
-        return ''
-
-
-def parse_requirements(filename, parent=None, dep=False):
-    parent = (parent or __file__)
-    filepath = p.join(p.dirname(parent), filename)
-    content = read(filename, parent)
-
-    for line_number, line in enumerate(content.splitlines(), 1):
-        candidate = line.strip()
-
-        if candidate.startswith('-r'):
-            for item in parse_requirements(candidate[2:].strip(), filepath, dep):
-                yield item
-        elif not dep and '#egg=' in candidate:
-            yield re.sub('.*#egg=(.*)-(.*)', r'\1==\2', candidate)
-        else:
-            yield candidate.replace('-e ', '')
-
-# Avoid byte-compiling the shipped template
 sys.dont_write_bytecode = True
+requirements = sorted(pkutils.parse_requirements('requirements.txt'))
+readme = pkutils.read('README.rst')
+changes = pkutils.read('CHANGES.rst').replace('.. :changelog:', '')
+license = module.__license__
+version = module.__version__
+project = module.__title__
+description = module.__description__
+user = 'reubano'
 
 
 setup(
-    name='riko',
-    version='0.27.0',
-    description=('A stream processor modeled after Yahoo! Pipes.'),
-    long_description=read('README.rst'),
-    url='http://kazeeki.github.com/riko/',
-    license = 'MIT',
-    author='Reuben Cummings',
-    author_email='reubano@gmail.com',
-    packages=find_packages(exclude=['tests']),
-    package_data={'data': 'data/*'},
+    name=project,
+    version=version,
+    description=description,
+    long_description='%s\n\n%s' % (readme, changes),
+    author=module.__author__,
+    author_email=module.__email__,
+    url=pkutils.get_url(project, user),
+    download_url=pkutils.get_dl_url(project, user, version),
+    packages=find_packages(exclude=['docs', 'tests']),
     include_package_data=True,
-    classifiers=[],
-    keywords='',
-    scripts=[p.join('bin', 'compile'), p.join('bin', 'run')],
-    install_requires=parse_requirements('requirements.txt'),
-    dependency_links=list(parse_requirements('requirements.txt', dep=True)),
+    package_data={
+        'data': ['data/*'],
+        'helpers': ['helpers/*'],
+        'tests': ['tests/*'],
+        'docs': ['docs/*'],
+        'examples': ['examples/*']
+    },
+    install_requires=requirements,
+    setup_requires=['pkutils>=0.12.4,<0.13.0'],
+    test_suite='nose.collector',
+    tests_require=dev_requirements,
+    license=license,
+    zip_safe=False,
+    keywords=[project] + description.split(' '),
+    classifiers=[
+        pkutils.LICENSES[license],
+        pkutils.get_status(version),
+        'Natural Language :: English',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: Implementation :: PyPy',
+        'Environment :: Console',
+        'Topic :: Software Development :: Libraries :: Python Modules',
+        'Intended Audience :: Developers',
+        'Operating System :: POSIX :: Linux',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: Microsoft :: Windows',
+    ],
+    platforms=['MacOS X', 'Windows', 'Linux'],
 )

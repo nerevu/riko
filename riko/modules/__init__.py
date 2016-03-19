@@ -34,8 +34,7 @@ __sources__ = [
     'piperssitembuilder',
     'pipexpathfetchpage',
     'pipeyql',
-    'pipeprivateinput',
-    'pipetextinput',
+    'pipeinput',
 ]
 
 __aggregators__ = [
@@ -60,21 +59,14 @@ __operators__ = [
 ]
 
 __processors__ = [
-    # 'pipecreaterss',
     'piperegex',
     'piperename',
     'pipesubelement',
     # 'pipelocationextractor',
-    'pipenumberinput',
-    'pipeurlinput',
-    # 'pipedateinput',
-    # 'pipelocationinput',
-    # 'pipeprivateinput',
     'pipeurlbuilder',
     'pipeexchangerate',
     'pipehash',
     'pipestrconcat',
-    'pipestrregex',
     'pipestrreplace',
     'pipestringtokenizer',
     'pipestrtransform',
@@ -82,13 +74,9 @@ __processors__ = [
     # 'pipetermextractor',
     # 'pipetranslate',
     # 'pipeyahooshortcuts',
-    # 'pipestrprivate',
-    'pipedatebuilder',
     'pipedateformat',
-    # 'pipelocationbuilder',
     'pipesimplemath',
     'pipecurrencyformat',
-    'pipeoutput',
     # 'pipeoutputjson',
     # 'pipeoutputical',
     # 'pipeoutputkml',
