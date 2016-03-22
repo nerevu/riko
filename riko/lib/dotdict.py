@@ -85,8 +85,6 @@ class DotDict(FeedParserDict):
         value = DotDict(self.copy())
 
         for key in keys:
-            if key == 'value':
-                break
 
             try:
                 key = int(key)

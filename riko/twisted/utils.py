@@ -124,6 +124,8 @@ class FakeReactor(MemoryReactor):
     """
     def __init__(self):
         super(FakeReactor, self).__init__()
+        global FAKE_REACTOR
+        FAKE_REACTOR = True
         self.work = []
         self.running = False
 
@@ -135,8 +137,6 @@ class FakeReactor(MemoryReactor):
     def run(self):
         """Fake L{IReactorCore.run}.
         """
-        global FAKE_REACTOR
-        FAKE_REACTOR = True
         self.running = True
 
     def stop(self):

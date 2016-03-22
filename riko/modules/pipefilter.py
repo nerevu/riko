@@ -74,7 +74,7 @@ def parse_rule(rule, item, **kwargs):
         try:
             _x = Decimal(x)
             _y = Decimal(y)
-        except InvalidOperation:
+        except (InvalidOperation, TypeError):
             try:
                 _x = utils.cast_date(x)
                 _y = utils.cast_date(y)

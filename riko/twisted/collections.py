@@ -62,10 +62,11 @@ class AsyncPipe(PyPipe):
     """An asynchronous PyPipe object"""
     def __init__(self, name, source=None, **kwargs):
         super(AsyncPipe, self).__init__(name, **kwargs)
+        self.source = source or []
         self.module = import_module('riko.modules.pipe%s' % self.name)
         self.asyncPipe = self.module.asyncPipe
-        self.processor = self.asyncPipe.func_dict.get('sub_type') == 'processor'
-        self.source = source
+        self.is_processor = self.asyncPipe.func_dict.get('type') == 'processor'
+        self.mapify = self.is_processor and self.source
 
     def __getattr__(self, name):
         return AsyncPipe(name, source=self.output)
@@ -80,7 +81,7 @@ class AsyncPipe(PyPipe):
         source = yield self.source
         asyncPipeline = partial(self.asyncPipe, **self.kwargs)
 
-        if self.processor:
+        if self.mapify:
             mapped = yield tu.asyncImap(asyncPipeline, source)
             output = multiplex(mapped)
         else:

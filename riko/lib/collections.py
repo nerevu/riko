@@ -74,16 +74,18 @@ class SyncPipe(PyPipe):
         if kwargs.pop('listize', False) and source:
             self.source = list(source)
         else:
-            self.source = source
+            self.source = source or []
 
         self.threads = kwargs.get('threads', True)
         self.reuse_pool = kwargs.get('reuse_pool', True)
         self.pool = kwargs.get('pool')
         self.module = import_module('riko.modules.pipe%s' % self.name)
         self.pipe = self.module.pipe
-        self.processor = self.pipe.func_dict.get('sub_type') == 'processor'
+        self.is_processor = self.pipe.func_dict.get('type') == 'processor'
+        self.parallelize = self.parallel and self.is_processor and self.source
+        self.mapify = self.is_processor and self.source
 
-        if self.parallel and self.processor:
+        if self.parallelize:
             ordered = kwargs.get('ordered')
             length = lenish(self.source)
             def_pool = ThreadPool if self.threads else Pool
@@ -115,17 +117,17 @@ class SyncPipe(PyPipe):
     def output(self):
         pipeline = partial(self.pipe, **self.kwargs)
 
-        if self.parallel and self.processor:
+        if self.parallelize:
             zipped = izip(self.source, repeat(pipeline))
             mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
-        elif self.processor:
+        elif self.mapify:
             mapped = self.map(pipeline, self.source)
 
-        if self.parallel and self.processor and not self.reuse_pool:
+        if self.parallelize and not self.reuse_pool:
             self.pool.close()
             self.pool.join()
 
-        return multiplex(mapped) if self.processor else pipeline(self.source)
+        return multiplex(mapped) if self.mapify else pipeline(self.source)
 
     @property
     def list(self):

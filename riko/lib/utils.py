@@ -293,7 +293,10 @@ def cast_date(date_str):
         'year', 'month', 'day', 'hour', 'minute', 'second', 'day_of_week',
         'day_of_year', 'daylight_savings')
 
-    tt = date.timetuple()
+    try:
+        tt = date.timetuple()
+    except AttributeError:
+        tt, date = date, dt(*date[:6])
 
     # Make Sunday the first day of the week
     day_of_w = 0 if tt[6] == 6 else tt[6] + 1
