@@ -40,6 +40,8 @@ from riko.twisted import utils as tu
 
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
+# EXCHANGE_API = 'https://openexchangerates.org/api/latest.json'
+# PARAMS = {'app_id': 'API_KEY'}
 
 OPTS = {'field': 'base', 'ftype': 'text'}
 DEFAULTS = {
