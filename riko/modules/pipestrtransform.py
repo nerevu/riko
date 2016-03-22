@@ -36,8 +36,8 @@ DEFAULTS = {}
 logger = Logger(__name__).logger
 
 ATTRS = {
-    'capitalize', 'lower', 'upper', 'swapcase', 'title', 'strip', 'zfill',
-    'replace', 'count', 'find'}
+    'capitalize', 'lower', 'upper', 'swapcase', 'title', 'strip', 'rstrip',
+    'lstrip', 'zfill', 'replace', 'count', 'find'}
 
 
 def reducer(word, rule):
@@ -144,7 +144,8 @@ def asyncPipe(*args, **kwargs):
 
                 transform (str): The string transformation to apply. Must be
                     one of: 'capitalize', 'lower', 'upper', 'swapcase',
-                    'title', 'strip', 'zfill', 'replace', 'count', or 'find'
+                    'title', 'strip', 'rstrip', 'lstrip', 'zfill', 'replace',
+                    'count', or 'find'
 
                 args (str): A comma separated list of arguments to supply the
                     transformer.
@@ -192,7 +193,8 @@ def pipe(*args, **kwargs):
 
                 transform (str): The string transformation to apply. Must be
                     one of: 'capitalize', 'lower', 'upper', 'swapcase',
-                    'title', 'strip', 'zfill', 'replace', 'count', or 'find'
+                    'title', 'strip', 'rstrip', 'lstrip', 'zfill', 'replace',
+                    'count', or 'find'
 
                 args (str): A comma separated list of arguments to supply the
                     transformer.
