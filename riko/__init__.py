@@ -13,11 +13,11 @@ Examples:
         >>> from riko.modules.pipestrreplace import pipe as strreplace
         >>> from riko.lib.collections import SyncPipe
         >>>
-    	>>> ib_conf = {
-        ... 	'attrs': [
-        ... 	    {'key': 'link', 'value': 'www.google.com', },
-        ... 	    {'key': 'title', 'value': 'google', },
-        ... 	    {'key': 'author', 'value': 'Tommy'}]}
+        >>> ib_conf = {
+        ...     'attrs': [
+        ...         {'key': 'link', 'value': 'www.google.com', },
+        ...         {'key': 'title', 'value': 'google', },
+        ...         {'key': 'author', 'value': 'Tommy'}]}
         >>>
         >>> sr_conf = {
         ...     'rule': [{'find': 'Tom', 'param': 'first', 'replace': 'Tim'}]}
