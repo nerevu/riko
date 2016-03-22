@@ -45,9 +45,6 @@ DEFAULTS = {'sleep': 0}
 logger = Logger(__name__).logger
 
 
-# http://blog.mekk.waw.pl/archives/
-# https://github.com/steder/ng-images/blob/master/natgeo.py
-# http://code.activestate.com/recipes/277099/
 @inlineCallbacks
 def asyncParser(_, urls, skip, **kwargs):
     """ Asynchronously parses the pipe content
