@@ -35,6 +35,7 @@ from twisted.internet.defer import inlineCallbacks, returnValue
 from . import processor
 from riko.lib import utils
 from riko.lib.log import Logger
+from riko.lib.tags import get_text
 from riko.twisted import utils as tu
 
 OPTS = {'ftype': 'none'}
@@ -130,7 +131,8 @@ def parser(_, objconf, skip, **kwargs):
         url = utils.get_abspath(objconf.url)
         content = urlopen(url).read()
         parsed = get_string(content, objconf.start, objconf.end)
-        splits = parsed.split(objconf.token) if objconf.token else [parsed]
+        detagged = get_text(parsed) if objconf.detag else parsed
+        splits = detagged.split(objconf.token) if objconf.token else [detagged]
         feed = ({kwargs['assign']: chunk} for chunk in splits)
 
     return feed, skip
@@ -147,7 +149,7 @@ def asyncPipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'start', 'end', 'token', or 'assign'.
+            contain the keys 'start', 'end', 'token', or 'detag'.
 
             url (str): The web site to fetch
             start (str): The starting string to fetch (exclusive, default:
@@ -155,6 +157,7 @@ def asyncPipe(*args, **kwargs):
 
             end (str): The ending string to fetch (exclusive, default: None).
             token (str): The tokenizer delimiter string (default: None).
+            detag (bool): Remove html tags from content (default: False).
 
         assign (str): Attribute to assign parsed content (default: content)
 
@@ -192,7 +195,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'start', 'end', 'token', or 'assign'.
+            contain the keys 'start', 'end', 'token', or 'detag'.
 
             url (str): The web site to fetch
             start (str): The starting string to fetch (exclusive, default:
@@ -200,6 +203,7 @@ def pipe(*args, **kwargs):
 
             end (str): The ending string to fetch (exclusive, default: None).
             token (str): The tokenizer delimiter string (default: None).
+            detag (bool): Remove html tags from content (default: False).
 
         assign (str): Attribute to assign parsed content (default: content)
 
