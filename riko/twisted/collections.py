@@ -14,15 +14,17 @@ Examples:
         >>>
         >>> url = {'value': get_url('gigs.json')}
         >>> fconf = {'url': url, 'path': 'value.items'}
-        >>> sconf = {'delimiter': '<br>'}
-        >>> skwargs = {'field': 'description', 'emit': True}
+        >>> str_conf = {'delimiter': '<br>'}
+        >>> str_kwargs = {'field': 'description', 'emit': True}
+        >>> sort_conf = {'rule': {'sort_key': 'title'}}
         >>>
         >>> @inlineCallbacks
         ... def run(reactor):
         ...     d1 = yield (AsyncPipe('fetchdata', conf=fconf)
-        ...     .sort()
-        ...     .stringtokenizer(conf=sconf, **skwargs)
-        ...     .count().list)
+        ...         .sort(conf=sort_conf)
+        ...         .stringtokenizer(conf=str_conf, **str_kwargs)
+        ...         .count().list)
+        ...
         ...     print(d1)
         ...
         ...     fconf['type'] = 'fetchdata'

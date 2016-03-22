@@ -9,9 +9,9 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipesort import pipe
-        >>> items = [{'title': 'b'}, {'title': 'a'}, {'title': 'c'}]
+        >>> items = [{'content': 'b'}, {'content': 'a'}, {'content': 'c'}]
         >>> pipe(items).next()
-        {u'title': u'a'}
+        {u'content': u'a'}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -30,7 +30,7 @@ from riko.lib.log import Logger
 from riko.twisted import utils as tu
 
 OPTS = {'listize': True, 'extract': 'rule'}
-DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'title'}}
+DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'content'}}
 logger = Logger(__name__).logger
 
 
@@ -68,9 +68,9 @@ def asyncParser(feed, rules, tuples, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0])
-        ...     kwargs = {'sort_key': 'title', 'sort_dir': 'desc'}
+        ...     kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
         ...     rule = Objectify(kwargs)
-        ...     feed = ({'title': x} for x in xrange(5))
+        ...     feed = ({'content': x} for x in xrange(5))
         ...     tuples = izip(feed, repeat(rule))
         ...     d = asyncParser(feed, [rule], tuples, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -80,7 +80,7 @@ def asyncParser(feed, rules, tuples, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'title': 4}
+        {u'content': 4}
     """
     return tu.asyncReduce(reducer, rules, feed)
 
@@ -111,12 +111,12 @@ def parser(feed, rules, tuples, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>> from itertools import repeat, izip
         >>>
-        >>> kwargs = {'sort_key': 'title', 'sort_dir': 'desc'}
+        >>> kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
         >>> rule = Objectify(kwargs)
-        >>> feed = ({'title': x} for x in xrange(5))
+        >>> feed = ({'content': x} for x in xrange(5))
         >>> tuples = izip(feed, repeat(rule))
         >>> parser(feed, [rule], tuples, **kwargs)[0]
-        {u'title': 4}
+        {u'content': 4}
     """
     return reduce(reducer, rules, feed)
 
@@ -137,7 +137,7 @@ def asyncPipe(*args, **kwargs):
             of dicts. May contain the keys 'sort_key' or 'dir'.
 
                 sort_key (str): Item attribute on which to sort by (default:
-                    'title').
+                    'content').
 
                 sort_dir (str): The sort direction. Must be either 'asc' or
                     'desc' (default: 'asc').
@@ -178,7 +178,7 @@ def pipe(*args, **kwargs):
         conf (dict): The pipe configuration. May contain the key 'rule'
 
             rule (dict): The sort configuration, can be either a dict or list
-                of dicts (default: {'sort_dir': 'asc', 'sort_key': 'title'}).
+                of dicts (default: {'sort_dir': 'asc', 'sort_key': 'content'}).
                 Must contain the key 'sort_key'. May contain the key 'sort_dir'.
 
                 sort_key (str): Item attribute on which to sort by.

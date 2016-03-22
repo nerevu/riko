@@ -13,21 +13,23 @@ Examples:
         >>>
         >>> url = {'value': get_url('gigs.json')}
         >>> fconf = {'url': url, 'path': 'value.items'}
-        >>> sconf = {'delimiter': '<br>'}
-        >>> skwargs = {'field': 'description', 'emit': True}
+        >>> str_conf = {'delimiter': '<br>'}
+        >>> str_kwargs = {'field': 'description', 'emit': True}
+        >>> sort_conf = {'rule': {'sort_key': 'title'}}
+        >>>
         >>> (SyncPipe('fetchdata', conf=fconf)
-        ...     .sort()
-        ...     .stringtokenizer(conf=sconf, **skwargs)
+        ...     .sort(conf=sort_conf)
+        ...     .stringtokenizer(conf=str_conf, **str_kwargs)
         ...     .count().list)
         [{u'count': 169}]
         >>> (SyncPipe('fetchdata', conf=fconf, parallel=True)
-        ...     .sort()
-        ...     .stringtokenizer(conf=sconf, **skwargs)
+        ...     .sort(conf=sort_conf)
+        ...     .stringtokenizer(conf=str_conf, **str_kwargs)
         ...     .count().list)
         [{u'count': 169}]
         >>> (SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
-        ...     .sort()
-        ...     .stringtokenizer(conf=sconf, **skwargs)
+        ...     .sort(conf=sort_conf)
+        ...     .stringtokenizer(conf=str_conf, **str_kwargs)
         ...     .count().list)
         [{u'count': 169}]
         >>> fconf['type'] = 'fetchdata'

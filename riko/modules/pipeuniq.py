@@ -32,7 +32,7 @@ from . import operator
 from riko.lib.log import Logger
 
 OPTS = {'extract': 'uniq_key'}
-DEFAULTS = {'uniq_key': 'title'}
+DEFAULTS = {'uniq_key': 'content'}
 logger = Logger(__name__).logger
 
 
@@ -92,7 +92,7 @@ def asyncPipe(*args, **kwargs):
         conf (dict): The pipe configuration. May contain the key 'uniq_key'.
 
             uniq_key (str): Item attribute which should be unique (default:
-                'title').
+                'content').
 
     Returns:
         Deferred: twisted.internet.defer.Deferred unique feed
@@ -130,20 +130,20 @@ def pipe(*args, **kwargs):
         conf (dict): The pipe configuration. May contain the key 'uniq_key'.
 
             uniq_key (str): Item attribute which should be unique (default:
-                'title').
+                'content').
 
     Yields:
         dict: a feed item
 
     Examples:
-        >>> items = [{'title': x, 'mod': x % 2} for x in xrange(5)]
+        >>> items = [{'content': x, 'mod': x % 2} for x in xrange(5)]
         >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
-        ...     {u'mod': 0, u'title': 0}, {u'mod': 1, u'title': 1}]
+        ...     {u'mod': 0, u'content': 0}, {u'mod': 1, u'content': 1}]
         True
         >>> feed = pipe(items)
-        >>> feed.next() == {u'mod': 0, u'title': 0}
+        >>> feed.next() == {u'mod': 0, u'content': 0}
         True
-        >>> [item['title'] for item in feed]
+        >>> [item['content'] for item in feed]
         [1, 2, 3, 4]
     """
     return parser(*args, **kwargs)
