@@ -51,7 +51,7 @@ from multiprocessing import Pool, cpu_count
 
 from builtins import *
 
-from riko.lib.utils import multiplex, multi_try
+from riko.lib.utils import multiplex, multi_try, combine_dicts as cdicts
 from riko.lib.log import Logger
 
 logger = Logger(__name__).logger
@@ -193,6 +193,5 @@ def listpipe(args):
 def getpipe(args, pipe=SyncPipe):
     source, sleep = args
     ptype = source.get('type', 'fetch')
-    conf = {'sleep': sleep}
-    conf.update(source)
-    return pipe(ptype, conf=source).list
+    conf = cdicts({'sleep': sleep}, source)
+    return pipe(ptype, conf=conf).list
