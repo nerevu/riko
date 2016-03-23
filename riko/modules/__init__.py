@@ -46,7 +46,7 @@ __aggregators__ = [
     # 'pipesum',
 ]
 
-__operators__ = [
+__composers__ = [
     'pipefilter',
     'pipereverse',
     'pipesort',
@@ -58,7 +58,7 @@ __operators__ = [
     # 'pipewebservice',
 ]
 
-__processors__ = [
+__transformers__ = [
     'piperegex',
     'piperename',
     'pipesubelement',
@@ -83,7 +83,7 @@ __processors__ = [
     # 'pipeoutputcsv',
 ]
 
-__all__ = __sources__ + __operators__ + __processors__ + __aggregators__
+__all__ = __sources__ + __composers__ + __transformers__ + __aggregators__
 
 parent = p.join(p.abspath(p.dirname(p.dirname(p.dirname(__file__)))), 'data')
 parts = [
@@ -131,7 +131,7 @@ class processor(object):
     def __init__(self, defaults=None, async=False, **opts):
         """Creates a sync/async pipe that processes individual items. These
         pipes are classified with as `type: processor` and as either
-        `sub_type: processor` or `subtype: source`. To be recognized as
+        `sub_type: transformer` or `subtype: source`. To be recognized as
         `subtype: source`, the pipes `ftype` must be set to 'none'.
 
         Args:
@@ -360,7 +360,7 @@ class processor(object):
 
         is_source = self.opts.get('ftype') == 'none'
         wrapper.__dict__['type'] = 'processor'
-        wrapper.__dict__['sub_type'] = 'source' if is_source else 'processor'
+        wrapper.__dict__['sub_type'] = 'source' if is_source else 'transformer'
         return inlineCallbacks(wrapper) if self.async else wrapper
 
 
@@ -599,7 +599,7 @@ class operator(object):
             else:
                 feed = pipe(orig_feed, objconf, tuples, **kwargs)
 
-            sub_type = 'aggregator' if hasattr(feed, 'keys') else 'operator'
+            sub_type = 'aggregator' if hasattr(feed, 'keys') else 'composer'
             wrapper.__dict__['sub_type'] = sub_type
 
             # operators can only assign one value per item and can't skip items
