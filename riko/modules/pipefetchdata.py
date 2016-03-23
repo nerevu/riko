@@ -192,7 +192,7 @@ def asyncPipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['title'])
         ...     path = 'value.items'
-        ...     conf = {'url': {'value': FILES[2]}, 'path': {'value': path}}
+        ...     conf = {'url': FILES[2], 'path': path}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -232,14 +232,14 @@ def pipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> path = 'value.items'
-        >>> conf = {'url': {'value': FILES[2]}, 'path': {'value': path}}
+        >>> conf = {'url': FILES[2], 'path': path}
         >>> pipe(conf=conf).next()['title']
         u'Business System Analyst'
         >>> path = 'appointment'
-        >>> conf = {'url': {'value': FILES[3]}, 'path': {'value': path}}
+        >>> conf = {'url': FILES[3], 'path': path}
         >>> pipe(conf=conf).next()['subject']
         'Bring pizza home'
-        >>> conf = {'url': {'value': FILES[3]}, 'path': {'value': ''}}
+        >>> conf = {'url': FILES[3], 'path': ''}
         >>> pipe(conf=conf).next()['reminder']
         '15'
     """

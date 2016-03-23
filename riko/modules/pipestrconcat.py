@@ -74,10 +74,13 @@ def asyncPipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'part'.
 
             part (dict): can be either a dict or list of dicts. Must contain
-                either the key 'value' or 'subkey'.
+                one of the following keys: 'value', 'subkey', or 'terminal'.
 
                 value (str): The substring value
                 subkey (str): The item attribute from which to obtain a
+                    substring
+
+                terminal (str): The id of a pipe from which to obtain a
                     substring
 
         assign (str): Attribute to assign parsed content (default: strconcat)
@@ -118,10 +121,13 @@ def pipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'part'.
 
             part (dict): can be either a dict or list of dicts. Must contain
-                either the key 'value' or 'subkey'.
+                one of the following keys: 'value', 'subkey', or 'terminal'.
 
                 value (str): The substring value
                 subkey (str): The item attribute from which to obtain a
+                    substring
+
+                terminal (str): The id of a pipe from which to obtain a
                     substring
 
         assign (str): Attribute to assign parsed content (default: strconcat)

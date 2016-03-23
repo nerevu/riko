@@ -24,7 +24,7 @@ Examples:
 
         >>> from . import FILES
         >>> from riko.modules.pipefetchsitefeed import pipe
-        >>> pipe(conf={'url': {'value': FILES[4]}}).next()['title']
+        >>> pipe(conf={'url': FILES[4]}).next()['title']
         u'Using NFC tags in the car'
 
 Attributes:
@@ -48,17 +48,17 @@ from riko.lib import utils, autorss
 from riko.lib.log import Logger
 from riko.twisted import utils as tu
 
-OPTS = {'listize': True, 'extract': 'url', 'ftype': 'none'}
+OPTS = {'ftype': 'none'}
 logger = Logger(__name__).logger
 
 
 @inlineCallbacks
-def asyncParser(_, urls, skip, **kwargs):
+def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
-        urls (List[str]): The urls to parse
+        objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
@@ -75,8 +75,9 @@ def asyncParser(_, urls, skip, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0].next()['title'])
+        ...     objconf = Objectify({'url': FILES[4]})
         ...     kwargs = {'feed': {}}
-        ...     d = asyncParser(None, [FILES[4]], False, **kwargs)
+        ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -89,24 +90,23 @@ def asyncParser(_, urls, skip, **kwargs):
     if skip:
         feed = kwargs['feed']
     else:
-        abs_urls = imap(utils.get_abspath, urls)
-        rss = yield tu.asyncImap(autorss.asyncGetRSS, abs_urls)
-        links = (utils.get_abspath(entries.next()['link']) for entries in rss)
-        contents = yield tu.asyncImap(tu.urlRead, links)
-        parsed = imap(speedparser.parse, contents)
-        entries = imap(utils.gen_entries, parsed)
-        feed = utils.multiplex(entries)
+        url = utils.get_abspath(objconf.url)
+        rss = yield autorss.asyncGetRSS(url)
+        link = utils.get_abspath(rss.next()['link'])
+        content = yield tu.urlRead(link)
+        parsed = speedparser.parse(content)
+        feed = utils.gen_entries(parsed)
 
     result = (feed, skip)
     returnValue(result)
 
 
-def parser(_, urls, skip, **kwargs):
+def parser(_, objconf, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
         _ (None): Ignored
-        urls (List[str]): The urls to fetch
+        objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
@@ -118,30 +118,30 @@ def parser(_, urls, skip, **kwargs):
 
     Examples:
         >>> from . import FILES
+        >>> from riko.lib.utils import Objectify
         >>>
+        >>> objconf = Objectify({'url': FILES[4]})
         >>> kwargs = {'feed': {}}
-        >>> result, skip = parser(None, [FILES[4]], False, **kwargs)
+        >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> result.next()['title']
         u'Using NFC tags in the car'
     """
     if skip:
         feed = kwargs['feed']
     else:
-        abs_urls = imap(utils.get_abspath, urls)
-        rss = imap(autorss.get_rss, abs_urls)
-        links = (utils.get_abspath(entries.next()['link']) for entries in rss)
-        contents = (urlopen(link).read() for link in links)
-        parsed = imap(speedparser.parse, contents)
-        entries = imap(utils.gen_entries, parsed)
-        feed = utils.multiplex(entries)
+        url = utils.get_abspath(objconf.url)
+        rss = autorss.get_rss(url)
+        link = utils.get_abspath(rss.next()['link'])
+        content = urlopen(link).read()
+        parsed = speedparser.parse(content)
+        feed = utils.gen_entries(parsed)
 
     return feed, skip
 
 
 @processor(async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on one or more
-    sites.
+    """A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -161,7 +161,7 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['title'])
-        ...     d = asyncPipe(conf={'url': {'value': FILES[4]}})
+        ...     d = asyncPipe(conf={'url': FILES[4]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -177,8 +177,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(**OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on one or more
-    sites.
+    """A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -194,7 +193,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from . import FILES
-        >>> pipe(conf={'url': {'value': FILES[4]}}).next()['title']
+        >>> pipe(conf={'url': FILES[4]}).next()['title']
         u'Using NFC tags in the car'
     """
     return parser(*args, **kwargs)

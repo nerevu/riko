@@ -5,17 +5,15 @@ riko.modules.pipefetch
 ~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for fetching RSS feeds.
 
-Lets you specify one or more RSS news feeds as input to your Pipe. The module
-understands feeds in RSS, Atom, and RDF formats. Feeds contain one or more
-items. When you add more feed URLs, you get a single feed combining all the
-items from the individual feeds.
+Lets you specify an RSS news feed as input. This module understands feeds in
+RSS, Atom, and RDF formats. Feeds contain one or more items.
 
 Examples:
     basic usage::
 
         >>> from . import FILES
         >>> from riko.modules.pipefetch import pipe
-        >>> pipe(conf={'url': {'value': FILES[0]}}).next()['title']
+        >>> pipe(conf={'url': FILES[0]}).next()['title']
         u'Donations'
 
 Attributes:
@@ -40,18 +38,18 @@ from riko.lib import utils
 from riko.twisted import utils as tu
 from riko.lib.log import Logger
 
-OPTS = {'listize': True, 'extract': 'url', 'ftype': 'none'}
+OPTS = {'ftype': 'none'}
 DEFAULTS = {'sleep': 0}
 logger = Logger(__name__).logger
 
 
 @inlineCallbacks
-def asyncParser(_, urls, skip, **kwargs):
+def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
-        urls (List[str]): The urls to fetch
+        objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
@@ -65,12 +63,13 @@ def asyncParser(_, urls, skip, **kwargs):
     Examples:
         >>> from twisted.internet.task import react
         >>> from . import FILES
+        >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0].next()['title'])
-        ...     conf = {'url': FILES}
-        ...     kwargs = {'feed': {}, 'conf': conf}
-        ...     d = asyncParser(None, conf['url'], False, **kwargs)
+        ...     objconf = Objectify({'url': FILES[0], 'sleep': 0})
+        ...     kwargs = {'feed': {}}
+        ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -83,24 +82,21 @@ def asyncParser(_, urls, skip, **kwargs):
     if skip:
         feed = kwargs['feed']
     else:
-        sleep = kwargs['conf'].get('sleep', 0)
-        read = partial(tu.urlRead, delay=sleep)
-        abs_urls = imap(utils.get_abspath, urls)
-        contents = yield tu.asyncImap(read, abs_urls)
-        parsed = imap(speedparser.parse, contents)
-        entries = imap(utils.gen_entries, parsed)
-        feed = utils.multiplex(entries)
+        url = utils.get_abspath(objconf.url)
+        content = yield tu.urlRead(url, delay=objconf.sleep)
+        parsed = speedparser.parse(content)
+        feed = utils.gen_entries(parsed)
 
     result = (feed, skip)
     returnValue(result)
 
 
-def parser(_, urls, skip, **kwargs):
+def parser(_, objconf, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
         _ (None): Ignored
-        urls (List[str]): The urls to fetch
+        objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
@@ -113,31 +109,30 @@ def parser(_, urls, skip, **kwargs):
 
     Examples:
         >>> from . import FILES
+        >>> from riko.lib.utils import Objectify
         >>>
-        >>> conf = {'url': FILES}
-        >>> kwargs = {'feed': {}, 'conf': conf}
-        >>> result, skip = parser(None, conf['url'], False, **kwargs)
+        >>> objconf = Objectify({'url': FILES[0], 'sleep': 0})
+        >>> kwargs = {'feed': {}}
+        >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> result.next()['title']
         u'Donations'
     """
     if skip:
         feed = kwargs['feed']
     else:
-        sleep = kwargs['conf'].get('sleep', 0)
-        context = utils.SleepyDict(delay=sleep)
-        abs_urls = imap(utils.get_abspath, urls)
-        contents = (urlopen(url, context=context).read() for url in abs_urls)
-        parsed = imap(speedparser.parse, contents)
-        entries = imap(utils.gen_entries, parsed)
-        feed = utils.multiplex(entries)
+        url = utils.get_abspath(objconf.url)
+        context = utils.SleepyDict(delay=objconf.sleep)
+        content = urlopen(url, context=context).read()
+        parsed = speedparser.parse(content)
+        feed = utils.gen_entries(parsed)
 
     return feed, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A source that asynchronously fetches and parses one or more feeds to
-    return the feed entries.
+    """A source that asynchronously fetches and parses a feed to return the
+    feed entries.
 
     Args:
         item (dict): The entry to process
@@ -147,14 +142,7 @@ def asyncPipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'url'. May
             contain the key 'sleep'.
 
-            url (str): The web site to fetch. Can be either a dict or list of
-                dicts. Must contain one of the following keys: 'value',
-                'subkey', or 'terminal'.
-
-                value (str): The url value
-                subkey (str): An item attribute from which to obtain the value
-                terminal (str): The id of a pipe from which to obtain the value
-
+            url (str): The web site to fetch.
             sleep (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
@@ -168,8 +156,7 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next().keys())
-        ...     urls = [{'value': FILES[0]}, {'value': FILES[1]}]
-        ...     d = asyncPipe(conf={'url': urls})
+        ...     d = asyncPipe(conf={'url': FILES[0]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -186,8 +173,7 @@ u'author.uri', u'author.name', 'id', u'y:id']
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses one or more feeds to return the
-    entries.
+    """A source that fetches and parses a feed to return the entries.
 
     Args:
         item (dict): The entry to process
@@ -197,14 +183,7 @@ def pipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'url'. May
             contain the key 'sleep'.
 
-            url (str): The web site to fetch. Can be either a dict or list of
-                dicts. Must contain one of the following keys: 'value',
-                'subkey', or 'terminal'.
-
-                value (str): The url value
-                subkey (str): An item attribute from which to obtain the value
-                terminal (str): The id of a pipe from which to obtain the value
-
+            url (str): The web site to fetch.
             sleep (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
@@ -214,16 +193,13 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from . import FILES
         >>>
-        >>> url = [{'value': FILES[0]}, {'value': FILES[1]}]
         >>> keys = [
         ...     'updated', 'updated_parsed', u'pubDate', 'author',
         ...     u'y:published', 'title', 'comments', 'summary', 'content',
         ...     'link', u'y:title', u'dc:creator', u'author.uri',
         ...     u'author.name', 'id', u'y:id']
-        >>> pipe(conf={'url': url}).next().keys() == keys
-        True
-        >>> result = pipe({'url': FILES[0]}, conf={'url': {'subkey': 'url'}})
-        >>> result.next().keys() == keys
+        >>>
+        >>> pipe(conf={'url': FILES[0]}).next().keys() == keys
         True
     """
     return parser(*args, **kwargs)

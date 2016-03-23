@@ -6,11 +6,10 @@ riko.modules.pipefeedautodiscovery
 Provides functions for finding the all available RSS and Atom feeds in a web
 site.
 
-Lets you enter one or more urls into the module. It then examines those pages
-for information (like link rel tags) about available feeds. If information
-about more than one feed is found, then multiple items are returned. Because
-more than one feed can be returned, the output from this module is often piped
-into a Fetch Feed module.
+Lets you enter a url and then examines those pages for information (like link
+rel tags) about available feeds. If information about more than one feed is
+found, then multiple items are returned. Because more than one feed can be
+returned, the output from this module is often piped into a Fetch Feed module.
 
 Also note that not all sites provide auto-discovery links on their web site's
 home page. For a simpler alternative, try the Fetch Site Feed Module. It
@@ -22,7 +21,7 @@ Examples:
         >>> from . import FILES
         >>> from riko.modules.pipefeedautodiscovery import pipe
         >>>
-        >>> entry = pipe(conf={'url': {'value': FILES[4]}}).next()
+        >>> entry = pipe(conf={'url': FILES[4]}).next()
         >>> sorted(entry.keys())
         ['href', 'hreflang', 'link', 'rel', 'tag']
         >>> entry['link']
@@ -46,17 +45,17 @@ from riko.lib import utils, autorss
 from riko.lib.log import Logger
 from riko.twisted import utils as tu
 
-OPTS = {'listize': True, 'extract': 'url', 'ftype': 'none'}
+OPTS = {'ftype': 'none'}
 logger = Logger(__name__).logger
 
 
 @inlineCallbacks
-def asyncParser(_, urls, skip, **kwargs):
+def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
-        urls (List[str]): The urls to parse
+        objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
@@ -73,8 +72,9 @@ def asyncParser(_, urls, skip, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0].next()['link'])
+        ...     objconf = Objectify({'url': FILES[4]})
         ...     kwargs = {'feed': {}}
-        ...     d = asyncParser(None, [FILES[4]], False, **kwargs)
+        ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -87,20 +87,19 @@ def asyncParser(_, urls, skip, **kwargs):
     if skip:
         feed = kwargs['feed']
     else:
-        abs_urls = imap(utils.get_abspath, urls)
-        rss = yield tu.asyncImap(autorss.asyncGetRSS, abs_urls)
-        feed = utils.multiplex(rss)
+        url = utils.get_abspath(objconf.url)
+        feed = yield autorss.asyncGetRSS(url)
 
     result = (feed, skip)
     returnValue(result)
 
 
-def parser(_, urls, skip, **kwargs):
+def parser(_, objconf, skip, **kwargs):
     """ Parses the pipe content
 
     Args:
         _ (None): Ignored
-        urls (List[str]): The urls to fetch
+        objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
@@ -112,26 +111,26 @@ def parser(_, urls, skip, **kwargs):
 
     Examples:
         >>> from . import FILES
+        >>> from riko.lib.utils import Objectify
         >>>
+        >>> objconf = Objectify({'url': FILES[4]})
         >>> kwargs = {'feed': {}}
-        >>> result, skip = parser(None, [FILES[4]], False, **kwargs)
+        >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> result.next()['link']
         'file://data/www.greenhughes.com_rssfeed.xml'
     """
     if skip:
         feed = kwargs['feed']
     else:
-        abs_urls = imap(utils.get_abspath, urls)
-        rss = imap(autorss.get_rss, abs_urls)
-        feed = utils.multiplex(rss)
+        url = utils.get_abspath(objconf.url)
+        feed = autorss.get_rss(url)
 
     return feed, skip
 
 
 @processor(async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on one or more
-    sites.
+    """A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -151,7 +150,7 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['link'])
-        ...     d = asyncPipe(conf={'url': {'value': FILES[4]}})
+        ...     d = asyncPipe(conf={'url': FILES[4]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -167,8 +166,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(**OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on one or more
-    sites.
+    """A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -184,7 +182,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from . import FILES
-        >>> pipe(conf={'url': {'value': FILES[4]}}).next()['link']
+        >>> pipe(conf={'url': FILES[4]}).next()['link']
         'file://data/www.greenhughes.com_rssfeed.xml'
     """
     return parser(*args, **kwargs)

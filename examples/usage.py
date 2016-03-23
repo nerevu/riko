@@ -340,7 +340,18 @@ Design Principles
     ...     'hash': 1346301218L}
     True
 
+    # Alternate conf usage
 
+    >>> from riko import get_url
+    >>> from riko.modules.pipefetch import pipe
+    >>>
+    >>> conf = {'url': {'subkey': 'url'}}
+    >>> result = pipe({'url': get_url('feed.xml')}, conf=conf)
+    >>> set(next(result).keys()) == {
+    ...     'updated', 'updated_parsed', 'pubDate', 'author', 'y:published',
+    ...     'title', 'comments', 'summary', 'content', 'link', 'y:title',
+    ...     'dc:creator', 'author.uri', 'author.name', 'id', 'y:id'}
+    True
 """
 
 from __future__ import (
