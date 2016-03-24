@@ -60,13 +60,18 @@ logger = Logger(__name__).logger
 
 class AsyncPipe(PyPipe):
     """An asynchronous PyPipe object"""
-    def __init__(self, name, source=None, **kwargs):
+    def __init__(self, name=None, source=None, **kwargs):
         super(AsyncPipe, self).__init__(name, **kwargs)
         self.source = source or []
-        self.module = import_module('riko.modules.pipe%s' % self.name)
-        self.asyncPipe = self.module.asyncPipe
-        self.is_processor = self.asyncPipe.func_dict.get('type') == 'processor'
-        self.mapify = self.is_processor and self.source
+
+        if self.name:
+            self.module = import_module('riko.modules.pipe%s' % self.name)
+            self.asyncPipe = self.module.asyncPipe
+            self.is_processor = self.asyncPipe.func_dict.get('type') == 'processor'
+            self.mapify = self.is_processor and self.source
+        else:
+            self.asyncPipe = lambda source, **kw: tu.asyncReturn(source)
+            self.mapify = False
 
     def __getattr__(self, name):
         return AsyncPipe(name, source=self.output)
@@ -103,6 +108,10 @@ class AsyncCollection(PyCollection):
         """Fetch all source urls"""
         mapped = yield tu.asyncImap(asyncGetPipe, self.zargs)
         returnValue(multiplex(mapped))
+
+    def asyncPipe(self, **kwargs):
+        """Return an AsyncPipe primed with the source feed"""
+        return AsyncPipe(source=self.asyncFetch(), **kwargs)
 
     @property
     @inlineCallbacks

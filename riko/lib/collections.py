@@ -59,7 +59,7 @@ logger = Logger(__name__).logger
 
 class PyPipe(object):
     """A riko module fetching object"""
-    def __init__(self, name, parallel=False, **kwargs):
+    def __init__(self, name=None, parallel=False, **kwargs):
         self.name = name
         self.parallel = parallel
         self.kwargs = kwargs
@@ -67,7 +67,7 @@ class PyPipe(object):
 
 class SyncPipe(PyPipe):
     """A synchronous Pipe object"""
-    def __init__(self, name, source=None, workers=None, **kwargs):
+    def __init__(self, name=None, source=None, workers=None, **kwargs):
         super(SyncPipe, self).__init__(name, **kwargs)
         chunksize = kwargs.get('chunksize')
 
@@ -79,11 +79,17 @@ class SyncPipe(PyPipe):
         self.threads = kwargs.get('threads', True)
         self.reuse_pool = kwargs.get('reuse_pool', True)
         self.pool = kwargs.get('pool')
-        self.module = import_module('riko.modules.pipe%s' % self.name)
-        self.pipe = self.module.pipe
-        self.is_processor = self.pipe.func_dict.get('type') == 'processor'
-        self.parallelize = self.parallel and self.is_processor and self.source
-        self.mapify = self.is_processor and self.source
+
+        if self.name:
+            self.module = import_module('riko.modules.pipe%s' % self.name)
+            self.pipe = self.module.pipe
+            self.is_processor = self.pipe.func_dict.get('type') == 'processor'
+            self.mapify = self.is_processor and self.source
+            self.parallelize = self.parallel and self.mapify
+        else:
+            self.pipe = lambda source, **kw: source
+            self.mapify = False
+            self.parallelize = False
 
         if self.parallelize:
             ordered = kwargs.get('ordered')
@@ -163,6 +169,10 @@ class SyncCollection(PyCollection):
         kwargs = {'chunksize': self.chunksize} if self.parallel else {}
         mapped = self.map(getpipe, self.zargs, **kwargs)
         return multiplex(mapped)
+
+    def pipe(self, **kwargs):
+        """Return a SyncPipe primed with the source feed"""
+        return SyncPipe(source=self.fetch(), **kwargs)
 
     @property
     def list(self):
