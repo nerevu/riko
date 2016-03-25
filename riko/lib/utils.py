@@ -468,8 +468,6 @@ def get_abspath(url):
     return url
 
 
-
-
 def listize(item):
     if hasattr(item, 'keys'):
         listlike = False
