@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# -*- coding: utf-8 -*-
+
+# create a source distribution package
+
+python setup.py sdist
+gpg --detach-sign -a dist/*.tar.gz

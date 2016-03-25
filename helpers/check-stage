@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# -*- coding: utf-8 -*-
+#
+# A script to disallow syntax errors to be committed
+# by running a checker (lint, pep8, pylint...)  on them
+#
+# to install type ln -s check-stage .git/hooks/pre-commit
+
+# Redirect output to stderr.
+exec 2>&1
+
+# set path (necessary for gitx and git-gui)
+export PATH=$PATH:/opt/local/bin:/opt/local/sbin:/usr/local/sbin:/usr/local/bin
+
+# necessary check for initial commit
+if [ git rev-parse --verify HEAD >/dev/null 2>&1 ]; then
+  against=HEAD
+else
+  # Initial commit: diff against an empty tree object
+  against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+fi
+
+# set Internal Field Separator to newline (dash does not support $'\n')
+IFS='
+'
+
+# get a list of staged files
+for LINE in $(git diff-index --cached --full-index $against); do
+  SHA=$(echo $LINE | cut -d' ' -f4)
+  STATUS=$(echo $LINE | cut -d' ' -f5 | cut -d' ' -f1)
+  FILENAME=$(echo $LINE | cut -d' ' -f5 | cut -d' ' -f2)
+  FILEEXT=$(echo $FILENAME | sed 's/^.*\.//')
+
+  # do not check deleted files
+  if [ $STATUS == "D" ]; then
+    continue
+  fi
+
+  # only check files with proper extension
+  if [ $FILEEXT == 'php' ]; then
+    PROGRAMS='php'
+    COMMANDS='php -l'
+  elif [ $FILEEXT == 'py' ]; then
+    PROGRAMS=$'pep8\npylint'
+    COMMANDS=$'pep8 --ignore=W191,E128'
+  else
+    continue
+  fi
+
+  for PROGRAM in $PROGRAMS; do
+    test $(which $PROGRAM)
+
+    if [ $? != 0 ]; then
+      echo "$PROGRAM binary does not exist or is not in path"
+      exit 1
+    fi
+  done
+
+  # check the staged content for syntax errors
+  for COMMAND in $COMMANDS; do
+    git cat-file -p $SHA > tmp.txt
+    RESULT=$(eval "$COMMAND tmp.txt")
+
+    if [ $? != 0 ]; then
+      echo "$COMMAND syntax check failed on $FILENAME"
+      for LINE in $RESULT; do echo $LINE; done
+      rm tmp.txt
+      exit 1
+    fi
+  done
+done
+
+unset IFS
+rm tmp.txt
+
+# If there are whitespace errors, print the offending file names and fail.
+# exec git diff-index --check --cached $against --

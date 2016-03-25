@@ -1,0 +1,52 @@
+sudo: false
+language: python
+python:
+  - "2.7"
+  - "3.4"
+  - "3.5"
+  - "pypy"
+  - "pypy3"
+
+cache:
+  directories:
+    - ~/.cache/pip
+
+env:
+  global:
+    - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
+    - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
+
+notifications:
+  email:
+    on_success: always
+
+branches:
+  except:
+    - /^v[0-9]/
+
+before_install:
+  - pip install -U pip
+  - pip install wheel
+
+install:
+  - pip install -r dev-requirements.txt
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then pip install future==0.15.2; fi
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "pypy" ]]; then pip install future==0.15.2; fi
+
+script:
+  - manage lint
+  - manage test
+
+after_success:
+  - if [[ "$TRAVIS_PULL_REQUEST" == "true" ]]; then exit 0; fi
+  - if [[ "$TRAVIS_BRANCH" != "master" ]]; then exit 0; fi
+
+deploy:
+  provider: pypi
+  user: reubano
+  password:
+    secure: secure
+
+  distributions: sdist bdist_wheel
+  on:
+    tags: true
