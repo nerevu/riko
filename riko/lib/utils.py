@@ -587,11 +587,15 @@ def multi_substitute(word, rules):
 
 def substitute(word, rule):
     if word:
-        result = rule['match'].sub(rule['replace'], word, rule['count'])
-    else:
-        result = word
+        result = rule['match'].subn(rule['replace'], word, rule['count'])
+        replaced, replacements = result
 
-    return result
+        if rule.get('default') is not None and not replacements:
+            replaced = rule.get('default')
+    else:
+        replaced = word
+
+    return replaced
 
 
 def get_new_rule(rule, recompile=False):
@@ -613,6 +617,7 @@ def get_new_rule(rule, recompile=False):
     nrule = {
         'match': match,
         'replace': replace,
+        'default': rule.get('default'),
         'field': rule.get('field'),
         'count': count,
         'flags': flags,

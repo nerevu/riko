@@ -183,6 +183,9 @@ def asyncPipe(*args, **kwargs):
                 field (str): The item attribute to search
                 match (str): The regex to apply
                 replace (str): The string replacement
+                default (str): Default if search pattern isn't found (
+                    default: None, i.e, return the original string)
+
                 singlematch (bool): Stop after first match (default: False)
                 singlelinematch (bool): Don't search across newlines with '^',
                     '$', or '.' (default: False)
@@ -239,6 +242,9 @@ def pipe(*args, **kwargs):
                 field (str): The item attribute to search
                 match (str): The regex to apply
                 replace (str): The string replacement
+                default (str): Default if search pattern isn't found (
+                    default: None, i.e, return the original string)
+
                 singlematch (bool): Stop after first match (default: False)
                 singlelinematch (bool): Don't search across newlines with '^',
                     '$', or '.' (default: False)
