@@ -15,6 +15,7 @@ sdist
 develop-eggs
 .installed.cfg
 lib64
+*.ipynb
 
 # Installer logs
 pip-log.txt
