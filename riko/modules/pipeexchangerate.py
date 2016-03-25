@@ -12,7 +12,7 @@ Examples:
         >>> from riko.modules.pipeexchangerate import pipe
         >>>
         >>> url = get_url('quote.json')
-        >>> pipe({'base': 'GBP'}, conf={'url': url}).next()['exchangerate']
+        >>> pipe({'content': 'GBP'}, conf={'url': url}).next()['exchangerate']
         Decimal('1.545801')
 
 Attributes:
@@ -43,7 +43,7 @@ EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
 # EXCHANGE_API = 'https://openexchangerates.org/api/latest.json'
 # PARAMS = {'app_id': 'API_KEY'}
 
-OPTS = {'field': 'base', 'ftype': 'text'}
+OPTS = {'field': 'content', 'ftype': 'text'}
 DEFAULTS = {
     'currency': 'USD',
     'sleep': 0,
@@ -108,10 +108,10 @@ def asyncParser(base, objconf, skip, **kwargs):
         ...     url = get_url('quote.json')
         ...     conf = {
         ...         'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
-        ...     item = {'base': 'GBP'}
+        ...     item = {'content': 'GBP'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'feed': item, 'assign': 'content'}
-        ...     d = asyncParser(item['base'], objconf, False, **kwargs)
+        ...     d = asyncParser(item['content'], objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -162,10 +162,10 @@ def parser(base, objconf, skip, **kwargs):
         >>>
         >>> url = get_url('quote.json')
         >>> conf = {'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
-        >>> item = {'base': 'GBP'}
+        >>> item = {'content': 'GBP'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'feed': item, 'assign': 'content'}
-        >>> result, skip = parser(item['base'], objconf, False, **kwargs)
+        >>> result, skip = parser(item['content'], objconf, False, **kwargs)
         >>> result
         Decimal('1.545801')
     """
@@ -232,7 +232,7 @@ def asyncPipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['exchangerate'])
         ...     url = get_url('quote.json')
-        ...     d = asyncPipe({'base': 'GBP'}, conf={'url': url})
+        ...     d = asyncPipe({'content': 'GBP'}, conf={'url': url})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -283,16 +283,16 @@ def pipe(*args, **kwargs):
         >>> from riko import get_url
         >>> url = get_url('quote.json')
         >>> conf = {'url': url}
-        >>> rate = pipe({'base': 'GBP'}, conf=conf).next()['exchangerate']
+        >>> rate = pipe({'content': 'GBP'}, conf=conf).next()['exchangerate']
         >>> rate
         Decimal('1.545801')
         >>> 'There are %#.2f GBPs per USD' % rate
         u'There are 1.55 GBPs per USD'
         >>> conf = {'url': url, 'currency': 'TZS', 'precision': 3}
-        >>> pipe({'base': 'USD'}, conf=conf).next()['exchangerate']
+        >>> pipe({'content': 'USD'}, conf=conf).next()['exchangerate']
         Decimal('1825.850')
         >>> conf = {'url': url, 'currency': 'XYZ'}
-        >>> pipe({'base': 'USD'}, conf=conf).next()['exchangerate']
+        >>> pipe({'content': 'USD'}, conf=conf).next()['exchangerate']
         Decimal('NaN')
     """
     return parser(*args, **kwargs)
