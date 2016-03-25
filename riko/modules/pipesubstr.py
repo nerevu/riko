@@ -34,7 +34,7 @@ from builtins import *
 from . import processor
 from riko.lib.log import Logger
 
-OPTS = {'ftype': 'unicode', 'ptype': 'int', 'field': 'content'}
+OPTS = {'ftype': 'text', 'ptype': 'int', 'field': 'content'}
 DEFAULTS = {'start': 0, 'length': 0}
 logger = Logger(__name__).logger
 

@@ -302,7 +302,7 @@ Design Principles
     >>> # In this case, if we just want the result, we can `emit` it instead
     >>> feed = pipe(item, conf=tokenizer_conf, field='title', emit=True)
     >>> next(feed)
-    {u'content': 'riko'}
+    {u'content': u'riko'}
 
     # an aggregator
     >>> from riko.modules.pipecount import pipe

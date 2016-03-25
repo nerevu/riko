@@ -6,8 +6,8 @@ riko.modules.pipeinput
 Provides functions for obtaining and parsing user input.
 
 Use this module any time you need to obtain and parse user input to wire into
-another pipe. Supported parsers are 'text', 'int', 'float', 'bool', 'unicode',
-'url', and 'date'.
+another pipe. Supported parsers are 'text', 'int', 'float', 'bool', 'url', and
+'date'.
 
 Valid Date Values
 
@@ -108,8 +108,7 @@ def asyncPipe(*args, **kwargs):
             prompt (str): User command line prompt
             default (scalar): Default value
             type (str): Expected value type. Must be one of 'text', 'int',
-                'float', 'bool', 'unicode', 'url', 'location', or 'date'.
-                Default: 'text'.
+                'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
             assign (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values to be used in place of prompting the user e.g.
@@ -157,8 +156,7 @@ def pipe(*args, **kwargs):
             prompt (str): User command line prompt
             default (scalar): Default value
             type (str): Expected value type. Must be one of 'text', 'int',
-                'float', 'bool', 'unicode', 'url', 'location', or 'date'.
-                Default: 'text'.
+                'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
 
         assign (str): Attribute to assign parsed content (default: content)
 
@@ -204,10 +202,6 @@ def pipe(*args, **kwargs):
         >>>
         >>> # text
         >>> pipe(conf={'type': 'text'}, inputs={'content': 'hello'}).next()
-        {u'content': 'hello'}
-        >>>
-        >>> # unicode
-        >>> pipe(conf={'type': 'unicode'}, inputs={'content': 'hello'}).next()
         {u'content': u'hello'}
         >>>
         >>> # url

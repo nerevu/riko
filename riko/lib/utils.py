@@ -72,7 +72,6 @@ DATES = {
     'yesterday': TODAY - timedelta(days=1),
 }
 
-encode = lambda w: str(w.encode('utf-8')) if isinstance(w, unicode) else w
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
 
@@ -331,8 +330,7 @@ def cast(content, _type='text'):
         'float': {'default': 0.0, 'func': float},
         'decimal': {'default': Decimal(0), 'func': Decimal},
         'int': {'default': 0, 'func': int},
-        'text': {'default': '', 'func': encode},
-        'unicode': {'default': u'', 'func': unicode},
+        'text': {'default': u'', 'func': unicode},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
         'url': {'default': {}, 'func': cast_url},
         'location': {'default': {}, 'func': cast_location},

@@ -30,7 +30,7 @@ from riko.lib.log import Logger
 from riko.twisted import utils as tu
 
 OPTS = {
-    'listize': True, 'ftype': 'unicode', 'field': 'content', 'extract': 'rule'}
+    'listize': True, 'ftype': 'text', 'field': 'content', 'extract': 'rule'}
 
 DEFAULTS = {}
 logger = Logger(__name__).logger
