@@ -79,7 +79,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> parser(None, objconf, False, inputs=inputs, assign='age')[0]
         {u'age': 30}
     """
-    if kwargs['inputs']:
+    if kwargs.get('inputs'):
         value = kwargs['inputs'].get(kwargs['assign'], objconf.default)
     elif objconf.test or skip:
         value = objconf.default
