@@ -81,7 +81,7 @@ def parser(_, objconf, skip, **kwargs):
     """
     if kwargs.get('inputs'):
         value = kwargs['inputs'].get(kwargs['assign'], objconf.default)
-    elif objconf.test or skip:
+    elif kwargs.get('test') or skip:
         value = objconf.default
     else:
         raw = raw_input("%s (default=%s) " % (objconf.prompt, objconf.default))
