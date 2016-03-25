@@ -13,7 +13,8 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipesplit import pipe
-        >>> pipe({'x': x} for x in xrange(5)).next()['feed'].next()
+        >>> feed1, feed2 = pipe({'x': x} for x in xrange(5))
+        >>> feed1.next()
         {u'x': 0}
 
 Attributes:
@@ -54,7 +55,7 @@ def parser(feed, splits, tuples, **kwargs):
         kwargs (dict): Keyword arguments.
 
     Yields:
-        dict: A feed containing item
+        Iter(dict): a feed of items
 
     Examples:
         >>> from itertools import repeat, izip
@@ -64,15 +65,14 @@ def parser(feed, splits, tuples, **kwargs):
         >>> feed = (({'x': x}) for x in xrange(5))
         >>> tuples = izip(feed, repeat(conf['splits']))
         >>> feeds = parser(feed, conf['splits'], tuples, **kwargs)
-        >>> feeds.next()['feed']  # doctest: +ELLIPSIS
-        <itertools.imap object at 0x...>
+        >>> feeds.next().next()
+        {u'x': 0}
     """
     source = list(feed)
 
     # deepcopy each item so that each split is independent
     for num in xrange(splits):
-        title = 'feed %i of %i' % (num + 1, splits)
-        yield {'title': title, 'feed': imap(deepcopy, source)}
+        yield imap(deepcopy, source)
 
 
 @operator(DEFAULTS, async=True, **OPTS)
@@ -90,14 +90,14 @@ def asyncPipe(*args, **kwargs):
             splits (int): the number of copies to create (default: 2).
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred feed of feeds
+        Deferred: twisted.internet.defer.Deferred iterable of feeds
 
     Examples:
         >>> from twisted.internet.task import react
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print([f['feed'].next() for f in x])
+        ...     callback = lambda x: print(x.next().next())
         ...     d = asyncPipe({'x': x} for x in xrange(5))
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -106,7 +106,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        [{u'x': 0}, {u'x': 0}]
+        {u'x': 0}
     """
     return parser(*args, **kwargs)
 
@@ -126,16 +126,12 @@ def pipe(*args, **kwargs):
             splits (int): the number of copies to create (default: 2).
 
     Yields:
-        dict: a feed containing item
+        Iter(dict): a feed of items
 
     Examples:
         >>> items = [{'x': x} for x in xrange(5)]
-        >>> feeds = list(pipe(items))
-        >>> [feed['feed'] for feed in feeds]  # doctest: +ELLIPSIS
-        [<itertools.imap object at 0x...>, <itertools.imap object at 0x...>]
-        >>> [feed['title'] for feed in feeds]
-        [u'feed 1 of 2', u'feed 2 of 2']
-        >>> feeds[0]['feed'].next()
+        >>> feed1, feed2 = pipe(items)
+        >>> feed1.next()
         {u'x': 0}
         >>> len(list(pipe(items, conf={'splits': '3'})))
         3
