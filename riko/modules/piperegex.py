@@ -183,10 +183,10 @@ def asyncPipe(*args, **kwargs):
                 field (str): The item attribute to search
                 match (str): The regex to apply
                 replace (str): The string replacement
-                globalmatch (bool): Find all matches (default: False)
-                dotall (bool): Match newlines with '.' (default: False)
-                singlelinematch (bool): Don't search across newlines with '^'
-                    and '$' (default: False)
+                singlematch (bool): Stop after first match (default: False)
+                singlelinematch (bool): Don't search across newlines with '^',
+                    '$', or '.' (default: False)
+
                 casematch (bool): Perform case sensitive match (default: False)
 
             multi (bool): Efficiently combine multiple regexes (default: False)
@@ -239,10 +239,10 @@ def pipe(*args, **kwargs):
                 field (str): The item attribute to search
                 match (str): The regex to apply
                 replace (str): The string replacement
-                globalmatch (bool): Find all matches (default: False)
-                dotall (bool): Match newlines with '.' (default: False)
-                singlelinematch (bool): Don't search across newlines with '^'
-                    and '$' (default: False)
+                singlematch (bool): Stop after first match (default: False)
+                singlelinematch (bool): Don't search across newlines with '^',
+                    '$', or '.' (default: False)
+
                 casematch (bool): Perform case sensitive match (default: False)
 
             multi (bool): Efficiently combine multiple regexes (default: False)

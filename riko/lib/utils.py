@@ -596,9 +596,12 @@ def substitute(word, rule):
 
 def get_new_rule(rule, recompile=False):
     flags = 0 if rule.get('casematch') else re.IGNORECASE
-    flags |= 0 if rule.get('singlelinematch') else re.MULTILINE
-    flags |= re.DOTALL if rule.get('dotall') else 0
-    count = 0 if rule.get('globalmatch') else 1
+
+    if not rule.get('singlelinematch'):
+        flags |= re.MULTILINE
+        flags |= re.DOTALL
+
+    count = 1 if rule.get('singlematch') else 0
 
     if recompile and '$' in rule['replace']:
         replace = re.sub('\$(\d+)', r'\\\1', rule['replace'], 0)
