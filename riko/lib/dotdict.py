@@ -95,7 +95,8 @@ class DotDict(FeedParserDict):
 
         if hasattr(value, 'keys') and 'terminal' in value:
             # value fed in from another module
-            value = kwargs[utils.pythonise(value['terminal'])].next()
+            feed = kwargs[value['terminal']]
+            value = feed.next()[value.get('path', 'content')]
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 

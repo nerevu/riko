@@ -187,15 +187,6 @@ def remove_keys(content, *args):
     return {k: v for k, v in content.items() if k not in args}
 
 
-def pythonise(id, encoding='ascii'):
-    """Return a Python-friendly id"""
-    replace = {'-': '_', ':': '_', '/': '_'}
-    func = lambda id, pair: id.replace(pair[0], pair[1])
-    id = reduce(func, replace.iteritems(), id)
-    id = '_%s' % id if id[0] in string.digits else id
-    return id.encode(encoding)
-
-
 def group_by(iterable, attr, default=None):
     # like operator.itemgetter but fills in missing keys with a default value
     keyfunc = lambda item: lambda obj: obj.get(item, default)
@@ -422,7 +413,8 @@ def parse_conf(item, **kwargs):
     if not_dict or (len(kw.conf) == 1 and sentinel.intersection(kw.conf)):
         objectified = get_value(item, **kwargs)
     else:
-        parsed = {k: get_value(item, kw.conf[k]) for k in kw.conf}
+        no_conf = remove_keys(kwargs, 'conf')
+        parsed = {k: get_value(item, kw.conf[k], **no_conf) for k in kw.conf}
         result = combine_dicts(kw.defaults, parsed)
         objectified = Objectify(result) if kw.objectify else result
 
