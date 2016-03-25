@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
+
+import requests
+import sys
+sys.path.append('../riko')
+
+from importlib import import_module
+from pprint import pprint
+from argparse import RawTextHelpFormatter, ArgumentParser
+from twisted.internet.task import react
+
+parser = ArgumentParser(
+    description='description: Run the kazeeki pipe', prog='pipe_kazeeki',
+    usage='%(prog)s [pipeid]', formatter_class=RawTextHelpFormatter)
+
+parser.add_argument(
+    dest='pipeid', nargs='?', default=sys.stdin,
+    help='The pipe to run (default: reads from stdin).')
+
+parser.add_argument(
+    '-a', '--async', action='store_true', default=False,
+    help="Load async pipe.\n\n")
+
+parser.add_argument(
+    '-t', '--test', action='store_true', default=False,
+    help="Run in test mode (uses default inputs).\n\n")
+
+args = parser.parse_args()
+
+
+def run():
+    """CLI runner"""
+    try:
+        pipeid = args.pipeid.read()
+    except AttributeError:
+        pipeid = args.pipeid
+
+    pipe_name = 'pipe_%s' % pipeid
+
+    try:
+        module = import_module('examples.%s' % pipe_name)
+    except ImportError:
+        exit('Pipe examples.%s not found!' % pipe_name)
+
+    if args.async:
+        pipe = 'asyncPipe%s' % pipeid.title()
+        pipeline = getattr(module, pipe)
+        react(pipeline, [args.test])
+    else:
+        pipeline = getattr(module, pipe_name)
+        pipeline(test=args.test)
+
+if __name__ == "__main__":
+    run()
