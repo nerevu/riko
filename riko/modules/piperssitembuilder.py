@@ -81,7 +81,8 @@ def parser(item, objconf, skip, **kwargs):
         feed = kwargs['feed']
     else:
         items = objconf.items()
-        feed = DotDict((RSS.get(k, k), item.get(v, v, **kwargs)) for k, v in items)
+        rdict = ((RSS.get(k, k), item.get(v, v, **kwargs)) for k, v in items)
+        feed = DotDict(rdict)
 
     return feed, skip
 
@@ -176,7 +177,8 @@ def pipe(*args, **kwargs):
         >>> # source based
         >>> # TODO: look into subkey
         >>> item = {'heading': 'Hi', 'id': 'a1', 'thumbnail': 'image.png'}
-        >>> conf = {'title': 'heading', 'guid': 'id', 'mediaThumbURL': 'thumbnail'}
+        >>> conf = {
+        ...     'title': 'heading', 'guid': 'id', 'mediaThumbURL': 'thumbnail'}
         >>> pipe(item, conf=conf).next() == rss
         True
     """

@@ -35,15 +35,12 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from itertools import imap
-
 from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
 from riko.lib import utils, autorss
 from riko.lib.log import Logger
-from riko.twisted import utils as tu
 
 OPTS = {'ftype': 'none'}
 logger = Logger(__name__).logger
@@ -68,6 +65,7 @@ def asyncParser(_, objconf, skip, **kwargs):
     Examples:
         >>> from twisted.internet.task import react
         >>> from . import FILES
+        >>> from riko.twisted import utils as tu
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -147,6 +145,7 @@ def asyncPipe(*args, **kwargs):
     Examples:
         >>> from twisted.internet.task import react
         >>> from . import FILES
+        >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x.next()['link'])

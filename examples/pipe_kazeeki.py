@@ -8,8 +8,8 @@ from pprint import pprint
 from twisted.internet.defer import inlineCallbacks
 from riko import get_url
 from riko.lib.utils import combine_dicts as cdict
-from riko.lib.collections import SyncPipe, SyncCollection
-from riko.twisted.collections import AsyncPipe, AsyncCollection
+from riko.lib.collections import SyncCollection
+from riko.twisted.collections import AsyncCollection
 
 
 def make_regex(field, match, replace, default=None):
@@ -17,6 +17,7 @@ def make_regex(field, match, replace, default=None):
         'field': field, 'match': match, 'replace': replace, 'default': default}
 
     return result
+
 
 def make_simplemath(other, op):
     return {'other': {'subkey': other, 'type': 'number'}, 'op': op}
@@ -169,13 +170,18 @@ regex5_conf = {
 }
 
 strconcat1_conf = {
-    'part': [{'subkey': 'k:budget_raw1_code'}, {'subkey': 'k:budget_raw2_code'}]}
+    'part': [
+        {'subkey': 'k:budget_raw1_code'}, {'subkey': 'k:budget_raw2_code'}]}
 
 strconcat2_conf = {
     'part': [{'subkey': 'k:budget_raw1_sym'}, {'subkey': 'k:budget_raw2_sym'}]}
 
 strconcat3_conf = {
-    'part': [{'subkey': 'k:budget_w_sym'}, {'value': ' ('}, {'subkey': 'k:budget_converted_w_sym'}, {'value': ')'}]}
+    'part': [
+        {'subkey': 'k:budget_w_sym'},
+        {'value': ' ('},
+        {'subkey': 'k:budget_converted_w_sym'},
+        {'value': ')'}]}
 
 strconcat4_conf = {'part': [{'subkey': 'k:budget_full'}, {'value': ' / hr'}]}
 tokenizer_conf = {'dedupe': True, 'sort': True}
@@ -246,4 +252,4 @@ def pipe_kazeeki(test=False):
 def asyncPipeKazeeki(reactor, test=None):
     source = AsyncCollection(sources).asyncPipe(test=test)
     output = yield parse_source(source)
-    pprint(parse_source(source)[-1])
+    pprint(output[-1])

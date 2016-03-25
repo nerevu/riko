@@ -8,7 +8,11 @@ from riko.twisted.collections import AsyncPipe, AsyncCollection
 
 p68_conf = {'url': 'file://data/gigs.json', 'path': 'value.items'}
 p90_conf = {'uniq_key': 'link'}
-p87_conf = {'combine': 'or', 'mode': 'block', 'rule': [{'field': 'title', 'value': 'php', 'op': 'contains'}]}
+p87_conf = {
+    'combine': 'or',
+    'mode': 'block',
+    'rule': [{'field': 'title', 'value': 'php', 'op': 'contains'}]}
+
 p101_conf = {'rule': [{'sort_key': 'pubDate', 'sort_dir': 'desc'}]}
 
 

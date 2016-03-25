@@ -11,7 +11,6 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import __builtin__
-import string
 import re
 import itertools as it
 import time
@@ -24,7 +23,6 @@ from urllib2 import quote
 from os import path as p, environ
 from calendar import timegm
 from decimal import Decimal
-from urllib import urlencode
 from urlparse import urlparse
 from json import loads
 
@@ -117,7 +115,6 @@ class Objectify(dict):
         else:
             attr = self.get(name)
             return self.func(attr) if self.func else attr
-
 
 
 class SleepyDict(dict):
@@ -300,7 +297,7 @@ def cast_date(date_str):
 def cast_url(url_str):
     url = 'http://%s' % url_str if '://' not in url_str else url_str
     quoted = url_quote(url)
-    parsed = urlparse(url)
+    parsed = urlparse(quoted)
     response = parsed._asdict()
     response['url'] = parsed.geturl()
     return response

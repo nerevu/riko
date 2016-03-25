@@ -129,15 +129,13 @@ Synchronous processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
-    >>> #     testing
-    >>> #   - the `dotall` option is used to match `.*` across newlines
+    >>> # Note: `get_url` just looks up files in the `data` directory to simplify
+    >>> # testing
     >>> fetch_conf = {'url': get_url('feed.xml')}
     >>> filter_rule = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
     >>>
     >>> ### Create a workflow ###
@@ -186,14 +184,12 @@ Parallel processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
-    >>> #     testing
-    >>> #   - the `dotall` option is used to match `.*` across newlines
+    >>> # Notes `get_url` just looks up files in the `data` directory to simplify
+    >>> # testing
     >>> url = get_url('feed.xml')
     >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
@@ -242,7 +238,9 @@ Asynchronous processing
     >>> url = get_url('feed.xml')
     >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {
+    ...     'field': 'content', 'match': match, 'replace': '$2',
+    ...     'dotall': True}
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
@@ -324,7 +322,8 @@ Design Principles
     >>>
     >>> asyncPipe.func_dict == {'type': 'processor', 'sub_type': 'source'}
     True
-    >>> pipe.func_dict == {'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
+    >>> pipe.func_dict == {
+    ...     'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
     True
 
     # SyncPipe usage

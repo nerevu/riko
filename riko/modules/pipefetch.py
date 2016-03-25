@@ -26,8 +26,6 @@ from __future__ import (
 
 import speedparser
 
-from functools import partial
-from itertools import imap
 from urllib2 import urlopen
 
 from builtins import *
