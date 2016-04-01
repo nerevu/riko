@@ -14,6 +14,7 @@ import nose.tools as nt
 
 from importlib import import_module
 from decimal import Decimal
+from builtins import *
 
 
 def setup_module():
@@ -23,7 +24,7 @@ def setup_module():
     print('Basic Module Setup\n')
 
 
-class TestExamples:
+class TestExamples(object):
     def __init__(self):
         self.cls_initialized = False
 
@@ -41,7 +42,7 @@ class TestExamples:
 
         example = {
             'author': {'name': None, 'uri': None},
-            'id': 1734103952L,
+            'id': 1734103952,
             'k:author': 'unknown',
             'k:budget': Decimal('0'),
             'k:budget_converted': Decimal('0.000000'),

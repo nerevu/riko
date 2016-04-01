@@ -539,7 +539,7 @@ threads or processes. Example ``processor``s include ``pipefetchsitefeed``,
     >>> item = {'title': 'riko pt. 1'}
     >>> feed = pipe(item, field='title')
     >>> next(feed)
-    {'title': 'riko pt. 1', 'hash': 2853617420L}
+    {'title': 'riko pt. 1', 'hash': 2853617420}
 
 Some ``processor``s, e.g. ``pipestringtokenizer`` return multiple results.
 
@@ -609,9 +609,9 @@ If you are unsure of the type of pipe you have, check its metadata.
     >>> from riko.modules.pipefetchpage import asyncPipe
     >>> from riko.modules.pipecount import pipe
     >>>
-    >>> asyncPipe.func_dict
+    >>> asyncPipe.__dict__
     {'type': 'processor', 'sub_type': 'source'}
-    >>> pipe.func_dict
+    >>> pipe.__dict__
     {'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
 
 The ``SyncPipe`` and ``AsyncPipe`` classes (among other things) perform this
@@ -631,7 +631,7 @@ parallelization.
         {
             'title': 'riko pt. 1',
             'content': "Let's talk about riko!",
-            'hash': 1346301218L}]
+            'hash': 1346301218}]
 
 Please see the `cookbook`_ for advanced examples including how to wire in
 vales from other pipes or accept user input.

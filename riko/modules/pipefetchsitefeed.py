@@ -24,7 +24,7 @@ Examples:
 
         >>> from . import FILES
         >>> from riko.modules.pipefetchsitefeed import pipe
-        >>> pipe(conf={'url': FILES[4]}).next()['title']
+        >>> next(pipe(conf={'url': FILES[4]}))['title']
         u'Using NFC tags in the car'
 
 Attributes:
@@ -37,9 +37,8 @@ from __future__ import (
 
 import speedparser
 
-from urllib2 import urlopen
-
 from builtins import *
+from six.moves.urllib.request import urlopen
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
@@ -73,7 +72,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0].next()['title'])
+        ...     callback = lambda x: print(next(x[0])['title'])
         ...     objconf = Objectify({'url': FILES[4]})
         ...     kwargs = {'feed': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
@@ -91,7 +90,7 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         rss = yield autorss.asyncGetRSS(url)
-        link = utils.get_abspath(rss.next()['link'])
+        link = utils.get_abspath(next(rss)['link'])
         content = yield tu.urlRead(link)
         parsed = speedparser.parse(content)
         feed = utils.gen_entries(parsed)
@@ -122,7 +121,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> objconf = Objectify({'url': FILES[4]})
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
-        >>> result.next()['title']
+        >>> next(result)['title']
         u'Using NFC tags in the car'
     """
     if skip:
@@ -130,7 +129,7 @@ def parser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         rss = autorss.get_rss(url)
-        link = utils.get_abspath(rss.next()['link'])
+        link = utils.get_abspath(next(rss)['link'])
         content = urlopen(link).read()
         parsed = speedparser.parse(content)
         feed = utils.gen_entries(parsed)
@@ -159,7 +158,7 @@ def asyncPipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     d = asyncPipe(conf={'url': FILES[4]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -192,7 +191,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from . import FILES
-        >>> pipe(conf={'url': FILES[4]}).next()['title']
+        >>> next(pipe(conf={'url': FILES[4]}))['title']
         u'Using NFC tags in the car'
     """
     return parser(*args, **kwargs)

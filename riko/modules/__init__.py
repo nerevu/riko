@@ -10,7 +10,7 @@ from __future__ import (
 
 from os import path as p
 from functools import partial, wraps
-from itertools import imap, chain
+from itertools import chain
 
 from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
@@ -104,10 +104,10 @@ def get_assignment(result, skip, **kwargs):
     if skip:
         return None, result
 
-    first_result = result.next()
+    first_result = next(result)
 
     try:
-        second_result = result.next()
+        second_result = next(result)
     except StopIteration:
         # pipe delivers one result, e.g., strconcat
         result = chain([first_result], result)
@@ -123,7 +123,7 @@ def get_assignment(result, skip, **kwargs):
 
 
 def assign(item, assignment, key, one=False):
-    value = assignment.next() if one else list(assignment)
+    value = next(assignment) if one else list(assignment)
     yield DotDict(cdicts(item, {key: value}))
 
 
@@ -222,11 +222,11 @@ class processor(object):
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> pipe(item, **kwargs).next()
+            >>> next(pipe(item, **kwargs))
             {u'content': u'say "hello world" three times!'}
             >>>
             >>> def run(reactor):
-            ...     callback = lambda x: print(x.next())
+            ...     callback = lambda x: print(next(x))
             ...     d = asyncPipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
@@ -286,11 +286,11 @@ class processor(object):
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> pipe(item, **kwargs).next()
+            >>> next(pipe(item, **kwargs))
             {u'content': u'say "hello world" three times!'}
             >>>
             >>> def run(reactor):
-            ...     callback = lambda x: print(x.next())
+            ...     callback = lambda x: print(next(x))
             ...     d = asyncPipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
@@ -453,17 +453,17 @@ class operator(object):
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> pipe1(items, **kwargs).next()
+            >>> next(pipe1(items, **kwargs))
             {u'content': u'say "bye world" three times!'}
-            >>> pipe2(items, **kwargs).next()
+            >>> next(pipe2(items, **kwargs))
             {u'content': 4}
             >>>
             >>> @inlineCallbacks
             ... def run(reactor):
             ...     r1 = yield asyncPipe1(items, **kwargs)
-            ...     print(r1.next())
+            ...     print(next(r1))
             ...     r2 = yield asyncPipe2(items, **kwargs)
-            ...     print(r2.next())
+            ...     print(next(r2))
             ...
             >>> try:
             ...     react(run, _reactor=tu.FakeReactor())
@@ -529,17 +529,17 @@ class operator(object):
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> pipe1(items, **kwargs).next()
+            >>> next(pipe1(items, **kwargs))
             {u'content': u'say "bye world" three times!'}
-            >>> pipe2(items, **kwargs).next()
+            >>> next(pipe2(items, **kwargs))
             {u'content': 4}
             >>>
             >>> @inlineCallbacks
             ... def run(reactor):
             ...     r1 = yield asyncPipe1(items, **kwargs)
-            ...     print(r1.next())
+            ...     print(next(r1))
             ...     r2 = yield asyncPipe2(items, **kwargs)
-            ...     print(r2.next())
+            ...     print(next(r2))
             ...
             >>> try:
             ...     react(run, _reactor=tu.FakeReactor())
@@ -573,7 +573,7 @@ class operator(object):
             kwargs.update(updates)
 
             items = items or iter([])
-            _INPUT = imap(DotDict, items) if combined.get('dictize') else items
+            _INPUT = map(DotDict, items) if combined.get('dictize') else items
             bfuncs = get_broadcast_funcs(**combined)
             types = {combined['ftype'], combined['ptype']}
 

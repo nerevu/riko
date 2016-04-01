@@ -15,8 +15,8 @@ Examples:
 
         >>> from riko.modules.pipestrreplace import pipe
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()['strreplace']
-        u'bye world'
+        >>> next(pipe({'content': 'hello world'}, conf=conf))['strreplace']
+        'bye world'
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -25,6 +25,8 @@ Attributes:
 
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
+
+from functools import reduce
 
 from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
@@ -157,7 +159,7 @@ def asyncPipe(*args, **kwargs):
         >>> from twisted.internet.task import react
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['strreplace'])
+        ...     callback = lambda x: print(next(x)['strreplace'])
         ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         ...     d = asyncPipe({'content': 'hello world'}, conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -200,14 +202,14 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()['strreplace']
-        u'bye world'
+        >>> next(pipe({'content': 'hello world'}, conf=conf))['strreplace']
+        'bye world'
         >>> rules = [
         ...     {'find': 'Gr', 'replace': 'M'},
         ...     {'find': 'e', 'replace': 'a', 'param': 'last'}]
         >>> conf = {'rule': rules}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> pipe({'title': 'Greetings'}, **kwargs).next()['result']
+        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result']
         u'Meatings'
     """
     return parser(*args, **kwargs)

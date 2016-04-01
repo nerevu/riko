@@ -10,7 +10,7 @@
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import __builtin__
+import builtins
 import re
 import itertools as it
 import time
@@ -19,14 +19,13 @@ import time
 from datetime import timedelta, datetime as dt
 from functools import partial
 from operator import itemgetter, add, sub
-from urllib2 import quote
 from os import path as p, environ
 from calendar import timegm
 from decimal import Decimal
-from urlparse import urlparse
 from json import loads
 
 from builtins import *
+from six.moves.urllib.parse import quote, urlparse
 from mezmorize import Cache
 from dateutil.parser import parse
 
@@ -106,9 +105,7 @@ class Objectify(dict):
         self.__delattr__ = dict.__delitem__
 
     def __getattribute__(self, name):
-        good = {
-            'get', 'pop', 'keys', 'items', 'iteritems', 'func', 'viewitems',
-            'viewkeys'}
+        good = {'get', 'pop', 'keys', 'items', 'func', 'viewitems', 'viewkeys'}
 
         if name in good:
             return object.__getattribute__(self, name)
@@ -142,7 +139,7 @@ class Chainable(object):
 
     def __getattr__(self, name):
         funcs = (partial(getattr, x) for x in [self.data, __builtin__, it])
-        zipped = it.izip(funcs, it.repeat(AttributeError))
+        zipped = zip(funcs, it.repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)
 
@@ -154,7 +151,7 @@ class Chainable(object):
 
 
 def combine_dicts(*dicts):
-    return dict(it.chain.from_iterable(it.imap(dict.iteritems, dicts)))
+    return dict(it.chain.from_iterable(map(dict.items, dicts)))
 
 
 def multi_try(source, zipped, default=None):
@@ -318,7 +315,7 @@ def cast(content, _type='text'):
         'float': {'default': 0.0, 'func': float},
         'decimal': {'default': Decimal(0), 'func': Decimal},
         'int': {'default': 0, 'func': int},
-        'text': {'default': u'', 'func': unicode},
+        'text': {'default': u'', 'func': str},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
         'url': {'default': {}, 'func': cast_url},
         'location': {'default': {}, 'func': cast_location},
@@ -377,7 +374,7 @@ def dispatch(split, *funcs):
         _OUTPUT = dispatch(split, double, triple, quadruple)
         _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
     """
-    return [func(item) for item, func in it.izip(split, funcs)]
+    return [func(item) for item, func in zip(split, funcs)]
 
 
 def broadcast(item, *funcs):
@@ -475,7 +472,7 @@ def _gen_words(match, splits):
         except ValueError:
             word = s
         else:
-            word = it.islice(groups, num, num + 1).next()
+            word = next(it.islice(groups, num, num + 1))
 
         yield word
 
@@ -495,11 +492,11 @@ def multi_substitute(word, rules):
     resplit = re.compile('\$(\d+)')
 
     # For each match, look-up corresponding replace value in dictionary
-    rules_in_series = it.ifilter(itemgetter('series'), rules)
+    rules_in_series = filter(itemgetter('series'), rules)
     rules_in_parallel = (r for r in rules if not r['series'])
 
     try:
-        has_parallel = [rules_in_parallel.next()]
+        has_parallel = [next(rules_in_parallel)]
     except StopIteration:
         has_parallel = []
 
@@ -521,8 +518,8 @@ def multi_substitute(word, rules):
         i = 0
 
         for match in regex.finditer(word):
-            items = match.groupdict().iteritems()
-            item = it.ifilter(itemgetter(1), items).next()
+            items = match.groupdict().items()
+            item = next(filter(itemgetter(1), items))
 
             # print('----------------')
             # print('groupdict:', match.groupdict().items())

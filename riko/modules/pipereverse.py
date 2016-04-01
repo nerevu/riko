@@ -9,7 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipereverse import pipe
-        >>> pipe({'x': x} for x in xrange(5)).next()
+        >>> next(pipe({'x': x} for x in range(5)))
         {u'x': 4}
 
 Attributes:
@@ -51,12 +51,12 @@ def parser(feed, objconf, tuples, **kwargs):
         Iter(dict): The output feed
 
     Examples:
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
         >>> kwargs = {}
-        >>> feed = ({'x': x} for x in xrange(5))
-        >>> tuples = izip(feed, repeat(None))
-        >>> parser(feed, None, tuples, **kwargs).next()
+        >>> feed = ({'x': x} for x in range(5))
+        >>> tuples = zip(feed, repeat(None))
+        >>> next(parser(feed, None, tuples, **kwargs))
         {u'x': 4}
     """
     return reversed(list(feed))
@@ -80,8 +80,8 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
-        ...     items = ({'x': x} for x in xrange(5))
+        ...     callback = lambda x: print(next(x))
+        ...     items = ({'x': x} for x in range(5))
         ...     d = asyncPipe(items)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -107,8 +107,8 @@ def pipe(*args, **kwargs):
         dict: a feed item
 
     Examples:
-        >>> items = ({'x': x} for x in xrange(5))
-        >>> pipe(items).next()
+        >>> items = ({'x': x} for x in range(5))
+        >>> next(pipe(items))
         {u'x': 4}
     """
     return parser(*args, **kwargs)

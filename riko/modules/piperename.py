@@ -20,7 +20,7 @@ Examples:
 
         >>> from riko.modules.piperename import pipe
         >>> conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()
+        >>> next(pipe({'content': 'hello world'}, conf=conf))
         {u'greeting': u'hello world'}
 
 Attributes:
@@ -30,6 +30,8 @@ Attributes:
 
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
+
+from functools import reduce
 
 from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
@@ -152,7 +154,7 @@ def asyncPipe(*args, **kwargs):
         >>> from twisted.internet.task import react
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
+        ...     callback = lambda x: print(next(x))
         ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
         ...     d = asyncPipe({'content': 'hello world'}, conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -193,14 +195,14 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> rule = {'field': 'content', 'newval': 'greeting'}
-        >>> pipe({'content': 'hello world'}, conf={'rule': rule}).next()
+        >>> next(pipe({'content': 'hello world'}, conf={'rule': rule}))
         {u'greeting': u'hello world'}
         >>> conf = {'rule': {'field': 'content'}}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()
+        >>> next(pipe({'content': 'hello world'}, conf=conf))
         {}
         >>> rule['copy'] = True
         >>> result = pipe({'content': 'hello world'}, conf={'rule': rule})
-        >>> sorted(result.next().keys())
+        >>> sorted(next(result).keys())
         [u'content', u'greeting']
     """
     return parser(*args, **kwargs)

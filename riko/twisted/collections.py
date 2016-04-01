@@ -67,7 +67,7 @@ class AsyncPipe(PyPipe):
         if self.name:
             self.module = import_module('riko.modules.pipe%s' % self.name)
             self.asyncPipe = self.module.asyncPipe
-            pipe_type = self.asyncPipe.func_dict.get('type')
+            pipe_type = self.asyncPipe.__dict__.get('type')
             self.is_processor = pipe_type == 'processor'
             self.mapify = self.is_processor and self.source
         else:

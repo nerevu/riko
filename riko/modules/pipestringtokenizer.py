@@ -12,8 +12,8 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipestringtokenizer import pipe
-        >>> pipe({'content': 'Once,twice,thrice'}).next()['stringtokenizer'][0]
-        {u'content': u'Once'}
+        >>> next(pipe({'content': 'Once,twice,thrice'}))['stringtokenizer'][0]
+        {u'content': 'Once'}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -51,7 +51,7 @@ def parser(content, objconf, skip, **kwargs):
         >>> objconf = Objectify({'delimiter': '//', 'token_key': 'token'})
         >>> content = 'Once//twice//thrice//no more'
         >>> result, skip = parser(content, objconf, False)
-        >>> result.next()
+        >>> next(result)
         {u'token': u'Once'}
     """
     if skip:
@@ -59,7 +59,7 @@ def parser(content, objconf, skip, **kwargs):
     else:
         splits = filter(None, content.split(objconf.delimiter))
         deduped = set(splits) if objconf.dedupe else splits
-        chunks = sorted(deduped, key=unicode.lower) if objconf.sort else deduped
+        chunks = sorted(deduped, key=str.lower) if objconf.sort else deduped
         feed = ({objconf.token_key: chunk} for chunk in chunks)
 
     return feed, skip
@@ -97,7 +97,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['stringtokenizer'][0])
+        ...     callback = lambda x: print(next(x)['stringtokenizer'][0])
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     d = asyncPipe(item)
         ...     return d.addCallbacks(callback, logger.error)
@@ -107,7 +107,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'content': u'Once'}
+        {u'content': 'Once'}
     """
     return parser(*args, **kwargs)
 
@@ -144,11 +144,11 @@ def pipe(*args, **kwargs):
         >>> item = {'description': 'Once//twice//thrice//no more'}
         >>> conf = {'delimiter': '//', 'sort': True}
         >>> kwargs = {'field': 'description', 'assign': 'tokens'}
-        >>> pipe(item, conf=conf, **kwargs).next()['tokens'][0]
-        {u'content': u'no more'}
+        >>> next(pipe(item, conf=conf, **kwargs))['tokens'][0]
+        {u'content': 'no more'}
         >>> kwargs.update({'emit': True})
         >>> conf.update({'token_key': 'token'})
-        >>> pipe(item, conf=conf, **kwargs).next()
-        {u'token': u'no more'}
+        >>> next(pipe(item, conf=conf, **kwargs))
+        {u'token': 'no more'}
     """
     return parser(*args, **kwargs)

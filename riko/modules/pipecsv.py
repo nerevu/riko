@@ -10,7 +10,7 @@ Examples:
 
         >>> from . import FILES
         >>> from riko.modules.pipecsv import pipe
-        >>> pipe(conf={'url': FILES[6]}).next()['mileage']
+        >>> next(pipe(conf={'url': FILES[6]}))['mileage']
         u'7213'
 
 Attributes:
@@ -21,9 +21,8 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from urllib2 import urlopen
-
 from builtins import *
+from six.moves.urllib.request import urlopen
 from meza.io import read_csv
 from twisted.internet.defer import inlineCallbacks, returnValue
 
@@ -62,7 +61,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0].next()['mileage'])
+        ...     callback = lambda x: print(next(x[0])['mileage'])
         ...     conf = {'url': FILES[6], 'sanitize': True, 'skip_rows': 0}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'feed': {}}
@@ -110,7 +109,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> objconf = Objectify(conf)
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
-        >>> result.next()['mileage']
+        >>> next(result)['mileage']
         u'7213'
     """
     if skip:
@@ -162,7 +161,7 @@ def asyncPipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['mileage'])
+        ...     callback = lambda x: print(next(x)['mileage'])
         ...     d = asyncPipe(conf={'url': FILES[6]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -208,7 +207,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from . import FILES
-        >>> pipe(conf={'url': FILES[6]}).next()['mileage']
+        >>> next(pipe(conf={'url': FILES[6]}))['mileage']
         u'7213'
     """
     return parser(*args, **kwargs)

@@ -24,7 +24,7 @@ Examples:
 
         >>> from riko.modules.pipedateformat import pipe
         >>> from datetime import date
-        >>> pipe({'date': date(2015, 5, 4)}).next()['dateformat']
+        >>> next(pipe({'date': date(2015, 5, 4)}))['dateformat']
         '05/04/2015 00:00:00'
 
 Attributes:
@@ -101,7 +101,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['dateformat'])
+        ...     callback = lambda x: print(next(x)['dateformat'])
         ...     d = asyncPipe({'date': date(2015, 5, 4)})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -142,11 +142,11 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from datetime import date
         >>> item = {'date': date(2015, 5, 4)}
-        >>> pipe(item).next()['dateformat']
+        >>> next(pipe(item))['dateformat']
         '05/04/2015 00:00:00'
-        >>> pipe(item, conf={'format': '%Y'}).next()['dateformat']
+        >>> next(pipe(item, conf={'format': '%Y'}))['dateformat']
         '2015'
-        >>> pipe({'date': '05/04/2015'}).next()['dateformat']
+        >>> next(pipe({'date': '05/04/2015'}))['dateformat']
         '05/04/2015 00:00:00'
     """
     return parser(*args, **kwargs)

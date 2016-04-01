@@ -9,9 +9,9 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipeunion import pipe
-        >>> items = ({'x': x} for x in xrange(5))
-        >>> other1 = ({'x': x + 5} for x in xrange(5))
-        >>> other2 = ({'x': x + 10} for x in xrange(5))
+        >>> items = ({'x': x} for x in range(5))
+        >>> other1 = ({'x': x + 5} for x in range(5))
+        >>> other2 = ({'x': x + 10} for x in range(5))
         >>> len(list(pipe(items, others=[other1, other2])))
         15
 
@@ -60,13 +60,13 @@ def parser(feed, objconf, tuples, **kwargs):
         Iter(dict): The output feed
 
     Examples:
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
-        >>> feed = ({'x': x} for x in xrange(5))
-        >>> other1 = ({'x': x + 5} for x in xrange(5))
-        >>> other2 = ({'x': x + 10} for x in xrange(5))
+        >>> feed = ({'x': x} for x in range(5))
+        >>> other1 = ({'x': x + 5} for x in range(5))
+        >>> other2 = ({'x': x + 10} for x in range(5))
         >>> kwargs = {'others': [other1, other2]}
-        >>> tuples = izip(feed, repeat(None))
+        >>> tuples = zip(feed, repeat(None))
         >>> len(list(parser(feed, None, tuples, **kwargs)))
         15
     """
@@ -93,9 +93,9 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(len(list(x)))
-        ...     items = ({'x': x} for x in xrange(5))
-        ...     other1 = ({'x': x + 5} for x in xrange(5))
-        ...     other2 = ({'x': x + 10} for x in xrange(5))
+        ...     items = ({'x': x} for x in range(5))
+        ...     other1 = ({'x': x + 5} for x in range(5))
+        ...     other2 = ({'x': x + 10} for x in range(5))
         ...     d = asyncPipe(items, others=[other1, other2])
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -124,9 +124,9 @@ def pipe(*args, **kwargs):
         dict: a merged feed item
 
     Examples:
-        >>> items = ({'x': x} for x in xrange(5))
-        >>> other1 = ({'x': x + 5} for x in xrange(5))
-        >>> other2 = ({'x': x + 10} for x in xrange(5))
+        >>> items = ({'x': x} for x in range(5))
+        >>> other1 = ({'x': x + 5} for x in range(5))
+        >>> other2 = ({'x': x + 10} for x in range(5))
         >>> len(list(pipe(items, others=[other1, other2])))
         15
     """

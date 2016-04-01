@@ -12,7 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipetruncate import pipe
-        >>> items = ({'x': x} for x in xrange(5))
+        >>> items = ({'x': x} for x in range(5))
         >>> len(list(pipe(items, conf={'count': '4'})))
         4
 
@@ -58,12 +58,12 @@ def parser(feed, objconf, tuples, **kwargs):
 
     Examples:
         >>> from riko.lib.utils import Objectify
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
         >>> kwargs = {'count': 4, 'start': 0}
         >>> objconf = Objectify(kwargs)
-        >>> feed = ({'x': x} for x in xrange(5))
-        >>> tuples = izip(feed, repeat(objconf))
+        >>> feed = ({'x': x} for x in range(5))
+        >>> tuples = zip(feed, repeat(objconf))
         >>> len(list(parser(feed, objconf, tuples, **kwargs)))
         4
     """
@@ -97,7 +97,7 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(len(list(x)))
-        ...     items = ({'x': x} for x in xrange(5))
+        ...     items = ({'x': x} for x in range(5))
         ...     d = asyncPipe(items, conf={'count': 4})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -130,11 +130,11 @@ def pipe(*args, **kwargs):
         dict: a feed item
 
     Examples:
-        >>> items = [{'x': x} for x in xrange(5)]
+        >>> items = [{'x': x} for x in range(5)]
         >>> len(list(pipe(items, conf={'count': '4'})))
         4
         >>> feed = pipe(items, conf={'count': '2', 'start': '2'})
-        >>> feed.next()
+        >>> next(feed)
         {u'x': 2}
     """
     return parser(*args, **kwargs)

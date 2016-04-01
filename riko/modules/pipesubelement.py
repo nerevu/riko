@@ -44,7 +44,7 @@ Examples:
         ...         {'id': 'st2', 'verses': ['st2v1', 'st2v2', 'st2v3']},
         ...         {'id': 'st3', 'verses': ['st3v1', 'st3v2', 'st3v3']}]}
         >>>
-        >>> pipe(sonnet, conf={'path': 'stanzas.verses'}).next()
+        >>> next(pipe(sonnet, conf={'path': 'stanzas.verses'}))
         {u'content': u'st1v1'}
 
 Attributes:
@@ -83,13 +83,13 @@ def parser(item, objconf, skip, **kwargs):
         >>> sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
         >>> conf = {'path': 'stanzas.verses', 'token_key': 'content'}
         >>> objconf = utils.Objectify(conf)
-        >>> parser(DotDict(sonnet), objconf, False)[0].next()
+        >>> next(parser(DotDict(sonnet), objconf, False)[0])
         {u'content': u'verse1'}
         >>> sonnet = {'stanzas': {'verses': ['verse1', 'verse2']}}
-        >>> parser(DotDict(sonnet), objconf, False)[0].next()
+        >>> next(parser(DotDict(sonnet), objconf, False)[0])
         {u'content': u'verse1'}
         >>> sonnet = {'stanzas': {'verses': 'verse1'}}
-        >>> parser(DotDict(sonnet), objconf, False)[0].next()
+        >>> next(parser(DotDict(sonnet), objconf, False)[0])
         {u'content': u'verse1'}
     """
     if skip:
@@ -126,7 +126,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
+        ...     callback = lambda x: print(next(x))
         ...     sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
         ...     conf = {'path': 'stanzas.verses'}
         ...     d = asyncPipe(sonnet, conf=conf)
@@ -179,7 +179,7 @@ def pipe(*args, **kwargs):
         >>> verses[8]
         {u'content': u'st3v3'}
         >>> conf.update({'token_key': 'verse'})
-        >>> pipe(sonnet, conf=conf).next()
+        >>> next(pipe(sonnet, conf=conf))
         {u'verse': u'st1v1'}
     """
     return parser(*args, **kwargs)

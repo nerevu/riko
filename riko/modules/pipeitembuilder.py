@@ -19,7 +19,7 @@ Examples:
 
         >>> from riko.modules.pipeitembuilder import pipe
         >>> attrs = {'key': 'title', 'value': 'the title'}
-        >>> pipe(conf={'attrs': attrs}).next()['title']
+        >>> next(pipe(conf={'attrs': attrs}))['title']
         u'the title'
 
 Attributes:
@@ -94,7 +94,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     attrs = [
         ...         {'key': 'title', 'value': 'the title'},
         ...         {'key': 'desc.content', 'value': 'the desc'}]
@@ -137,7 +137,7 @@ def pipe(*args, **kwargs):
         >>> attrs = [
         ...     {'key': 'title', 'value': 'the title'},
         ...     {'key': 'desc.content', 'value': 'the desc'}]
-        >>> pipe(conf={'attrs': attrs}).next() == {
+        >>> next(pipe(conf={'attrs': attrs})) == {
         ...     u'title': 'the title', u'desc': {u'content': 'the desc'}}
         True
     """

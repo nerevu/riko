@@ -32,7 +32,7 @@ Examples:
         >>>
         >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
         >>> title = 'Running “Native” Data Wrangling Applications in the Browser'
-        >>> pipe(conf=conf).next()['title'][:59] == title
+        >>> next(pipe(conf=conf))['title'][:59] == title
         True
 
 Attributes:
@@ -43,11 +43,10 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from urllib2 import urlopen
 from os.path import splitext
-from itertools import imap
 
 from builtins import *
+from six.moves.urllib.request import urlopen
 from lxml import objectify, html
 from lxml.html import html5parser
 from twisted.internet.defer import inlineCallbacks, returnValue
@@ -101,7 +100,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0].next()['title'][:59])
+        ...     callback = lambda x: print(next(x[0])['title'][:59])
         ...     xpath = '/rss/channel/item'
         ...     objconf = Objectify({'url': FILES[1], 'xpath': xpath})
         ...     kwargs = {'feed': {}}
@@ -125,16 +124,16 @@ def asyncParser(_, objconf, skip, **kwargs):
         if ext == 'xml':
             root = yield microdom.parse(f)
             elements = genXPATH(root, objconf.xpath)
-            items = imap(tu.elementToDict, elements)
+            items = map(tu.elementToDict, elements)
         elif ext == 'html':
             tree = html5parser.parse(f) if objconf.html5 else html.parse(f)
             root = tree.getroot()
             elements = root.xpath(objconf.xpath)
-            items = imap(utils.etree_to_dict, elements)
+            items = map(utils.etree_to_dict, elements)
         else:
             raise TypeError('Invalid file type %s' % ext)
 
-        strigified = ({kwargs['assign']: unicode(i)} for i in items)
+        strigified = ({kwargs['assign']: str(i)} for i in items)
         feed = strigified if objconf.stringify else items
 
     result = (feed, skip)
@@ -160,7 +159,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> title = 'Running “Native” Data Wrangling Applications in the Browser'
-        >>> result.next()['title'][:59] == title
+        >>> next(result)['title'][:59] == title
         True
     """
     if skip:
@@ -177,8 +176,8 @@ def parser(_, objconf, skip, **kwargs):
 
         root = tree.getroot()
         elements = root.xpath(objconf.xpath)
-        items = imap(utils.etree_to_dict, elements)
-        strigified = ({kwargs['assign']: unicode(i)} for i in items)
+        items = map(utils.etree_to_dict, elements)
+        strigified = ({kwargs['assign']: str(i)} for i in items)
         feed = strigified if objconf.stringify else items
 
     return feed, skip
@@ -213,7 +212,7 @@ def asyncPipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['guid']['content'])
+        ...     callback = lambda x: print(next(x)['guid']['content'])
         ...     conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -255,7 +254,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from . import FILES
         >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
-        >>> pipe(conf=conf).next()['guid']['content']
+        >>> next(pipe(conf=conf))['guid']['content']
         'http://blog.ouseful.info/?p=12065'
     """
     return parser(*args, **kwargs)

@@ -12,8 +12,8 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipetail import pipe
-        >>> items = ({'x': x} for x in xrange(5))
-        >>> pipe(items, conf={'count': 2}).next()
+        >>> items = ({'x': x} for x in range(5))
+        >>> next(pipe(items, conf={'count': 2}))
         {u'x': 3}
 
 Attributes:
@@ -57,12 +57,12 @@ def parser(feed, objconf, tuples, **kwargs):
 
     Examples:
         >>> from riko.lib.utils import Objectify
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
         >>> kwargs = {'count': 2}
         >>> objconf = Objectify(kwargs)
-        >>> feed = ({'x': x} for x in xrange(5))
-        >>> tuples = izip(feed, repeat(objconf))
+        >>> feed = ({'x': x} for x in range(5))
+        >>> tuples = zip(feed, repeat(objconf))
         >>> parser(feed, objconf, tuples, **kwargs)[0]
         {u'x': 3}
     """
@@ -90,8 +90,8 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
-        ...     items = ({'x': x} for x in xrange(5))
+        ...     callback = lambda x: print(next(x))
+        ...     items = ({'x': x} for x in range(5))
         ...     d = asyncPipe(items, conf={'count': 2})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -122,8 +122,8 @@ def pipe(*args, **kwargs):
         dict: a feed item
 
     Examples:
-        >>> items = [{'x': x} for x in xrange(5)]
-        >>> pipe(items, conf={'count': 2}).next()
+        >>> items = [{'x': x} for x in range(5)]
+        >>> next(pipe(items, conf={'count': 2}))
         {u'x': 3}
     """
     return parser(*args, **kwargs)
