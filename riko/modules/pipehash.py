@@ -5,12 +5,21 @@ riko.modules.pipehash
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for hashing text.
 
+Note: If the PYTHONHASHSEED environment variable is set to an integer value,
+it is used as a fixed seed for generating the hash. Its purpose is to allow
+repeatable hashing across python processes and versions. The integer must be a
+decimal number in the range [0, 4294967295].
+
+Specifying the value 0 will disable hash randomization. If this variable is set
+to `random`, a random value is used to seed the hashes. Hash randomization is
+is enabled by default for Python 3.2.3+, and disabled otherwise.
+
 Examples:
     basic usage::
 
         >>> from riko.modules.pipehash import pipe
         >>> pipe({'content': 'hello world'}).next()['hash']
-        2794220831L
+        3885626731L
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -54,7 +63,7 @@ def parser(word, _, skip, **kwargs):
         >>> item = {'content': 'hello world'}
         >>> kwargs = {'feed': item}
         >>> parser(item['content'], None, False, **kwargs)[0]
-        2794220831L
+        3885626731L
     """
     parsed = kwargs['feed'] if skip else ctypes.c_uint(hash(word)).value
     return parsed, skip
@@ -90,7 +99,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        2794220831
+        3885626731
     """
     return parser(*args, **kwargs)
 
@@ -113,9 +122,9 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> pipe({'content': 'hello world'}).next()['hash']
-        2794220831L
+        3885626731L
         >>> kwargs = {'field': 'title', 'assign': 'result'}
         >>> pipe({'title': 'greeting'}, **kwargs).next()['result']
-        4090572397L
+        3500283417L
     """
     return parser(*args, **kwargs)

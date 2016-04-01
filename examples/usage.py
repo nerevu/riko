@@ -129,15 +129,13 @@ Synchronous processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
-    >>> #     testing
-    >>> #   - the `dotall` option is used to match `.*` across newlines
+    >>> # Note: `get_url` just looks up files in the `data` directory to simplify
+    >>> # testing
     >>> fetch_conf = {'url': get_url('feed.xml')}
     >>> filter_rule = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
     >>>
     >>> ### Create a workflow ###
@@ -157,8 +155,8 @@ Synchronous processing
     >>> flat_extract = chain.from_iterable(extracted)
     >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
     >>> flat_match = chain.from_iterable(matched)
-    >>> sorted = sort(flat_match, conf=sort_conf)
-    >>> next(sorted) == {'content': 'mailto:mail@writetoreply.org'}
+    >>> sorted_match = sort(flat_match, conf=sort_conf)
+    >>> next(sorted_match) == {'content': 'mailto:mail@writetoreply.org'}
     True
 
     >>> ### Alternatively, create a SyncPipe workflow ###
@@ -168,14 +166,14 @@ Synchronous processing
     >>> # `chain` steps
     >>> from riko.lib.collections import SyncPipe
     >>>
-    >>> sorted = (SyncPipe('fetch', conf=fetch_conf)
+    >>> output = (SyncPipe('fetch', conf=fetch_conf)
     ...     .filter(conf={'rule': filter_rule})
     ...     .subelement(conf=sub_conf, emit=True)
     ...     .regex(conf={'rule': regex_rule})
     ...     .sort(conf=sort_conf)
     ...     .output)
     >>>
-    >>> next(sorted) == {'content': 'mailto:mail@writetoreply.org'}
+    >>> next(output) == {'content': 'mailto:mail@writetoreply.org'}
     True
 
 
@@ -186,14 +184,12 @@ Parallel processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
-    >>> #     testing
-    >>> #   - the `dotall` option is used to match `.*` across newlines
+    >>> # Notes `get_url` just looks up files in the `data` directory to simplify
+    >>> # testing
     >>> url = get_url('feed.xml')
     >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
@@ -242,7 +238,9 @@ Asynchronous processing
     >>> url = get_url('feed.xml')
     >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {
+    ...     'field': 'content', 'match': match, 'replace': '$2',
+    ...     'dotall': True}
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
@@ -285,7 +283,7 @@ Design Principles
     >>> item = {'title': 'riko pt. 1'}
     >>> feed = pipe(item, field='title')
     >>> next(feed) == {
-    ...     'title': 'riko pt. 1', 'hash': 2853617420L}
+    ...     'title': 'riko pt. 1', 'hash': 3946887032L}
     True
     >>> from riko.modules.pipestringtokenizer import pipe
     >>>
@@ -324,7 +322,8 @@ Design Principles
     >>>
     >>> asyncPipe.func_dict == {'type': 'processor', 'sub_type': 'source'}
     True
-    >>> pipe.func_dict == {'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
+    >>> pipe.func_dict == {
+    ...     'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
     True
 
     # SyncPipe usage
@@ -337,7 +336,7 @@ Design Principles
     >>> sync_pipe.hash().list[0] == {
     ...     'title': 'riko pt. 1',
     ...     'content': "Let's talk about riko!",
-    ...     'hash': 1346301218L}
+    ...     'hash': 1589640534L}
     True
 
     # Alternate conf usage

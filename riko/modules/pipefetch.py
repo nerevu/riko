@@ -26,8 +26,6 @@ from __future__ import (
 
 import speedparser
 
-from functools import partial
-from itertools import imap
 from urllib2 import urlopen
 
 from builtins import *
@@ -155,7 +153,7 @@ def asyncPipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next().keys())
+        ...     callback = lambda x: print(sorted(x.next().keys()))
         ...     d = asyncPipe(conf={'url': FILES[0]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -164,9 +162,9 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        ['updated', 'updated_parsed', u'pubDate', 'author', u'y:published', \
-'title', 'comments', 'summary', 'content', 'link', u'y:title', u'dc:creator', \
-u'author.uri', u'author.name', 'id', u'y:id']
+        ['author', u'author.name', u'author.uri', 'comments', 'content', \
+u'dc:creator', 'id', 'link', u'pubDate', 'summary', 'title', 'updated', \
+'updated_parsed', u'y:id', u'y:published', u'y:title']
     """
     return asyncParser(*args, **kwargs)
 
@@ -193,13 +191,13 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from . import FILES
         >>>
-        >>> keys = [
+        >>> keys = {
         ...     'updated', 'updated_parsed', u'pubDate', 'author',
         ...     u'y:published', 'title', 'comments', 'summary', 'content',
         ...     'link', u'y:title', u'dc:creator', u'author.uri',
-        ...     u'author.name', 'id', u'y:id']
+        ...     u'author.name', 'id', u'y:id'}
         >>>
-        >>> pipe(conf={'url': FILES[0]}).next().keys() == keys
+        >>> set(pipe(conf={'url': FILES[0]}).next().keys()) == keys
         True
     """
     return parser(*args, **kwargs)

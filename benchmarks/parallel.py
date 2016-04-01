@@ -1,9 +1,7 @@
 from __future__ import absolute_import, division, print_function, with_statement
 
 from os import path as p
-from itertools import imap
 from functools import partial
-from collections import defaultdict
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool
 from time import time, sleep
@@ -17,7 +15,6 @@ from riko.lib.collections import (
 from riko.twisted.collections import AsyncPipe, AsyncCollection
 from riko.twisted.utils import asyncImap, asyncSleep
 from riko.modules.pipefetch import pipe, asyncPipe
-from riko.lib.utils import get_abspath
 
 NUMBER = 3
 LOOPS = 3
@@ -54,7 +51,7 @@ def baseline_sync():
 
 def baseline_threads():
     workers = get_worker_cnt(length)
-    chunksize =  get_chunksize(length, workers)
+    chunksize = get_chunksize(length, workers)
     pool = ThreadPool(workers)
     return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
 
@@ -128,7 +125,7 @@ def run_async(reactor, tests, max_chars):
 
             for j in xrange(NUMBER):
                 start = time()
-                result = yield test()
+                yield test()
                 loop += time() - start
 
             results.append(loop)
@@ -156,4 +153,3 @@ if __name__ == '__main__':
         print_time(test, max_chars, run_time, units)
 
     react(run_async, [async_tests, max_chars])
-

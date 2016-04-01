@@ -21,7 +21,6 @@ from twisted.internet.defer import (
 from twisted.internet.task import (
     Cooperator, coiterate as _coiterate, cooperate as _cooperate)
 from twisted.internet.utils import getProcessOutput
-from twisted.internet.fdesc import readFromFD, setNonBlocking
 from twisted.internet.interfaces import IReactorCore
 from twisted.internet.reactor import callLater
 from twisted.protocols.basic import FileSender
@@ -114,6 +113,8 @@ class FakeReactor(MemoryReactor):
     Examples:
         >>> import sys
         >>> from twisted.internet.abstract import FileDescriptor
+        >>> from twisted.internet.fdesc import readFromFD, setNonBlocking
+        >>>
         >>> # reactor = proto_helpers.FakeReactor()
         >>> reactor = FakeReactor()
         >>> f = FileDescriptor(reactor)
@@ -251,7 +252,7 @@ def urlRead(url, timeout=0, **kwargs):
 
     return content
 
-# End user functions
+
 def deferToProcess(source, function, *args, **kwargs):
     command = "from %s import %s\n%s(*%s, **%s)" % (
         source, function, function, args, kwargs)

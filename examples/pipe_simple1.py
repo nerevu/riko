@@ -6,8 +6,15 @@ from twisted.internet.defer import inlineCallbacks
 from riko.lib.collections import SyncPipe, SyncCollection
 from riko.twisted.collections import AsyncPipe, AsyncCollection
 
-p163_conf = {'attrs':[{'value': 'http://www.caltrain.com/Fares/farechart.html', 'key': 'url'}]}
-p134_conf = {'rule': {'field': 'url', 'match': {'subkey': 'url'}, 'replace': 'farechart'}}
+p163_conf = {
+    'attrs': [
+        {
+            'value': 'http://www.caltrain.com/Fares/farechart.html',
+            'key': 'url'}]}
+
+p134_conf = {
+    'rule': {
+        'field': 'url', 'match': {'subkey': 'url'}, 'replace': 'farechart'}}
 
 
 def pipe_simple1(test=False):

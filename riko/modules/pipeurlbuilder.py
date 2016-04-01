@@ -106,9 +106,10 @@ def parser(item, params, skip, **kwargs):
         feed = kwargs['feed']
     else:
         conf = kwargs.pop('conf')
-        paths = (get_value(item, DotDict(p), **kwargs) for p in conf.get('path'))
+        path = conf.get('path')
+        paths = (get_value(item, DotDict(p), **kwargs) for p in path)
         params = urlencode([(p.key, p.value) for p in params])
-        url = '%s?%s' % (urljoin(conf['base'],  '/'.join(paths)), params)
+        url = '%s?%s' % (urljoin(conf['base'], '/'.join(paths)), params)
         feed = cast_url(url)
 
     return feed, skip
@@ -196,4 +197,3 @@ def pipe(*args, **kwargs):
         u'http://finance.yahoo.com/rss/headline?s=gm'
     """
     return parser(*args, **kwargs)
-

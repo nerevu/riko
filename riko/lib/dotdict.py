@@ -13,7 +13,7 @@ from __future__ import (
 from builtins import *
 from feedparser import FeedParserDict
 
-from . import utils, log
+from . import log
 
 logger = log.Logger(__name__).logger
 

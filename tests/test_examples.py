@@ -15,6 +15,7 @@ import nose.tools as nt
 from importlib import import_module
 from decimal import Decimal
 
+
 def setup_module():
     """site initialization"""
     global initialized
@@ -29,7 +30,7 @@ class TestExamples:
     def _get_pipeline(self, pipe_name):
         module = import_module('examples.%s' % pipe_name)
         pipe_generator = getattr(module, pipe_name)
-        pipeline = getattr(module, pipe_name)(test=True)
+        pipeline = pipe_generator(test=True)
         return list(pipeline)
 
     def test_kazeeki(self):
@@ -39,32 +40,32 @@ class TestExamples:
         pipeline = self._get_pipeline(pipe_name)
 
         example = {
-            u'author': {u'name': None, u'uri': None},
-            u'id': 2761769956L,
-            u'k:author': u'unknown',
-            u'k:budget': Decimal('0'),
-            u'k:budget_converted': Decimal('0.000000'),
-            u'k:budget_converted_w_sym': u'$0.00',
-            u'k:budget_full': u'$0.00',
-            u'k:budget_w_sym': u'$0.00',
-            u'k:client_location': u'Cambodia',
-            u'k:content': u'We are looking for freelancers ( individuals and companies ) who offer their services related to Architecture Walkthrough and 3D animations. Please consider this job as a potential to several more and a long term relationship.   We are a Media...',
-            u'k:cur_code': u'USD',
-            u'k:due': u' Thu, 05 Feb 2015 11:46:40 EST',
-            u'k:job_type': u'2',
-            u'k:marketplace': u'elance.com',
-            u'k:parsed_type': u'fixed',
-            u'k:posted': u'Tue, 06 Jan 2015 11:46:40 EST',
-            u'k:rate': Decimal('1.000000'),
-            u'k:submissions': u'0',
-            u'k:tags': [
-                {u'content': u'animation'},
-                {u'content': u'design'},
-                {u'content': u'multimedia'}],
-            u'k:work_location': u'unknown',
-            u'link': u'https://www.elance.com/j/3d-architecture-walkthrough-3d-animation-artists/66963214/',
-            u'links': [{}],
-            u'title': u'3D Architecture Walkthrough &amp; 3D / Animation Artists '}
+            'author': {'name': None, 'uri': None},
+            'id': 1734103952L,
+            'k:author': 'unknown',
+            'k:budget': Decimal('0'),
+            'k:budget_converted': Decimal('0.000000'),
+            'k:budget_converted_w_sym': '$0.00',
+            'k:budget_full': '$0.00',
+            'k:budget_w_sym': '$0.00',
+            'k:client_location': 'Cambodia',
+            'k:content': 'We are looking for freelancers ( individuals and companies ) who offer their services related to Architecture Walkthrough and 3D animations. Please consider this job as a potential to several more and a long term relationship.   We are a Media...',
+            'k:cur_code': 'USD',
+            'k:due': ' Thu, 05 Feb 2015 11:46:40 EST',
+            'k:job_type': '2',
+            'k:marketplace': 'elance.com',
+            'k:parsed_type': 'fixed',
+            'k:posted': 'Tue, 06 Jan 2015 11:46:40 EST',
+            'k:rate': Decimal('1.000000'),
+            'k:submissions': '0',
+            'k:tags': [
+                {'content': 'animation'},
+                {'content': 'design'},
+                {'content': 'multimedia'}],
+            'k:work_location': 'unknown',
+            'link': 'https://www.elance.com/j/3d-architecture-walkthrough-3d-animation-artists/66963214/',
+            'links': [{}],
+            'title': '3D Architecture Walkthrough &amp; 3D / Animation Artists '}
 
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
@@ -78,29 +79,29 @@ class TestExamples:
         pipeline = self._get_pipeline(pipe_name)
 
         example = {
-            u'description': u'<b>Description:</b> Need a to port our existing iOS App to Android. Actually it is as good as writing a new Android app...<br><b>Category:</b> Web, Software & IT<br><b>Required skills:</b> android, sqlite<br><b>Fixed Price budget:</b> $250-$500<br><b>Project type:</b> Public<br><b>Freelancer Location:</b> India<br>',
-            u'guid': u'http://www.guru.com/jobs/educational-android-app/1058980',
-            u'link': u'http://www.guru.com/jobs/educational-android-app/1058980',
-            u'pubDate': u'Tue, 05 Aug 2014 09:35:28 GMT',
-            u'title': u'Educational Android App',
-            u'y:id': {
-                u'permalink': u'false',
-                u'value': u'http://www.guru.com/jobs/educational-android-app/1058980'},
-            u'y:published': {
-                u'day': u'5',
-                u'day_name': u'Tuesday',
-                u'day_of_week': u'2',
-                u'day_ordinal_suffix': u'th',
-                u'hour': u'9',
-                u'minute': u'35',
-                u'month': u'8',
-                u'month_name': u'August',
-                u'second': u'28',
-                u'timezone': u'UTC',
-                u'utime': u'1407231328',
-                u'year': u'2014'},
-            u'y:repeatcount': u'1',
-            u'y:title': u'Educational Android App'}
+            'description': '<b>Description:</b> Need a to port our existing iOS App to Android. Actually it is as good as writing a new Android app...<br><b>Category:</b> Web, Software & IT<br><b>Required skills:</b> android, sqlite<br><b>Fixed Price budget:</b> $250-$500<br><b>Project type:</b> Public<br><b>Freelancer Location:</b> India<br>',
+            'guid': 'http://www.guru.com/jobs/educational-android-app/1058980',
+            'link': 'http://www.guru.com/jobs/educational-android-app/1058980',
+            'pubDate': 'Tue, 05 Aug 2014 09:35:28 GMT',
+            'title': 'Educational Android App',
+            'y:id': {
+                'permalink': 'false',
+                'value': 'http://www.guru.com/jobs/educational-android-app/1058980'},
+            'y:published': {
+                'day': '5',
+                'day_name': 'Tuesday',
+                'day_of_week': '2',
+                'day_ordinal_suffix': 'th',
+                'hour': '9',
+                'minute': '35',
+                'month': '8',
+                'month_name': 'August',
+                'second': '28',
+                'timezone': 'UTC',
+                'utime': '1407231328',
+                'year': '2014'},
+            'y:repeatcount': '1',
+            'y:title': 'Educational Android App'}
 
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
@@ -115,14 +116,16 @@ class TestExamples:
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
         nt.assert_equal(length, 1, msg % (pipe_name, length))
-        nt.assert_equal({u'url': u'farechart'}, pipeline[-1])
+        nt.assert_equal({'url': 'farechart'}, pipeline[-1])
 
     def test_simple2(self):
         """Tests the simple2 pipeline
         """
         pipe_name = 'pipe_simple2'
         pipeline = self._get_pipeline(pipe_name)
-        example = {u'author': u'ABC', u'link': u'www.google.com', u'title': u'google'}
+        example = {
+            'author': 'ABC', 'link': 'www.google.com', 'title': 'google'}
+
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
         nt.assert_equal(length, 1, msg % (pipe_name, length))
@@ -133,7 +136,7 @@ class TestExamples:
         """
         pipe_name = 'pipe_split'
         pipeline = self._get_pipeline(pipe_name)
-        example = {u'date': 'December 02, 2014', u'year': 2014}
+        example = {'date': 'December 02, 2014', 'year': 2014}
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
         nt.assert_equal(length, 1, msg % (pipe_name, length))
@@ -147,4 +150,4 @@ class TestExamples:
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
         nt.assert_equal(length, 1, msg % (pipe_name, length))
-        nt.assert_equal({u'date': 'May 04, 1982'}, pipeline[-1])
+        nt.assert_equal({'date': 'May 04, 1982'}, pipeline[-1])

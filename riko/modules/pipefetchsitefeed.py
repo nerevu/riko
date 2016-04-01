@@ -38,7 +38,6 @@ from __future__ import (
 import speedparser
 
 from urllib2 import urlopen
-from itertools import imap
 
 from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
