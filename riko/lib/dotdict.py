@@ -6,7 +6,6 @@
 
     Provides methods for creating dicts using dot notation
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 

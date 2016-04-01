@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    riko.lib.utils
-    ~~~~~~~~~~~~~~~~~
-    Utility functions
-
+riko.lib.utils
+~~~~~~~~~~~~~~~~~
+Utility functions
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 

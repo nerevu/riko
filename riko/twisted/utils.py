@@ -2,7 +2,6 @@
 # vim: sw=4:ts=4:expandtab
 
 """Twisted utility functions"""
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
