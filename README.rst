@@ -293,8 +293,8 @@ riko can modify feeds by combining any of the 40 built-in ``pipes``
     >>> flat_extract = chain.from_iterable(extracted)
     >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
     >>> flat_match = chain.from_iterable(matched)
-    >>> sorted = sort(flat_match, conf=sort_conf)
-    >>> next(sorted)
+    >>> sorted_match = sort(flat_match, conf=sort_conf)
+    >>> next(sorted_match)
     {'content': 'mailto:mail@writetoreply.org'}
 
     >>> ### Alternatively, create a SyncPipe workflow ###
@@ -304,14 +304,14 @@ riko can modify feeds by combining any of the 40 built-in ``pipes``
     >>> # `chain` steps
     >>> from riko.lib.collections import SyncPipe
     >>>
-    >>> sorted = (SyncPipe('fetch', conf=fetch_conf)
+    >>> output = (SyncPipe('fetch', conf=fetch_conf)
     ...     .filter(conf={'rule': filter_rule})
     ...     .subelement(conf=sub_conf, emit=True)
     ...     .regex(conf={'rule': regex_rule})
     ...     .sort(conf=sort_conf)
     ...     .output)
     >>>
-    >>> next(sorted)
+    >>> next(output)
     {'content': 'mailto:mail@writetoreply.org'}
 
 Please see `Design Principles`_ for an explanation on why some pipes receive
