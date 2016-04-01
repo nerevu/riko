@@ -283,7 +283,7 @@ Design Principles
     >>> item = {'title': 'riko pt. 1'}
     >>> feed = pipe(item, field='title')
     >>> next(feed) == {
-    ...     'title': 'riko pt. 1', 'hash': 2853617420L}
+    ...     'title': 'riko pt. 1', 'hash': 3946887032L}
     True
     >>> from riko.modules.pipestringtokenizer import pipe
     >>>
@@ -336,7 +336,7 @@ Design Principles
     >>> sync_pipe.hash().list[0] == {
     ...     'title': 'riko pt. 1',
     ...     'content': "Let's talk about riko!",
-    ...     'hash': 1346301218L}
+    ...     'hash': 1589640534L}
     True
 
     # Alternate conf usage
