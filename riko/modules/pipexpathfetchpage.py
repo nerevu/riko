@@ -31,8 +31,8 @@ Examples:
         >>> from riko.modules.pipexpathfetchpage import pipe
         >>>
         >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
-        >>> title = 'Running “Native” Data Wrangling Applications in the Browser'
-        >>> next(pipe(conf=conf))['title'][:59] == title
+        >>> title = 'Running “Native” Data Wrangling Applications'
+        >>> next(pipe(conf=conf))['title'][:44] == title
         True
 
 Attributes:
@@ -100,7 +100,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['title'][:59])
+        ...     callback = lambda x: print(next(x[0])['title'][:44])
         ...     xpath = '/rss/channel/item'
         ...     objconf = Objectify({'url': FILES[1], 'xpath': xpath})
         ...     kwargs = {'feed': {}}
@@ -112,7 +112,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        Running “Native” Data Wrangling Applications in the Browser
+        Running “Native” Data Wrangling Applications
     """
     if skip:
         feed = kwargs['feed']
@@ -158,8 +158,8 @@ def parser(_, objconf, skip, **kwargs):
         >>> objconf = Objectify({'url': FILES[1], 'xpath': '/rss/channel/item'})
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
-        >>> title = 'Running “Native” Data Wrangling Applications in the Browser'
-        >>> next(result)['title'][:59] == title
+        >>> title = 'Running “Native” Data Wrangling Applications'
+        >>> next(result)['title'][:44] == title
         True
     """
     if skip:

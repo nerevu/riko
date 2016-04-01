@@ -6,6 +6,9 @@ riko.lib.autorss
 Provides functions for finding RSS feeds from a site's LINK tags
 """
 
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
+
 from itertools import chain
 from html.parser import HTMLParser
 

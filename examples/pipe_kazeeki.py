@@ -87,7 +87,8 @@ match1_06 = r'.*?[Description]?.*?<.*?>(.*?)\s*?<.*?>.*'
 match1_08 = r'(.*)(<b>Proposals:<.*?>).*?(\d+).*?(<a href)(.*)'
 match1_11 = r'(.*)(\bby\b)(.*)'
 match1_13 = r'(.*)((Freelancer|Preferred Job) Location:<.*?>)(.*?)(<.*?>)(.*)'
-match1_14 = r'(.*)(Client Location:<.*?>|Country<.*?>:).*?(\w.*?)\s*?(<.*?>)(.*)'
+m1_14 = 'Client Location:<.*?>|Country<.*?>:'
+match1_14 = r'(.*)(%s).*?(\w.*?)\s*?(<.*?>)(.*)' % m1_14
 match1_15 = r'(.*)(<b>(Category:?<.*?>:?))(.*?)(<.*?>|<b>Skills<.*?>)(.*)'
 match1_16 = r'(.*)(<b>(Required skills|Desired Skills):<.*?>)(.*?)(<.*?>)(.*)'
 match1_17 = r'(.*)(Jobs:)(.*?)(\))(.*)'
@@ -96,7 +97,8 @@ match1_19 = r'(\w+)(?!.*,)'
 match1_20 = r'\/|\s*&amp;'
 match1_21 = r'[^\w|\-,]+'
 match1_23 = r'.*Time Left.*Ends\s*?(.*?)\)?\s*?<.*?>.*'
-match1_24 = r'(.*)(Fixed Price budget:<.*?>|Hourly budget.*Rate:|Fixed Price\s+\()(.*?)\)*(<.*?>|, Jobs:)(.*)'
+m1_24 = 'Fixed Price budget:<.*?>|Hourly budget.*Rate:|Fixed Price\s+\('
+match1_24 = r'(.*)(%s)(.*?)\)*(<.*?>|, Jobs:)(.*)' % m1_24
 match1_25 = r'Under|Upto|Less than|or less'
 match1_26 = r'^(?!.*-.*)(.*)'
 
@@ -212,27 +214,56 @@ def parse_source(source):
         .regex(conf={'rule': regex2_rule})
         .rename(conf={'rule': rename3_rule})
         .regex(conf={'rule': regex3_rule})
-        .strreplace(conf={'rule': strreplace_rule}, field='k:job_type', assign='k:job_type')
-        .strtransform(conf={'rule': {'transform': 'lower'}}, field='k:tags', assign='k:tags')
+        .strreplace(
+            conf={'rule': strreplace_rule},
+            field='k:job_type',
+            assign='k:job_type')
+        .strtransform(
+            conf={'rule': {'transform': 'lower'}},
+            field='k:tags', assign='k:tags')
         .stringtokenizer(conf=tokenizer_conf, field='k:tags', assign='k:tags')
-        .simplemath(conf=simplemath1_conf, field='k:budget_raw1_num', assign='k:budget')
+        .simplemath(
+            conf=simplemath1_conf,
+            field='k:budget_raw1_num',
+            assign='k:budget')
         .strconcat(conf=strconcat1_conf, assign='k:cur_code')
         .substr(conf=substring1_conf, field='k:cur_code', assign='k:cur_code')
-        .strconcat(conf=strconcat2_conf, field='k:budget_sym', assign='k:budget_sym')
-        .substr(conf=substring2_conf, field='k:budget_sym', assign='k:budget_sym')
-        .strreplace(conf={'rule': strreplace2_rule}, field='k:budget_sym', assign='k:cur_code', skip_if=test1)
+        .strconcat(
+            conf=strconcat2_conf,
+            field='k:budget_sym',
+            assign='k:budget_sym')
+        .substr(
+            conf=substring2_conf,
+            field='k:budget_sym',
+            assign='k:budget_sym')
+        .strreplace(
+            conf={'rule': strreplace2_rule},
+            field='k:budget_sym',
+            assign='k:cur_code',
+            skip_if=test1)
         .regex(conf={'rule': regex4_rule})
         .regex(conf=regex5_conf, assign='k:job_type_code')
         .hash(field='content', assign='id')
-        .currencyformat(conf=currencyformat1_conf, field='k:budget', assign='k:budget_w_sym')
-        .exchangerate(conf=exchangerate_conf, field='k:cur_code', assign='k:rate')
-        .simplemath(conf=simplemath2_conf, field='k:budget', assign='k:budget_converted')
-        .currencyformat(conf=currencyformat2_conf, field='k:budget_converted', assign='k:budget_converted_w_sym')
+        .currencyformat(
+            conf=currencyformat1_conf,
+            field='k:budget',
+            assign='k:budget_w_sym')
+        .exchangerate(
+            conf=exchangerate_conf,
+            field='k:cur_code',
+            assign='k:rate')
+        .simplemath(
+            conf=simplemath2_conf,
+            field='k:budget',
+            assign='k:budget_converted')
+        .currencyformat(
+            conf=currencyformat2_conf,
+            field='k:budget_converted',
+            assign='k:budget_converted_w_sym')
         .rename(conf={'rule': rename4_rule}, skip_if=test2)
         .strconcat(conf=strconcat3_conf, assign='k:budget_full', skip_if=test3)
         .strconcat(conf=strconcat4_conf, field='k:budget_full', skip_if=test4)
-        .rename(conf={'rule': rename5_rule})
-    )
+        .rename(conf={'rule': rename5_rule}))
 
     return pipe.list
 

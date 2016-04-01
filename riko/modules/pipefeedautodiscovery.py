@@ -22,8 +22,8 @@ Examples:
         >>> from riko.modules.pipefeedautodiscovery import pipe
         >>>
         >>> entry = next(pipe(conf={'url': FILES[4]}))
-        >>> sorted(entry.keys())
-        ['href', 'hreflang', 'link', 'rel', 'tag']
+        >>> sorted(entry.keys()) == ['href', 'hreflang', 'link', 'rel', 'tag']
+        True
         >>> entry['link']
         'file://data/www.greenhughes.com_rssfeed.xml'
 

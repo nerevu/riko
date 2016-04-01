@@ -21,7 +21,8 @@ Word Count
     >>> #      testing
     >>> #   - the `detag` option will strip all html tags from the result
     >>> url = get_url('users.jyu.fi_~atsoukka_cgi_bin_aarresaari.html')
-    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
+    >>> fetch_conf = {
+    ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\\n', 'replace': ' '}}
     >>>
     >>> ### Create a workflow ###
@@ -129,10 +130,11 @@ Synchronous processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Note: `get_url` just looks up files in the `data` directory to simplify
-    >>> # testing
+    >>> # Note: `get_url` just looks up files in the `data` directory to
+    >>> # simplify testing
     >>> fetch_conf = {'url': get_url('feed.xml')}
-    >>> filter_rule = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> filter_rule = {
+    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
@@ -184,10 +186,11 @@ Parallel processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Notes `get_url` just looks up files in the `data` directory to simplify
-    >>> # testing
+    >>> # Notes `get_url` just looks up files in the `data` directory to
+    >>> # simplify testing
     >>> url = get_url('feed.xml')
-    >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> filter_rule1 = {
+    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
@@ -236,7 +239,8 @@ Asynchronous processing
     >>> #     testing
     >>> #   - the `dotall` option is used to match `.*` across newlines
     >>> url = get_url('feed.xml')
-    >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> filter_rule1 = {
+    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {
     ...     'field': 'content', 'match': match, 'replace': '$2',

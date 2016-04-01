@@ -3,8 +3,8 @@ from __future__ import (
 
 from pprint import pprint
 from twisted.internet.defer import inlineCallbacks
-from riko.lib.collections import SyncPipe, SyncCollection
-from riko.twisted.collections import AsyncPipe, AsyncCollection
+from riko.lib.collections import SyncPipe
+from riko.twisted.collections import AsyncPipe
 
 p232_conf = {
     'attrs': [

@@ -10,7 +10,6 @@
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import builtins
 import re
 import itertools as it
 import time
@@ -31,29 +30,9 @@ from dateutil.parser import parse
 
 from riko.lib.log import Logger
 
-logger = Logger(__name__).logger
+global CACHE
 
-if environ.get('DATABASE_URL'):  # HEROKU
-    cache_config = {
-        'CACHE_TYPE': 'saslmemcached',
-        'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
-        'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
-        'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')}
-else:
-    try:
-        import pylibmc
-    except ImportError:
-        logger.debug('simplecache')
-        cache_config = {
-            'DEBUG': True,
-            'CACHE_TYPE': 'simple',
-            'CACHE_THRESHOLD': 25}
-    else:
-        logger.debug('memcached')
-        cache_config = {
-            'DEBUG': True,
-            'CACHE_TYPE': 'memcached',
-            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
+logger = Logger(__name__).logger
 
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
@@ -168,12 +147,38 @@ def multi_try(source, zipped, default=None):
         return default
 
 
+def get_cache_config(cache_type='simple'):
+    CONFIGS = {
+        'sasl': {
+            'CACHE_TYPE': 'saslmemcached',
+            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
+            'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
+            'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')},
+        'simple': {
+            'DEBUG': True,
+            'CACHE_TYPE': 'simple',
+            'CACHE_THRESHOLD': 25},
+        'memcached': {
+            'DEBUG': True,
+            'CACHE_TYPE': 'memcached',
+            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}}
+
+    return CONFIGS[cache_type]
+
+
+def set_cache(cache_config):
+    global CACHE
+    CACHE = Cache(**cache_config)
+
+CACHE = Cache(**get_cache_config())
+
+
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
 def memoize(*args, **kwargs):
-    return Cache(**cache_config).memoize(*args, **kwargs)
+    return CACHE.memoize(*args, **kwargs)
 
 
 def remove_keys(content, *args):

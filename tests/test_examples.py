@@ -50,7 +50,12 @@ class TestExamples(object):
             'k:budget_full': '$0.00',
             'k:budget_w_sym': '$0.00',
             'k:client_location': 'Cambodia',
-            'k:content': 'We are looking for freelancers ( individuals and companies ) who offer their services related to Architecture Walkthrough and 3D animations. Please consider this job as a potential to several more and a long term relationship.   We are a Media...',
+            'k:content': (
+                'We are looking for freelancers ( individuals and companies ) '
+                'who offer their services related to Architecture Walkthrough '
+                'and 3D animations. Please consider this job as a potential '
+                'to several more and a long term relationship.   We are a '
+                'Media...'),
             'k:cur_code': 'USD',
             'k:due': ' Thu, 05 Feb 2015 11:46:40 EST',
             'k:job_type': '2',
@@ -64,9 +69,12 @@ class TestExamples(object):
                 {'content': 'design'},
                 {'content': 'multimedia'}],
             'k:work_location': 'unknown',
-            'link': 'https://www.elance.com/j/3d-architecture-walkthrough-3d-animation-artists/66963214/',
+            'link': (
+                'https://www.elance.com/j/3d-architecture-walkthrough-3d-'
+                'animation-artists/66963214/'),
             'links': [{}],
-            'title': '3D Architecture Walkthrough &amp; 3D / Animation Artists '}
+            'title': (
+                '3D Architecture Walkthrough &amp; 3D / Animation Artists ')}
 
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
@@ -80,14 +88,22 @@ class TestExamples(object):
         pipeline = self._get_pipeline(pipe_name)
 
         example = {
-            'description': '<b>Description:</b> Need a to port our existing iOS App to Android. Actually it is as good as writing a new Android app...<br><b>Category:</b> Web, Software & IT<br><b>Required skills:</b> android, sqlite<br><b>Fixed Price budget:</b> $250-$500<br><b>Project type:</b> Public<br><b>Freelancer Location:</b> India<br>',
+            'description': (
+                '<b>Description:</b> Need a to port our existing iOS App to '
+                'Android. Actually it is as good as writing a new Android '
+                'app...<br><b>Category:</b> Web, Software & IT<br><b>Required '
+                'skills:</b> android, sqlite<br><b>Fixed Price budget:</b> '
+                '$250-$500<br><b>Project type:</b> Public<br><b>Freelancer '
+                'Location:</b> India<br>'),
             'guid': 'http://www.guru.com/jobs/educational-android-app/1058980',
             'link': 'http://www.guru.com/jobs/educational-android-app/1058980',
             'pubDate': 'Tue, 05 Aug 2014 09:35:28 GMT',
             'title': 'Educational Android App',
             'y:id': {
                 'permalink': 'false',
-                'value': 'http://www.guru.com/jobs/educational-android-app/1058980'},
+                'value': (
+                    'http://www.guru.com/jobs/educational-android-app/'
+                    '1058980')},
             'y:published': {
                 'day': '5',
                 'day_name': 'Tuesday',
