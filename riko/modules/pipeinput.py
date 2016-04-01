@@ -37,14 +37,13 @@ Examples:
 
         >>> from riko.modules.pipeinput import pipe
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-        >>> pipe(conf=conf, inputs={'content': '30'}).next()
+        >>> next(pipe(conf=conf, inputs={'content': '30'}))
         {u'content': 30}
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -84,7 +83,7 @@ def parser(_, objconf, skip, **kwargs):
     elif kwargs.get('test') or skip:
         value = objconf.default
     else:
-        raw = raw_input("%s (default=%s) " % (objconf.prompt, objconf.default))
+        raw = input("%s (default=%s) " % (objconf.prompt, objconf.default))
         value = raw or objconf.default
 
     casted = utils.cast(value, objconf.type)
@@ -125,7 +124,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
+        ...     callback = lambda x: print(next(x))
         ...     conf = {'prompt': 'How old are you?', 'type': 'int'}
         ...     d = asyncPipe(conf=conf, inputs={'content': '30'})
         ...     return d.addCallbacks(callback, logger.error)
@@ -172,14 +171,14 @@ def pipe(*args, **kwargs):
     Examples:
         >>> # int
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-        >>> pipe(conf=conf, inputs={'content': '30'}).next()
+        >>> next(pipe(conf=conf, inputs={'content': '30'}))
         {u'content': 30}
         >>>
         >>> # date
         >>> import datetime
         >>>
         >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
-        >>> result = pipe(conf=conf, inputs={'content': '5/4/82'}).next()
+        >>> result = next(pipe(conf=conf, inputs={'content': '5/4/82'}))
         >>> sorted(result.keys()) == [
         ...     u'date', u'day', u'day_of_week', u'day_of_year',
         ...     u'daylight_savings', u'hour', u'minute', u'month',
@@ -187,26 +186,26 @@ def pipe(*args, **kwargs):
         True
         >>> result['date']
         datetime.datetime(1982, 5, 4, 0, 0)
-        >>> d = pipe(conf=conf, inputs={'content': 'tomorrow'}).next()
+        >>> d = next(pipe(conf=conf, inputs={'content': 'tomorrow'}))
         >>> td = d['date'] - datetime.datetime.utcnow()
         >>> 24 > td.total_seconds() / 3600 > 23
         True
         >>>
         >>> # float
-        >>> pipe(conf={'type': 'float'}, inputs={'content': '1'}).next()
+        >>> next(pipe(conf={'type': 'float'}, inputs={'content': '1'}))
         {u'content': 1.0}
         >>>
         >>> # bool
-        >>> pipe(conf={'type': 'bool'}, inputs={'content': 'true'}).next()
+        >>> next(pipe(conf={'type': 'bool'}, inputs={'content': 'true'}))
         {u'content': True}
         >>>
         >>> # text
-        >>> pipe(conf={'type': 'text'}, inputs={'content': 'hello'}).next()
-        {u'content': u'hello'}
+        >>> next(pipe(conf={'type': 'text'}, inputs={'content': 'hello'}))
+        {u'content': 'hello'}
         >>>
         >>> # url
         >>> inputs = {'content': 'google.com'}
-        >>> result = pipe(conf={'type': 'url'}, inputs=inputs).next()
+        >>> result = next(pipe(conf={'type': 'url'}, inputs=inputs))
         >>> sorted(result.keys())
         ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
         >>> result['url']
@@ -214,7 +213,7 @@ def pipe(*args, **kwargs):
         >>>
         >>> # location
         >>> inputs = {'content': 'palo alto, ca'}
-        >>> result = pipe(conf={'type': 'location'}, inputs=inputs).next()
+        >>> result = next(pipe(conf={'type': 'location'}, inputs=inputs))
         >>> sorted(result.keys()) == [
         ...     u'admin1', u'admin2', u'admin3', u'city', u'country', u'lat',
         ...     u'lon', u'postal', u'quality', u'street']

@@ -13,19 +13,18 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipesplit import pipe
-        >>> feed1, feed2 = pipe({'x': x} for x in xrange(5))
-        >>> feed1.next()
+        >>> feed1, feed2 = pipe({'x': x} for x in range(5))
+        >>> next(feed1)
         {u'x': 0}
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from itertools import imap
+
 from copy import deepcopy
 
 from builtins import *
@@ -58,21 +57,21 @@ def parser(feed, splits, tuples, **kwargs):
         Iter(dict): a feed of items
 
     Examples:
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
         >>> conf = {'splits': 3}
         >>> kwargs = {'conf': conf}
-        >>> feed = (({'x': x}) for x in xrange(5))
-        >>> tuples = izip(feed, repeat(conf['splits']))
+        >>> feed = (({'x': x}) for x in range(5))
+        >>> tuples = zip(feed, repeat(conf['splits']))
         >>> feeds = parser(feed, conf['splits'], tuples, **kwargs)
-        >>> feeds.next().next()
+        >>> next(next(feeds))
         {u'x': 0}
     """
     source = list(feed)
 
     # deepcopy each item so that each split is independent
-    for num in xrange(splits):
-        yield imap(deepcopy, source)
+    for num in range(splits):
+        yield map(deepcopy, source)
 
 
 @operator(DEFAULTS, async=True, **OPTS)
@@ -97,8 +96,8 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next().next())
-        ...     d = asyncPipe({'x': x} for x in xrange(5))
+        ...     callback = lambda x: print(next(next(x)))
+        ...     d = asyncPipe({'x': x} for x in range(5))
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -129,9 +128,9 @@ def pipe(*args, **kwargs):
         Iter(dict): a feed of items
 
     Examples:
-        >>> items = [{'x': x} for x in xrange(5)]
+        >>> items = [{'x': x} for x in range(5)]
         >>> feed1, feed2 = pipe(items)
-        >>> feed1.next()
+        >>> next(feed1)
         {u'x': 0}
         >>> len(list(pipe(items, conf={'splits': '3'})))
         3

@@ -2,16 +2,16 @@
 # vim: sw=4:ts=4:expandtab
 
 """Twisted utility functions"""
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import itertools as it
+
 from os import environ
 from sys import executable
 from functools import partial
-from StringIO import StringIO
-from htmlentitydefs import entitydefs, name2codepoint
+from io import StringIO
+from html.entities import entitydefs, name2codepoint
 
 from builtins import *
 from zope.interface import implementer
@@ -314,7 +314,7 @@ def pMap(func, iterable, workers=1):
 def asyncImap(asyncCallable, *iterables):
     """map for deferred callables
     """
-    deferreds = it.imap(asyncCallable, *iterables)
+    deferreds = map(asyncCallable, *iterables)
     return gatherResults(deferreds, consumeErrors=True)
 
 
@@ -326,7 +326,7 @@ def asyncStarMap(asyncCallable, iterable):
 
 
 def asyncDispatch(split, *asyncCallables, **kwargs):
-    return asyncStarMap(lambda item, f: f(item), it.izip(split, asyncCallables))
+    return asyncStarMap(lambda item, f: f(item), zip(split, asyncCallables))
 
 
 def asyncBroadcast(item, *asyncCallables, **kwargs):
@@ -339,7 +339,7 @@ def def2unicode(entitydef):
     def2name = {v: k for k, v in entitydefs.items()}
     name = def2name[entitydef]
     cp = name2codepoint[name]
-    return unichr(cp)
+    return chr(cp)
 
 
 def elementToDict(element, tag='content'):

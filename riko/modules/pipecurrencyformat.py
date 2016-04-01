@@ -9,14 +9,13 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipecurrencyformat import pipe
-        >>> pipe({'content': '100'}).next()['currencyformat']
+        >>> next(pipe({'content': '100'}))['currencyformat']
         u'$100.00'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -88,7 +87,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['currencyformat'])
+        ...     callback = lambda x: print(next(x)['currencyformat'])
         ...     d = asyncPipe({'content': '10.33'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -125,10 +124,10 @@ def pipe(*args, **kwargs):
         dict: an item with formatted date string
 
     Examples:
-        >>> pipe({'content': '10.33'}).next()['currencyformat']
+        >>> next(pipe({'content': '10.33'}))['currencyformat']
         u'$10.33'
         >>> conf = {'currency': 'GBP'}
-        >>> result = pipe({'content': '100'}, conf=conf).next()
+        >>> result = next(pipe({'content': '100'}, conf=conf))
         >>> result['currencyformat'] == '£100.00'
         True
     """

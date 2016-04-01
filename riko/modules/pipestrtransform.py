@@ -11,16 +11,17 @@ Examples:
 
         >>> from riko.modules.pipestrtransform import pipe
         >>> conf = {'rule': {'transform': 'title'}}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()['strtransform']
+        >>> next(pipe({'content': 'hello world'}, conf=conf))['strtransform']
         u'Hello World'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
+
+from functools import reduce
 
 from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
@@ -43,7 +44,7 @@ ATTRS = {
 def reducer(word, rule):
     if rule.transform in ATTRS:
         args = rule.args.split(',') if rule.args else []
-        result = getattr(unicode, rule.transform)(word, *args)
+        result = getattr(str, rule.transform)(word, *args)
     else:
         logger.warning('Invalid transformation: %s', rule.transform)
         result = word
@@ -161,7 +162,7 @@ def asyncPipe(*args, **kwargs):
         >>> from twisted.internet.task import react
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['strtransform'])
+        ...     callback = lambda x: print(next(x)['strtransform'])
         ...     conf = {'rule': {'transform': 'title'}}
         ...     d = asyncPipe({'content': 'hello world'}, conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -208,13 +209,13 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> conf = {'rule': {'transform': 'title'}}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()['strtransform']
+        >>> next(pipe({'content': 'hello world'}, conf=conf))['strtransform']
         u'Hello World'
         >>> rules = [
         ...     {'transform': 'lower'}, {'transform': 'count', 'args': 'g'}]
         >>> conf = {'rule': rules}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> pipe({'title': 'Greetings'}, **kwargs).next()['result']
+        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result']
         2
     """
     return parser(*args, **kwargs)

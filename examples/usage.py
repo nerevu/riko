@@ -21,7 +21,8 @@ Word Count
     >>> #      testing
     >>> #   - the `detag` option will strip all html tags from the result
     >>> url = get_url('users.jyu.fi_~atsoukka_cgi_bin_aarresaari.html')
-    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
+    >>> fetch_conf = {
+    ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\\n', 'replace': ' '}}
     >>>
     >>> ### Create a workflow ###
@@ -129,10 +130,11 @@ Synchronous processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Note: `get_url` just looks up files in the `data` directory to simplify
-    >>> # testing
+    >>> # Note: `get_url` just looks up files in the `data` directory to
+    >>> # simplify testing
     >>> fetch_conf = {'url': get_url('feed.xml')}
-    >>> filter_rule = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> filter_rule = {
+    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
@@ -184,10 +186,11 @@ Parallel processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Notes `get_url` just looks up files in the `data` directory to simplify
-    >>> # testing
+    >>> # Notes `get_url` just looks up files in the `data` directory to
+    >>> # simplify testing
     >>> url = get_url('feed.xml')
-    >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> filter_rule1 = {
+    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
@@ -236,7 +239,8 @@ Asynchronous processing
     >>> #     testing
     >>> #   - the `dotall` option is used to match `.*` across newlines
     >>> url = get_url('feed.xml')
-    >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> filter_rule1 = {
+    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {
     ...     'field': 'content', 'match': match, 'replace': '$2',
@@ -283,7 +287,7 @@ Design Principles
     >>> item = {'title': 'riko pt. 1'}
     >>> feed = pipe(item, field='title')
     >>> next(feed) == {
-    ...     'title': 'riko pt. 1', 'hash': 3946887032L}
+    ...     'title': 'riko pt. 1', 'hash': 3946887032}
     True
     >>> from riko.modules.pipestringtokenizer import pipe
     >>>
@@ -300,7 +304,7 @@ Design Principles
     >>> # In this case, if we just want the result, we can `emit` it instead
     >>> feed = pipe(item, conf=tokenizer_conf, field='title', emit=True)
     >>> next(feed)
-    {u'content': u'riko'}
+    {u'content': 'riko'}
 
     # an aggregator
     >>> from riko.modules.pipecount import pipe
@@ -320,9 +324,9 @@ Design Principles
     >>> from riko.modules.pipefetchpage import asyncPipe
     >>> from riko.modules.pipecount import pipe
     >>>
-    >>> asyncPipe.func_dict == {'type': 'processor', 'sub_type': 'source'}
+    >>> asyncPipe.__dict__ == {'type': 'processor', 'sub_type': 'source'}
     True
-    >>> pipe.func_dict == {
+    >>> pipe.__dict__ == {
     ...     'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
     True
 
@@ -336,11 +340,10 @@ Design Principles
     >>> sync_pipe.hash().list[0] == {
     ...     'title': 'riko pt. 1',
     ...     'content': "Let's talk about riko!",
-    ...     'hash': 1589640534L}
+    ...     'hash': 1589640534}
     True
 
     # Alternate conf usage
-
     >>> from riko import get_url
     >>> from riko.modules.pipefetch import pipe
     >>>
@@ -352,7 +355,6 @@ Design Principles
     ...     'dc:creator', 'author.uri', 'author.name', 'id', 'y:id'}
     True
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 

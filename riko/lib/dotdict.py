@@ -6,9 +6,10 @@
 
     Provides methods for creating dicts using dot notation
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
+
+from functools import reduce
 
 from builtins import *
 from feedparser import FeedParserDict
@@ -96,7 +97,7 @@ class DotDict(FeedParserDict):
         if hasattr(value, 'keys') and 'terminal' in value:
             # value fed in from another module
             feed = kwargs[value['terminal']]
-            value = feed.next()[value.get('path', 'content')]
+            value = next(feed)[value.get('path', 'content')]
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 
@@ -113,8 +114,8 @@ class DotDict(FeedParserDict):
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
             keys = ['.'.join(self._parse_key(k)[:-1]) for k in dot_keys]
-            items = ((k, v) for k, v in _dict.iteritems() if k not in keys)
+            items = ((k, v) for k, v in _dict.items() if k not in keys)
         else:
-            items = _dict.iteritems()
+            items = _dict.items()
 
         [self.set(key, value) for key, value in items]

@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    riko.lib.utils
-    ~~~~~~~~~~~~~~~~~
-    Utility functions
-
+riko.lib.utils
+~~~~~~~~~~~~~~~~~
+Utility functions
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import __builtin__
 import re
 import itertools as it
 import time
@@ -19,42 +16,21 @@ import time
 from datetime import timedelta, datetime as dt
 from functools import partial
 from operator import itemgetter, add, sub
-from urllib2 import quote
 from os import path as p, environ
 from calendar import timegm
 from decimal import Decimal
-from urlparse import urlparse
 from json import loads
 
 from builtins import *
+from six.moves.urllib.parse import quote, urlparse
 from mezmorize import Cache
 from dateutil.parser import parse
 
 from riko.lib.log import Logger
 
-logger = Logger(__name__).logger
+global CACHE
 
-if environ.get('DATABASE_URL'):  # HEROKU
-    cache_config = {
-        'CACHE_TYPE': 'saslmemcached',
-        'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
-        'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
-        'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')}
-else:
-    try:
-        import pylibmc
-    except ImportError:
-        logger.debug('simplecache')
-        cache_config = {
-            'DEBUG': True,
-            'CACHE_TYPE': 'simple',
-            'CACHE_THRESHOLD': 25}
-    else:
-        logger.debug('memcached')
-        cache_config = {
-            'DEBUG': True,
-            'CACHE_TYPE': 'memcached',
-            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}
+logger = Logger(__name__).logger
 
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
@@ -106,9 +82,7 @@ class Objectify(dict):
         self.__delattr__ = dict.__delitem__
 
     def __getattribute__(self, name):
-        good = {
-            'get', 'pop', 'keys', 'items', 'iteritems', 'func', 'viewitems',
-            'viewkeys'}
+        good = {'get', 'pop', 'keys', 'items', 'func', 'viewitems', 'viewkeys'}
 
         if name in good:
             return object.__getattribute__(self, name)
@@ -142,7 +116,7 @@ class Chainable(object):
 
     def __getattr__(self, name):
         funcs = (partial(getattr, x) for x in [self.data, __builtin__, it])
-        zipped = it.izip(funcs, it.repeat(AttributeError))
+        zipped = zip(funcs, it.repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)
 
@@ -154,7 +128,7 @@ class Chainable(object):
 
 
 def combine_dicts(*dicts):
-    return dict(it.chain.from_iterable(it.imap(dict.iteritems, dicts)))
+    return dict(it.chain.from_iterable(map(dict.items, dicts)))
 
 
 def multi_try(source, zipped, default=None):
@@ -171,12 +145,38 @@ def multi_try(source, zipped, default=None):
         return default
 
 
+def get_cache_config(cache_type='simple'):
+    CONFIGS = {
+        'sasl': {
+            'CACHE_TYPE': 'saslmemcached',
+            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
+            'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
+            'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')},
+        'simple': {
+            'DEBUG': True,
+            'CACHE_TYPE': 'simple',
+            'CACHE_THRESHOLD': 25},
+        'memcached': {
+            'DEBUG': True,
+            'CACHE_TYPE': 'memcached',
+            'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}}
+
+    return CONFIGS[cache_type]
+
+
+def set_cache(cache_config):
+    global CACHE
+    CACHE = Cache(**cache_config)
+
+CACHE = Cache(**get_cache_config())
+
+
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
 # http://api.stackexchange.com/2.2/tags?
 # page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
 def memoize(*args, **kwargs):
-    return Cache(**cache_config).memoize(*args, **kwargs)
+    return CACHE.memoize(*args, **kwargs)
 
 
 def remove_keys(content, *args):
@@ -318,7 +318,7 @@ def cast(content, _type='text'):
         'float': {'default': 0.0, 'func': float},
         'decimal': {'default': Decimal(0), 'func': Decimal},
         'int': {'default': 0, 'func': int},
-        'text': {'default': u'', 'func': unicode},
+        'text': {'default': u'', 'func': str},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
         'url': {'default': {}, 'func': cast_url},
         'location': {'default': {}, 'func': cast_location},
@@ -377,7 +377,7 @@ def dispatch(split, *funcs):
         _OUTPUT = dispatch(split, double, triple, quadruple)
         _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
     """
-    return [func(item) for item, func in it.izip(split, funcs)]
+    return [func(item) for item, func in zip(split, funcs)]
 
 
 def broadcast(item, *funcs):
@@ -475,7 +475,7 @@ def _gen_words(match, splits):
         except ValueError:
             word = s
         else:
-            word = it.islice(groups, num, num + 1).next()
+            word = next(it.islice(groups, num, num + 1))
 
         yield word
 
@@ -495,11 +495,11 @@ def multi_substitute(word, rules):
     resplit = re.compile('\$(\d+)')
 
     # For each match, look-up corresponding replace value in dictionary
-    rules_in_series = it.ifilter(itemgetter('series'), rules)
+    rules_in_series = filter(itemgetter('series'), rules)
     rules_in_parallel = (r for r in rules if not r['series'])
 
     try:
-        has_parallel = [rules_in_parallel.next()]
+        has_parallel = [next(rules_in_parallel)]
     except StopIteration:
         has_parallel = []
 
@@ -521,8 +521,8 @@ def multi_substitute(word, rules):
         i = 0
 
         for match in regex.finditer(word):
-            items = match.groupdict().iteritems()
-            item = it.ifilter(itemgetter(1), items).next()
+            items = match.groupdict().items()
+            item = next(filter(itemgetter(1), items))
 
             # print('----------------')
             # print('groupdict:', match.groupdict().items())

@@ -120,10 +120,10 @@ def run_async(reactor, tests, max_chars):
     for test in tests:
         results = []
 
-        for i in xrange(LOOPS):
+        for i in range(LOOPS):
             loop = 0
 
-            for j in xrange(NUMBER):
+            for j in range(NUMBER):
                 start = time()
                 yield test()
                 loop += time() - start

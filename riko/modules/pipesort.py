@@ -10,17 +10,17 @@ Examples:
 
         >>> from riko.modules.pipesort import pipe
         >>> items = [{'content': 'b'}, {'content': 'a'}, {'content': 'c'}]
-        >>> pipe(items).next()
+        >>> next(pipe(items))
         {u'content': u'a'}
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+from functools import reduce
 from operator import itemgetter
 
 from builtins import *
@@ -62,7 +62,7 @@ def asyncParser(feed, rules, tuples, **kwargs):
         List(dict): Deferred output feed
 
     Examples:
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>> from twisted.internet.task import react
         >>> from riko.lib.utils import Objectify
         >>>
@@ -70,8 +70,8 @@ def asyncParser(feed, rules, tuples, **kwargs):
         ...     callback = lambda x: print(x[0])
         ...     kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
         ...     rule = Objectify(kwargs)
-        ...     feed = ({'content': x} for x in xrange(5))
-        ...     tuples = izip(feed, repeat(rule))
+        ...     feed = ({'content': x} for x in range(5))
+        ...     tuples = zip(feed, repeat(rule))
         ...     d = asyncParser(feed, [rule], tuples, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -109,12 +109,12 @@ def parser(feed, rules, tuples, **kwargs):
 
     Examples:
         >>> from riko.lib.utils import Objectify
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
         >>> kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
         >>> rule = Objectify(kwargs)
-        >>> feed = ({'content': x} for x in xrange(5))
-        >>> tuples = izip(feed, repeat(rule))
+        >>> feed = ({'content': x} for x in range(5))
+        >>> tuples = zip(feed, repeat(rule))
         >>> parser(feed, [rule], tuples, **kwargs)[0]
         {u'content': 4}
     """
@@ -150,7 +150,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
+        ...     callback = lambda x: print(next(x))
         ...     items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]
         ...     d = asyncPipe(items, conf={'rule': {'sort_key': 'rank'}})
         ...     return d.addCallbacks(callback, logger.error)
@@ -193,12 +193,12 @@ def pipe(*args, **kwargs):
         ...     {'rank': 'b', 'name': 'adam'},
         ...     {'rank': 'a', 'name': 'sue'},
         ...     {'rank': 'c', 'name': 'bill'}]
-        >>> pipe(items, conf={'rule': {'sort_key': 'rank'}}).next()['rank']
+        >>> next(pipe(items, conf={'rule': {'sort_key': 'rank'}}))['rank']
         u'a'
-        >>> pipe(items, conf={'rule': {'sort_key': 'name'}}).next()['name']
+        >>> next(pipe(items, conf={'rule': {'sort_key': 'name'}}))['name']
         u'adam'
         >>> rule = {'sort_key': 'name', 'sort_dir': 'desc'}
-        >>> pipe(items, conf={'rule': rule}).next()['name']
+        >>> next(pipe(items, conf={'rule': rule}))['name']
         u'sue'
     """
     return parser(*args, **kwargs)

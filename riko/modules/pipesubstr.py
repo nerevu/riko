@@ -18,14 +18,13 @@ Examples:
 
         >>> from riko.modules.pipesubstr import pipe
         >>> conf = {'start': '3', 'length': '4'}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()['substr']
+        >>> next(pipe({'content': 'hello world'}, conf=conf))['substr']
         u'lo w'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -97,7 +96,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['substr'])
+        ...     callback = lambda x: print(next(x)['substr'])
         ...     conf = {'start': '3', 'length': '4'}
         ...     d = asyncPipe({'content': 'hello world'}, conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -136,11 +135,11 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> conf = {'start': '3', 'length': '4'}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()['substr']
+        >>> next(pipe({'content': 'hello world'}, conf=conf))['substr']
         u'lo w'
         >>> conf = {'start': '3'}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> pipe({'title': 'Greetings'}, **kwargs).next()['result']
-        u'etings'
+        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result']
+        'etings'
     """
     return parser(*args, **kwargs)

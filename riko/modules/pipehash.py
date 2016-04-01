@@ -18,14 +18,13 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipehash import pipe
-        >>> pipe({'content': 'hello world'}).next()['hash']
+        >>> next(pipe({'content': 'hello world'}))['hash']
         3885626731L
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -90,7 +89,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['hash'])
+        ...     callback = lambda x: print(next(x)['hash'])
         ...     d = asyncPipe({'content': 'hello world'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -121,10 +120,10 @@ def pipe(*args, **kwargs):
         dict: an item with concatenated content
 
     Examples:
-        >>> pipe({'content': 'hello world'}).next()['hash']
+        >>> next(pipe({'content': 'hello world'}))['hash']
         3885626731L
         >>> kwargs = {'field': 'title', 'assign': 'result'}
-        >>> pipe({'title': 'greeting'}, **kwargs).next()['result']
+        >>> next(pipe({'title': 'greeting'}, **kwargs))['result']
         3500283417L
     """
     return parser(*args, **kwargs)

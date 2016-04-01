@@ -13,7 +13,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipeuniq import pipe
-        >>> items = ({'x': x, 'mod': x % 2} for x in xrange(5))
+        >>> items = ({'x': x, 'mod': x % 2} for x in range(5))
         >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
         ...     {u'x': 0, u'mod': 0}, {u'x': 1, u'mod': 1}]
         True
@@ -22,7 +22,6 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -58,12 +57,12 @@ def parser(feed, key, tuples, **kwargs):
 
     Examples:
         >>> from riko.lib.dotdict import DotDict
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
         >>> conf = {'uniq_key': 'mod'}
         >>> kwargs = {'conf': conf}
-        >>> feed = (DotDict({'x': x, 'mod': x % 2}) for x in xrange(5))
-        >>> tuples = izip(feed, repeat(conf['uniq_key']))
+        >>> feed = (DotDict({'x': x, 'mod': x % 2}) for x in range(5))
+        >>> tuples = zip(feed, repeat(conf['uniq_key']))
         >>> list(parser(feed, conf['uniq_key'], tuples, **kwargs)) == [
         ...     {u'x': 0, u'mod': 0}, {u'x': 1, u'mod': 1}]
         True
@@ -103,7 +102,7 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print([i['mod'] for i in x])
-        ...     items = ({'x': x, 'mod': x % 2} for x in xrange(5))
+        ...     items = ({'x': x, 'mod': x % 2} for x in range(5))
         ...     d = asyncPipe(items, conf={'uniq_key': 'mod'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -136,12 +135,12 @@ def pipe(*args, **kwargs):
         dict: a feed item
 
     Examples:
-        >>> items = [{'content': x, 'mod': x % 2} for x in xrange(5)]
+        >>> items = [{'content': x, 'mod': x % 2} for x in range(5)]
         >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
         ...     {u'mod': 0, u'content': 0}, {u'mod': 1, u'content': 1}]
         True
         >>> feed = pipe(items)
-        >>> feed.next() == {u'mod': 0, u'content': 0}
+        >>> next(feed) == {'mod': 0, 'content': 0}
         True
         >>> [item['content'] for item in feed]
         [1, 2, 3, 4]

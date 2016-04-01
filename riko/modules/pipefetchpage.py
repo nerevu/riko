@@ -16,20 +16,18 @@ Examples:
         >>> from . import FILES
         >>>
         >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
-        >>> pipe(conf=conf).next()['content']  # doctest: +ELLIPSIS
+        >>> next(pipe(conf=conf))['content']  # doctest: +ELLIPSIS
         u'CNN.com International - Breaking, World..., Entertainment and...'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from urllib2 import urlopen
-
 from builtins import *
+from six.moves.urllib.request import urlopen
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
@@ -76,7 +74,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0].next()['content'][:32])
+        ...     callback = lambda x: print(next(x[0])['content'][:32])
         ...     conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'feed': {}, 'assign': 'content'}
@@ -122,7 +120,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> objconf = Objectify(conf)
         >>> kwargs = {'feed': {}, 'assign': 'content'}
         >>> result, skip = parser(None, objconf, False, **kwargs)
-        >>> result.next()['content'][:32]
+        >>> next(result)['content'][:32]
         u'CNN.com International - Breaking'
     """
     if skip:
@@ -169,7 +167,7 @@ def asyncPipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
+        ...     callback = lambda x: print(next(x))
         ...     path = 'value.items'
         ...     conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
         ...     d = asyncPipe(conf=conf)
@@ -213,7 +211,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from . import FILES
         >>> conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
-        >>> pipe(conf=conf).next()
+        >>> next(pipe(conf=conf))
         {u'content': u'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
     """
     return parser(*args, **kwargs)

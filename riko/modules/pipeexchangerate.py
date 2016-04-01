@@ -12,14 +12,13 @@ Examples:
         >>> from riko.modules.pipeexchangerate import pipe
         >>>
         >>> url = get_url('quote.json')
-        >>> pipe({'content': 'GBP'}, conf={'url': url}).next()['exchangerate']
+        >>> next(pipe({'content': 'GBP'}, conf={'url': url}))['exchangerate']
         Decimal('1.545801')
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -27,10 +26,10 @@ import requests
 import treq
 
 from json import loads
-from urllib2 import urlopen
 from decimal import Decimal
 
 from builtins import *
+from six.moves.urllib.request import urlopen
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
@@ -230,7 +229,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko import get_url
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['exchangerate'])
+        ...     callback = lambda x: print(next(x)['exchangerate'])
         ...     url = get_url('quote.json')
         ...     d = asyncPipe({'content': 'GBP'}, conf={'url': url})
         ...     return d.addCallbacks(callback, logger.error)
@@ -283,16 +282,16 @@ def pipe(*args, **kwargs):
         >>> from riko import get_url
         >>> url = get_url('quote.json')
         >>> conf = {'url': url}
-        >>> rate = pipe({'content': 'GBP'}, conf=conf).next()['exchangerate']
+        >>> rate = next(pipe({'content': 'GBP'}, conf=conf))['exchangerate']
         >>> rate
         Decimal('1.545801')
         >>> 'There are %#.2f GBPs per USD' % rate
         u'There are 1.55 GBPs per USD'
         >>> conf = {'url': url, 'currency': 'TZS', 'precision': 3}
-        >>> pipe({'content': 'USD'}, conf=conf).next()['exchangerate']
+        >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
         Decimal('1825.850')
         >>> conf = {'url': url, 'currency': 'XYZ'}
-        >>> pipe({'content': 'USD'}, conf=conf).next()['exchangerate']
+        >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
         Decimal('NaN')
     """
     return parser(*args, **kwargs)

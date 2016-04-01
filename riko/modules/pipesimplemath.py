@@ -13,14 +13,13 @@ Examples:
         >>> from riko.modules.pipesimplemath import pipe
         >>>
         >>> conf = {'op': 'divide', 'other': '5'}
-        >>> pipe({'content': '10'}, conf=conf).next()['simplemath']
+        >>> next(pipe({'content': '10'}, conf=conf))['simplemath']
         Decimal('2')
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -47,7 +46,7 @@ OPS = {
     'subtract': operator.sub,
     'multiply': operator.mul,
     'mean': mean,
-    'divide': operator.div,
+    'divide': operator.truediv,
     'floor': operator.floordiv,
     'modulo': operator.mod,
     'power': operator.pow,
@@ -67,10 +66,10 @@ def parser(num, objconf, skip, **kwargs):
 
     Examples:
         >>> from riko.lib.utils import Objectify
-        >>> conf = {'op': 'divide', 'other': 5}
+        >>> conf = {'op': 'divide', 'other': 4}
         >>> objconf = Objectify(conf)
         >>> parser(10, objconf, False, conf=conf)[0]
-        2
+        2.5
     """
     operation = OPS[kwargs['conf']['op']]
     parsed = kwargs['feed'] if skip else operation(num, objconf.other)
@@ -107,7 +106,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['simplemath'])
+        ...     callback = lambda x: print(next(x)['simplemath'])
         ...     conf = {'op': 'divide', 'other': '5'}
         ...     d = asyncPipe({'content': '10'}, conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -150,10 +149,10 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from decimal import Decimal
         >>> conf = {'op': 'divide', 'other': '5'}
-        >>> pipe({'content': '10'}, conf=conf).next()['simplemath']
+        >>> next(pipe({'content': '10'}, conf=conf))['simplemath']
         Decimal('2')
         >>> kwargs = {'conf': conf, 'field': 'num', 'assign': 'result'}
-        >>> pipe({'num': '10'}, **kwargs).next()['result']
+        >>> next(pipe({'num': '10'}, **kwargs))['result']
         Decimal('2')
     """
     return parser(*args, **kwargs)

@@ -31,21 +31,18 @@ Examples:
         >>> from urllib2 import urlopen
         >>>
         >>> conf = {'query': "select * from feed where url='%s'" % FEEDS[0]}
-        >>> pipe(conf=conf, response=urlopen(FILES[7])).next()['title']
+        >>> next(pipe(conf=conf, response=urlopen(FILES[7])))['title']
         'Bring pizza home'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import requests
 import treq
-
-from itertools import imap
 
 from builtins import *
 from lxml.etree import parse
@@ -91,7 +88,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> query = "select * from feed where url='%s'" % FEEDS[0]
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0].next()['title'])
+        ...     callback = lambda x: print(next(x[0])['title'])
         ...     conf = {'query': query, 'url': url, 'debug': False}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'feed': {}, 'response': urlopen(FILES[7])}
@@ -119,7 +116,7 @@ def asyncParser(_, objconf, skip, **kwargs):
             root = yield microdom.parseString(content)
 
         results = root.getElementsByTagName('results')[0]
-        feed = imap(tu.elementToDict, results.childNodes)
+        feed = map(tu.elementToDict, results.childNodes)
 
     result = (feed, skip)
     returnValue(result)
@@ -152,7 +149,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> objconf = Objectify(conf)
         >>> kwargs = {'feed': {}, 'response': urlopen(FILES[7])}
         >>> result, skip = parser(None, objconf, False, **kwargs)
-        >>> result.next()['title']
+        >>> next(result)['title']
         'Bring pizza home'
     """
     if skip:
@@ -169,7 +166,7 @@ def parser(_, objconf, skip, **kwargs):
         tree = parse(f)
         root = tree.getroot()
         results = root.find('results')
-        feed = imap(utils.etree_to_dict, results.getchildren())
+        feed = map(utils.etree_to_dict, results.getchildren())
 
     return feed, skip
 
@@ -207,7 +204,7 @@ def asyncPipe(*args, **kwargs):
         >>> query = "select * from feed where url='%s'" % FEEDS[0]
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     d = asyncPipe(conf={'query': query}, response=urlopen(FILES[7]))
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -249,7 +246,7 @@ def pipe(*args, **kwargs):
         >>> from . import processor, FEEDS, FILES
         >>>
         >>> conf = {'query': "select * from feed where url='%s'" % FEEDS[0]}
-        >>> result = pipe(conf=conf, response=urlopen(FILES[7])).next()
+        >>> result = next(pipe(conf=conf, response=urlopen(FILES[7])))
         >>> sorted(result.keys())
         ['alarmTime', 'begin', 'duration', 'place', 'title', 'uid']
         >>> result['title']

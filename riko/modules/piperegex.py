@@ -18,16 +18,17 @@ Examples:
         >>> match = r'(\w+)\s(\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule}
-        >>> pipe({'content': 'hello world'}, conf=conf).next()['content']
+        >>> next(pipe({'content': 'hello world'}, conf=conf))['content']
         u'worldwide'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
+
+from functools import reduce
 
 from builtins import *
 from twisted.internet.defer import inlineCallbacks, returnValue
@@ -208,7 +209,7 @@ def asyncPipe(*args, **kwargs):
         >>> replace = '$2wide'
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['content'])
+        ...     callback = lambda x: print(next(x)['content'])
         ...     rule = {'field': 'content', 'match': match, 'replace': replace}
         ...     conf = {'rule': rule, 'multi': False, 'convert': True}
         ...     d = asyncPipe(item, conf=conf)
@@ -264,21 +265,21 @@ def pipe(*args, **kwargs):
         >>> match = r'(\w+)\s(\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
-        >>> result = pipe(item, conf=conf).next()
+        >>> result = next(pipe(item, conf=conf))
         >>> result == {'content': u'worldwide', 'title': 'greeting'}
         True
         >>> # multiple regex mode
         >>> conf['multi'] = True
-        >>> pipe(item, conf=conf).next() == result
+        >>> next(pipe(item, conf=conf)) == result
         True
         >>> # case insensitive matching
         >>> item = {'content': 'Hello hello'}
         >>> rule.update({'match': r'hello.*', 'replace': 'bye'})
-        >>> pipe(item, conf=conf).next()['content']
+        >>> next(pipe(item, conf=conf))['content']
         u'bye'
         >>> # case sensitive matching
         >>> rule['casematch'] = True
-        >>> pipe(item, conf=conf).next()['content']
+        >>> next(pipe(item, conf=conf))['content']
         u'Hello bye'
     """
     return parser(*args, **kwargs)

@@ -3,8 +3,8 @@ from __future__ import (
 
 from pprint import pprint
 from twisted.internet.defer import inlineCallbacks
-from riko.lib.collections import SyncPipe, SyncCollection
-from riko.twisted.collections import AsyncPipe, AsyncCollection
+from riko.lib.collections import SyncPipe
+from riko.twisted.collections import AsyncPipe
 
 p120_conf = {'type': 'text'}
 p120_inputs = {'format': '%B %d, %Y'}
@@ -14,9 +14,11 @@ p100_conf = {
     'attrs': {
         'value': {'terminal': 'value', 'path': 'dateformat'}, 'key': 'date'}}
 
+p120_kwargs = {'conf': p120_conf, 'inputs': p120_inputs, 'assign': 'format'}
+
 
 def pipe_wired(test=False):
-    p120 = SyncPipe('input', conf=p120_conf, inputs=p120_inputs, assign='format', test=test).output
+    p120 = SyncPipe('input', test=test, **p120_kwargs).output
     p151 = (SyncPipe('input', conf=p112_conf, test=test)
         .dateformat(conf=p151_conf, format=p120)
         .output)
@@ -32,12 +34,13 @@ def pipe_wired(test=False):
 
 @inlineCallbacks
 def asyncPipeWired(reactor, test=False):
-    p120 = yield AsyncPipe('input', conf=p120_conf, inputs=p120_inputs, assign='format', test=test).output
+    p120 = yield AsyncPipe('input', test=test, **p120_kwargs).output
     p151 = yield (AsyncPipe('input', conf=p112_conf, test=test)
         .dateformat(conf=p151_conf, format=p120)
         .output)
 
-    output = yield (AsyncPipe('itembuilder', conf=p100_conf, value=p151, test=test)
+    output_kwargs = {'conf': p100_conf, 'value': p151, 'test': test}
+    output = yield (AsyncPipe('itembuilder', **output_kwargs)
         .list)
 
     for i in output:

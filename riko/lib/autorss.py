@@ -5,13 +5,14 @@ riko.lib.autorss
 ~~~~~~~~~~~~~~~~
 Provides functions for finding RSS feeds from a site's LINK tags
 """
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
 
-
-from urllib2 import urlopen
-from HTMLParser import HTMLParser
-from itertools import chain, ifilter
+from itertools import chain
+from html.parser import HTMLParser
 
 from builtins import *
+from six.moves.urllib.request import urlopen
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from riko.twisted.utils import urlOpen
@@ -55,7 +56,7 @@ def asyncGetRSS(url):
     try:
         f = yield urlOpen(url, timeout=TIMEOUT)
     except ValueError:
-        f = ifilter(None, url.splitlines())
+        f = filter(None, url.splitlines())
 
     returnValue(gen_entries(f, parser))
 
@@ -66,6 +67,6 @@ def get_rss(url):
     try:
         f = urlopen(url, timeout=TIMEOUT)
     except ValueError:
-        f = ifilter(None, url.splitlines())
+        f = filter(None, url.splitlines())
 
     return gen_entries(f, parser)

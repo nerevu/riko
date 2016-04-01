@@ -21,9 +21,9 @@ Examples:
         >>> from . import FILES
         >>> from riko.modules.pipefeedautodiscovery import pipe
         >>>
-        >>> entry = pipe(conf={'url': FILES[4]}).next()
-        >>> sorted(entry.keys())
-        ['href', 'hreflang', 'link', 'rel', 'tag']
+        >>> entry = next(pipe(conf={'url': FILES[4]}))
+        >>> sorted(entry.keys()) == ['href', 'hreflang', 'link', 'rel', 'tag']
+        True
         >>> entry['link']
         'file://data/www.greenhughes.com_rssfeed.xml'
 
@@ -31,7 +31,6 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -69,7 +68,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0].next()['link'])
+        ...     callback = lambda x: print(next(x[0])['link'])
         ...     objconf = Objectify({'url': FILES[4]})
         ...     kwargs = {'feed': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
@@ -114,7 +113,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> objconf = Objectify({'url': FILES[4]})
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
-        >>> result.next()['link']
+        >>> next(result)['link']
         'file://data/www.greenhughes.com_rssfeed.xml'
     """
     if skip:
@@ -148,7 +147,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['link'])
+        ...     callback = lambda x: print(next(x)['link'])
         ...     d = asyncPipe(conf={'url': FILES[4]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -181,7 +180,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from . import FILES
-        >>> pipe(conf={'url': FILES[4]}).next()['link']
+        >>> next(pipe(conf={'url': FILES[4]}))['link']
         'file://data/www.greenhughes.com_rssfeed.xml'
     """
     return parser(*args, **kwargs)

@@ -3,7 +3,6 @@
 # vim: sw=4:ts=4:expandtab
 
 """ A script to manage development tasks """
-
 from __future__ import (
     absolute_import, division, print_function, with_statement,
     unicode_literals)
@@ -49,7 +48,7 @@ def check():
 @manager.command
 def lint(where=None, strict=False):
     """Check style with linters"""
-    args = 'pylint --rcfile=tests/standard.rc -rn -fparseable meza'
+    args = 'pylint --rcfile=tests/standard.rc -rn -fparseable riko'
 
     try:
         check_call(['flake8', where] if where else 'flake8')

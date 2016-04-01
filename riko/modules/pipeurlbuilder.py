@@ -46,21 +46,18 @@ Examples:
         >>> path = [{'value': 'rss'}, {'value': 'headline'}]
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
-        >>> pipe(conf=conf).next()['url']
+        >>> next(pipe(conf=conf))['url']
         u'http://finance.yahoo.com/rss/headline?s=gm'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from urlparse import urljoin
-from urllib import urlencode
-
 from builtins import *
+from six.moves.urllib.parse import urljoin, urlencode
 
 from . import processor
 from riko.lib.log import Logger
@@ -143,7 +140,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['url'])
+        ...     callback = lambda x: print(next(x)['url'])
         ...     params = {'key': 's', 'value': 'gm'}
         ...     path = [{'value': 'rss'}, {'value': 'headline'}]
         ...     base = 'http://finance.yahoo.com'
@@ -190,7 +187,7 @@ def pipe(*args, **kwargs):
         >>> path = [{'value': 'rss'}, {'value': 'headline'}]
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
-        >>> result = pipe(conf=conf).next()
+        >>> result = next(pipe(conf=conf))
         >>> sorted(result.keys())
         ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
         >>> result['url']

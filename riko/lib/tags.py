@@ -5,10 +5,11 @@ riko.lib.autorss
 ~~~~~~~~~~~~~~~~
 Provides functions for tags from html
 """
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
 
-
-from StringIO import StringIO
-from HTMLParser import HTMLParser
+from io import StringIO
+from html.parser import HTMLParser
 
 from builtins import *
 

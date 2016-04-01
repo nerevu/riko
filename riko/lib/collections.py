@@ -39,12 +39,11 @@ Examples:
         >>> len(SyncCollection(sources, parallel=True).list)
         56
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from functools import partial
-from itertools import imap, izip, repeat
+from itertools import repeat
 from importlib import import_module
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool, cpu_count
@@ -83,7 +82,7 @@ class SyncPipe(PyPipe):
         if self.name:
             self.module = import_module('riko.modules.pipe%s' % self.name)
             self.pipe = self.module.pipe
-            self.is_processor = self.pipe.func_dict.get('type') == 'processor'
+            self.is_processor = self.pipe.__dict__.get('type') == 'processor'
             self.mapify = self.is_processor and self.source
             self.parallelize = self.parallel and self.mapify
         else:
@@ -103,7 +102,7 @@ class SyncPipe(PyPipe):
         else:
             self.workers = workers
             self.chunksize = chunksize
-            self.map = imap
+            self.map = map
 
     def __getattr__(self, name):
         kwargs = {
@@ -124,7 +123,7 @@ class SyncPipe(PyPipe):
         pipeline = partial(self.pipe, **self.kwargs)
 
         if self.parallelize:
-            zipped = izip(self.source, repeat(pipeline))
+            zipped = zip(self.source, repeat(pipeline))
             mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
         elif self.mapify:
             mapped = self.map(pipeline, self.source)
@@ -147,7 +146,7 @@ class PyCollection(object):
         self.parallel = parallel
         self.workers = workers
         self.sleep = kwargs.get('sleep', 0)
-        self.zargs = izip(self.sources, repeat(self.sleep))
+        self.zargs = zip(self.sources, repeat(self.sleep))
         self.length = lenish(self.sources)
         self.workers = workers or get_worker_cnt(self.length)
 
@@ -162,7 +161,7 @@ class SyncCollection(PyCollection):
             self.pool = ThreadPool(self.workers)
             self.map = self.pool.imap_unordered
         else:
-            self.map = imap
+            self.map = map
 
     def fetch(self):
         """Fetch all source urls"""
@@ -191,7 +190,7 @@ def get_worker_cnt(length, threads=True):
 def lenish(source, default=50):
     funcs = (len, lambda x: getattr(x, '__length_hint__')())
     errors = (TypeError, AttributeError)
-    zipped = zip(funcs, errors)
+    zipped = list(zip(funcs, errors))
     return multi_try(source, zipped, default)
 
 

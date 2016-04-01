@@ -13,22 +13,20 @@ Examples:
 
         >>> from . import FILES
         >>> from riko.modules.pipefetch import pipe
-        >>> pipe(conf={'url': FILES[0]}).next()['title']
+        >>> next(pipe(conf={'url': FILES[0]}))['title']
         u'Donations'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import speedparser
 
-from urllib2 import urlopen
-
 from builtins import *
+from six.moves.urllib.request import urlopen
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
@@ -64,7 +62,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0].next()['title'])
+        ...     callback = lambda x: print(next(x[0])['title'])
         ...     objconf = Objectify({'url': FILES[0], 'sleep': 0})
         ...     kwargs = {'feed': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
@@ -112,7 +110,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> objconf = Objectify({'url': FILES[0], 'sleep': 0})
         >>> kwargs = {'feed': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
-        >>> result.next()['title']
+        >>> next(result)['title']
         u'Donations'
     """
     if skip:
@@ -153,7 +151,7 @@ def asyncPipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(sorted(x.next().keys()))
+        ...     callback = lambda x: print(sorted(next(x).keys()))
         ...     d = asyncPipe(conf={'url': FILES[0]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -197,7 +195,7 @@ def pipe(*args, **kwargs):
         ...     'link', u'y:title', u'dc:creator', u'author.uri',
         ...     u'author.name', 'id', u'y:id'}
         >>>
-        >>> set(pipe(conf={'url': FILES[0]}).next().keys()) == keys
+        >>> set(next(pipe(conf={'url': FILES[0]})).keys()) == keys
         True
     """
     return parser(*args, **kwargs)

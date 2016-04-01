@@ -13,14 +13,13 @@ Examples:
 
         >>> from riko.modules.piperssitembuilder import pipe
         >>> conf = {'title': 'the title', 'description': 'description'}
-        >>> pipe(conf=conf).next()['y:title']
+        >>> next(pipe(conf=conf))['y:title']
         u'the title'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -120,7 +119,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['media:thumbnail'])
+        ...     callback = lambda x: print(next(x)['media:thumbnail'])
         ...     conf = {
         ...         'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
         ...     d = asyncPipe(conf=conf)
@@ -168,7 +167,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> # conf based
         >>> conf = {'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
-        >>> rss = pipe(conf=conf).next()
+        >>> rss = next(pipe(conf=conf))
         >>> rss['media:thumbnail']
         {u'url': u'image.png'}
         >>> sorted(rss.keys())
@@ -179,7 +178,7 @@ def pipe(*args, **kwargs):
         >>> item = {'heading': 'Hi', 'id': 'a1', 'thumbnail': 'image.png'}
         >>> conf = {
         ...     'title': 'heading', 'guid': 'id', 'mediaThumbURL': 'thumbnail'}
-        >>> pipe(item, conf=conf).next() == rss
+        >>> next(pipe(item, conf=conf)) == rss
         True
     """
     return parser(*args, **kwargs)

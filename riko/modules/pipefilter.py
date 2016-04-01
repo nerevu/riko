@@ -18,16 +18,15 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipefilter import pipe
-        >>> items = ({'x': x} for x in xrange(5))
+        >>> items = ({'x': x} for x in range(5))
         >>> rule = {'field': 'x', 'op': 'is', 'value': 3}
-        >>> pipe(items, conf={'rule': rule}).next()
+        >>> next(pipe(items, conf={'rule': rule}))
         {u'x': 3}
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -116,20 +115,20 @@ def parser(feed, rules, tuples, **kwargs):
     Examples:
         >>> from riko.lib.utils import Objectify
         >>> from riko.lib.dotdict import DotDict
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
         >>> conf = DotDict({'mode': 'permit', 'combine': 'and'})
         >>> kwargs = {'conf': conf}
         >>> rule = {'field': 'ex', 'op': 'greater', 'value': 3}
         >>> objrule = Objectify(rule)
-        >>> feed = (DotDict({'ex': x}) for x in xrange(5))
-        >>> tuples = izip(feed, repeat(objrule))
-        >>> parser(feed, [objrule], tuples, **kwargs).next()
+        >>> feed = (DotDict({'ex': x}) for x in range(5))
+        >>> tuples = zip(feed, repeat(objrule))
+        >>> next(parser(feed, [objrule], tuples, **kwargs))
         {u'ex': 4}
     """
     conf = kwargs['conf']
     # TODO: add terminal check
-    dynamic = any('subkey' in v for v in conf.itervalues())
+    dynamic = any('subkey' in v for v in conf.values())
     objconf = None if dynamic else parse_conf({}, conf=conf, objectify=True)
 
     for item in feed:
@@ -187,7 +186,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
+        ...     callback = lambda x: print(next(x))
         ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
         ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
         ...     d = asyncPipe(items, conf={'rule': rule})
@@ -241,7 +240,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
         >>> rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
-        >>> pipe(items, conf={'rule': rule}).next()
+        >>> next(pipe(items, conf={'rule': rule}))
         {u'title': u'Website Developer'}
         >>> rule['value'] = 'kjhlked'
         >>> any(pipe(items, conf={'rule': [rule]}))

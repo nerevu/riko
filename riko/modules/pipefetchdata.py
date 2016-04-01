@@ -15,24 +15,24 @@ Examples:
         >>> from riko.modules.pipefetchdata import pipe
         >>>
         >>> conf = {'url': FILES[2], 'path': 'value.items'}
-        >>> pipe(conf=conf).next()['title']
+        >>> next(pipe(conf=conf))['title']
         u'Business System Analyst'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from lxml import objectify, html
-from lxml.html import html5parser
-from urllib2 import urlopen
+from functools import reduce
 from json import loads
 from os.path import splitext
 
 from builtins import *
+from six.moves.urllib.request import urlopen
+from lxml import objectify, html
+from lxml.html import html5parser
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
@@ -190,7 +190,7 @@ def asyncPipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     path = 'value.items'
         ...     conf = {'url': FILES[2], 'path': path}
         ...     d = asyncPipe(conf=conf)
@@ -233,14 +233,14 @@ def pipe(*args, **kwargs):
         >>>
         >>> path = 'value.items'
         >>> conf = {'url': FILES[2], 'path': path}
-        >>> pipe(conf=conf).next()['title']
+        >>> next(pipe(conf=conf))['title']
         u'Business System Analyst'
         >>> path = 'appointment'
         >>> conf = {'url': FILES[3], 'path': path}
-        >>> pipe(conf=conf).next()['subject']
+        >>> next(pipe(conf=conf))['subject']
         'Bring pizza home'
         >>> conf = {'url': FILES[3], 'path': ''}
-        >>> pipe(conf=conf).next()['reminder']
+        >>> next(pipe(conf=conf))['reminder']
         '15'
     """
     return parser(*args, **kwargs)

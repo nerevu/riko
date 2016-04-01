@@ -9,14 +9,13 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipecount import pipe
-        >>> pipe({'x': x} for x in xrange(5)).next()
+        >>> next(pipe({'x': x} for x in range(5)))
         {u'count': 5}
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -52,10 +51,10 @@ def parser(feed, _, tuples, **kwargs):
         dict: The output
 
     Examples:
-        >>> from itertools import repeat, izip
+        >>> from itertools import repeat
         >>>
-        >>> feed = ({'x': x} for x in xrange(5))
-        >>> tuples = izip(feed, repeat(None))
+        >>> feed = ({'x': x} for x in range(5))
+        >>> tuples = zip(feed, repeat(None))
         >>> parser(feed, None, tuples, assign='content')
         {u'content': 5}
     """
@@ -84,8 +83,8 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next())
-        ...     items = ({'x': x} for x in xrange(5))
+        ...     callback = lambda x: print(next(x))
+        ...     items = ({'x': x} for x in range(5))
         ...     d = asyncPipe(items)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -116,8 +115,8 @@ def pipe(*args, **kwargs):
         dict: the number of counted items
 
     Examples:
-        >>> items = ({'x': x} for x in xrange(5))
-        >>> pipe(items).next()['count']
+        >>> items = ({'x': x} for x in range(5))
+        >>> next(pipe(items))['count']
         5
     """
     return parser(*args, **kwargs)

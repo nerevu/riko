@@ -14,14 +14,13 @@ Examples:
         >>> from riko.modules.pipestrconcat import pipe
         >>> item = {'word': 'hello'}
         >>> part = [{'subkey': 'word'}, {'value': ' world'}]
-        >>> pipe(item, conf={'part': part}).next()['strconcat']
+        >>> next(pipe(item, conf={'part': part}))['strconcat']
         u'hello world'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
@@ -93,7 +92,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x.next()['strconcat'])
+        ...     callback = lambda x: print(next(x)['strconcat'])
         ...     item = {'title': 'Hello world'}
         ...     part = [{'subkey': 'title'}, {'value': 's'}]
         ...     d = asyncPipe(item, conf={'part': part})
@@ -140,9 +139,9 @@ def pipe(*args, **kwargs):
         >>> part = [
         ...     {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
         ... ]
-        >>> pipe(item, conf={'part': part}).next()['strconcat']
+        >>> next(pipe(item, conf={'part': part}))['strconcat']
         u'<img src="http://www.site.com">'
-        >>> pipe(item, conf={'part': part}, assign='result').next()['result']
+        >>> next(pipe(item, conf={'part': part}, assign='result'))['result']
         u'<img src="http://www.site.com">'
     """
     return parser(*args, **kwargs)
