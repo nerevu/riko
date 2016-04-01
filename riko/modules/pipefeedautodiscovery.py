@@ -24,8 +24,8 @@ Examples:
         >>> entry = next(pipe(conf={'url': get_path('bbc.html')}))
         >>> sorted(entry.keys()) == ['href', 'hreflang', 'link', 'rel', 'tag']
         True
-        >>> entry['link']
-        'file://data/greenhughes.xml'
+        >>> entry['link'] == 'file://data/greenhughes.xml'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -111,8 +111,8 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['link']
-        'file://data/greenhughes.xml'
+        >>> next(result)['link'] == 'file://data/greenhughes.xml'
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -178,7 +178,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['link']
-        'file://data/greenhughes.xml'
+        >>> conf = {'url': get_path('bbc.html')}
+        >>> next(pipe(conf=conf))['link'] == 'file://data/greenhughes.xml'
+        True
     """
     return parser(*args, **kwargs)

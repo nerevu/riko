@@ -44,8 +44,9 @@ Examples:
         ...         {'id': 'st2', 'verses': ['st2v1', 'st2v2', 'st2v3']},
         ...         {'id': 'st3', 'verses': ['st3v1', 'st3v2', 'st3v3']}]}
         >>>
-        >>> next(pipe(sonnet, conf={'path': 'stanzas.verses'}))
-        {u'content': u'st1v1'}
+        >>> conf = {'path': 'stanzas.verses'}
+        >>> next(pipe(sonnet, conf=conf)) == {'content': 'st1v1'}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -79,17 +80,19 @@ def parser(item, objconf, skip, **kwargs):
     Examples:
         >>> from riko.lib.dotdict import DotDict
         >>>
-        >>> sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
         >>> conf = {'path': 'stanzas.verses', 'token_key': 'content'}
         >>> objconf = utils.Objectify(conf)
-        >>> next(parser(DotDict(sonnet), objconf, False)[0])
-        {u'content': u'verse1'}
+        >>> args = [objconf, False]
+        >>>
+        >>> sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
+        >>> next(parser(DotDict(sonnet), *args)[0]) == {'content': 'verse1'}
+        True
         >>> sonnet = {'stanzas': {'verses': ['verse1', 'verse2']}}
-        >>> next(parser(DotDict(sonnet), objconf, False)[0])
-        {u'content': u'verse1'}
+        >>> next(parser(DotDict(sonnet), *args)[0]) == {'content': 'verse1'}
+        True
         >>> sonnet = {'stanzas': {'verses': 'verse1'}}
-        >>> next(parser(DotDict(sonnet), objconf, False)[0])
-        {u'content': u'verse1'}
+        >>> next(parser(DotDict(sonnet), *args)[0]) == {'content': 'verse1'}
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -126,7 +129,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        ...     callback = lambda x: print(next(x) == {'content': 'verse1'})
         ...     sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
         ...     conf = {'path': 'stanzas.verses'}
         ...     d = asyncPipe(sonnet, conf=conf)
@@ -137,7 +140,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'content': u'verse1'}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -176,12 +179,12 @@ def pipe(*args, **kwargs):
         >>> verses = list(pipe(sonnet, conf=conf))
         >>> len(verses)
         9
-        >>> verses[0]
-        {u'content': u'st1v1'}
-        >>> verses[8]
-        {u'content': u'st3v3'}
+        >>> verses[0] == {'content': 'st1v1'}
+        True
+        >>> verses[8] == {'content': 'st3v3'}
+        True
         >>> conf.update({'token_key': 'verse'})
-        >>> next(pipe(sonnet, conf=conf))
-        {u'verse': u'st1v1'}
+        >>> next(pipe(sonnet, conf=conf)) == {'verse': 'st1v1'}
+        True
     """
     return parser(*args, **kwargs)

@@ -287,8 +287,9 @@ def pipe(*args, **kwargs):
         >>> rate = next(pipe({'content': 'GBP'}, conf=conf))['exchangerate']
         >>> rate
         Decimal('1.545801')
-        >>> 'There are %#.2f GBPs per USD' % rate
-        u'There are 1.55 GBPs per USD'
+        >>> msg = 'There are 1.55 GBPs per USD'
+        >>> 'There are %#.2f GBPs per USD' % rate == msg
+        True
         >>> conf = {'url': url, 'currency': 'TZS', 'precision': 3}
         >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
         Decimal('1825.850')

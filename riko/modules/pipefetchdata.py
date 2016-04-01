@@ -15,8 +15,8 @@ Examples:
         >>> from riko.modules.pipefetchdata import pipe
         >>>
         >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> next(pipe(conf=conf))['title']
-        u'Business System Analyst'
+        >>> next(pipe(conf=conf))['title'] == 'Business System Analyst'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -111,8 +111,8 @@ def parser(_, objconf, skip, **kwargs):
         >>> url = get_path('gigs.json')
         >>> objconf = Objectify({'url': url, 'path': 'value.items'})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> result[0]['title']
-        u'Business System Analyst'
+        >>> result[0]['title'] == 'Business System Analyst'
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -196,12 +196,12 @@ def pipe(*args, **kwargs):
         >>> from riko import get_path
         >>>
         >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> next(pipe(conf=conf))['title']
-        u'Business System Analyst'
+        >>> next(pipe(conf=conf))['title'] == 'Business System Analyst'
+        True
         >>> path = 'appointment'
         >>> conf = {'url': get_path('places.xml'), 'path': path}
-        >>> next(pipe(conf=conf))['subject']
-        'Bring pizza home'
+        >>> next(pipe(conf=conf))['subject'] == 'Bring pizza home'
+        True
         >>> conf = {'url': get_path('places.xml'), 'path': ''}
         >>> next(pipe(conf=conf))['reminder']
         '15'

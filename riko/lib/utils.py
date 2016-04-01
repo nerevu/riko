@@ -282,7 +282,7 @@ def betwix(iterable, start=None, stop=None, inc=False):
         >>> list(betwix('ABCDEFG', 'C')) == ['C', 'D', 'E', 'F', 'G']
         True
         >>> f = StringIO('alpha\\n<beta>\\ngamma\\n')
-        >>> list(betwix(f, '<', '>', True)) == [u'<beta>\\n']
+        >>> list(betwix(f, '<', '>', True)) == ['<beta>\\n']
         True
         >>> list(betwix('ABCDEFG', 'C', 'E', True)) == ['C', 'D', 'E']
         True

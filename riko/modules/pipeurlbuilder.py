@@ -46,8 +46,9 @@ Examples:
         >>> path = [{'value': 'rss'}, {'value': 'headline'}]
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
-        >>> next(pipe(conf=conf))['url']
-        u'http://finance.yahoo.com/rss/headline?s=gm'
+        >>> url = 'http://finance.yahoo.com/rss/headline?s=gm'
+        >>> next(pipe(conf=conf))['url'] == url
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -94,10 +95,12 @@ def parser(item, params, skip, **kwargs):
         >>> conf = {'base': base, 'path': path, 'params': params}
         >>> kwargs = {'stream': item, 'conf': conf}
         >>> result = parser(item, [Objectify(params)], False, **kwargs)[0]
-        >>> sorted(result.keys())
-        ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
-        >>> result['url']
-        u'http://finance.yahoo.com/rss/headline?s=gm'
+        >>> sorted(result.keys()) == [
+        ...     'fragment', 'netloc', 'params', 'path', 'query', 'scheme',
+        ...     'url']
+        True
+        >>> result['url'] == 'http://finance.yahoo.com/rss/headline?s=gm'
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -188,9 +191,11 @@ def pipe(*args, **kwargs):
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
         >>> result = next(pipe(conf=conf))
-        >>> sorted(result.keys())
-        ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
-        >>> result['url']
-        u'http://finance.yahoo.com/rss/headline?s=gm'
+        >>> sorted(result.keys()) == [
+        ...     'fragment', 'netloc', 'params', 'path', 'query', 'scheme',
+        ...     'url']
+        True
+        >>> result['url'] == 'http://finance.yahoo.com/rss/headline?s=gm'
+        True
     """
     return parser(*args, **kwargs)

@@ -37,8 +37,8 @@ Examples:
 
         >>> from riko.modules.pipeinput import pipe
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-        >>> next(pipe(conf=conf, inputs={'content': '30'}))
-        {u'content': 30}
+        >>> next(pipe(conf=conf, inputs={'content': '30'})) == {'content': 30}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -75,8 +75,9 @@ def parser(_, objconf, skip, **kwargs):
         >>> inputs = {'age': '30'}
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> objconf = Objectify(conf)
-        >>> parser(None, objconf, False, inputs=inputs, assign='age')[0]
-        {u'age': 30}
+        >>> kwargs = {'inputs': inputs, 'assign': 'age'}
+        >>> parser(None, objconf, False, **kwargs)[0] == {'age': 30}
+        True
     """
     if kwargs.get('inputs'):
         value = kwargs['inputs'].get(kwargs['assign'], objconf.default)
@@ -124,7 +125,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        ...     callback = lambda x: print(next(x) == {'content': 30})
         ...     conf = {'prompt': 'How old are you?', 'type': 'int'}
         ...     d = asyncPipe(conf=conf, inputs={'content': '30'})
         ...     return d.addCallbacks(callback, logger.error)
@@ -134,7 +135,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'content': 30}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -171,8 +172,8 @@ def pipe(*args, **kwargs):
     Examples:
         >>> # int
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-        >>> next(pipe(conf=conf, inputs={'content': '30'}))
-        {u'content': 30}
+        >>> next(pipe(conf=conf, inputs={'content': '30'})) == {'content': 30}
+        True
         >>>
         >>> # date
         >>> import datetime
@@ -180,45 +181,53 @@ def pipe(*args, **kwargs):
         >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
         >>> result = next(pipe(conf=conf, inputs={'content': '5/4/82'}))
         >>> sorted(result.keys()) == [
-        ...     u'date', u'day', u'day_of_week', u'day_of_year',
-        ...     u'daylight_savings', u'hour', u'minute', u'month',
-        ...     u'second', u'timezone', u'utime', u'year']
+        ...     'date', 'day', 'day_of_week', 'day_of_year',
+        ...     'daylight_savings', 'hour', 'minute', 'month',
+        ...     'second', 'timezone', 'utime', 'year']
         True
         >>> result['date']
         datetime.datetime(1982, 5, 4, 0, 0)
-        >>> d = next(pipe(conf=conf, inputs={'content': 'tomorrow'}))
-        >>> td = d['date'] - datetime.datetime.utcnow()
-        >>> 24 > td.total_seconds() / 3600 > 23
+        >>>
+        >>> stream = pipe(conf={'type': 'date'}, inputs={'content': 'tomorrow'})
+        >>> d = next(stream)
+        >>> sorted(d.keys()) == [
+        ...     'date', 'day', 'day_of_week', 'day_of_year',
+        ...     'daylight_savings', 'hour', 'minute', 'month', 'second',
+        ...     'timezone', 'utime', 'year']
         True
+        >>> td = d['date'] - datetime.datetime.utcnow()
+        >>> hours = td.total_seconds() / 3600
+        >>> 24 > hours > 23
+        True
+        >>> # float, bool, text
+        >>> matrix = [
+        ...     ('float', '1', 1.0),
+        ...     ('bool', 'true', True),
+        ...     ('text', 'hello', 'hello')]
         >>>
-        >>> # float
-        >>> next(pipe(conf={'type': 'float'}, inputs={'content': '1'}))
-        {u'content': 1.0}
-        >>>
-        >>> # bool
-        >>> next(pipe(conf={'type': 'bool'}, inputs={'content': 'true'}))
-        {u'content': True}
-        >>>
-        >>> # text
-        >>> next(pipe(conf={'type': 'text'}, inputs={'content': 'hello'}))
-        {u'content': 'hello'}
-        >>>
+        >>> for t, c, r in matrix:
+        ...     kwargs = {'conf': {'type': t}, 'inputs': {'content': c}}
+        ...     next(pipe(**kwargs)) == {'content': r}
+        True
+        True
+        True
         >>> # url
         >>> inputs = {'content': 'google.com'}
         >>> result = next(pipe(conf={'type': 'url'}, inputs=inputs))
-        >>> sorted(result.keys())
-        ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
-        >>> result['url']
-        u'http://google.com'
-        >>>
+        >>> sorted(result.keys())== [
+        ...     'fragment', 'netloc', 'params', 'path', 'query', 'scheme',
+        ...     'url']
+        True
+        >>> result['url'] == 'http://google.com'
+        True
         >>> # location
         >>> inputs = {'content': 'palo alto, ca'}
         >>> result = next(pipe(conf={'type': 'location'}, inputs=inputs))
         >>> sorted(result.keys()) == [
-        ...     u'admin1', u'admin2', u'admin3', u'city', u'country', u'lat',
-        ...     u'lon', u'postal', u'quality', u'street']
+        ...     'admin1', 'admin2', 'admin3', 'city', 'country', 'lat',
+        ...     'lon', 'postal', 'quality', 'street']
         True
-        >>> result['city']
-        u'city'
+        >>> result['city'] == 'city'
+        True
     """
     return parser(*args, **kwargs)

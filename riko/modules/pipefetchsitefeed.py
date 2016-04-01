@@ -24,8 +24,10 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.modules.pipefetchsitefeed import pipe
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
-        u'Using NFC tags in the car'
+        >>>
+        >>> title = 'Using NFC tags in the car'
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title'] == title
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -116,8 +118,8 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['title']
-        u'Using NFC tags in the car'
+        >>> next(result)['title'] == 'Using NFC tags in the car'
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -186,7 +188,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
-        u'Using NFC tags in the car'
+        >>> title = 'Using NFC tags in the car'
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title'] == title
+        True
     """
     return parser(*args, **kwargs)

@@ -10,8 +10,10 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.modules.pipecsv import pipe
-        >>> next(pipe(conf={'url': get_path('spreadsheet.csv')}))['mileage']
-        u'7213'
+        >>>
+        >>> url = get_path('spreadsheet.csv')
+        >>> next(pipe(conf={'url': url}))['mileage'] == '7213'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -111,8 +113,8 @@ def parser(_, objconf, skip, **kwargs):
         >>> conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
         >>> objconf = Objectify(conf)
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['mileage']
-        u'7213'
+        >>> next(result)['mileage'] == '7213'
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -211,7 +213,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> next(pipe(conf={'url': get_path('spreadsheet.csv')}))['mileage']
-        u'7213'
+        >>> url = get_path('spreadsheet.csv')
+        >>> next(pipe(conf={'url': url}))['mileage'] == '7213'
+        True
     """
     return parser(*args, **kwargs)

@@ -13,8 +13,10 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.modules.pipefetch import pipe
-        >>> next(pipe(conf={'url': get_path('feed.xml')}))['title']
-        u'Donations'
+        >>>
+        >>> url = get_path('feed.xml')
+        >>> next(pipe(conf={'url': url}))['title'] == 'Donations'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -109,8 +111,8 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['title']
-        u'Donations'
+        >>> next(result)['title'] == 'Donations'
+        True
     """
     if skip:
         stream = kwargs['stream']

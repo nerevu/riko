@@ -207,11 +207,12 @@ class processor(object):
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe(item, **kwargs))
-            {u'content': u'say "hello world" three times!'}
+            >>> response = {'content': 'say "hello world" three times!'}
+            >>> next(pipe(item, **kwargs)) == response
+            True
             >>>
             >>> def run(reactor):
-            ...     callback = lambda x: print(next(x))
+            ...     callback = lambda x: print(next(x) == response)
             ...     d = asyncPipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
@@ -220,7 +221,7 @@ class processor(object):
             ... except SystemExit:
             ...     pass
             ...
-            {u'content': u'say "hello world" three times!'}
+            True
         """
         self.defaults = defaults or {}
         self.opts = opts or {}
@@ -271,11 +272,12 @@ class processor(object):
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe(item, **kwargs))
-            {u'content': u'say "hello world" three times!'}
+            >>> response = {'content': 'say "hello world" three times!'}
+            >>> next(pipe(item, **kwargs)) == response
+            True
             >>>
             >>> def run(reactor):
-            ...     callback = lambda x: print(next(x))
+            ...     callback = lambda x: print(next(x) == response)
             ...     d = asyncPipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
@@ -284,7 +286,7 @@ class processor(object):
             ... except SystemExit:
             ...     pass
             ...
-            {u'content': u'say "hello world" three times!'}
+            True
         """
         @wraps(pipe)
         def wrapper(item=None, **kwargs):
@@ -438,25 +440,26 @@ class operator(object):
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe1(items, **kwargs))
-            {u'content': u'say "bye world" three times!'}
-            >>> next(pipe2(items, **kwargs))
-            {u'content': 4}
+            >>> response = {'content': 'say "bye world" three times!'}
+            >>> next(pipe1(items, **kwargs)) == response
+            True
+            >>> next(pipe2(items, **kwargs)) == {'content': 4}
+            True
             >>>
             >>> @coroutine
             ... def run(reactor):
             ...     r1 = yield asyncPipe1(items, **kwargs)
-            ...     print(next(r1))
+            ...     print(next(r1) == response)
             ...     r2 = yield asyncPipe2(items, **kwargs)
-            ...     print(next(r2))
+            ...     print(next(r2) == {'content': 4})
             ...
             >>> try:
             ...     react(run, _reactor=FakeReactor())
             ... except SystemExit:
             ...     pass
             ...
-            {u'content': u'say "bye world" three times!'}
-            {u'content': 4}
+            True
+            True
         """
         self.defaults = defaults or {}
         self.opts = opts or {}
@@ -514,25 +517,26 @@ class operator(object):
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe1(items, **kwargs))
-            {u'content': u'say "bye world" three times!'}
-            >>> next(pipe2(items, **kwargs))
-            {u'content': 4}
+            >>> response = {'content': 'say "bye world" three times!'}
+            >>> next(pipe1(items, **kwargs)) == response
+            True
+            >>> next(pipe2(items, **kwargs)) == {'content': 4}
+            True
             >>>
             >>> @coroutine
             ... def run(reactor):
             ...     r1 = yield asyncPipe1(items, **kwargs)
-            ...     print(next(r1))
+            ...     print(next(r1) == response)
             ...     r2 = yield asyncPipe2(items, **kwargs)
-            ...     print(next(r2))
+            ...     print(next(r2) == {'content': 4})
             ...
             >>> try:
             ...     react(run, _reactor=FakeReactor())
             ... except SystemExit:
             ...     pass
             ...
-            {u'content': u'say "bye world" three times!'}
-            {u'content': 4}
+            True
+            True
         """
         @wraps(pipe)
         def wrapper(items=None, **kwargs):

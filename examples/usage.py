@@ -78,8 +78,8 @@ Fetching feeds
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
-    >>> item['list']['resources'][0]['resource']['fields']['symbol']
-    u'KRW=X'
+    >>> item['list']['resources'][0]['resource']['fields']['symbol'] == 'KRW=X'
+    True
 
     >>> ### Fetch an rss feed ###
     >>> stream = fetch(conf={'url': get_path('feed.xml')})
@@ -112,9 +112,12 @@ Fetching feeds
     >>> item = next(stream)
     >>> set(item.keys()).issuperset(intersection)
     True
-    >>> item['title'], item['author'], item['link']
-    (u'Using NFC tags in the car', u'Liam Green-Hughes', \
-u'http://www.greenhughes.com/content/using-nfc-tags-car')
+    >>> item['title'] == 'Using NFC tags in the car'
+    True
+    >>> item['author'] == 'Liam Green-Hughes'
+    True
+    >>> item['link'] == 'http://www.greenhughes.com/content/using-nfc-tags-car'
+    True
 
 
 Synchronous processing
@@ -276,8 +279,8 @@ Design Principles
     >>> from riko.modules.pipereverse import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(stream))
-    {u'title': u'riko pt. 2'}
+    >>> next(pipe(stream)) == {'title': 'riko pt. 2'}
+    True
 
     # a transformer
     >>> import ctypes
@@ -302,22 +305,23 @@ Design Principles
     True
     >>> # In this case, if we just want the result, we can `emit` it instead
     >>> stream = pipe(item, conf=tokenizer_conf, field='title', emit=True)
-    >>> next(stream)
-    {u'content': 'riko'}
+    >>> next(stream) == {'content': 'riko'}
+    True
 
     # an aggregator
     >>> from riko.modules.pipecount import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(stream))
-    {u'count': 2}
+    >>> next(pipe(stream)) == {'count': 2}
+    True
 
     # a source
     >>> from riko.modules.pipeitembuilder import pipe
     >>>
     >>> attrs = {'key': 'title', 'value': 'riko pt. 1'}
-    >>> next(pipe(conf={'attrs': attrs}))
-    {u'title': u'riko pt. 1'}
+    >>> next(pipe(conf={'attrs': attrs})) == {'title': 'riko pt. 1'}
+    True
+
 
     # check metadata
     >>> from riko.modules.pipefetchpage import asyncPipe

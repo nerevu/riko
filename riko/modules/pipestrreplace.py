@@ -15,8 +15,9 @@ Examples:
 
         >>> from riko.modules.pipestrreplace import pipe
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))['strreplace']
-        'bye world'
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['strreplace'] == 'bye world'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -120,8 +121,8 @@ def parser(word, rules, skip, **kwargs):
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         >>> rule = Objectify(conf['rule'])
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(item['content'], [rule], False, **kwargs)[0]
-        u'bye world'
+        >>> parser(item['content'], [rule], False, **kwargs)[0] == 'bye world'
+        True
     """
     value = kwargs['stream'] if skip else reduce(reducer, rules, word)
     return value, skip
@@ -202,14 +203,16 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))['strreplace']
-        'bye world'
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['strreplace'] == 'bye world'
+        True
         >>> rules = [
         ...     {'find': 'Gr', 'replace': 'M'},
         ...     {'find': 'e', 'replace': 'a', 'param': 'last'}]
         >>> conf = {'rule': rules}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result']
-        u'Meatings'
+        >>> item = {'title': 'Greetings'}
+        >>> next(pipe(item, **kwargs))['result'] == 'Meatings'
+        True
     """
     return parser(*args, **kwargs)

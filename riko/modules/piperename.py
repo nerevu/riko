@@ -19,9 +19,11 @@ Examples:
     basic usage::
 
         >>> from riko.modules.piperename import pipe
+        >>>
         >>> conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))
-        {u'greeting': u'hello world'}
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf)) == {'greeting': 'hello world'}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -74,7 +76,7 @@ def asyncParser(item, rules, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0])
+        ...     callback = lambda x: print(x[0] == {'greeting': 'hello world'})
         ...     item = DotDict({'content': 'hello world'})
         ...     rule = {'field': 'content', 'newval': 'greeting'}
         ...     kwargs = {'stream': item}
@@ -86,7 +88,7 @@ def asyncParser(item, rules, skip, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'greeting': u'hello world'}
+        True
     """
     if skip:
         item = kwargs['stream']
@@ -119,8 +121,9 @@ def parser(item, rules, skip, **kwargs):
         >>> item = DotDict({'content': 'hello world'})
         >>> rule = {'field': 'content', 'newval': 'greeting'}
         >>> kwargs = {'stream': item}
-        >>> parser(item, [Objectify(rule)], False, **kwargs)[0]
-        {u'greeting': u'hello world'}
+        >>> args = [item, [Objectify(rule)], False]
+        >>> parser(*args, **kwargs)[0] == {'greeting': 'hello world'}
+        True
     """
     item = kwargs['stream'] if skip else reduce(reducer, rules, item)
     return item, skip
@@ -154,7 +157,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        ...     callback = lambda x: print(next(x)['greeting'] == 'hello world')
         ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
         ...     d = asyncPipe({'content': 'hello world'}, conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -164,7 +167,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'greeting': u'hello world'}
+        True
     """
     return asyncParser(*args, **kwargs)
 
@@ -195,14 +198,15 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> rule = {'field': 'content', 'newval': 'greeting'}
-        >>> next(pipe({'content': 'hello world'}, conf={'rule': rule}))
-        {u'greeting': u'hello world'}
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf={'rule': rule})) == {'greeting': 'hello world'}
+        True
         >>> conf = {'rule': {'field': 'content'}}
         >>> next(pipe({'content': 'hello world'}, conf=conf))
         {}
         >>> rule['copy'] = True
         >>> result = pipe({'content': 'hello world'}, conf={'rule': rule})
-        >>> sorted(next(result).keys())
-        [u'content', u'greeting']
+        >>> sorted(next(result).keys()) == ['content', 'greeting']
+        True
     """
     return parser(*args, **kwargs)

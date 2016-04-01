@@ -18,8 +18,9 @@ Examples:
 
         >>> from riko.modules.pipesubstr import pipe
         >>> conf = {'start': '3', 'length': '4'}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))['substr']
-        u'lo w'
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['substr'] == 'lo w'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -59,9 +60,10 @@ def parser(word, objconf, skip, **kwargs):
         >>>
         >>> item = {'content': 'hello world'}
         >>> conf = {'start': 3, 'length': 4}
+        >>> args = item['content'], Objectify(conf), False
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(item['content'], Objectify(conf), False, **kwargs)[0]
-        u'lo w'
+        >>> parser(*args, **kwargs)[0] == 'lo w'
+        True
     """
     end = objconf.start + objconf.length if objconf.length else None
     value = kwargs['stream'] if skip else word[objconf.start:end]
@@ -135,8 +137,9 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> conf = {'start': '3', 'length': '4'}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))['substr']
-        u'lo w'
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['substr'] == 'lo w'
+        True
         >>> conf = {'start': '3'}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
         >>> next(pipe({'title': 'Greetings'}, **kwargs))['result'] == 'etings'

@@ -14,8 +14,8 @@ Examples:
 
         >>> from riko.modules.pipesplit import pipe
         >>> stream1, stream2 = pipe({'x': x} for x in range(5))
-        >>> next(stream1)
-        {u'x': 0}
+        >>> next(stream1) == {'x': 0}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -64,8 +64,8 @@ def parser(stream, splits, tuples, **kwargs):
         >>> stream = (({'x': x}) for x in range(5))
         >>> tuples = zip(stream, repeat(conf['splits']))
         >>> streams = parser(stream, conf['splits'], tuples, **kwargs)
-        >>> next(next(streams))
-        {u'x': 0}
+        >>> next(next(streams)) == {'x': 0}
+        True
     """
     source = list(stream)
 
@@ -96,7 +96,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(next(x)))
+        ...     callback = lambda x: print(next(next(x)) == {'x': 0})
         ...     d = asyncPipe({'x': x} for x in range(5))
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -105,7 +105,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'x': 0}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -130,8 +130,8 @@ def pipe(*args, **kwargs):
     Examples:
         >>> items = [{'x': x} for x in range(5)]
         >>> stream1, stream2 = pipe(items)
-        >>> next(stream1)
-        {u'x': 0}
+        >>> next(stream1) == {'x': 0}
+        True
         >>> len(list(pipe(items, conf={'splits': '3'})))
         3
     """

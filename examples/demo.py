@@ -21,8 +21,8 @@ Word Count
     ...     .count()
     ...     .output)
     >>>
-    >>> next(counts)
-    {u'count': 70}
+    >>> next(counts) == {'count': 70}
+    True
 
 Fetching feeds
 
@@ -36,8 +36,10 @@ Fetching feeds
     >>> item = next(feed)
     >>> set(item.keys()).issuperset(intersection)
     True
-    >>> item['title'], item['link']  # doctest: +ELLIPSIS
-    (u'...', u'http...')
+    >>> item['title'][:24] == 'This Is What A Celebrity'
+    True
+    >>> item['link'][:23] == 'http://feeds.gawker.com'
+    True
 """
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)

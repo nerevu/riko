@@ -94,8 +94,8 @@ if __name__ == '__main__':
     runpipe_tests = [
         ([], ['demo'], text),
         (['-a'], ['demo'], text),
-        ([], ['simple1'], "{u'url': u'farechart'}\n"),
-        (['-a'], ['simple1'], "{u'url': u'farechart'}\n"),
+        ([], ['simple1'], "{'url': 'farechart'}\n"),
+        (['-a'], ['simple1'], "{'url': 'farechart'}\n"),
     ]
 
     main(demo, runpipe_tests)

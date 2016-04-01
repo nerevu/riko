@@ -14,8 +14,8 @@ Examples:
         >>> from riko.modules.pipestrconcat import pipe
         >>> item = {'word': 'hello'}
         >>> part = [{'subkey': 'word'}, {'value': ' world'}]
-        >>> next(pipe(item, conf={'part': part}))['strconcat']
-        u'hello world'
+        >>> next(pipe(item, conf={'part': part}))['strconcat'] == 'hello world'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -50,8 +50,8 @@ def parser(_, parts, skip, **kwargs):
         Tuple(str, bool): Tuple of (the concatenated string, skip)
 
     Examples:
-        >>> parser(None, ['one', 'two'], False)[0]
-        u'onetwo'
+        >>> parser(None, ['one', 'two'], False)[0] == 'onetwo'
+        True
     """
     parsed = kwargs['stream'] if skip else ''.join(map(decode, parts))
     return parsed, skip
@@ -135,9 +135,11 @@ def pipe(*args, **kwargs):
         >>> part = [
         ...     {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
         ... ]
-        >>> next(pipe(item, conf={'part': part}))['strconcat']
-        u'<img src="http://www.site.com">'
-        >>> next(pipe(item, conf={'part': part}, assign='result'))['result']
-        u'<img src="http://www.site.com">'
+        >>> conf = {'part': part}
+        >>> resp = '<img src="http://www.site.com">'
+        >>> next(pipe(item, conf=conf))['strconcat'] == resp
+        True
+        >>> next(pipe(item, conf=conf, assign='result'))['result'] == resp
+        True
     """
     return parser(*args, **kwargs)

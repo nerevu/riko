@@ -12,8 +12,9 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipestringtokenizer import pipe
-        >>> next(pipe({'content': 'Once,twice,thrice'}))['stringtokenizer'][0]
-        {u'content': 'Once'}
+        >>> item = {'content': 'Once,twice,thrice'}
+        >>> next(pipe(item))['stringtokenizer'][0] == {'content': 'Once'}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -50,8 +51,8 @@ def parser(content, objconf, skip, **kwargs):
         >>> objconf = Objectify({'delimiter': '//', 'token_key': 'token'})
         >>> content = 'Once//twice//thrice//no more'
         >>> result, skip = parser(content, objconf, False)
-        >>> next(result)
-        {u'token': u'Once'}
+        >>> next(result) == {'token': 'Once'}
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -96,7 +97,9 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['stringtokenizer'][0])
+        ...     resp = {'content': 'Once'}
+        ...     attr = 'stringtokenizer'
+        ...     callback = lambda x: print(next(x)[attr][0] == resp)
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     d = asyncPipe(item)
         ...     return d.addCallbacks(callback, logger.error)
@@ -106,7 +109,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'content': 'Once'}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -143,11 +146,12 @@ def pipe(*args, **kwargs):
         >>> item = {'description': 'Once//twice//thrice//no more'}
         >>> conf = {'delimiter': '//', 'sort': True}
         >>> kwargs = {'field': 'description', 'assign': 'tokens'}
-        >>> next(pipe(item, conf=conf, **kwargs))['tokens'][0]
-        {u'content': 'no more'}
+        >>> resp = {'content': 'no more'}
+        >>> next(pipe(item, conf=conf, **kwargs))['tokens'][0] == resp
+        True
         >>> kwargs.update({'emit': True})
         >>> conf.update({'token_key': 'token'})
-        >>> next(pipe(item, conf=conf, **kwargs))
-        {u'token': 'no more'}
+        >>> next(pipe(item, conf=conf, **kwargs)) == {'token': 'no more'}
+        True
     """
     return parser(*args, **kwargs)

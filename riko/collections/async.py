@@ -27,7 +27,7 @@ Examples:
         ...         .count()
         ...         .list)
         ...
-        ...     print(d1)
+        ...     print(d1 == [{'count': 169}])
         ...
         ...     fconf['type'] = 'fetchdata'
         ...     sources = [{'url': {'value': get_path('feed.xml')}}, fconf]
@@ -39,7 +39,7 @@ Examples:
         ... except SystemExit:
         ...     pass
         ...
-        [{u'count': 169}]
+        True
         56
 """
 from __future__ import (
