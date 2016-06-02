@@ -29,11 +29,11 @@ Some workflows have ``conf`` values that are wired from other pipes
 
 .. code-block:: python
 
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.modules.pipefetch import pipe
     >>>
     >>> conf = {'url': {'subkey': 'url'}}
-    >>> result = pipe({'url': get_url('feed.xml')}, conf=conf)
+    >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
     >>> set(next(result).keys()) == {
     ...     'updated', 'updated_parsed', 'pubDate', 'author', 'y:published',
     ...     'title', 'comments', 'summary', 'content', 'link', 'y:title',

@@ -10,9 +10,9 @@ Examples:
 
         >>> from twisted.internet.task import react
         >>> from riko.twisted.collections import AsyncPipe, AsyncCollection
-        >>> from riko import get_url
+        >>> from riko import get_path
         >>>
-        >>> url = {'value': get_url('gigs.json')}
+        >>> url = {'value': get_path('gigs.json')}
         >>> fconf = {'url': url, 'path': 'value.items'}
         >>> str_conf = {'delimiter': '<br>'}
         >>> str_kwargs = {'field': 'description', 'emit': True}
@@ -28,7 +28,7 @@ Examples:
         ...     print(d1)
         ...
         ...     fconf['type'] = 'fetchdata'
-        ...     sources = [{'url': {'value': get_url('feed.xml')}}, fconf]
+        ...     sources = [{'url': {'value': get_path('feed.xml')}}, fconf]
         ...     d2 = yield AsyncCollection(sources).list
         ...     print(len(d2))
         ...
