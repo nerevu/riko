@@ -20,7 +20,7 @@ Word Count
     >>> #   - `get_path` just looks up files in the `data` directory to simplify
     >>> #      testing
     >>> #   - the `detag` option will strip all html tags from the result
-    >>> url = get_path('users.jyu.fi_~atsoukka_cgi_bin_aarresaari.html')
+    >>> url = get_path('users.jyu.fi.html')
     >>> fetch_conf = {
     ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\\n', 'replace': ' '}}
