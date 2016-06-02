@@ -87,12 +87,10 @@ Fetching feeds
     >>> ### Fetch the first rss feed found ###
     >>> feed = fetchsitefeed(conf={'url': get_path('edition.cnn.html')})
     >>>
-    >>> ### Find all rss links ###
+    >>> ### Find all rss links and fetch the feeds ###
     >>> url = get_path('www.bbc.co.uk_news.html')
     >>> entries = autodiscovery(conf={'url': url})
     >>> urls = (e['link'] for e in entries)
-    >>>
-    >>> ### Fetch multiple links ###
     >>> feed = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
     >>> ### Alternatively, create a SyncCollection ###
@@ -114,8 +112,9 @@ Fetching feeds
     ...     'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
     ...     'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
     True
-    >>> item['author']
-    u'Liam Green-Hughes'
+    >>> item['title'], item['author'], item['link']
+    (u'Using NFC tags in the car', u'Liam Green-Hughes', \
+u'http://www.greenhughes.com/content/using-nfc-tags-car')
 
 
 Synchronous processing

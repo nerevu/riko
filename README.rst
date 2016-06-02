@@ -14,17 +14,24 @@ Introduction
 ------------
 
 **riko** is a Python `framework`_ for analyzing and processing streams of
-structured data. It has synchronous and asynchronous APIs, supports parallel
-execution, and is well suited for processing `rss`_ feeds.
+structured data. It has `synchronous`_ and `asynchronous`_ APIs, supports `parallel
+execution`_, and is well suited for processing rss feeds [#]_.
 
 With riko, you can
 
 - Read csv/xml/json/html files
 - Create text and data processing workflows via modular `pipes`_
 - Parse, extract, and process rss feeds
-- Create awesome `mashups`_, APIs, and maps
-- Perform parallel processing via cpus/processors or threads
+- Create awesome mashups [#]_, APIs, and maps
+- Perform `parallel processing`_ via cpus/processors or threads
 - and much more...
+
+Notes
+^^^^^
+
+.. [#] `Really Simple Syndication`
+.. [#] https://en.wikipedia.org/wiki/Mashup_%28web_application_hybrid%29
+
 
 Requirements
 ------------
@@ -45,7 +52,7 @@ Accelerated xml parsing  `lxml`_ [#]_  ``pip install lxml``
 Notes
 ^^^^^
 
-.. [#] If ``lxml`` isn't present, riko will default to the builtin Python xml parser
+.. [#] If ``lxml`` isn't present, ``riko`` will default to the builtin Python xml parser
 
 Word Count
 ----------
@@ -54,45 +61,20 @@ In this example, we use several `pipes`_ to count the words on a webpage.
 
 .. code-block:: python
 
-    >>> import itertools as it
-    >>> from riko import get_url
-    >>> from riko.modules.pipefetchpage import pipe as fetchpage
-    >>> from riko.modules.pipestrreplace import pipe as strreplace
-    >>> from riko.modules.pipestringtokenizer import pipe as stringtokenizer
-    >>> from riko.modules.pipecount import pipe as count
-    >>>
-    >>> ### Set the pipe configurations ###
-    >>> #
-    >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
-    >>> #      testing
-    >>> #   - the `detag` option will strip all html tags from the result
-    >>> url = get_url('users.jyu.fi_~atsoukka_cgi_bin_aarresaari.html')
-    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
-    >>> replace_conf = {'rule': {'find': '\\n', 'replace': ' '}}
-    >>>
-    >>> ### Create a workflow ###
-    >>> #
-    >>> # The following workflow will:
-    >>> #   1. fetch the url and return the content between the body tags
-    >>> #   2. replace newlines with spaces
-    >>> #   3. tokenize (split) the content by spaces, i.e., yield words
-    >>> #   4. count the words
-    >>> #
-    >>> # Note: because `fetchpage` and `strreplace` each return an iterator of
-    >>> # just one item, we can safely call `next` without fear of loosing data
-    >>> page = next(fetchpage(conf=fetch_conf))
-    >>> replaced = next(strreplace(page, conf=replace_conf, assign='content'))
-    >>> words = stringtokenizer(replaced, conf={'delimiter': ' '}, emit=True)
-    >>> counts = count(words)
-    >>> next(counts)
-    {'count': 70}
-
-    >>> ### Alternatively, create a SyncPipe workflow ###
+    >>> ### Create a SyncPipe workflow ###
     >>> #
     >>> # `SyncPipe` is a workflow convenience class that enables method
     >>> # chaining and parallel processing
     >>> from riko.lib.collections import SyncPipe
+    >>>
+    >>> ### Set the pipe configurations ###
+    >>> #
+    >>> # Notes:
+    >>> #   1. `get_path` just looks up a file in the `data` directory
+    >>> #   2. the `detag` option will strip all html tags from the result
+    >>> url = get_path('users.jyu.fi.html')                                            # 1
+    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 2
+    >>> replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
     >>>
     >>> counts = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
@@ -109,18 +91,15 @@ Motivation
 Why I built riko
 ^^^^^^^^^^^^^^^^
 
-Yahoo! Pipes [#]_ was a user and developer friendly web application that allowed
-you to "aggregate, manipulate, and mashup content from around the web."
-
-Desiring the flexibility to create custom pipes, I looked for an open source
-alternative and found `pipe2py`_. It translated the json configuration from a
-Yahoo pipe into python code. pipe2py suited my needs at the time but was
+Yahoo! Pipes [#]_ was a user friendly web application used to "aggregate,
+manipulate, and mashup content from around the web." Wanting to create custom
+pipes, I came across `pipe2py`_ which translated a Yahoo! Pipes
+into python code. ``pipe2py`` suited my needs at the time but was
 unmaintained and lacked asynchronous and parallel processing APIs.
 
-I designed **riko** to address the shortcomings of pipe2py without the burden
-of providing Yahoo! Pipes compatibility. To that extent, riko contains
-~40 built-in modules, aka ``pipes``, that allow you to programatically
-recreate much of what you previously could on Yahoo! Pipes.
+``riko`` addresses the shortcomings of ``pipe2py`` but breaks compatibility with
+Yahoo! Pipes workflows. ``riko`` contains ~40 built-in modules, aka ``pipes``, that
+allow you to programatically recreate much of what you previously could on Yahoo! Pipes.
 
 Why you should use riko
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -128,22 +107,19 @@ Why you should use riko
 ``riko`` provides a number of benefits / differences from other stream processing
 applications such as Huginn, Flink, Spark, and Storm [#]_. Namely:
 
-- small footprint (CPU and memory usage)
+- a small footprint (CPU and memory usage)
 - native RSS support
 - simple installation and usage
 - `pypy support`_
 - modular ``pipes`` to filter, sort, and modify feeds
 
-Unlike Spark et al., riko is not distributed, i.e., able to run on a cluster of
-servers. The main benefit this brings is a simple installation process
-(no dependencies outside of python) and low resource usage. Next, of
-the other processors mentioned, only riko and Huginn natively support RSS feeds.
+The subsequent tradeoffs ``riko`` makes are:
 
-Compared to Huginn however, riko has a much narrower focus. riko lacks a gui,
-doesn't continually monitor feeds for new data, and can't react to specific
-events. Additionally, riko implements streams as iterators. Iterators have the
-benefit of low memory usage, but are "pull" based and only support a single
-consumer.
+- not distributed (able to run on a cluster of servers)
+- no GUI for creating workflows
+- doesn't continually monitor feeds for new data
+- can't react to specific events
+- iterator (pull) based so only supports a single consumer
 
 The following table summaries these observations:
 
@@ -160,14 +136,14 @@ For more detailed information, please check-out the `FAQ`_.
 Notes
 ^^^^^
 
-.. [#] Yahoo discontinued Yahoo! Pipes in ???, but you can view what `remains`_
+.. [#] Yahoo discontinued Yahoo! Pipes in 2015, but you can view what `remains`_
 .. [#] `Huginn`_, `Flink`_, `Spark`_, and `Storm`_
 .. [#] `Complex Event Processing`_
 
 Usage
 -----
 
-riko is intended to be used directly as a Python library.
+``riko`` is intended to be used directly as a Python library.
 
 Usage Index
 ^^^^^^^^^^^
@@ -181,27 +157,27 @@ Usage Index
 Fetching feeds
 ^^^^^^^^^^^^^^
 
-riko can read both local and remote filepaths via ``source`` pipes. All source
-pipes return equivalent `feed` iterators, i.e., a generator of dictionaries,
-aka items.
+``riko`` can read both local and remote filepaths via ``source`` pipes. All ``source``
+pipes return an equivalent ``feed`` iterator of dictionaries,
+aka ``items``.
 
 .. code-block:: python
 
     >>> from itertools import chain
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.modules.pipefetch import pipe as fetch
+    >>> from riko.modules.pipefetchpage import pipe as fetchpage
     >>> from riko.modules.pipefetchdata import pipe as fetchdata
     >>> from riko.modules.pipefetchsitefeed import pipe as fetchsitefeed
     >>> from riko.modules.pipefeedautodiscovery import pipe as autodiscovery
     >>>
     >>> ### Fetch a url ###
-    >>> feed = fetchdata(conf={'url': 'http://site.com/file.xml'})
+    >>> feed = fetchpage(conf={'url': 'https://news.ycombinator.com'})
     >>>
     >>> ### Fetch a filepath ###
     >>> #
-    >>> # Note: `get_url` just looks up files in the `data` directory
-    >>> # to simplify testing
-    >>> feed = fetchdata(conf={'url': get_url('quote.json')})
+    >>> # Note: `get_path` just looks up a file in the `data` directory
+    >>> feed = fetchdata(conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
     >>> item = next(feed)
@@ -209,17 +185,14 @@ aka items.
     'KRW=X'
 
     >>> ### Fetch an rss feed ###
-    >>> feed = fetch(conf={'url': get_url('feed.xml')})
+    >>> feed = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
     >>> ### Fetch the first rss feed found ###
-    >>> feed = fetchsitefeed(conf={'url': get_url('edition.cnn.html')})
+    >>> feed = fetchsitefeed(conf={'url': http://www.bbc.com/news})
     >>>
-    >>> ### Find all rss links ###
-    >>> url = get_url('www.bbc.co.uk_news.html')
-    >>> entries = autodiscovery(conf={'url': url})
+    >>> ### Find all rss links and fetch the feeds ###
+    >>> entries = autodiscovery(conf={'url': http://edition.cnn.com/services/rss/})
     >>> urls = (e['link'] for e in entries)
-    >>>
-    >>> ### Fetch multiple links ###
     >>> feed = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
     >>> ### Alternatively, create a SyncCollection ###
@@ -241,8 +214,10 @@ aka items.
         'author', 'author.name', 'author.uri', 'comments', 'content',
         'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
         'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
-    >>> item['author']
-    'Liam Green-Hughes'
+    >>> item['title'], item['author'], item['link']
+    (
+        u'Using NFC tags in the car', u'Liam Green-Hughes',
+        u'http://www.greenhughes.com/content/using-nfc-tags-car')
 
 Please see the `FAQ`_ for a complete list of supported `file types`_ and
 `protocols`_
@@ -251,12 +226,12 @@ Please see the `FAQ`_ for a complete list of supported `file types`_ and
 Synchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^
 
-riko can modify feeds by combining any of the 40 built-in ``pipes``
+``riko`` can modify feeds by combining any of the 40 built-in ``pipes``
 
 .. code-block:: python
 
     >>> from itertools import chain
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.modules.pipefetch import pipe as fetch
     >>> from riko.modules.pipefilter import pipe as pfilter
     >>> from riko.modules.pipesubelement import pipe as subelement
@@ -266,17 +241,19 @@ riko can modify feeds by combining any of the 40 built-in ``pipes``
     >>> ### Set the pipe configurations ###
     >>> #
     >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
-    >>> #     testing
-    >>> #   - the `dotall` option is used to match `.*` across newlines
-    >>> fetch_conf = {'url': get_url('feed.xml')}
+    >>> #   1. `get_path` just looks up a file in the `data` directory
+    >>> #   2. the `dotall` option is used to match `.*` across newlines
+    >>> fetch_conf = {'url': get_path('feed.xml')}                                          # 1
     >>> filter_rule = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}  # 2
     >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
     >>>
-    >>> ### Create a workflow ###
+    >>> ### Create a SyncPipe workflow ###
+    >>> #
+    >>> # `SyncPipe` is a workflow convenience class that enables method
+    >>> # chaining and parallel processing.
     >>> #
     >>> # The following workflow will:
     >>> #   1. fetch the rss feed
@@ -285,61 +262,43 @@ riko can modify feeds by combining any of the 40 built-in ``pipes``
     >>> #   4. replace the extracted text with the last href url contained
     >>> #      within it
     >>> #   5. reverse sort the items by the replaced url
+    >>> #   5. return the raw feed iterator
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> feed = fetch(conf=fetch_conf)
-    >>> filtered = pfilter(feed, conf={'rule': filter_rule})
-    >>> extracted = (subelement(i, conf=sub_conf, emit=True) for i in filtered)
-    >>> flat_extract = chain.from_iterable(extracted)
-    >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
-    >>> flat_match = chain.from_iterable(matched)
-    >>> sorted_match = sort(flat_match, conf=sort_conf)
-    >>> next(sorted_match)
-    {'content': 'mailto:mail@writetoreply.org'}
-
-    >>> ### Alternatively, create a SyncPipe workflow ###
-    >>> #
-    >>> # `SyncPipe` is a workflow convenience class that enables method
-    >>> # chaining, parallel processing, and eliminates the manual `map` and
-    >>> # `chain` steps
     >>> from riko.lib.collections import SyncPipe
     >>>
-    >>> output = (SyncPipe('fetch', conf=fetch_conf)
-    ...     .filter(conf={'rule': filter_rule})
-    ...     .subelement(conf=sub_conf, emit=True)
-    ...     .regex(conf={'rule': regex_rule})
-    ...     .sort(conf=sort_conf)
-    ...     .output)
+    >>> output = (SyncPipe('fetch', conf=fetch_conf)  # 1
+    ...     .filter(conf={'rule': filter_rule})       # 2
+    ...     .subelement(conf=sub_conf, emit=True)     # 3
+    ...     .regex(conf={'rule': regex_rule})         # 4
+    ...     .sort(conf=sort_conf)                     # 5
+    ...     .output)                                  # 6
     >>>
     >>> next(output)
     {'content': 'mailto:mail@writetoreply.org'}
 
-Please see `Design Principles`_ for an explanation on why some pipes receive
-an entire feed, e.g., ``pipefilter``, while others receive individual items, e.g.,
-``pipesubelement``.
-
+Please see `Design Principles`_ for an alternative (function based) workflow.
 Please see `pipes`_ for a complete list of available pipes.
 
 Parallel processing
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
-An example using riko's ThreadPool based parallel API
+An example using ``riko``'s ThreadPool based parallel API
 
 .. code-block:: python
 
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.lib.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
     >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
-    >>> #     testing
-    >>> #   - the `dotall` option is used to match `.*` across newlines
-    >>> url = get_url('feed.xml')
+    >>> #   1. `get_path` just looks up a file in the `data` directory
+    >>> #   2. the `dotall` option is used to match `.*` across newlines
+    >>> url = get_path('feed.xml')                                                          # 1
     >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}  # 2
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
@@ -357,15 +316,15 @@ An example using riko's ThreadPool based parallel API
     >>> #   7. remove duplicate urls
     >>> #   8. fetch each rss feed
     >>> #   9. Merge the rss feeds into a list
-    >>> feed = (SyncPipe('fetch', conf={'url': url}, parallel=True)
-    ...     .filter(conf={'rule': filter_rule1})
-    ...     .subelement(conf=sub_conf, emit=True)
-    ...     .regex(conf={'rule': regex_rule})
-    ...     .filter(conf={'rule': filter_rule2})
-    ...     .strtransform(conf=strtransform_conf)
-    ...     .uniq(conf={'uniq_key': 'strtransform'})
-    ...     .fetch(conf={'url': {'subkey': 'strtransform'}})
-    ...     .list)
+    >>> feed = (SyncPipe('fetch', conf={'url': url}, parallel=True)  # 1
+    ...     .filter(conf={'rule': filter_rule1})                     # 2
+    ...     .subelement(conf=sub_conf, emit=True)                    # 3
+    ...     .regex(conf={'rule': regex_rule})                        # 4
+    ...     .filter(conf={'rule': filter_rule2})                     # 5
+    ...     .strtransform(conf=strtransform_conf)                    # 6
+    ...     .uniq(conf={'uniq_key': 'strtransform'})                 # 7
+    ...     .fetch(conf={'url': {'subkey': 'strtransform'}})         # 8
+    ...     .list)                                                   # 9
     >>>
     >>> len(feed)
     25
@@ -373,31 +332,31 @@ An example using riko's ThreadPool based parallel API
 Asynchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-An example using riko's Twisted powered asynchronous API
+An example using ``riko``'s Twisted powered asynchronous API
 
 .. code-block:: python
 
     >>> from twisted.internet.task import react
     >>> from twisted.internet.defer import inlineCallbacks
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.twisted.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
     >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
-    >>> #     testing
-    >>> #   - the `dotall` option is used to match `.*` across newlines
-    >>> url = get_url('feed.xml')
+    >>> #   1. `get_path` just looks up a file in the `data` directory
+    >>> #   2. the `dotall` option is used to match `.*` across newlines
+    >>> url = get_path('feed.xml')                                                          # 1
     >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}
+    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}  # 2
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
     >>> ### Create a AsyncPipe workflow ###
     >>> #
-    >>> # See `Parallel processing` above for the steps this performs
+    >>> # See `Parallel processing` above for an explanation of the steps this
+    >>> # performs
     >>> @inlineCallbacks
     ... def run(reactor):
     ...     feed = yield (AsyncPipe('fetch', conf={'url': url})
@@ -420,19 +379,13 @@ Cookbook
 
 Please see the `cookbook`_ or ipython `notebook`_ for more examples.
 
-Notes
-^^^^^
-
-.. [#] http://pandas.pydata.org/pandas-docs/stable/10min.html#min
-.. [#] https://csvkit.readthedocs.org/en/0.9.1/cli.html#processing
-.. [#] https://github.com/mapbox?utf8=%E2%9C%93&query=geojson
 
 Installation
 ------------
 
 (You are using a `virtualenv`_, right?)
 
-At the command line, install riko using either ``pip`` (*recommended*)
+At the command line, install ``riko`` using either ``pip`` (*recommended*)
 
 .. code-block:: bash
 
@@ -457,67 +410,63 @@ Project Structure
     ├── Makefile
     ├── README.rst
     ├── bin
-    │   └── run
+    │   └── run
     ├── data/*
     ├── dev-requirements.txt
     ├── docs
-    │   ├── AUTHORS.rst
-    │   ├── CHANGES.rst
-    │   ├── COOKBOOK.rst
-    │   ├── FAQ.rst
-    │   ├── INSTALLATION.rst
-    │   └── TODO.rst
+    │   ├── AUTHORS.rst
+    │   ├── CHANGES.rst
+    │   ├── COOKBOOK.rst
+    │   ├── FAQ.rst
+    │   ├── INSTALLATION.rst
+    │   └── TODO.rst
     ├── examples
-    │   ├── __init__.py
-    │   ├── pipe_1a0ea1b39a8f261d0339a12fb5f0f03e.py
-    │   ├── pipe_4f26297843f4952fad920af5990ddc50.py
-    │   ├── pipe_679e2c544332e978b15b6b163767975f.py
-    │   ├── pipe_a3d1afa31f0a24cc51dcbe79f1590343.py
-    │   ├── pipe_base.py
-    │   ├── pipe_gigs.py
-    │   ├── pipe_test.py
-    │   ├── usage.ipynb
-    │   └── usage.py
+    │   ├── __init__.py
+    │   ├── pipe_base.py
+    │   ├── pipe_gigs.py
+    │   ├── pipe_test.py
+    │   ├── usage.ipynb
+    │   └── usage.py
     ├── helpers/*
     ├── manage.py
     ├── py2-requirements.txt
     ├── requirements.txt
     ├── riko
-    │   ├── __init__.py
-    │   ├── lib
-    │   │   ├── __init__.py
-    │   │   ├── autorss.py
-    │   │   ├── collections.py
-    │   │   ├── dotdict.py
-    │   │   ├── log.py
-    │   │   └── utils.py
-    │   ├── modules/*
-    │   └── twisted
-    │       ├── __init__.py
-    │       ├── collections.py
-    │       └── utils.py
+    │   ├── __init__.py
+    │   ├── lib
+    │   │   ├── __init__.py
+    │   │   ├── autorss.py
+    │   │   ├── collections.py
+    │   │   ├── dotdict.py
+    │   │   ├── log.py
+    │   │   └── utils.py
+    │   ├── modules/*
+    │   └── twisted
+    │       ├── __init__.py
+    │       ├── collections.py
+    │       └── utils.py
     ├── setup.cfg
     ├── setup.py
     ├── tests
-    │   ├── __init__.py
-    │   └── standard.rc
+    │   ├── __init__.py
+    │   └── standard.rc
     └── tox.ini
 
 Design Principles
 -----------------
 
-The primary data structures in riko are the ``item``, and ``feed``. An ``item``
+The primary data structures in ``riko`` are the ``item``, and ``feed``. An ``item``
 is a simple dictionary, and a ``feed`` is an iterator of ``items``. You can
 create a feed manually with something as simple as
 ``[{'content': 'hello world'}]``. The primary way to manipulate a ``feed`` in
-riko is via a ``pipe``. A ``pipe`` is simply a function that accepts either a
-``feed`` or ``item``, and returns an iterator of ``item``s. You can create a
+``riko`` is via a ``pipe``. A ``pipe`` is simply a function that accepts either a
+``feed`` or ``item``, and returns an iterator of ``item``'s. You can create a
 ``workflow`` by using the output of one ``pipe`` as the input to another
 ``pipe``.
 
-riko ``pipes`` come in two flavors; ``operator`` and ``processor``.
-``operator``s operate on an entire feed at once and are unable to handle
-individual items. Example ``operator``s include ``pipecount``, ``pipefilter``,
+``riko`` ``pipes`` come in two flavors; ``operator`` and ``processor``.
+``operator``'s operate on an entire feed at once and are unable to handle
+individual items. Example ``operator``'s include ``pipecount``, ``pipefilter``,
 and ``pipereverse``.
 
 .. code-block:: python
@@ -528,8 +477,8 @@ and ``pipereverse``.
     >>> next(pipe(feed))
     {'title': 'riko pt. 2'}
 
-``processor``s process individual feed items and can be parallelized across
-threads or processes. Example ``processor``s include ``pipefetchsitefeed``,
+``processor``'s process individual feed items and can be parallelized across
+threads or processes. Example ``processor``'s include ``pipefetchsitefeed``,
 ``pipehash``, ``pipeitembuilder``, and ``piperegex``.
 
 .. code-block:: python
@@ -541,7 +490,7 @@ threads or processes. Example ``processor``s include ``pipefetchsitefeed``,
     >>> next(feed)
     {'title': 'riko pt. 1', 'hash': 2853617420}
 
-Some ``processor``s, e.g. ``pipestringtokenizer`` return multiple results.
+Some ``processor``'s, e.g. ``pipestringtokenizer`` return multiple results.
 
 .. code-block:: python
 
@@ -563,10 +512,9 @@ Some ``processor``s, e.g. ``pipestringtokenizer`` return multiple results.
     >>> next(feed)
     {'content': 'riko'}
 
-``operator``s are split into sub-types of ``aggregator``
-and ``composer``; and ``processor``s are split into sub-types of
-``source`` and ``transformer``. ``aggregator``s, e.g., ``pipecount``, aggregate
-all items of a feed into a single value while ``composer``s, e.g., ``pipefilter``
+``operator``'s are split into sub-types of ``aggregator``
+and ``composer``. ``aggregator``'s, e.g., ``pipecount``, aggregate
+all items of a feed into a single value while ``composer``'s, e.g., ``pipefilter``
 composed a new feed from a subset or all of the available items.
 
 .. code-block:: python
@@ -577,8 +525,9 @@ composed a new feed from a subset or all of the available items.
     >>> next(pipe(feed))
     {'count': 2}
 
-``source``s, e.g., ``pipefetchsitefeed``, can create a feed while
-``transformer``s, e.g. ``pipehash`` can only transform items in a feed.
+``processor``'s are split into sub-types of ``source`` and ``transformer``.
+``source``'s, e.g., ``pipeitembuilder``, can create a feed while
+``transformer``'s, e.g. ``pipehash`` can only transform items in a feed.
 
 .. code-block:: python
 
@@ -590,19 +539,19 @@ composed a new feed from a subset or all of the available items.
 
 The following table summaries these observations:
 
-+-----------+-------------+-------+-------------+----------------+--------------+
-| type      | sub-type    | input | output [#]_ | parallelizable | feed creator |
-+-----------+-------------+-------+-------------+----------------+--------------+
-| operator  | aggregator  | feed  | aggregation | false          | false        |
-|           +-------------+-------+-------------+----------------+--------------+
-|           | composer    | feed  | feed        | false          | false        |
-+-----------+-------------+-------+-------------+----------------+--------------+
-| processor | source      | item  | feed        | true           | true         |
-|           +-------------+-------+-------------+----------------+--------------+
-|           | transformer | item  | feed        | true           | false        |
-+-----------+-------------+-------+-------------+----------------+--------------+
++-----------+-------------+-------+-------------+--------------------+------------------+
+| type      | sub-type    | input | output      | is parallelizable? | is feed creator? |
++-----------+-------------+-------+-------------+--------------------+------------------+
+| operator  | aggregator  | feed  | aggregation |                    |                  |
+|           +-------------+-------+-------------+--------------------+------------------+
+|           | composer    | feed  | feed        |                    |                  |
++-----------+-------------+-------+-------------+--------------------+------------------+
+| processor | source      | item  | feed        | √                  | √                |
+|           +-------------+-------+-------------+--------------------+------------------+
+|           | transformer | item  | feed        | √                  |                  |
++-----------+-------------+-------+-------------+--------------------+------------------+
 
-If you are unsure of the type of pipe you have, check its metadata.
+If you are unsure of the type of ``pipe`` you have, check its metadata.
 
 .. code-block:: python
 
@@ -610,7 +559,7 @@ If you are unsure of the type of pipe you have, check its metadata.
     >>> from riko.modules.pipecount import pipe
     >>>
     >>> asyncPipe.__dict__
-    {'type': 'processor', 'sub_type': 'source'}
+    {'type': 'processor', 'name': 'fetchpage', 'sub_type': 'source'}
     >>> pipe.__dict__
     {'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
 
@@ -644,7 +593,7 @@ Notes
 Scripts
 -------
 
-riko comes with a built in task manager ``manage.py``
+``riko`` comes with a built in task manager ``manage.py``
 
 Setup
 ^^^^^
@@ -675,8 +624,8 @@ Please see the `contributing doc`_ for more details.
 Credits
 -------
 
-Shoutout to `pipe2py`_ for heavily inspiring riko. riko started out as a fork
-of pipe2py, but has since diverged so much that little (if any) of the original
+Shoutout to `pipe2py`_ for heavily inspiring ``riko``. ``riko`` started out as a fork
+of ``pipe2py``, but has since diverged so much that little (if any) of the original
 code-base remains.
 
 More Info
@@ -689,7 +638,7 @@ More Info
 License
 -------
 
-riko is distributed under the `MIT License`_.
+``riko`` is distributed under the `MIT License`_.
 
 .. |travis| image:: https://img.shields.io/travis/reubano/riko/master.svg
     :target: https://travis-ci.org/reubano/riko
@@ -700,17 +649,22 @@ riko is distributed under the `MIT License`_.
 .. |pypi| image:: https://img.shields.io/pypi/v/riko.svg
     :target: https://pypi.python.org/pypi/riko
 
-.. _rss: https://wikipedia.org/?
-.. _mashups: https://wikipedia.org/?
-.. _pipe2py: https://github.com/?/pipe2py
-.. _Huginn: https://github.com/?/huginn
-.. _Flink: ?
-.. _Spark: ?
-.. _Storm: ?
-.. _Complex Event Processing: ?
-`remains`_ http://???
+.. _Really Simple Syndication: https://en.wikipedia.org/wiki/RSS
+.. _synchronous: #synchronous-processing
+.. _asynchronous: #asynchronous-processing
+.. _parallel execution: #parallel-processing
+.. _mashups: https://en.wikipedia.org/wiki/Mashup_%28web_application_hybrid%29
+.. _pipe2py: https://github.com/ggaughan/pipe2py/
+.. _parallel processing: #parallel-processing
+.. _Huginn: https://github.com/cantino/huginn/
+.. _Flink: http://flink.apache.org/
+.. _Spark: http://spark.apache.org/
+.. _Storm: http://storm.apache.org/
+.. _Complex Event Processing: https://en.wikipedia.org/wiki/Complex_event_processing
+.. _remains: https://web.archive.org/web/20150930021241/http://pipes.yahoo.com/pipes/
 .. _framework: #usage
 .. _lxml: http://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser
+.. _Twisted: http://twistedmatrix.com/
 .. _MIT License: http://opensource.org/licenses/MIT
 .. _virtualenv: http://www.virtualenv.org/en/latest/index.html
 .. _contributing doc: https://github.com/reubano/riko/blob/master/CONTRIBUTING.rst
