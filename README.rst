@@ -41,12 +41,12 @@ Requirements
 Optional Dependencies
 ^^^^^^^^^^^^^^^^^^^^^
 
-=======================  ============  =======================
+=======================  ============  ===========================
 Feature                  Dependency    Installation
-=======================  ============  =======================
-Async API                `Twisted`_    ``pip install twisted``
+=======================  ============  ===========================
+Async API                `Twisted`_    ``pip install riko[async]``
 Accelerated xml parsing  `lxml`_ [#]_  ``pip install lxml``
-=======================  ============  =======================
+=======================  ============  ===========================
 
 Notes
 ^^^^^
@@ -331,7 +331,13 @@ An example using ``riko``'s ThreadPool based parallel API
 Asynchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-An example using ``riko``'s Twisted powered asynchronous API
+To enable this asynchronous processing, you must install the ``async`` module.
+
+.. code-block:: bash
+
+    pip install riko[async]
+
+An example using ``riko``'s optional Twisted powered asynchronous API.
 
 .. code-block:: python
 
