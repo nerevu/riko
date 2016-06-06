@@ -6,7 +6,7 @@ from __future__ import (
 
 from pprint import pprint
 from twisted.internet.defer import inlineCallbacks
-from riko import get_url
+from riko import get_path
 from riko.lib.utils import combine_dicts as cdict
 from riko.lib.collections import SyncCollection
 from riko.twisted.collections import AsyncCollection
@@ -190,7 +190,7 @@ tokenizer_conf = {'dedupe': True, 'sort': True}
 substring1_conf = {'from': 0, 'length': 3}
 substring2_conf = {'from': 0, 'length': 1}
 currencyformat1_conf = {'currency': {'subkey': 'k:cur_code'}}
-exchangerate_conf = {'url': get_url('quote.json')}
+exchangerate_conf = {'url': get_path('quote.json')}
 currencyformat2_conf = {'currency': DEF_CUR_CODE}
 simplemath1_conf = make_simplemath('k:budget_raw2_num', 'mean')
 simplemath2_conf = make_simplemath('k:rate', 'multiply')

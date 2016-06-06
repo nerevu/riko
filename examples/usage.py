@@ -8,7 +8,7 @@ README examples
 Word Count
 
     >>> import itertools as it
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.modules.pipefetchpage import pipe as fetchpage
     >>> from riko.modules.pipestrreplace import pipe as strreplace
     >>> from riko.modules.pipestringtokenizer import pipe as stringtokenizer
@@ -17,10 +17,10 @@ Word Count
     >>> ### Set the pipe configurations ###
     >>> #
     >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
+    >>> #   - `get_path` just looks up files in the `data` directory to simplify
     >>> #      testing
     >>> #   - the `detag` option will strip all html tags from the result
-    >>> url = get_url('users.jyu.fi_~atsoukka_cgi_bin_aarresaari.html')
+    >>> url = get_path('users.jyu.fi.html')
     >>> fetch_conf = {
     ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\\n', 'replace': ' '}}
@@ -61,7 +61,7 @@ Word Count
 Fetching feeds
 
     >>> from itertools import chain
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.modules.pipefetch import pipe as fetch
     >>> from riko.modules.pipefetchdata import pipe as fetchdata
     >>> from riko.modules.pipefetchsitefeed import pipe as fetchsitefeed
@@ -72,9 +72,9 @@ Fetching feeds
     >>>
     >>> ### Fetch a filepath ###
     >>> #
-    >>> # Note: `get_url` just looks up files in the `data` directory
+    >>> # Note: `get_path` just looks up files in the `data` directory
     >>> # to simplify testing
-    >>> feed = fetchdata(conf={'url': get_url('quote.json')})
+    >>> feed = fetchdata(conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
     >>> item = next(feed)
@@ -82,17 +82,15 @@ Fetching feeds
     u'KRW=X'
 
     >>> ### Fetch an rss feed ###
-    >>> feed = fetch(conf={'url': get_url('feed.xml')})
+    >>> feed = fetch(conf={'url': get_path('feed.xml')})
     >>>
     >>> ### Fetch the first rss feed found ###
-    >>> feed = fetchsitefeed(conf={'url': get_url('edition.cnn.html')})
+    >>> feed = fetchsitefeed(conf={'url': get_path('edition.cnn.html')})
     >>>
-    >>> ### Find all rss links ###
-    >>> url = get_url('www.bbc.co.uk_news.html')
+    >>> ### Find all rss links and fetch the feeds ###
+    >>> url = get_path('www.bbc.co.uk_news.html')
     >>> entries = autodiscovery(conf={'url': url})
     >>> urls = (e['link'] for e in entries)
-    >>>
-    >>> ### Fetch multiple links ###
     >>> feed = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
     >>> ### Alternatively, create a SyncCollection ###
@@ -114,14 +112,15 @@ Fetching feeds
     ...     'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
     ...     'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
     True
-    >>> item['author']
-    u'Liam Green-Hughes'
+    >>> item['title'], item['author'], item['link']
+    (u'Using NFC tags in the car', u'Liam Green-Hughes', \
+u'http://www.greenhughes.com/content/using-nfc-tags-car')
 
 
 Synchronous processing
 
     >>> from itertools import chain
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.modules.pipefetch import pipe as fetch
     >>> from riko.modules.pipefilter import pipe as pfilter
     >>> from riko.modules.pipesubelement import pipe as subelement
@@ -130,9 +129,9 @@ Synchronous processing
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Note: `get_url` just looks up files in the `data` directory to
+    >>> # Note: `get_path` just looks up files in the `data` directory to
     >>> # simplify testing
-    >>> fetch_conf = {'url': get_url('feed.xml')}
+    >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {
     ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
@@ -181,14 +180,14 @@ Synchronous processing
 
 Parallel processing
 
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.lib.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
-    >>> # Notes `get_url` just looks up files in the `data` directory to
+    >>> # Notes `get_path` just looks up files in the `data` directory to
     >>> # simplify testing
-    >>> url = get_url('feed.xml')
+    >>> url = get_path('feed.xml')
     >>> filter_rule1 = {
     ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
@@ -228,17 +227,17 @@ Asynchronous processing
 
     >>> from twisted.internet.task import react
     >>> from twisted.internet.defer import inlineCallbacks
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.twisted import utils as tu
     >>> from riko.twisted.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
     >>> # Notes:
-    >>> #   - `get_url` just looks up files in the `data` directory to simplify
+    >>> #   - `get_path` just looks up files in the `data` directory to simplify
     >>> #     testing
     >>> #   - the `dotall` option is used to match `.*` across newlines
-    >>> url = get_url('feed.xml')
+    >>> url = get_path('feed.xml')
     >>> filter_rule1 = {
     ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
@@ -344,11 +343,11 @@ Design Principles
     True
 
     # Alternate conf usage
-    >>> from riko import get_url
+    >>> from riko import get_path
     >>> from riko.modules.pipefetch import pipe
     >>>
     >>> conf = {'url': {'subkey': 'url'}}
-    >>> result = pipe({'url': get_url('feed.xml')}, conf=conf)
+    >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
     >>> set(next(result).keys()) == {
     ...     'updated', 'updated_parsed', 'pubDate', 'author', 'y:published',
     ...     'title', 'comments', 'summary', 'content', 'link', 'y:title',

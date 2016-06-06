@@ -26,7 +26,7 @@ files = [
     'feed.xml',
     'feeds.delicious.com_v2_rss_popular?count=3.xml',
     'feeds.delicious.com_v2_rss_popular?count=15.xml',
-    'feeds.delicious.com_v2_rss_psychemedia?count=15.xml',
+    'feeds.delicious.compsychemedia.xml',
     'feeds.feedburner.com_ouseful.xml',
     'feeds.feedburner.com_TheEdTechie.xml',
     'feeds.feedburner.com_yodelanecdotal.xml',
@@ -38,10 +38,10 @@ files = [
     'www.greenhughes.com_rssfeed.xml',
     'www.slideshare.net_rss_user_psychemedia.xml']
 
-get_url = lambda name: 'file://%s' % p.join(parent, name)
-sources = [{'url': get_url(f)} for f in files]
+get_path = lambda name: 'file://%s' % p.join(parent, name)
+sources = [{'url': get_path(f)} for f in files]
 length = len(files)
-conf = {'url': [{'value': get_url(f)} for f in files], 'sleep': DELAY}
+conf = {'url': [{'value': get_path(f)} for f in files], 'sleep': DELAY}
 iterable = [DELAY for x in files]
 
 

@@ -19,6 +19,8 @@ sys.dont_write_bytecode = True
 py2_requirements = sorted(pkutils.parse_requirements('py2-requirements.txt'))
 py3_requirements = sorted(pkutils.parse_requirements('requirements.txt'))
 dev_requirements = sorted(pkutils.parse_requirements('dev-requirements.txt'))
+optional = 'optional-requirements.txt'
+async_requirements = sorted(pkutils.parse_requirements(optional))
 readme = pkutils.read('README.rst')
 changes = pkutils.read('CHANGES.rst').replace('.. :changelog:', '')
 license = module.__license__
@@ -34,7 +36,11 @@ else:
     requirements = py3_requirements
 
 # Conditional bdist_wheel dependencies:
-extras_require = sorted(set(py2_requirements).difference(py3_requirements))
+py2_require = sorted(set(py2_requirements).difference(py3_requirements))
+
+# Optional requirements
+async_require = set(async_requirements).difference(requirements)
+dev_require = set(dev_requirements).difference(requirements)
 
 setup(
     name=project,
@@ -55,7 +61,11 @@ setup(
         'examples': ['examples/*']
     },
     install_requires=requirements,
-    extras_require={'python_version<3.0': extras_require},
+    extras_require={
+        'python_version<3.0': py2_require,
+        'async': async_require,
+        'develop': dev_require,
+    },
     setup_requires=['pkutils>=0.12.4,<0.13.0'],
     test_suite='nose.collector',
     tests_require=dev_requirements,

@@ -36,7 +36,7 @@ from __future__ import (
 from os import path as p
 from builtins import *
 
-__version__ = '0.28.2'
+__version__ = '0.29.0'
 
 __title__ = 'riko'
 __package_name__ = 'riko'
@@ -51,5 +51,5 @@ parts = [
     'www.bbc.co.uk_news.html', 'edition.cnn.html', 'google_spreadsheet.csv']
 
 
-def get_url(name):
+def get_path(name):
     return 'file://%s' % p.join('data', name)

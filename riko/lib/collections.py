@@ -9,9 +9,9 @@ Examples:
     basic usage::
 
         >>> from riko.lib.collections import SyncPipe
-        >>> from riko import get_url
+        >>> from riko import get_path
         >>>
-        >>> url = {'value': get_url('gigs.json')}
+        >>> url = {'value': get_path('gigs.json')}
         >>> fconf = {'url': url, 'path': 'value.items'}
         >>> str_conf = {'delimiter': '<br>'}
         >>> str_kwargs = {'field': 'description', 'emit': True}
@@ -33,7 +33,7 @@ Examples:
         ...     .count().list)
         [{u'count': 169}]
         >>> fconf['type'] = 'fetchdata'
-        >>> sources = [{'url': {'value': get_url('feed.xml')}}, fconf]
+        >>> sources = [{'url': {'value': get_path('feed.xml')}}, fconf]
         >>> len(SyncCollection(sources).list)
         56
         >>> len(SyncCollection(sources, parallel=True).list)

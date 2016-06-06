@@ -1,0 +1,4 @@
+-r requirements.txt
+Twisted>=15.0.0,<16.0.0
+treq>=0.2.1,<0.3.0
+lxml>=3.3.5,<4.0.0

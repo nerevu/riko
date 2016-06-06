@@ -25,6 +25,9 @@ pip-log.txt
 .tox
 .noseids
 nosetests.xml
+*.ropeproject
+cover/*
+coverage.xml
 
 # Translations
 *.mo

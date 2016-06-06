@@ -8,10 +8,10 @@ Provides functions for querying currency exchange rates
 Examples:
     basic usage::
 
-        >>> from riko import get_url
+        >>> from riko import get_path
         >>> from riko.modules.pipeexchangerate import pipe
         >>>
-        >>> url = get_url('quote.json')
+        >>> url = get_path('quote.json')
         >>> next(pipe({'content': 'GBP'}, conf={'url': url}))['exchangerate']
         Decimal('1.545801')
 
@@ -99,12 +99,12 @@ def asyncParser(base, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from riko import get_url
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0])
-        ...     url = get_url('quote.json')
+        ...     url = get_path('quote.json')
         ...     conf = {
         ...         'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
@@ -156,10 +156,10 @@ def parser(base, objconf, skip, **kwargs):
         Tuple(dict, bool): Tuple of (item, skip)
 
     Examples:
-        >>> from riko import get_url
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> url = get_url('quote.json')
+        >>> url = get_path('quote.json')
         >>> conf = {'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify(conf)
@@ -226,11 +226,11 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from riko import get_url
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['exchangerate'])
-        ...     url = get_url('quote.json')
+        ...     url = get_path('quote.json')
         ...     d = asyncPipe({'content': 'GBP'}, conf={'url': url})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -279,8 +279,8 @@ def pipe(*args, **kwargs):
         dict: an item of the result
 
     Examples:
-        >>> from riko import get_url
-        >>> url = get_url('quote.json')
+        >>> from riko import get_path
+        >>> url = get_path('quote.json')
         >>> conf = {'url': url}
         >>> rate = next(pipe({'content': 'GBP'}, conf=conf))['exchangerate']
         >>> rate
