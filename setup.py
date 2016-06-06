@@ -27,7 +27,7 @@ license = module.__license__
 version = module.__version__
 project = module.__title__
 description = module.__description__
-user = 'reubano'
+user = 'nerevu'
 
 # Conditional sdist dependencies:
 if 'bdist_wheel' not in sys.argv and sys.version_info.major == 2:
