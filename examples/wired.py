@@ -17,29 +17,29 @@ p100_conf = {
 p120_kwargs = {'conf': p120_conf, 'inputs': p120_inputs, 'assign': 'format'}
 
 
-def pipe_wired(test=False):
-    p120 = SyncPipe('input', test=test, **p120_kwargs).output
-    p151 = (SyncPipe('input', conf=p112_conf, test=test)
-        .dateformat(conf=p151_conf, format=p120)
+def pipe(test=False):
+    s1 = SyncPipe('input', test=test, **p120_kwargs).output
+    s2 = (SyncPipe('input', conf=p112_conf, test=test)
+        .dateformat(conf=p151_conf, format=s1)
         .output)
 
-    output = (SyncPipe('itembuilder', conf=p100_conf, value=p151, test=test)
+    stream = (SyncPipe('itembuilder', conf=p100_conf, value=s2, test=test)
         .list)
 
-    for i in output:
+    for i in stream:
         pprint(i)
 
-    return output
+    return stream
 
 
 @inlineCallbacks
-def asyncPipeWired(reactor, test=False):
-    p120 = yield AsyncPipe('input', test=test, **p120_kwargs).output
-    p151 = yield (AsyncPipe('input', conf=p112_conf, test=test)
-        .dateformat(conf=p151_conf, format=p120)
+def asyncPipe(reactor, test=False):
+    s1 = yield AsyncPipe('input', test=test, **p120_kwargs).output
+    s2 = yield (AsyncPipe('input', conf=p112_conf, test=test)
+        .dateformat(conf=p151_conf, format=s1)
         .output)
 
-    output_kwargs = {'conf': p100_conf, 'value': p151, 'test': test}
+    output_kwargs = {'conf': p100_conf, 'value': s2, 'test': test}
     output = yield (AsyncPipe('itembuilder', **output_kwargs)
         .list)
 

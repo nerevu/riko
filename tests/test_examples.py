@@ -29,14 +29,13 @@ class TestExamples(object):
 
     def _get_pipeline(self, pipe_name):
         module = import_module('examples.%s' % pipe_name)
-        pipe_generator = getattr(module, pipe_name)
-        pipeline = pipe_generator(test=True)
+        pipeline = module.pipe(test=True)
         return list(pipeline)
 
     def test_kazeeki(self):
         """Tests the kazeeki pipeline
         """
-        pipe_name = 'pipe_kazeeki'
+        pipe_name = 'kazeeki'
         pipeline = self._get_pipeline(pipe_name)
 
         example = {
@@ -83,7 +82,7 @@ class TestExamples(object):
     def test_gigs(self):
         """Tests the gigs pipeline
         """
-        pipe_name = 'pipe_gigs'
+        pipe_name = 'gigs'
         pipeline = self._get_pipeline(pipe_name)
 
         example = {
@@ -127,7 +126,7 @@ class TestExamples(object):
     def test_simple1(self):
         """Tests the simple1 pipeline
         """
-        pipe_name = 'pipe_simple1'
+        pipe_name = 'simple1'
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
@@ -137,7 +136,7 @@ class TestExamples(object):
     def test_simple2(self):
         """Tests the simple2 pipeline
         """
-        pipe_name = 'pipe_simple2'
+        pipe_name = 'simple2'
         pipeline = self._get_pipeline(pipe_name)
         example = {
             'author': 'ABC', 'link': 'www.google.com', 'title': 'google'}
@@ -150,7 +149,7 @@ class TestExamples(object):
     def test_split(self):
         """Tests the split pipeline
         """
-        pipe_name = 'pipe_split'
+        pipe_name = 'split'
         pipeline = self._get_pipeline(pipe_name)
         example = {'date': 'December 02, 2014', 'year': 2014}
         length = len(pipeline)
@@ -161,7 +160,7 @@ class TestExamples(object):
     def test_wired(self):
         """Tests the wired pipeline
         """
-        pipe_name = 'pipe_wired'
+        pipe_name = 'wired'
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'

@@ -39,19 +39,16 @@ def run():
     except AttributeError:
         pipeid = args.pipeid
 
-    pipe_name = 'pipe_%s' % pipeid
-
     try:
-        module = import_module('examples.%s' % pipe_name)
+        module = import_module('examples.%s' % pipeid)
     except ImportError:
-        exit('Pipe examples.%s not found!' % pipe_name)
+        exit('Pipe examples.%s not found!' % pipeid)
 
     if args.async:
-        pipe = 'asyncPipe%s' % pipeid.title()
-        pipeline = getattr(module, pipe)
+        pipeline = getattr(module, 'asyncPipe')
         react(pipeline, [args.test])
     else:
-        pipeline = getattr(module, pipe_name)
+        pipeline = getattr(module, 'pipe')
         pipeline(test=args.test)
 
 if __name__ == "__main__":

@@ -6,33 +6,33 @@ from twisted.internet.defer import inlineCallbacks
 from riko.lib.collections import SyncPipe
 from riko.twisted.collections import AsyncPipe
 
-p163_conf = {
+p1_conf = {
     'attrs': [
         {
             'value': 'http://www.caltrain.com/Fares/farechart.html',
             'key': 'url'}]}
 
-p134_conf = {
+p2_conf = {
     'rule': {
         'field': 'url', 'match': {'subkey': 'url'}, 'replace': 'farechart'}}
 
 
-def pipe_simple1(test=False):
-    output = (SyncPipe('itembuilder', conf=p163_conf, test=test)
-        .regex(conf=p134_conf)
+def pipe(test=False):
+    stream = (SyncPipe('itembuilder', conf=p1_conf, test=test)
+        .regex(conf=p2_conf)
         .list)
 
-    for i in output:
+    for i in stream:
         pprint(i)
 
-    return output
+    return stream
 
 
 @inlineCallbacks
-def asyncPipeSimple1(reactor, test=False):
-    output = yield (AsyncPipe('itembuilder', conf=p163_conf, test=test)
-        .regex(conf=p134_conf)
+def asyncPipe(reactor, test=False):
+    stream = yield (AsyncPipe('itembuilder', conf=p1_conf, test=test)
+        .regex(conf=p2_conf)
         .list)
 
-    for i in output:
+    for i in stream:
         pprint(i)

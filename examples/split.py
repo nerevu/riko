@@ -17,32 +17,30 @@ p393_conf = {
 p385_kwargs = {'conf': p385_conf, 'inputs': p385_in}
 
 
-def pipe_split(test=False):
-    p405, p406 = (SyncPipe('input', test=test, **p385_kwargs)
+def pipe(test=False):
+    s1, s2 = (SyncPipe('input', test=test, **p385_kwargs)
         .dateformat(conf=p405_conf)
         .split()
         .output)
 
-    p393_kwargs = {'conf': p393_conf, 'date': p405, 'year': p406, 'test': test}
-    output = (SyncPipe('itembuilder', **p393_kwargs)
-        .list)
+    p393_kwargs = {'conf': p393_conf, 'date': s1, 'year': s2, 'test': test}
+    stream = SyncPipe('itembuilder', **p393_kwargs).list
 
-    for i in output:
+    for i in stream:
         pprint(i)
 
-    return output
+    return stream
 
 
 @inlineCallbacks
-def asyncPipeSplit(reactor, test=False):
-    p405, p406 = yield (AsyncPipe('input', test=test, **p385_kwargs)
+def asyncPipe(reactor, test=False):
+    s1, s2 = yield (AsyncPipe('input', test=test, **p385_kwargs)
         .dateformat(conf=p405_conf)
         .split()
         .output)
 
-    p393_kwargs = {'conf': p393_conf, 'date': p405, 'year': p406, 'test': test}
-    output = yield (AsyncPipe('itembuilder', **p393_kwargs)
-        .list)
+    p393_kwargs = {'conf': p393_conf, 'date': s1, 'year': s2, 'test': test}
+    stream = yield AsyncPipe('itembuilder', **p393_kwargs).list
 
-    for i in output:
+    for i in stream:
         pprint(i)
