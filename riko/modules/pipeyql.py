@@ -73,10 +73,10 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: content)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (feed, skip)
+        Deferred: twisted.internet.defer.Deferred Tuple of (stream, skip)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -91,7 +91,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ...     callback = lambda x: print(next(x[0])['title'])
         ...     conf = {'query': query, 'url': url, 'debug': False}
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'feed': {}, 'response': urlopen(FILES[7])}
+        ...     kwargs = {'stream': {}, 'response': urlopen(FILES[7])}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -103,7 +103,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         Bring pizza home
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         f = kwargs.get('response')
 
@@ -116,9 +116,9 @@ def asyncParser(_, objconf, skip, **kwargs):
             root = yield microdom.parseString(content)
 
         results = root.getElementsByTagName('results')[0]
-        feed = map(tu.elementToDict, results.childNodes)
+        stream = map(tu.elementToDict, results.childNodes)
 
-    result = (feed, skip)
+    result = (stream, skip)
     returnValue(result)
 
 
@@ -133,10 +133,10 @@ def parser(_, objconf, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: content)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from urllib2 import urlopen
@@ -147,13 +147,13 @@ def parser(_, objconf, skip, **kwargs):
         >>> query = "select * from feed where url='%s'" % FEEDS[0]
         >>> conf = {'query': query, 'url': url, 'debug': False}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'feed': {}, 'response': urlopen(FILES[7])}
+        >>> kwargs = {'stream': {}, 'response': urlopen(FILES[7])}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['title']
         'Bring pizza home'
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         f = kwargs.get('response')
 
@@ -166,9 +166,9 @@ def parser(_, objconf, skip, **kwargs):
         tree = parse(f)
         root = tree.getroot()
         results = root.find('results')
-        feed = map(utils.etree_to_dict, results.getchildren())
+        stream = map(utils.etree_to_dict, results.getchildren())
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
@@ -193,7 +193,7 @@ def asyncPipe(*args, **kwargs):
             assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
-        dict: twisted.internet.defer.Deferred feed of items
+        dict: twisted.internet.defer.Deferred stream of items
 
     Examples:
         >>> from urllib2 import urlopen

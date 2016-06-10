@@ -66,7 +66,7 @@ def parser(date, objconf, skip, **kwargs):
         '05/04/2015'
     """
     timetuple = date['date'].timetuple()
-    parsed = kwargs['feed'] if skip else strftime(objconf.format, timetuple)
+    parsed = kwargs['stream'] if skip else strftime(objconf.format, timetuple)
     return parsed, skip
 
 

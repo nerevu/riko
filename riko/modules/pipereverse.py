@@ -3,7 +3,7 @@
 """
 riko.modules.pipereverse
 ~~~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for flipping the order of all items in a feed.
+Provides functions for flipping the order of all items in a stream.
 
 Examples:
     basic usage::
@@ -29,45 +29,45 @@ OPTS = {'dictize': False}
 logger = Logger(__name__).logger
 
 
-def parser(feed, objconf, tuples, **kwargs):
+def parser(stream, objconf, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+        stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         objconf (obj): the item independent configuration (an Objectify
             instance).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source feed and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the `feed`
-            iterator, so consuming it will consume `feed` as well.
+            `item` is an element in the source stream and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the
+            `stream` iterator, so consuming it will consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
 
     Returns:
-        Iter(dict): The output feed
+        Iter(dict): The output stream
 
     Examples:
         >>> from itertools import repeat
         >>>
         >>> kwargs = {}
-        >>> feed = ({'x': x} for x in range(5))
-        >>> tuples = zip(feed, repeat(None))
-        >>> next(parser(feed, None, tuples, **kwargs))
+        >>> stream = ({'x': x} for x in range(5))
+        >>> tuples = zip(stream, repeat(None))
+        >>> next(parser(stream, None, tuples, **kwargs))
         {u'x': 4}
     """
-    return reversed(list(feed))
+    return reversed(list(stream))
 
 
 @operator(async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously reverses the order of source items in
-    a feed. Note that this pipe is not lazy.
+    a stream. Note that this pipe is not lazy.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Returns:
@@ -96,14 +96,14 @@ def asyncPipe(*args, **kwargs):
 
 @operator(**OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly reverses the order of source items in a feed.
+    """An operator that eagerly reverses the order of source items in a stream.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Yields:
-        dict: a feed item
+        dict: an item
 
     Examples:
         >>> items = ({'x': x} for x in range(5))

@@ -10,9 +10,9 @@ assigning values to one or more item attributes. The module lets you assign
 a value to an attribute.
 
 Item Builder's strength is its ability to restructure and rename multiple
-elements in a feed. When Item Builder is fed an input feed, the assigned values
-can be existing attributes of the input feed. These attributes can be reassigned
-or used to create entirely new attributes.
+elements in a stream. When Item Builder is fed an input stream, the assigned
+values can be existing attributes of the stream. These attributes can be
+reassigned or used to create entirely new attributes.
 
 Examples:
     basic usage::
@@ -49,10 +49,10 @@ def parser(_, attrs, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple[Iter(dict), bool]: Tuple of (feed, skip)
+        Tuple[Iter(dict), bool]: Tuple of (stream, skip)
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -64,8 +64,8 @@ def parser(_, attrs, skip, **kwargs):
         True
     """
     items = ((a.key, a.value) for a in attrs)
-    feed = kwargs['feed'] if skip else DotDict(items)
-    return feed, skip
+    stream = kwargs['stream'] if skip else DotDict(items)
+    return stream, skip
 
 
 @processor(async=True, **OPTS)

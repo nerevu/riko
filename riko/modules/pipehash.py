@@ -51,7 +51,7 @@ def parser(word, _, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: exchangerate)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple(dict, bool): Tuple of (item, skip)
@@ -60,17 +60,17 @@ def parser(word, _, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> item = {'content': 'hello world'}
-        >>> kwargs = {'feed': item}
+        >>> kwargs = {'stream': item}
         >>> parser(item['content'], None, False, **kwargs)[0]
         3885626731L
     """
-    parsed = kwargs['feed'] if skip else ctypes.c_uint(hash(word)).value
+    parsed = kwargs['stream'] if skip else ctypes.c_uint(hash(word)).value
     return parsed, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A processor module that asynchronously hashes the field of a feed item.
+    """A processor module that asynchronously hashes the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -105,7 +105,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(**OPTS)
 def pipe(*args, **kwargs):
-    """A processor that hashes the field of a feed item.
+    """A processor that hashes the field of an item.
 
     Args:
         item (dict): The entry to process

@@ -59,10 +59,10 @@ def parser(item, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from riko.lib.dotdict import DotDict
@@ -71,19 +71,19 @@ def parser(item, objconf, skip, **kwargs):
         >>> item = DotDict()
         >>> conf = {'guid': 'a1', 'mediaThumbURL': 'image.png'}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'feed': item}
+        >>> kwargs = {'stream': item}
         >>> result, skip = parser(item, objconf, False, **kwargs)
         >>> result == {'media:thumbnail': {'url': 'image.png'}, 'y:id': 'a1'}
         True
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         items = objconf.items()
         rdict = ((RSS.get(k, k), item.get(v, v, **kwargs)) for k, v in items)
-        feed = DotDict(rdict)
+        stream = DotDict(rdict)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)

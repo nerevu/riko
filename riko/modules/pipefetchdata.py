@@ -69,10 +69,10 @@ def asyncParser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -82,7 +82,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0][0]['title'])
         ...     objconf = Objectify({'url': FILES[2], 'path': 'value.items'})
-        ...     kwargs = {'feed': {}}
+        ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -94,7 +94,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         Business System Analyst
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
@@ -110,9 +110,9 @@ def asyncParser(_, objconf, skip, **kwargs):
         else:
             raise TypeError('Invalid file type %s' % ext)
 
-        feed = yield tu.coopReduce(reducer, path, element)
+        stream = yield tu.coopReduce(reducer, path, element)
 
-    result = (feed, skip)
+    result = (stream, skip)
     returnValue(result)
 
 
@@ -126,23 +126,23 @@ def parser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from . import FILES
         >>> from riko.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'url': FILES[2], 'path': 'value.items'})
-        >>> kwargs = {'feed': {}}
+        >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> result[0]['title']
         u'Business System Analyst'
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
@@ -158,15 +158,15 @@ def parser(_, objconf, skip, **kwargs):
         else:
             raise TypeError('Invalid file type %s' % ext)
 
-        feed = reduce(reducer, path, element)
+        stream = reduce(reducer, path, element)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches and parses an XML or JSON file to
-    return the feed entries.
+    return the entries.
 
     Args:
         item (dict): The entry to process
@@ -183,7 +183,7 @@ def asyncPipe(*args, **kwargs):
             html5 (bool): Use the HTML5 parser (default: False)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred feed of items
+        Deferred: twisted.internet.defer.Deferred stream of items
 
     Examples:
         >>> from twisted.internet.task import react
@@ -209,7 +209,7 @@ def asyncPipe(*args, **kwargs):
 @processor(**OPTS)
 def pipe(*args, **kwargs):
     """A source that fetches and parses an XML or JSON file to
-    return the feed entries.
+    return the entries.
 
     Args:
         item (dict): The entry to process

@@ -3,7 +3,7 @@
 """
 riko.modules.pipecount
 ~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for counting the number of items in a feed.
+Provides functions for counting the number of items in a stream.
 
 Examples:
     basic usage::
@@ -29,18 +29,18 @@ OPTS = {'dictize': False, 'ptype': 'none'}
 logger = Logger(__name__).logger
 
 
-def parser(feed, _, tuples, **kwargs):
+def parser(stream, _, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+        stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         _ (None): Ignored.
 
         tuples (Iter[(dict, None)]): Iterable of tuples of (item, None)
-            `item` is an element in the source feed. Note: this shares the
-            `feed` iterator, so consuming it will consume `feed` as well.
+            `item` is an element in the source. Note: this shares the
+            `stream` iterator, so consuming it will consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
 
@@ -53,21 +53,21 @@ def parser(feed, _, tuples, **kwargs):
     Examples:
         >>> from itertools import repeat
         >>>
-        >>> feed = ({'x': x} for x in range(5))
-        >>> tuples = zip(feed, repeat(None))
-        >>> parser(feed, None, tuples, assign='content')
+        >>> stream = ({'x': x} for x in range(5))
+        >>> tuples = zip(stream, repeat(None))
+        >>> parser(stream, None, tuples, assign='content')
         {u'content': 5}
     """
-    return {kwargs['assign']: len(list(feed))}
+    return {kwargs['assign']: len(list(stream))}
 
 
 @operator(async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously and eagerly counts the number of items
-    in a feed. Note that this pipe is not lazy.
+    in a stream. Note that this pipe is not lazy.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -100,11 +100,11 @@ def asyncPipe(*args, **kwargs):
 
 @operator(**OPTS)
 def pipe(*args, **kwargs):
-    """An aggregator that eagerly counts the number of items in a feed.
+    """An aggregator that eagerly counts the number of items in a stream.
     Note that this pipe is not lazy.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

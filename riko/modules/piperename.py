@@ -3,7 +3,7 @@
 """
 riko.modules.piperename
 ~~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for renaming, copying, and deleting elements of a feed item.
+Provides functions for renaming, copying, and deleting elements of an item.
 
 There are several cases when this is useful, for example when the input data is
 not in RSS format (e.g., elements are not named title, link, description, etc.)
@@ -63,7 +63,7 @@ def asyncParser(item, rules, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
@@ -77,7 +77,7 @@ def asyncParser(item, rules, skip, **kwargs):
         ...     callback = lambda x: print(x[0])
         ...     item = DotDict({'content': 'hello world'})
         ...     rule = {'field': 'content', 'newval': 'greeting'}
-        ...     kwargs = {'feed': item}
+        ...     kwargs = {'stream': item}
         ...     d = asyncParser(item, [Objectify(rule)], False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -89,7 +89,7 @@ def asyncParser(item, rules, skip, **kwargs):
         {u'greeting': u'hello world'}
     """
     if skip:
-        item = kwargs['feed']
+        item = kwargs['stream']
     else:
         item = yield tu.coopReduce(reducer, rules, item)
 
@@ -107,7 +107,7 @@ def parser(item, rules, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple (dict, bool): Tuple of (item, skip)
@@ -118,18 +118,18 @@ def parser(item, rules, skip, **kwargs):
         >>>
         >>> item = DotDict({'content': 'hello world'})
         >>> rule = {'field': 'content', 'newval': 'greeting'}
-        >>> kwargs = {'feed': item}
+        >>> kwargs = {'stream': item}
         >>> parser(item, [Objectify(rule)], False, **kwargs)[0]
         {u'greeting': u'hello world'}
     """
-    item = kwargs['feed'] if skip else reduce(reducer, rules, item)
+    item = kwargs['stream'] if skip else reduce(reducer, rules, item)
     return item, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A processor module that asynchronously renames or copies fields in a
-    feed item.
+    """A processor module that asynchronously renames or copies fields in an
+    item.
 
     Args:
         item (dict): The entry to process
@@ -170,7 +170,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(**OPTS)
 def pipe(*args, **kwargs):
-    """A processor that renames or copies fields in a feed item.
+    """A processor that renames or copies fields in an item.
 
     Args:
         item (dict): The entry to process

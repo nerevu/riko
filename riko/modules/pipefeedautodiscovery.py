@@ -56,10 +56,10 @@ def asyncParser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Deferred Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Deferred Tuple of (stream, skip)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -70,7 +70,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['link'])
         ...     objconf = Objectify({'url': FILES[4]})
-        ...     kwargs = {'feed': {}}
+        ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -82,12 +82,12 @@ def asyncParser(_, objconf, skip, **kwargs):
         file://data/www.greenhughes.com_rssfeed.xml
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        feed = yield autorss.asyncGetRSS(url)
+        stream = yield autorss.asyncGetRSS(url)
 
-    result = (feed, skip)
+    result = (stream, skip)
     returnValue(result)
 
 
@@ -101,28 +101,28 @@ def parser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from . import FILES
         >>> from riko.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'url': FILES[4]})
-        >>> kwargs = {'feed': {}}
+        >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['link']
         'file://data/www.greenhughes.com_rssfeed.xml'
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        feed = autorss.get_rss(url)
+        stream = autorss.get_rss(url)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(async=True, **OPTS)
@@ -176,7 +176,7 @@ def pipe(*args, **kwargs):
             url (str): The web site to fetch
 
     Yields:
-        dict: an item of the feed
+        dict: item
 
     Examples:
         >>> from . import FILES

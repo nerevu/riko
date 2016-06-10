@@ -50,7 +50,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
         conf (dict): The pipe configuration
 
     Returns:
@@ -64,7 +64,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'])
         ...     objconf = Objectify({'url': FILES[0], 'sleep': 0})
-        ...     kwargs = {'feed': {}}
+        ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -76,14 +76,14 @@ def asyncParser(_, objconf, skip, **kwargs):
         Donations
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         content = yield tu.urlRead(url, delay=objconf.sleep)
         parsed = speedparser.parse(content)
-        feed = utils.gen_entries(parsed)
+        stream = utils.gen_entries(parsed)
 
-    result = (feed, skip)
+    result = (stream, skip)
     returnValue(result)
 
 
@@ -97,38 +97,38 @@ def parser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
         conf (dict): The pipe configuration
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from . import FILES
         >>> from riko.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'url': FILES[0], 'sleep': 0})
-        >>> kwargs = {'feed': {}}
+        >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['title']
         u'Donations'
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         context = utils.SleepyDict(delay=objconf.sleep)
         content = urlopen(url, context=context).read()
         parsed = speedparser.parse(content)
-        feed = utils.gen_entries(parsed)
+        stream = utils.gen_entries(parsed)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches and parses a feed to return the
-    feed entries.
+    entries.
 
     Args:
         item (dict): The entry to process

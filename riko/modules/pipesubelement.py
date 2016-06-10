@@ -3,10 +3,10 @@
 """
 riko.modules.pipesubelement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for extracting sub-elements from a feed item
+Provides functions for extracting sub-elements from an item
 
-Sometimes the data you need from a feed is buried deep in its hierarchy. You
-need to extract just those select sub-elements from the feed. This is what the
+Sometimes the data you need from a stream is buried deep in its hierarchy. You
+need to extract just those select sub-elements from the stream. This is what the
 Sub-element module is for.
 
 Let's suppose we have a Sonnet of William Shakespeare rendered as an item, with
@@ -74,7 +74,7 @@ def parser(item, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from riko.lib.dotdict import DotDict
@@ -92,18 +92,17 @@ def parser(item, objconf, skip, **kwargs):
         {u'content': u'verse1'}
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         element = item.get(objconf.path, **kwargs)
-        feed = utils.gen_items(element, objconf.token_key)
+        stream = utils.gen_items(element, objconf.token_key)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A processor that asynchronously extracts sub-elements for the item of a
-    feed.
+    """A processor that asynchronously extracts sub-elements from an item.
 
     Args:
         item (dict): The entry to process
@@ -143,7 +142,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that extracts sub-elements for the item of a feed.
+    """A processor that extracts sub-elements from an item.
 
     Args:
         item (dict): The entry to process

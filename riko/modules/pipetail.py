@@ -3,7 +3,7 @@
 """
 riko.modules.pipetail
 ~~~~~~~~~~~~~~~~~~
-Provides functions for truncating a feed to the last N items.
+Provides functions for truncating a stream to the last N items.
 
 Contrast this with the Truncate module, which limits the output to the first N
 items.
@@ -34,25 +34,25 @@ OPTS = {}
 logger = Logger(__name__).logger
 
 
-def parser(feed, objconf, tuples, **kwargs):
+def parser(stream, objconf, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+        stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         objconf (obj): the item independent configuration (an Objectify
             instance).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source feed and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the `feed`
-            iterator, so consuming it will consume `feed` as well.
+            `item` is an element in the source stream and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the
+            `stream` iterator, so consuming it will consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
 
     Returns:
-        List(dict): The output feed
+        List(dict): The output stream
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -60,29 +60,29 @@ def parser(feed, objconf, tuples, **kwargs):
         >>>
         >>> kwargs = {'count': 2}
         >>> objconf = Objectify(kwargs)
-        >>> feed = ({'x': x} for x in range(5))
-        >>> tuples = zip(feed, repeat(objconf))
-        >>> parser(feed, objconf, tuples, **kwargs)[0]
+        >>> stream = ({'x': x} for x in range(5))
+        >>> tuples = zip(stream, repeat(objconf))
+        >>> parser(stream, objconf, tuples, **kwargs)[0]
         {u'x': 3}
     """
-    return deque(feed, int(objconf.count))
+    return deque(stream, int(objconf.count))
 
 
 @operator(async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """An aggregator that asynchronously truncates a feed to the last N items.
+    """An aggregator that asynchronously truncates a stream to the last N items.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'count'.
 
-            count (int): desired feed length
+            count (int): desired stream length
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred truncated feed
+        Deferred: twisted.internet.defer.Deferred truncated stream
 
     Examples:
         >>> from twisted.internet.task import react
@@ -106,19 +106,19 @@ def asyncPipe(*args, **kwargs):
 
 @operator(**OPTS)
 def pipe(*args, **kwargs):
-    """An operator that truncates a feed to the last N items.
+    """An operator that truncates a stream to the last N items.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'count'.
 
-            count (int): desired feed length
+            count (int): desired streamstream length
 
     Yields:
-        dict: a feed item
+        dict: an item
 
     Examples:
         >>> items = [{'x': x} for x in range(5)]

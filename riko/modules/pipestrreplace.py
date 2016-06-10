@@ -63,7 +63,7 @@ def asyncParser(word, rules, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: exchangerate)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
@@ -77,7 +77,7 @@ def asyncParser(word, rules, skip, **kwargs):
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         ...     rule = Objectify(conf['rule'])
-        ...     kwargs = {'feed': item, 'conf': conf}
+        ...     kwargs = {'stream': item, 'conf': conf}
         ...     d = asyncParser(item['content'], [rule], False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -89,7 +89,7 @@ def asyncParser(word, rules, skip, **kwargs):
         bye world
     """
     if skip:
-        value = kwargs['feed']
+        value = kwargs['stream']
     else:
         value = yield tu.coopReduce(reducer, rules, word)
 
@@ -108,7 +108,7 @@ def parser(word, rules, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: strtransform)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple(dict, bool): Tuple of (item, skip)
@@ -119,18 +119,18 @@ def parser(word, rules, skip, **kwargs):
         >>> item = {'content': 'hello world'}
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         >>> rule = Objectify(conf['rule'])
-        >>> kwargs = {'feed': item, 'conf': conf}
+        >>> kwargs = {'stream': item, 'conf': conf}
         >>> parser(item['content'], [rule], False, **kwargs)[0]
         u'bye world'
     """
-    value = kwargs['feed'] if skip else reduce(reducer, rules, word)
+    value = kwargs['stream'] if skip else reduce(reducer, rules, word)
     return value, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A processor module that asynchronously replaces the text of a field of a
-    feed item.
+    """A processor module that asynchronously replaces the text of a field of
+    an item.
 
     Args:
         item (dict): The entry to process
@@ -175,7 +175,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(**OPTS)
 def pipe(*args, **kwargs):
-    """A processor that replaces the text of a field of a feed item.
+    """A processor that replaces the text of a field of an item.
 
     Args:
         item (dict): The entry to process

@@ -43,7 +43,7 @@ def parser(content, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -54,14 +54,14 @@ def parser(content, objconf, skip, **kwargs):
         {u'token': u'Once'}
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         splits = filter(None, content.split(objconf.delimiter))
         deduped = set(splits) if objconf.dedupe else splits
         chunks = sorted(deduped, key=str.lower) if objconf.sort else deduped
-        feed = ({objconf.token_key: chunk} for chunk in chunks)
+        stream = ({objconf.token_key: chunk} for chunk in chunks)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)

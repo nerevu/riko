@@ -51,7 +51,7 @@ def parser(amount, objconf, skip, **kwargs):
         u'$10.33'
     """
     if skip:
-        parsed = kwargs['feed']
+        parsed = kwargs['stream']
     else:
         parsed = format_currency(amount, objconf.currency)
 

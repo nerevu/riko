@@ -3,18 +3,18 @@
 """
 riko.modules.pipesplit
 ~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for splitting a feed into identical copies
+Provides functions for splitting a stream into identical copies
 
 Use split when you want to perform different operations on data from the same
-feed. The Union module is the reverse of Split, it merges multiple input feeds
-into a single combined feed.
+stream. The Union module is the reverse of Split, it merges multiple input
+streams into a single combined stream.
 
 Examples:
     basic usage::
 
         >>> from riko.modules.pipesplit import pipe
-        >>> feed1, feed2 = pipe({'x': x} for x in range(5))
-        >>> next(feed1)
+        >>> stream1, stream2 = pipe({'x': x} for x in range(5))
+        >>> next(stream1)
         {u'x': 0}
 
 Attributes:
@@ -37,37 +37,37 @@ DEFAULTS = {'splits': 2}
 logger = Logger(__name__).logger
 
 
-def parser(feed, splits, tuples, **kwargs):
+def parser(stream, splits, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+        stream (Iter[dict]): The source stream. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         splits (int): the number of copies to create.
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, splits)
-            `item` is an element in the source feed (a DotDict instance)
-            and `splits` is an int. Note: this shares the `feed` iterator,
-            so consuming it will consume `feed` as well.
+            `item` is an element in the source stream (a DotDict instance)
+            and `splits` is an int. Note: this shares the `stream` iterator,
+            so consuming it will consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
 
     Yields:
-        Iter(dict): a feed of items
+        Iter(dict): a stream of items
 
     Examples:
         >>> from itertools import repeat
         >>>
         >>> conf = {'splits': 3}
         >>> kwargs = {'conf': conf}
-        >>> feed = (({'x': x}) for x in range(5))
-        >>> tuples = zip(feed, repeat(conf['splits']))
-        >>> feeds = parser(feed, conf['splits'], tuples, **kwargs)
-        >>> next(next(feeds))
+        >>> stream = (({'x': x}) for x in range(5))
+        >>> tuples = zip(stream, repeat(conf['splits']))
+        >>> streams = parser(stream, conf['splits'], tuples, **kwargs)
+        >>> next(next(streams))
         {u'x': 0}
     """
-    source = list(feed)
+    source = list(stream)
 
     # deepcopy each item so that each split is independent
     for num in range(splits):
@@ -76,11 +76,11 @@ def parser(feed, splits, tuples, **kwargs):
 
 @operator(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """An operator that asynchronously and eagerly splits a feed into identical
+    """An operator that asynchronously and eagerly splits a stream into identical
     copies. Note that this pipe is not lazy.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source stream.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -89,7 +89,7 @@ def asyncPipe(*args, **kwargs):
             splits (int): the number of copies to create (default: 2).
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterable of feeds
+        Deferred: twisted.internet.defer.Deferred iterable of streams
 
     Examples:
         >>> from twisted.internet.task import react
@@ -112,11 +112,11 @@ def asyncPipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly splits a feed into identical copies.
+    """An operator that eagerly splits a stream into identical copies.
     Note that this pipe is not lazy.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source stream.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -125,12 +125,12 @@ def pipe(*args, **kwargs):
             splits (int): the number of copies to create (default: 2).
 
     Yields:
-        Iter(dict): a feed of items
+        Iter(dict): a stream of items
 
     Examples:
         >>> items = [{'x': x} for x in range(5)]
-        >>> feed1, feed2 = pipe(items)
-        >>> next(feed1)
+        >>> stream1, stream2 = pipe(items)
+        >>> next(stream1)
         {u'x': 0}
         >>> len(list(pipe(items, conf={'splits': '3'})))
         3

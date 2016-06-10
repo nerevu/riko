@@ -28,10 +28,10 @@ everything after the server name, up to (but not including) the question mark
 In our example, there's only one parameter, named s. The parameter name and its
 value are separated by an equal sign, giving us "s=gm" or "s=yhoo".
 
-If we want to use this feed service in our Pipe, we can just drop a Fetch Feed
-module into the Editor and type the URL in. But then our Pipe is stuck reading
-data for just one ticker symbol. We could wire in a URL Input module, but then
-the user has to enter the whole URL.
+If we want to use this service in our Pipe, we can just use a Fetch Feed
+module and enter the URL. But then our Pipe is stuck reading data for just one
+ticker symbol. We could wire in a URL Input module, but then the user has to
+enter the whole URL.
 
 The better way is to use URL Builder. This module constructs a URL for you from
 parts. Some parts you may type in, others you may wire in using Text User Input
@@ -79,7 +79,7 @@ def parser(item, params, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple (dict, bool): Tuple of (item, skip)
@@ -92,7 +92,7 @@ def parser(item, params, skip, **kwargs):
         >>> path = [{'value': 'rss'}, {'value': 'headline'}]
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
-        >>> kwargs = {'feed': item, 'conf': conf}
+        >>> kwargs = {'stream': item, 'conf': conf}
         >>> result = parser(item, [Objectify(params)], False, **kwargs)[0]
         >>> sorted(result.keys())
         ['fragment', 'netloc', 'params', 'path', 'query', 'scheme', u'url']
@@ -100,16 +100,16 @@ def parser(item, params, skip, **kwargs):
         u'http://finance.yahoo.com/rss/headline?s=gm'
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         conf = kwargs.pop('conf')
         path = conf.get('path')
         paths = (get_value(item, DotDict(p), **kwargs) for p in path)
         params = urlencode([(p.key, p.value) for p in params])
         url = '%s?%s' % (urljoin(conf['base'], '/'.join(paths)), params)
-        feed = cast_url(url)
+        stream = cast_url(url)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
