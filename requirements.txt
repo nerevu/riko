@@ -1,7 +1,6 @@
 Jinja2>=2.7.3,<3.0.0
 MarkupSafe>=0.22,<0.23
 html5lib==0.999
-mccabe>=0.2.1,<0.3.0
 six>=1.9.0,<2.0.0
 speedparser>=0.2.0,<0.3.0
 feedparser>=5.1.3,<6.0.0
