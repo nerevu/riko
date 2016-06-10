@@ -94,7 +94,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         url = utils.get_abspath(objconf.url)
         content = yield tu.urlRead(url)
         parsed = get_string(content, objconf.start, objconf.end)
-        splits = parsed.split(objconf.token) if objconf.token else [parsed]
+        detagged = get_text(parsed) if objconf.detag else parsed
+        splits = detagged.split(objconf.token) if objconf.token else [detagged]
         feed = ({kwargs['assign']: chunk} for chunk in splits)
 
     result = (feed, skip)
