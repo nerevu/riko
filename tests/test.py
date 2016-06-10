@@ -90,10 +90,10 @@ def main(script, tests, verbose=False, stop=True):
 if __name__ == '__main__':
     parent_dir = p.abspath(p.dirname(p.dirname(__file__)))
     script = p.join(parent_dir, 'bin', 'runpipe')
-
+    text = 'Deadline to clear up health law eligibility near 907\n'
     tests = [
-        ([], ['demo'], 'Deadline to clear up health law eligibility near 907\n'),
-        (['-a'], ['demo'], 'Deadline to clear up health law eligibility near 907\n'),
+        ([], ['demo'], text),
+        (['-a'], ['demo'], text),
         ([], ['simple1'], "{u'url': u'farechart'}\n"),
         (['-a'], ['simple1'], "{u'url': u'farechart'}\n"),
     ]

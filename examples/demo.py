@@ -52,6 +52,7 @@ url2 = get_path('www.caltrain.com_Fares_farechart.html')
 fetch_conf = {
     'url': url2, 'start': '<body>', 'end': '</body>', 'detag': True}
 
+
 def pipe(test=False):
     s1 = SyncPipe('fetch', test=test, conf={'url': url1}).output
     s2 = (SyncPipe('fetchpage', test=test, conf=fetch_conf)

@@ -10,7 +10,6 @@ sys.path.append('../riko')
 
 from os import path as p
 from importlib import import_module
-from pprint import pprint
 
 try:
     from importlib.util import spec_from_file_location, module_from_spec
