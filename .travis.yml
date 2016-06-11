@@ -12,6 +12,7 @@ env:
   global:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
+    - PYTHONHASHSEED=94967295
 
 notifications:
   email:
