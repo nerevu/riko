@@ -128,7 +128,8 @@ class Chainable(object):
 
 
 def combine_dicts(*dicts):
-    return dict(it.chain.from_iterable(map(dict.items, dicts)))
+    iterable = (d.items() for d in dicts)
+    return dict(it.chain.from_iterable(iterable))
 
 
 def multi_try(source, zipped, default=None):
