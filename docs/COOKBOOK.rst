@@ -19,7 +19,7 @@ set of values passed into every pipe).
 
     >>> from riko.modules.pipeinput import pipe
     >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-    >>> pipe(conf=conf, inputs={'content': '30'}).next()
+    >>> next(pipe(conf=conf, inputs={'content': '30'}))
     {'content': 30}
 
 Fetching data and feeds

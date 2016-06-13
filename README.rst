@@ -14,15 +14,15 @@ Introduction
 ------------
 
 **riko** is a pure Python `framework`_ for analyzing and processing ``streams`` of
-structured data. It has `synchronous`_ and `asynchronous`_ APIs, supports `parallel
-execution`_, and is well suited for processing rss feeds [#]_. It also supplies
+structured data. ``riko`` has `synchronous`_ and `asynchronous`_ APIs, supports `parallel
+execution`_, and is well suited for processing RSS feeds [#]_. ``riko`` also supplies
 a `command-line interface`_ for executing ``flows``.
 
 With ``riko``, you can
 
 - Read csv/xml/json/html files
 - Create text and data processing ``flows`` via modular `pipes`_
-- Parse, extract, and process rss feeds
+- Parse, extract, and process RSS feeds
 - Create awesome mashups [#]_, APIs, and maps
 - Perform `parallel processing`_ via cpus/processors or threads
 - and much more...
@@ -90,15 +90,18 @@ Motivation
 Why I built riko
 ^^^^^^^^^^^^^^^^
 
-Yahoo! Pipes [#]_ was a user friendly web application used to "aggregate,
-manipulate, and mashup content from around the web." Wanting to create custom
-pipes, I came across `pipe2py`_ which translated a Yahoo! Pipes `pipe`
-into python code. ``pipe2py`` suited my needs at the time but was
-unmaintained and lacked asynchronous or parallel processing APIs.
+Yahoo! Pipes [#]_ was a user friendly web application used to::
 
-``riko`` addresses the shortcomings of ``pipe2py`` but breaks compatibility with
-Yahoo! Pipes' workflows. ``riko`` contains ~40 built-in modules, aka ``pipes``, that
-allow you to programatically perform most of the tasks Yahoo! Pipes allowed.
+    aggregate, manipulate, and mashup content from around the web
+
+Wanting to create custom pipes, I came across `pipe2py`_ which translated a
+Yahoo! Pipes `pipe` into python code. ``pipe2py`` suited my needs at the time
+but was unmaintained and lacked asynchronous or parallel processing APIs.
+
+``riko`` addresses the shortcomings of ``pipe2py`` but removed support for
+importing Yahoo! Pipes json workflow schemas. ``riko`` contains ~40 built-in
+modules, aka ``pipes``, that allow you to programatically perform most of the
+tasks Yahoo! Pipes allowed.
 
 Why you should use riko
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -110,25 +113,26 @@ applications such as Huginn, Flink, Spark, and Storm [#]_. Namely:
 - native RSS support
 - simple installation and usage
 - a pure python library with `pypy`_ support
-- modular ``pipes`` to filter, sort, and modify feeds
+- modular ``pipes`` to filter, sort, and modify ``streams``
 
 The subsequent tradeoffs ``riko`` makes are:
 
 - not distributed (able to run on a cluster of servers)
 - no GUI for creating ``flows``
-- doesn't continually monitor feeds for new data
+- doesn't continually monitor ``streams`` for new data
 - can't react to specific events
 - iterator (pull) based so streams only supports a single consumer [#]_
 
 The following table summaries these observations:
 
-===========  ===========  =========  ===  =======================  ========  ===========
-Framework    Stream Type  Footprint  RSS  no outside dependencies  CEP [#]_  distributed
-===========  ===========  =========  ===  =======================  ========  ===========
-riko         pull         small      √    √
-Huginn       push         med        √                             √
-Others       push         large                                    √         √
-===========  ===========  =========  ===  =======================  ========  ===========
+===========  ===========  =========  =====  ===========  =====  ========  ========  ===========
+Framework    Stream Type  Footprint  RSS    simple [#]_  async  parallel  CEP [#]_  distributed
+===========  ===========  =========  =====  ===========  =====  ========  ========  ===========
+riko         pull         small      √      √            √      √
+pipe2py      pull         small      √      √
+Huginn       push         med        √                   [#]_   √         √
+Others       push         large      [#]_   [#]_         [#]_   √         √         √
+===========  ===========  =========  =====  ===========  =====  ========  ========  ===========
 
 For more detailed information, please check-out the `FAQ`_.
 
@@ -138,7 +142,12 @@ Notes
 .. [#] Yahoo discontinued Yahoo! Pipes in 2015, but you can view what `remains`_
 .. [#] `Huginn`_, `Flink`_, `Spark`_, and `Storm`_
 .. [#] You can mitigate this via the `split`_ module
+.. [#] Doesn't depend on outside services like MySQL, Kafka, YARN, ZooKeeper, or Mesos
 .. [#] `Complex Event Processing`_
+.. [#] Huginn doesn't appear to make `async web requests`_
+.. [#] Many frameworks can't parse RSS streams without the use of 3rd party libraries
+.. [#] While most frameworks offer a local mode, many require integrating with a data ingestor (e.g., Flume/Kafka) to do anything useful
+.. [#] I can't find evidence that these frameworks offer a async apis (apparently `Spark doesn't`_)
 
 Usage
 -----
@@ -148,33 +157,33 @@ Usage
 Usage Index
 ^^^^^^^^^^^
 
-- `Fetching feeds`_
+- `Fetching streams`_
 - `Synchronous processing`_
 - `Parallel processing`_
 - `Asynchronous processing`_
 - `Cookbook`_
 
-Fetching feeds
-^^^^^^^^^^^^^^
+Fetching streams
+^^^^^^^^^^^^^^^^
 
-``riko`` can read both local and remote filepaths via ``source`` pipes. All ``source``
-pipes return an equivalent ``feed`` iterator of dictionaries,
-aka ``items``.
+``riko`` can fetching streams from both local and remote filepaths via ``source``
+``pipes``. Each ``source`` ``pipe`` returns a ``stream``, i.e., an iterator of
+dictionaries, aka ``items``.
 
 .. code-block:: python
 
     >>> from riko.modules.pipefetch import pipe as fetch
     >>> from riko.modules.pipefetchsitefeed import pipe as fetchsitefeed
     >>>
-    >>> ### Fetch an rss feed ###
+    >>> ### Fetch an RSS feed ###
     >>> stream = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
-    >>> ### Fetch the first rss feed found ###
+    >>> ### Fetch the first RSS feed found ###
     >>> stream = fetchsitefeed(conf={'url': 'http://www.bbc.com/news'})
     >>>
-    >>> ### View the fetched rss feed(s) ###
+    >>> ### View the fetched RSS feed(s) ###
     >>> #
-    >>> # Note: regardless of how you fetch an rss feed, it will have the same
+    >>> # Note: regardless of how you fetch an RSS feed, it will have the same
     >>> # structure
     >>> item = next(stream)
     >>> sorted(item.keys())
@@ -184,17 +193,17 @@ aka ``items``.
         'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
     >>> item['title'], item['author'], item['link']
     (
-        u'Using NFC tags in the car', u'Liam Green-Hughes',
-        u'http://www.greenhughes.com/content/using-nfc-tags-car')
+        'Using NFC tags in the car', 'Liam Green-Hughes',
+        'http://www.greenhughes.com/content/using-nfc-tags-car')
 
 Please see the `FAQ`_ for a complete list of supported `file types`_ and
-`protocols`_
+`protocols`_. Please see `Fetching data and feeds`_ for more examples.
 
 
 Synchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^
 
-``riko`` can modify ``streams`` by combining any of the 40 built-in ``pipes``
+``riko`` can modify ``streams`` via the 40 built-in ``pipes``
 
 .. code-block:: python
 
@@ -219,7 +228,7 @@ Synchronous processing
     >>> # and allows for parallel processing.
     >>> #
     >>> # The following flow will:
-    >>> #   1. fetch the rss feed
+    >>> #   1. fetch the RSS feed
     >>> #   2. filter for items published before 2/5/2009
     >>> #   3. extract the path `content.value` from each feed item
     >>> #   4. replace the extracted text with the last href url contained
@@ -240,13 +249,13 @@ Synchronous processing
     >>> next(stream)
     {'content': 'mailto:mail@writetoreply.org'}
 
-Please see `Design Principles`_ for an alternative (function based) method for
-creating a ``stream``. Please see `pipes`_ for a complete list of available pipes.
+Please see `Alternate workflow creation`_ for an alternative (function based) method for
+creating a ``stream``. Please see `pipes`_ for a complete list of available ``pipes``.
 
 Parallel processing
 ^^^^^^^^^^^^^^^^^^^
 
-An example using ``riko``'s ThreadPool based parallel API
+An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
 
 .. code-block:: python
 
@@ -268,16 +277,16 @@ An example using ``riko``'s ThreadPool based parallel API
     >>> ### Create a parallel SyncPipe flow ###
     >>> #
     >>> # The following flow will:
-    >>> #   1. fetch the rss feed
+    >>> #   1. fetch the RSS feed
     >>> #   2. filter for items published before 2/5/2009
     >>> #   3. extract the path `content.value` from each feed item
     >>> #   4. replace the extracted text with the last href url contained
     >>> #      within it
-    >>> #   5. filter for items with local file urls (which happen to be rss
+    >>> #   5. filter for items with local file urls (which happen to be RSS
     >>> #      feeds)
     >>> #   6. strip any trailing `\` from the url
     >>> #   7. remove duplicate urls
-    >>> #   8. fetch each rss feed
+    >>> #   8. fetch each feed
     >>> #   9. merge the feeds into a single stream of items
     >>> flow = (SyncPipe('fetch', conf={'url': url}, parallel=True)  # 1
     ...     .filter(conf={'rule': filter_rule1})                     # 2
@@ -295,13 +304,13 @@ An example using ``riko``'s ThreadPool based parallel API
 Asynchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-To enable this asynchronous processing, you must install the ``async`` module.
+To enable asynchronous processing, you must install the ``async`` module.
 
 .. code-block:: bash
 
     pip install riko[async]
 
-An example using ``riko``'s optional Twisted powered asynchronous API.
+An example using ``riko``'s asynchronous API.
 
 .. code-block:: python
 
@@ -346,8 +355,12 @@ An example using ``riko``'s optional Twisted powered asynchronous API.
 Cookbook
 ^^^^^^^^
 
-Please see the `cookbook`_ or ipython `notebook`_ for more examples.
+Please see the `cookbook`_ or `ipython notebook`_ for more examples.
 
+Notes
+^^^^^
+
+.. [#] You can instead enable a ``ProcessPool`` by additionally passing ``threads=False`` to ``SyncPipe``, i.e., ``SyncPipe('fetch', conf={'url': url}, parallel=True, threads=False)``.
 
 Installation
 ------------
@@ -371,11 +384,11 @@ Please see the `installation doc`_ for more details.
 Design Principles
 -----------------
 
-The primary data structures in ``riko`` are the ``item``, and ``stream``. An ``item``
+The primary data structures in ``riko`` are the ``item`` and ``stream``. An ``item``
 is just a python dictionary, and a ``stream`` is an iterator of ``items``. You can
 create a ``stream`` manually with something as simple as
-``[{'content': 'hello world'}]``. The primary way to manipulate a ``stream`` in
-``riko`` is via a ``pipe``. A ``pipe`` is simply a function that accepts either a
+``[{'content': 'hello world'}]``. You manipulate ``streams`` in
+``riko`` via ``pipes``. A ``pipe`` is simply a function that accepts either a
 ``stream`` or ``item``, and returns a ``stream``. ``pipes`` are composable: you
 can use the output of one ``pipe`` as the input to another ``pipe``.
 
@@ -405,7 +418,7 @@ threads or processes. Example ``processors`` include ``pipefetchsitefeed``,
     >>> next(stream)
     {'title': 'riko pt. 1', 'hash': 2853617420}
 
-Some ``processors``, e.g. ``pipestringtokenizer`` return multiple results.
+Some ``processors``, e.g., ``pipestringtokenizer``, return multiple results.
 
 .. code-block:: python
 
@@ -428,9 +441,10 @@ Some ``processors``, e.g. ``pipestringtokenizer`` return multiple results.
     {'content': 'riko'}
 
 ``operators`` are split into sub-types of ``aggregators``
-and ``composers``. ``aggregators``, e.g., ``pipecount``, aggregate
-all items of a ``stream`` into a single value while ``composers``, e.g., ``pipefilter``
-compose a new ``stream`` from some or all of the available items.
+and ``composers``. ``aggregators``, e.g., ``pipecount``, combine
+all ``items`` of an input ``stream`` into a new ``stream`` with a single ``item``;
+while ``composers``, e.g., ``pipefilter``, create a new ``stream`` containing
+some or all ``items`` of an input ``stream``.
 
 .. code-block:: python
 
@@ -593,7 +607,7 @@ More Info
 
 - `FAQ`_
 - `cookbook`_
-- ipython `notebook`_
+- `ipython notebook`_
 
 Project Structure
 -----------------
@@ -676,6 +690,8 @@ License
 .. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
 .. _cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
 .. _split: https://github.com/nerevu/riko/blob/master/riko/modules/pipesplit.py
+.. _Alternate workflow creation: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#synchronous-processing
+.. _Fetching data and feeds: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#fetching-data-and-feeds
 
 .. _pypy: http://pypy.org
 .. _Really Simple Syndication: https://en.wikipedia.org/wiki/RSS
@@ -683,12 +699,14 @@ License
 .. _pipe2py: https://github.com/ggaughan/pipe2py/
 .. _Huginn: https://github.com/cantino/huginn/
 .. _Flink: http://flink.apache.org/
-.. _Spark: http://spark.apache.org/
+.. _Spark: http://spark.apache.org/streaming/
 .. _Storm: http://storm.apache.org/
 .. _Complex Event Processing: https://en.wikipedia.org/wiki/Complex_event_processing
+.. _async web requests: https://github.com/cantino/huginn/blob/bf7c2feba4a7f27f39de96877c121d40282c0af9/app/models/agents/rss_agent.rb#L101
+.. _Spark doesn't: https://github.com/perwendel/spark/issues/208
 .. _remains: https://web.archive.org/web/20150930021241/http://pipes.yahoo.com/pipes/
 .. _lxml: http://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser
 .. _Twisted: http://twistedmatrix.com/
 .. _MIT License: http://opensource.org/licenses/MIT
 .. _virtualenv: http://www.virtualenv.org/en/latest/index.html
-.. _notebook: http://nbviewer.jupyter.org/github/nerevu/riko/blob/master/examples/usage.ipynb
+.. _ipython notebook: http://nbviewer.jupyter.org/github/nerevu/riko/blob/master/examples/usage.ipynb
