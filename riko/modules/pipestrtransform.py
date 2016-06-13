@@ -44,7 +44,7 @@ ATTRS = {
 def reducer(word, rule):
     if rule.transform in ATTRS:
         args = rule.args.split(',') if rule.args else []
-        result = getattr(str, rule.transform)(word, *args)
+        result = getattr(word, rule.transform)(*args)
     else:
         logger.warning('Invalid transformation: %s', rule.transform)
         result = word

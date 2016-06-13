@@ -49,21 +49,24 @@ DATES = {
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
 
-class Objectify(dict):
-    def __init__(self, kwargs, func=None, **defaults):
+class Objectify(object):
+    """Creates an object with dynamically set attributes. Useful
+    for accessing the kwargs of a function as attributes.
+    """
+    def __init__(self, initialdata, func=None, **defaults):
         """ Objectify constructor
 
         Args:
-            kwargs (dict): The attributes to set
+            initialdata (dict): The attributes to set
             defaults (dict): The default attributes
 
         Examples:
-            >>> kwargs = {'one': 1, 'two': 2}
+            >>> initialdata = {'one': 1, 'two': 2}
             >>> defaults = {'two': 5, 'three': 3}
-            >>> kw = Objectify(kwargs, **defaults)
+            >>> kw = Objectify(initialdata, **defaults)
             >>> sorted(kw.keys()) == ['one', 'three', 'two']
             True
-            >>> kw == {u'three': 3, u'two': 2, u'one': 1}
+            >>> dict(kw) == {'one': 1, 'two': 2, 'three': 3}
             True
             >>> kw.one
             1
@@ -75,20 +78,30 @@ class Objectify(dict):
             >>> kw.get('one')
             1
         """
-        defaults.update(kwargs)
-        super(Objectify, self).__init__(defaults)
+        defaults.update(initialdata)
+        self.data = defaults
         self.func = func
-        self.__setattr__ = dict.__setitem__
-        self.__delattr__ = dict.__delitem__
+        self.get = self.data.get
+        self.keys = self.data.keys
+        self.values = self.data.values
+        self.items = self.data.items
+        self.__setitem__ = self.data.__setitem__
+        self.__delitem__ = self.data.__delitem__
+        self.__setattr__ = self.data.__setitem__
+        self.__delattr__ = self.data.__delitem__
 
-    def __getattribute__(self, name):
-        good = {'get', 'pop', 'keys', 'items', 'func', 'viewitems', 'viewkeys'}
+    def __repr__(self):
+        return repr(self.data)
 
-        if name in good:
-            return object.__getattribute__(self, name)
-        else:
-            attr = self.get(name)
-            return self.func(attr) if self.func else attr
+    def __getitem__(self, name):
+        return self.data.__getitem__(name)
+
+    def __getattr__(self, name):
+        attr = self.get(name)
+        return self.func(attr) if self.func else attr
+
+    def __iter__(self):
+        return iter(self.data.values())
 
 
 class SleepyDict(dict):
@@ -181,7 +194,22 @@ def memoize(*args, **kwargs):
 
 
 def remove_keys(content, *args):
-    """Remove keys from a dict and return new dict"""
+    """ Remove keys from a dict and return new dict
+
+    Args:
+        content (dict): The dict to remove keys from
+        args (List[str]): The keys to remove
+
+    Returns:
+        dict: New dict with specified keys removed
+
+    Examples:
+        >>> content = {'keep': 1, 'remove': 2}
+        >>> remove_keys(content, 'remove') == {'keep': 1}
+        True
+        >>> remove_keys(Objectify(content), 'remove') == {'keep': 1}
+        True
+    """
     return {k: v for k, v in content.items() if k not in args}
 
 
@@ -638,10 +666,10 @@ def gen_entries(parsed):
         yield entry
 
 
-def gen_items(content, key):
+def gen_items(content, key=None):
     if hasattr(content, 'append'):
         for nested in content:
             for i in gen_items(nested, key):
                 yield i
     elif content:
-        yield {key: content}
+        yield {key: content} if key else content

@@ -18,8 +18,10 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipehash import pipe
-        >>> next(pipe({'content': 'hello world'}))['hash']
-        3885626731L
+        >>>
+        >>> _hash = ctypes.c_uint(hash('hello world')).value
+        >>> next(pipe({'content': 'hello world'}))['hash'] == _hash
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -59,10 +61,11 @@ def parser(word, _, skip, **kwargs):
     Examples:
         >>> from riko.lib.utils import Objectify
         >>>
+        >>> _hash = ctypes.c_uint(hash('hello world')).value
         >>> item = {'content': 'hello world'}
         >>> kwargs = {'stream': item}
-        >>> parser(item['content'], None, False, **kwargs)[0]
-        3885626731L
+        >>> parser(item['content'], None, False, **kwargs)[0] == _hash
+        True
     """
     parsed = kwargs['stream'] if skip else ctypes.c_uint(hash(word)).value
     return parsed, skip
@@ -88,8 +91,10 @@ def asyncPipe(*args, **kwargs):
         >>> from twisted.internet.task import react
         >>> from riko.twisted import utils as tu
         >>>
+        >>> _hash = ctypes.c_uint(hash('hello world')).value
+        >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['hash'])
+        ...     callback = lambda x: print(next(x)['hash'] == _hash)
         ...     d = asyncPipe({'content': 'hello world'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -98,7 +103,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        3885626731
+        True
     """
     return parser(*args, **kwargs)
 
@@ -120,10 +125,12 @@ def pipe(*args, **kwargs):
         dict: an item with concatenated content
 
     Examples:
-        >>> next(pipe({'content': 'hello world'}))['hash']
-        3885626731L
+        >>> _hash = ctypes.c_uint(hash('hello world')).value
+        >>> next(pipe({'content': 'hello world'}))['hash'] == _hash
+        True
+        >>> _hash = ctypes.c_uint(hash('greeting')).value
         >>> kwargs = {'field': 'title', 'assign': 'result'}
-        >>> next(pipe({'title': 'greeting'}, **kwargs))['result']
-        3500283417L
+        >>> next(pipe({'title': 'greeting'}, **kwargs))['result'] == _hash
+        True
     """
     return parser(*args, **kwargs)

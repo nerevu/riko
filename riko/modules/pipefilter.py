@@ -81,6 +81,8 @@ def parse_rule(rule, item, **kwargs):
                 pass
             else:
                 x, y = _x, _y
+        except ValueError:
+            pass
         else:
             x, y = _x, _y
 

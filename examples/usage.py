@@ -281,12 +281,13 @@ Design Principles
     {u'title': u'riko pt. 2'}
 
     # a processor
+    >>> import ctypes
     >>> from riko.modules.pipehash import pipe
     >>>
+    >>> _hash = ctypes.c_uint(hash('riko pt. 1')).value
     >>> item = {'title': 'riko pt. 1'}
     >>> stream = pipe(item, field='title')
-    >>> next(stream) == {
-    ...     'title': 'riko pt. 1', 'hash': 3946887032}
+    >>> next(stream) == {'title': 'riko pt. 1', 'hash': _hash}
     True
     >>> from riko.modules.pipestringtokenizer import pipe
     >>>
@@ -332,6 +333,7 @@ Design Principles
     # SyncPipe usage
     >>> from riko.lib.collections import SyncPipe
     >>>
+    >>> _hash = ctypes.c_uint(hash("Let's talk about riko!")).value
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}]
@@ -339,7 +341,7 @@ Design Principles
     >>> sync_pipe.hash().list[0] == {
     ...     'title': 'riko pt. 1',
     ...     'content': "Let's talk about riko!",
-    ...     'hash': 1589640534}
+    ...     'hash': _hash}
     True
 
     # Alternate conf usage

@@ -139,7 +139,7 @@ def pipe(*args, **kwargs):
         u'lo w'
         >>> conf = {'start': '3'}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result']
-        'etings'
+        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result'] == 'etings'
+        True
     """
     return parser(*args, **kwargs)
