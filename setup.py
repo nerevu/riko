@@ -40,10 +40,9 @@ else:
 py2_require = py2_requirements.difference(py3_requirements)
 
 # Optional requirements
-optional_require = optional_requirements.difference(requirements)
-lxml_require = {r for r in optional_require if r.startswith('lxml')}
-async_require = optional_require.difference(lxml_require)
 dev_require = dev_requirements.difference(requirements)
+lxml_require = {r for r in optional_requirements if r.startswith('lxml')}
+async_require = optional_requirements.difference(lxml_require)
 
 setup(
     name=project,
