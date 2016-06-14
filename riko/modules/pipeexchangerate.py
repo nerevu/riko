@@ -126,8 +126,8 @@ def asyncParser(base, objconf, skip, **kwargs):
         r = yield treq.get(objconf.url, params=objconf.params)
         json = yield treq.json_content(r)
     else:
-        abs_url = utils.get_abspath(objconf.url)
-        content = yield tu.urlRead(abs_url, delay=objconf.sleep)
+        url = utils.get_abspath(objconf.url)
+        content = yield tu.urlRead(url, delay=objconf.sleep)
         json = loads(content)
 
     if not skip:
@@ -179,8 +179,8 @@ def parser(base, objconf, skip, **kwargs):
         json = r.json()
     else:
         context = utils.SleepyDict(delay=objconf.sleep)
-        abs_url = utils.get_abspath(objconf.url)
-        content = urlopen(abs_url, context=context).read()
+        url = utils.get_abspath(objconf.url)
+        content = urlopen(url, context=context).read()
         json = loads(content)
 
     if not skip:
