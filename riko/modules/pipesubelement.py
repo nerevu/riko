@@ -114,7 +114,9 @@ def asyncPipe(*args, **kwargs):
 
             path (str): Path to the element to extract
             token_key (str): Attribute to assign individual tokens (default:
-                content)
+                content). Set to `None` to output raw text.
+
+        assign (str): Attribute to assign parsed content (default: subelement)
 
     Returns:
        Deferred: twisted.internet.defer.Deferred sub-element item
@@ -154,7 +156,9 @@ def pipe(*args, **kwargs):
 
             path (str): Path to the element to extract
             token_key (str): Attribute to assign individual tokens (default:
-                content)
+                content). Set to `None` to output raw text.
+
+        assign (str): Attribute to assign parsed content (default: subelement)
 
     Yields:
         dict: a sub-element item

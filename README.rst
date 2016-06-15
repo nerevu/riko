@@ -147,7 +147,7 @@ Notes
 .. [#] Huginn doesn't appear to make `async web requests`_
 .. [#] Many frameworks can't parse RSS streams without the use of 3rd party libraries
 .. [#] While most frameworks offer a local mode, many require integrating with a data ingestor (e.g., Flume/Kafka) to do anything useful
-.. [#] I can't find evidence that these frameworks offer a async apis (apparently `Spark doesn't`_)
+.. [#] I can't find evidence that these frameworks offer a async APIs (and apparently `Spark doesn't`_)
 
 Usage
 -----

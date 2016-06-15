@@ -280,7 +280,7 @@ Design Principles
     >>> next(pipe(stream))
     {u'title': u'riko pt. 2'}
 
-    # a processor
+    # a transformer
     >>> import ctypes
     >>> from riko.modules.pipehash import pipe
     >>>
