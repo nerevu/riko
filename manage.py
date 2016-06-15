@@ -76,17 +76,29 @@ def require():
     'stop', 'x', help='Stop after first error', type=bool, default=False)
 @manager.arg(
     'failed', 'f', help='Run failed tests', type=bool, default=False)
-@manager.arg('tox', 't', help='Run tox tests')
+@manager.arg(
+    'cover', 'c', help='Add coverage report', type=bool, default=False)
+@manager.arg('tox', 't', help='Run tox tests', type=bool, default=False)
+@manager.arg('detox', 'd', help='Run detox tests', type=bool, default=False)
+@manager.arg(
+    'verbose', 'v', help='Use detailed errors', type=bool, default=False)
+@manager.arg(
+    'debug', 'D', help='Use nose.loader debugger', type=bool, default=False)
 @manager.command
-def test(where=None, stop=False, failed=False, tox=False):
+def test(where=None, stop=None, **kwargs):
     """Run nose, tox, and script tests"""
     opts = '-xv' if stop else '-v'
+    opts += ' --with-coverage' if kwargs.get('cover') else ''
+    opts += ' --failed' if kwargs.get('failed') else ''
+    opts += ' --detailed-errors' if kwargs.get('verbose') else ''
+    opts += ' --debug=nose.loader' if kwargs.get('debug') else ''
     opts += 'w %s' % where if where else ''
-    opts += ' --failed' if failed else ''
 
     try:
-        if tox:
+        if kwargs.get('tox'):
             check_call('tox')
+        elif kwargs.get('detox'):
+            check_call('detox')
         else:
             check_call(('nosetests %s' % opts).split(' '))
     except CalledProcessError as e:
