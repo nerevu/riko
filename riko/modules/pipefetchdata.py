@@ -25,14 +25,12 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from functools import reduce
+from functools import reduce, partial
 from json import loads
 from os.path import splitext
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from lxml import objectify, html
-from lxml.html import html5parser
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
@@ -42,20 +40,7 @@ from riko.twisted import utils as tu
 
 OPTS = {'ftype': 'none'}
 reducer = lambda element, i: element.get(i) if element else None
-json2dict = lambda f: loads(f.read())
 logger = Logger(__name__).logger
-
-
-def xml2dict(f):
-    tree = objectify.parse(f)
-    root = tree.getroot()
-    return utils.etree_to_dict(root)
-
-
-def html2dict(f, html5=False):
-    tree = html5parser.parse(f) if html5 else html.parse(f)
-    root = tree.getroot()
-    return utils.etree_to_dict(root)
 
 
 @inlineCallbacks
@@ -100,16 +85,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ext = splitext(url)[1].lstrip('.')
         path = objconf.path.split('.') if objconf.path else []
         f = yield tu.urlOpen(url)
-
-        if ext == 'xml':
-            element = xml2dict(f)
-        elif ext == 'json':
-            element = json2dict(f)
-        elif ext == 'html':
-            element = html2dict(f, objconf.html5)
-        else:
-            raise TypeError('Invalid file type %s' % ext)
-
+        element = utils.any2dict(f, ext, objconf.html5)
         stream = yield tu.coopReduce(reducer, path, element)
 
     result = (stream, skip)
@@ -148,16 +124,7 @@ def parser(_, objconf, skip, **kwargs):
         ext = splitext(url)[1].lstrip('.')
         path = objconf.path.split('.') if objconf.path else []
         f = urlopen(url)
-
-        if ext == 'xml':
-            element = xml2dict(f)
-        elif ext == 'json':
-            element = json2dict(f)
-        elif ext == 'html':
-            element = html2dict(f, objconf.html5)
-        else:
-            raise TypeError('Invalid file type %s' % ext)
-
+        element = utils.any2dict(f, ext, objconf.html5)
         stream = reduce(reducer, path, element)
 
     return stream, skip

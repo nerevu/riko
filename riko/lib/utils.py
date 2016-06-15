@@ -24,7 +24,16 @@ from json import loads
 from builtins import *
 from six.moves.urllib.parse import quote, urlparse
 from mezmorize import Cache
-from dateutil.parser import parse
+from dateutil import parser
+
+try:
+    from lxml import etree, html
+except ImportError:
+    from xml.etree import ElementTree as etree
+    LAZY = False
+else:
+    from lxml.html import html5parser
+    LAZY = True
 
 from riko.lib.log import Logger
 
@@ -239,6 +248,17 @@ def unique_everseen(iterable, key=None):
             yield k
 
 
+def xml2etree(f, xml=True, html5=False):
+    if xml:
+        parser = etree.parse
+    elif html5:
+        parser = html5parser.parse
+    else:
+        parser = html.parse
+
+    return parser(f).getroot()
+
+
 def _make_content(i, value=None, tag='content', append=True, strip=False):
     content = i.get(tag)
 
@@ -258,15 +278,16 @@ def _make_content(i, value=None, tag='content', append=True, strip=False):
     return {tag: content} if content else {}
 
 
-def etree_to_dict(element):
-    """Convert an lxml element into a dict imitating how Yahoo Pipes does it.
+def etree2dict(element, lazy=LAZY):
+    """Convert an element tree into a dict imitating how Yahoo Pipes does it.
     """
     i = dict(element.items())
     i.update(_make_content(i, element.text, strip=True))
+    children = element.iterchildren() if lazy else element.getchildren()
 
-    for child in element.iterchildren():
+    for child in children:
         tag = child.tag
-        value = etree_to_dict(child)
+        value = etree2dict(child, lazy)
         i.update(_make_content(i, value, tag))
 
     if element.text and not set(i).difference(['content']):
@@ -274,6 +295,19 @@ def etree_to_dict(element):
         i = i['content']
 
     return i
+
+
+def any2dict(f, ext='xml', html5=False):
+    if ext in {'xml', 'html'}:
+        xml = ext == 'xml'
+        root = xml2etree(f, xml, html5)
+        content = etree2dict(root)
+    elif ext == 'json':
+        content = loads(f.read())
+    else:
+        raise TypeError('Invalid file type %s' % ext)
+
+    return content
 
 
 def cast_date(date_str):
@@ -301,7 +335,7 @@ def cast_date(date_str):
         date = DATES.get(date_str)
     else:
         try:
-            date = parse(date_str)
+            date = parser.parse(date_str)
         except AttributeError:
             date = time.gmtime(date_str)
 
@@ -654,8 +688,8 @@ def multiplex(sources):
 ############
 def gen_entries(parsed):
     for entry in parsed['entries']:
-        entry['pubDate'] = entry.get('updated_parsed')
-        entry['y:published'] = entry.get('updated_parsed')
+        entry['pubDate'] = entry.get('updated_parsed', 'published_parsed')
+        entry['y:published'] = entry.get('updated_parsed', 'published_parsed')
         entry['dc:creator'] = entry.get('author')
         entry['author.uri'] = entry.get('author_detail', {}).get(
             'href')

@@ -45,7 +45,6 @@ import requests
 import treq
 
 from builtins import *
-from lxml.etree import parse
 from twisted.web import microdom
 from twisted.internet.defer import inlineCallbacks, returnValue
 
@@ -116,7 +115,7 @@ def asyncParser(_, objconf, skip, **kwargs):
             root = yield microdom.parseString(content)
 
         results = root.getElementsByTagName('results')[0]
-        stream = map(tu.elementToDict, results.childNodes)
+        stream = map(tu.etreeToDict, results.childNodes)
 
     result = (stream, skip)
     returnValue(result)
@@ -163,10 +162,9 @@ def parser(_, objconf, skip, **kwargs):
             f = r.raw
 
         # todo: consider paging for large result sets
-        tree = parse(f)
-        root = tree.getroot()
+        root = utils.xml2etree(f)
         results = root.find('results')
-        stream = map(utils.etree_to_dict, results.getchildren())
+        stream = map(utils.etree2dict, results.getchildren())
 
     return stream, skip
 

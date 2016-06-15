@@ -106,11 +106,11 @@ Fetching feeds
     >>> #
     >>> # Note: regardless of how you fetch an rss feed, it will have the same
     >>> # structure
+    >>> intersection = [
+    ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
+    ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
     >>> item = next(stream)
-    >>> sorted(item.keys()) == [
-    ...     'author', 'author.name', 'author.uri', 'comments', 'content',
-    ...     'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
-    ...     'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
+    >>> set(item.keys()).issuperset(intersection)
     True
     >>> item['title'], item['author'], item['link']
     (u'Using NFC tags in the car', u'Liam Green-Hughes', \
@@ -348,12 +348,12 @@ Design Principles
     >>> from riko import get_path
     >>> from riko.modules.pipefetch import pipe
     >>>
+    >>> intersection = [
+    ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
+    ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
     >>> conf = {'url': {'subkey': 'url'}}
     >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
-    >>> set(next(result).keys()) == {
-    ...     'updated', 'updated_parsed', 'pubDate', 'author', 'y:published',
-    ...     'title', 'comments', 'summary', 'content', 'link', 'y:title',
-    ...     'dc:creator', 'author.uri', 'author.name', 'id', 'y:id'}
+    >>> set(next(result).keys()).issuperset(intersection)
     True
 """
 from __future__ import (

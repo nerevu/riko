@@ -34,7 +34,10 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import speedparser
+try:
+    import speedparser
+except ImportError:
+    import feedparser as speedparser
 
 from builtins import *
 from six.moves.urllib.request import urlopen

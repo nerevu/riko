@@ -24,6 +24,7 @@ from twisted.internet.utils import getProcessOutput
 from twisted.internet.interfaces import IReactorCore
 from twisted.internet.reactor import callLater
 from twisted.protocols.basic import FileSender
+from twisted.web import microdom
 from twisted.web.client import getPage, downloadPage
 from twisted.web.microdom import EntityReference
 from twisted.test.proto_helpers import (
@@ -342,8 +343,8 @@ def def2unicode(entitydef):
     return chr(cp)
 
 
-def elementToDict(element, tag='content'):
-    """Convert a microdom element into a dict imitating how Yahoo Pipes does it.
+def etreeToDict(element, tag='content'):
+    """Convert a microdom element tree into a dict imitating how Yahoo Pipes does it.
 
     TODO: checkout twisted.words.xish
     """
@@ -357,7 +358,7 @@ def elementToDict(element, tag='content'):
 
     for child in element.childNodes:
         tag = child.tagName if hasattr(child, 'tagName') else 'content'
-        value = elementToDict(child, tag)
+        value = etreeToDict(child, tag)
 
         # try to join the content first since microdom likes to split up
         # elements that contain a mix of text and entity reference
@@ -371,3 +372,8 @@ def elementToDict(element, tag='content'):
         i = i['content']
 
     return i
+
+
+def asyncXML2Etree(f, xml=True, html5=False):
+    parse = microdom.parseXML if xml else microdom.parse
+    return parse(f)

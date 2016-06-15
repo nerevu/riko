@@ -23,7 +23,11 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import speedparser
+try:
+    import speedparser
+except ImportError:
+    import feedparser as speedparser
+
 
 from builtins import *
 from six.moves.urllib.request import urlopen
@@ -37,6 +41,9 @@ from riko.lib.log import Logger
 OPTS = {'ftype': 'none'}
 DEFAULTS = {'sleep': 0}
 logger = Logger(__name__).logger
+intersection = [
+    'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
+    'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
 
 
 @inlineCallbacks
@@ -151,7 +158,7 @@ def asyncPipe(*args, **kwargs):
         >>> from . import FILES
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(sorted(next(x).keys()))
+        ...     callback = lambda x: print(set(next(x).keys()).issuperset(intersection))
         ...     d = asyncPipe(conf={'url': FILES[0]})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -160,9 +167,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        ['author', u'author.name', u'author.uri', 'comments', 'content', \
-u'dc:creator', 'id', 'link', u'pubDate', 'summary', 'title', 'updated', \
-'updated_parsed', u'y:id', u'y:published', u'y:title']
+        True
     """
     return asyncParser(*args, **kwargs)
 
@@ -189,13 +194,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from . import FILES
         >>>
-        >>> keys = {
-        ...     'updated', 'updated_parsed', u'pubDate', 'author',
-        ...     u'y:published', 'title', 'comments', 'summary', 'content',
-        ...     'link', u'y:title', u'dc:creator', u'author.uri',
-        ...     u'author.name', 'id', u'y:id'}
-        >>>
-        >>> set(next(pipe(conf={'url': FILES[0]})).keys()) == keys
+        >>> set(next(pipe(conf={'url': FILES[0]})).keys()).issuperset(intersection)
         True
     """
     return parser(*args, **kwargs)
