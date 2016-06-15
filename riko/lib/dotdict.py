@@ -30,18 +30,12 @@ class DotDict(FeedParserDict):
         self.update(data)
 
     def __getitem__(self, key):
-        try:
-            value = dict.__getitem__(self, key)
-        except KeyError:
-            value = super(DotDict, self).__getitem__(key)
+        value = super(DotDict, self).__getitem__(key)
 
         if hasattr(value, 'keys'):
             value = DotDict(value)
 
         return value
-
-    def __setitem__(self, key, value):
-        return dict.__setitem__(self, key, value)
 
     def _parse_key(self, key=None):
         try:
@@ -79,7 +73,7 @@ class DotDict(FeedParserDict):
         last = keys[-1]
         item = self.copy()
         reduce(lambda i, k: i.setdefault(k, {}), first, item)[last] = value
-        dict.update(self, item)
+        super(DotDict, self).update(item)
 
     def get(self, key=None, default=None, **kwargs):
         keys = self._parse_key(key)
@@ -96,8 +90,8 @@ class DotDict(FeedParserDict):
 
         if hasattr(value, 'keys') and 'terminal' in value:
             # value fed in from another module
-            feed = kwargs[value['terminal']]
-            value = next(feed)[value.get('path', 'content')]
+            stream = kwargs[value['terminal']]
+            value = next(stream)[value.get('path', 'content')]
         elif hasattr(value, 'keys') and 'value' in value:
             value = value['value']
 

@@ -44,7 +44,7 @@ ATTRS = {
 def reducer(word, rule):
     if rule.transform in ATTRS:
         args = rule.args.split(',') if rule.args else []
-        result = getattr(str, rule.transform)(word, *args)
+        result = getattr(word, rule.transform)(*args)
     else:
         logger.warning('Invalid transformation: %s', rule.transform)
         result = word
@@ -64,7 +64,7 @@ def asyncParser(word, rules, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: strtransform)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
@@ -78,7 +78,7 @@ def asyncParser(word, rules, skip, **kwargs):
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'transform': 'title'}}
         ...     rule = Objectify(conf['rule'])
-        ...     kwargs = {'feed': item, 'conf': conf}
+        ...     kwargs = {'stream': item, 'conf': conf}
         ...     d = asyncParser(item['content'], [rule], False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -90,7 +90,7 @@ def asyncParser(word, rules, skip, **kwargs):
         Hello World
     """
     if skip:
-        value = kwargs['feed']
+        value = kwargs['stream']
     else:
         value = yield tu.coopReduce(reducer, rules, word)
 
@@ -109,7 +109,7 @@ def parser(word, rules, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: strtransform)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple(dict, bool): Tuple of (item, skip)
@@ -120,18 +120,18 @@ def parser(word, rules, skip, **kwargs):
         >>> item = {'content': 'hello world'}
         >>> conf = {'rule': {'transform': 'title'}}
         >>> rule = Objectify(conf['rule'])
-        >>> kwargs = {'feed': item, 'conf': conf}
+        >>> kwargs = {'stream': item, 'conf': conf}
         >>> parser(item['content'], [rule], False, **kwargs)[0]
         u'Hello World'
     """
-    value = kwargs['feed'] if skip else reduce(reducer, rules, word)
+    value = kwargs['stream'] if skip else reduce(reducer, rules, word)
     return value, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously performs string transformations
-    on the field of a feed item.
+    on the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -179,8 +179,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(**OPTS)
 def pipe(*args, **kwargs):
-    """A processor that performs string transformations on the field of a feed
-    item.
+    """A processor that performs string transformations on the field of an item.
 
     Args:
         item (dict): The entry to process

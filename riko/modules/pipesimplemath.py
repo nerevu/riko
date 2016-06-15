@@ -72,7 +72,7 @@ def parser(num, objconf, skip, **kwargs):
         2.5
     """
     operation = OPS[kwargs['conf']['op']]
-    parsed = kwargs['feed'] if skip else operation(num, objconf.other)
+    parsed = kwargs['stream'] if skip else operation(num, objconf.other)
     return parsed, skip
 
 

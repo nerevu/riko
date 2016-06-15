@@ -72,6 +72,7 @@ Ready to contribute? Here's how to set up ``riko`` for local development.
 
     mkvirtualenv --no-site-packages riko
     pip install -r dev-requirements.txt
+    pip install -r optional-requirements.txt
     python setup.py develop
 
 Or, if you only have ``virtualenv`` installed
@@ -81,6 +82,7 @@ Or, if you only have ``virtualenv`` installed
     virtualenv --no-site-packages ~/.venvs/riko
     source ~/.venvs/riko/bin/activate
     pip install -r dev-requirements.txt
+    pip install -r optional-requirements.txt
     python setup.py develop
 
 3. Create a branch for local development

@@ -8,6 +8,7 @@ import sys
 import riko as module
 import pkutils
 
+from os import path as p
 from builtins import *
 
 try:
@@ -16,18 +17,18 @@ except ImportError:
     from distutils.core import setup, find_packages
 
 sys.dont_write_bytecode = True
-py2_requirements = sorted(pkutils.parse_requirements('py2-requirements.txt'))
-py3_requirements = sorted(pkutils.parse_requirements('requirements.txt'))
-dev_requirements = sorted(pkutils.parse_requirements('dev-requirements.txt'))
+py2_requirements = set(pkutils.parse_requirements('py2-requirements.txt'))
+py3_requirements = set(pkutils.parse_requirements('requirements.txt'))
+dev_requirements = set(pkutils.parse_requirements('dev-requirements.txt'))
 optional = 'optional-requirements.txt'
-async_requirements = sorted(pkutils.parse_requirements(optional))
+optional_requirements = set(pkutils.parse_requirements(optional))
 readme = pkutils.read('README.rst')
 changes = pkutils.read('CHANGES.rst').replace('.. :changelog:', '')
 license = module.__license__
 version = module.__version__
 project = module.__title__
 description = module.__description__
-user = 'reubano'
+user = 'nerevu'
 
 # Conditional sdist dependencies:
 if 'bdist_wheel' not in sys.argv and sys.version_info.major == 2:
@@ -36,11 +37,12 @@ else:
     requirements = py3_requirements
 
 # Conditional bdist_wheel dependencies:
-py2_require = sorted(set(py2_requirements).difference(py3_requirements))
+py2_require = py2_requirements.difference(py3_requirements)
 
 # Optional requirements
-async_require = set(async_requirements).difference(requirements)
-dev_require = set(dev_requirements).difference(requirements)
+dev_require = dev_requirements.difference(requirements)
+lxml_require = {r for r in optional_requirements if r.startswith('lxml')}
+async_require = optional_requirements.difference(lxml_require)
 
 setup(
     name=project,
@@ -63,6 +65,7 @@ setup(
     install_requires=requirements,
     extras_require={
         'python_version<3.0': py2_require,
+        'lxml': lxml_require,
         'async': async_require,
         'develop': dev_require,
     },
@@ -78,11 +81,7 @@ setup(
         'Natural Language :: English',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: Implementation :: PyPy',
-        'Programming Language :: Python :: Implementation :: PyPy3',
         'Environment :: Console',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Intended Audience :: Developers',
@@ -91,4 +90,5 @@ setup(
         'Operating System :: Microsoft :: Windows',
     ],
     platforms=['MacOS X', 'Windows', 'Linux'],
+    scripts=[p.join('bin', 'runpipe')],
 )

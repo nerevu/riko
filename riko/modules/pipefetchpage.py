@@ -63,10 +63,10 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: content)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -77,7 +77,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ...     callback = lambda x: print(next(x[0])['content'][:32])
         ...     conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'feed': {}, 'assign': 'content'}
+        ...     kwargs = {'stream': {}, 'assign': 'content'}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -89,15 +89,16 @@ def asyncParser(_, objconf, skip, **kwargs):
         CNN.com International - Breaking
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         content = yield tu.urlRead(url)
         parsed = get_string(content, objconf.start, objconf.end)
-        splits = parsed.split(objconf.token) if objconf.token else [parsed]
-        feed = ({kwargs['assign']: chunk} for chunk in splits)
+        detagged = get_text(parsed) if objconf.detag else parsed
+        splits = detagged.split(objconf.token) if objconf.token else [detagged]
+        stream = ({kwargs['assign']: chunk} for chunk in splits)
 
-    result = (feed, skip)
+    result = (stream, skip)
     returnValue(result)
 
 
@@ -110,7 +111,7 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -118,22 +119,22 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'feed': {}, 'assign': 'content'}
+        >>> kwargs = {'stream': {}, 'assign': 'content'}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['content'][:32]
         u'CNN.com International - Breaking'
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         content = urlopen(url).read()
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
         splits = detagged.split(objconf.token) if objconf.token else [detagged]
-        feed = ({kwargs['assign']: chunk} for chunk in splits)
+        stream = ({kwargs['assign']: chunk} for chunk in splits)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(async=True, **OPTS)
@@ -160,7 +161,7 @@ def asyncPipe(*args, **kwargs):
         assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
-        dict: twisted.internet.defer.Deferred item with feeds
+        dict: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from twisted.internet.task import react
@@ -206,7 +207,7 @@ def pipe(*args, **kwargs):
         assign (str): Attribute to assign parsed content (default: content)
 
     Yields:
-        dict: an item on the feed
+        dict: item
 
     Examples:
         >>> from . import FILES

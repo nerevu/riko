@@ -15,22 +15,22 @@ p232_conf = {
 p421_conf = {'rule': [{'find': 'empty', 'param': 'first', 'replace': 'ABC'}]}
 
 
-def pipe_simple2(test=False):
-    output = (SyncPipe('itembuilder', conf=p232_conf, test=test)
+def pipe(test=False):
+    stream = (SyncPipe('itembuilder', conf=p232_conf, test=test)
         .strreplace(conf=p421_conf, field='author', assign='author')
         .list)
 
-    for i in output:
+    for i in stream:
         pprint(i)
 
-    return output
+    return stream
 
 
 @inlineCallbacks
-def asyncPipeSimple2(reactor, test=False):
-    output = yield (AsyncPipe('itembuilder', conf=p232_conf, test=test)
+def asyncPipe(reactor, test=False):
+    stream = yield (AsyncPipe('itembuilder', conf=p232_conf, test=test)
         .strreplace(conf=p421_conf, field='author', assign='author')
         .list)
 
-    for i in output:
+    for i in stream:
         pprint(i)

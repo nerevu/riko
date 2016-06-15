@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.pipehash
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 Provides functions for hashing text.
 
 Note: If the PYTHONHASHSEED environment variable is set to an integer value,
@@ -18,8 +18,10 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipehash import pipe
-        >>> next(pipe({'content': 'hello world'}))['hash']
-        3885626731L
+        >>>
+        >>> _hash = ctypes.c_uint(hash('hello world')).value
+        >>> next(pipe({'content': 'hello world'}))['hash'] == _hash
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -51,7 +53,7 @@ def parser(word, _, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: exchangerate)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple(dict, bool): Tuple of (item, skip)
@@ -59,18 +61,19 @@ def parser(word, _, skip, **kwargs):
     Examples:
         >>> from riko.lib.utils import Objectify
         >>>
+        >>> _hash = ctypes.c_uint(hash('hello world')).value
         >>> item = {'content': 'hello world'}
-        >>> kwargs = {'feed': item}
-        >>> parser(item['content'], None, False, **kwargs)[0]
-        3885626731L
+        >>> kwargs = {'stream': item}
+        >>> parser(item['content'], None, False, **kwargs)[0] == _hash
+        True
     """
-    parsed = kwargs['feed'] if skip else ctypes.c_uint(hash(word)).value
+    parsed = kwargs['stream'] if skip else ctypes.c_uint(hash(word)).value
     return parsed, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A processor module that asynchronously hashes the field of a feed item.
+    """A processor module that asynchronously hashes the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -88,8 +91,10 @@ def asyncPipe(*args, **kwargs):
         >>> from twisted.internet.task import react
         >>> from riko.twisted import utils as tu
         >>>
+        >>> _hash = ctypes.c_uint(hash('hello world')).value
+        >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['hash'])
+        ...     callback = lambda x: print(next(x)['hash'] == _hash)
         ...     d = asyncPipe({'content': 'hello world'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -98,14 +103,14 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        3885626731
+        True
     """
     return parser(*args, **kwargs)
 
 
 @processor(**OPTS)
 def pipe(*args, **kwargs):
-    """A processor that hashes the field of a feed item.
+    """A processor that hashes the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -120,10 +125,12 @@ def pipe(*args, **kwargs):
         dict: an item with concatenated content
 
     Examples:
-        >>> next(pipe({'content': 'hello world'}))['hash']
-        3885626731L
+        >>> _hash = ctypes.c_uint(hash('hello world')).value
+        >>> next(pipe({'content': 'hello world'}))['hash'] == _hash
+        True
+        >>> _hash = ctypes.c_uint(hash('greeting')).value
         >>> kwargs = {'field': 'title', 'assign': 'result'}
-        >>> next(pipe({'title': 'greeting'}, **kwargs))['result']
-        3500283417L
+        >>> next(pipe({'title': 'greeting'}, **kwargs))['result'] == _hash
+        True
     """
     return parser(*args, **kwargs)

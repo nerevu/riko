@@ -43,7 +43,7 @@ def parser(_, parts, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple(str, bool): Tuple of (the concatenated string, skip)
@@ -53,7 +53,7 @@ def parser(_, parts, skip, **kwargs):
         u'onetwo'
     """
     try:
-        parsed = kwargs['feed'] if skip else ''.join(parts)
+        parsed = kwargs['stream'] if skip else ''.join(parts)
     except UnicodeDecodeError:
         decoded = [p.decode('utf-8') for p in parts]
         parsed = ''.join(decoded)

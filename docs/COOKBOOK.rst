@@ -4,7 +4,7 @@ riko Cookbook
 Index
 -----
 
-`User input`_ | `Alternate conf value entry`_ | `Alternate workflow creation`_
+`User input`_ | `Fetching data and feeds`_ | `Alternate conf value entry`_ | `Alternate workflow creation`_
 
 User input
 ----------
@@ -19,8 +19,74 @@ set of values passed into every pipe).
 
     >>> from riko.modules.pipeinput import pipe
     >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-    >>> pipe(conf=conf, inputs={'content': '30'}).next()
+    >>> next(pipe(conf=conf, inputs={'content': '30'}))
     {'content': 30}
+
+Fetching data and feeds
+-----------------------
+
+``riko`` can read both local and remote filepaths via ``source`` pipes. All ``source``
+pipes return an equivalent ``feed`` iterator of dictionaries,
+aka ``items``.
+
+.. code-block:: python
+
+    >>> from itertools import chain
+    >>> from riko import get_path
+    >>> from riko.modules.pipefetch import pipe as fetch
+    >>> from riko.modules.pipefetchpage import pipe as fetchpage
+    >>> from riko.modules.pipefetchdata import pipe as fetchdata
+    >>> from riko.modules.pipefetchsitefeed import pipe as fetchsitefeed
+    >>> from riko.modules.pipefeedautodiscovery import pipe as autodiscovery
+    >>>
+    >>> ### Fetch a url ###
+    >>> stream = fetchpage(conf={'url': 'https://news.ycombinator.com'})
+    >>>
+    >>> ### Fetch a filepath ###
+    >>> #
+    >>> # Note: `get_path` just looks up a file in the `data` directory
+    >>> stream = fetchdata(conf={'url': get_path('quote.json')})
+    >>>
+    >>> ### View the fetched data ###
+    >>> item = next(stream)
+    >>> item['list']['resources'][0]['resource']['fields']['symbol']
+    'KRW=X'
+
+    >>> ### Fetch an rss feed ###
+    >>> stream = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
+    >>>
+    >>> ### Fetch the first rss feed found ###
+    >>> stream = fetchsitefeed(conf={'url': 'http://www.bbc.com/news'})
+    >>>
+    >>> ### Find all rss links and fetch the feeds ###
+    >>> entries = autodiscovery(conf={'url': 'http://edition.cnn.com/services/rss'})
+    >>> urls = (e['link'] for e in entries)
+    >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
+    >>>
+    >>> ### Alternatively, create a SyncCollection ###
+    >>> #
+    >>> # `SyncCollection` is a url fetching convenience class with support for
+    >>> # parallel processing
+    >>> from riko.lib.collections import SyncCollection
+    >>>
+    >>> sources = [{'url': url} for url in urls]
+    >>> stream = SyncCollection(sources).fetch()
+    >>>
+    >>> ### View the fetched rss feed(s) ###
+    >>> #
+    >>> # Note: regardless of how you fetch an rss feed, it will have the same
+    >>> # structure
+    >>> item = next(stream)
+    >>> sorted(item.keys())
+    [
+        'author', 'author.name', 'author.uri', 'comments', 'content',
+        'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
+        'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
+    >>> item['title'], item['author'], item['link']
+    (
+        u'Using NFC tags in the car', u'Liam Green-Hughes',
+        u'http://www.greenhughes.com/content/using-nfc-tags-car')
+
 
 Alternate ``conf`` value entry
 ------------------------------
@@ -41,9 +107,10 @@ Some workflows have ``conf`` values that are wired from other pipes
     True
 
 Alternate workflow creation
-------------------------------
+---------------------------
 
-In addition to `class based workflows`_ ``riko`` supports a pure functional style
+In addition to `class based workflows`_ ``riko`` supports a pure functional
+style [#]_.
 
 .. code-block:: python
 
@@ -92,8 +159,8 @@ In addition to `class based workflows`_ ``riko`` supports a pure functional styl
     >>> #   5. reverse sort the items by the replaced url
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> feed = fetch(conf=fetch_conf)
-    >>> filtered = pfilter(feed, conf={'rule': filter_rule})
+    >>> stream = fetch(conf=fetch_conf)
+    >>> filtered = pfilter(stream, conf={'rule': filter_rule})
     >>> extracted = (subelement(i, conf=sub_conf, emit=True) for i in filtered)
     >>> flat_extract = chain.from_iterable(extracted)
     >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
@@ -102,4 +169,10 @@ In addition to `class based workflows`_ ``riko`` supports a pure functional styl
     >>> next(sorted_match)
     {'content': 'mailto:mail@writetoreply.org'}
 
+Notes
+^^^^^
+
+.. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
+
+.. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
 .. _class based workflows: https://github.com/reubano/riko/blob/master/README.rst#synchronous-processing

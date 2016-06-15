@@ -10,7 +10,7 @@ Uses a web site's auto-discovery information to find an RSS or Atom feed. If
 multiple feeds are discovered, only the first one is fetched. If a site changes
 their feed URL in the future, this module can discover the new URL for you (as
 long as the site updates their auto-discovery links). For sites with only one
-feed, this module provides a good alternative to the Fetch Feed module.
+stream, this module provides a good alternative to the Fetch Feed module.
 
 Also note that not all sites provide auto-discovery links on their web site's
 home page.
@@ -60,10 +60,10 @@ def asyncParser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -73,7 +73,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'])
         ...     objconf = Objectify({'url': FILES[4]})
-        ...     kwargs = {'feed': {}}
+        ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -85,16 +85,16 @@ def asyncParser(_, objconf, skip, **kwargs):
         Using NFC tags in the car
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         rss = yield autorss.asyncGetRSS(url)
         link = utils.get_abspath(next(rss)['link'])
         content = yield tu.urlRead(link)
         parsed = speedparser.parse(content)
-        feed = utils.gen_entries(parsed)
+        stream = utils.gen_entries(parsed)
 
-    result = (feed, skip)
+    result = (stream, skip)
     returnValue(result)
 
 
@@ -108,32 +108,32 @@ def parser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from . import FILES
         >>> from riko.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'url': FILES[4]})
-        >>> kwargs = {'feed': {}}
+        >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['title']
         u'Using NFC tags in the car'
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         rss = autorss.get_rss(url)
         link = utils.get_abspath(next(rss)['link'])
         content = urlopen(link).read()
         parsed = speedparser.parse(content)
-        feed = utils.gen_entries(parsed)
+        stream = utils.gen_entries(parsed)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(async=True, **OPTS)
@@ -186,7 +186,7 @@ def pipe(*args, **kwargs):
             url (str): The web site to fetch
 
     Yields:
-        dict: an item of the feed
+        dict: item
 
     Examples:
         >>> from . import FILES

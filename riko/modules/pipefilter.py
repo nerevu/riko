@@ -3,9 +3,9 @@
 """
 riko.modules.pipefilter
 ~~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for filtering (including or excluding) items from a feed.
+Provides functions for filtering (including or excluding) items from a stream.
 
-With Filter you create rules that compare feed elements to values you specify.
+With Filter you create rules that compare item elements to values you specify.
 So, for example, you may create a rule that says "permit items where the
 item.description contains 'kittens'". Or a rule that says "omit any items where
 the item.y:published is before yesterday".
@@ -81,6 +81,8 @@ def parse_rule(rule, item, **kwargs):
                 pass
             else:
                 x, y = _x, _y
+        except ValueError:
+            pass
         else:
             x, y = _x, _y
 
@@ -92,20 +94,20 @@ def parse_rule(rule, item, **kwargs):
     return result
 
 
-def parser(feed, rules, tuples, **kwargs):
+def parser(stream, rules, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+        stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         rules (List[obj]): the item independent rules (Objectify instances).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, rules)
-            `item` is an element in the source feed (a DotDict instance)
+            `item` is an element in the source stream (a DotDict instance)
             and `rules` is the rule configuration (an Objectify instance).
-            Note: this shares the `feed` iterator, so consuming it will
-            consume `feed` as well.
+            Note: this shares the `stream` iterator, so consuming it will
+            consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
 
@@ -121,9 +123,9 @@ def parser(feed, rules, tuples, **kwargs):
         >>> kwargs = {'conf': conf}
         >>> rule = {'field': 'ex', 'op': 'greater', 'value': 3}
         >>> objrule = Objectify(rule)
-        >>> feed = (DotDict({'ex': x}) for x in range(5))
-        >>> tuples = zip(feed, repeat(objrule))
-        >>> next(parser(feed, [objrule], tuples, **kwargs))
+        >>> stream = (DotDict({'ex': x}) for x in range(5))
+        >>> tuples = zip(stream, repeat(objrule))
+        >>> next(parser(stream, [objrule], tuples, **kwargs))
         {u'ex': 4}
     """
     conf = kwargs['conf']
@@ -131,7 +133,7 @@ def parser(feed, rules, tuples, **kwargs):
     dynamic = any('subkey' in v for v in conf.values())
     objconf = None if dynamic else parse_conf({}, conf=conf, objectify=True)
 
-    for item in feed:
+    for item in stream:
         if dynamic:
             objconf = parse_conf(item, conf=conf, objectify=True)
 
@@ -154,7 +156,7 @@ def asyncPipe(*args, **kwargs):
     the given rules.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -207,7 +209,7 @@ def pipe(*args, **kwargs):
     """An operator that extracts items matching the given rules.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

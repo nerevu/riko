@@ -9,6 +9,7 @@ Provides example pipeline tests.
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import ctypes
 import nose.tools as nt
 
 from importlib import import_module
@@ -29,19 +30,40 @@ class TestExamples(object):
 
     def _get_pipeline(self, pipe_name):
         module = import_module('examples.%s' % pipe_name)
-        pipe_generator = getattr(module, pipe_name)
-        pipeline = pipe_generator(test=True)
+        pipeline = module.pipe(test=True)
         return list(pipeline)
 
     def test_kazeeki(self):
         """Tests the kazeeki pipeline
         """
-        pipe_name = 'pipe_kazeeki'
+        pipe_name = 'kazeeki'
         pipeline = self._get_pipeline(pipe_name)
+        raw = (
+            '<p>We are looking for freelancers ( individuals and companies )'
+            ' who offer their services related to Architecture Walkthrough and'
+            ' 3D animations. Please consider this job as a potential to '
+            'several more and a long term relationship.   We are a Media...\n'
+            '    <br> <br>\n    <b>Category:</b> Design &amp; Multimedia &gt;'
+            ' Animation <br>\n    <b>Type and Budget:</b> Hourly ($10 - $15 / '
+            'hr)<br>\n    <b>Time Left:</b> Ends: 29d, 23h (Ends Thu, 05 Feb '
+            '2015 11:46:40 EST) <br>\n    <b>Start Date:</b> 06 Jan 2015 <br>'
+            '\n    <b>Proposals:</b> 0 (<a href=\"https://www.elance.com/php/'
+            'landing/main/login.php?assumePreviousLogin=1&amp;redirect=https'
+            '%3A%2F%2Fwww.elance.com%2Fr%2Fjobs%2Fcat-design-multimedia%3F'
+            'showUpgradeModelIfFreeMember%3D1\">login</a>) <br>\n    '
+            '<b>Client:</b> Client (0 jobs posted, 0% awarded, $0 total '
+            'purchased, Payment Method Verified) <br>\n    <b>Client Location:'
+            '</b> , , Cambodia <br>\n        <b>Desired Skills:</b> Animation'
+            '  3D Modeling  Computer Graphics  3d Animation  3D Rendering <br>'
+            '\n    <b>Job ID:</b> 66963214 <br> <br>\n    <a href=\"https://'
+            'www.elance.com/j/3d-architecture-walkthrough-3d-animation-artists'
+            '/66963214/\">View job »</a></p>')
+
+        _hash = ctypes.c_uint(hash(raw)).value
 
         example = {
             'author': {'name': None, 'uri': None},
-            'id': 1734103952,
+            'id': _hash,
             'k:author': 'unknown',
             'k:budget': Decimal('0'),
             'k:budget_converted': Decimal('0.000000'),
@@ -83,7 +105,7 @@ class TestExamples(object):
     def test_gigs(self):
         """Tests the gigs pipeline
         """
-        pipe_name = 'pipe_gigs'
+        pipe_name = 'gigs'
         pipeline = self._get_pipeline(pipe_name)
 
         example = {
@@ -127,7 +149,7 @@ class TestExamples(object):
     def test_simple1(self):
         """Tests the simple1 pipeline
         """
-        pipe_name = 'pipe_simple1'
+        pipe_name = 'simple1'
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'
@@ -137,7 +159,7 @@ class TestExamples(object):
     def test_simple2(self):
         """Tests the simple2 pipeline
         """
-        pipe_name = 'pipe_simple2'
+        pipe_name = 'simple2'
         pipeline = self._get_pipeline(pipe_name)
         example = {
             'author': 'ABC', 'link': 'www.google.com', 'title': 'google'}
@@ -150,7 +172,7 @@ class TestExamples(object):
     def test_split(self):
         """Tests the split pipeline
         """
-        pipe_name = 'pipe_split'
+        pipe_name = 'split'
         pipeline = self._get_pipeline(pipe_name)
         example = {'date': 'December 02, 2014', 'year': 2014}
         length = len(pipeline)
@@ -161,7 +183,7 @@ class TestExamples(object):
     def test_wired(self):
         """Tests the wired pipeline
         """
-        pipe_name = 'pipe_wired'
+        pipe_name = 'wired'
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
         msg = 'Pipeline %s has length %i, not 1'

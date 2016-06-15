@@ -15,7 +15,6 @@ sdist
 develop-eggs
 .installed.cfg
 lib64
-*.ipynb
 
 # Installer logs
 pip-log.txt
@@ -24,6 +23,7 @@ pip-log.txt
 .coverage
 .tox
 .noseids
+.scripttest
 nosetests.xml
 *.ropeproject
 cover/*

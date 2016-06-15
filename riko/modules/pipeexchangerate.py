@@ -92,7 +92,7 @@ def asyncParser(base, objconf, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: exchangerate)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
@@ -109,7 +109,7 @@ def asyncParser(base, objconf, skip, **kwargs):
         ...         'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'feed': item, 'assign': 'content'}
+        ...     kwargs = {'stream': item, 'assign': 'content'}
         ...     d = asyncParser(item['content'], objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -121,13 +121,13 @@ def asyncParser(base, objconf, skip, **kwargs):
         1.545801
     """
     if skip:
-        rate = kwargs['feed']
+        rate = kwargs['stream']
     elif objconf.url.startswith('http'):
         r = yield treq.get(objconf.url, params=objconf.params)
         json = yield treq.json_content(r)
     else:
-        abs_url = utils.get_abspath(objconf.url)
-        content = yield tu.urlRead(abs_url, delay=objconf.sleep)
+        url = utils.get_abspath(objconf.url)
+        content = yield tu.urlRead(url, delay=objconf.sleep)
         json = loads(content)
 
     if not skip:
@@ -150,7 +150,7 @@ def parser(base, objconf, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: exchangerate)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple(dict, bool): Tuple of (item, skip)
@@ -163,13 +163,13 @@ def parser(base, objconf, skip, **kwargs):
         >>> conf = {'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'feed': item, 'assign': 'content'}
+        >>> kwargs = {'stream': item, 'assign': 'content'}
         >>> result, skip = parser(item['content'], objconf, False, **kwargs)
         >>> result
         Decimal('1.545801')
     """
     if skip:
-        rate = kwargs['feed']
+        rate = kwargs['stream']
     elif objconf.memoize:
         get = utils.memoize(utils.HALF_DAY)(requests.get)
         r = get(objconf.url, params=objconf.params)
@@ -179,8 +179,8 @@ def parser(base, objconf, skip, **kwargs):
         json = r.json()
     else:
         context = utils.SleepyDict(delay=objconf.sleep)
-        abs_url = utils.get_abspath(objconf.url)
-        content = urlopen(abs_url, context=context).read()
+        url = utils.get_abspath(objconf.url)
+        content = urlopen(url, context=context).read()
         json = loads(content)
 
     if not skip:
@@ -222,7 +222,7 @@ def asyncPipe(*args, **kwargs):
                 exchangerate)
 
     Returns:
-        dict: twisted.internet.defer.Deferred feed of items
+        dict: twisted.internet.defer.Deferred stream of items
 
     Examples:
         >>> from twisted.internet.task import react

@@ -49,10 +49,10 @@ def asyncParser(_, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -63,7 +63,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ...     callback = lambda x: print(next(x[0])['mileage'])
         ...     conf = {'url': FILES[6], 'sanitize': True, 'skip_rows': 0}
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'feed': {}}
+        ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -75,7 +75,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         7213
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         f = yield tu.urlOpen(url)
@@ -83,9 +83,9 @@ def asyncParser(_, objconf, skip, **kwargs):
             'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
 
         rkwargs = utils.combine_dicts(objconf, odd)
-        feed = read_csv(f, **rkwargs)
+        stream = read_csv(f, **rkwargs)
 
-    result = (feed, skip)
+    result = (stream, skip)
     returnValue(result)
 
 
@@ -98,7 +98,7 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from . import FILES
@@ -106,22 +106,22 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> conf = {'url': FILES[6], 'sanitize': True, 'skip_rows': 0}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'feed': {}}
+        >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['mileage']
         u'7213'
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         f = urlopen(url)
         odd = {
             'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
         rkwargs = utils.combine_dicts(objconf, odd)
-        feed = read_csv(f, **rkwargs)
+        stream = read_csv(f, **rkwargs)
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(DEFAULTS, async=True, **OPTS)
@@ -153,7 +153,7 @@ def asyncPipe(*args, **kwargs):
             col_names (List[str]): Custom column names (default: None).
 
     Returns:
-        dict: twisted.internet.defer.Deferred item with feeds
+        dict: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from twisted.internet.task import react
@@ -202,7 +202,7 @@ def pipe(*args, **kwargs):
             col_names (List[str]): Custom column names (default: None).
 
     Yields:
-        dict: an item on the feed
+        dict: item
 
     Examples:
         >>> from . import FILES

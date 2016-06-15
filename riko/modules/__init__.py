@@ -176,19 +176,19 @@ class processor(object):
                 or 'decimal'. Default: 'pass', i.e., return the item as is.
                 Note: setting to 'none' automatically enables `emit`.
 
-            count (str): Output count. Must be either 'first' or 'all'
+            count (str): Stream count. Must be either 'first' or 'all'
                 (default: 'all', i.e., output all results).
 
-            assign (str): Attribute to assign output (default: 'content' if
+            assign (str): Attribute to assign stream (default: 'content' if
                 `ftype` is 'none', pipe name otherwise)
 
-            emit (bool): Return the output as is and don't assign it to an item
+            emit (bool): Return the stream as is and don't assign it to an item
                 attribute (default: True if `ftype` is set to 'none', False
                 otherwise).
 
             skip_if (func): A function that takes the `item` and should return
                 True if processing should be skipped, or False otherwise. If
-                processing is skipped, the resulting output will be the original
+                processing is skipped, the resulting stream will be the original
                 input `item`.
 
         Examples:
@@ -198,12 +198,12 @@ class processor(object):
             >>> @processor()
             ... def pipe(item, objconf, skip, **kwargs):
             ...     if skip:
-            ...         output = kwargs['feed']
+            ...         stream = kwargs['stream']
             ...     else:
             ...         content = item['content']
-            ...         output = 'say "%s" %s times!' % (content, objconf.times)
+            ...         stream = 'say "%s" %s times!' % (content, objconf.times)
             ...
-            ...     return output, skip
+            ...     return stream, skip
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
@@ -211,12 +211,12 @@ class processor(object):
             ... @inlineCallbacks
             ... def asyncPipe(item, objconf, skip, **kwargs):
             ...     if skip:
-            ...         output = kwargs['feed']
+            ...         stream = kwargs['stream']
             ...     else:
             ...         content = yield tu.asyncReturn(item['content'])
-            ...         output = 'say "%s" %s times!' % (content, objconf.times)
+            ...         stream = 'say "%s" %s times!' % (content, objconf.times)
             ...
-            ...     result = output, skip
+            ...     result = stream, skip
             ...     returnValue(result)
             ...
             >>> item = {'content': 'hello world'}
@@ -264,24 +264,24 @@ class processor(object):
             >>> @processor(**kwargs)
             ... def pipe(content, times, skip, **kwargs):
             ...     if skip:
-            ...         output = kwargs['feed']
+            ...         stream = kwargs['stream']
             ...     else:
             ...         value = 'say "%s" %s times!' % (content, times[0])
-            ...         output = {kwargs['assign']: value}
+            ...         stream = {kwargs['assign']: value}
             ...
-            ...     return output, skip
+            ...     return stream, skip
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @processor(async=True, **kwargs)
             ... def asyncPipe(content, times, skip, **kwargs):
             ...     if skip:
-            ...         output = kwargs['feed']
+            ...         stream = kwargs['stream']
             ...     else:
             ...         value = 'say "%s" %s times!' % (content, times[0])
-            ...         output = {kwargs['assign']: value}
+            ...         stream = {kwargs['assign']: value}
             ...
-            ...     return output, skip
+            ...     return stream, skip
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -339,23 +339,23 @@ class processor(object):
             parsed, orig_item = dispatch(_input, bfuncs, dfuncs=dfuncs)
 
             if self.async:
-                feed, skip = yield pipe(*parsed, feed=orig_item, **kwargs)
+                stream, skip = yield pipe(*parsed, stream=orig_item, **kwargs)
             else:
-                feed, skip = pipe(*parsed, feed=orig_item, **kwargs)
+                stream, skip = pipe(*parsed, stream=orig_item, **kwargs)
 
-            one, assignment = get_assignment(feed, skip, **combined)
+            one, assignment = get_assignment(stream, skip, **combined)
 
             if skip or combined.get('emit'):
-                output = assignment
+                stream = assignment
             elif not skip:
                 key = combined.get('assign')
-                output = assign(_input, assignment, key, one=one)
+                stream = assign(_input, assignment, key, one=one)
 
             if self.async:
-                returnValue(output)
+                returnValue(stream)
             else:
-                for o in output:
-                    yield o
+                for s in stream:
+                    yield s
 
         is_source = self.opts.get('ftype') == 'none'
         wrapper.__dict__['type'] = 'processor'
@@ -365,7 +365,7 @@ class processor(object):
 
 class operator(object):
     def __init__(self, defaults=None, async=False, **opts):
-        """Creates a sync/async pipe that processes an entire feed of items
+        """Creates a sync/async pipe that processes an entire stream of items
 
         Args:
             defaults (dict): Default `conf` values.
@@ -409,12 +409,12 @@ class operator(object):
                 `items`. Must be one of 'pass', 'none', 'text', or 'num' (
                 default: 'pass', i.e., return the item as is)
 
-            count (str): Output count. Must be either 'first' or 'all'
+            count (str): Stream count. Must be either 'first' or 'all'
                 (default: 'all').
 
-            assign (str): Attribute to assign output (default: the pipe name)
+            assign (str): Attribute to assign stream (default: the pipe name)
 
-            emit (bool): return the output as is and don't assign it to an item
+            emit (bool): return the stream as is and don't assign it to an item
                 attribute (default: True).
 
         Examples:
@@ -425,20 +425,20 @@ class operator(object):
             >>> # and operators can't skip items, so the pipe is passed an
             >>> # item dependent version of objconf as the 3rd arg
             >>> @operator(emit=False)
-            ... def pipe1(feed, objconf, tuples, **kwargs):
+            ... def pipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in reversed(list(tuples)):
             ...         s = 'say "%s" %s times!'
             ...         yield s % (item['content'], objconf.times)
             ...
             >>> @operator(emit=False)
-            ... def pipe2(feed, objconf, tuples, **kwargs):
-            ...     return sum(len(item['content'].split()) for item in feed)
+            ... def pipe2(stream, objconf, tuples, **kwargs):
+            ...     return sum(len(item['content'].split()) for item in stream)
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
             >>> @operator(async=True, emit=False)
             ... @inlineCallbacks
-            ... def asyncPipe1(feed, objconf, tuples, **kwargs):
+            ... def asyncPipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in reversed(list(tuples)):
             ...         content = yield tu.asyncReturn(item['content'])
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
@@ -447,8 +447,8 @@ class operator(object):
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @operator(async=True, emit=False)
-            ... def asyncPipe2(feed, objconf, tuples, **kwargs):
-            ...     return sum(len(item['content'].split()) for item in feed)
+            ... def asyncPipe2(stream, objconf, tuples, **kwargs):
+            ...     return sum(len(item['content'].split()) for item in stream)
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -477,13 +477,13 @@ class operator(object):
         self.async = async
 
     def __call__(self, pipe):
-        """Creates a sync/async pipe that processes an entire feed of items
+        """Creates a sync/async pipe that processes an entire stream of items
 
         Args:
             pipe (Iter[dict]): The entry to process
 
         Yields:
-            dict: twisted.internet.defer.Deferred item with feeds
+            dict: twisted.internet.defer.Deferred item
 
         Returns:
             Deferred: twisted.internet.defer.Deferred generator of items
@@ -499,20 +499,20 @@ class operator(object):
             ...     'objectify': False}
             ...
             >>> @operator(**opts)
-            ... def pipe1(feed, objconf, tuples, **kwargs):
+            ... def pipe1(stream, objconf, tuples, **kwargs):
             ...     for content, times in reversed(list(tuples)):
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
             >>> @operator(**opts)
-            ... def pipe2(feed, objconf, tuples, **kwargs):
-            ...     word_cnt = sum(len(content.split()) for content in feed)
+            ... def pipe2(stream, objconf, tuples, **kwargs):
+            ...     word_cnt = sum(len(content.split()) for content in stream)
             ...     return {kwargs['assign']: word_cnt}
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @operator(async=True, **opts)
-            ... def asyncPipe1(feed, objconf, tuples, **kwargs):
+            ... def asyncPipe1(stream, objconf, tuples, **kwargs):
             ...     for content, times in reversed(list(tuples)):
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
@@ -521,8 +521,8 @@ class operator(object):
             >>> # call an async function
             >>> @operator(async=True, **opts)
             ... @inlineCallbacks
-            ... def asyncPipe2(feed, objconf, tuples, **kwargs):
-            ...     words = (len(content.split()) for content in feed)
+            ... def asyncPipe2(stream, objconf, tuples, **kwargs):
+            ...     words = (len(content.split()) for content in stream)
             ...     word_cnt = yield maybeDeferred(sum, words)
             ...     returnValue({kwargs['assign']: word_cnt})
             ...
@@ -590,33 +590,33 @@ class operator(object):
             # - `tuples` is an iterator of tuples of the first two `parsed`
             #   elements
             tuples = ((p[0][0], p[0][1]) for p in pairs)
-            orig_feed = (p[0][0] for p in pairs)
+            orig_stream = (p[0][0] for p in pairs)
             objconf = parsed[1]
 
             if self.async:
-                feed = yield pipe(orig_feed, objconf, tuples, **kwargs)
+                stream = yield pipe(orig_stream, objconf, tuples, **kwargs)
             else:
-                feed = pipe(orig_feed, objconf, tuples, **kwargs)
+                stream = pipe(orig_stream, objconf, tuples, **kwargs)
 
-            sub_type = 'aggregator' if hasattr(feed, 'keys') else 'composer'
+            sub_type = 'aggregator' if hasattr(stream, 'keys') else 'composer'
             wrapper.__dict__['sub_type'] = sub_type
 
             # operators can only assign one value per item and can't skip items
-            _, assignment = get_assignment(feed, False, **combined)
+            _, assignment = get_assignment(stream, False, **combined)
 
             if combined.get('emit'):
-                output = assignment
+                stream = assignment
             else:
                 singles = (iter([v]) for v in assignment)
                 key = combined.get('assign')
                 assigned = (assign({}, s, key, one=True) for s in singles)
-                output = utils.multiplex(assigned)
+                stream = utils.multiplex(assigned)
 
             if self.async:
-                returnValue(output)
+                returnValue(stream)
             else:
-                for o in output:
-                    yield o
+                for s in stream:
+                    yield s
 
         wrapper.__dict__['type'] = 'operator'
         return inlineCallbacks(wrapper) if self.async else wrapper

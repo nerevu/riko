@@ -13,11 +13,11 @@ What pipes are available?
 Overview
 ^^^^^^^^
 
-riko's available pipes are outlined below:
+riko's available pipes are outlined below [#]_:
 
 +-------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | Pipe name         | Pipe type | Pipe sub-type | Pipe description                                                                             |
-+===================+===========================+==============================================================================================+
++===================+===========+===============+==============================================================================================+
 | count             | operator  | aggregator    | counts the number of items in a feed                                                         |
 +-------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | csv               | processor | source        | parses a csv file to yield items                                                             |
@@ -90,30 +90,28 @@ riko's available pipes are outlined below:
 Args
 ^^^^
 
-riko ``pipes`` come in two flavors; ``operator`` and ``processor``.
-``operator``s operate on an entire feed at once and are unable to handle
-individual items. Example ``operator``s include ``pipecount``, ``pipefilter``,
+riko ``pipes`` come in two flavors; ``operator`` and ``processor`` [#]_.
+``operator``s operate on an entire ``stream`` at once. Example ``operator``s include ``pipecount``, ``pipefilter``,
 and ``pipereverse``.
 
 .. code-block:: python
 
     >>> from riko.modules.pipereverse import pipe
     >>>
-    >>> feed = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(feed))
+    >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
+    >>> next(pipe(stream))
     {'title': 'riko pt. 2'}
 
-``processor``s process individual feed items and can be parallelized across
-threads or processes. Example ``processor``s include ``pipefetchsitefeed``,
-``pipehash``, ``pipeitembuilder``, and ``piperegex``.
+``processor``s process individual ``items``. Example ``processor``s include
+``pipefetchsitefeed``, ``pipehash``, ``pipeitembuilder``, and ``piperegex``.
 
 .. code-block:: python
 
     >>> from riko.modules.pipehash import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
-    >>> feed = pipe(item, field='title')
-    >>> next(feed)
+    >>> stream = pipe(item, field='title')
+    >>> next(stream)
     {'title': 'riko pt. 1', 'hash': 2853617420L}
 
 Kwargs
@@ -139,6 +137,12 @@ emit        bool  Return the output as is (don't assign)            varies
 skip_if     func  Determines if processing should be skipped        None
 inputs      dict  Values to be used in place of prompting the user  None
 ==========  ====  ================================================  =======
+
+Notes
+^^^^^
+
+.. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
+.. [#] See `Alternate workflow creation`_ for pipe composition examples
 
 What file types are supported?
 ------------------------------
@@ -170,3 +174,5 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _What pipes are available: #what-pipes-are-available
 .. _What file types are supported: #what-file-types-are-supported
 .. _What protocols are supported: #what-protocols-are-supported
+.. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
+.. _Alternate workflow creation: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#synchronous-processing

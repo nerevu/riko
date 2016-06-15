@@ -3,7 +3,7 @@
 """
 riko.modules.pipeuniq
 ~~~~~~~~~~~~~~~~~~~~~
-Provides functions for filtering out non unique items from a feed according
+Provides functions for filtering out non unique items from a stream according
 to a specified field.
 
 Removes duplicate items. You select the element to filter on, and Unique
@@ -35,20 +35,20 @@ DEFAULTS = {'uniq_key': 'content'}
 logger = Logger(__name__).logger
 
 
-def parser(feed, key, tuples, **kwargs):
+def parser(stream, key, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+        stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         key (str): the field to extract.
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, rules)
-            `item` is an element in the source feed (a DotDict instance)
+            `item` is an element in the source stream (a DotDict instance)
             and `rules` is the rule configuration (an Objectify instance).
-            Note: this shares the `feed` iterator, so consuming it will
-            consume `feed` as well.
+            Note: this shares the `stream` iterator, so consuming it will
+            consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
 
@@ -61,16 +61,16 @@ def parser(feed, key, tuples, **kwargs):
         >>>
         >>> conf = {'uniq_key': 'mod'}
         >>> kwargs = {'conf': conf}
-        >>> feed = (DotDict({'x': x, 'mod': x % 2}) for x in range(5))
-        >>> tuples = zip(feed, repeat(conf['uniq_key']))
-        >>> list(parser(feed, conf['uniq_key'], tuples, **kwargs)) == [
+        >>> stream = (DotDict({'x': x, 'mod': x % 2}) for x in range(5))
+        >>> tuples = zip(stream, repeat(conf['uniq_key']))
+        >>> list(parser(stream, conf['uniq_key'], tuples, **kwargs)) == [
         ...     {u'x': 0, u'mod': 0}, {u'x': 1, u'mod': 1}]
         True
 
     """
     seen = set()
 
-    for item in feed:
+    for item in stream:
         value = item.get(key)
 
         if value not in seen:
@@ -84,7 +84,7 @@ def asyncPipe(*args, **kwargs):
     to a specified field.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -94,7 +94,7 @@ def asyncPipe(*args, **kwargs):
                 'content').
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred unique feed
+        Deferred: twisted.internet.defer.Deferred stream
 
     Examples:
         >>> from twisted.internet.task import react
@@ -122,7 +122,7 @@ def pipe(*args, **kwargs):
     field.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -132,17 +132,17 @@ def pipe(*args, **kwargs):
                 'content').
 
     Yields:
-        dict: a feed item
+        dict: an item
 
     Examples:
         >>> items = [{'content': x, 'mod': x % 2} for x in range(5)]
         >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
         ...     {u'mod': 0, u'content': 0}, {u'mod': 1, u'content': 1}]
         True
-        >>> feed = pipe(items)
-        >>> next(feed) == {'mod': 0, 'content': 0}
+        >>> stream = pipe(items)
+        >>> next(stream) == {'mod': 0, 'content': 0}
         True
-        >>> [item['content'] for item in feed]
+        >>> [item['content'] for item in stream]
         [1, 2, 3, 4]
     """
     return parser(*args, **kwargs)

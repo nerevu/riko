@@ -88,10 +88,10 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: content)
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from twisted.internet.task import react
@@ -102,7 +102,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ...     callback = lambda x: print(next(x[0])['title'][:44])
         ...     xpath = '/rss/channel/item'
         ...     objconf = Objectify({'url': FILES[1], 'xpath': xpath})
-        ...     kwargs = {'feed': {}}
+        ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -114,7 +114,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         Running “Native” Data Wrangling Applications
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
@@ -132,10 +132,10 @@ def asyncParser(_, objconf, skip, **kwargs):
         else:
             raise TypeError('Invalid file type %s' % ext)
 
-        strigified = ({kwargs['assign']: str(i)} for i in items)
-        feed = strigified if objconf.stringify else items
+        stringified = ({kwargs['assign']: str(i)} for i in items)
+        stream = stringified if objconf.stringify else items
 
-    result = (feed, skip)
+    result = (stream, skip)
     returnValue(result)
 
 
@@ -148,21 +148,21 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (feed, skip)
+        Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
         >>> from riko.lib.utils import Objectify
         >>> from . import FILES
         >>>
         >>> objconf = Objectify({'url': FILES[1], 'xpath': '/rss/channel/item'})
-        >>> kwargs = {'feed': {}}
+        >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> title = 'Running “Native” Data Wrangling Applications'
         >>> next(result)['title'][:44] == title
         True
     """
     if skip:
-        feed = kwargs['feed']
+        stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
@@ -176,10 +176,10 @@ def parser(_, objconf, skip, **kwargs):
         root = tree.getroot()
         elements = root.xpath(objconf.xpath)
         items = map(utils.etree_to_dict, elements)
-        strigified = ({kwargs['assign']: str(i)} for i in items)
-        feed = strigified if objconf.stringify else items
+        stringified = ({kwargs['assign']: str(i)} for i in items)
+        stream = stringified if objconf.stringify else items
 
-    return feed, skip
+    return stream, skip
 
 
 @processor(async=True, **OPTS)
@@ -204,7 +204,7 @@ def asyncPipe(*args, **kwargs):
             assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
-        dict: twisted.internet.defer.Deferred item with feeds
+        dict: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from twisted.internet.task import react
@@ -248,7 +248,7 @@ def pipe(*args, **kwargs):
             assign (str): Attribute to assign parsed content (default: content)
 
     Yields:
-        dict: an item of the feed
+        dict: item
 
     Examples:
         >>> from . import FILES

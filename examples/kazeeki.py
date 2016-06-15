@@ -27,6 +27,7 @@ DEF_CUR_CODE = 'USD'
 pmatch = {'seriesmatch': False}
 smatch = {'singlematch': True}
 
+subelement_conf = {'path': 'content.value', 'token_key': None}
 rename1_rule = [
     {'newval': 'k:marketplace', 'field': 'link', 'copy': True},
     {'newval': 'k:job_type', 'field': 'description', 'copy': True},
@@ -161,7 +162,6 @@ strreplace2_rule = [
     {'find': '₹', 'replace': 'INR'},
 ]
 
-
 regex4_rule = make_regex('k:cur_code', r'^(?![A-Z]{3}\b)(.*)', DEF_CUR_CODE)
 regex5_conf = {
     'rule': [
@@ -208,6 +208,7 @@ sources = [
 
 def parse_source(source):
     pipe = (source
+        .subelement(conf=subelement_conf, emit=False, assign='content')
         .rename(conf={'rule': rename1_rule})
         .regex(conf={'rule': regex1_rule})
         .rename(conf={'rule': rename2_rule})
@@ -268,19 +269,15 @@ def parse_source(source):
     return pipe.list
 
 
-def pipe_kazeeki(test=False):
+def pipe(test=False):
     source = SyncCollection(sources).pipe(test=test)
-    output = parse_source(source)
-
-    for item in output:
-        pass
-
-    pprint(item)
-    return output
+    stream = parse_source(source)
+    pprint(stream[-1])
+    return stream
 
 
 @inlineCallbacks
-def asyncPipeKazeeki(reactor, test=None):
+def asyncPipe(reactor, test=None):
     source = AsyncCollection(sources).asyncPipe(test=test)
-    output = yield parse_source(source)
-    pprint(output[-1])
+    stream = yield parse_source(source)
+    pprint(stream[-1])

@@ -3,7 +3,7 @@
 """
 riko.modules.pipesort
 ~~~~~~~~~~~~~~~~~~~~~
-Provides functions for sorting a feed by an item field.
+Provides functions for sorting a stream by an item field.
 
 Examples:
     basic usage::
@@ -34,24 +34,24 @@ DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'content'}}
 logger = Logger(__name__).logger
 
 
-def reducer(feed, rule):
+def reducer(stream, rule):
     reverse = rule.sort_dir == 'desc'
-    return sorted(feed, key=itemgetter(rule.sort_key), reverse=reverse)
+    return sorted(stream, key=itemgetter(rule.sort_key), reverse=reverse)
 
 
-def asyncParser(feed, rules, tuples, **kwargs):
+def asyncParser(stream, rules, tuples, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+        stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         keys (List[obj]): the item independent keys (Objectify instances).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source feed and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the `feed`
-            iterator, so consuming it will consume `feed` as well.
+            `item` is an element in the source stream and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the
+            `stream` iterator, so consuming it will consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
 
@@ -59,7 +59,7 @@ def asyncParser(feed, rules, tuples, **kwargs):
         conf (dict): The pipe configuration.
 
     Returns:
-        List(dict): Deferred output feed
+        List(dict): Deferred output stream
 
     Examples:
         >>> from itertools import repeat
@@ -70,9 +70,9 @@ def asyncParser(feed, rules, tuples, **kwargs):
         ...     callback = lambda x: print(x[0])
         ...     kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
         ...     rule = Objectify(kwargs)
-        ...     feed = ({'content': x} for x in range(5))
-        ...     tuples = zip(feed, repeat(rule))
-        ...     d = asyncParser(feed, [rule], tuples, **kwargs)
+        ...     stream = ({'content': x} for x in range(5))
+        ...     tuples = zip(stream, repeat(rule))
+        ...     d = asyncParser(stream, [rule], tuples, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -82,22 +82,22 @@ def asyncParser(feed, rules, tuples, **kwargs):
         ...
         {u'content': 4}
     """
-    return tu.asyncReduce(reducer, rules, feed)
+    return tu.asyncReduce(reducer, rules, stream)
 
 
-def parser(feed, rules, tuples, **kwargs):
+def parser(stream, rules, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
-        feed (Iter[dict]): The source feed. Note: this shares the `tuples`
+        stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         keys (List[obj]): the item independent keys (Objectify instances).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source feed and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the `feed`
-            iterator, so consuming it will consume `feed` as well.
+            `item` is an element in the source stream and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the
+            `stream` iterator, so consuming it will consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
 
@@ -105,7 +105,7 @@ def parser(feed, rules, tuples, **kwargs):
         conf (dict): The pipe configuration.
 
     Returns:
-        List(dict): The output feed
+        List(dict): The output stream
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -113,12 +113,12 @@ def parser(feed, rules, tuples, **kwargs):
         >>>
         >>> kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
         >>> rule = Objectify(kwargs)
-        >>> feed = ({'content': x} for x in range(5))
-        >>> tuples = zip(feed, repeat(rule))
-        >>> parser(feed, [rule], tuples, **kwargs)[0]
+        >>> stream = ({'content': x} for x in range(5))
+        >>> tuples = zip(stream, repeat(rule))
+        >>> parser(stream, [rule], tuples, **kwargs)[0]
         {u'content': 4}
     """
-    return reduce(reducer, rules, feed)
+    return reduce(reducer, rules, stream)
 
 
 @operator(DEFAULTS, async=True, **OPTS)
@@ -127,7 +127,7 @@ def asyncPipe(*args, **kwargs):
     according to a specified key. Note that this pipe is not lazy.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -143,7 +143,7 @@ def asyncPipe(*args, **kwargs):
                     'desc' (default: 'asc').
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred feed
+        Deferred: twisted.internet.defer.Deferred stream
 
     Examples:
         >>> from twisted.internet.task import react
@@ -167,11 +167,11 @@ def asyncPipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly sorts a feed according to a specified
+    """An operator that eagerly sorts a stream according to a specified
     key. Note that this pipe is not lazy.
 
     Args:
-        items (Iter[dict]): The source feed.
+        items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -186,7 +186,7 @@ def pipe(*args, **kwargs):
                     'desc'.
 
     Yields:
-        dict: a feed item
+        dict: an item
 
     Examples:
         >>> items = [

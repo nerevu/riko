@@ -8,13 +8,32 @@ import requests
 import sys
 sys.path.append('../riko')
 
+from os import path as p
 from importlib import import_module
-from pprint import pprint
+
+try:
+    from importlib.util import spec_from_file_location, module_from_spec
+except ImportError:
+    try:
+        from importlib.machinery import SourceFileLoader
+        io_error = FileNotFoundError
+        load_file = lambda name, src: SourceFileLoader(name, src).load_module()
+    except ImportError:
+        from imp import load_source as load_file
+        io_error = IOError
+else:
+    io_error = FileNotFoundError
+    def load_file(name, src):
+        spec = spec_from_file_location(name, src)
+        module = module_from_spec(spec)
+        return spec.loader.exec_module(module)
+
+
 from argparse import RawTextHelpFormatter, ArgumentParser
 from twisted.internet.task import react
 
 parser = ArgumentParser(
-    description='description: Run the kazeeki pipe', prog='pipe_kazeeki',
+    description='description: Runs a riko pipe', prog='runpipe',
     usage='%(prog)s [pipeid]', formatter_class=RawTextHelpFormatter)
 
 parser.add_argument(
@@ -32,6 +51,10 @@ parser.add_argument(
 args = parser.parse_args()
 
 
+def file2name(path):
+    return p.splitext(p.basename(path))[0]
+
+
 def run():
     """CLI runner"""
     try:
@@ -39,19 +62,20 @@ def run():
     except AttributeError:
         pipeid = args.pipeid
 
-    pipe_name = 'pipe_%s' % pipeid
-
     try:
-        module = import_module('examples.%s' % pipe_name)
-    except ImportError:
-        exit('Pipe examples.%s not found!' % pipe_name)
+        name = file2name('%s.py' % pipeid)
+        module = load_file(name, pipeid)
+    except io_error:
+        try:
+            module = import_module('examples.%s' % pipeid)
+        except ImportError:
+            exit('Pipe examples.%s not found!' % pipeid)
 
     if args.async:
-        pipe = 'asyncPipe%s' % pipeid.title()
-        pipeline = getattr(module, pipe)
+        pipeline = getattr(module, 'asyncPipe')
         react(pipeline, [args.test])
     else:
-        pipeline = getattr(module, pipe_name)
+        pipeline = getattr(module, 'pipe')
         pipeline(test=args.test)
 
 if __name__ == "__main__":

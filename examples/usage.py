@@ -48,13 +48,13 @@ Word Count
     >>> # chaining and parallel processing
     >>> from riko.lib.collections import SyncPipe
     >>>
-    >>> counts = (SyncPipe('fetchpage', conf=fetch_conf)
+    >>> stream = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
     ...     .stringtokenizer(conf={'delimiter': ' '}, emit=True)
     ...     .count()
     ...     .output)
     >>>
-    >>> next(counts) == {'count': 70}
+    >>> next(stream) == {'count': 70}
     True
 
 
@@ -68,30 +68,30 @@ Fetching feeds
     >>> from riko.modules.pipefeedautodiscovery import pipe as autodiscovery
     >>>
     >>> ### Fetch a url ###
-    >>> feed = fetchdata(conf={'url': 'http://site.com/file.xml'})
+    >>> stream = fetchdata(conf={'url': 'http://site.com/file.xml'})
     >>>
     >>> ### Fetch a filepath ###
     >>> #
     >>> # Note: `get_path` just looks up files in the `data` directory
     >>> # to simplify testing
-    >>> feed = fetchdata(conf={'url': get_path('quote.json')})
+    >>> stream = fetchdata(conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
-    >>> item = next(feed)
+    >>> item = next(stream)
     >>> item['list']['resources'][0]['resource']['fields']['symbol']
     u'KRW=X'
 
     >>> ### Fetch an rss feed ###
-    >>> feed = fetch(conf={'url': get_path('feed.xml')})
+    >>> stream = fetch(conf={'url': get_path('feed.xml')})
     >>>
     >>> ### Fetch the first rss feed found ###
-    >>> feed = fetchsitefeed(conf={'url': get_path('edition.cnn.html')})
+    >>> stream = fetchsitefeed(conf={'url': get_path('edition.cnn.html')})
     >>>
     >>> ### Find all rss links and fetch the feeds ###
     >>> url = get_path('www.bbc.co.uk_news.html')
     >>> entries = autodiscovery(conf={'url': url})
     >>> urls = (e['link'] for e in entries)
-    >>> feed = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
+    >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
     >>> ### Alternatively, create a SyncCollection ###
     >>> #
@@ -100,13 +100,13 @@ Fetching feeds
     >>> from riko.lib.collections import SyncCollection
     >>>
     >>> sources = [{'url': url} for url in urls]
-    >>> feed = SyncCollection(sources).fetch()
+    >>> stream = SyncCollection(sources).fetch()
     >>>
     >>> ### View the fetched rss feed(s) ###
     >>> #
     >>> # Note: regardless of how you fetch an rss feed, it will have the same
     >>> # structure
-    >>> item = next(feed)
+    >>> item = next(stream)
     >>> sorted(item.keys()) == [
     ...     'author', 'author.name', 'author.uri', 'comments', 'content',
     ...     'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
@@ -150,8 +150,8 @@ Synchronous processing
     >>> #   5. reverse sort the items by the replaced url
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> feed = fetch(conf=fetch_conf)
-    >>> filtered = pfilter(feed, conf={'rule': filter_rule})
+    >>> stream = fetch(conf=fetch_conf)
+    >>> filtered = pfilter(stream, conf={'rule': filter_rule})
     >>> extracted = (subelement(i, conf=sub_conf, emit=True) for i in filtered)
     >>> flat_extract = chain.from_iterable(extracted)
     >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
@@ -209,7 +209,7 @@ Parallel processing
     >>> #   7. remove duplicate urls
     >>> #   8. fetch each rss feed
     >>> #   9. Merge the rss feeds into a list
-    >>> feed = (SyncPipe('fetch', conf={'url': url}, parallel=True)
+    >>> stream = (SyncPipe('fetch', conf={'url': url}, parallel=True)
     ...     .filter(conf={'rule': filter_rule1})
     ...     .subelement(conf=sub_conf, emit=True)
     ...     .regex(conf={'rule': regex_rule})
@@ -219,7 +219,7 @@ Parallel processing
     ...     .fetch(conf={'url': {'subkey': 'strtransform'}})
     ...     .list)
     >>>
-    >>> len(feed)
+    >>> len(stream)
     25
 
 
@@ -252,7 +252,7 @@ Asynchronous processing
     >>> # See `Parallel processing` above for the steps this performs
     >>> @inlineCallbacks
     ... def run(reactor):
-    ...     feed = yield (AsyncPipe('fetch', conf={'url': url})
+    ...     stream = yield (AsyncPipe('fetch', conf={'url': url})
     ...         .filter(conf={'rule': filter_rule1})
     ...         .subelement(conf=sub_conf, emit=True)
     ...         .regex(conf={'rule': regex_rule})
@@ -262,7 +262,7 @@ Asynchronous processing
     ...         .fetch(conf={'url': {'subkey': 'strtransform'}})
     ...         .list)
     ...
-    ...     print(len(feed))
+    ...     print(len(stream))
     ...
     >>> try:
     ...     react(run, _reactor=tu.FakeReactor())
@@ -276,24 +276,25 @@ Design Principles
     # an operator
     >>> from riko.modules.pipereverse import pipe
     >>>
-    >>> feed = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(feed))
+    >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
+    >>> next(pipe(stream))
     {u'title': u'riko pt. 2'}
 
-    # a processor
+    # a transformer
+    >>> import ctypes
     >>> from riko.modules.pipehash import pipe
     >>>
+    >>> _hash = ctypes.c_uint(hash('riko pt. 1')).value
     >>> item = {'title': 'riko pt. 1'}
-    >>> feed = pipe(item, field='title')
-    >>> next(feed) == {
-    ...     'title': 'riko pt. 1', 'hash': 3946887032}
+    >>> stream = pipe(item, field='title')
+    >>> next(stream) == {'title': 'riko pt. 1', 'hash': _hash}
     True
     >>> from riko.modules.pipestringtokenizer import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> tokenizer_conf = {'delimiter': ' '}
-    >>> feed = pipe(item, conf=tokenizer_conf, field='title')
-    >>> next(feed) == {
+    >>> stream = pipe(item, conf=tokenizer_conf, field='title')
+    >>> next(stream) == {
     ...     'title': 'riko pt. 1',
     ...     'stringtokenizer': [
     ...         {'content': 'riko'},
@@ -301,15 +302,15 @@ Design Principles
     ...         {'content': '1'}]}
     True
     >>> # In this case, if we just want the result, we can `emit` it instead
-    >>> feed = pipe(item, conf=tokenizer_conf, field='title', emit=True)
-    >>> next(feed)
+    >>> stream = pipe(item, conf=tokenizer_conf, field='title', emit=True)
+    >>> next(stream)
     {u'content': 'riko'}
 
     # an aggregator
     >>> from riko.modules.pipecount import pipe
     >>>
-    >>> feed = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(feed))
+    >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
+    >>> next(pipe(stream))
     {u'count': 2}
 
     # a source
@@ -332,6 +333,7 @@ Design Principles
     # SyncPipe usage
     >>> from riko.lib.collections import SyncPipe
     >>>
+    >>> _hash = ctypes.c_uint(hash("Let's talk about riko!")).value
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}]
@@ -339,7 +341,7 @@ Design Principles
     >>> sync_pipe.hash().list[0] == {
     ...     'title': 'riko pt. 1',
     ...     'content': "Let's talk about riko!",
-    ...     'hash': 1589640534}
+    ...     'hash': _hash}
     True
 
     # Alternate conf usage
@@ -358,3 +360,19 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from builtins import *
+
+from pprint import pprint
+from riko.lib.collections import SyncPipe
+
+attrs = [
+    {'key': 'title', 'value': 'riko pt. 1'},
+    {'key': 'content', 'value': "Let's talk about riko!"}]
+
+ib_conf = {'attrs': attrs}
+
+
+def pipe(test=False):
+    flow = SyncPipe('itembuilder', conf=ib_conf, test=test).hash()
+
+    for i in flow.output:
+        pprint(i)

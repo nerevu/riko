@@ -3,7 +3,7 @@
 """
 riko.modules.piperegex
 ~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for modifying the content of a field of a feed item using
+Provides functions for modifying the content of a field of an item using
 regular expressions, a powerful type of pattern matching.
 
 Think of it as search-and-replace on steriods. You can define multiple Regex
@@ -56,7 +56,7 @@ def asyncParser(item, rules, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Deferred: twisted.internet.defer.Deferred Tuple(dict, bool)
@@ -74,7 +74,7 @@ def asyncParser(item, rules, skip, **kwargs):
         ...     rule = {'field': 'content', 'match': match, 'replace': replace}
         ...     conf = {'rule': rule, 'multi': False, 'convert': True}
         ...     rules = [Objectify(rule)]
-        ...     kwargs = {'feed': item, 'conf': conf}
+        ...     kwargs = {'stream': item, 'conf': conf}
         ...     d = asyncParser(item, rules, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -100,7 +100,7 @@ def asyncParser(item, rules, skip, **kwargs):
         returnValue(DotDict(combined))
 
     if skip:
-        item = kwargs['feed']
+        item = kwargs['stream']
     else:
         new_rules = [utils.get_new_rule(r, recompile=recompile) for r in rules]
         grouped = utils.group_by(new_rules, 'field')
@@ -121,7 +121,7 @@ def parser(item, rules, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        feed (dict): The original item
+        stream (dict): The original item
 
     Returns:
         Tuple (dict, bool): Tuple of (item, skip)
@@ -134,7 +134,7 @@ def parser(item, rules, skip, **kwargs):
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> rules = [Objectify(rule)]
-        >>> kwargs = {'feed': item, 'conf': conf}
+        >>> kwargs = {'stream': item, 'conf': conf}
         >>> regexed, skip = parser(item, rules, False, **kwargs)
         >>> regexed == {'content': 'worldwide', 'title': 'greeting'}
         True
@@ -155,7 +155,7 @@ def parser(item, rules, skip, **kwargs):
         return DotDict(cdicts(item, {field: replacement}))
 
     if skip:
-        item = kwargs['feed']
+        item = kwargs['stream']
     else:
         new_rules = [utils.get_new_rule(r, recompile=recompile) for r in rules]
         grouped = utils.group_by(new_rules, 'field')
@@ -167,7 +167,7 @@ def parser(item, rules, skip, **kwargs):
 
 @processor(DEFAULTS, async=True, **OPTS)
 def asyncPipe(*args, **kwargs):
-    """A processor that asynchronously replaces text in fields of a feed item
+    """A processor that asynchronously replaces text in fields of an item
     using regexes.
 
     Args:
@@ -227,7 +227,7 @@ def asyncPipe(*args, **kwargs):
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that replaces text in fields of a feed item using regexes.
+    """A processor that replaces text in fields of an item using regexes.
 
     Args:
         item (dict): The entry to process
