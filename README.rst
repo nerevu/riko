@@ -1,5 +1,5 @@
-riko: A stream processing framework modeled after Yahoo! Pipes
-==============================================================
+riko: A stream processing engine modeled after Yahoo! Pipes
+===========================================================
 
 |travis| |versions| |pypi|
 
@@ -13,7 +13,7 @@ Index
 Introduction
 ------------
 
-**riko** is a pure Python `framework`_ for analyzing and processing ``streams`` of
+**riko** is a pure Python `library`_ for analyzing and processing ``streams`` of
 structured data. ``riko`` has `synchronous`_ and `asynchronous`_ APIs, supports `parallel
 execution`_, and is well suited for processing RSS feeds [#]_. ``riko`` also supplies
 a `command-line interface`_ for executing ``flows``.
@@ -41,17 +41,19 @@ Requirements
 Optional Dependencies
 ^^^^^^^^^^^^^^^^^^^^^
 
-=======================  ============  ===========================
-Feature                  Dependency    Installation
-=======================  ============  ===========================
-Async API                `Twisted`_    ``pip install riko[async]``
-Accelerated xml parsing  `lxml`_ [#]_  ``pip install riko[lxml]``
-=======================  ============  ===========================
+========================  ===================  ===========================
+Feature                   Dependency           Installation
+========================  ===================  ===========================
+Async API                 `Twisted`_           ``pip install riko[async]``
+Accelerated xml parsing   `lxml`_ [#]_         ``pip install riko[xml]``
+Accelerated feed parsing  `speedparser`_ [#]_  ``pip install riko[xml]``
+========================  ===================  ===========================
 
 Notes
 ^^^^^
 
 .. [#] If ``lxml`` isn't present, ``riko`` will default to the builtin Python xml parser
+.. [#] If ``speedparser`` isn't present, ``riko`` will default to ``feedparser``
 
 Word Count
 ----------
@@ -125,14 +127,14 @@ The subsequent tradeoffs ``riko`` makes are:
 
 The following table summaries these observations:
 
-===========  ===========  =========  =====  ===========  =====  ========  ========  ===========
-Framework    Stream Type  Footprint  RSS    simple [#]_  async  parallel  CEP [#]_  distributed
-===========  ===========  =========  =====  ===========  =====  ========  ========  ===========
-riko         pull         small      √      √            √      √
-pipe2py      pull         small      √      √
-Huginn       push         med        √                   [#]_   √         √
-Others       push         large      [#]_   [#]_         [#]_   √         √         √
-===========  ===========  =========  =====  ===========  =====  ========  ========  ===========
+=======  ===========  =========  =====  ===========  =====  ========  ========  ===========
+library  Stream Type  Footprint  RSS    simple [#]_  async  parallel  CEP [#]_  distributed
+=======  ===========  =========  =====  ===========  =====  ========  ========  ===========
+riko     pull         small      √      √            √      √
+pipe2py  pull         small      √      √
+Huginn   push         med        √                   [#]_   √         √
+Others   push         large      [#]_   [#]_         [#]_   √         √         √
+=======  ===========  =========  =====  ===========  =====  ========  ========  ===========
 
 For more detailed information, please check-out the `FAQ`_.
 
@@ -145,9 +147,9 @@ Notes
 .. [#] Doesn't depend on outside services like MySQL, Kafka, YARN, ZooKeeper, or Mesos
 .. [#] `Complex Event Processing`_
 .. [#] Huginn doesn't appear to make `async web requests`_
-.. [#] Many frameworks can't parse RSS streams without the use of 3rd party libraries
-.. [#] While most frameworks offer a local mode, many require integrating with a data ingestor (e.g., Flume/Kafka) to do anything useful
-.. [#] I can't find evidence that these frameworks offer a async APIs (and apparently `Spark doesn't`_)
+.. [#] Many libraries can't parse RSS streams without the use of 3rd party libraries
+.. [#] While most libraries offer a local mode, many require integrating with a data ingestor (e.g., Flume/Kafka) to do anything useful
+.. [#] I can't find evidence that these libraries offer a async APIs (and apparently `Spark doesn't`_)
 
 Usage
 -----
@@ -680,7 +682,7 @@ License
 .. _asynchronous: #asynchronous-processing
 .. _parallel execution: #parallel-processing
 .. _parallel processing: #parallel-processing
-.. _framework: #usage
+.. _library: #usage
 
 .. _contributing doc: https://github.com/nerevu/riko/blob/master/CONTRIBUTING.rst
 .. _FAQ: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst
@@ -707,6 +709,7 @@ License
 .. _remains: https://web.archive.org/web/20150930021241/http://pipes.yahoo.com/pipes/
 .. _lxml: http://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser
 .. _Twisted: http://twistedmatrix.com/
+.. _speedparser: https://github.com/jmoiron/speedparser
 .. _MIT License: http://opensource.org/licenses/MIT
 .. _virtualenv: http://www.virtualenv.org/en/latest/index.html
 .. _ipython notebook: http://nbviewer.jupyter.org/github/nerevu/riko/blob/master/examples/usage.ipynb

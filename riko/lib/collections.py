@@ -3,7 +3,7 @@
 """
 riko.lib.collections
 ~~~~~~~~~~~~~~~~~~~~
-Provides methods for creating riko pipes
+Provides methods for creating riko flows and streams
 
 Examples:
     basic usage::
