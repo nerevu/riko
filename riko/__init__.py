@@ -3,7 +3,7 @@
 """
 riko
 ~~~~
-Provides methods for analyzing and processing streams of structured data
+Provides functions for analyzing and processing streams of structured data
 
 Examples:
     basic usage::
@@ -11,7 +11,7 @@ Examples:
         >>> from itertools import chain
         >>> from riko.modules.pipeitembuilder import pipe as itembuilder
         >>> from riko.modules.pipestrreplace import pipe as strreplace
-        >>> from riko.lib.collections import SyncPipe
+        >>> from riko.collections.sync import SyncPipe
         >>>
         >>> ib_conf = {
         ...     'attrs': [

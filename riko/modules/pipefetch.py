@@ -23,6 +23,8 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 try:
     import speedparser
 except ImportError:
@@ -31,22 +33,20 @@ except ImportError:
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
 from riko.lib import utils
-from riko.twisted import utils as tu
-from riko.lib.log import Logger
+from riko.bado import coroutine, return_value, io
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {'sleep': 0}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 intersection = [
     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
@@ -64,19 +64,19 @@ def asyncParser(_, objconf, skip, **kwargs):
         Deferred: twisted.internet.defer.Deferred Tuple(Iter[dict], bool)
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'])
         ...     objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
-        ...     kwargs = {'stream': {}}
-        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     d = asyncParser(None, objconf, False, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -86,12 +86,12 @@ def asyncParser(_, objconf, skip, **kwargs):
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        content = yield tu.urlRead(url, delay=objconf.sleep)
+        content = yield io.urlRead(url, delay=objconf.sleep)
         parsed = speedparser.parse(content)
         stream = utils.gen_entries(parsed)
 
     result = (stream, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(_, objconf, skip, **kwargs):
@@ -115,8 +115,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
-        >>> kwargs = {'stream': {}}
-        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> result, skip = parser(None, objconf, False, stream={})
         >>> next(result)['title']
         u'Donations'
     """
@@ -154,8 +153,9 @@ def asyncPipe(*args, **kwargs):
         Deferred: twisted.internet.defer.Deferred iterator of items
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> i = intersection
         >>>
@@ -165,7 +165,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

@@ -27,18 +27,18 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from builtins import *
 from six.moves.urllib.request import urlopen
-from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
 from riko.lib import utils
-from riko.lib.log import Logger
+from riko.bado import coroutine, return_value, io
 from riko.lib.tags import get_text
-from riko.twisted import utils as tu
 
 OPTS = {'ftype': 'none'}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def get_string(content, start, end):
@@ -52,7 +52,7 @@ def get_string(content, start, end):
     return right[:end_location] if end_location > 0 else right
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
@@ -70,8 +70,9 @@ def asyncParser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -84,7 +85,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -94,14 +95,14 @@ def asyncParser(_, objconf, skip, **kwargs):
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        content = yield tu.urlRead(url)
+        content = yield io.urlRead(url)
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
         splits = detagged.split(objconf.token) if objconf.token else [detagged]
         stream = ({kwargs['assign']: chunk} for chunk in splits)
 
     result = (stream, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(_, objconf, skip, **kwargs):
@@ -167,8 +168,9 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred item
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x))
@@ -178,7 +180,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

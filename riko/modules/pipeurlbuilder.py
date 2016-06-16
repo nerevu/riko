@@ -60,13 +60,13 @@ from builtins import *
 from six.moves.urllib.parse import urljoin, urlencode
 
 from . import processor
-from riko.lib.log import Logger
+import pygogo as gogo
 from riko.lib.dotdict import DotDict
 from riko.lib.utils import get_value, cast_url
 
 OPTS = {'extract': 'params', 'listize': True, 'emit': True}
 DEFAULTS = {}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(item, params, skip, **kwargs):
@@ -136,8 +136,8 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred an iterator of items
 
     Examples:
-        >>> from twisted.internet.task import react
-        >>> from riko.twisted import utils as tu
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['url'])
@@ -149,7 +149,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ...     pass
         ... except SystemExit:
         ...     pass

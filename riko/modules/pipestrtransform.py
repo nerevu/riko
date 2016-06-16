@@ -21,20 +21,19 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from functools import reduce
+import pygogo as gogo
 
+from functools import reduce
 from builtins import *
-from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
+from riko.bado import coroutine, return_value, itertools as ait
 
 OPTS = {
     'listize': True, 'ftype': 'text', 'field': 'content', 'extract': 'rule'}
 
 DEFAULTS = {}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 ATTRS = {
     'capitalize', 'lower', 'upper', 'swapcase', 'title', 'strip', 'rstrip',
@@ -52,7 +51,7 @@ def reducer(word, rule):
     return result
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(word, rules, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
@@ -70,7 +69,8 @@ def asyncParser(word, rules, skip, **kwargs):
         Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
 
     Examples:
-        >>> from twisted.internet.task import react
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -83,7 +83,7 @@ def asyncParser(word, rules, skip, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -92,10 +92,10 @@ def asyncParser(word, rules, skip, **kwargs):
     if skip:
         value = kwargs['stream']
     else:
-        value = yield tu.coopReduce(reducer, rules, word)
+        value = yield ait.coopReduce(reducer, rules, word)
 
     result = (value, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(word, rules, skip, **kwargs):
@@ -159,7 +159,8 @@ def asyncPipe(*args, **kwargs):
        Deferred: twisted.internet.defer.Deferred item with transformed content
 
     Examples:
-        >>> from twisted.internet.task import react
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['strtransform'])
@@ -168,7 +169,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

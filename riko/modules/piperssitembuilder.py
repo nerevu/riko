@@ -28,12 +28,12 @@ from datetime import datetime as dt
 from builtins import *
 
 from . import processor
-from riko.lib.log import Logger
+import pygogo as gogo
 from riko.lib.dotdict import DotDict
 
 OPTS = {'emit': True}
 DEFAULTS = {'pubDate': dt.now().isoformat()}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 # yahoo style rss items (dots are for sub-levels)
@@ -115,8 +115,8 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred an iterator of items
 
     Examples:
-        >>> from twisted.internet.task import react
-        >>> from riko.twisted import utils as tu
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['media:thumbnail'])
@@ -126,7 +126,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ...     pass
         ... except SystemExit:
         ...     pass

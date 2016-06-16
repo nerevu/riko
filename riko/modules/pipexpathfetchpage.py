@@ -43,19 +43,20 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from os.path import splitext
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from twisted.internet.defer import inlineCallbacks, returnValue
+
 
 from . import processor
 from riko.lib import utils
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
+from riko.bado import coroutine, return_value, util as tu, io
 
 OPTS = {'ftype': 'none'}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 # TODO: convert relative links to absolute
@@ -88,7 +89,7 @@ def xpath(tree, path, pos=0):
             yield e
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
@@ -106,20 +107,20 @@ def asyncParser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'][:44])
         ...     url, path = get_path('ouseful.xml'), '/rss/channel/item'
         ...     objconf = Objectify({'url': url, 'xpath': path})
-        ...     kwargs = {'stream': {}}
-        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     d = asyncParser(None, objconf, False, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -130,16 +131,16 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
-        xml = ext == 'xml'
-        f = yield tu.urlOpen(url)
-        root = yield tu.asyncXML2Etree(f, xml=xml)
+        html = ext == 'html'
+        f = yield io.urlOpen(url)
+        root = yield tu.xml2etree(f, html=html)
         elements = xpath(root, objconf.xpath)
         items = map(tu.etreeToDict, elements)
         stringified = ({kwargs['assign']: str(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
     result = (stream, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(_, objconf, skip, **kwargs):
@@ -159,8 +160,7 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> url = get_path('ouseful.xml')
         >>> objconf = Objectify({'url': url, 'xpath': '/rss/channel/item'})
-        >>> kwargs = {'stream': {}}
-        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> result, skip = parser(None, objconf, False, stream={})
         >>> title = 'Running “Native” Data Wrangling Applications'
         >>> next(result)['title'][:44] == title
         True
@@ -206,8 +206,9 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred item
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['guid']['content'])
@@ -217,7 +218,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

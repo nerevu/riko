@@ -105,6 +105,7 @@ def test(where=None, stop=None, **kwargs):
             check_call('detox')
         else:
             check_call(('nosetests %s' % opts).split(' '))
+            check_call(['python', p.join(BASEDIR, 'tests', 'test.py')])
     except CalledProcessError as e:
         exit(e.returncode)
 

@@ -30,11 +30,11 @@ from copy import deepcopy
 from builtins import *
 
 from . import operator
-from riko.lib.log import Logger
+import pygogo as gogo
 
 OPTS = {'extract': 'splits', 'ptype': 'int', 'objectify': False}
 DEFAULTS = {'splits': 2}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, splits, tuples, **kwargs):
@@ -92,8 +92,8 @@ def asyncPipe(*args, **kwargs):
         Deferred: twisted.internet.defer.Deferred iterable of streams
 
     Examples:
-        >>> from twisted.internet.task import react
-        >>> from riko.twisted import utils as tu
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(next(x)))
@@ -101,7 +101,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

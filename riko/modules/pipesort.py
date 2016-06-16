@@ -20,18 +20,19 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from functools import reduce
 from operator import itemgetter
 
 from builtins import *
 
 from . import operator
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
+from riko.bado import itertools as ait
 
 OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'content'}}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def reducer(stream, rule):
@@ -63,7 +64,8 @@ def asyncParser(stream, rules, tuples, **kwargs):
 
     Examples:
         >>> from itertools import repeat
-        >>> from twisted.internet.task import react
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -76,13 +78,13 @@ def asyncParser(stream, rules, tuples, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
         {u'content': 4}
     """
-    return tu.asyncReduce(reducer, rules, stream)
+    return ait.asyncReduce(reducer, rules, stream)
 
 
 def parser(stream, rules, tuples, **kwargs):
@@ -146,8 +148,8 @@ def asyncPipe(*args, **kwargs):
         Deferred: twisted.internet.defer.Deferred stream
 
     Examples:
-        >>> from twisted.internet.task import react
-        >>> from riko.twisted import utils as tu
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x))
@@ -156,7 +158,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

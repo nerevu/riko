@@ -13,9 +13,8 @@ from html.parser import HTMLParser
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from twisted.internet.defer import inlineCallbacks, returnValue
-
-from riko.twisted.utils import urlOpen
+from riko.bado import coroutine, return_value
+from riko.bado.io import urlOpen
 
 TIMEOUT = 10
 
@@ -35,8 +34,8 @@ class LinkParser(HTMLParser):
             entry['tag'] = tag
             self.entry = chain(self.entry, [entry])
 
-from riko.lib.log import Logger
-logger = Logger(__name__).logger
+import pygogo as gogo
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def gen_entries(f, parser):
@@ -47,7 +46,7 @@ def gen_entries(f, parser):
             yield entry
 
 
-@inlineCallbacks
+@coroutine
 def asyncGetRSS(url):
     # TODO: implement via an async parser
     # maybe get twisted.web.microdom.parse working for HTML
@@ -58,7 +57,7 @@ def asyncGetRSS(url):
     except ValueError:
         f = filter(None, url.splitlines())
 
-    returnValue(gen_entries(f, parser))
+    return_value(gen_entries(f, parser))
 
 
 def get_rss(url):

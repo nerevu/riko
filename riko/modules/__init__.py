@@ -2,23 +2,24 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
 """
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
+
+import pygogo as gogo
 
 from functools import partial, wraps
 from itertools import chain
 
 from builtins import *
-from twisted.internet.defer import inlineCallbacks, returnValue
 
+from riko.bado import coroutine, return_value
 from riko.lib import utils
-from riko.lib.log import Logger
 from riko.lib.dotdict import DotDict
 from riko.lib.utils import combine_dicts as cdicts, remove_keys
 
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 __sources__ = [
     'pipecsv',
@@ -177,8 +178,8 @@ class processor(object):
                 input `item`.
 
         Examples:
-            >>> from twisted.internet.task import react
-            >>> from riko.twisted import utils as tu
+            >>> from riko.bado import react, util as tu
+            >>> from riko.bado.mock import FakeReactor
             >>>
             >>> @processor()
             ... def pipe(item, objconf, skip, **kwargs):
@@ -193,7 +194,7 @@ class processor(object):
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
             >>> @processor(async=True)
-            ... @inlineCallbacks
+            ... @coroutine
             ... def asyncPipe(item, objconf, skip, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
@@ -202,7 +203,7 @@ class processor(object):
             ...         stream = 'say "%s" %s times!' % (content, objconf.times)
             ...
             ...     result = stream, skip
-            ...     returnValue(result)
+            ...     return_value(result)
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -215,7 +216,7 @@ class processor(object):
             ...     return d.addCallbacks(callback, logger.error)
             ...
             >>> try:
-            ...     react(run, _reactor=tu.FakeReactor())
+            ...     react(run, _reactor=FakeReactor())
             ... except SystemExit:
             ...     pass
             ...
@@ -238,8 +239,8 @@ class processor(object):
             Deferred: twisted.internet.defer.Deferred generator of items
 
         Examples:
-            >>> from twisted.internet.task import react
-            >>> from riko.twisted import utils as tu
+            >>> from riko.bado import react
+            >>> from riko.bado.mock import FakeReactor
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
@@ -279,7 +280,7 @@ class processor(object):
             ...     return d.addCallbacks(callback, logger.error)
             ...
             >>> try:
-            ...     react(run, _reactor=tu.FakeReactor())
+            ...     react(run, _reactor=FakeReactor())
             ... except SystemExit:
             ...     pass
             ...
@@ -337,7 +338,7 @@ class processor(object):
                 stream = assign(_input, assignment, key, one=one)
 
             if self.async:
-                returnValue(stream)
+                return_value(stream)
             else:
                 for s in stream:
                     yield s
@@ -345,7 +346,7 @@ class processor(object):
         is_source = self.opts.get('ftype') == 'none'
         wrapper.__dict__['type'] = 'processor'
         wrapper.__dict__['sub_type'] = 'source' if is_source else 'transformer'
-        return inlineCallbacks(wrapper) if self.async else wrapper
+        return coroutine(wrapper) if self.async else wrapper
 
 
 class operator(object):
@@ -403,8 +404,8 @@ class operator(object):
                 attribute (default: True).
 
         Examples:
-            >>> from twisted.internet.task import react
-            >>> from riko.twisted import utils as tu
+            >>> from riko.bado import react, util as tu
+            >>> from riko.bado.mock import FakeReactor
             >>>
             >>> # emit is True by default
             >>> # and operators can't skip items, so the pipe is passed an
@@ -422,12 +423,12 @@ class operator(object):
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
             >>> @operator(async=True, emit=False)
-            ... @inlineCallbacks
+            ... @coroutine
             ... def asyncPipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in reversed(list(tuples)):
             ...         content = yield tu.asyncReturn(item['content'])
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
-            ...         returnValue(value)
+            ...         return_value(value)
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
@@ -442,7 +443,7 @@ class operator(object):
             >>> next(pipe2(items, **kwargs))
             {u'content': 4}
             >>>
-            >>> @inlineCallbacks
+            >>> @coroutine
             ... def run(reactor):
             ...     r1 = yield asyncPipe1(items, **kwargs)
             ...     print(next(r1))
@@ -450,7 +451,7 @@ class operator(object):
             ...     print(next(r2))
             ...
             >>> try:
-            ...     react(run, _reactor=tu.FakeReactor())
+            ...     react(run, _reactor=FakeReactor())
             ... except SystemExit:
             ...     pass
             ...
@@ -474,9 +475,9 @@ class operator(object):
             Deferred: twisted.internet.defer.Deferred generator of items
 
         Examples:
-            >>> from twisted.internet.task import react
-            >>> from riko.twisted import utils as tu
-            >>> from twisted.internet.defer import maybeDeferred
+            >>> from riko.bado import react
+            >>> from riko.bado.mock import FakeReactor
+            >>> from riko.bado.util import maybeDeferred
             >>>
             >>> opts = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
@@ -505,11 +506,11 @@ class operator(object):
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
             >>> @operator(async=True, **opts)
-            ... @inlineCallbacks
+            ... @coroutine
             ... def asyncPipe2(stream, objconf, tuples, **kwargs):
             ...     words = (len(content.split()) for content in stream)
             ...     word_cnt = yield maybeDeferred(sum, words)
-            ...     returnValue({kwargs['assign']: word_cnt})
+            ...     return_value({kwargs['assign']: word_cnt})
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -518,7 +519,7 @@ class operator(object):
             >>> next(pipe2(items, **kwargs))
             {u'content': 4}
             >>>
-            >>> @inlineCallbacks
+            >>> @coroutine
             ... def run(reactor):
             ...     r1 = yield asyncPipe1(items, **kwargs)
             ...     print(next(r1))
@@ -526,7 +527,7 @@ class operator(object):
             ...     print(next(r2))
             ...
             >>> try:
-            ...     react(run, _reactor=tu.FakeReactor())
+            ...     react(run, _reactor=FakeReactor())
             ... except SystemExit:
             ...     pass
             ...
@@ -598,13 +599,13 @@ class operator(object):
                 stream = utils.multiplex(assigned)
 
             if self.async:
-                returnValue(stream)
+                return_value(stream)
             else:
                 for s in stream:
                     yield s
 
         wrapper.__dict__['type'] = 'operator'
-        return inlineCallbacks(wrapper) if self.async else wrapper
+        return coroutine(wrapper) if self.async else wrapper
 
 
 def dispatch(item, bfuncs, dfuncs=None):
