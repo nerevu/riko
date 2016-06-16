@@ -114,7 +114,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['link']
-        'file://data/www.greenhughes.com_rssfeed.xml'
+        'file://data/greenhughes.xml'
     """
     if skip:
         stream = kwargs['stream']
@@ -157,7 +157,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        file://data/www.greenhughes.com_rssfeed.xml
+        file://data/greenhughes.xml
     """
     return asyncParser(*args, **kwargs)
 
@@ -181,6 +181,6 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from . import FILES
         >>> next(pipe(conf={'url': FILES[4]}))['link']
-        'file://data/www.greenhughes.com_rssfeed.xml'
+        'file://data/greenhughes.xml'
     """
     return parser(*args, **kwargs)

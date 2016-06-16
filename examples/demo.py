@@ -28,7 +28,7 @@ Fetching feeds
 
     >>> from riko.modules.pipefetch import pipe as fetch
     >>>
-    >>> url = get_path('feeds.gawker.com_jalopnik_full.xml')
+    >>> url = get_path('gawker.xml')
     >>> intersection = [
     ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
     ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']

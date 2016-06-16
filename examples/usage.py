@@ -85,10 +85,10 @@ Fetching feeds
     >>> stream = fetch(conf={'url': get_path('feed.xml')})
     >>>
     >>> ### Fetch the first rss feed found ###
-    >>> stream = fetchsitefeed(conf={'url': get_path('edition.cnn.html')})
+    >>> stream = fetchsitefeed(conf={'url': get_path('cnn.html')})
     >>>
     >>> ### Find all rss links and fetch the feeds ###
-    >>> url = get_path('www.bbc.co.uk_news.html')
+    >>> url = get_path('bbc.html')
     >>> entries = autodiscovery(conf={'url': url})
     >>> urls = (e['link'] for e in entries)
     >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)

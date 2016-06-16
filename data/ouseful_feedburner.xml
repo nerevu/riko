@@ -1,69 +1,86 @@
-<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
-	xmlns:content="http://purl.org/rss/1.0/modules/content/"
-	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
-	xmlns:dc="http://purl.org/dc/elements/1.1/"
-	xmlns:atom="http://www.w3.org/2005/Atom"
-	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
-	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
-	xmlns:georss="http://www.georss.org/georss" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:media="http://search.yahoo.com/mrss/"
-	>
-
-<channel>
-	<title>OUseful.Info, the blog...</title>
-	<atom:link href="http://blog.ouseful.info/feed/" rel="self" type="application/rss+xml" />
-	<link>http://blog.ouseful.info</link>
-	<description>Trying to find useful things to do with emerging technologies in open education</description>
-	<lastBuildDate>Sun, 24 Aug 2014 18:09:27 +0000</lastBuildDate>
-	<language>en</language>
-		<sy:updatePeriod>hourly</sy:updatePeriod>
-		<sy:updateFrequency>1</sy:updateFrequency>
-	<generator>http://wordpress.com/</generator>
-<cloud domain='blog.ouseful.info' port='80' path='/?rsscloud=notify' registerProcedure='' protocol='http-post' />
-<image>
-		<url>http://s2.wp.com/i/buttonw-com.png</url>
-		<title>OUseful.Info, the blog...</title>
-		<link>http://blog.ouseful.info</link>
-	</image>
-	<atom:link rel="search" type="application/opensearchdescription+xml" href="http://blog.ouseful.info/osd.xml" title="OUseful.Info, the blog..." />
-	<atom:link rel='hub' href='http://blog.ouseful.info/?pushpress=hub'/>
-	<item>
-		<title>Running &#8220;Native&#8221; Data Wrangling Applications in the Browser &#8211; IPython Notebooks (and R?) in Chrome</title>
-		<link>http://blog.ouseful.info/2014/08/22/running-native-data-wrangling-applications-in-the-browser-ipython-notebooks-and-r-in-chrome/</link>
-		<comments>http://blog.ouseful.info/2014/08/22/running-native-data-wrangling-applications-in-the-browser-ipython-notebooks-and-r-in-chrome/#comments</comments>
-		<pubDate>Fri, 22 Aug 2014 09:42:21 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Anything you want]]></category>
-		<category><![CDATA[Rstats]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=12065</guid>
-		<description><![CDATA[Using browser based data analysis toolkits such as pandas in IPython notebooks, or R in RStudio, means you need to have access to python or R and the corresponding application server either on your own computer, or running on a remote server that you have access to. When running occasional training sessions or workshops, this [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12065&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>Using browser based data analysis toolkits such as pandas in IPython notebooks, or R in RStudio, means you need to have access to python or R and the corresponding application server either on your own computer, or running on a remote server that you have access to.</p>
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" media="screen" href="/~d/styles/rss2full.xsl"?>
+  <?xml-stylesheet type="text/css" media="screen" href="http://feeds.feedburner.com/~d/styles/itemcontent.css"?>
+    <rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:georss="http://www.georss.org/georss" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:media="http://search.yahoo.com/mrss/" xmlns:creativeCommons="http://backend.userland.com/creativeCommonsRssModule" xmlns:feedburner="http://rssnamespace.org/feedburner/ext/1.0" version="2.0">
+      <channel>
+        <title>PLEASE change feed URL to http://blog.ouseful.info/feed/</title>
+        <link>http://blog.ouseful.info</link>
+        <description>In the expectation that Google will axe feedburner, please change any subscriptions to this feed to http://blog.ouseful.info/feed/</description>
+        <lastBuildDate>Sun, 24 Aug 2014 18:06:11 +0000</lastBuildDate>
+        <language>en</language>
+        <sy:updatePeriod>hourly</sy:updatePeriod>
+        <sy:updateFrequency>1</sy:updateFrequency>
+        <generator>http://wordpress.com/</generator>
+        <cloud domain="blog.ouseful.info" port="80" path="/?rsscloud=notify" registerProcedure="" protocol="http-post" />
+        <image>
+          <url>http://s2.wp.com/i/buttonw-com.png</url>
+          <title>OUseful.Info, the blog...</title>
+          <link>http://blog.ouseful.info</link>
+        </image>
+        <atom:link rel="search" type="application/opensearchdescription+xml" href="http://blog.ouseful.info/osd.xml" title="OUseful.Info, the blog..." />
+        <atom10:link xmlns:atom10="http://www.w3.org/2005/Atom" rel="self" type="application/rss+xml" href="http://feeds.feedburner.com/ouseful" />
+        <feedburner:info uri="ouseful" />
+        <atom10:link xmlns:atom10="http://www.w3.org/2005/Atom" rel="hub" href="http://pubsubhubbub.appspot.com/" />
+        <atom10:link xmlns:atom10="http://www.w3.org/2005/Atom" rel="hub" href="http://blog.ouseful.info/?pushpress=hub" />
+        <xhtml:meta xmlns:xhtml="http://www.w3.org/1999/xhtml" name="robots" content="noindex" />
+        <feedburner:emailServiceId>ouseful</feedburner:emailServiceId>
+        <feedburner:feedburnerHostname>http://feedburner.google.com</feedburner:feedburnerHostname>
+        <item>
+          <title>Running “Native” Data Wrangling Applications in the Browser – IPython Notebooks (and R?) in Chrome</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/Ar-1U3yOUwM/</link>
+          <comments>http://blog.ouseful.info/2014/08/22/running-native-data-wrangling-applications-in-the-browser-ipython-notebooks-and-r-in-chrome/#comments</comments>
+          <pubDate>Fri, 22 Aug 2014 09:42:21 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Anything you want]]>
+          </category>
+          <category>
+            <![CDATA[Rstats]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=12065</guid>
+          <description>Using browser based data analysis toolkits such as pandas in IPython notebooks, or R in RStudio, means you need to have access to python or R and the corresponding application server either on your own computer, or running on a remote server that you have access to. When running occasional training sessions or workshops, this [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=12065&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>Using browser based data analysis toolkits such as pandas in IPython notebooks, or R in RStudio, means you need to have access to python or R and the corresponding application server either on your own computer, or running on a remote server that you have access to.</p>
 <p>When running occasional training sessions or workshops, this can cause several headaches: either a remote service needs to be set up that is capable of supporting the expected number of participants, security may need putting in place, accounts configured (or account management tools supported), network connections need guaranteeing so that participants can access the server, and so on; or participants need to install software on their own computers: ideally this would be done in advance of a training session, otherwise training time is spent installing, configuring and debugging software installs; some computers may have security policies that prevent users installing software, or require and IT person with admin privileges to install the software, and so on.</p>
 <p>That&#8217;s why the <a href="https://github.com/jupyter/colaboratory"><em>coLaboratory</em></a> <a href="https://chrome.google.com/webstore/detail/colaboratory-notebook/pianggobfjcgeihlmfhfgkfalopndooo/">Chrome extension</a> looks like an interesting innovation &#8211; it runs an IPython notebook fork, with <em>pandas</em> and <em>matplotlib</em> as a Chrome Native Client application. I posted a quick walkthrough of the extension over on the School of Data blog: <a href="http://schoolofdata.org/2014/08/20/working-with-data-in-the-browser-using-python/">Working With Data in the Browser Using python – coLaboratory</a>.</p>
 <p>Via a Twitter exchange with @nativeclient, it seems that there&#8217;s also the possibility that R could run as a dependency free Chrome extension. Native Client seems to like things written in C/C++, which underpins R, although I think R also has some fortran dependencies. (One of the coLaboratory talks mentioned the to do list item of getting scipy (I think?) running in the coLaboratory extension, the major challenge there (or whatever the package was) being the fortran src; so there maybe be synergies in working the fortran components there?)) </p>
 <p>Within a couple of hours of the twitter exchange starting, Brad Nelson/@flagxor posted a <a href="https://codereview.chromium.org/495183003/#ps20001">first attempt at an R port to the Native Client</a>. I don&#8217;t pretend to understand what&#8217;s involved in moving from this to an extension with some sort of useable UI, even if only a command line, but it represents an interesting possibility: of being able to run R in the browser (or at least, in Chrome). Package availability would be limited of course to packages compiled to run using PNaCl.</p>
 <p>For training events, there is still the requirement that users install a Chrome browser on their computer and then install the extension into that. However, I think it is possible to run Chrome as a portable app &#8211; that is, from a flash drive such as a USB memory stick: <a href="http://portableapps.com/apps/internet/google_chrome_portable">Google Chrome Portable (Windows)</a>.</p>
-<p>I&#8217;m not sure how <em>fast</em> it would be able to run, but it suggests there may be a way of carrying a portable, dependency free <em>pandas</em> environment around that you can run on a Windows computer from a USB key?! And maybe R too&#8230;?</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12065/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12065/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12065&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/08/22/running-native-data-wrangling-applications-in-the-browser-ipython-notebooks-and-r-in-chrome/feed/</wfw:commentRss>
-		<slash:comments>0</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>More OpenData Published &#8211; So What?</title>
-		<link>http://blog.ouseful.info/2014/08/15/more-opendata-published-so-what/</link>
-		<comments>http://blog.ouseful.info/2014/08/15/more-opendata-published-so-what/#comments</comments>
-		<pubDate>Fri, 15 Aug 2014 09:56:24 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Open Data]]></category>
-		<category><![CDATA[Policy]]></category>
-		<category><![CDATA[360 Giving]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=12059</guid>
-		<description><![CDATA[Whenever a new open data dataset is released, the #opendata wires hum a little more. More open data is a Good Thing, right? Why? Haven&#8217;t we got enough already? In a blog post a few weeks ago, Alan Levine, aka @cogdog, set about Stalking the Mythical OER Reuse: Seeking Non-Blurry Videos. OERs are open educational [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12059&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>Whenever a new open data dataset is released, the #opendata wires hum a little more. More open data is a Good Thing, right? Why? Haven&#8217;t we got enough already?</p>
+<p>I&#8217;m not sure how <em>fast</em> it would be able to run, but it suggests there may be a way of carrying a portable, dependency free <em>pandas</em> environment around that you can run on a Windows computer from a USB key?! And maybe R too&#8230;?</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12065/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12065/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12065&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=Ar-1U3yOUwM:z7d5gJSnyfA:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=Ar-1U3yOUwM:z7d5gJSnyfA:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=Ar-1U3yOUwM:z7d5gJSnyfA:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=Ar-1U3yOUwM:z7d5gJSnyfA:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=Ar-1U3yOUwM:z7d5gJSnyfA:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=Ar-1U3yOUwM:z7d5gJSnyfA:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=Ar-1U3yOUwM:z7d5gJSnyfA:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=Ar-1U3yOUwM:z7d5gJSnyfA:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=Ar-1U3yOUwM:z7d5gJSnyfA:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/Ar-1U3yOUwM" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/08/22/running-native-data-wrangling-applications-in-the-browser-ipython-notebooks-and-r-in-chrome/feed/</wfw:commentRss>
+          <slash:comments>0</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/08/22/running-native-data-wrangling-applications-in-the-browser-ipython-notebooks-and-r-in-chrome/</feedburner:origLink>
+        </item>
+        <item>
+          <title>More OpenData Published – So What?</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/-5l0hbDXdLs/</link>
+          <comments>http://blog.ouseful.info/2014/08/15/more-opendata-published-so-what/#comments</comments>
+          <pubDate>Fri, 15 Aug 2014 09:56:24 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Open Data]]>
+          </category>
+          <category>
+            <![CDATA[Policy]]>
+          </category>
+          <category>
+            <![CDATA[360 Giving]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=12059</guid>
+          <description>Whenever a new open data dataset is released, the #opendata wires hum a little more. More open data is a Good Thing, right? Why? Haven&amp;#8217;t we got enough already? In a blog post a few weeks ago, Alan Levine, aka @cogdog, set about Stalking the Mythical OER Reuse: Seeking Non-Blurry Videos. OERs are open educational [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=12059&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>Whenever a new open data dataset is released, the #opendata wires hum a little more. More open data is a Good Thing, right? Why? Haven&#8217;t we got enough already?</p>
 <p>In a blog post a few weeks ago, Alan Levine, aka @cogdog, set about <a href="http://cogdogblog.com/2014/07/18/stalking-the-mythical/">Stalking the Mythical OER Reuse: Seeking Non-Blurry Videos</a>. OERs are <em>open educational resources</em>, openly licensed materials produced by educators and released to the world so others could make use of them. Funding was put into developing and releasing them and then, &#8230; what?</p>
 <blockquote><p>OERs. People build them. People house them in repositories. People do journal articles, conference presentations, research on them. I doubt never their existence.</p>
 <p>But the ultimate thing they are supposed to support, maybe their raison d’être – the re use by other educators, what do we have to show for that except whispered stories, innuendo, and blurry photos in the forest?<br />
@@ -117,31 +134,42 @@ Wellcome Trust</p>
 <p>Now I know there is a risk to this. Funders may want to not release details about the addresses of the charities of they are funding because that data may be used to plot maps to say &#8220;this is where the money&#8217;s going&#8221; when it isn&#8217;t. The charity may have a Kensington address and the received funding for an initiative in Oswaldtwistle, but the map might see all the money sinking into Kensington; which would be wrong. But that&#8217;s where you have to start educating the data users. Or releasing data fields like &#8220;address of charity&#8221; and &#8220;postcode area of point of use&#8221;, or whatever, even if the latter is empty. As it is, if you give me a charity or company name, I can look up it&#8217;s address. And its company or charity number if it has one.</li>
 </ul>
 <p>As I mentioned, I don&#8217;t want to knock the work 360 Giving have done, but I&#8217;m keen to understand what it is they have done, what they haven&#8217;t done, and what the opendata they have aggregated and re-presented could &#8211; practically, tractably, tangibly &#8211; be used for. Really used for.</p>
-<p>Time to pack my bags and head out into the wood, maybe&#8230;</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12059/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12059/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12059&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/08/15/more-opendata-published-so-what/feed/</wfw:commentRss>
-		<slash:comments>8</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-
-		<media:content url="http://ouseful.files.wordpress.com/2014/08/360giving-unioxford.png" medium="image">
-			<media:title type="html">360giving-uniOxford</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>Opening Up Access to Data: Why APIs May Not Be Enough&#8230;</title>
-		<link>http://blog.ouseful.info/2014/08/11/opening-up-access-to-data-why-apis-may-not-be-enough/</link>
-		<comments>http://blog.ouseful.info/2014/08/11/opening-up-access-to-data-why-apis-may-not-be-enough/#comments</comments>
-		<pubDate>Mon, 11 Aug 2014 14:04:21 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Data]]></category>
-		<category><![CDATA[Rstats]]></category>
-		<category><![CDATA[ONS]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=12051</guid>
-		<description><![CDATA[Last week, a post on the ONS (Office of National Statistics) Digital Publishing blog caught my eye: Introducing the New Improved ONS API which apparently &#8220;mak[es] things much easier to work with&#8221;. Ooh&#8230; exciting&#8230;. maybe I can use this to start hacking together some notebooks?:-) It was followed a few days later by this one [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12051&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>Last week, a post on the ONS (Office of National Statistics) Digital Publishing blog caught my eye: <a href="http://digitalpublishing.ons.gov.uk/2014/08/04/introducing-the-new-improved-ons-api/">Introducing the New Improved ONS API</a> which apparently <em>&#8220;mak[es] things much easier to work with&#8221;</em>.</p>
+<p>Time to pack my bags and head out into the wood, maybe&#8230;</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12059/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12059/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12059&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=-5l0hbDXdLs:fXAuKxu1OUs:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=-5l0hbDXdLs:fXAuKxu1OUs:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=-5l0hbDXdLs:fXAuKxu1OUs:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=-5l0hbDXdLs:fXAuKxu1OUs:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=-5l0hbDXdLs:fXAuKxu1OUs:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=-5l0hbDXdLs:fXAuKxu1OUs:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=-5l0hbDXdLs:fXAuKxu1OUs:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=-5l0hbDXdLs:fXAuKxu1OUs:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=-5l0hbDXdLs:fXAuKxu1OUs:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/-5l0hbDXdLs" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/08/15/more-opendata-published-so-what/feed/</wfw:commentRss>
+          <slash:comments>8</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <media:content url="http://ouseful.files.wordpress.com/2014/08/360giving-unioxford.png" medium="image">
+            <media:title type="html">360giving-uniOxford</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/08/15/more-opendata-published-so-what/</feedburner:origLink>
+        </item>
+        <item>
+          <title>Opening Up Access to Data: Why APIs May Not Be Enough…</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/2YAcxGDjcwA/</link>
+          <comments>http://blog.ouseful.info/2014/08/11/opening-up-access-to-data-why-apis-may-not-be-enough/#comments</comments>
+          <pubDate>Mon, 11 Aug 2014 14:04:21 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Data]]>
+          </category>
+          <category>
+            <![CDATA[Rstats]]>
+          </category>
+          <category>
+            <![CDATA[ONS]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=12051</guid>
+          <description>Last week, a post on the ONS (Office of National Statistics) Digital Publishing blog caught my eye: Introducing the New Improved ONS API which apparently &amp;#8220;mak[es] things much easier to work with&amp;#8221;. Ooh&amp;#8230; exciting&amp;#8230;. maybe I can use this to start hacking together some notebooks?:-) It was followed a few days later by this one [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=12051&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>Last week, a post on the ONS (Office of National Statistics) Digital Publishing blog caught my eye: <a href="http://digitalpublishing.ons.gov.uk/2014/08/04/introducing-the-new-improved-ons-api/">Introducing the New Improved ONS API</a> which apparently <em>&#8220;mak[es] things much easier to work with&#8221;</em>.</p>
 <p>Ooh&#8230; exciting&#8230;. maybe I can use this to start hacking together some notebooks?:-)</p>
 <p>It was followed a few days later by this one &#8211; <a href="http://digitalpublishing.ons.gov.uk/2014/08/07/ons-api-just-the-numbers/">ONS-API, Just the Numbers</a> which described <em>&#8220;a simple bit of code for requesting some data and then turning that into ‘just the raw numbers’&#8221;</em> &#8211; a blog post that describes how to get a simple statistic, as a number, from the API. The API that <em>&#8220;mak[es] things much easier to work with&#8221;</em>.</p>
 <p>After a few hours spent hacking away over the weekend, looking round various bits of the API, I still wasn&#8217;t really in a position to discover where to find the numbers, let alone get numbers out of the API in a reliable way. (You can see my fumblings <a href="http://nbviewer.ipython.org/gist/psychemedia/be0c279f2e51f6266b45">here</a>.) Note that I&#8217;m happy to be told I&#8217;m going about this completely the wrong way and didn&#8217;t find the baby steps guide I need to help me use it properly.</p>
@@ -160,31 +188,51 @@ Wellcome Trust</p>
 <p>When publishing APIs, it&#8217;s worth considering who can address them and use them. Just because you publish a data API doesn&#8217;t mean a data analyst can necessarily use the data, because they may not be (are likely not to be) a programmer. And if ten, or a hundred, or a thousand potential data users all have to implement the same sort of glue code to get the data from the API into the same sort of analysis environment, that&#8217;s not necessarily efficient either. (Data users may feel they can hack some code to get the data from the API into the environment for their particular use case, but may not be willing to release it as a general, tested and robust API wrapper, certainly not a stable production level one.)</p>
 <p>This isn&#8217;t meant to be a slight against the ONS API, more a reflection on some of the things I was thinking as I hacked my weekend away&#8230;</p>
 <p>PS I don&#8217;t know how easy it is to run Python code in R, but the R magic in IPython notebooks supports the running of R code within a notebook running a Python kernel, with the handing over of data from R dataframes to python dataframes. Which is to say, if there&#8217;s an R package available, for someone who can run R via an IPython context, it&#8217;s available via python too.</p>
-<p>PPS I notice that from some of the ONS API calls we can get links to URLs of downloadable datasets (though when I tried some of them, I got errors trying to unzip the results). This provides an intermediate way of providing API access to a dataset &#8211; search based API calls that allow discovery of a dataset, then the download and automatic unpacking of that dataset into a native data representation, such as one or more data frames.</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12051/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12051/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12051&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/08/11/opening-up-access-to-data-why-apis-may-not-be-enough/feed/</wfw:commentRss>
-		<slash:comments>0</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>Using Open Data to Hold Companies to Account?</title>
-		<link>http://blog.ouseful.info/2014/08/03/using-open-data-to-hold-companies-to-account/</link>
-		<comments>http://blog.ouseful.info/2014/08/03/using-open-data-to-hold-companies-to-account/#comments</comments>
-		<pubDate>Sun, 03 Aug 2014 00:10:03 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Open Data]]></category>
-		<category><![CDATA[opengov]]></category>
-		<category><![CDATA[Policy]]></category>
-		<category><![CDATA[Stirring]]></category>
-		<category><![CDATA[beertalkin']]></category>
-		<category><![CDATA[opendata]]></category>
-		<category><![CDATA[transparency]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=12022</guid>
-		<description><![CDATA[Some rambling but possibly associated thoughts&#8230; I suggest you put Alice&#8217;s Restaurant on&#8230; For some time now, I&#8217;ve had an uncomfortable feeling about the asymmetries that exist in the open data world as well as total confusion about the notion of transparency. Part of the nub of the problem (for me) lies with the asymmetric [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12022&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>Some rambling but possibly associated thoughts&#8230; I suggest you put <a href="https://www.youtube.com/watch?v=m57gzA2JCcM">Alice&#8217;s Restaurant</a> on&#8230; </p>
+<p>PPS I notice that from some of the ONS API calls we can get links to URLs of downloadable datasets (though when I tried some of them, I got errors trying to unzip the results). This provides an intermediate way of providing API access to a dataset &#8211; search based API calls that allow discovery of a dataset, then the download and automatic unpacking of that dataset into a native data representation, such as one or more data frames.</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12051/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12051/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12051&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=2YAcxGDjcwA:PqnESbgYPF0:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=2YAcxGDjcwA:PqnESbgYPF0:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=2YAcxGDjcwA:PqnESbgYPF0:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=2YAcxGDjcwA:PqnESbgYPF0:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=2YAcxGDjcwA:PqnESbgYPF0:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=2YAcxGDjcwA:PqnESbgYPF0:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=2YAcxGDjcwA:PqnESbgYPF0:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=2YAcxGDjcwA:PqnESbgYPF0:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=2YAcxGDjcwA:PqnESbgYPF0:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/2YAcxGDjcwA" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/08/11/opening-up-access-to-data-why-apis-may-not-be-enough/feed/</wfw:commentRss>
+          <slash:comments>0</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/08/11/opening-up-access-to-data-why-apis-may-not-be-enough/</feedburner:origLink>
+        </item>
+        <item>
+          <title>Using Open Data to Hold Companies to Account?</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/pZM0WlySjMg/</link>
+          <comments>http://blog.ouseful.info/2014/08/03/using-open-data-to-hold-companies-to-account/#comments</comments>
+          <pubDate>Sun, 03 Aug 2014 00:10:03 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Open Data]]>
+          </category>
+          <category>
+            <![CDATA[opengov]]>
+          </category>
+          <category>
+            <![CDATA[Policy]]>
+          </category>
+          <category>
+            <![CDATA[Stirring]]>
+          </category>
+          <category>
+            <![CDATA[beertalkin']]>
+          </category>
+          <category>
+            <![CDATA[opendata]]>
+          </category>
+          <category>
+            <![CDATA[transparency]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=12022</guid>
+          <description>Some rambling but possibly associated thoughts&amp;#8230; I suggest you put Alice&amp;#8217;s Restaurant on&amp;#8230; For some time now, I&amp;#8217;ve had an uncomfortable feeling about the asymmetries that exist in the open data world as well as total confusion about the notion of transparency. Part of the nub of the problem (for me) lies with the asymmetric [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=12022&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>Some rambling but possibly associated thoughts&#8230; I suggest you put <a href="https://www.youtube.com/watch?v=m57gzA2JCcM">Alice&#8217;s Restaurant</a> on&#8230; </p>
 <p>For some time now, I&#8217;ve had an uncomfortable feeling about the asymmetries that exist in the open data world as well as <a href="http://blog.ouseful.info/2014/06/24/confused-about-transparency/">total confusion about the notion of <em>transparency</em></a>.</p>
 <p>Part of the nub of the problem (for me) lies with the asymmetric disclosure requirements of public and private services. Public bodies have disclosure requirements (eg <a href="https://www.gov.uk/government/publications/local-government-transparency-code-2014">Local Government Transparency Code</a>), private companies don&#8217;t. Public bodies disclose metrics and spend data, data that can be used in public contract tendering processes by private bodies against public ones tendering for the same service. The private body uses this information &#8211; and prices in a discount associated with <em>not</em> having to carry the cost of public reporting &#8211; into the bid. The next time the contract is tendered, the public body won&#8217;t have access to the (previously publicly disclosed) information that the private body originally had when making its bid. Possibly. I don&#8217;t know how tendering works. But from the outside, that&#8217;s how it appears to me. (Maybe there needs to be more <em>transparency</em> about the process?)</p>
 <p>Open data is possibly a Big Thing. Who knows? Maybe it isn&#8217;t. Certainly the big consulting firms are calling it as something worth squillionty billionty of pounds. I&#8217;m not sure how they cost it. Maybe I need to dig through the references and footnotes in their reports (Cap Gemini&#8217;s <a href="http://www.uk.capgemini.com/resources/the-open-data-economy-unlocking-economic-value-by-opening-government-and-public-data">Open Data Economy: Unlocking Economic Value by Opening Government and Public Data</a>, Deloitte&#8217;s <a href="http://www.deloitte.com/view/en_GB/uk/market-insights/deloitte-analytics/bfb570a79416b310VgnVCM1000003256f70aRCRD.htm">Open growth: Stimulating demand for open data in the UK</a> or McKinsey&#8217;s <a href="http://www.mckinsey.com/insights/business_technology/open_data_unlocking_innovation_and_performance_with_liquid_information">Open data: Unlocking innovation and performance with liquid information</a>). I don&#8217;t know how much those companies have received in fees for producing those reports, or how much they have received in consultancy fees associated with public open data initiatives &#8211; somehow, that spend data doesn&#8217;t seem to have been curated in a convenient way, or as a #opendatadata bundle? &#8211; but I have to assume they&#8217;re not doing it to fleece the public bodies and tee up benefits for their other private corporate clients.</p>
@@ -212,28 +260,42 @@ Wellcome Trust</p>
 <p>Can you imagine your local council publishing the forecourt fuel prices for one petrol stations, just one petrol station, in your local council area every day? And how about if they do it for two petrol stations, two petrol stations, each day? And if they do it for three forecourts, three, can you imagine if they do it for three petrol stations&#8230;? And can you, can you imagine prices for 50 petrol stations a day being published by your local council, your council helping you inform yourself about how you&#8217;re being manipulated, can you imagine&#8230;? (It may not be so hard &#8211; <a href="http://ratings.food.gov.uk/">food hygiene ratings</a> are published for food retail environments across the England, Northern Ireland and Wales&#8230;</p>
 <p>So let&#8217;s hear it for open data, and how open data can be used to hold corporates to account, and how public bodies can use open data to help you make better decisions (which is a good neoliberal position to take and one which the other folk on the bench tell you that that&#8217;s what you want and that and markets work, though they also fall short of telling you that the models say that markets work with full information but you don&#8217;t have the information, and even if you did, you wouldn&#8217;t understand it, because you don&#8217;t really know how to  make a good decision, but at the end of the day you don&#8217;t want a decision, you just want a good service fairly delivered, but they don&#8217;t tell that it&#8217;s all right to just want that&#8230;)</p>
 <p>And let&#8217;s hear it for public bodies making data available whether it&#8217;s open or not, making it available by paying for it if they have to and making it available via library services so that we can start using it to start holding companies to account and start helping our public services, and ourselves, protect ourselves from the attacks being mounted on us by companies, and their national government supporters, who take on debt, and who allow them to take on debt, to make dividend payouts but not capital investment and subsidise the temporary driving down of prices (which is NOT a capital investment) through debt subsidised loss leading designed to crush competition in a last man standing contest that will allow monopolistic last man standing price hikes at the end of it&#8230;</p>
-<p>And just remember, if there&#8217;s anything you want, you know where you can get it&#8230; At Alice&#8217;s&#8230; or the library&#8230; only they&#8217;re shutting them down, aren&#8217;t they&#8230;? So that leaves what..? Google?</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12022/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12022/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12022&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/08/03/using-open-data-to-hold-companies-to-account/feed/</wfw:commentRss>
-		<slash:comments>0</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>A Conversation With Data &#8211; Isle of Wight Car Parking Meter Transaction Logs</title>
-		<link>http://blog.ouseful.info/2014/07/25/a-conversation-with-data-isle-of-wight-car-parking-meter-transaction-logs/</link>
-		<comments>http://blog.ouseful.info/2014/07/25/a-conversation-with-data-isle-of-wight-car-parking-meter-transaction-logs/#comments</comments>
-		<pubDate>Fri, 25 Jul 2014 18:04:11 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Anything you want]]></category>
-		<category><![CDATA[Data]]></category>
-		<category><![CDATA[onthewight]]></category>
-		<category><![CDATA[parkingmeters]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=12010</guid>
-		<description><![CDATA[Killer post title, eh? Some time ago I put in an FOI request to the Isle of Wight Council for the transaction logs from a couple of ticket machines in the car park at Yarmouth. Since then, the Council made some unpopular decisions about car parking charges, got a recall and then in passing made [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12010&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>Killer post title, eh?</p>
+<p>And just remember, if there&#8217;s anything you want, you know where you can get it&#8230; At Alice&#8217;s&#8230; or the library&#8230; only they&#8217;re shutting them down, aren&#8217;t they&#8230;? So that leaves what..? Google?</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12022/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12022/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12022&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=pZM0WlySjMg:a4K2epW34X4:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=pZM0WlySjMg:a4K2epW34X4:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=pZM0WlySjMg:a4K2epW34X4:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=pZM0WlySjMg:a4K2epW34X4:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=pZM0WlySjMg:a4K2epW34X4:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=pZM0WlySjMg:a4K2epW34X4:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=pZM0WlySjMg:a4K2epW34X4:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=pZM0WlySjMg:a4K2epW34X4:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=pZM0WlySjMg:a4K2epW34X4:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/pZM0WlySjMg" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/08/03/using-open-data-to-hold-companies-to-account/feed/</wfw:commentRss>
+          <slash:comments>0</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/08/03/using-open-data-to-hold-companies-to-account/</feedburner:origLink>
+        </item>
+        <item>
+          <title>A Conversation With Data – Isle of Wight Car Parking Meter Transaction Logs</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/OfQh6jC7RaQ/</link>
+          <comments>http://blog.ouseful.info/2014/07/25/a-conversation-with-data-isle-of-wight-car-parking-meter-transaction-logs/#comments</comments>
+          <pubDate>Fri, 25 Jul 2014 18:04:11 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Anything you want]]>
+          </category>
+          <category>
+            <![CDATA[Data]]>
+          </category>
+          <category>
+            <![CDATA[onthewight]]>
+          </category>
+          <category>
+            <![CDATA[parkingmeters]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=12010</guid>
+          <description>Killer post title, eh? Some time ago I put in an FOI request to the Isle of Wight Council for the transaction logs from a couple of ticket machines in the car park at Yarmouth. Since then, the Council made some unpopular decisions about car parking charges, got a recall and then in passing made [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=12010&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>Killer post title, eh?</p>
 <p>Some time ago I put in an <a href="https://www.whatdotheyknow.com/request/pay_and_display_ticket_machine_l">FOI request</a> to the Isle of Wight Council for the transaction logs from a couple of ticket machines in the car park at Yarmouth. Since then, the Council made some unpopular decisions about car parking charges, got a recall and then in passing made the local BBC news (along with other councils) in respect of the extent of parking charge overpayments&#8230; </p>
 <p>Here&#8217;s how hyperlocal news outlet OnTheWight reported the unfolding story&#8230;</p>
 <ul>
@@ -260,26 +322,36 @@ Wellcome Trust</p>
 <li>how does the issuance of traffic penalty charge notices compare with the sorts of parking meter tickets issued?</li>
 <li>from the timestamps of when traffic penalty charge notices tickets are issued, can we work out the rounds of different traffic warden patrols?</li>
 </ul>
-<p>The last one might be a little bit cheeky &#8211; just like <a href="http://www.oxfordmail.co.uk/news/10104624.Police_try_to_prevent_speed_trap__flashers_/?ref=rl">you aren&#8217;t supposed to share information about the mobile speed traps</a>, perhaps you also aren&#8217;t supposed to share information that there&#8217;s a traffic warden doing the rounds&#8230;?!</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12010/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12010/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12010&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/07/25/a-conversation-with-data-isle-of-wight-car-parking-meter-transaction-logs/feed/</wfw:commentRss>
-		<slash:comments>0</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>MOOCs as Partworks</title>
-		<link>http://blog.ouseful.info/2014/07/22/moocs-as-partworks/</link>
-		<comments>http://blog.ouseful.info/2014/07/22/moocs-as-partworks/#comments</comments>
-		<pubDate>Tue, 22 Jul 2014 15:26:14 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Anything you want]]></category>
-		<category><![CDATA[MOOCs]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=11989</guid>
-		<description><![CDATA[A couple of recent posts crossed my feeds recently mooching around the idea that doing is MOOC is Like Reading a Newspaper; or not: MOOC Completion Rates DO Matter. First up, Downes suggests that: The traditional course is designed like a book &#8211; it is intended to run in a sequence, the latter bits build [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11989&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>A couple of recent posts crossed my feeds recently mooching around the idea that doing is MOOC is <a href="http://halfanhour.blogspot.co.uk/2014/03/like-reading-newspaper.html">Like Reading a Newspaper</a>; or not:  <a href="http://nogoodreason.typepad.co.uk/no_good_reason/2014/07/mooc-completion-rates-do-matter.html">MOOC Completion Rates DO Matter</a>.</p>
+<p>The last one might be a little bit cheeky &#8211; just like <a href="http://www.oxfordmail.co.uk/news/10104624.Police_try_to_prevent_speed_trap__flashers_/?ref=rl">you aren&#8217;t supposed to share information about the mobile speed traps</a>, perhaps you also aren&#8217;t supposed to share information that there&#8217;s a traffic warden doing the rounds&#8230;?!</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/12010/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/12010/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=12010&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=OfQh6jC7RaQ:e2CSSd1inME:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=OfQh6jC7RaQ:e2CSSd1inME:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=OfQh6jC7RaQ:e2CSSd1inME:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=OfQh6jC7RaQ:e2CSSd1inME:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=OfQh6jC7RaQ:e2CSSd1inME:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=OfQh6jC7RaQ:e2CSSd1inME:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=OfQh6jC7RaQ:e2CSSd1inME:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=OfQh6jC7RaQ:e2CSSd1inME:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=OfQh6jC7RaQ:e2CSSd1inME:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/OfQh6jC7RaQ" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/07/25/a-conversation-with-data-isle-of-wight-car-parking-meter-transaction-logs/feed/</wfw:commentRss>
+          <slash:comments>0</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/07/25/a-conversation-with-data-isle-of-wight-car-parking-meter-transaction-logs/</feedburner:origLink>
+        </item>
+        <item>
+          <title>MOOCs as Partworks</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/VIlHqghWzCA/</link>
+          <comments>http://blog.ouseful.info/2014/07/22/moocs-as-partworks/#comments</comments>
+          <pubDate>Tue, 22 Jul 2014 15:26:14 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Anything you want]]>
+          </category>
+          <category>
+            <![CDATA[MOOCs]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=11989</guid>
+          <description>A couple of recent posts crossed my feeds recently mooching around the idea that doing is MOOC is Like Reading a Newspaper; or not: MOOC Completion Rates DO Matter. First up, Downes suggests that: The traditional course is designed like a book &amp;#8211; it is intended to run in a sequence, the latter bits build [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=11989&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>A couple of recent posts crossed my feeds recently mooching around the idea that doing is MOOC is <a href="http://halfanhour.blogspot.co.uk/2014/03/like-reading-newspaper.html">Like Reading a Newspaper</a>; or not:  <a href="http://nogoodreason.typepad.co.uk/no_good_reason/2014/07/mooc-completion-rates-do-matter.html">MOOC Completion Rates DO Matter</a>.</p>
 <p>First up, Downes suggests that:</p>
 <blockquote><p>The traditional course is designed like a book &#8211; it is intended to run in a sequence, the latter bits build on the first bits, and if you start a book and abandon it p[art way through there is a real sense in which you can say the book has failed, because the whole point of a book is to read it from beginning to end.</p>
 <p>But our MOOCs are not designed like that. Though they have a beginning and an end and a range of topics in between, they&#8217;re not designed to be consumed in a linear fashion the way a book it. Rather, they&#8217;re much more like a magazine or a newspaper (or an atlas or a city map or a phone book). The idea is that there&#8217;s probably more content than you want, and that you&#8217;re supposed to pick and choose from the items, selecting those that are useful and relevant to your present purpose.</p>
@@ -310,28 +382,42 @@ Wellcome Trust</p>
 <p>Erm, oh yes &#8211; back to the MOOCs.. and the partworks models. Martin mentioned the economics &#8211; just thinking about the partwork model (pun intended, or maybe not) here, how are parts costed? Maybe an expensive loss leader part in week 1, then cheap parts for months, then the expensive parts at the end when only two people still want them? How will print on demand affect partworks (newsagent has a partwork printer round the back to print of the bits that are needed for whatever magazines are sold that week?) And how do the partwork costing models then translate to MOOC production and presentation models?</p>
 <p>Big expensively produced materials in front loaded weeks, then maybe move to smaller presentation methods, get the forums working a little better with smaller, more engaged groups? How about the cMOOC ideas &#8211; up front in early weeks, or pushed back to later weeks, where different motivations, skills, interest and engagement models play out.</p>
 <p>MOOCs are newspapers? Nah&#8230; MOOCs as partwork &#8211; that works better as a model for me. (You can always buy a partwork mid-way through because you are interested in that week&#8217;s content, or the content covered by the magazine generally, not because you are interested in the plastic model or badge.</p>
-<p>Thinks: hmm, partworks come in at least two forms, don&#8217;t they &#8211; one to get pieces to build a big model of a boat or a steam train or whatever. The other where you get a different superhero figurine each week and the aim it attract the completionist. Which isn&#8217;t to say that part 37 might not be stupidly popular because it has a figure that is just generally of interest, ex- of being part of a set?</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11989/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11989/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11989&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/07/22/moocs-as-partworks/feed/</wfw:commentRss>
-		<slash:comments>2</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>F1 Timing Screen as a Spreadsheet?</title>
-		<link>http://blog.ouseful.info/2014/07/17/f1-timing-screen-as-a-spreadsheet/</link>
-		<comments>http://blog.ouseful.info/2014/07/17/f1-timing-screen-as-a-spreadsheet/#comments</comments>
-		<pubDate>Thu, 17 Jul 2014 16:38:33 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Anything you want]]></category>
-		<category><![CDATA[f1data]]></category>
-		<category><![CDATA[f1datajunkie]]></category>
-		<category><![CDATA[tata]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=11987</guid>
-		<description><![CDATA[One of the comment themes I&#8217;ve noticed around the first Challenge in the Tata F1 Connectivity Innovation Prize, a challenge to rethink what&#8217;s possible around the timing screen given only the data in the real time timing feed, is that the non-programmers don&#8217;t get to play. I don&#8217;t think that&#8217;s true &#8211; the challenge seems [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11987&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>One of the comment themes I&#8217;ve noticed around the first Challenge in the <a href="https://prize.tatacommunications.com/home">Tata F1 Connectivity Innovation Prize</a>, a challenge to rethink what&#8217;s possible around the timing screen given only the data in the real time timing feed, is that the non-programmers don&#8217;t get to play. I don&#8217;t think that&#8217;s true &#8211; the challenge seems to be open to ideas as well as practical demonstrations, but it got me thinking about what technical ways in might be to non-programmers who wouldn&#8217;t know where to start when it came to working with the timing stream messages.</p>
+<p>Thinks: hmm, partworks come in at least two forms, don&#8217;t they &#8211; one to get pieces to build a big model of a boat or a steam train or whatever. The other where you get a different superhero figurine each week and the aim it attract the completionist. Which isn&#8217;t to say that part 37 might not be stupidly popular because it has a figure that is just generally of interest, ex- of being part of a set?</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11989/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11989/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11989&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=VIlHqghWzCA:4gBGrHN0H58:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=VIlHqghWzCA:4gBGrHN0H58:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=VIlHqghWzCA:4gBGrHN0H58:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=VIlHqghWzCA:4gBGrHN0H58:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=VIlHqghWzCA:4gBGrHN0H58:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=VIlHqghWzCA:4gBGrHN0H58:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=VIlHqghWzCA:4gBGrHN0H58:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=VIlHqghWzCA:4gBGrHN0H58:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=VIlHqghWzCA:4gBGrHN0H58:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/VIlHqghWzCA" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/07/22/moocs-as-partworks/feed/</wfw:commentRss>
+          <slash:comments>2</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/07/22/moocs-as-partworks/</feedburner:origLink>
+        </item>
+        <item>
+          <title>F1 Timing Screen as a Spreadsheet?</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/6kxr0IJNVCw/</link>
+          <comments>http://blog.ouseful.info/2014/07/17/f1-timing-screen-as-a-spreadsheet/#comments</comments>
+          <pubDate>Thu, 17 Jul 2014 16:38:33 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Anything you want]]>
+          </category>
+          <category>
+            <![CDATA[f1data]]>
+          </category>
+          <category>
+            <![CDATA[f1datajunkie]]>
+          </category>
+          <category>
+            <![CDATA[tata]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=11987</guid>
+          <description>One of the comment themes I&amp;#8217;ve noticed around the first Challenge in the Tata F1 Connectivity Innovation Prize, a challenge to rethink what&amp;#8217;s possible around the timing screen given only the data in the real time timing feed, is that the non-programmers don&amp;#8217;t get to play. I don&amp;#8217;t think that&amp;#8217;s true &amp;#8211; the challenge seems [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=11987&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>One of the comment themes I&#8217;ve noticed around the first Challenge in the <a href="https://prize.tatacommunications.com/home">Tata F1 Connectivity Innovation Prize</a>, a challenge to rethink what&#8217;s possible around the timing screen given only the data in the real time timing feed, is that the non-programmers don&#8217;t get to play. I don&#8217;t think that&#8217;s true &#8211; the challenge seems to be open to ideas as well as practical demonstrations, but it got me thinking about what technical ways in might be to non-programmers who wouldn&#8217;t know where to start when it came to working with the timing stream messages.</p>
 <p>The answer is surely the timing screen itself&#8230; One of the issues I still haven&#8217;t fully resolved is a proven way of getting useful information events from the timing feed &#8211; it updates the timing screen on a cell by cell basis, so we have to finesse the way we associate new laptimes or sector times with a particular driver, bearing in mind cells update one at a time, in a potentially arbitrary order, and with potentially different timestamps.</p>
 <p><a href="http://f1-innovation-prize.s3.amazonaws.com/challenge_packs/The%20F1%20Connectivity%20Innovation%20Prize%20%E2%80%93%20Challenge%201%20Brief.pdf"><img src="http://ouseful.files.wordpress.com/2014/07/f1-innovation-prize_s3_amazonaws_com_challenge_packs_the_f1_connectivity_innovation_prize_e28093_challenge_1_brief_pdf.png?w=700&#038;h=573" alt="f1-innovation-prize_s3_amazonaws_com_challenge_packs_The_F1_Connectivity_Innovation_Prize_–_Challenge_1_Brief_pdf" width="700" height="573" class="alignnone size-full wp-image-11896" /></a></p>
 <p>So how about if we work with a &#8220;live information model&#8221; by creating a copy of an example timing screen in a spreadsheet. If we know how, we might be able to parse the real data stream to directly update the appropriate cells, but that&#8217;s largely by the by. At least we have something we can work work to start playing with the timing screen in terms of a literal reimagining of it. So what can we do if we put the data from an example timing screen into a spreadsheet?</p>
@@ -342,29 +428,36 @@ Wellcome Trust</p>
 <p>Simple, but a start.</p>
 <p>I&#8217;ve not really tried to push this idea very far &#8211; I&#8217;m not much of a spreadsheet jockey &#8211; but I&#8217;d be interested to know how folk who are might be able to push this idea&#8230;</p>
 <p>If you need example data, there&#8217;s some on the F1 site &#8211; <a href="http://www.formula1.com/results/season/2014/919/">f1.com &#8211; results for Spanish Grand Prix, 2014</a> and more on <a href="http://ergast.com/mrd/">Ergast Developer API</a>.</p>
-<p>PS FWIW, my entry to the competition is here: <a href="https://github.com/psychemedia/tata-f1">#f1datajunkie challenge 1 entry</a>. It&#8217;s perhaps a little off-brief, but I&#8217;ve been meaning to do this sort of summary for some time, and this was a good starting point. If I get a chance, I&#8217;ll have a go a getting the parsers to work properly properly!</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11987/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11987/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11987&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/07/17/f1-timing-screen-as-a-spreadsheet/feed/</wfw:commentRss>
-		<slash:comments>0</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-
-		<media:content url="http://ouseful.files.wordpress.com/2014/07/f1-innovation-prize_s3_amazonaws_com_challenge_packs_the_f1_connectivity_innovation_prize_e28093_challenge_1_brief_pdf.png" medium="image">
-			<media:title type="html">f1-innovation-prize_s3_amazonaws_com_challenge_packs_The_F1_Connectivity_Innovation_Prize_–_Challenge_1_Brief_pdf</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>DRIP&#8230; Letter to My MP</title>
-		<link>http://blog.ouseful.info/2014/07/14/drip-letter-to-my-mp/</link>
-		<comments>http://blog.ouseful.info/2014/07/14/drip-letter-to-my-mp/#comments</comments>
-		<pubDate>Mon, 14 Jul 2014 15:07:29 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Uncategorized]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/2014/07/14/drip-letter-to-my-mp/</guid>
-		<description><![CDATA[Dear Andrew Turner, I am writing to you today to express concern about the way in which the Data Retention and Investigatory Powers Bill [1] is being rushed through Parliament without appropriate time allowed for scrutiny of the Bill or members to elicit expert and informed opinion about what the consequences of the Bill might [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11975&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<blockquote><p>Dear Andrew Turner,</p>
+<p>PS FWIW, my entry to the competition is here: <a href="https://github.com/psychemedia/tata-f1">#f1datajunkie challenge 1 entry</a>. It&#8217;s perhaps a little off-brief, but I&#8217;ve been meaning to do this sort of summary for some time, and this was a good starting point. If I get a chance, I&#8217;ll have a go a getting the parsers to work properly properly!</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11987/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11987/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11987&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=6kxr0IJNVCw:bWa9kAbM1C4:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=6kxr0IJNVCw:bWa9kAbM1C4:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=6kxr0IJNVCw:bWa9kAbM1C4:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=6kxr0IJNVCw:bWa9kAbM1C4:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=6kxr0IJNVCw:bWa9kAbM1C4:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=6kxr0IJNVCw:bWa9kAbM1C4:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=6kxr0IJNVCw:bWa9kAbM1C4:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=6kxr0IJNVCw:bWa9kAbM1C4:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=6kxr0IJNVCw:bWa9kAbM1C4:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/6kxr0IJNVCw" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/07/17/f1-timing-screen-as-a-spreadsheet/feed/</wfw:commentRss>
+          <slash:comments>0</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <media:content url="http://ouseful.files.wordpress.com/2014/07/f1-innovation-prize_s3_amazonaws_com_challenge_packs_the_f1_connectivity_innovation_prize_e28093_challenge_1_brief_pdf.png" medium="image">
+            <media:title type="html">f1-innovation-prize_s3_amazonaws_com_challenge_packs_The_F1_Connectivity_Innovation_Prize_–_Challenge_1_Brief_pdf</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/07/17/f1-timing-screen-as-a-spreadsheet/</feedburner:origLink>
+        </item>
+        <item>
+          <title>DRIP… Letter to My MP</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/FyvhUosOHLE/</link>
+          <comments>http://blog.ouseful.info/2014/07/14/drip-letter-to-my-mp/#comments</comments>
+          <pubDate>Mon, 14 Jul 2014 15:07:29 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Uncategorized]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/2014/07/14/drip-letter-to-my-mp/</guid>
+          <description>Dear Andrew Turner, I am writing to you today to express concern about the way in which the Data Retention and Investigatory Powers Bill [1] is being rushed through Parliament without appropriate time allowed for scrutiny of the Bill or members to elicit expert and informed opinion about what the consequences of the Bill might [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=11975&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<blockquote><p>Dear Andrew Turner,</p>
 <p>I am writing to you today to express concern about the way in which the Data Retention and Investigatory Powers Bill [1] is being rushed through Parliament without appropriate time allowed for scrutiny of the Bill or members to elicit expert and informed opinion about what the consequences of the Bill might be.</p>
 <p>I do not know if you have read the Bill [1], the supporting documentation (explanatory notes and impact  assessment) [2], or the ECJ ruling [3] that prompted the emergency legislation, or how you intend to vote in the matter of the Bill. If you have not read the supporting documents, but you do intend to vote in support of the Bill, I would like to ask by what rationale you came to that decision? Because it would not be in my name as a constituent and you would not have my support in the matter.</p>
 <p>If you do not have time to read through the official documents, may I ask what other sources of information you turned to in forming your opinion. For your information,  [4] considers some of the issues raised in the impact assessment document.</p>
@@ -379,25 +472,33 @@ Wellcome Trust</p>
 <p>[3]</p>
 <p><a href="http://curia.europa.eu/juris/document/document_print.jsf?doclang=EN&#038;text=&#038;pageIndex=0&#038;part=1&#038;mode=req&#038;docid=150642&#038;occ=first&#038;dir=&#038;cid=731497" rel="nofollow">http://curia.europa.eu/juris/document/document_print.jsf?doclang=EN&#038;text=&#038;pageIndex=0&#038;part=1&#038;mode=req&#038;docid=150642&#038;occ=first&#038;dir=&#038;cid=731497</a></p>
 <p>[4]</p>
-<p><a href="http://cyberleagle.blogspot.co.uk/2014/07/dissecting-emergency-data-retention-and.html" rel="nofollow">http://cyberleagle.blogspot.co.uk/2014/07/dissecting-emergency-data-retention-and.html</a></p></blockquote><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11975/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11975/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11975&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/07/14/drip-letter-to-my-mp/feed/</wfw:commentRss>
-		<slash:comments>0</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>Tracking Anonymous Wikipedia Edits From Specific IP Ranges</title>
-		<link>http://blog.ouseful.info/2014/07/11/tracking-anonymous-wikipedia-edits-from-specific-ip-ranges/</link>
-		<comments>http://blog.ouseful.info/2014/07/11/tracking-anonymous-wikipedia-edits-from-specific-ip-ranges/#comments</comments>
-		<pubDate>Fri, 11 Jul 2014 07:45:35 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Anything you want]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=11941</guid>
-		<description><![CDATA[Via @davewiner&#8217;s blog, I spotted a link to @congressedits, &#8220;a bot that tweets anonymous Wikipedia edits that are made from IP addresses in the US Congress&#8221;. (For more info, see why @congressedits?, /via @ostephens.) I didn&#8217;t follow the link to the home page for that account (doh!), but in response to a question about whether [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11941&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>Via @davewiner&#8217;s blog, I spotted a link to @congressedits, &#8220;a bot that tweets anonymous Wikipedia edits that are made from IP addresses in the US Congress&#8221;. (For more info, see <a href="http://inkdroid.org/journal/2014/07/10/why-congressedits/">why @congressedits?</a>, /via @ostephens.) I didn&#8217;t follow the link to the home page for that account (doh!), but in response to a question about whether white label code was available, @superglaze pointed me to <a href="https://github.com/edsu/anon">https://github.com/edsu/anon</a>, a script that &#8220;will watch Wikipedia for edits from a set of named IP ranges and will tweet when it notices one&#8221;.</p>
+<p><a href="http://cyberleagle.blogspot.co.uk/2014/07/dissecting-emergency-data-retention-and.html" rel="nofollow">http://cyberleagle.blogspot.co.uk/2014/07/dissecting-emergency-data-retention-and.html</a></p></blockquote><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11975/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11975/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11975&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=FyvhUosOHLE:u8sfecyy4Lc:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=FyvhUosOHLE:u8sfecyy4Lc:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=FyvhUosOHLE:u8sfecyy4Lc:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=FyvhUosOHLE:u8sfecyy4Lc:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=FyvhUosOHLE:u8sfecyy4Lc:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=FyvhUosOHLE:u8sfecyy4Lc:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=FyvhUosOHLE:u8sfecyy4Lc:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=FyvhUosOHLE:u8sfecyy4Lc:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=FyvhUosOHLE:u8sfecyy4Lc:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/FyvhUosOHLE" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/07/14/drip-letter-to-my-mp/feed/</wfw:commentRss>
+          <slash:comments>0</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/07/14/drip-letter-to-my-mp/</feedburner:origLink>
+        </item>
+        <item>
+          <title>Tracking Anonymous Wikipedia Edits From Specific IP Ranges</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/razrRknYVbA/</link>
+          <comments>http://blog.ouseful.info/2014/07/11/tracking-anonymous-wikipedia-edits-from-specific-ip-ranges/#comments</comments>
+          <pubDate>Fri, 11 Jul 2014 07:45:35 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Anything you want]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=11941</guid>
+          <description>Via @davewiner&amp;#8217;s blog, I spotted a link to @congressedits, &amp;#8220;a bot that tweets anonymous Wikipedia edits that are made from IP addresses in the US Congress&amp;#8221;. (For more info, see why @congressedits?, /via @ostephens.) I didn&amp;#8217;t follow the link to the home page for that account (doh!), but in response to a question about whether [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=11941&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>Via @davewiner&#8217;s blog, I spotted a link to @congressedits, &#8220;a bot that tweets anonymous Wikipedia edits that are made from IP addresses in the US Congress&#8221;. (For more info, see <a href="http://inkdroid.org/journal/2014/07/10/why-congressedits/">why @congressedits?</a>, /via @ostephens.) I didn&#8217;t follow the link to the home page for that account (doh!), but in response to a question about whether white label code was available, @superglaze pointed me to <a href="https://github.com/edsu/anon">https://github.com/edsu/anon</a>, a script that &#8220;will watch Wikipedia for edits from a set of named IP ranges and will tweet when it notices one&#8221;.</p>
 <p>It turns out the script was inspired by @parliamentedits, a bot built by @tomscott that &#8220;tracks edits to Wikipedia made from Parliamentary IP addresses&#8221; built using IFTT and possibly a list of IP ranges operated by the House of Commons gleaned from <a href="https://www.whatdotheyknow.com/request/parliaments_access_to_the_intern?unfold=1">this FOI request</a>?</p>
 <p>Nice&#8230;</p>
 <p>My immediate thought was set up something to track edits made to Wikipedia from OU IP addresses, then idly wondered if set of feeds for tracking edits from HEIs in general might also be useful (something to add to the <a href="http://observatory.data.ac.uk/">UK University Web Observatory</a> for example?)</p>
@@ -421,26 +522,36 @@ Wellcome Trust</p>
 <p>I think I started looking at how we might start to map IP ranges for organisations once&#8230;.? Erm&#8230; maybe not, actually: it was <a href="http://blog.ouseful.info/2012/09/07/fragment-pondering-mapping-the-pearson-network/">looking up domains a company owned from its nameservers</a>.</p>
 <p>Hmm.. thinks&#8230; webstats show IP ranges of incoming requests &#8211; can we create maps from those? In fact, are there maps/indexes that give IP ranges for eg companies or universities?</p>
 <p>I&#8217;m rambling again&#8230;</p>
-<p>PS Related: <a href="http://blog.ouseful.info/2013/02/27/repository-googalytics-visits-from-heis/">Repository Googalytics – Visits from HEIs</a> which briefly reviews the idea of tracking visits to HEI repositories from other HEIs&#8230;</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11941/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11941/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11941&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/07/11/tracking-anonymous-wikipedia-edits-from-specific-ip-ranges/feed/</wfw:commentRss>
-		<slash:comments>1</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-	</item>
-		<item>
-		<title>Foolish is as foolish does&#8230; fragments&#8230;</title>
-		<link>http://blog.ouseful.info/2014/07/10/foolish-is-as-foolish-does-fragments/</link>
-		<comments>http://blog.ouseful.info/2014/07/10/foolish-is-as-foolish-does-fragments/#comments</comments>
-		<pubDate>Thu, 10 Jul 2014 18:11:43 +0000</pubDate>
-		<dc:creator><![CDATA[Tony Hirst]]></dc:creator>
-				<category><![CDATA[Anything you want]]></category>
-		<category><![CDATA[corporate fool]]></category>
-
-		<guid isPermaLink="false">http://blog.ouseful.info/?p=11933</guid>
-		<description><![CDATA[It&#8217;s been that CDSA paperwork time of year again, and if nothing else it has forced me to start pulling together some fragments of ideas backed up by other peoples&#8217; (or people&#8217;s &#8211; I never can remember) words&#8230; So here are some fragments that are, I think, aligned to some of the things that I&#8217;ve [&#8230;]<img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11933&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></description>
-				<content:encoded><![CDATA[<p>It&#8217;s been that CDSA paperwork time of year again, and if nothing else it has forced me to start pulling together some fragments of ideas backed up by other peoples&#8217; (or people&#8217;s &#8211; I never can remember) words&#8230;</p>
+<p>PS Related: <a href="http://blog.ouseful.info/2013/02/27/repository-googalytics-visits-from-heis/">Repository Googalytics – Visits from HEIs</a> which briefly reviews the idea of tracking visits to HEI repositories from other HEIs&#8230;</p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11941/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11941/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11941&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=razrRknYVbA:4RacT2hO9ao:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=razrRknYVbA:4RacT2hO9ao:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=razrRknYVbA:4RacT2hO9ao:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=razrRknYVbA:4RacT2hO9ao:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=razrRknYVbA:4RacT2hO9ao:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=razrRknYVbA:4RacT2hO9ao:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=razrRknYVbA:4RacT2hO9ao:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=razrRknYVbA:4RacT2hO9ao:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=razrRknYVbA:4RacT2hO9ao:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/razrRknYVbA" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/07/11/tracking-anonymous-wikipedia-edits-from-specific-ip-ranges/feed/</wfw:commentRss>
+          <slash:comments>1</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/07/11/tracking-anonymous-wikipedia-edits-from-specific-ip-ranges/</feedburner:origLink>
+        </item>
+        <item>
+          <title>Foolish is as foolish does… fragments…</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/fN7AZNmaiec/</link>
+          <comments>http://blog.ouseful.info/2014/07/10/foolish-is-as-foolish-does-fragments/#comments</comments>
+          <pubDate>Thu, 10 Jul 2014 18:11:43 +0000</pubDate>
+          <dc:creator>
+            <![CDATA[Tony Hirst]]>
+          </dc:creator>
+          <category>
+            <![CDATA[Anything you want]]>
+          </category>
+          <category>
+            <![CDATA[corporate fool]]>
+          </category>
+          <guid isPermaLink="false">http://blog.ouseful.info/?p=11933</guid>
+          <description>It&amp;#8217;s been that CDSA paperwork time of year again, and if nothing else it has forced me to start pulling together some fragments of ideas backed up by other peoples&amp;#8217; (or people&amp;#8217;s &amp;#8211; I never can remember) words&amp;#8230; So here are some fragments that are, I think, aligned to some of the things that I&amp;#8217;ve [&amp;#8230;]&lt;img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&amp;#038;blog=325417&amp;#038;post=11933&amp;#038;subd=ouseful&amp;#038;ref=&amp;#038;feed=1" width="1" height="1" /&gt;</description>
+          <content:encoded>
+            <![CDATA[<p>It&#8217;s been that CDSA paperwork time of year again, and if nothing else it has forced me to start pulling together some fragments of ideas backed up by other peoples&#8217; (or people&#8217;s &#8211; I never can remember) words&#8230;</p>
 <p>So here are some fragments that are, I think, aligned to some of the things that I&#8217;ve <a href="http://blog.ouseful.info/2008/12/09/corporate-foolery-and-the-abilene-paradox/">thought for a long time</a> and have been thinking again more recently, things that resonated with me as I read them just now&#8230;</p>
 <p>The way in to this this time round for me was part of a talk by Prof Richard Keeble at the University of Lincoln School of Journalism Research Symposium last week, when he mentioned the role of the fool as a safety valve or regulator in the classical court&#8230;</p>
 <p>First up, from &#8220;<a href="https://circle.ubc.ca/bitstream/handle/2429/5042/ubc_1994-0177.pdf?...1">Class Clown and Court Jester</a>&#8220;, David Chevreau, MA thesis, UBC, April 1994</p>
@@ -490,13 +601,73 @@ Yet, because it takes work to create order within play, play always (sub- limina
 &#8220;Pursuing the metaphor of the Fool presents an interesting perspective on the University as an educational institution. While the Fool is an educator of sorts, she does not really ‘own’ knowledge that she ‘passes on’ as per our conventional understanding of pedagogy. Unlike the teacher who is usually cast as the learner’s caring coach, the Fool is an irritant, a provocateur, whose <em>modus operandi</em> is to provoke new wisdom in others. The Fool’s approach is, quite literally, to play the fool, acting as a lucid and ludic lens through which others perceive and recognize profound truths, truths that indeed may be lost in the conventions of learning and scholarship. The fool (like the child) is not expected to ‘know’ anything and is therefore free to act the fool, because she cannot, by definition, ‘know any better’. Paradoxically, this epistemic vacuum is also a potential source of great wisdom, which is why the idea of the ‘wise fool’ has such a long tradition. Moreover, the oxymoron ‘wise fool’ is also reversible: he that believes himself to be wise is necessarily foolish. For the Fool also reminds us that knowledge of the mystery of life is always beyond even the wise; at best we can only know that there is much of which we are and can only be ignorant.<br />
 &#8230;<br />
 [The university] must be the institutional manifestation of an <em>oxymoron</em>, remembering that this word comes from the Greek, <em>oxumo ̄rone</em>, meaning ‘pointedly foolish’.&#8221;</p>
-<p><em>&#8211; Fin</em></p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11933/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11933/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11933&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" />]]></content:encoded>
-			<wfw:commentRss>http://blog.ouseful.info/2014/07/10/foolish-is-as-foolish-does-fragments/feed/</wfw:commentRss>
-		<slash:comments>1</slash:comments>
-	
-		<media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&#38;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
-			<media:title type="html">Tony Hirst</media:title>
-		</media:content>
-	</item>
-	</channel>
-</rss>
+<p><em>&#8211; Fin</em></p><br />  <a rel="nofollow" href="http://feeds.wordpress.com/1.0/gocomments/ouseful.wordpress.com/11933/"><img alt="" border="0" src="http://feeds.wordpress.com/1.0/comments/ouseful.wordpress.com/11933/" /></a> <img alt="" border="0" src="http://pixel.wp.com/b.gif?host=blog.ouseful.info&#038;blog=325417&#038;post=11933&#038;subd=ouseful&#038;ref=&#038;feed=1" width="1" height="1" /><div class="feedflare">
+<a href="http://feeds.feedburner.com/~ff/ouseful?a=fN7AZNmaiec:Mfl_23KqJdY:yIl2AUoC8zA"><img src="http://feeds.feedburner.com/~ff/ouseful?d=yIl2AUoC8zA" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=fN7AZNmaiec:Mfl_23KqJdY:2mJPEYqXBVI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=2mJPEYqXBVI" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=fN7AZNmaiec:Mfl_23KqJdY:gIN9vFwOqvQ"><img src="http://feeds.feedburner.com/~ff/ouseful?i=fN7AZNmaiec:Mfl_23KqJdY:gIN9vFwOqvQ" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=fN7AZNmaiec:Mfl_23KqJdY:F7zBnMyn0Lo"><img src="http://feeds.feedburner.com/~ff/ouseful?i=fN7AZNmaiec:Mfl_23KqJdY:F7zBnMyn0Lo" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=fN7AZNmaiec:Mfl_23KqJdY:V_sGLiPBpWU"><img src="http://feeds.feedburner.com/~ff/ouseful?i=fN7AZNmaiec:Mfl_23KqJdY:V_sGLiPBpWU" border="0"></img></a> <a href="http://feeds.feedburner.com/~ff/ouseful?a=fN7AZNmaiec:Mfl_23KqJdY:cGdyc7Q-1BI"><img src="http://feeds.feedburner.com/~ff/ouseful?d=cGdyc7Q-1BI" border="0"></img></a>
+</div><img src="http://feeds.feedburner.com/~r/ouseful/~4/fN7AZNmaiec" height="1" width="1"/>]]>
+          </content:encoded>
+          <wfw:commentRss>http://blog.ouseful.info/2014/07/10/foolish-is-as-foolish-does-fragments/feed/</wfw:commentRss>
+          <slash:comments>1</slash:comments>
+          <media:content url="http://1.gravatar.com/avatar/abbd9f90565ce9ae4d065d93a81d8c03?s=96&amp;d=http%3A%2F%2F1.gravatar.com%2Favatar%2Fad516503a11cd5ca435acc9bb6523536%3Fs%3D96" medium="image">
+            <media:title type="html">Tony Hirst</media:title>
+          </media:content>
+          <creativeCommons:license>http://creativecommons.org/licenses/by/2.0/</creativeCommons:license>
+          <feedburner:origLink>http://blog.ouseful.info/2014/07/10/foolish-is-as-foolish-does-fragments/</feedburner:origLink>
+        </item>
+        <item>
+          <title>Links for 2013-01-05 [del.icio.us]</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/H16YaMdnLbA/feedthru</link>
+          <pubDate>Sun, 06 Jan 2013 00:00:00 PST</pubDate>
+          <guid isPermaLink="false">http://del.icio.us/psychemedia/feedthru#2013-01-05</guid>
+          <description>&lt;ul&gt; &lt;li&gt;&lt;a href="http://www.johntedesco.net/blog/2012/06/21/how-to-solve-impossible-problems-daniel-russells-awesome-google-search-techniques/"&gt;How to solve impossible problems: Daniel Russell&amp;rsquo;s awesome Google search techniques&lt;/a&gt;&lt;br/&gt; Handy summary of Google search tricks. Worth reading simply as a refresher... do you know about the intext: search limit for example?&lt;/li&gt; &lt;/ul&gt;&lt;img src="http://feeds.feedburner.com/~r/ouseful/~4/H16YaMdnLbA" height="1" width="1"/&gt;</description>
+          <feedburner:origLink>http://del.icio.us/psychemedia/feedthru#2013-01-05</feedburner:origLink>
+        </item>
+        <item>
+          <title>Links for 2012-12-17 [del.icio.us]</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/ToQLXSSkOMg/feedthru</link>
+          <pubDate>Tue, 18 Dec 2012 00:00:00 PST</pubDate>
+          <guid isPermaLink="false">http://del.icio.us/psychemedia/feedthru#2012-12-17</guid>
+          <description>&lt;ul&gt; &lt;li&gt;&lt;a href="http://www.mikestirling.co.uk/bbc-micro-on-an-fpga/"&gt;BBC Micro on an FPGA | mikestirling.co.uk&lt;/a&gt;&lt;br/&gt; This is just insane - a BBC Micro on an FPGA. THe creator, Mike Stirling, has also done a ZX Spectrum on an FPGA. /sort of via @benosteen&lt;/li&gt; &lt;/ul&gt;&lt;img src="http://feeds.feedburner.com/~r/ouseful/~4/ToQLXSSkOMg" height="1" width="1"/&gt;</description>
+          <feedburner:origLink>http://del.icio.us/psychemedia/feedthru#2012-12-17</feedburner:origLink>
+        </item>
+        <item>
+          <title>Links for 2012-12-15 [del.icio.us]</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/8TXrUaXlSuk/feedthru</link>
+          <pubDate>Sun, 16 Dec 2012 00:00:00 PST</pubDate>
+          <guid isPermaLink="false">http://del.icio.us/psychemedia/feedthru#2012-12-15</guid>
+          <description>&lt;ul&gt; &lt;li&gt;&lt;a href="http://www.open.edu/openlearn/science-maths-technology/mathematics-and-statistics/statistics/diary-data-sleuth-getting-grips-the-census-data"&gt;Diary of a data sleuth: Getting to grips with the census data&lt;/a&gt;&lt;br/&gt; Following the release of statistical tables around the 2011 England and Wales census, I thought I'd have a quick look at what sort of shape the data was in...&lt;/li&gt; &lt;/ul&gt;&lt;img src="http://feeds.feedburner.com/~r/ouseful/~4/8TXrUaXlSuk" height="1" width="1"/&gt;</description>
+          <feedburner:origLink>http://del.icio.us/psychemedia/feedthru#2012-12-15</feedburner:origLink>
+        </item>
+        <item>
+          <title>Links for 2012-12-12 [del.icio.us]</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/DMseenkkTQc/feedthru</link>
+          <pubDate>Thu, 13 Dec 2012 00:00:00 PST</pubDate>
+          <guid isPermaLink="false">http://del.icio.us/psychemedia/feedthru#2012-12-12</guid>
+          <description>&lt;ul&gt; &lt;li&gt;&lt;a href="http://www.open.edu/openlearn/science-maths-technology/mathematics-and-statistics/statistics/two-can-play-game-when-polls-collide"&gt;Two can play at that game: When polls collide - OpenLearn - Open University&lt;/a&gt;&lt;br/&gt; Two polls, operated by the same polling organisation, that ostensibly ask similar questions but apparently give opposing results. What's going on? I search for the data...&lt;/li&gt; &lt;li&gt;&lt;a href="http://www.open.edu/openlearn/science-maths-technology/engineering-and-technology/engineering/partial-history-ou-adventures-lego-engineering"&gt;A partial history of OU adventures in lego engineering - OpenLearn - Open University&lt;/a&gt;&lt;br/&gt; A brief, personal history of recent OU courses where Lego has played a role...&lt;/li&gt; &lt;/ul&gt;&lt;img src="http://feeds.feedburner.com/~r/ouseful/~4/DMseenkkTQc" height="1" width="1"/&gt;</description>
+          <feedburner:origLink>http://del.icio.us/psychemedia/feedthru#2012-12-12</feedburner:origLink>
+        </item>
+        <item>
+          <title>Links for 2012-12-03 [del.icio.us]</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/Foj2A0GZdvs/feedthru</link>
+          <pubDate>Tue, 04 Dec 2012 00:00:00 PST</pubDate>
+          <guid isPermaLink="false">http://del.icio.us/psychemedia/feedthru#2012-12-03</guid>
+          <description>&lt;ul&gt; &lt;li&gt;&lt;a href="http://www.guardian.co.uk/news/datablog/2012/nov/28/data-shadows-twitter-uk-floods-mapped"&gt;Digital trails of the UK floods - how well do tweets match observations? | News | guardian.co.uk&lt;/a&gt;&lt;br/&gt; You can imagine maps like these being used to illustrate academic research papers published months, or years, after the event. Rather than a few *days* after the event. What does this say about the sorts of things that are valid in an academic research context, given academic research timescales?&lt;/li&gt; &lt;/ul&gt;&lt;img src="http://feeds.feedburner.com/~r/ouseful/~4/Foj2A0GZdvs" height="1" width="1"/&gt;</description>
+          <feedburner:origLink>http://del.icio.us/psychemedia/feedthru#2012-12-03</feedburner:origLink>
+        </item>
+        <item>
+          <title>Links for 2012-11-28 [del.icio.us]</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/UzzKz8-GBs0/feedthru</link>
+          <pubDate>Thu, 29 Nov 2012 00:00:00 PST</pubDate>
+          <guid isPermaLink="false">http://del.icio.us/psychemedia/feedthru#2012-11-28</guid>
+          <description>&lt;ul&gt; &lt;li&gt;&lt;a href="http://www.open.edu/openlearn/science-maths-technology/mathematics-and-statistics/statistics/diary-data-sleuth-football-injury-time"&gt;Diary of a data sleuth: Football injury time&lt;/a&gt;&lt;br/&gt; Does Fergie-tike exist? Does injury time lead to last-minute goals? (By me), a (failed) attempt at finding football stats and open data sets that might have helped me answer this question for myself...&lt;/li&gt; &lt;li&gt;&lt;a href="http://blog.stephenwolfram.com/2012/11/mathematica-9-is-released-today/"&gt;Stephen Wolfram Blog : Mathematica 9 Is Released Today!&lt;/a&gt;&lt;br/&gt; As I read of Mathematica 9 I appreciate one of the many magical things about software is how it bootstraps itself... ...and I wonder, by Mathematica 10 will we just have to write the first line of an analysis, or present a data file to it, and then just click to accept various suggestions about what code or analysis generating step to try next?&lt;/li&gt; &lt;/ul&gt;&lt;img src="http://feeds.feedburner.com/~r/ouseful/~4/UzzKz8-GBs0" height="1" width="1"/&gt;</description>
+          <feedburner:origLink>http://del.icio.us/psychemedia/feedthru#2012-11-28</feedburner:origLink>
+        </item>
+        <item>
+          <title>Links for 2012-11-02 [del.icio.us]</title>
+          <link>http://feedproxy.google.com/~r/ouseful/~3/VE0sooQYqB8/feedthru</link>
+          <pubDate>Sat, 03 Nov 2012 00:00:00 PDT</pubDate>
+          <guid isPermaLink="false">http://del.icio.us/psychemedia/feedthru#2012-11-02</guid>
+          <description>&lt;ul&gt; &lt;li&gt;&lt;a href="http://www.bbc.co.uk/blogs/blogcollegeofjournalism/posts/How-to-map-your-social-network"&gt;BBC - Blogs - College of Journalism - How to map your social network&lt;/a&gt;&lt;br/&gt; A post wot I wrote for the BBC College blog...&lt;/li&gt; &lt;/ul&gt;&lt;img src="http://feeds.feedburner.com/~r/ouseful/~4/VE0sooQYqB8" height="1" width="1"/&gt;</description>
+          <feedburner:origLink>http://del.icio.us/psychemedia/feedthru#2012-11-02</feedburner:origLink>
+        </item>
+      </channel>
+    </rss>

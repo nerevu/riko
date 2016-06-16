@@ -47,8 +47,8 @@ __license__ = 'MIT'
 __copyright__ = 'Copyright 2015 Reuben Cummings'
 
 parts = [
-    'feed.xml', 'blog.ouseful.info_feed.xml', 'gigs.json', 'places.xml',
-    'www.bbc.co.uk_news.html', 'edition.cnn.html', 'google_spreadsheet.csv']
+    'feed.xml', 'ouseful.xml', 'gigs.json', 'places.xml',
+    'bbc.html', 'cnn.html', 'spreadsheet.csv']
 
 
 def get_path(name):
