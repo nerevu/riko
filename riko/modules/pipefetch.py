@@ -11,9 +11,9 @@ RSS, Atom, and RDF formats. Feeds contain one or more items.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipefetch import pipe
-        >>> next(pipe(conf={'url': FILES[0]}))['title']
+        >>> next(pipe(conf={'url': get_path('feed.xml')}))['title']
         u'Donations'
 
 Attributes:
@@ -23,7 +23,11 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import speedparser
+try:
+    import speedparser
+except ImportError:
+    import feedparser as speedparser
+
 
 from builtins import *
 from six.moves.urllib.request import urlopen
@@ -37,6 +41,9 @@ from riko.lib.log import Logger
 OPTS = {'ftype': 'none'}
 DEFAULTS = {'sleep': 0}
 logger = Logger(__name__).logger
+intersection = [
+    'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
+    'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
 
 
 @inlineCallbacks
@@ -58,12 +65,12 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'])
-        ...     objconf = Objectify({'url': FILES[0], 'sleep': 0})
+        ...     objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -104,10 +111,10 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> objconf = Objectify({'url': FILES[0], 'sleep': 0})
+        >>> objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['title']
@@ -148,11 +155,13 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
+        >>>
+        >>> i = intersection
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(sorted(next(x).keys()))
-        ...     d = asyncPipe(conf={'url': FILES[0]})
+        ...     callback = lambda x: print(set(next(x).keys()).issuperset(i))
+        ...     d = asyncPipe(conf={'url': get_path('feed.xml')})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -160,9 +169,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        ['author', u'author.name', u'author.uri', 'comments', 'content', \
-u'dc:creator', 'id', 'link', u'pubDate', 'summary', 'title', 'updated', \
-'updated_parsed', u'y:id', u'y:published', u'y:title']
+        True
     """
     return asyncParser(*args, **kwargs)
 
@@ -187,15 +194,10 @@ def pipe(*args, **kwargs):
         dict: an iterator of items
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
-        >>> keys = {
-        ...     'updated', 'updated_parsed', u'pubDate', 'author',
-        ...     u'y:published', 'title', 'comments', 'summary', 'content',
-        ...     'link', u'y:title', u'dc:creator', u'author.uri',
-        ...     u'author.name', 'id', u'y:id'}
-        >>>
-        >>> set(next(pipe(conf={'url': FILES[0]})).keys()) == keys
+        >>> keys = next(pipe(conf={'url': get_path('feed.xml')})).keys()
+        >>> set(keys).issuperset(intersection)
         True
     """
     return parser(*args, **kwargs)

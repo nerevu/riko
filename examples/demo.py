@@ -28,13 +28,14 @@ Fetching feeds
 
     >>> from riko.modules.pipefetch import pipe as fetch
     >>>
-    >>> url = get_path('feeds.gawker.com_jalopnik_full.xml')
+    >>> url = get_path('gawker.xml')
+    >>> intersection = [
+    ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
+    ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
     >>> feed = fetch(conf={'url': url})
     >>> item = next(feed)
-    >>> sorted(item.keys())
-    ['author', u'author.name', u'author.uri', 'content', u'dc:creator', 'id', \
-'link', u'pubDate', 'summary', 'title', 'updated', 'updated_parsed', u'y:id', \
-u'y:published', u'y:title']
+    >>> set(item.keys()).issuperset(intersection)
+    True
     >>> item['title'], item['link']  # doctest: +ELLIPSIS
     (u'...', u'http...')
 """

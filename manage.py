@@ -89,7 +89,7 @@ def test(where=None, stop=None, **kwargs):
     """Run nose, tox, and script tests"""
     opts = '-xv' if stop else '-v'
     opts += ' --with-coverage' if kwargs.get('cover') else ''
-    opts += ' --failed' if kwargs.get('failed') else ''
+    opts += ' --failed' if kwargs.get('failed') else ' --with-id'
     opts += ' --detailed-errors' if kwargs.get('verbose') else ''
     opts += ' --debug=nose.loader' if kwargs.get('debug') else ''
     opts += 'w %s' % where if where else ''

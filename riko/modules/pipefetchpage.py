@@ -13,9 +13,10 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipefetchpage import pipe
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
-        >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        >>> url = get_path('cnn.html')
+        >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         >>> next(pipe(conf=conf))['content']  # doctest: +ELLIPSIS
         u'CNN.com International - Breaking, World..., Entertainment and...'
 
@@ -70,12 +71,13 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['content'][:32])
-        ...     conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        ...     url = get_path('cnn.html')
+        ...     conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}, 'assign': 'content'}
         ...     d = asyncParser(None, objconf, False, **kwargs)
@@ -115,9 +117,10 @@ def parser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from riko.lib.utils import Objectify
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
-        >>> conf = {'url': FILES[5], 'start': '<title>', 'end': '</title>'}
+        >>> url = get_path('cnn.html')
+        >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': {}, 'assign': 'content'}
         >>> result, skip = parser(None, objconf, False, **kwargs)
@@ -165,12 +168,12 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x))
-        ...     path = 'value.items'
-        ...     conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
+        ...     url, path = get_path('bbc.html'), 'value.items'
+        ...     conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -210,8 +213,9 @@ def pipe(*args, **kwargs):
         dict: item
 
     Examples:
-        >>> from . import FILES
-        >>> conf = {'url': FILES[4], 'start': 'DOCTYPE ', 'end': 'http'}
+        >>> from riko import get_path
+        >>> url = get_path('bbc.html')
+        >>> conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         >>> next(pipe(conf=conf))
         {u'content': u'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
     """

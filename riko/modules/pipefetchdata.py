@@ -11,10 +11,10 @@ can then be converted into an RSS feed or merged with other data in your Pipe.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipefetchdata import pipe
         >>>
-        >>> conf = {'url': FILES[2], 'path': 'value.items'}
+        >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
         >>> next(pipe(conf=conf))['title']
         u'Business System Analyst'
 
@@ -26,13 +26,10 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from functools import reduce
-from json import loads
 from os.path import splitext
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from lxml import objectify, html
-from lxml.html import html5parser
 from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
@@ -42,20 +39,7 @@ from riko.twisted import utils as tu
 
 OPTS = {'ftype': 'none'}
 reducer = lambda element, i: element.get(i) if element else None
-json2dict = lambda f: loads(f.read())
 logger = Logger(__name__).logger
-
-
-def xml2dict(f):
-    tree = objectify.parse(f)
-    root = tree.getroot()
-    return utils.etree_to_dict(root)
-
-
-def html2dict(f, html5=False):
-    tree = html5parser.parse(f) if html5 else html.parse(f)
-    root = tree.getroot()
-    return utils.etree_to_dict(root)
 
 
 @inlineCallbacks
@@ -76,12 +60,13 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0][0]['title'])
-        ...     objconf = Objectify({'url': FILES[2], 'path': 'value.items'})
+        ...     url = get_path('gigs.json')
+        ...     objconf = Objectify({'url': url, 'path': 'value.items'})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -100,16 +85,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ext = splitext(url)[1].lstrip('.')
         path = objconf.path.split('.') if objconf.path else []
         f = yield tu.urlOpen(url)
-
-        if ext == 'xml':
-            element = xml2dict(f)
-        elif ext == 'json':
-            element = json2dict(f)
-        elif ext == 'html':
-            element = html2dict(f, objconf.html5)
-        else:
-            raise TypeError('Invalid file type %s' % ext)
-
+        element = utils.any2dict(f, ext, objconf.html5)
         stream = yield tu.coopReduce(reducer, path, element)
 
     result = (stream, skip)
@@ -132,10 +108,11 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> objconf = Objectify({'url': FILES[2], 'path': 'value.items'})
+        >>> url = get_path('gigs.json')
+        >>> objconf = Objectify({'url': url, 'path': 'value.items'})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> result[0]['title']
@@ -148,16 +125,7 @@ def parser(_, objconf, skip, **kwargs):
         ext = splitext(url)[1].lstrip('.')
         path = objconf.path.split('.') if objconf.path else []
         f = urlopen(url)
-
-        if ext == 'xml':
-            element = xml2dict(f)
-        elif ext == 'json':
-            element = json2dict(f)
-        elif ext == 'html':
-            element = html2dict(f, objconf.html5)
-        else:
-            raise TypeError('Invalid file type %s' % ext)
-
+        element = utils.any2dict(f, ext, objconf.html5)
         stream = reduce(reducer, path, element)
 
     return stream, skip
@@ -187,12 +155,12 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
         ...     path = 'value.items'
-        ...     conf = {'url': FILES[2], 'path': path}
+        ...     conf = {'url': get_path('gigs.json'), 'path': path}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -229,17 +197,16 @@ def pipe(*args, **kwargs):
         dict: an iterator of items
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
-        >>> path = 'value.items'
-        >>> conf = {'url': FILES[2], 'path': path}
+        >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
         >>> next(pipe(conf=conf))['title']
         u'Business System Analyst'
         >>> path = 'appointment'
-        >>> conf = {'url': FILES[3], 'path': path}
+        >>> conf = {'url': get_path('places.xml'), 'path': path}
         >>> next(pipe(conf=conf))['subject']
         'Bring pizza home'
-        >>> conf = {'url': FILES[3], 'path': ''}
+        >>> conf = {'url': get_path('places.xml'), 'path': ''}
         >>> next(pipe(conf=conf))['reminder']
         '15'
     """

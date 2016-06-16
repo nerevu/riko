@@ -22,21 +22,20 @@ DELAY = 0.2
 
 parent = p.join(p.abspath(p.dirname(p.dirname(__file__))), 'data')
 files = [
-    'blog.ouseful.info_feed.xml',
+    'ouseful.xml',
     'feed.xml',
-    'feeds.delicious.com_v2_rss_popular?count=3.xml',
-    'feeds.delicious.com_v2_rss_popular?count=15.xml',
-    'feeds.delicious.compsychemedia.xml',
-    'feeds.feedburner.com_ouseful.xml',
-    'feeds.feedburner.com_TheEdTechie.xml',
-    'feeds.feedburner.com_yodelanecdotal.xml',
-    'feeds.gawker.com_jalopnik_full.xml',
-    'news.yahoo.com_rss_health.xml',
-    'news.yahoo.com_rss_topstories.xml',
-    'www.autoblog.com_rss.xml',
-    'www.fourtitude.com_news_publish_rss.xml',
-    'www.greenhughes.com_rssfeed.xml',
-    'www.slideshare.net_rss_user_psychemedia.xml']
+    'delicious.xml',
+    'psychemedia.xml',
+    'ouseful_feedburner.xml',
+    'TheEdTechie.xml',
+    'yodel.xml',
+    'gawker.xml',
+    'health.xml',
+    'topstories.xml',
+    'autoblog.xml',
+    'fourtitude.xml',
+    'greenhughes.xml',
+    'psychemedia_slideshare.xml']
 
 get_path = lambda name: 'file://%s' % p.join(parent, name)
 sources = [{'url': get_path(f)} for f in files]

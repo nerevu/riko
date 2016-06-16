@@ -21,7 +21,7 @@ py2_requirements = set(pkutils.parse_requirements('py2-requirements.txt'))
 py3_requirements = set(pkutils.parse_requirements('requirements.txt'))
 dev_requirements = set(pkutils.parse_requirements('dev-requirements.txt'))
 optional = 'optional-requirements.txt'
-optional_requirements = set(pkutils.parse_requirements(optional))
+opt_requirements = set(pkutils.parse_requirements(optional))
 readme = pkutils.read('README.rst')
 changes = pkutils.read('CHANGES.rst').replace('.. :changelog:', '')
 license = module.__license__
@@ -41,8 +41,8 @@ py2_require = py2_requirements.difference(py3_requirements)
 
 # Optional requirements
 dev_require = dev_requirements.difference(requirements)
-lxml_require = {r for r in optional_requirements if r.startswith('lxml')}
-async_require = optional_requirements.difference(lxml_require)
+xml_require = {r for r in opt_requirements if not r.lower().startswith('t')}
+async_require = opt_requirements.difference(xml_require)
 
 setup(
     name=project,
@@ -65,7 +65,7 @@ setup(
     install_requires=requirements,
     extras_require={
         'python_version<3.0': py2_require,
-        'lxml': lxml_require,
+        'xml': xml_require,
         'async': async_require,
         'develop': dev_require,
     },

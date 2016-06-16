@@ -27,10 +27,11 @@ checking the "Use HTML5 parser" checkbox to use the HTML5 parser.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipexpathfetchpage import pipe
         >>>
-        >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
+        >>> url = get_path('ouseful.xml')
+        >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
         >>> title = 'Running “Native” Data Wrangling Applications'
         >>> next(pipe(conf=conf))['title'][:44] == title
         True
@@ -46,10 +47,7 @@ from os.path import splitext
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from lxml import objectify, html
-from lxml.html import html5parser
 from twisted.internet.defer import inlineCallbacks, returnValue
-from twisted.web import microdom
 
 from . import processor
 from riko.lib import utils
@@ -63,17 +61,31 @@ logger = Logger(__name__).logger
 # TODO: convert relative links to absolute
 # TODO: remove the closing tag if using an HTML tag stripped of HTML tags
 # TODO: clean html with Tidy
-def genXPATH(tree, xpath, pos=0):
-    tags = xpath.split('/')[1:] if xpath else []
-    elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
 
-    if len(tags or [1]) - pos == 1:
-        for element in elements:
-            yield element
-    else:
-        for element in elements:
-            for e in genXPATH(element, xpath, pos + 1):
+def xpath(tree, path, pos=0):
+    try:
+        elements = tree.xpath(path)
+    except AttributeError:
+        tags = path.split('/')[1:] if path else []
+
+        try:
+            elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
+        except AttributeError:
+            elements = tree.findall('./%s' % '/'.join(tags[1:]))
+
+            for e in elements:
                 yield e
+        else:
+            if len(tags or [1]) - pos == 1:
+                for element in elements:
+                    yield element
+            else:
+                for element in elements:
+                    for e in xpath(element, path, pos + 1):
+                        yield e
+    else:
+        for e in elements:
+            yield e
 
 
 @inlineCallbacks
@@ -95,13 +107,13 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'][:44])
-        ...     xpath = '/rss/channel/item'
-        ...     objconf = Objectify({'url': FILES[1], 'xpath': xpath})
+        ...     url, path = get_path('ouseful.xml'), '/rss/channel/item'
+        ...     objconf = Objectify({'url': url, 'xpath': path})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -118,20 +130,11 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
+        xml = ext == 'xml'
         f = yield tu.urlOpen(url)
-
-        if ext == 'xml':
-            root = yield microdom.parse(f)
-            elements = genXPATH(root, objconf.xpath)
-            items = map(tu.elementToDict, elements)
-        elif ext == 'html':
-            tree = html5parser.parse(f) if objconf.html5 else html.parse(f)
-            root = tree.getroot()
-            elements = root.xpath(objconf.xpath)
-            items = map(utils.etree_to_dict, elements)
-        else:
-            raise TypeError('Invalid file type %s' % ext)
-
+        root = yield tu.asyncXML2Etree(f, xml=xml)
+        elements = xpath(root, objconf.xpath)
+        items = map(tu.etreeToDict, elements)
         stringified = ({kwargs['assign']: str(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
@@ -152,9 +155,10 @@ def parser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from riko.lib.utils import Objectify
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
-        >>> objconf = Objectify({'url': FILES[1], 'xpath': '/rss/channel/item'})
+        >>> url = get_path('ouseful.xml')
+        >>> objconf = Objectify({'url': url, 'xpath': '/rss/channel/item'})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> title = 'Running “Native” Data Wrangling Applications'
@@ -166,16 +170,11 @@ def parser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
+        xml = ext == 'xml'
         f = urlopen(url)
-
-        if ext == 'xml':
-            tree = objectify.parse(f)
-        elif ext == 'html':
-            tree = html5parser.parse(f) if objconf.html5 else html.parse(f)
-
-        root = tree.getroot()
-        elements = root.xpath(objconf.xpath)
-        items = map(utils.etree_to_dict, elements)
+        root = utils.xml2etree(f, xml=xml, html5=objconf.html5)
+        elements = xpath(root, objconf.xpath)
+        items = map(utils.etree2dict, elements)
         stringified = ({kwargs['assign']: str(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
@@ -208,11 +207,12 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['guid']['content'])
-        ...     conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
+        ...     url = get_path('ouseful.xml')
+        ...     conf = {'url': url, 'xpath': '/rss/channel/item'}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -251,8 +251,9 @@ def pipe(*args, **kwargs):
         dict: item
 
     Examples:
-        >>> from . import FILES
-        >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
+        >>> from riko import get_path
+        >>> url = get_path('ouseful.xml')
+        >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
         >>> next(pipe(conf=conf))['guid']['content']
         'http://blog.ouseful.info/?p=12065'
     """

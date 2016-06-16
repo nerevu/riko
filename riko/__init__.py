@@ -36,19 +36,15 @@ from __future__ import (
 from os import path as p
 from builtins import *
 
-__version__ = '0.30.0'
+__version__ = '0.30.1'
 
 __title__ = 'riko'
 __package_name__ = 'riko'
 __author__ = 'Reuben Cummings'
-__description__ = 'A stream processing framework modeled after Yahoo! Pipes.'
+__description__ = 'A stream processing engine modeled after Yahoo! Pipes.'
 __email__ = 'reubano@gmail.com'
 __license__ = 'MIT'
 __copyright__ = 'Copyright 2015 Reuben Cummings'
-
-parts = [
-    'feed.xml', 'blog.ouseful.info_feed.xml', 'gigs.json', 'places.xml',
-    'www.bbc.co.uk_news.html', 'edition.cnn.html', 'google_spreadsheet.csv']
 
 
 def get_path(name):

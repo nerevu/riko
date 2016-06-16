@@ -202,7 +202,6 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
         >>>
         >>> item = {'content': 'hello world', 'title': 'greeting'}
         >>> match = r'(\w+)\s(\w+)'
