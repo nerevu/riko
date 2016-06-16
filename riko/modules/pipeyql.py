@@ -26,12 +26,15 @@ A more complex query that finds Flickr photos tagged "fog" in San Francisco:
 Examples:
     basic usage::
 
-        >>> from . import FEEDS, FILES
-        >>> from riko.modules.pipeyql import pipe
         >>> from urllib2 import urlopen
+        >>> from riko import get_path
+        >>> from riko.lib.utils import get_abspath
+        >>> from riko.modules.pipeyql import pipe
         >>>
-        >>> conf = {'query': "select * from feed where url='%s'" % FEEDS[0]}
-        >>> next(pipe(conf=conf, response=urlopen(FILES[7])))['title']
+        >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
+        >>> conf = {'query': "select * from feed where url='%s'" % feed}
+        >>> response = urlopen(get_abspath(get_path('yql.xml')))
+        >>> next(pipe(conf=conf, response=response))['title']
         'Bring pizza home'
 
 Attributes:
@@ -78,19 +81,22 @@ def asyncParser(_, objconf, skip, **kwargs):
         Deferred: twisted.internet.defer.Deferred Tuple of (stream, skip)
 
     Examples:
-        >>> from twisted.internet.task import react
-        >>> from . import processor, FEEDS, FILES
-        >>> from riko.lib.utils import Objectify
         >>> from urllib2 import urlopen
+        >>> from twisted.internet.task import react
+        >>> from urllib2 import urlopen
+        >>> from riko import get_path
+        >>> from riko.lib.utils import Objectify, get_abspath
         >>>
+        >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
-        >>> query = "select * from feed where url='%s'" % FEEDS[0]
+        >>> query = "select * from feed where url='%s'" % feed
+        >>> response = urlopen(get_abspath(get_path('yql.xml')))
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'])
         ...     conf = {'query': query, 'url': url, 'debug': False}
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'stream': {}, 'response': urlopen(FILES[7])}
+        ...     kwargs = {'stream': {}, 'response': response}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -139,14 +145,16 @@ def parser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from urllib2 import urlopen
-        >>> from . import processor, FEEDS, FILES
-        >>> from riko.lib.utils import Objectify
+        >>> from riko import get_path
+        >>> from riko.lib.utils import Objectify, get_abspath
         >>>
+        >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
-        >>> query = "select * from feed where url='%s'" % FEEDS[0]
+        >>> query = "select * from feed where url='%s'" % feed
+        >>> response = urlopen(get_abspath(get_path('yql.xml')))
         >>> conf = {'query': query, 'url': url, 'debug': False}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'stream': {}, 'response': urlopen(FILES[7])}
+        >>> kwargs = {'stream': {}, 'response': response}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['title']
         'Bring pizza home'
@@ -195,15 +203,17 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from urllib2 import urlopen
-        >>> from . import processor, FEEDS, FILES
         >>> from twisted.internet.task import react
+        >>> from riko import get_path
+        >>> from riko.lib.utils import get_abspath
         >>>
-        >>> url = 'http://query.yahooapis.com/v1/public/yql'
-        >>> query = "select * from feed where url='%s'" % FEEDS[0]
+        >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
+        >>> query = "select * from feed where url='%s'" % feed
+        >>> response = urlopen(get_abspath(get_path('yql.xml')))
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
-        ...     d = asyncPipe(conf={'query': query}, response=urlopen(FILES[7]))
+        ...     d = asyncPipe(conf={'query': query}, response=response)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -241,10 +251,13 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from urllib2 import urlopen
-        >>> from . import processor, FEEDS, FILES
+        >>> from riko import get_path
+        >>> from riko.lib.utils import get_abspath
         >>>
-        >>> conf = {'query': "select * from feed where url='%s'" % FEEDS[0]}
-        >>> result = next(pipe(conf=conf, response=urlopen(FILES[7])))
+        >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
+        >>> conf = {'query': "select * from feed where url='%s'" % feed}
+        >>> response = urlopen(get_abspath(get_path('yql.xml')))
+        >>> result = next(pipe(conf=conf, response=response))
         >>> sorted(result.keys())
         ['alarmTime', 'begin', 'duration', 'place', 'title', 'uid']
         >>> result['title']

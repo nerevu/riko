@@ -84,17 +84,6 @@ __transformers__ = [
 
 __all__ = __sources__ + __composers__ + __transformers__ + __aggregators__
 
-parent = p.join(p.abspath(p.dirname(p.dirname(p.dirname(__file__)))), 'data')
-parts = [
-    'feed.xml', 'ouseful.xml', 'gigs.json', 'places.xml',
-    'bbc.html', 'cnn.html', 'spreadsheet.csv', 'yql.xml']
-
-FEEDS = [
-    'http://feeds.feedburner.com/TechCrunch/',
-    'http://feeds.arstechnica.com/arstechnica/index']
-
-FILES = ['file://%s' % p.join(parent, x) for x in parts]
-
 
 def get_assignment(result, skip, **kwargs):
     result = iter(utils.listize(result))

@@ -18,14 +18,14 @@ returns the content from the first discovered feed.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipefeedautodiscovery import pipe
         >>>
-        >>> entry = next(pipe(conf={'url': FILES[4]}))
+        >>> entry = next(pipe(conf={'url': get_path('bbc.html')}))
         >>> sorted(entry.keys()) == ['href', 'hreflang', 'link', 'rel', 'tag']
         True
         >>> entry['link']
-        'file://data/www.greenhughes.com_rssfeed.xml'
+        'file://data/greenhughes.xml'
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -63,13 +63,13 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.twisted import utils as tu
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['link'])
-        ...     objconf = Objectify({'url': FILES[4]})
+        ...     objconf = Objectify({'url': get_path('bbc.html')})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -79,7 +79,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        file://data/www.greenhughes.com_rssfeed.xml
+        file://data/greenhughes.xml
     """
     if skip:
         stream = kwargs['stream']
@@ -107,10 +107,10 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> objconf = Objectify({'url': FILES[4]})
+        >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['link']
@@ -143,12 +143,12 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.twisted import utils as tu
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['link'])
-        ...     d = asyncPipe(conf={'url': FILES[4]})
+        ...     d = asyncPipe(conf={'url': get_path('bbc.html')})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -179,8 +179,8 @@ def pipe(*args, **kwargs):
         dict: item
 
     Examples:
-        >>> from . import FILES
-        >>> next(pipe(conf={'url': FILES[4]}))['link']
+        >>> from riko import get_path
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['link']
         'file://data/greenhughes.xml'
     """
     return parser(*args, **kwargs)

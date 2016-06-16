@@ -22,9 +22,9 @@ site, but (unlike this module) doesn't fetch the feed data itself.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipefetchsitefeed import pipe
-        >>> next(pipe(conf={'url': FILES[4]}))['title']
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
         u'Using NFC tags in the car'
 
 Attributes:
@@ -70,12 +70,12 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'])
-        ...     objconf = Objectify({'url': FILES[4]})
+        ...     objconf = Objectify({'url': get_path('bbc.html')})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -117,10 +117,10 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> objconf = Objectify({'url': FILES[4]})
+        >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['title']
@@ -157,11 +157,11 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
-        ...     d = asyncPipe(conf={'url': FILES[4]})
+        ...     d = asyncPipe(conf={'url': get_path('bbc.html')})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -192,8 +192,8 @@ def pipe(*args, **kwargs):
         dict: item
 
     Examples:
-        >>> from . import FILES
-        >>> next(pipe(conf={'url': FILES[4]}))['title']
+        >>> from riko import get_path
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
         u'Using NFC tags in the car'
     """
     return parser(*args, **kwargs)

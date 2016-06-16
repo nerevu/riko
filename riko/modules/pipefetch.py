@@ -11,9 +11,9 @@ RSS, Atom, and RDF formats. Feeds contain one or more items.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipefetch import pipe
-        >>> next(pipe(conf={'url': FILES[0]}))['title']
+        >>> next(pipe(conf={'url': get_path('feed.xml')}))['title']
         u'Donations'
 
 Attributes:
@@ -65,12 +65,12 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'])
-        ...     objconf = Objectify({'url': FILES[0], 'sleep': 0})
+        ...     objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -111,10 +111,10 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> objconf = Objectify({'url': FILES[0], 'sleep': 0})
+        >>> objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> next(result)['title']
@@ -155,11 +155,11 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(set(next(x).keys()).issuperset(intersection))
-        ...     d = asyncPipe(conf={'url': FILES[0]})
+        ...     d = asyncPipe(conf={'url': get_path('feed.xml')})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -192,9 +192,10 @@ def pipe(*args, **kwargs):
         dict: an iterator of items
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
-        >>> set(next(pipe(conf={'url': FILES[0]})).keys()).issuperset(intersection)
+        >>> keys = next(pipe(conf={'url': get_path('feed.xml')})).keys()
+        >>> set(keys).issuperset(intersection)
         True
     """
     return parser(*args, **kwargs)

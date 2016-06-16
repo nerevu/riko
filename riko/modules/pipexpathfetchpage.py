@@ -27,10 +27,10 @@ checking the "Use HTML5 parser" checkbox to use the HTML5 parser.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipexpathfetchpage import pipe
         >>>
-        >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
+        >>> conf = {'url': get_path('ouseful.xml'), 'xpath': '/rss/channel/item'}
         >>> title = 'Running “Native” Data Wrangling Applications'
         >>> next(pipe(conf=conf))['title'][:44] == title
         True
@@ -106,13 +106,13 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'][:44])
         ...     path = '/rss/channel/item'
-        ...     objconf = Objectify({'url': FILES[1], 'xpath': path})
+        ...     objconf = Objectify({'url': get_path('ouseful.xml'), 'xpath': path})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -154,9 +154,9 @@ def parser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from riko.lib.utils import Objectify
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
-        >>> objconf = Objectify({'url': FILES[1], 'xpath': '/rss/channel/item'})
+        >>> objconf = Objectify({'url': get_path('ouseful.xml'), 'xpath': '/rss/channel/item'})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> title = 'Running “Native” Data Wrangling Applications'
@@ -205,11 +205,11 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['guid']['content'])
-        ...     conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
+        ...     conf = {'url': get_path('ouseful.xml'), 'xpath': '/rss/channel/item'}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -248,8 +248,8 @@ def pipe(*args, **kwargs):
         dict: item
 
     Examples:
-        >>> from . import FILES
-        >>> conf = {'url': FILES[1], 'xpath': '/rss/channel/item'}
+        >>> from riko import get_path
+        >>> conf = {'url': get_path('ouseful.xml'), 'xpath': '/rss/channel/item'}
         >>> next(pipe(conf=conf))['guid']['content']
         'http://blog.ouseful.info/?p=12065'
     """

@@ -46,10 +46,6 @@ __email__ = 'reubano@gmail.com'
 __license__ = 'MIT'
 __copyright__ = 'Copyright 2015 Reuben Cummings'
 
-parts = [
-    'feed.xml', 'ouseful.xml', 'gigs.json', 'places.xml',
-    'bbc.html', 'cnn.html', 'spreadsheet.csv']
-
 
 def get_path(name):
     return 'file://%s' % p.join('data', name)

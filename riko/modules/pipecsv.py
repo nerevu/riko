@@ -8,9 +8,9 @@ Provides functions for fetching csv files.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipecsv import pipe
-        >>> next(pipe(conf={'url': FILES[6]}))['mileage']
+        >>> next(pipe(conf={'url': get_path('spreadsheet.csv')}))['mileage']
         u'7213'
 
 Attributes:
@@ -56,12 +56,12 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['mileage'])
-        ...     conf = {'url': FILES[6], 'sanitize': True, 'skip_rows': 0}
+        ...     conf = {'url': get_path('spreadsheet.csv'), 'sanitize': True, 'skip_rows': 0}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
@@ -101,10 +101,10 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> conf = {'url': FILES[6], 'sanitize': True, 'skip_rows': 0}
+        >>> conf = {'url': get_path('spreadsheet.csv'), 'sanitize': True, 'skip_rows': 0}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
@@ -157,11 +157,11 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['mileage'])
-        ...     d = asyncPipe(conf={'url': FILES[6]})
+        ...     d = asyncPipe(conf={'url': get_path('spreadsheet.csv')})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -205,8 +205,8 @@ def pipe(*args, **kwargs):
         dict: item
 
     Examples:
-        >>> from . import FILES
-        >>> next(pipe(conf={'url': FILES[6]}))['mileage']
+        >>> from riko import get_path
+        >>> next(pipe(conf={'url': get_path('spreadsheet.csv')}))['mileage']
         u'7213'
     """
     return parser(*args, **kwargs)

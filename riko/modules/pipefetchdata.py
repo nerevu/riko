@@ -11,10 +11,10 @@ can then be converted into an RSS feed or merged with other data in your Pipe.
 Examples:
     basic usage::
 
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.modules.pipefetchdata import pipe
         >>>
-        >>> conf = {'url': FILES[2], 'path': 'value.items'}
+        >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
         >>> next(pipe(conf=conf))['title']
         u'Business System Analyst'
 
@@ -61,12 +61,12 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0][0]['title'])
-        ...     objconf = Objectify({'url': FILES[2], 'path': 'value.items'})
+        ...     objconf = Objectify({'url': get_path('gigs.json'), 'path': 'value.items'})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -108,10 +108,10 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> objconf = Objectify({'url': FILES[2], 'path': 'value.items'})
+        >>> objconf = Objectify({'url': get_path('gigs.json'), 'path': 'value.items'})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> result[0]['title']
@@ -154,12 +154,12 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from twisted.internet.task import react
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
         ...     path = 'value.items'
-        ...     conf = {'url': FILES[2], 'path': path}
+        ...     conf = {'url': get_path('gigs.json'), 'path': path}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -196,17 +196,16 @@ def pipe(*args, **kwargs):
         dict: an iterator of items
 
     Examples:
-        >>> from . import FILES
+        >>> from riko import get_path
         >>>
-        >>> path = 'value.items'
-        >>> conf = {'url': FILES[2], 'path': path}
+        >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
         >>> next(pipe(conf=conf))['title']
         u'Business System Analyst'
         >>> path = 'appointment'
-        >>> conf = {'url': FILES[3], 'path': path}
+        >>> conf = {'url': get_path('places.xml'), 'path': path}
         >>> next(pipe(conf=conf))['subject']
         'Bring pizza home'
-        >>> conf = {'url': FILES[3], 'path': ''}
+        >>> conf = {'url': get_path('places.xml'), 'path': ''}
         >>> next(pipe(conf=conf))['reminder']
         '15'
     """
