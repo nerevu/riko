@@ -96,8 +96,7 @@ Or, if you only have ``virtualenv`` installed
 .. code-block:: bash
 
     manage lint
-    manage test
-    manage tox
+    tox
 
 5. Commit your changes and push your branch to GitHub
 

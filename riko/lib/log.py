@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    riko.lib.utils
-    ~~~~~~~~~~~~~~~~~
-    Utility functions
+riko.lib.log
+~~~~~~~~~~~~
+Provides a logging class
 
 """
 from __future__ import (

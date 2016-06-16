@@ -21,7 +21,6 @@ from riko.lib.utils import combine_dicts as cdicts, remove_keys
 logger = Logger(__name__).logger
 
 __sources__ = [
-    # Source Modules
     'pipecsv',
     'pipefeedautodiscovery',
     'pipefetch',
@@ -36,7 +35,6 @@ __sources__ = [
 ]
 
 __aggregators__ = [
-    # Aggregator Modules
     'pipecount',
     # 'pipemean',
     # 'pipemin',

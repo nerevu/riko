@@ -2,8 +2,8 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.lib.utils
-~~~~~~~~~~~~~~~~~
-Utility functions
+~~~~~~~~~~~~~~
+Provides utility classes and functions
 """
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
@@ -681,6 +681,25 @@ def get_new_rule(rule, recompile=False):
 def multiplex(sources):
     """Combine multiple generators into one"""
     return it.chain.from_iterable(sources)
+
+
+def extend_entry(entry):
+    if entry.get('k:tags'):
+        if len(tags.split(',')) < 2:
+            tags = tags.replace(' ', ',')
+
+        tags = tags.replace('/', ',').replace('#', '').replace(' ', '_')
+        tags = filter(None, sorted(set(parse_tags(tags.split(',')))))
+    else:
+        tags = []
+
+    content = entry.get('k:content').replace('<br />', '')
+    content = content.replace('\n', '').strip()
+
+    entry['k:tags'] = tags
+    entry['k:content'] = content
+    entry['k:summary'] = '%s%s' % (content[:128].replace('...', ''), '...')
+    return entry
 
 
 ############
