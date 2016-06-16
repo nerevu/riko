@@ -20,14 +20,16 @@ try:
     from twisted.internet.task import react
 except ImportError:
     react = lambda _, _reactor=None: None
-    coroutine = lambda _: lambda: None
-    return_value = lambda _: lambda: None
+    inlineCallbacks = lambda _: lambda: None
+    returnValue = lambda _: lambda: None
 else:
-    from twisted.internet.defer import inlineCallbacks as coroutine
-    from twisted.internet.defer import returnValue as return_value
+    from twisted.internet.defer import inlineCallbacks
+    from twisted.internet.defer import returnValue
 
 
 class Reactor(object):
     fake = False
 
 reactor = Reactor()
+coroutine = inlineCallbacks
+return_value = returnValue
