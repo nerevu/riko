@@ -40,7 +40,6 @@ else:
 py2_require = py2_requirements.difference(py3_requirements)
 
 # Optional requirements
-dev_require = dev_requirements.difference(requirements)
 xml_require = {r for r in opt_requirements if not r.lower().startswith('t')}
 async_require = opt_requirements.difference(xml_require)
 
@@ -67,9 +66,9 @@ setup(
         'python_version<3.0': py2_require,
         'xml': xml_require,
         'async': async_require,
-        'develop': dev_require,
+        'develop': dev_requirements,
     },
-    setup_requires=['pkutils>=0.12.4,<0.13.0'],
+    setup_requires=['pkutils~=0.12.4'],
     test_suite='nose.collector',
     tests_require=dev_requirements,
     license=license,

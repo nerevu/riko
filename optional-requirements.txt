@@ -1,5 +1,5 @@
-Twisted>=15.0.0,<17.0.0
-treq>=0.2.1,<0.3.0
-lxml>=3.3.5,<4.0.0
-html5lib>=0.999,<1.0.0
-speedparser>=0.2.0,<0.3.0
+html5lib~=0.9999999
+lxml~=3.6.0
+treq~=15.1.0
+Twisted~=16.2.0
+speedparser~=0.2.0
