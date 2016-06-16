@@ -30,7 +30,8 @@ Examples:
         >>> from riko import get_path
         >>> from riko.modules.pipexpathfetchpage import pipe
         >>>
-        >>> conf = {'url': get_path('ouseful.xml'), 'xpath': '/rss/channel/item'}
+        >>> url = get_path('ouseful.xml')
+        >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
         >>> title = 'Running “Native” Data Wrangling Applications'
         >>> next(pipe(conf=conf))['title'][:44] == title
         True
@@ -111,8 +112,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'][:44])
-        ...     path = '/rss/channel/item'
-        ...     objconf = Objectify({'url': get_path('ouseful.xml'), 'xpath': path})
+        ...     url, path = get_path('ouseful.xml'), '/rss/channel/item'
+        ...     objconf = Objectify({'url': url, 'xpath': path})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -156,7 +157,8 @@ def parser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>> from riko import get_path
         >>>
-        >>> objconf = Objectify({'url': get_path('ouseful.xml'), 'xpath': '/rss/channel/item'})
+        >>> url = get_path('ouseful.xml')
+        >>> objconf = Objectify({'url': url, 'xpath': '/rss/channel/item'})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> title = 'Running “Native” Data Wrangling Applications'
@@ -209,7 +211,8 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['guid']['content'])
-        ...     conf = {'url': get_path('ouseful.xml'), 'xpath': '/rss/channel/item'}
+        ...     url = get_path('ouseful.xml')
+        ...     conf = {'url': url, 'xpath': '/rss/channel/item'}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -249,7 +252,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> conf = {'url': get_path('ouseful.xml'), 'xpath': '/rss/channel/item'}
+        >>> url = get_path('ouseful.xml')
+        >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
         >>> next(pipe(conf=conf))['guid']['content']
         'http://blog.ouseful.info/?p=12065'
     """

@@ -25,8 +25,7 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from functools import reduce, partial
-from json import loads
+from functools import reduce
 from os.path import splitext
 
 from builtins import *
@@ -66,7 +65,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0][0]['title'])
-        ...     objconf = Objectify({'url': get_path('gigs.json'), 'path': 'value.items'})
+        ...     url = get_path('gigs.json')
+        ...     objconf = Objectify({'url': url, 'path': 'value.items'})
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
@@ -111,7 +111,8 @@ def parser(_, objconf, skip, **kwargs):
         >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> objconf = Objectify({'url': get_path('gigs.json'), 'path': 'value.items'})
+        >>> url = get_path('gigs.json')
+        >>> objconf = Objectify({'url': url, 'path': 'value.items'})
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)
         >>> result[0]['title']

@@ -344,7 +344,8 @@ def def2unicode(entitydef):
 
 
 def etreeToDict(element, tag='content'):
-    """Convert a microdom element tree into a dict imitating how Yahoo Pipes does it.
+    """Convert a microdom element tree into a dict imitating how Yahoo Pipes
+    does it.
 
     TODO: checkout twisted.words.xish
     """

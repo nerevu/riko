@@ -61,7 +61,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['mileage'])
-        ...     conf = {'url': get_path('spreadsheet.csv'), 'sanitize': True, 'skip_rows': 0}
+        ...     url = get_path('spreadsheet.csv')
+        ...     conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}}
         ...     d = asyncParser(None, objconf, False, **kwargs)
@@ -104,7 +105,8 @@ def parser(_, objconf, skip, **kwargs):
         >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> conf = {'url': get_path('spreadsheet.csv'), 'sanitize': True, 'skip_rows': 0}
+        >>> url = get_path('spreadsheet.csv')
+        >>> conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': {}}
         >>> result, skip = parser(None, objconf, False, **kwargs)

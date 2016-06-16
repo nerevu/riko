@@ -15,7 +15,8 @@ Examples:
         >>> from riko.modules.pipefetchpage import pipe
         >>> from riko import get_path
         >>>
-        >>> conf = {'url': get_path('cnn.html'), 'start': '<title>', 'end': '</title>'}
+        >>> url = get_path('cnn.html')
+        >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         >>> next(pipe(conf=conf))['content']  # doctest: +ELLIPSIS
         u'CNN.com International - Breaking, World..., Entertainment and...'
 
@@ -75,7 +76,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['content'][:32])
-        ...     conf = {'url': get_path('cnn.html'), 'start': '<title>', 'end': '</title>'}
+        ...     url = get_path('cnn.html')
+        ...     conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}, 'assign': 'content'}
         ...     d = asyncParser(None, objconf, False, **kwargs)
@@ -117,7 +119,8 @@ def parser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>> from riko import get_path
         >>>
-        >>> conf = {'url': get_path('cnn.html'), 'start': '<title>', 'end': '</title>'}
+        >>> url = get_path('cnn.html')
+        >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': {}, 'assign': 'content'}
         >>> result, skip = parser(None, objconf, False, **kwargs)
@@ -169,8 +172,8 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x))
-        ...     path = 'value.items'
-        ...     conf = {'url': get_path('bbc.html'), 'start': 'DOCTYPE ', 'end': 'http'}
+        ...     url, path = get_path('bbc.html'), 'value.items'
+        ...     conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         ...     d = asyncPipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -211,7 +214,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> conf = {'url': get_path('bbc.html'), 'start': 'DOCTYPE ', 'end': 'http'}
+        >>> url = get_path('bbc.html')
+        >>> conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         >>> next(pipe(conf=conf))
         {u'content': u'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'}
     """

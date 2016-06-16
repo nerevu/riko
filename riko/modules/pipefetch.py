@@ -157,8 +157,10 @@ def asyncPipe(*args, **kwargs):
         >>> from twisted.internet.task import react
         >>> from riko import get_path
         >>>
+        >>> i = intersection
+        >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(set(next(x).keys()).issuperset(intersection))
+        ...     callback = lambda x: print(set(next(x).keys()).issuperset(i))
         ...     d = asyncPipe(conf={'url': get_path('feed.xml')})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
