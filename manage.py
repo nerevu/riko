@@ -83,6 +83,9 @@ def require():
 @manager.arg(
     'verbose', 'v', help='Use detailed errors', type=bool, default=False)
 @manager.arg(
+    'parallel', 'p', help='Run tests in parallel in multiple processes',
+    type=bool, default=False)
+@manager.arg(
     'debug', 'D', help='Use nose.loader debugger', type=bool, default=False)
 @manager.command
 def test(where=None, stop=None, **kwargs):
@@ -90,6 +93,7 @@ def test(where=None, stop=None, **kwargs):
     opts = '-xv' if stop else '-v'
     opts += ' --with-coverage' if kwargs.get('cover') else ''
     opts += ' --failed' if kwargs.get('failed') else ' --with-id'
+    opts += ' --processes=-1' if kwargs.get('parallel') else ''
     opts += ' --detailed-errors' if kwargs.get('verbose') else ''
     opts += ' --debug=nose.loader' if kwargs.get('debug') else ''
     opts += 'w %s' % where if where else ''
