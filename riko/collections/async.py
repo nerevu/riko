@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.twisted.collections
+riko.collections.sync
 ~~~~~~~~~~~~~~~~~~~~~~~~
-Provides methods for creating asynchronous riko pipes
+Provides functions for creating asynchronous riko pipes
 
 Examples:
     basic usage::
 
-        >>> from twisted.internet.task import react
-        >>> from riko.twisted.collections import AsyncPipe, AsyncCollection
         >>> from riko import get_path
+        >>> from riko.bado import coroutine, react
+        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.collections.async import AsyncPipe, AsyncCollection
         >>>
         >>> url = {'value': get_path('gigs.json')}
         >>> fconf = {'url': url, 'path': 'value.items'}
@@ -18,12 +19,13 @@ Examples:
         >>> str_kwargs = {'field': 'description', 'emit': True}
         >>> sort_conf = {'rule': {'sort_key': 'title'}}
         >>>
-        >>> @inlineCallbacks
+        >>> @coroutine
         ... def run(reactor):
         ...     d1 = yield (AsyncPipe('fetchdata', conf=fconf)
         ...         .sort(conf=sort_conf)
         ...         .stringtokenizer(conf=str_conf, **str_kwargs)
-        ...         .count().list)
+        ...         .count()
+        ...         .list)
         ...
         ...     print(d1)
         ...
@@ -33,7 +35,7 @@ Examples:
         ...     print(len(d2))
         ...
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -43,18 +45,19 @@ Examples:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from functools import partial
 from importlib import import_module
 
 from builtins import *
-from twisted.internet.defer import inlineCallbacks, returnValue
 
-from riko.lib.collections import PyPipe, PyCollection, getpipe
+from riko.bado import coroutine, return_value
+from riko.collections.sync import PyPipe, PyCollection, getpipe
 from riko.lib.utils import multiplex
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
+from riko.bado import util as tu, itertools as ait
 
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class AsyncPipe(PyPipe):
@@ -81,50 +84,50 @@ class AsyncPipe(PyPipe):
         return self
 
     @property
-    @inlineCallbacks
+    @coroutine
     def output(self):
         source = yield self.source
         asyncPipeline = partial(self.asyncPipe, **self.kwargs)
 
         if self.mapify:
-            mapped = yield tu.asyncImap(asyncPipeline, source)
+            mapped = yield ait.asyncImap(asyncPipeline, source)
             output = multiplex(mapped)
         else:
             output = yield asyncPipeline(source)
 
-        returnValue(output)
+        return_value(output)
 
     @property
-    @inlineCallbacks
+    @coroutine
     def list(self):
         output = yield self.output
-        returnValue(list(output))
+        return_value(list(output))
 
 
 class AsyncCollection(PyCollection):
     """An asynchronous PyCollection object"""
-    @inlineCallbacks
+    @coroutine
     def asyncFetch(self):
         """Fetch all source urls"""
-        mapped = yield tu.asyncImap(asyncGetPipe, self.zargs)
-        returnValue(multiplex(mapped))
+        mapped = yield ait.asyncImap(asyncGetPipe, self.zargs)
+        return_value(multiplex(mapped))
 
     def asyncPipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""
         return AsyncPipe(source=self.asyncFetch(), **kwargs)
 
     @property
-    @inlineCallbacks
+    @coroutine
     def list(self):
         result = yield self.asyncFetch()
-        returnValue(list(result))
+        return_value(list(result))
 
 
-@inlineCallbacks
+@coroutine
 def asyncListPipe(args):
     source, asyncPipeline = args
     output = yield asyncPipeline(source)
-    returnValue(list(output))
+    return_value(list(output))
 
 
 def asyncGetPipe(args):

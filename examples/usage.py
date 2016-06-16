@@ -46,7 +46,7 @@ Word Count
     >>> #
     >>> # `SyncPipe` is a workflow convenience class that enables method
     >>> # chaining and parallel processing
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> stream = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
@@ -97,7 +97,7 @@ Fetching feeds
     >>> #
     >>> # `SyncCollection` is a url fetching convenience class with support for
     >>> # parallel processing
-    >>> from riko.lib.collections import SyncCollection
+    >>> from riko.collections.sync import SyncCollection
     >>>
     >>> sources = [{'url': url} for url in urls]
     >>> stream = SyncCollection(sources).fetch()
@@ -165,7 +165,7 @@ Synchronous processing
     >>> # `SyncPipe` is a workflow convenience class that enables method
     >>> # chaining, parallel processing, and eliminates the manual `map` and
     >>> # `chain` steps
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> output = (SyncPipe('fetch', conf=fetch_conf)
     ...     .filter(conf={'rule': filter_rule})
@@ -181,7 +181,7 @@ Synchronous processing
 Parallel processing
 
     >>> from riko import get_path
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -225,11 +225,10 @@ Parallel processing
 
 Asynchronous processing
 
-    >>> from twisted.internet.task import react
-    >>> from twisted.internet.defer import inlineCallbacks
     >>> from riko import get_path
-    >>> from riko.twisted import utils as tu
-    >>> from riko.twisted.collections import AsyncPipe
+    >>> from riko.bado import coroutine, react
+    >>> from riko.bado.mock import FakeReactor
+    >>> from riko.collections.async import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -247,10 +246,10 @@ Asynchronous processing
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
-    >>> ### Create a AsyncPipe workflow ###
+    >>> ### Create an AsyncPipe workflow ###
     >>> #
     >>> # See `Parallel processing` above for the steps this performs
-    >>> @inlineCallbacks
+    >>> @coroutine
     ... def run(reactor):
     ...     stream = yield (AsyncPipe('fetch', conf={'url': url})
     ...         .filter(conf={'rule': filter_rule1})
@@ -265,7 +264,7 @@ Asynchronous processing
     ...     print(len(stream))
     ...
     >>> try:
-    ...     react(run, _reactor=tu.FakeReactor())
+    ...     react(run, _reactor=FakeReactor())
     ... except SystemExit:
     ...     pass
     25
@@ -331,7 +330,7 @@ Design Principles
     True
 
     # SyncPipe usage
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> _hash = ctypes.c_uint(hash("Let's talk about riko!")).value
     >>> attrs = [
@@ -362,7 +361,7 @@ from __future__ import (
 from builtins import *
 
 from pprint import pprint
-from riko.lib.collections import SyncPipe
+from riko.collections.sync import SyncPipe
 
 attrs = [
     {'key': 'title', 'value': 'riko pt. 1'},

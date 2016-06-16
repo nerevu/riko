@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.lib.collections
-~~~~~~~~~~~~~~~~~~~~
-Provides methods for creating riko flows and streams
+riko.collections.sync
+~~~~~~~~~~~~~~~~~~~~~
+Provides functions for creating synchronous riko flows and streams
 
 Examples:
     basic usage::
 
-        >>> from riko.lib.collections import SyncPipe
+        >>> from riko.collections.sync import SyncPipe
         >>> from riko import get_path
         >>>
         >>> url = {'value': get_path('gigs.json')}
@@ -51,9 +51,9 @@ from multiprocessing import Pool, cpu_count
 from builtins import *
 
 from riko.lib.utils import multiplex, multi_try, combine_dicts as cdicts
-from riko.lib.log import Logger
+import pygogo as gogo
 
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class PyPipe(object):

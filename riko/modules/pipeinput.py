@@ -51,11 +51,11 @@ from builtins import *
 
 from . import processor
 from riko.lib import utils
-from riko.lib.log import Logger
+import pygogo as gogo
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {'type': 'text', 'default': ''}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(_, objconf, skip, **kwargs):
@@ -120,8 +120,8 @@ def asyncPipe(*args, **kwargs):
        Deferred: twisted.internet.defer.Deferred iterator of items of user input
 
     Examples:
-        >>> from twisted.internet.task import react
-        >>> from riko.twisted import utils as tu
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x))
@@ -130,7 +130,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

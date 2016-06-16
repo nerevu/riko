@@ -28,24 +28,23 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from functools import reduce
+import pygogo as gogo
 
+from functools import reduce
 from builtins import *
-from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
+from riko.bado import coroutine, return_value, itertools as ait
 from riko.lib import utils
 from riko.lib.utils import combine_dicts as cdicts
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
 from riko.lib.dotdict import DotDict
 
 OPTS = {'listize': True, 'extract': 'rule', 'emit': True}
 DEFAULTS = {'convert': True, 'multi': False}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(item, rules, skip, **kwargs):
     """ Asynchronously parsers the pipe content
 
@@ -62,7 +61,8 @@ def asyncParser(item, rules, skip, **kwargs):
         Deferred: twisted.internet.defer.Deferred Tuple(dict, bool)
 
     Examples:
-        >>> from twisted.internet.task import react
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
@@ -79,7 +79,7 @@ def asyncParser(item, rules, skip, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -88,16 +88,16 @@ def asyncParser(item, rules, skip, **kwargs):
     multi = kwargs['conf']['multi']
     recompile = not multi
 
-    @inlineCallbacks
+    @coroutine
     def asyncReducer(item, rules):
         field = rules[0]['field']
         word = item.get(field, **kwargs)
         grouped = utils.group_by(rules, 'flags')
         group_rules = [g[1] for g in grouped] if multi else rules
         reducer = utils.multi_substitute if multi else utils.substitute
-        replacement = yield tu.coopReduce(reducer, group_rules, word)
+        replacement = yield ait.coopReduce(reducer, group_rules, word)
         combined = cdicts(item, {field: replacement})
-        returnValue(DotDict(combined))
+        return_value(DotDict(combined))
 
     if skip:
         item = kwargs['stream']
@@ -105,10 +105,10 @@ def asyncParser(item, rules, skip, **kwargs):
         new_rules = [utils.get_new_rule(r, recompile=recompile) for r in rules]
         grouped = utils.group_by(new_rules, 'field')
         field_rules = [g[1] for g in grouped]
-        item = yield tu.asyncReduce(asyncReducer, field_rules, item)
+        item = yield ait.asyncReduce(asyncReducer, field_rules, item)
 
     result = (item, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(item, rules, skip, **kwargs):
@@ -201,7 +201,8 @@ def asyncPipe(*args, **kwargs):
         Deferred: twisted.internet.defer.Deferred item with concatenated content
 
     Examples:
-        >>> from twisted.internet.task import react
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> item = {'content': 'hello world', 'title': 'greeting'}
         >>> match = r'(\w+)\s(\w+)'
@@ -215,7 +216,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

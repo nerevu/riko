@@ -28,11 +28,11 @@ from itertools import islice
 from builtins import *
 
 from . import operator
-from riko.lib.log import Logger
+import pygogo as gogo
 
 OPTS = {'ptype': 'int'}
 DEFAULTS = {'start': 0}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
@@ -91,8 +91,8 @@ def asyncPipe(*args, **kwargs):
         Deferred: twisted.internet.defer.Deferred truncated stream
 
     Examples:
-        >>> from twisted.internet.task import react
-        >>> from riko.twisted import utils as tu
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(len(list(x)))
@@ -101,7 +101,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

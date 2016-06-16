@@ -23,19 +23,17 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import requests
-import treq
+import pygogo as gogo
 
 from json import loads
 from decimal import Decimal
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
 from riko.lib import utils
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
+from riko.bado import coroutine, return_value, requests as treq, io
 
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
@@ -51,7 +49,7 @@ DEFAULTS = {
     'url': EXCHANGE_API,
     'params': {'format': 'json'}}
 
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parse_response(json):
@@ -80,7 +78,7 @@ def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
     return (Decimal(1) / rate).quantize(places)
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(base, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
@@ -98,8 +96,9 @@ def asyncParser(base, objconf, skip, **kwargs):
         Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -114,7 +113,7 @@ def asyncParser(base, objconf, skip, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -127,7 +126,7 @@ def asyncParser(base, objconf, skip, **kwargs):
         json = yield treq.json_content(r)
     else:
         url = utils.get_abspath(objconf.url)
-        content = yield tu.urlRead(url, delay=objconf.sleep)
+        content = yield io.urlRead(url, delay=objconf.sleep)
         json = loads(content)
 
     if not skip:
@@ -136,7 +135,7 @@ def asyncParser(base, objconf, skip, **kwargs):
         rate = calc_rate(base, objconf.currency, rates, places=places)
 
     result = (rate, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(base, objconf, skip, **kwargs):
@@ -225,8 +224,9 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred stream of items
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['exchangerate'])
@@ -235,7 +235,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

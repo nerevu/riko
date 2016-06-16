@@ -25,24 +25,24 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from functools import reduce
 from os.path import splitext
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
 from riko.lib import utils
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
+from riko.bado import coroutine, return_value, itertools as ait, io
 
 OPTS = {'ftype': 'none'}
 reducer = lambda element, i: element.get(i) if element else None
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
@@ -59,20 +59,20 @@ def asyncParser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0][0]['title'])
         ...     url = get_path('gigs.json')
         ...     objconf = Objectify({'url': url, 'path': 'value.items'})
-        ...     kwargs = {'stream': {}}
-        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     d = asyncParser(None, objconf, False, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -84,12 +84,12 @@ def asyncParser(_, objconf, skip, **kwargs):
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         path = objconf.path.split('.') if objconf.path else []
-        f = yield tu.urlOpen(url)
+        f = yield io.urlOpen(url)
         element = utils.any2dict(f, ext, objconf.html5)
-        stream = yield tu.coopReduce(reducer, path, element)
+        stream = yield ait.coopReduce(reducer, path, element)
 
     result = (stream, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(_, objconf, skip, **kwargs):
@@ -113,8 +113,7 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> url = get_path('gigs.json')
         >>> objconf = Objectify({'url': url, 'path': 'value.items'})
-        >>> kwargs = {'stream': {}}
-        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> result, skip = parser(None, objconf, False, stream={})
         >>> result[0]['title']
         u'Business System Analyst'
     """
@@ -154,8 +153,9 @@ def asyncPipe(*args, **kwargs):
         Deferred: twisted.internet.defer.Deferred stream of items
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
@@ -165,7 +165,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

@@ -5,11 +5,11 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from pprint import pprint
-from twisted.internet.defer import inlineCallbacks
+from riko.bado import coroutine
 from riko import get_path
 from riko.lib.utils import combine_dicts as cdict
-from riko.lib.collections import SyncCollection
-from riko.twisted.collections import AsyncCollection
+from riko.collections.sync import SyncCollection
+from riko.collections.async import AsyncCollection
 
 
 def make_regex(field, match, replace, default=None):
@@ -276,7 +276,7 @@ def pipe(test=False):
     return stream
 
 
-@inlineCallbacks
+@coroutine
 def asyncPipe(reactor, test=None):
     source = AsyncCollection(sources).asyncPipe(test=test)
     stream = yield parse_source(source)

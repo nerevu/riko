@@ -20,7 +20,7 @@ from os import path as p
 from io import StringIO
 from timeit import default_timer as timer
 
-sys.path.append('../pygogo')
+sys.path.append('../riko')
 import pygogo as gogo
 
 from builtins import *
@@ -90,7 +90,7 @@ def main(script, tests, verbose=False, stop=True):
 if __name__ == '__main__':
     parent_dir = p.abspath(p.dirname(p.dirname(__file__)))
     script = p.join(parent_dir, 'bin', 'runpipe')
-    text = 'Deadline to clear up health law eligibility near 907\n'
+    text = 'Deadline to clear up health law eligibility near 771\n'
     tests = [
         ([], ['demo'], text),
         (['-a'], ['demo'], text),

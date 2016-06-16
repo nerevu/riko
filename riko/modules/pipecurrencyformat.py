@@ -23,11 +23,11 @@ from builtins import *
 from babel.numbers import format_currency
 
 from . import processor
-from riko.lib.log import Logger
+import pygogo as gogo
 
 OPTS = {'ftype': 'decimal', 'field': 'content'}
 DEFAULTS = {'currency': 'USD'}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(amount, objconf, skip, **kwargs):
@@ -83,8 +83,8 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from datetime import date
-        >>> from twisted.internet.task import react
-        >>> from riko.twisted import utils as tu
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['currencyformat'])
@@ -92,7 +92,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

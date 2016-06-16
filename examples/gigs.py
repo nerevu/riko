@@ -2,9 +2,9 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from pprint import pprint
-from twisted.internet.defer import inlineCallbacks
-from riko.lib.collections import SyncPipe
-from riko.twisted.collections import AsyncPipe
+from riko.bado import coroutine
+from riko.collections.sync import SyncPipe
+from riko.collections.async import AsyncPipe
 
 p1_conf = {'url': 'file://data/gigs.json', 'path': 'value.items'}
 p2_conf = {'uniq_key': 'link'}
@@ -29,7 +29,7 @@ def pipe(test=False):
     return stream
 
 
-@inlineCallbacks
+@coroutine
 def asyncPipe(reactor, test=False):
     stream = yield (AsyncPipe('fetchdata', conf=p1_conf, test=test)
         .uniq(conf=p2_conf)

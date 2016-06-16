@@ -8,14 +8,13 @@ Provides a class for creating dicts with dot notation access
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from functools import reduce
+import pygogo as gogo
 
+from functools import reduce
 from builtins import *
 from feedparser import FeedParserDict
 
-from . import log
-
-logger = log.Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class DotDict(FeedParserDict):

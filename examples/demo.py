@@ -7,7 +7,7 @@ riko demo
 
 Word Count
 
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>> from riko import get_path
     >>>
     >>> url = get_path('users.jyu.fi.html')
@@ -42,14 +42,14 @@ Fetching feeds
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from twisted.internet.defer import inlineCallbacks
+from riko.bado import coroutine
 from riko import get_path
-from riko.lib.collections import SyncPipe
-from riko.twisted.collections import AsyncPipe
+from riko.collections.sync import SyncPipe
+from riko.collections.async import AsyncPipe
 
 replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
-url1 = get_path('news.yahoo.com_rss_health.xml')
-url2 = get_path('www.caltrain.com_Fares_farechart.html')
+url1 = get_path('health.xml')
+url2 = get_path('caltrain.html')
 fetch_conf = {
     'url': url2, 'start': '<body>', 'end': '</body>', 'detag': True}
 
@@ -65,7 +65,7 @@ def pipe(test=False):
     print(next(s1)['title'], next(s2)['count'])
 
 
-@inlineCallbacks
+@coroutine
 def asyncPipe(reactor, test=False):
     s1 = yield AsyncPipe('fetch', test=test, conf={'url': url1}).output
     s2 = yield (AsyncPipe('fetchpage', test=test, conf=fetch_conf)

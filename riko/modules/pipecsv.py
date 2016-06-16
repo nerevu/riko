@@ -20,25 +20,25 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from builtins import *
 from six.moves.urllib.request import urlopen
 from meza.io import read_csv
-from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
 from riko.lib import utils
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
+from riko.bado import coroutine, return_value, io
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {
     'delimiter': ',', 'quotechar': '"', 'encoding': 'utf-8', 'skip_rows': 0,
     'sanitize': True, 'dedupe': True, 'col_names': None, 'has_header': True}
 
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
@@ -55,8 +55,9 @@ def asyncParser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
@@ -64,12 +65,11 @@ def asyncParser(_, objconf, skip, **kwargs):
         ...     url = get_path('spreadsheet.csv')
         ...     conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'stream': {}}
-        ...     d = asyncParser(None, objconf, False, **kwargs)
+        ...     d = asyncParser(None, objconf, False, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -79,7 +79,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        f = yield tu.urlOpen(url)
+        f = yield io.urlOpen(url)
         odd = {
             'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
 
@@ -87,7 +87,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         stream = read_csv(f, **rkwargs)
 
     result = (stream, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(_, objconf, skip, **kwargs):
@@ -108,8 +108,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> url = get_path('spreadsheet.csv')
         >>> conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'stream': {}}
-        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> result, skip = parser(None, objconf, False, stream={})
         >>> next(result)['mileage']
         u'7213'
     """
@@ -158,8 +157,9 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred item
 
     Examples:
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['mileage'])
@@ -167,7 +167,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

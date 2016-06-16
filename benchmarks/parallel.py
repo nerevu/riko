@@ -6,14 +6,15 @@ from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool
 from time import time, sleep
 
-from twisted.internet.defer import inlineCallbacks, returnValue
-from twisted.internet.task import react
+from builtins import *
 
-from riko.lib.collections import (
+from riko.collections.sync import (
     SyncPipe, SyncCollection, get_chunksize, get_worker_cnt)
 
-from riko.twisted.collections import AsyncPipe, AsyncCollection
-from riko.twisted.utils import asyncImap, asyncSleep
+from riko.bado import coroutine, return_value, react
+from riko.collections.async import AsyncPipe, AsyncCollection
+from riko.bado.util import asyncSleep
+from riko.bado.itertools import asyncImap
 from riko.modules.pipefetch import pipe, asyncPipe
 
 NUMBER = 3
@@ -114,7 +115,7 @@ def print_time(test, max_chars, run_time, units):
     print(msg % (padded, NUMBER, LOOPS, run_time, units))
 
 
-@inlineCallbacks
+@coroutine
 def run_async(reactor, tests, max_chars):
     for test in tests:
         results = []
@@ -132,7 +133,7 @@ def run_async(reactor, tests, max_chars):
         run_time, units = parse_results(results)
         print_time(test.func_name, max_chars, run_time, units)
 
-    returnValue(None)
+    return_value(None)
 
 if __name__ == '__main__':
     from timeit import repeat

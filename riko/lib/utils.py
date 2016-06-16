@@ -11,6 +11,7 @@ from __future__ import (
 import re
 import itertools as it
 import time
+import pygogo as gogo
 
 # from pprint import pprint
 from datetime import timedelta, datetime as dt
@@ -35,11 +36,9 @@ else:
     from lxml.html import html5parser
     LAZY = True
 
-from riko.lib.log import Logger
-
 global CACHE
 
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)

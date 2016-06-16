@@ -45,25 +45,22 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import requests
-import treq
+import pygogo as gogo
 
 from builtins import *
-from twisted.web import microdom
-from twisted.internet.defer import inlineCallbacks, returnValue
 
 from . import processor
 from riko.lib import utils
-from riko.lib.log import Logger
-from riko.twisted import utils as tu
+from riko.bado import coroutine, return_value, util as tu, requests as treq
 
 OPTS = {'ftype': 'none'}
 
 # we use the default format of xml since json loses some structure
 DEFAULTS = {'url': 'http://query.yahooapis.com/v1/public/yql', 'debug': False}
-logger = Logger(__name__).logger
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@inlineCallbacks
+@coroutine
 def asyncParser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
 
@@ -82,9 +79,9 @@ def asyncParser(_, objconf, skip, **kwargs):
 
     Examples:
         >>> from urllib2 import urlopen
-        >>> from twisted.internet.task import react
-        >>> from urllib2 import urlopen
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify, get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
@@ -101,7 +98,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
@@ -112,19 +109,17 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         f = kwargs.get('response')
 
-        if f:
-            root = yield microdom.parse(f)
-        else:
+        if not f:
             params = {'q': objconf.query, 'diagnostics': objconf.debug}
             r = yield treq.get(objconf.url, params=params)
-            content = yield treq.content(r)
-            root = yield microdom.parseString(content)
+            f = yield treq.content(r)
 
+        root = yield tu.xml2etree(f)
         results = root.getElementsByTagName('results')[0]
         stream = map(tu.etreeToDict, results.childNodes)
 
     result = (stream, skip)
-    returnValue(result)
+    return_value(result)
 
 
 def parser(_, objconf, skip, **kwargs):
@@ -203,8 +198,9 @@ def asyncPipe(*args, **kwargs):
 
     Examples:
         >>> from urllib2 import urlopen
-        >>> from twisted.internet.task import react
         >>> from riko import get_path
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
@@ -217,7 +213,7 @@ def asyncPipe(*args, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
-        ...     react(run, _reactor=tu.FakeReactor())
+        ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...

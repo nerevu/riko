@@ -2,9 +2,9 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from pprint import pprint
-from twisted.internet.defer import inlineCallbacks
-from riko.lib.collections import SyncPipe
-from riko.twisted.collections import AsyncPipe
+from riko.bado import coroutine
+from riko.collections.sync import SyncPipe
+from riko.collections.async import AsyncPipe
 
 p120_conf = {'type': 'text'}
 p120_inputs = {'format': '%B %d, %Y'}
@@ -32,7 +32,7 @@ def pipe(test=False):
     return stream
 
 
-@inlineCallbacks
+@coroutine
 def asyncPipe(reactor, test=False):
     s1 = yield AsyncPipe('input', test=test, **p120_kwargs).output
     s2 = yield (AsyncPipe('input', conf=p112_conf, test=test)
