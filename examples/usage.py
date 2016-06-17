@@ -167,14 +167,14 @@ Synchronous processing
     >>> # `chain` steps
     >>> from riko.collections.sync import SyncPipe
     >>>
-    >>> output = (SyncPipe('fetch', conf=fetch_conf)
+    >>> stream = (SyncPipe('fetch', conf=fetch_conf)
     ...     .filter(conf={'rule': filter_rule})
     ...     .subelement(conf=sub_conf, emit=True)
     ...     .regex(conf={'rule': regex_rule})
     ...     .sort(conf=sort_conf)
     ...     .output)
     >>>
-    >>> next(output) == {'content': 'mailto:mail@writetoreply.org'}
+    >>> next(stream) == {'content': 'mailto:mail@writetoreply.org'}
     True
 
 

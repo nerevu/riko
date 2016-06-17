@@ -45,6 +45,7 @@ from __future__ import (
 
 import pygogo as gogo
 
+from contextlib import closing
 from os.path import splitext
 
 from builtins import *
@@ -62,31 +63,6 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 # TODO: convert relative links to absolute
 # TODO: remove the closing tag if using an HTML tag stripped of HTML tags
 # TODO: clean html with Tidy
-
-def xpath(tree, path, pos=0):
-    try:
-        elements = tree.xpath(path)
-    except AttributeError:
-        tags = path.split('/')[1:] if path else []
-
-        try:
-            elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
-        except AttributeError:
-            elements = tree.findall('./%s' % '/'.join(tags[1:]))
-
-            for e in elements:
-                yield e
-        else:
-            if len(tags or [1]) - pos == 1:
-                for element in elements:
-                    yield element
-            else:
-                for element in elements:
-                    for e in xpath(element, path, pos + 1):
-                        yield e
-    else:
-        for e in elements:
-            yield e
 
 
 @coroutine
@@ -133,8 +109,8 @@ def asyncParser(_, objconf, skip, **kwargs):
         ext = splitext(url)[1].lstrip('.')
         html = ext == 'html'
         f = yield io.urlOpen(url)
-        root = yield tu.xml2etree(f, html=html)
-        elements = xpath(root, objconf.xpath)
+        tree = yield tu.xml2etree(f, html=html)
+        elements = utils.xpath(tree, objconf.xpath)
         items = map(tu.etreeToDict, elements)
         stringified = ({kwargs['assign']: str(i)} for i in items)
         stream = stringified if objconf.stringify else items
@@ -171,9 +147,11 @@ def parser(_, objconf, skip, **kwargs):
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         xml = ext == 'xml'
-        f = urlopen(url)
-        root = utils.xml2etree(f, xml=xml, html5=objconf.html5)
-        elements = xpath(root, objconf.xpath)
+
+        with closing(urlopen(url)) as f:
+            root = utils.xml2etree(f, xml=xml, html5=objconf.html5).getroot()
+            elements = utils.xpath(root, objconf.xpath)
+
         items = map(utils.etree2dict, elements)
         stringified = ({kwargs['assign']: str(i)} for i in items)
         stream = stringified if objconf.stringify else items

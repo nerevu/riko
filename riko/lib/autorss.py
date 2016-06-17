@@ -8,6 +8,8 @@ Provides functions for finding RSS feeds from a site's LINK tags
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from itertools import chain
 from html.parser import HTMLParser
 
@@ -17,6 +19,7 @@ from riko.bado import coroutine, return_value
 from riko.bado.io import urlOpen
 
 TIMEOUT = 10
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class LinkParser(HTMLParser):
@@ -33,9 +36,6 @@ class LinkParser(HTMLParser):
             entry['link'] = entry['href']
             entry['tag'] = tag
             self.entry = chain(self.entry, [entry])
-
-import pygogo as gogo
-logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def gen_entries(f, parser):

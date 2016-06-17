@@ -13,7 +13,6 @@ import itertools as it
 import time
 import pygogo as gogo
 
-# from pprint import pprint
 from datetime import timedelta, datetime as dt
 from functools import partial
 from operator import itemgetter, add, sub
@@ -21,11 +20,16 @@ from os import path as p, environ
 from calendar import timegm
 from decimal import Decimal
 from json import loads
+from contextlib import closing
 
 from builtins import *
 from six.moves.urllib.parse import quote, urlparse
+from six.moves.urllib.request import urlopen
+from six.moves.urllib_error import URLError
 from mezmorize import Cache
 from dateutil import parser
+from ijson import items
+from meza._compat import encode, decode
 
 try:
     from lxml import etree, html
@@ -36,8 +40,15 @@ else:
     from lxml.html import html5parser
     LAZY = True
 
+try:
+    import speedparser
+except ImportError:
+    import feedparser
+    speedparser = None
+
 global CACHE
 
+rssparser = speedparser or feedparser
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 DATE_FORMAT = '%m/%d/%Y'
@@ -247,15 +258,98 @@ def unique_everseen(iterable, key=None):
             yield k
 
 
+def betwix(iterable, start=None, stop=None, inc=False):
+    """ Extract selected elements from an iterable. But unlike `islice`,
+    extract based on the element's value instead of its position.
+
+    Args:
+        iterable (iter): The initial sequence
+        start (str): The fragment to begin with (inclusive)
+        stop (str): The fragment to finish at (exclusive)
+        inc (bool): Make stop operate inclusively (useful if reading a file and
+            the start and stop fragments are on the same line)
+
+    Returns:
+        Iter: New dict with specified keys removed
+
+    Examples:
+        >>> from io import StringIO
+        >>>
+        >>> list(betwix('ABCDEFG', stop='C')) == ['A', 'B']
+        True
+        >>> list(betwix('ABCDEFG', 'C', 'E')) == ['C', 'D']
+        True
+        >>> list(betwix('ABCDEFG', 'C')) == ['C', 'D', 'E', 'F', 'G']
+        True
+        >>> f = StringIO('alpha\\n<beta>\\ngamma\\n')
+        >>> list(betwix(f, '<', '>', True)) == [u'<beta>\\n']
+        True
+        >>> list(betwix('ABCDEFG', 'C', 'E', True)) == ['C', 'D', 'E']
+        True
+    """
+    def inc_takewhile(predicate, _iter):
+        for x in _iter:
+            yield x
+
+            if not predicate(x):
+                break
+
+    get_pred = lambda sentinel: lambda x: sentinel not in decode(x)
+    first = it.dropwhile(get_pred(start), iterable) if start else iterable
+    pred = get_pred(stop)
+
+    if stop and inc:
+        last = inc_takewhile(pred, first)
+    elif stop:
+        last = it.takewhile(pred, first)
+    else:
+        last = first
+
+    return last
+
+
+def parse_rss(url, delay=0):
+    context = SleepyDict(delay=delay)
+
+    try:
+        with closing(urlopen(url, context=context)) as f:
+            content = f.read() if speedparser else f
+            parsed = rssparser.parse(content)
+    except (ValueError, URLError):
+        parsed = rssparser.parse(url)
+
+    return parsed
+
+
+def xpath(tree, path, pos=0):
+    try:
+        elements = tree.xpath(path)
+    except AttributeError:
+        tags = path.split('/')[1:] if path else []
+
+        try:
+            elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
+        except AttributeError:
+            return iter(tree.findall('./%s' % '/'.join(tags[1:])))
+        else:
+            if len(tags or [1]) - pos == 1:
+                return elements
+            else:
+                for element in elements:
+                    return xpath(element, path, pos + 1)
+    else:
+        return iter(elements)
+
+
 def xml2etree(f, xml=True, html5=False):
     if xml:
-        parser = etree.parse
+        parser = etree
     elif html5:
-        parser = html5parser.parse
+        parser = html5parser
     else:
-        parser = html.parse
+        parser = html
 
-    return parser(f).getroot()
+    return parser.parse(f)
 
 
 def _make_content(i, value=None, tag='content', append=True, strip=False):
@@ -296,13 +390,15 @@ def etree2dict(element, lazy=LAZY):
     return i
 
 
-def any2dict(f, ext='xml', html5=False):
+def any2dict(f, ext='xml', html5=False, path=None):
     if ext in {'xml', 'html'}:
         xml = ext == 'xml'
-        root = xml2etree(f, xml, html5)
-        content = etree2dict(root)
+        root = xml2etree(f, xml, html5).getroot()
+        replaced = '/%s' % path.replace('.', '/') if '.' in path else path
+        tree = next(xpath(root, replaced)) if replaced else root
+        content = etree2dict(tree)
     elif ext == 'json':
-        content = loads(f.read())
+        content = next(items(f, path or ''))
     else:
         raise TypeError('Invalid file type %s' % ext)
 
@@ -380,7 +476,7 @@ def cast(content, _type='text'):
         'float': {'default': 0.0, 'func': float},
         'decimal': {'default': Decimal(0), 'func': Decimal},
         'int': {'default': 0, 'func': int},
-        'text': {'default': u'', 'func': str},
+        'text': {'default': '', 'func': str},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
         'url': {'default': {}, 'func': cast_url},
         'location': {'default': {}, 'func': cast_location},

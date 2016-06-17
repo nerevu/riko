@@ -23,4 +23,4 @@ except ImportError:
     json_content = lambda _: lambda: None
 else:
     get = treq.get
-    json_content = treq.json_content
+    json = treq.json_content

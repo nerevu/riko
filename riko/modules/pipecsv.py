@@ -22,6 +22,8 @@ from __future__ import (
 
 import pygogo as gogo
 
+from contextlib import closing
+
 from builtins import *
 from six.moves.urllib.request import urlopen
 from meza.io import read_csv
@@ -116,9 +118,10 @@ def parser(_, objconf, skip, **kwargs):
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        f = urlopen(url)
         odd = {
             'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
+
+        f = urlopen(url)
         rkwargs = utils.combine_dicts(objconf, odd)
         stream = read_csv(f, **rkwargs)
 

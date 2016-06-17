@@ -27,9 +27,12 @@ import pygogo as gogo
 
 from json import loads
 from decimal import Decimal
+from contextlib import closing
 
 from builtins import *
 from six.moves.urllib.request import urlopen
+from ijson import items
+from meza._compat import encode, decode
 
 from . import processor
 from riko.lib import utils
@@ -123,11 +126,11 @@ def asyncParser(base, objconf, skip, **kwargs):
         rate = kwargs['stream']
     elif objconf.url.startswith('http'):
         r = yield treq.get(objconf.url, params=objconf.params)
-        json = yield treq.json_content(r)
+        json = yield treq.json(r)
     else:
         url = utils.get_abspath(objconf.url)
         content = yield io.urlRead(url, delay=objconf.sleep)
-        json = loads(content)
+        json = loads(decode(content))
 
     if not skip:
         places = Decimal(10) ** -objconf.precision
@@ -169,18 +172,17 @@ def parser(base, objconf, skip, **kwargs):
     """
     if skip:
         rate = kwargs['stream']
-    elif objconf.memoize:
-        get = utils.memoize(utils.HALF_DAY)(requests.get)
-        r = get(objconf.url, params=objconf.params)
-        json = r.json()
     elif objconf.url.startswith('http'):
-        r = requests.get(objconf.url, params=objconf.params)
-        json = r.json()
+        get = partial(requests.get, stream=True)
+        sget = utils.memoize(utils.HALF_DAY)(get) if objconf.memoize else get
+        r = sget(objconf.url, params=objconf.params)
+        json = next(items(r.raw, ''))
     else:
         context = utils.SleepyDict(delay=objconf.sleep)
         url = utils.get_abspath(objconf.url)
-        content = urlopen(url, context=context).read()
-        json = loads(content)
+
+        with closing(urlopen(url, context=context)) as f:
+            json = next(items(f, ''))
 
     if not skip:
         places = Decimal(10) ** -objconf.precision

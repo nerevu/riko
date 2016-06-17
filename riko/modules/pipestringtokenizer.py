@@ -22,10 +22,10 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
-
-from . import processor
 import pygogo as gogo
+
+from builtins import *
+from . import processor
 
 OPTS = {'ftype': 'text', 'field': 'content'}
 DEFAULTS = {

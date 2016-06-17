@@ -7,8 +7,8 @@ riko demo
 
 Word Count
 
-    >>> from riko.collections.sync import SyncPipe
     >>> from riko import get_path
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> url = get_path('users.jyu.fi.html')
     >>> fetch_conf = {
@@ -42,20 +42,20 @@ Fetching feeds
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from riko.bado import coroutine
 from riko import get_path
+from riko.bado import coroutine
 from riko.collections.sync import SyncPipe
 from riko.collections.async import AsyncPipe
 
 replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
-url1 = get_path('health.xml')
-url2 = get_path('caltrain.html')
-fetch_conf = {
-    'url': url2, 'start': '<body>', 'end': '</body>', 'detag': True}
+health = get_path('health.xml')
+caltrain = get_path('caltrain.html')
+start = '<body id="thebody" class="Level2">'
+fetch_conf = {'url': caltrain, 'start': start, 'end': '</body>', 'detag': True}
 
 
 def pipe(test=False):
-    s1 = SyncPipe('fetch', test=test, conf={'url': url1}).output
+    s1 = SyncPipe('fetch', test=test, conf={'url': health}).output
     s2 = (SyncPipe('fetchpage', test=test, conf=fetch_conf)
         .strreplace(conf=replace_conf, assign='content')
         .stringtokenizer(conf={'delimiter': ' '}, emit=True)
@@ -67,7 +67,7 @@ def pipe(test=False):
 
 @coroutine
 def asyncPipe(reactor, test=False):
-    s1 = yield AsyncPipe('fetch', test=test, conf={'url': url1}).output
+    s1 = yield AsyncPipe('fetch', test=test, conf={'url': health}).output
     s2 = yield (AsyncPipe('fetchpage', test=test, conf=fetch_conf)
         .strreplace(conf=replace_conf, assign='content')
         .stringtokenizer(conf={'delimiter': ' '}, emit=True)

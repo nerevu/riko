@@ -27,18 +27,17 @@ from __future__ import (
 
 import pygogo as gogo
 
-from functools import reduce
 from os.path import splitext
+from contextlib import closing
 
 from builtins import *
 from six.moves.urllib.request import urlopen
 
 from . import processor
 from riko.lib import utils
-from riko.bado import coroutine, return_value, itertools as ait, io
+from riko.bado import coroutine, return_value, io
 
 OPTS = {'ftype': 'none'}
-reducer = lambda element, i: element.get(i) if element else None
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -83,10 +82,8 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
-        path = objconf.path.split('.') if objconf.path else []
         f = yield io.urlOpen(url)
-        element = utils.any2dict(f, ext, objconf.html5)
-        stream = yield ait.coopReduce(reducer, path, element)
+        stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
 
     result = (stream, skip)
     return_value(result)
@@ -122,10 +119,9 @@ def parser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
-        path = objconf.path.split('.') if objconf.path else []
-        f = urlopen(url)
-        element = utils.any2dict(f, ext, objconf.html5)
-        stream = reduce(reducer, path, element)
+
+        with closing(urlopen(url)) as f:
+            stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
 
     return stream, skip
 
@@ -144,8 +140,8 @@ def asyncPipe(*args, **kwargs):
             contain the keys 'path' or 'html5'.
 
             url (str): The web site to fetch
-            path (str): The path to extract (default: None, i.e., return entire
-                page)
+            path (str): Dot separated path to extract (default: None, i.e.,
+                return entire page)
 
             html5 (bool): Use the HTML5 parser (default: False)
 
@@ -188,8 +184,8 @@ def pipe(*args, **kwargs):
             contain the keys 'path' or 'html5'.
 
             url (str): The web site to fetch
-            path (str): The path to extract (default: None, i.e., return entire
-                page)
+            path (str): Dot separated path to extract (default: None, i.e.,
+                return entire page)
 
             html5 (bool): Use the HTML5 parser (default: False)
 

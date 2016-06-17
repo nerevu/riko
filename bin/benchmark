@@ -1,32 +1,42 @@
-from __future__ import absolute_import, division, print_function, with_statement
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
+
+import sys
 
 from os import path as p
 from functools import partial
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool
 from time import time, sleep
+from itertools import chain
 
 from builtins import *
 
-from riko.collections.sync import (
-    SyncPipe, SyncCollection, get_chunksize, get_worker_cnt)
+sys.path.append('../riko')
 
+from riko import get_path
 from riko.bado import coroutine, return_value, react
-from riko.collections.async import AsyncPipe, AsyncCollection
 from riko.bado.util import asyncSleep
 from riko.bado.itertools import asyncImap
 from riko.modules.pipefetch import pipe, asyncPipe
+from riko.collections.async import AsyncPipe, AsyncCollection
+from riko.collections.sync import (
+    SyncPipe, SyncCollection, get_chunksize, get_worker_cnt)
 
-NUMBER = 3
-LOOPS = 3
-DELAY = 0.2
+NUMBER = 1
+LOOPS = 1
+DELAY = 0.1
 
 parent = p.join(p.abspath(p.dirname(p.dirname(__file__))), 'data')
 files = [
     'ouseful.xml',
     'feed.xml',
     'delicious.xml',
-    'psychemedia.xml',
+    'psychemedia_delicious.xml',
     'ouseful_feedburner.xml',
     'TheEdTechie.xml',
     'yodel.xml',
@@ -38,15 +48,15 @@ files = [
     'greenhughes.xml',
     'psychemedia_slideshare.xml']
 
-get_path = lambda name: 'file://%s' % p.join(parent, name)
-sources = [{'url': get_path(f)} for f in files]
+urls = [get_path(f) for f in files]
+confs = [{'url': url, 'sleep': DELAY} for url in urls]
+sources = [{'url': url} for url in urls]
 length = len(files)
-conf = {'url': [{'value': get_path(f)} for f in files], 'sleep': DELAY}
 iterable = [DELAY for x in files]
 
 
 def baseline_sync():
-    return map(sleep, iterable)
+    return list(map(sleep, iterable))
 
 
 def baseline_threads():
@@ -64,11 +74,13 @@ def baseline_procs():
 
 
 def sync_pipeline():
-    return list(pipe(conf=conf))
+    pipes = (pipe(conf=conf) for conf in confs)
+    return list(chain.from_iterable(pipes))
 
 
 def sync_pipe():
-    return SyncPipe('fetch', conf=conf).list
+    streams = (SyncPipe('fetch', conf=conf).list for conf in confs)
+    return list(chain.from_iterable(streams))
 
 
 def sync_collection():
@@ -84,13 +96,13 @@ def baseline_async():
 
 
 def async_pipeline():
-    d = asyncPipe(conf=conf)
+    d = asyncImap(lambda conf: asyncPipe(conf=conf), confs)
     d.addCallbacks(list, print)
-    return d
-
 
 def async_pipe():
-    return AsyncPipe('fetch', conf=conf).list
+    asyncCallable = lambda conf: AsyncPipe('fetch', conf=conf).list
+    d = asyncImap(asyncCallable, confs)
+    d.addCallbacks(list, print)
 
 
 def async_collection():
@@ -131,7 +143,7 @@ def run_async(reactor, tests, max_chars):
             results.append(loop)
 
         run_time, units = parse_results(results)
-        print_time(test.func_name, max_chars, run_time, units)
+        print_time(test.__name__, max_chars, run_time, units)
 
     return_value(None)
 
@@ -144,8 +156,8 @@ if __name__ == '__main__':
         'sync_pipe', 'sync_collection', 'par_sync_collection']
 
     async_tests = [baseline_async, async_pipeline, async_pipe, async_collection]
-    combined_tests = sync_tests + [f.func_name for f in async_tests]
-    max_chars = max(map(len, combined_tests))
+    combined_tests = sync_tests + [f.__name__ for f in async_tests]
+    max_chars = max(list(map(len, combined_tests)))
 
     for test in sync_tests:
         results = run('%s()' % test, setup='from __main__ import %s' % test)

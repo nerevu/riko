@@ -31,8 +31,9 @@ else:
     from twisted.internet import defer
     from twisted.internet.utils import getProcessOutput
     from twisted.internet.reactor import callLater
-    from twisted.web import microdom
-    from twisted.web.microdom import EntityReference
+
+    from . import microdom
+    from .microdom import EntityReference
 
     asyncNone = defer.succeed(None)
     asyncReturn = partial(defer.succeed)

@@ -24,10 +24,11 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
-
-from . import processor
 import pygogo as gogo
+
+from builtins import *
+from meza._compat import encode, decode
+from . import processor
 
 OPTS = {'listize': True, 'extract': 'part'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -52,12 +53,7 @@ def parser(_, parts, skip, **kwargs):
         >>> parser(None, ['one', 'two'], False)[0]
         u'onetwo'
     """
-    try:
-        parsed = kwargs['stream'] if skip else ''.join(parts)
-    except UnicodeDecodeError:
-        decoded = [p.decode('utf-8') for p in parts]
-        parsed = ''.join(decoded)
-
+    parsed = kwargs['stream'] if skip else ''.join(map(decode, parts))
     return parsed, skip
 
 

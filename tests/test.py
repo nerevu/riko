@@ -6,25 +6,24 @@
 tests.test
 ~~~~~~~~~~
 
-Provides scripttests pygogo CLI functionality.
+Provides scripttests riko runpipe CLI functionality.
 """
 
 from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+    absolute_import, division, print_function, unicode_literals)
 
 import sys
+import pygogo as gogo
 
 from difflib import unified_diff
 from os import path as p
-from io import StringIO
+from io import StringIO, open
 from timeit import default_timer as timer
-
-sys.path.append('../riko')
-import pygogo as gogo
 
 from builtins import *
 from scripttest import TestFileEnvironment
+
+sys.path.append('../riko')
 
 
 def main(script, tests, verbose=False, stop=True):
@@ -89,13 +88,15 @@ def main(script, tests, verbose=False, stop=True):
 
 if __name__ == '__main__':
     parent_dir = p.abspath(p.dirname(p.dirname(__file__)))
-    script = p.join(parent_dir, 'bin', 'runpipe')
-    text = 'Deadline to clear up health law eligibility near 771\n'
-    tests = [
+    demo = p.join(parent_dir, 'bin', 'runpipe')
+    benchmark = p.join(parent_dir, 'bin', 'benchmark')
+    text = 'Deadline to clear up health law eligibility near 682\n'
+    runpipe_tests = [
         ([], ['demo'], text),
         (['-a'], ['demo'], text),
         ([], ['simple1'], "{u'url': u'farechart'}\n"),
         (['-a'], ['simple1'], "{u'url': u'farechart'}\n"),
     ]
 
-    main(script, tests)
+    main(demo, runpipe_tests)
+    main(benchmark, [([], [], '')])

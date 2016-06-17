@@ -16,8 +16,11 @@ from __future__ import (
 
 import pygogo as gogo
 
-from io import StringIO
+from io import StringIO, open
+
 from builtins import *
+from meza._compat import encode, decode
+
 from . import coroutine, return_value
 
 try:
@@ -103,7 +106,7 @@ def getFile(filename, transport, protocol=FileReader, **kwargs):
 def urlOpen(url, timeout=0, **kwargs):
     if url.startswith('http'):
         f = StringIO()
-        yield downloadPage(url, f, timeout=timeout)
+        yield downloadPage(encode(url), f, timeout=timeout)
         f.seek(0)
     else:
         f = yield getFile(url, StringTransport(), **kwargs)
@@ -113,7 +116,7 @@ def urlOpen(url, timeout=0, **kwargs):
 
 def urlRead(url, timeout=0, **kwargs):
     if url.startswith('http'):
-        content = getPage(url, timeout=timeout)
+        content = getPage(encode(url), timeout=timeout)
     else:
         content = readFile(url, StringTransport(), **kwargs)
 

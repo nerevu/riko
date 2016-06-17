@@ -34,15 +34,9 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-try:
-    import speedparser
-except ImportError:
-    import feedparser as speedparser
-
 import pygogo as gogo
 
 from builtins import *
-from six.moves.urllib.request import urlopen
 
 from . import processor
 from riko.bado import coroutine, return_value, io
@@ -94,7 +88,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         rss = yield autorss.asyncGetRSS(url)
         link = utils.get_abspath(next(rss)['link'])
         content = yield io.urlRead(link)
-        parsed = speedparser.parse(content)
+        parsed = utils.parse_rss(content)
         stream = utils.gen_entries(parsed)
 
     result = (stream, skip)
@@ -131,8 +125,7 @@ def parser(_, objconf, skip, **kwargs):
         url = utils.get_abspath(objconf.url)
         rss = autorss.get_rss(url)
         link = utils.get_abspath(next(rss)['link'])
-        content = urlopen(link).read()
-        parsed = speedparser.parse(content)
+        parsed = utils.parse_rss(link)
         stream = utils.gen_entries(parsed)
 
     return stream, skip
