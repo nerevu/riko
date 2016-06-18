@@ -29,7 +29,7 @@ from six.moves.urllib_error import URLError
 from mezmorize import Cache
 from dateutil import parser
 from ijson import items
-from meza._compat import encode, decode
+from meza._compat import decode
 
 try:
     from lxml import etree, html

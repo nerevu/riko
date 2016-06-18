@@ -27,7 +27,7 @@ from __future__ import (
 import pygogo as gogo
 
 from builtins import *
-from meza._compat import encode, decode
+from meza._compat import decode
 from . import processor
 
 OPTS = {'listize': True, 'extract': 'part'}

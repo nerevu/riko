@@ -112,7 +112,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         tree = yield tu.xml2etree(f, html=html)
         elements = utils.xpath(tree, objconf.xpath)
         items = map(tu.etreeToDict, elements)
-        stringified = ({kwargs['assign']: str(i)} for i in items)
+        stringified = ({kwargs['assign']: encode(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
     result = (stream, skip)

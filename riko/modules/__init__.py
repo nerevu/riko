@@ -115,7 +115,7 @@ def assign(item, assignment, key, one=False):
 class processor(object):
     def __init__(self, defaults=None, async=False, **opts):
         """Creates a sync/async pipe that processes individual items. These
-        pipes are classified with as `type: processor` and as either
+        pipes are classified as `type: processor` and as either
         `sub_type: transformer` or `subtype: source`. To be recognized as
         `subtype: source`, the pipes `ftype` must be set to 'none'.
 

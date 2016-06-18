@@ -32,7 +32,7 @@ from contextlib import closing
 from builtins import *
 from six.moves.urllib.request import urlopen
 from ijson import items
-from meza._compat import encode, decode
+from meza._compat import decode
 
 from . import processor
 from riko.lib import utils

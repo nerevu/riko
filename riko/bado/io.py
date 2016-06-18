@@ -19,7 +19,7 @@ import pygogo as gogo
 from io import StringIO, open
 
 from builtins import *
-from meza._compat import encode, decode
+from meza._compat import encode
 
 from . import coroutine, return_value
 
