@@ -201,11 +201,13 @@ class XMLParser(Protocol):
     def do_begin(self, byte):
         if byte.isspace():
             return
-        if byte != '<':
-            if self.lenient:
-                self._leadingBodyData = byte
-                return 'bodydata'
+
+        if byte != '<' and self.lenient:
+            self._leadingBodyData = byte
+            return 'bodydata'
+        elif byte != '<':
             self._parseError("First char of document [%r] wasn't <" % (byte,))
+
         return 'tagstart'
 
     def begin_comment(self, byte):
@@ -213,6 +215,7 @@ class XMLParser(Protocol):
 
     def do_comment(self, byte):
         self.commentbuf += byte
+
         if self.commentbuf.endswith('-->'):
             self.gotComment(self.commentbuf[:-3])
             return 'bodydata'
@@ -223,14 +226,28 @@ class XMLParser(Protocol):
         self.termtag = 0                # is the tag self-terminating
         self.endtag = 0
 
+    def _update_tags(self, byte):
+        alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
+
+        if (byte in '!?') or alnum_or_ident:
+            self.tagName += byte
+        elif byte == '>' and self.endtag:
+            self.gotTagEnd(self.tagName)
+        elif byte == '>':
+            self.gotTagStart(self.tagName, {})
+        elif byte == '/' and not self.tagName:
+            self.endtag = 1
+        elif byte in '!?' and not self.tagName:
+            self.tagName += byte
+            self.termtag = 1
+
     def do_tagstart(self, byte):
         val = None
-        isspace = byte.isspace()
         alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
         good = byte in IDENTCHARS + '/!?['
         real_good = good or byte.isalnum() or byte.isspace()
 
-        if isspace and not self.tagName:
+        if byte.isspace() and not self.tagName:
             self._parseError("Whitespace before tag-name")
         elif byte in '!?' and self.tagName and self.strict:
             self._parseError("Invalid character in tag-name")
@@ -239,11 +256,11 @@ class XMLParser(Protocol):
 
         if alnum_or_ident and self.tagName == '!--':
             val = 'comment'
-        elif isspace and self.tagName and self.endtag:
+        elif byte.isspace() and self.tagName and self.endtag:
             # properly strict thing to do here is probably to only
             # accept whitespace
             val = 'waitforgt'
-        elif isspace and self.tagName:
+        elif byte.isspace() and self.tagName:
             val = 'attrs'
         elif byte == '>' and self.endtag:
             val = 'bodydata'
@@ -261,22 +278,8 @@ class XMLParser(Protocol):
             val = 'unentity'
 
         self._update_tags(byte)
+
         return val
-
-    def _update_tags(self, byte):
-        alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
-
-        if (byte in '!?') or alnum_or_ident:
-            self.tagName += byte
-        elif byte == '>' and self.endtag:
-            self.gotTagEnd(self.tagName)
-        elif byte == '>':
-            self.gotTagStart(self.tagName, {})
-        elif byte == '/' and not self.tagName:
-            self.endtag = 1
-        elif byte in '!?' and not self.tagName:
-            self.tagName += byte
-            self.termtag = 1
 
     def begin_unentity(self, byte):
         self.bodydata += byte
