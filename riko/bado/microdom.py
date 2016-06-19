@@ -952,9 +952,29 @@ class MicroDOMParser(XMLParser):
                 args = first + self.saveMark() + el._markpos
                 raise MismatchedTags(*args)
 
+    def _update_stacks(self, lastEl, nstuple):
+        update = False
+
+        for idx, element in enumerate(reversed(self.elementstack)):
+            if element.tagName == cname:
+                element.endTag(name)
+                break
+        else:
+            # this was a garbage close tag; wait for a real one
+            self.elementstack.append(el)
+            self.nsstack.append(nstuple) if nstuple else None
+            updated = True
+
+        if not updated:
+            del self.elementstack[-(idx + 1):]
+
+        if not (updated or self.elementstack):
+            self.documents.append(lastEl)
+            updated = True
+
+        return updated
+
     def gotTagEnd(self, name):
-        # print ' '*self.indentlevel, 'end tag',name
-        # self.indentlevel -= 1
         if self.beExtremelyLenient and not self.elementstack:
             return
         elif not self.elementstack:
@@ -971,38 +991,24 @@ class MicroDOMParser(XMLParser):
 
         self._check_name(name, el)
         tn_is_cname = tn == cname
+        lenient_stack = self.beExtremelyLenient and self.elementstack
 
-        if not tn_is_cname and self.beExtremelyLenient and self.elementstack:
+        if not tn_is_cname and lenient_stack:
             lastEl = self.elementstack[0]
-
-            for idx, element in enumerate(reversed(self.elementstack)):
-                if element.tagName == cname:
-                    element.endTag(name)
-                    break
-            else:
-                # this was a garbage close tag; wait for a real one
-                self.elementstack.append(el)
-
-                if nstuple is not None:
-                    self.nsstack.append(nstuple)
-
-                return
-
-            del self.elementstack[-(idx + 1):]
-
-            if not self.elementstack:
-                self.documents.append(lastEl)
-                return
+            updated = self._update_stacks(lastEl, nstuple)
         elif not tn_is_cname:
             first = (self.filename, el.tagName, name)
             raise MismatchedTags(*(first + self.saveMark() + el._markpos))
+        else:
+            updated = False
 
-        el.endTag(name)
+        if not updated:
+            el.endTag(name)
 
-        if not self.elementstack:
+        if not (updated or self.elementstack):
             self.documents.append(el)
 
-        if self.beExtremelyLenient and el.tagName == "script":
+        if not updated and self.beExtremelyLenient and el.tagName == "script":
             self._fixScriptElement(el)
 
     def connectionLost(self, reason):
