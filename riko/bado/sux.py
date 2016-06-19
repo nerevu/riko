@@ -176,7 +176,7 @@ class XMLParser(Protocol):
 
                 newState = doFn(char)
 
-                if newState is not None and newState != curState:
+                if newState and newState != curState:
                     # this is the endFn from the previous state
                     endFn()
                     curState = newState

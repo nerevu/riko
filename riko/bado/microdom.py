@@ -569,58 +569,48 @@ class Element(Node):
     def hasAttribute(self, name):
         return name in self.attributes
 
+    def gen_prefixes(self, nsprefixes):
+        for k, v in self.nsprefixes.items():
+            if k not in nsprefixes:
+                yield (k, v)
+
     def _writexml(self, namespace, nsprefixes, newl, indent):
-        if self.nsprefixes:
-            newprefixes = self.nsprefixes.copy()
+        newprefixes = dict(self.gen_prefixes(nsprefixes))
+        begin = [newl, indent, '<'] if self.tag_is_blockelement else ['<']
+        is_same_namespace = self.namespace and namespace == self.namespace
 
-            for ns in nsprefixes.keys():
-                if ns in newprefixes:
-                    del newprefixes[ns]
-        else:
-            newprefixes = {}
-
-        if self.tag_is_blockelement:
-            begin = [newl, indent, '<']
-        else:
-            begin = ['<']
-
-        # Make a local for tracking what end tag will be used.  If namespace
+        # Make a local for tracking what end tag will be used. If namespace
         # prefixes are involved, this will be changed to account for that
         # before it's actually used.
         endTagName = self.endTagName
 
-        if self.namespace and namespace != self.namespace:
-            # If the current default namespace is not the namespace of this tag
-            # (and this tag has a namespace at all) then we'll write out
-            # something related to namespaces.
+        if not is_same_namespace and self.namespace in nsprefixes:
+            # This tag's namespace already has a prefix bound to it. Use
+            # that prefix.
+            prefix = nsprefixes[self.namespace]
+            begin.extend(prefix + ':' + self.tagName)
 
-            if self.namespace in nsprefixes:
-                # This tag's namespace already has a prefix bound to it.  Use
-                # that prefix.
-                prefix = nsprefixes[self.namespace]
-                begin.extend(prefix + ':' + self.tagName)
+            # Also make sure we use it for the end tag.
+            endTagName = prefix + ':' + self.endTagName
+        elif not is_same_namespace:
+            # This tag's namespace has no prefix bound to it. Change the
+            # default namespace to this tag's namespace so we don't need
+            # prefixes.  Alternatively, we could add a new prefix binding.
+            # I'm not sure why the code was written one way rather than the
+            # other. -exarkun
+            begin.extend(self.tagName)
+            begin.extend(self.create_attr("xmlns", self.namespace))
 
-                # Also make sure we use it for the end tag.
-                endTagName = prefix + ':' + self.endTagName
-            else:
-                # This tag's namespace has no prefix bound to it.  Change the
-                # default namespace to this tag's namespace so we don't need
-                # prefixes.  Alternatively, we could add a new prefix binding.
-                # I'm not sure why the code was written one way rather than the
-                # other. -exarkun
-                begin.extend(self.tagName)
-                begin.extend(self.create_attr("xmlns", self.namespace))
-
-                # The default namespace just changed.  Make sure any children
-                # know about this.
-                namespace = self.namespace
+            # The default namespace just changed.  Make sure any children
+            # know about this.
+            namespace = self.namespace
         else:
             # This tag has no namespace or its namespace is already the default
             # namespace.  Nothing extra to do here.
             begin.extend(self.tagName)
 
         for attr, val in sorted(self.attributes.items()):
-            if isinstance(attr, tuple):
+            if val and isinstance(attr, tuple):
                 ns, key = attr
 
                 if ns in nsprefixes:
@@ -628,13 +618,18 @@ class Element(Node):
                 else:
                     newprefixes[ns] = prefix = next(_gen_prefix())
 
-                assert val is not None
                 begin.extend(self.create_attr(prefix + ':' + key, val))
-            else:
-                assert val is not None
+            elif val:
                 begin.extend(self.create_attr(attr, val))
 
         return begin, namespace, endTagName, newprefixes
+
+    def _write_child(self, stream, newl, newindent, **kwargs):
+        for child in self.childNodes:
+            if self.tag_is_blockelement and self.tag_is_nice_format:
+                stream.write(''.join((newl, newindent)))
+
+            child.writexml(stream, newl=newl, newindent=newindent, **kwargs)
 
     def writexml(self, stream, *args, **kwargs):
         """
@@ -689,11 +684,7 @@ class Element(Node):
                 'downprefixes': downprefixes,
                 'namespace': namespace}
 
-            for child in self.childNodes:
-                if self.tag_is_blockelement and self.tag_is_nice_format:
-                    stream.write(''.join((newl, newindent)))
-
-                child.writexml(stream, **kwargs)
+            self._write_child(stream, newl, newindent, **kwargs)
 
             if self.tag_is_blockelement:
                 stream.write(''.join((newl, indent)))
