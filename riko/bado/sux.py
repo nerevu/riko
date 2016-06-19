@@ -371,20 +371,28 @@ class XMLParser(Protocol):
         self.attrname = byte
         self._attrname_termtag = 0
 
-    def do_attrname(self, byte):
-        val = None
-
-        if byte.isalnum() or byte in IDENTCHARS:
-            self.attrname += byte
-        elif byte == '=':
+    def _get_attrname(self, byte):
+        if byte == '=':
             val = 'beforeattrval'
         elif byte.isspace():
             val = 'beforeeq'
-        elif not self.lenient:
+        elif self.lenient and byte in '"\'':
+            val = 'attrval'
+        elif self.lenient and byte == '>':
+            val = 'bodydata' if self._attrname_termtag else None
+        else:
+            # something is really broken. let's leave this attribute where it
+            # is and move on to the next thing
+            val = None
+
+        return val
+
+    def do_attrname(self, byte):
+        if byte.isalnum() or byte in IDENTCHARS:
+            self.attrname += byte
+        elif self.strict and not (byte.isspace() or byte == '='):
             msg = "Invalid attribute name: %r %r" % (self.attrname, byte)
             self._parseError(msg)
-        elif byte in '"\'':
-            val = 'attrval'
         elif byte in LENIENT_IDENTCHARS or byte.isalnum():
             self.attrname += byte
         elif byte == '/':
@@ -393,16 +401,9 @@ class XMLParser(Protocol):
             self.attrval = 'True'
             self.tagAttributes[self.attrname] = self.attrval
             self.gotTagStart(self.tagName, self.tagAttributes)
+            self.gotTagEnd(self.tagName) if self._attrname_termtag else None
 
-            if self._attrname_termtag:
-                self.gotTagEnd(self.tagName)
-                val = 'bodydata'
-        elif byte == '>':
-            val = self.maybeBodyData()
-
-        # something is really broken. let's leave this attribute where it
-        # is and move on to the next thing
-        return val
+        return self._get_attrname(byte)
 
     def do_beforeattrval(self, byte):
         chars = LENIENT_IDENTCHARS
