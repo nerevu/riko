@@ -36,7 +36,8 @@ Notes
 Requirements
 ------------
 
-``riko`` has been tested and is known to work on Python 2.7 and PyPy2 5.1.1.
+``riko`` has been tested and is known to work on Python 2.7, 3.4, and 3.5;
+and PyPy2 5.1.1 and PyPy3 2.4.0.
 
 Optional Dependencies
 ^^^^^^^^^^^^^^^^^^^^^
