@@ -15,6 +15,7 @@ from html.parser import HTMLParser
 
 from builtins import *
 from six.moves.urllib.request import urlopen
+from meza._compat import decode
 from riko.bado import coroutine, return_value
 from riko.bado.io import urlOpen
 
@@ -40,7 +41,7 @@ class LinkParser(HTMLParser):
 
 def gen_entries(f, parser):
     for line in f:
-        parser.feed(line)
+        parser.feed(decode(line))
 
         for entry in parser.entry:
             yield entry

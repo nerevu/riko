@@ -181,7 +181,11 @@ def parser(base, objconf, skip, **kwargs):
         context = utils.SleepyDict(delay=objconf.sleep)
         url = utils.get_abspath(objconf.url)
 
+    try:
         with closing(urlopen(url, context=context)) as f:
+            json = next(items(f, ''))
+    except TypeError:
+        with closing(urlopen(url)) as f:
             json = next(items(f, ''))
 
     if not skip:

@@ -29,7 +29,7 @@ from six.moves.urllib_error import URLError
 from mezmorize import Cache
 from dateutil import parser
 from ijson import items
-from meza._compat import decode
+from meza._compat import encode, decode
 
 try:
     from lxml import etree, html
@@ -312,8 +312,12 @@ def parse_rss(url, delay=0):
     context = SleepyDict(delay=delay)
 
     try:
-        with closing(urlopen(url, context=context)) as f:
-            content = f.read() if speedparser else f
+        with closing(urlopen(decode(url), context=context)) as f:
+            content = encode(f.read()) if speedparser else f
+            parsed = rssparser.parse(content)
+    except TypeError:
+        with closing(urlopen(decode(url))) as f:
+            content = encode(f.read()) if speedparser else f
             parsed = rssparser.parse(content)
     except (ValueError, URLError):
         parsed = rssparser.parse(url)
@@ -612,7 +616,7 @@ def get_abspath(url):
         abspath = p.abspath(p.join(parent, rel_path))
         url = 'file://%s' % abspath
 
-    return url
+    return decode(url)
 
 
 def listize(item):
