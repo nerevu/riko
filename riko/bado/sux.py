@@ -226,6 +226,35 @@ class XMLParser(Protocol):
         self.termtag = 0                # is the tag self-terminating
         self.endtag = 0
 
+    def _get_val(self, byte):
+        val = None
+        alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
+        is_good = alnum_or_ident or byte in '/!?[' or byte.isspace()
+
+        if alnum_or_ident and self.tagName == '!--':
+            val = 'comment'
+        elif byte.isspace() and self.tagName:
+            # properly strict thing to do here is probably to only
+            # accept whitespace
+            val = 'waitforgt' if self.endtag else 'attrs'
+        elif byte in '>/[':
+            def_gt = self.strict and 'bodydata' or self.maybeBodyData()
+
+            switch = {
+                '>': 'bodydata' if self.endtag else def_gt,
+                '/': 'afterslash'if self.tagName else None,
+                '[': 'expectcdata' if self.tagName == '!' else None}
+
+            val = switch[byte]
+
+        if not (self.lenient or val or is_good):
+            self._parseError('Invalid tag character: %r' % byte)
+        elif self.lenient:
+            self.bodydata = '<'
+            val = 'unentity'
+
+        return val
+
     def _update_tags(self, byte):
         alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
 
@@ -242,11 +271,6 @@ class XMLParser(Protocol):
             self.termtag = 1
 
     def do_tagstart(self, byte):
-        val = None
-        alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
-        good = byte in IDENTCHARS + '/!?['
-        real_good = good or byte.isalnum() or byte.isspace()
-
         if byte.isspace() and not self.tagName:
             self._parseError("Whitespace before tag-name")
         elif byte in '!?' and self.tagName and self.strict:
@@ -254,31 +278,8 @@ class XMLParser(Protocol):
         elif byte == '[' and not self.tagName == '!':
             self._parseError("Invalid '[' in tag-name")
 
-        if alnum_or_ident and self.tagName == '!--':
-            val = 'comment'
-        elif byte.isspace() and self.tagName and self.endtag:
-            # properly strict thing to do here is probably to only
-            # accept whitespace
-            val = 'waitforgt'
-        elif byte.isspace() and self.tagName:
-            val = 'attrs'
-        elif byte == '>' and self.endtag:
-            val = 'bodydata'
-        elif byte == '>':
-            val = self.strict and 'bodydata' or self.maybeBodyData()
-        elif byte == '/' and self.tagName:
-            val = 'afterslash'
-        elif byte == '[' and self.tagName == '!':
-            val = 'expectcdata'
-
-        if not any([self.lenient, val, real_good]):
-            self._parseError('Invalid tag character: %r' % byte)
-        elif self.lenient:
-            self.bodydata = '<'
-            val = 'unentity'
-
+        val = self._get_val(byte)
         self._update_tags(byte)
-
         return val
 
     def begin_unentity(self, byte):
