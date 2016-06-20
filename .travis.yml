@@ -5,7 +5,6 @@ python:
   - "3.4"
   - "3.5"
   - "pypy"
-  - "pypy3"
 
 cache:
   directories:
@@ -16,6 +15,11 @@ env:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
     - PYTHONHASHSEED=94967295
+    - PYPY_GIT=https://github.com/yyuu/pyenv.git
+    - PYENV_ROOT=$HOME/.pyenv
+    - PYPY_VENV=$HOME/virtualenvs/pypy
+    - PYPY_PATH=$PYENV_ROOT/versions/pypy
+    - PYPY_VERSION=5.1.1
 
 notifications:
   email:
@@ -29,27 +33,46 @@ before_install:
   - pip install -U pip
   - pip install wheel
   - |
-      if [ "$TRAVIS_PYTHON_VERSION" = "pypy" ]; then
-        export PYENV_ROOT="$HOME/.pyenv"
+      if [[ "$TRAVIS_PYTHON_VERSION" == "pypy" ]]; then
         if [ -f "$PYENV_ROOT/bin/pyenv" ]; then
           pushd "$PYENV_ROOT" && git pull && popd
         else
-          rm -rf "$PYENV_ROOT" && git clone --depth 1 https://github.com/yyuu/pyenv.git "$PYENV_ROOT"
+          rm -rf "$PYENV_ROOT" && git clone --depth 1 "$PYPY_GIT" "$PYENV_ROOT"
         fi
-        export PYPY_VERSION="5.1.1"
+
         "$PYENV_ROOT/bin/pyenv" install --skip-existing "pypy-$PYPY_VERSION"
-        virtualenv --python="$PYENV_ROOT/versions/pypy-$PYPY_VERSION/bin/python" "$HOME/virtualenvs/pypy-$PYPY_VERSION"
-        source "$HOME/virtualenvs/pypy-$PYPY_VERSION/bin/activate"
+        PYTHON="$PYPY_PATH-$PYPY_VERSION/bin/python"
+        virtualenv --python="$PYTHON" "$PYPY_VENV-$PYPY_VERSION"
+        source "$PYPY_VENV-$PYPY_VERSION/bin/activate"
+      fi
+  - |
+      if [ "$TRAVIS_PYTHON_VERSION" = "pypy3" ]; then
+        export PYPY_VERSION="2.4.0"
+
+        if [ -f "$PYENV_ROOT/bin/pyenv" ]; then
+          pushd "$PYENV_ROOT" && git pull && popd
+        else
+          rm -rf "$PYENV_ROOT" && git clone --depth 1 "$PYPY_GIT" "$PYENV_ROOT"
+        fi
+
+        "$PYENV_ROOT/bin/pyenv" install --skip-existing "pypy3-$PYPY_VERSION"
+        virtualenv --python="${PYPY_PATH}3-$PYPY_VERSION/bin/python" "${PYPY_VENV}3-$PYPY_VERSION"
+        source "${PYPY_VENV}3-$PYPY_VERSION/bin/activate"
       fi
 
 install:
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then then pip install -r py2-requirements.txt; fi
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "pypy" ]]; then pip install -r py2-requirements.txt; fi
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "3.4" ]]; then pip install -r requirements.txt; fi
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "3.5" ]]; then pip install -r requirements.txt; fi
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "pypy3" ]]; then pip install -r requirements.txt; fi
+  - |
+      if [[ $TRAVIS_PYTHON_VERSION == *"3"* ]]; then
+        pip install -r requirements.txt
+      else
+        pip install -r py2-requirements.txt
+      fi
+  - |
+      if [[ "$TRAVIS_PYTHON_VERSION" != "pypy"* ]]; then
+        pip wheel -r optional-requirements.txt
+        pip install -r optional-requirements.txt
+      fi
   - pip install -r dev-requirements.txt
-  - pip install -r optional-requirements.txt
 
 script:
   - manage lint
@@ -64,7 +87,7 @@ deploy:
   provider: pypi
   user: reubano
   password:
-    secure: secure
+    secure: N7MPQIBC8UbFhlQtxuNmYJuApcxnDwK3eVD8LN1mP5gtVQjZ82g5sRFcsOmQPgAGSVhSSgdaU63XfXiIDT+62Z9wm+I1eS5eZJ1pGbiqdM7RMUDsfthkRvl5Rret2RgJa5yd8UifDtEPThdbNot7soAfeIq2fnL1jnGG9dw0ffmoh0HQaHnvbAq8aVvAdrp4/KhkvhsKFKcKvAFOJKnw5E0N0ZTuPQk+kxKBlOC7qI8Zy8WY/+pdYHFk0PHQw05Sl/aX5OkQ44Tx6DhQX8gZepQGWfbTpz9m14n1wnJJnXQp+shby3N+0/yiT7KEeQP5YxlFOubSZm5IsuqyWnmm7vIry8Zz8oXn3IadWhoWcUtNJZVvF5rKRJV9V4lU16gj0z06iLJj/U67qEcWy+EufcS6TcxYvTsYzbMfbG1Z4sWEZZySJEqO8oGDMezt+XCGcQoZpJs5hrt8a4KJ1zYHyAJTXeLPce7clFGKFEXOQQiS1tBif6AjVSTWJdj0DEs0xXpk4x9q0/cza7Q+2K7fIFxkntGBfkbdUSL5/INBZ0ph0OGQ/fnTtHnvymx5N4+kqYNCuXxCyWeFzcwEN43G+lMeNlZ6Hj3aYqMYWg/Ji6txNdf6v3ERq0jxEKmdQAoRNMqIQZbozUeFFrOvH2cIQCQFthIHjr1petll71lAzcg=
 
   distributions: sdist bdist_wheel
   on:
