@@ -23,7 +23,7 @@ def pipe(test=False):
         .list)
 
     for i in stream:
-        pprint(i)
+        pprint(str(i['url']))
 
     return stream
 
@@ -35,4 +35,4 @@ def asyncPipe(reactor, test=False):
         .list)
 
     for i in stream:
-        pprint(i)
+        pprint(str(i['url']))

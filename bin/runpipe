@@ -30,7 +30,7 @@ else:
 
 
 from argparse import RawTextHelpFormatter, ArgumentParser
-from twisted.internet.task import react
+from riko.bado import react
 
 parser = ArgumentParser(
     description='description: Runs a riko pipe', prog='runpipe',
