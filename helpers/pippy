@@ -1,233 +1,32 @@
 #!/usr/bin/env sh -u
 #
 
-# source shflags
-. /usr/lib/shflags || return $?
-
-# configure shflags
-DEFINE_string 'cache' `echo ~/.pip/packages` 'path to package cache' 'c'
-DEFINE_string 'wheel' `echo ~/.pip/wheels` 'path to wheel dir' 'w'
-DEFINE_string 'requirements' '' 'the requirements file to install' 'r'
-DEFINE_boolean 'upgrade' 'false' 'install requirement even if already satisfied' 'u'
-DEFINE_boolean 'save' 'false' 'save wheel to cache' 's'
-DEFINE_boolean 'sudo' 'false' 'install with sudo privileges' 'H'
-DEFINE_boolean 'py3' 'false' 'install with python3' 'p'
-DEFINE_string 'package' '' 'the pip package(s)' '' true
-
-# parse the command-line
-FLAGS "$@" || exit 1
-[ ${FLAGS_help} -eq ${FLAGS_FALSE} ] || exit
-eval set -- "${FLAGS_ARGV}"
-
-# check for packages
-if [ $# -eq 0 ]; then
-  packages=''
-else
-  packages=$@
-fi
-
-if [ ${FLAGS_py3} -eq ${FLAGS_TRUE} ]; then
-  pip='pip3'
-else
-  pip='pip'
-fi
-
-if [ ${FLAGS_sudo} -eq ${FLAGS_TRUE} ]; then
-  install="sudo -H $pip install"
-else
-  install="$pip install"
-fi
-
-if [ ${FLAGS_upgrade} -eq ${FLAGS_TRUE} ]; then
-  cmd="$install --upgrade"
-else
-  cmd="$install"
-fi
-
-CFLAGS="-I /opt/local/include"
-LDFLAGS="-L /opt/local/lib"
-ARCHFLAGS="-arch x86_64"
-
-repl () {
-  printf "${1}%.0s" $(seq 2 $(echo $2 | wc -c))
-  echo
-}
-
-_download () {
-  package=$1
-
-  echo "Downloading $package..."
-
-  if $flags; then
-    CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" ARCHFLAGS="$ARCHFLAGS" \
-      $cmd --download=$FLAGS_cache $package
-  else
-    $cmd --download=$FLAGS_cache $package
-  fi
-
-  if [ $? -eq 0 ]; then
-    echo "$package downloaded!"
-    success=true
-  else
-    echo "Failed to download $package! Try again.\n"
-    success=false
-  fi
-}
-
-__install () {
-  package=$1
-  link=$FLAGS_wheel
-
-  echo "Checking for $package in cache..."
-
-  if [[ $package == pylibmc* ]]; then
-    option="--with-libmemcached=/opt/local"
-  else
-    option=false
-  fi
-
-  if $flags; then
-    CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" ARCHFLAGS="$ARCHFLAGS" \
-      $cmd --use-wheel --no-index --find-links="$link" $package
-  elif $option; then
-    $cmd --use-wheel --no-index --find-links="$link" \
-      --install-option="$option" $package
-  else
-    $cmd --use-wheel --no-index --find-links="$link" $package
-  fi
-
-  if [ $? -eq 0 ]; then
-    echo "$package installed from $FLAGS_wheel!"
-    success=true
-  else
-    echo "$package not found in $FLAGS_wheel."
-    echo "Trying $FLAGS_cache..."
-
-    link=$FLAGS_cache
-
-    if $flags; then
-      CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" ARCHFLAGS="$ARCHFLAGS" \
-        $cmd --use-wheel --no-index --find-links="$link" $package
-    elif $option; then
-      $cmd --use-wheel --no-index --find-links="$link" \
-        --install-option="$option" $package
-    else
-      $cmd --use-wheel --no-index --find-links="$link" $package
-    fi
-
-    if [ $? -eq 0 ]; then
-      echo "$package installed from $FLAGS_cache!\n"
-      success=true
-    else
-      echo "$package not found in $FLAGS_cache!\n"
-      success=false
-    fi
-  fi
-}
-
-_make_wheel () {
-  package=$1
-
-  echo "Creating $package wheel..."
-
-  if [[ $package == pylibmc* ]]; then
-    option="--with-libmemcached=/opt/local"
-  else
-    option=false
-  fi
-
-  if $flags; then
-    CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" ARCHFLAGS="$ARCHFLAGS" \
-      pip wheel --wheel-dir=$FLAGS_wheel --no-index --find-links=$FLAGS_cache \
-      $package
-  elif $option; then
-    pip wheel --wheel-dir=$FLAGS_wheel --no-index --find-links=$FLAGS_cache \
-      --build-option="$option" $package
-  else
-    pip wheel --wheel-dir=$FLAGS_wheel --no-index --find-links=$FLAGS_cache \
-      $package
-  fi
-
-  if [ $? -eq 0 ]; then
-    echo "$package wheel created!"
-    success=true
-  else
-    echo "Failed to create $package wheel! Try again.\n"
-    success=false
-  fi
-}
-
 _install () {
   package=$1
+  echo "installing $package from $PIP_WHEEL_DIR..."
+  pip install --use-wheel --no-index --find-links="$PIP_FIND_LINKS" $package
 
-  repl '*' "Installing $package..."
-  echo "Installing $package..."
-  repl '*' "Installing $package..."
+  if [ $? -eq 1 ]; then
+    echo "$package not found in cache, downloading..."
 
-  if [[ $package == scrapy* ]] || [[ $package == service_identity* ]] || [[ $package == gevent* ]]; then
-    flags=true
-  else
-    flags=false
-  fi
-
-  __install $package
-
-  if [ $success == true ]; then
-    if [ ${FLAGS_save} -eq ${FLAGS_TRUE} ]; then
-      _make_wheel $package
+    if [ $package == 'wheel' ]; then
+      pip install wheel
+    else
+      pip download --src="$PIP_CACHE_DIR" $package
+      pip wheel --wheel-dir="$PIP_WHEEL_DIR" --no-index \
+        --find-links="$PIP_CACHE_DIR" $package
+      pip install --use-wheel --no-index \
+        --find-links="$PIP_FIND_LINKS" $package
     fi
-
-    continue
-  else
-    _download $package
-  fi
-
-  if [ $success == false ]; then
-    continue
-  fi
-
-  _make_wheel $package
-
-  if [ $success == false ]; then
-    continue
-  fi
-
-  __install $package
-}
-
-pippy () {
-  if $1; then
-    cd $2
-    file=$3
-    PREVDIR=$(dirname $3)
-
-    while read package || [[ -n $package ]]; do
-      if [[ $package == -r* ]]; then
-        pippy true $PREVDIR $(echo "$package" | cut -d' ' -f2)
-      fi
-
-      [ "$package" == '' ] || _install $package
-    done < $file
-  else
-    for package in "${@:3}"; do
-      _install $package
-    done
   fi
 }
 
-if [ "${FLAGS_requirements}" != '' ]; then
-  pippy true '.' ${FLAGS_requirements}
-fi
+if [ "$1" == "-e" ]; then
+  pip install $@
+else
+  _install wheel
 
-if [ "$packages" != '' ]; then
-  pippy false '.' $packages
-fi
-
-# move any orphan wheel files (e.g., when dependencies were installed)
-WHEEL_CNT=$(ls $FLAGS_cache/*.whl 2> /dev/null | wc -l)
-
-if [ $WHEEL_CNT -gt 0 ]; then
-  for WHEEL in `ls $FLAGS_cache/*.whl`; do
-    mv "$WHEEL" "$FLAGS_wheel/"
+  for package in "$@"; do
+    _install $package
   done
 fi

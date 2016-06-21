@@ -1,7 +1,7 @@
 Babel~=2.3.4
 chardet~=2.3.0
 feedparser~=5.1.3
-meza~=0.29.0
+meza>=0.29.4,<0.30.0
 Mezmorize~=0.16.1
 python-dateutil~=2.4.2
 pygogo~=0.8.13
