@@ -90,7 +90,7 @@ class Objectify(object):
             >>> initialdata = {'one': 1, 'two': 2}
             >>> defaults = {'two': 5, 'three': 3}
             >>> kw = Objectify(initialdata, **defaults)
-            >>> sorted(kw.keys()) == ['one', 'three', 'two']
+            >>> sorted(kw) == ['one', 'three', 'two']
             True
             >>> dict(kw) == {'one': 1, 'two': 2, 'three': 3}
             True
@@ -127,7 +127,7 @@ class Objectify(object):
         return self.func(attr) if self.func else attr
 
     def __iter__(self):
-        return iter(self.data.values())
+        return iter(self.data)
 
 
 class SleepyDict(dict):
@@ -302,8 +302,8 @@ def betwix(iterable, start=None, stop=None, inc=False):
                 break
 
     get_pred = lambda sentinel: lambda x: sentinel not in x
-    first = it.dropwhile(get_pred(start), iterable) if start else iterable
     pred = get_pred(stop)
+    first = it.dropwhile(get_pred(start), iterable) if start else iterable
 
     if stop and inc:
         last = inc_takewhile(pred, first)

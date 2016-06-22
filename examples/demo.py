@@ -34,7 +34,7 @@ Fetching feeds
     ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
     >>> feed = fetch(conf={'url': url})
     >>> item = next(feed)
-    >>> set(item.keys()).issuperset(intersection)
+    >>> set(item).issuperset(intersection)
     True
     >>> item['title'][:24] == 'This Is What A Celebrity'
     True

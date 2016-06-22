@@ -46,7 +46,7 @@ END_HANDLER = 2
 IDENTCHARS = '.-_:'
 LENIENT_IDENTCHARS = IDENTCHARS + ';+#/%~'
 
-nop = lambda *a, **kw: None
+nop = lambda *args, **kwargs: None
 
 
 def zipfndict(*args):
@@ -148,15 +148,9 @@ class XMLParser(Protocol):
 
     def dataReceived(self, data):
         stateTable = self._buildStateTable()
-
-        if not self.encoding:
-            self.encoding = detect(data)['encoding']
-
+        self.encoding = self.encoding or detect(data)['encoding']
         self.check_encoding(data)
-
-        if not self.state:
-            self.state = 'begin'
-
+        self.state = self.state or 'begin'
         content = decode(data, self.encoding)
 
         # bring state, lineno, colno into local scope
@@ -466,6 +460,7 @@ class XMLParser(Protocol):
             elif byte == '/':
                 self._beforeeq_termtag = 1
                 return
+
         self._parseError("Invalid attribute")
 
     def begin_attrval(self, byte):
@@ -517,11 +512,10 @@ class XMLParser(Protocol):
         if self._after_slash_closed:
             self._parseError("Mal-formed")  # XXX When does this happen??
 
-        if byte != '>':
-            if self.lenient:
-                return
-            else:
-                self._parseError("No data allowed after '/'")
+        if byte != '>' and self.lenient:
+            return
+        elif byte != '>':
+            self._parseError("No data allowed after '/'")
 
         self._after_slash_closed = 1
         self.gotTagStart(self.tagName, self.tagAttributes)

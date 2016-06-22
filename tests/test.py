@@ -30,6 +30,8 @@ try:
 except ImportError:
     _isasync = False
 
+PARENT_DIR = p.abspath(p.dirname(p.dirname(__file__)))
+
 
 def main(script, tests, verbose=False, stop=True):
     """ Main method
@@ -50,7 +52,7 @@ def main(script, tests, verbose=False, stop=True):
         joined_args = '"%s"' % '" "'.join(arguments) if arguments else ''
         command = "%s %s %s" % (script, joined_opts, joined_args)
         short_command = "%s %s %s" % (short_script, joined_opts, joined_args)
-        result = env.run(command, cwd=p.abspath(p.dirname(p.dirname(__file__))))
+        result = env.run(command, cwd=PARENT_DIR, expect_stderr=True)
         output = result.stdout
 
         if isinstance(expected, bool):
@@ -92,9 +94,8 @@ def main(script, tests, verbose=False, stop=True):
     sys.exit(failures)
 
 if __name__ == '__main__':
-    parent_dir = p.abspath(p.dirname(p.dirname(__file__)))
-    demo = p.join(parent_dir, 'bin', 'runpipe')
-    benchmark = p.join(parent_dir, 'bin', 'benchmark')
+    demo = p.join(PARENT_DIR, 'bin', 'runpipe')
+    benchmark = p.join(PARENT_DIR, 'bin', 'benchmark')
     text = 'Deadline to clear up health law eligibility near 682\n'
     runpipe_tests = [
         ([], ['demo'], text),

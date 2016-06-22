@@ -110,7 +110,7 @@ Fetching feeds
     ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
     ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
     >>> item = next(stream)
-    >>> set(item.keys()).issuperset(intersection)
+    >>> set(item).issuperset(intersection)
     True
     >>> item['title'] == 'Using NFC tags in the car'
     True
@@ -362,7 +362,7 @@ Design Principles
     ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
     >>> conf = {'url': {'subkey': 'url'}}
     >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
-    >>> set(next(result).keys()).issuperset(intersection)
+    >>> set(next(result)).issuperset(intersection)
     True
 """
 from __future__ import (

@@ -22,7 +22,7 @@ Examples:
         >>> from riko.modules.pipefeedautodiscovery import pipe
         >>>
         >>> entry = next(pipe(conf={'url': get_path('bbc.html')}))
-        >>> sorted(entry.keys()) == ['href', 'hreflang', 'link', 'rel', 'tag']
+        >>> sorted(entry) == ['href', 'hreflang', 'link', 'rel', 'tag']
         True
         >>> entry['link'] == 'file://riko/data/greenhughes.xml'
         True

@@ -252,8 +252,7 @@ class Node(object):
             raise ValueError("oldChild is not a child of this node")
 
         self.childNodes[self.childNodes.index(oldChild)] = newChild
-        oldChild.parentNode = None
-        newChild.parentNode = self
+        oldChild.parentNodem, newChild.parentNode = None, self
 
     def lastChild(self):
         return self.childNodes[-1]
@@ -828,12 +827,7 @@ class MicroDOMParser(XMLParser):
             e = e.firstChild()
 
             if isinstance(e, (CDATASection, Comment)):
-                el.childNodes = []
-
-                if prefix:
-                    el.childNodes.append(Text(prefix))
-
-                el.childNodes.append(e)
+                el.childNodes = [e] + ([Text(prefix)] if prefix else [])
 
     def gotDoctype(self, doctype):
         self._mddoctype = doctype
@@ -895,13 +889,13 @@ class MicroDOMParser(XMLParser):
         new_namespaces = combine_dicts(namespaces, newspaces)
         gen_attr_args = (new_unesc_attributes, new_namespaces)
         new_attributes = dict(self._gen_attrs(*gen_attr_args))
-        args = (name, new_attributes, parent, self.filename, self.saveMark())
+        el_args = (name, new_attributes, parent, self.filename, self.saveMark())
 
         kwargs = {
             'case_insensitive': self.case_insensitive,
             'namespace': new_namespaces.get('')}
 
-        el = Element(*args, **kwargs)
+        el = Element(*el_args, **kwargs)
         revspaces = invert_dict(newspaces)
         el.addPrefixes(revspaces)
 
