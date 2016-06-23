@@ -64,7 +64,7 @@ def asyncParser(stream, rules, tuples, **kwargs):
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.bado import react
+        >>> from riko.bado import react, _issync
         >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
@@ -77,11 +77,13 @@ def asyncParser(stream, rules, tuples, **kwargs):
         ...     d = asyncParser(stream, [rule], tuples, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> if _issync:
+        ...     True
+        ... else:
+        ...     try:
+        ...         react(run, _reactor=FakeReactor())
+        ...     except SystemExit:
+        ...         pass
         True
     """
     return ait.asyncReduce(reducer, rules, stream)

@@ -178,7 +178,7 @@ class processor(object):
                 input `item`.
 
         Examples:
-            >>> from riko.bado import react, util as tu
+            >>> from riko.bado import react, util as tu, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> @processor()
@@ -216,11 +216,13 @@ class processor(object):
             ...     d = asyncPipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
-            >>> try:
-            ...     react(run, _reactor=FakeReactor())
-            ... except SystemExit:
-            ...     pass
-            ...
+            >>> if _issync:
+            ...     True
+            ... else:
+            ...     try:
+            ...         react(run, _reactor=FakeReactor())
+            ...     except SystemExit:
+            ...         pass
             True
         """
         self.defaults = defaults or {}
@@ -240,7 +242,7 @@ class processor(object):
             Deferred: twisted.internet.defer.Deferred generator of items
 
         Examples:
-            >>> from riko.bado import react
+            >>> from riko.bado import react, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> kwargs = {
@@ -281,11 +283,13 @@ class processor(object):
             ...     d = asyncPipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
-            >>> try:
-            ...     react(run, _reactor=FakeReactor())
-            ... except SystemExit:
-            ...     pass
-            ...
+            >>> if _issync:
+            ...     True
+            ... else:
+            ...     try:
+            ...         react(run, _reactor=FakeReactor())
+            ...     except SystemExit:
+            ...         pass
             True
         """
         @wraps(pipe)
@@ -406,7 +410,7 @@ class operator(object):
                 attribute (default: True).
 
         Examples:
-            >>> from riko.bado import react, util as tu
+            >>> from riko.bado import react, util as tu, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> # emit is True by default
@@ -453,11 +457,14 @@ class operator(object):
             ...     r2 = yield asyncPipe2(items, **kwargs)
             ...     print(next(r2) == {'content': 4})
             ...
-            >>> try:
-            ...     react(run, _reactor=FakeReactor())
-            ... except SystemExit:
-            ...     pass
-            ...
+            >>> if _issync:
+            ...     True
+            ...     True
+            ... else:
+            ...     try:
+            ...         react(run, _reactor=FakeReactor())
+            ...     except SystemExit:
+            ...         pass
             True
             True
         """
@@ -478,7 +485,7 @@ class operator(object):
             Deferred: twisted.internet.defer.Deferred generator of items
 
         Examples:
-            >>> from riko.bado import react
+            >>> from riko.bado import react, _issync
             >>> from riko.bado.mock import FakeReactor
             >>> from riko.bado.util import maybeDeferred
             >>>
@@ -530,11 +537,14 @@ class operator(object):
             ...     r2 = yield asyncPipe2(items, **kwargs)
             ...     print(next(r2) == {'content': 4})
             ...
-            >>> try:
-            ...     react(run, _reactor=FakeReactor())
-            ... except SystemExit:
-            ...     pass
-            ...
+            >>> if _issync:
+            ...     True
+            ...     True
+            ... else:
+            ...     try:
+            ...         react(run, _reactor=FakeReactor())
+            ...     except SystemExit:
+            ...         pass
             True
             True
         """

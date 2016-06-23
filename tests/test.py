@@ -25,6 +25,10 @@ from scripttest import TestFileEnvironment
 
 sys.path.append('../riko')
 
+try:
+    from riko.bado import _isasync
+except ImportError:
+    _isasync = False
 
 def main(script, tests, verbose=False, stop=True):
     """ Main method
@@ -93,10 +97,12 @@ if __name__ == '__main__':
     text = 'Deadline to clear up health law eligibility near 682\n'
     runpipe_tests = [
         ([], ['demo'], text),
-        (['-a'], ['demo'], text),
-        ([], ['simple1'], "'farechart'\n"),
-        (['-a'], ['simple1'], "'farechart'\n"),
-    ]
+        ([], ['simple1'], "'farechart'\n")]
+
+    if _isasync:
+        runpipe_tests += [
+            (['-a'], ['demo'], text),
+            (['-a'], ['simple1'], "'farechart'\n")]
 
     main(demo, runpipe_tests)
     main(benchmark, [([], [], '')])

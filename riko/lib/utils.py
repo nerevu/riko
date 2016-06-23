@@ -327,20 +327,20 @@ def xpath(tree, path, pos=0):
     try:
         elements = tree.xpath(path)
     except AttributeError:
-        tags = path.split('/')[1:] if path else []
+        tags = path.split('/')[1:] or [path]
 
         try:
             elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
         except AttributeError:
-            return iter(tree.findall('./%s' % '/'.join(tags[1:])))
+            elements = tree.findall('./%s' % '/'.join(tags[1:]))
         else:
             if len(tags or [1]) - pos == 1:
                 return elements
             else:
                 for element in elements:
                     return xpath(element, path, pos + 1)
-    else:
-        return iter(elements)
+
+    return iter(elements)
 
 
 def xml2etree(f, xml=True, html5=False):

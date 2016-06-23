@@ -9,7 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko import get_path
-        >>> from riko.bado import coroutine, react
+        >>> from riko.bado import coroutine, react, _issync
         >>> from riko.bado.mock import FakeReactor
         >>> from riko.collections.async import AsyncPipe, AsyncCollection
         >>>
@@ -34,11 +34,14 @@ Examples:
         ...     d2 = yield AsyncCollection(sources).list
         ...     print(len(d2))
         ...
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> if _issync:
+        ...     True
+        ...     56
+        ... else:
+        ...     try:
+        ...         react(run, _reactor=FakeReactor())
+        ...     except SystemExit:
+        ...         pass
         True
         56
 """

@@ -229,7 +229,7 @@ Parallel processing
 Asynchronous processing
 
     >>> from riko import get_path
-    >>> from riko.bado import coroutine, react
+    >>> from riko.bado import coroutine, react, _issync, _isasync
     >>> from riko.bado.mock import FakeReactor
     >>> from riko.collections.async import AsyncPipe
     >>>
@@ -266,10 +266,13 @@ Asynchronous processing
     ...
     ...     print(len(stream))
     ...
-    >>> try:
-    ...     react(run, _reactor=FakeReactor())
-    ... except SystemExit:
-    ...     pass
+    >>> if _issync:
+    ...     25
+    ... else:
+    ...     try:
+    ...         react(run, _reactor=FakeReactor())
+    ...     except SystemExit:
+    ...         pass
     25
 
 
@@ -327,7 +330,8 @@ Design Principles
     >>> from riko.modules.pipefetchpage import asyncPipe
     >>> from riko.modules.pipecount import pipe
     >>>
-    >>> asyncPipe.__dict__ == {'type': 'processor', 'sub_type': 'source'}
+    >>> resp = {'type': 'processor', 'sub_type': 'source'}
+    >>> asyncPipe.__dict__ == (resp if _isasync else {})
     True
     >>> pipe.__dict__ == {
     ...     'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
