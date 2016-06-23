@@ -23,44 +23,41 @@ does not:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
+from builtins import *
+
+from chardet import detect
+from meza._compat import decode
 from twisted.internet.protocol import Protocol
 from twisted.python.reflect import prefixedMethodNames
 
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 # Elements of the three-tuples in the state table.
 BEGIN_HANDLER = 0
 DO_HANDLER = 1
 END_HANDLER = 2
+IDENTCHARS = '.-_:'
+LENIENT_IDENTCHARS = IDENTCHARS + ';+#/%~'
 
-identChars = '.-_:'
-lenientIdentChars = identChars + ';+#/%~'
-
-def nop(*args, **kw):
-    "Do nothing."
+nop = lambda *a, **kw: None
 
 
-def unionlist(*args):
-    l = []
-    for x in args:
-        l.extend(x)
-    d = dict([(x, 1) for x in l])
-    return d.keys()
-
-
-def zipfndict(*args, **kw):
-    default = kw.get('default', nop)
-    d = {}
-    for key in unionlist(*[fndict.keys() for fndict in args]):
-        d[key] = tuple([x.get(key, default) for x in args])
-    return d
+def zipfndict(*args):
+    for fndict in args:
+        for key in fndict:
+            yield (key, tuple(x.get(key, nop) for x in args))
 
 
 def prefixedMethodClassDict(clazz, prefix):
-    return dict([(name, getattr(clazz, prefix + name)) for name in prefixedMethodNames(clazz, prefix)])
+    names = prefixedMethodNames(clazz, prefix)
+    return {name: getattr(clazz, prefix + name) for name in names}
 
 
 def prefixedMethodObjDict(obj, prefix):
-    return dict([(name, getattr(obj, prefix + name)) for name in prefixedMethodNames(obj.__class__, prefix)])
+    names = prefixedMethodNames(obj.__class__, prefix)
+    return {name: getattr(obj, prefix + name) for name in names}
 
 
 class ParseError(Exception):
@@ -71,15 +68,19 @@ class ParseError(Exception):
         self.message = message
 
     def __str__(self):
-       return "%s:%s:%s: %s" % (self.filename, self.line, self.col,
-                                self.message)
+        return "%s:%s:%s: %s" % (
+            self.filename, self.line, self.col, self.message)
+
 
 class XMLParser(Protocol):
     state = None
-    encodings = None
+    encoding = None
     filename = "<xml />"
-    beExtremelyLenient = 0
-    _prepend = None
+    lenient = 0
+    strict = not lenient
+    bom = None
+    attrname = ''
+    attrval = ''
 
     # _leadingBodyData will sometimes be set before switching to the
     # 'bodydata' state, when we "accidentally" read a byte of bodydata
@@ -89,7 +90,6 @@ class XMLParser(Protocol):
     def connectionMade(self):
         self.lineno = 1
         self.colno = 0
-        self.encodings = []
 
     def saveMark(self):
         '''Get the line number and column of the last character parsed'''
@@ -97,7 +97,7 @@ class XMLParser(Protocol):
         return (self.lineno, self.colno)
 
     def _parseError(self, message):
-        raise ParseError(*((self.filename,)+self.saveMark()+(message,)))
+        raise ParseError(*((self.filename,) + self.saveMark() + (message,)))
 
     def _buildStateTable(self):
         '''Return a dictionary of begin, do, end state function tuples'''
@@ -105,20 +105,21 @@ class XMLParser(Protocol):
         # does.. probably slowly, so I'm doing some evil caching so it doesn't
         # get called more than once per class.
         stateTable = getattr(self.__class__, '__stateTable', None)
+
         if stateTable is None:
-            stateTable = self.__class__.__stateTable = zipfndict(
-                *[prefixedMethodObjDict(self, prefix)
-                  for prefix in ('begin_', 'do_', 'end_')])
+            prefixes = ('begin_', 'do_', 'end_')
+            fndicts = (prefixedMethodObjDict(self, p) for p in prefixes)
+            stateTable = dict(zipfndict(*fndicts))
+            self.__class__.__stateTable = stateTable
+
         return stateTable
 
-    def _decode(self, data):
-        if 'UTF-16' in self.encodings or 'UCS-2' in self.encodings:
+    def check_encoding(self, data):
+        if self.encoding.startswith('UTF-16'):
+            data = data[2:]
+
+        if 'UTF-16' in self.encoding or 'UCS-2' in self.encoding:
             assert not len(data) & 1, 'UTF-16 must come in pairs for now'
-        if self._prepend:
-            data = self._prepend + data
-        for encoding in self.encodings:
-            data = unicode(data, encoding)
-        return data
 
     def maybeBodyData(self):
         if self.endtag:
@@ -131,63 +132,62 @@ class XMLParser(Protocol):
         # BUT <script src="foo"> will be special-cased to do regular,
         # lenient behavior, because those may not have </script>
         # -radix
-
         if (self.tagName == 'script' and 'src' not in self.tagAttributes):
             # we do this ourselves rather than having begin_waitforendscript
             # because that can get called multiple times and we don't want
             # bodydata to get reset other than the first time.
             self.begin_bodydata(None)
             return 'waitforendscript'
+
         return 'bodydata'
-
-
 
     def dataReceived(self, data):
         stateTable = self._buildStateTable()
+
+        if not self.encoding:
+            self.encoding = detect(data)['encoding']
+
+        self.check_encoding(data)
+
         if not self.state:
-            # all UTF-16 starts with this string
-            if data.startswith('\xff\xfe'):
-                self._prepend = '\xff\xfe'
-                self.encodings.append('UTF-16')
-                data = data[2:]
-            elif data.startswith('\xfe\xff'):
-                self._prepend = '\xfe\xff'
-                self.encodings.append('UTF-16')
-                data = data[2:]
             self.state = 'begin'
-        if self.encodings:
-            data = self._decode(data)
+
+        content = decode(data, self.encoding)
+
         # bring state, lineno, colno into local scope
         lineno, colno = self.lineno, self.colno
         curState = self.state
+
         # replace saveMark with a nested scope function
-        _saveMark = self.saveMark
-        def saveMark():
-            return (lineno, colno)
-        self.saveMark = saveMark
+        saveMark = lambda: (lineno, colno)
+        self.saveMark, _saveMark = saveMark, self.saveMark
+
         # fetch functions from the stateTable
         beginFn, doFn, endFn = stateTable[curState]
+
         try:
-            for byte in data:
+            for char in content:
                 # do newline stuff
-                if byte == '\n':
+                if char == '\n':
                     lineno += 1
                     colno = 0
                 else:
                     colno += 1
-                newState = doFn(byte)
+
+                newState = doFn(char)
+
                 if newState is not None and newState != curState:
                     # this is the endFn from the previous state
                     endFn()
                     curState = newState
                     beginFn, doFn, endFn = stateTable[curState]
-                    beginFn(byte)
+                    beginFn(char)
         finally:
             self.saveMark = _saveMark
             self.lineno, self.colno = lineno, colno
+
         # state doesn't make sense if there's an exception..
         self.state = curState
-
 
     def connectionLost(self, reason):
         """
@@ -196,14 +196,13 @@ class XMLParser(Protocol):
         stateTable = self._buildStateTable()
         stateTable[self.state][END_HANDLER]()
 
-
     # state methods
 
     def do_begin(self, byte):
         if byte.isspace():
             return
         if byte != '<':
-            if self.beExtremelyLenient:
+            if self.lenient:
                 self._leadingBodyData = byte
                 return 'bodydata'
             self._parseError("First char of document [%r] wasn't <" % (byte,))
@@ -225,48 +224,59 @@ class XMLParser(Protocol):
         self.endtag = 0
 
     def do_tagstart(self, byte):
-        if byte.isalnum() or byte in identChars:
-            self.tagName += byte
-            if self.tagName == '!--':
-                return 'comment'
-        elif byte.isspace():
-            if self.tagName:
-                if self.endtag:
-                    # properly strict thing to do here is probably to only
-                    # accept whitespace
-                    return 'waitforgt'
-                return 'attrs'
-            else:
-                self._parseError("Whitespace before tag-name")
+        val = None
+        isspace = byte.isspace()
+        alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
+        good = byte in IDENTCHARS + '/!?['
+        real_good = good or byte.isalnum() or byte.isspace()
+
+        if isspace and not self.tagName:
+            self._parseError("Whitespace before tag-name")
+        elif byte in '!?' and self.tagName and self.strict:
+            self._parseError("Invalid character in tag-name")
+        elif byte == '[' and not self.tagName == '!':
+            self._parseError("Invalid '[' in tag-name")
+
+        if alnum_or_ident and self.tagName == '!--':
+            val = 'comment'
+        elif isspace and self.tagName and self.endtag:
+            # properly strict thing to do here is probably to only
+            # accept whitespace
+            val = 'waitforgt'
+        elif isspace and self.tagName:
+            val = 'attrs'
+        elif byte == '>' and self.endtag:
+            val = 'bodydata'
         elif byte == '>':
-            if self.endtag:
-                self.gotTagEnd(self.tagName)
-                return 'bodydata'
-            else:
-                self.gotTagStart(self.tagName, {})
-                return (not self.beExtremelyLenient) and 'bodydata' or self.maybeBodyData()
-        elif byte == '/':
-            if self.tagName:
-                return 'afterslash'
-            else:
-                self.endtag = 1
-        elif byte in '!?':
-            if self.tagName:
-                if not self.beExtremelyLenient:
-                    self._parseError("Invalid character in tag-name")
-            else:
-                self.tagName += byte
-                self.termtag = 1
-        elif byte == '[':
-            if self.tagName == '!':
-                return 'expectcdata'
-            else:
-                self._parseError("Invalid '[' in tag-name")
-        else:
-            if self.beExtremelyLenient:
-                self.bodydata = '<'
-                return 'unentity'
-            self._parseError('Invalid tag character: %r'% byte)
+            val = self.strict and 'bodydata' or self.maybeBodyData()
+        elif byte == '/' and self.tagName:
+            val = 'afterslash'
+        elif byte == '[' and self.tagName == '!':
+            val = 'expectcdata'
+
+        if not any([self.lenient, val, real_good]):
+            self._parseError('Invalid tag character: %r' % byte)
+        elif self.lenient:
+            self.bodydata = '<'
+            val = 'unentity'
+
+        self._update_tags(byte)
+        return val
+
+    def _update_tags(self, byte):
+        alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
+
+        if (byte in '!?') or alnum_or_ident:
+            self.tagName += byte
+        elif byte == '>' and self.endtag:
+            self.gotTagEnd(self.tagName)
+        elif byte == '>':
+            self.gotTagStart(self.tagName, {})
+        elif byte == '/' and not self.tagName:
+            self.endtag = 1
+        elif byte in '!?' and not self.tagName:
+            self.tagName += byte
+            self.termtag = 1
 
     def begin_unentity(self, byte):
         self.bodydata += byte
@@ -285,20 +295,22 @@ class XMLParser(Protocol):
         self.cdatabuf += byte
         cdb = self.cdatabuf
         cd = '[CDATA['
+
         if len(cd) > len(cdb):
             if cd.startswith(cdb):
                 return
-            elif self.beExtremelyLenient:
-                ## WHAT THE CRAP!?  MSWord9 generates HTML that includes these
-                ## bizarre <![if !foo]> <![endif]> chunks, so I've gotta ignore
-                ## 'em as best I can.  this should really be a separate parse
-                ## state but I don't even have any idea what these _are_.
+            elif self.lenient:
+                # WHAT THE CRAP!?  MSWord9 generates HTML that includes these
+                # bizarre <![if !foo]> <![endif]> chunks, so I've gotta ignore
+                # 'em as best I can.  this should really be a separate parse
+                # state but I don't even have any idea what these _are_.
                 return 'waitforgt'
             else:
                 self._parseError("Mal-formed CDATA header")
         if cd == cdb:
             self.cdatabuf = ''
             return 'cdata'
+
         self._parseError("Mal-formed CDATA header")
 
     def do_cdata(self, byte):
@@ -312,24 +324,27 @@ class XMLParser(Protocol):
         self.cdatabuf = ''
 
     def do_attrs(self, byte):
-        if byte.isalnum() or byte in identChars:
+        if byte.isalnum() or byte in IDENTCHARS:
             # XXX FIXME really handle !DOCTYPE at some point
             if self.tagName == '!DOCTYPE':
                 return 'doctype'
+
             if self.tagName[0] in '!?':
                 return 'waitforgt'
+
             return 'attrname'
         elif byte.isspace():
             return
         elif byte == '>':
             self.gotTagStart(self.tagName, self.tagAttributes)
-            return (not self.beExtremelyLenient) and 'bodydata' or self.maybeBodyData()
+            return self.strict and 'bodydata' or self.maybeBodyData()
         elif byte == '/':
             return 'afterslash'
-        elif self.beExtremelyLenient:
+        elif self.lenient:
             # discard and move on?  Only case I've seen of this so far was:
             # <foo bar="baz"">
             return
+
         self._parseError("Unexpected character: %r" % byte)
 
     def begin_doctype(self, byte):
@@ -338,6 +353,7 @@ class XMLParser(Protocol):
     def do_doctype(self, byte):
         if byte == '>':
             return 'bodydata'
+
         self.doctype += byte
 
     def end_doctype(self):
@@ -346,8 +362,9 @@ class XMLParser(Protocol):
 
     def do_waitforgt(self, byte):
         if byte == '>':
-            if self.endtag or not self.beExtremelyLenient:
+            if self.endtag or self.lenient:
                 return 'bodydata'
+
             return self.maybeBodyData()
 
     def begin_attrname(self, byte):
@@ -355,58 +372,65 @@ class XMLParser(Protocol):
         self._attrname_termtag = 0
 
     def do_attrname(self, byte):
-        if byte.isalnum() or byte in identChars:
+        val = None
+
+        if byte.isalnum() or byte in IDENTCHARS:
             self.attrname += byte
-            return
         elif byte == '=':
-            return 'beforeattrval'
+            val = 'beforeattrval'
         elif byte.isspace():
-            return 'beforeeq'
-        elif self.beExtremelyLenient:
-            if byte in '"\'':
-                return 'attrval'
-            if byte in lenientIdentChars or byte.isalnum():
-                self.attrname += byte
-                return
-            if byte == '/':
-                self._attrname_termtag = 1
-                return
-            if byte == '>':
-                self.attrval = 'True'
-                self.tagAttributes[self.attrname] = self.attrval
-                self.gotTagStart(self.tagName, self.tagAttributes)
-                if self._attrname_termtag:
-                    self.gotTagEnd(self.tagName)
-                    return 'bodydata'
-                return self.maybeBodyData()
-            # something is really broken. let's leave this attribute where it
-            # is and move on to the next thing
-            return
-        self._parseError("Invalid attribute name: %r %r" % (self.attrname, byte))
+            val = 'beforeeq'
+        elif not self.lenient:
+            msg = "Invalid attribute name: %r %r" % (self.attrname, byte)
+            self._parseError(msg)
+        elif byte in '"\'':
+            val = 'attrval'
+        elif byte in LENIENT_IDENTCHARS or byte.isalnum():
+            self.attrname += byte
+        elif byte == '/':
+            self._attrname_termtag = 1
+        elif byte == '>':
+            self.attrval = 'True'
+            self.tagAttributes[self.attrname] = self.attrval
+            self.gotTagStart(self.tagName, self.tagAttributes)
+
+            if self._attrname_termtag:
+                self.gotTagEnd(self.tagName)
+                val = 'bodydata'
+        elif byte == '>':
+            val = self.maybeBodyData()
+
+        # something is really broken. let's leave this attribute where it
+        # is and move on to the next thing
+        return val
 
     def do_beforeattrval(self, byte):
+        chars = LENIENT_IDENTCHARS
+        val = None
+
         if byte in '"\'':
-            return 'attrval'
+            val = 'attrval'
         elif byte.isspace():
-            return
-        elif self.beExtremelyLenient:
-            if byte in lenientIdentChars or byte.isalnum():
-                return 'messyattr'
-            if byte == '>':
-                self.attrval = 'True'
-                self.tagAttributes[self.attrname] = self.attrval
-                self.gotTagStart(self.tagName, self.tagAttributes)
-                return self.maybeBodyData()
-            if byte == '\\':
-                # I saw this in actual HTML once:
-                # <font size=\"3\"><sup>SM</sup></font>
-                return
-        self._parseError("Invalid initial attribute value: %r; Attribute values must be quoted." % byte)
+            pass
+        elif self.lenient and (byte in chars or byte.isalnum()):
+            val = 'messyattr'
+        elif self.lenient and byte == '>':
+            self.attrval = 'True'
+            self.tagAttributes[self.attrname] = self.attrval
+            self.gotTagStart(self.tagName, self.tagAttributes)
+            val = self.maybeBodyData()
+        elif self.lenient and byte == '\\':
+            # I saw this in actual HTML once:
+            # <font size=\"3\"><sup>SM</sup></font>
+            pass
+        else:
+            msg = 'Invalid initial attribute value: %r; ' % byte
+            msg += 'Attribute values must be quoted.'
+            self._parseError(msg)
 
-    attrname = ''
-    attrval = ''
+        return val
 
-    def begin_beforeeq(self,byte):
+    def begin_beforeeq(self, byte):
         self._beforeeq_termtag = 0
 
     def do_beforeeq(self, byte):
@@ -414,8 +438,8 @@ class XMLParser(Protocol):
             return 'beforeattrval'
         elif byte.isspace():
             return
-        elif self.beExtremelyLenient:
-            if byte.isalnum() or byte in identChars:
+        elif self.lenient:
+            if byte.isalnum() or byte in IDENTCHARS:
                 self.attrval = 'True'
                 self.tagAttributes[self.attrname] = self.attrval
                 return 'attrname'
@@ -423,9 +447,11 @@ class XMLParser(Protocol):
                 self.attrval = 'True'
                 self.tagAttributes[self.attrname] = self.attrval
                 self.gotTagStart(self.tagName, self.tagAttributes)
+
                 if self._beforeeq_termtag:
                     self.gotTagEnd(self.tagName)
                     return 'bodydata'
+
                 return self.maybeBodyData()
             elif byte == '/':
                 self._beforeeq_termtag = 1
@@ -453,14 +479,18 @@ class XMLParser(Protocol):
             return 'attrs'
         elif byte == '>':
             endTag = 0
+
             if self.attrval.endswith('/'):
                 endTag = 1
                 self.attrval = self.attrval[:-1]
+
             self.tagAttributes[self.attrname] = self.attrval
             self.gotTagStart(self.tagName, self.tagAttributes)
+
             if endTag:
                 self.gotTagEnd(self.tagName)
                 return 'bodydata'
+
             return self.maybeBodyData()
         else:
             self.attrval += byte
@@ -475,15 +505,18 @@ class XMLParser(Protocol):
     def do_afterslash(self, byte):
         # this state is only after a self-terminating slash, e.g. <foo/>
         if self._after_slash_closed:
-            self._parseError("Mal-formed")#XXX When does this happen??
+            self._parseError("Mal-formed")  # XXX When does this happen??
+
         if byte != '>':
-            if self.beExtremelyLenient:
+            if self.lenient:
                 return
             else:
                 self._parseError("No data allowed after '/'")
+
         self._after_slash_closed = 1
         self.gotTagStart(self.tagName, self.tagAttributes)
         self.gotTagEnd(self.tagName)
+
         # don't need maybeBodyData here because there better not be
         # any javascript code after a <script/>... we'll see :(
         return 'bodydata'
@@ -520,7 +553,8 @@ class XMLParser(Protocol):
         # 1 enforce / as first byte read
         # 2 enforce following bytes to be subset of "script" until
         #   tagName == "script"
-        #   2a when that happens, gotText(self.bodydata) and gotTagEnd(self.tagName)
+        #   2a when that happens, gotText(self.bodydata) and
+        #      gotTagEnd(self.tagName)
         # 3 spaces can happen anywhere, they're ignored
         #   e.g. < / script >
         # 4 anything else causes all data I've read to be moved to the
@@ -538,7 +572,7 @@ class XMLParser(Protocol):
             self.bodydata += "<" + self.temptagdata
             return 'waitforendscript'
         # 2
-        elif byte.isalnum() or byte in identChars:
+        elif byte.isalnum() or byte in IDENTCHARS:
             self.tagName += byte
             if not 'script'.startswith(self.tagName):
                 self.bodydata += "<" + self.temptagdata
@@ -555,14 +589,13 @@ class XMLParser(Protocol):
             self.bodydata += "<" + self.temptagdata
             return 'waitforendscript'
 
-
     def begin_entityref(self, byte):
         self.erefbuf = ''
-        self.erefextra = '' # extra bit for lenient mode
+        self.erefextra = ''  # extra bit for lenient mode
 
     def do_entityref(self, byte):
         if byte.isspace() or byte == "<":
-            if self.beExtremelyLenient:
+            if self.lenient:
                 # '&foo' probably was '&amp;foo'
                 if self.erefbuf and self.erefbuf != "amp":
                     self.erefextra = self.erefbuf
@@ -581,11 +614,12 @@ class XMLParser(Protocol):
     def end_entityref(self):
         self.gotEntityReference(self.erefbuf)
 
-    # hacky support for space after & in entityref in beExtremelyLenient
+    # hacky support for space after & in entityref in lenient
     # state should only happen in that case
     def begin_spacebodydata(self, byte):
         self.bodydata = self.erefextra
         self.erefextra = None
+
     do_spacebodydata = do_bodydata
     end_spacebodydata = end_bodydata
 
@@ -595,19 +629,19 @@ class XMLParser(Protocol):
         '''Encountered an opening tag.
 
         Default behaviour is to print.'''
-        print 'begin', name, attributes
+        print('begin', name, attributes)
 
     def gotText(self, data):
         '''Encountered text
 
         Default behaviour is to print.'''
-        print 'text:', repr(data)
+        print('text:', repr(data))
 
     def gotEntityReference(self, entityRef):
         '''Encountered mnemonic entity reference
 
         Default behaviour is to print.'''
-        print 'entityRef: &%s;' % entityRef
+        print('entityRef: &%s;' % entityRef)
 
     def gotComment(self, comment):
         '''Encountered comment.
@@ -627,10 +661,10 @@ class XMLParser(Protocol):
         This is really grotty: it basically just gives you everything between
         '<!DOCTYPE' and '>' as an argument.
         """
-        print '!DOCTYPE', repr(doctype)
+        print('!DOCTYPE', repr(doctype))
 
     def gotTagEnd(self, name):
         '''Encountered closing tag
 
         Default behaviour is to print.'''
-        print 'end', name
+        print('end', name)
