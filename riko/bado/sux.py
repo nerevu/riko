@@ -29,8 +29,13 @@ from builtins import *
 
 from chardet import detect
 from meza._compat import decode
-from twisted.internet.protocol import Protocol
-from twisted.python.reflect import prefixedMethodNames
+
+try:
+    from twisted.internet.protocol import Protocol
+except ImportError:
+    Protocol = object
+else:
+    from twisted.python.reflect import prefixedMethodNames
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 

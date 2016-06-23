@@ -29,7 +29,11 @@ from functools import partial
 from builtins import *
 
 from meza._compat import encode, decode
-from twisted.python.util import InsensitiveDict
+
+try:
+    from twisted.python.util import InsensitiveDict
+except ImportError:
+    pass
 
 from .sux import XMLParser, ParseError
 
