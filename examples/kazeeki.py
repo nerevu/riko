@@ -5,8 +5,8 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from pprint import pprint
-from riko.bado import coroutine
 from riko import get_path
+from riko.bado import coroutine
 from riko.lib.utils import combine_dicts as cdict
 from riko.collections.sync import SyncCollection
 from riko.collections.async import AsyncCollection
@@ -200,9 +200,9 @@ test3 = lambda item: item.get('k:cur_code') == DEF_CUR_CODE
 test4 = lambda item: item.get('k:job_type') != 'hourly'
 
 sources = [
-    {'url': 'file://data/kazeeki_1.json', 'type': 'fetchdata', 'path': 'items'},
-    {'url': 'file://data/kazeeki_2.json', 'type': 'fetchdata', 'path': 'items'},
-    {'url': 'file://data/kazeeki_3.json', 'type': 'fetchdata', 'path': 'items'},
+    {'url': get_path('kazeeki_1.json'), 'type': 'fetchdata', 'path': 'items'},
+    {'url': get_path('kazeeki_2.json'), 'type': 'fetchdata', 'path': 'items'},
+    {'url': get_path('kazeeki_3.json'), 'type': 'fetchdata', 'path': 'items'},
 ]
 
 

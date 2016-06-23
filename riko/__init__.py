@@ -46,7 +46,7 @@ __email__ = 'reubano@gmail.com'
 __license__ = 'MIT'
 __copyright__ = 'Copyright 2015 Reuben Cummings'
 
-PARENT_DIR = p.abspath(p.dirname(p.dirname(__file__)))
+PARENT_DIR = p.abspath(p.dirname(__file__))
 
 def get_path(name):
     return 'file://%s' % p.join(PARENT_DIR, 'data', name)

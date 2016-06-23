@@ -24,7 +24,7 @@ Examples:
         >>> entry = next(pipe(conf={'url': get_path('bbc.html')}))
         >>> sorted(entry.keys()) == ['href', 'hreflang', 'link', 'rel', 'tag']
         True
-        >>> entry['link'] == 'file://data/greenhughes.xml'
+        >>> entry['link'] == 'file://riko/data/greenhughes.xml'
         True
 
 Attributes:
@@ -78,7 +78,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        file://data/greenhughes.xml
+        file://riko/data/greenhughes.xml
     """
     if skip:
         stream = kwargs['stream']
@@ -111,7 +111,7 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['link'] == 'file://data/greenhughes.xml'
+        >>> next(result)['link'] == 'file://riko/data/greenhughes.xml'
         True
     """
     if skip:
@@ -155,7 +155,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        file://data/greenhughes.xml
+        file://riko/data/greenhughes.xml
     """
     return asyncParser(*args, **kwargs)
 
@@ -179,7 +179,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from riko import get_path
         >>> conf = {'url': get_path('bbc.html')}
-        >>> next(pipe(conf=conf))['link'] == 'file://data/greenhughes.xml'
+        >>> next(pipe(conf=conf))['link'] == 'file://riko/data/greenhughes.xml'
         True
     """
     return parser(*args, **kwargs)

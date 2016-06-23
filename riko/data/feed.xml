@@ -109,7 +109,7 @@ How do you select documents? We're interested [...]]]>
 <li><strong>Are you a bunch of radicals out to bring down the government?</strong> No. We just think that it should be easier for people to comment on public documents in detail. This is one way of doing it. There's another good example of it happening on the <a title="Power of Information Report" href="http://poit.cabinetoffice.gov.uk/poit/">Power of Information Taskforce</a> site. We really hope that the authors of the documents find it a convenient and effective way of getting detailed feedback.</li>
 <li><strong>Are documents open for comment forever?</strong> If there is a given consultation period for the document, we'll note it on the front page of the site. We imagine that the older a document gets, the fewer comments it will receive. Authors of the documents can choose to view the comments or subscribe to the RSS feed of the comments for as long as they choose.</li>
 <li><strong>How long did it take to get this site up and running?</strong> About two days from our first Twitter exchange to going live (evenings and lunchtimes). It's not difficult if you know how to use a <a title="WordPress" href="http://wordpress.org">WordPress</a> blog. All the tools are freely available.</li>
-<li><strong>The site is a bit slow!</strong> Sorry. <span style="font-family: Georgia,'Times New Roman',Times,serif; font-size: 13px; line-height: 17px;">It's running on a resource limited host  (currently funded by <a title="Eduserv" href="file://data/greenhughes.xml/">Eduserv</a> - thank you!). We are looking at alternative  hosting arrangements to provide more robust hosting.</span></li>
+<li><strong>The site is a bit slow!</strong> Sorry. <span style="font-family: Georgia,'Times New Roman',Times,serif; font-size: 13px; line-height: 17px;">It's running on a resource limited host  (currently funded by <a title="Eduserv" href="file://riko/data/greenhughes.xml/">Eduserv</a> - thank you!). We are looking at alternative  hosting arrangements to provide more robust hosting.</span></li>
 <li><strong>How can we support you?</strong> see #12 :-)</li>
 <li><strong>I have a question/suggestion.</strong> Great! Contact us via Email or Twitter.</li>
 </ol>
@@ -205,7 +205,7 @@ The copyright of the original [...]]]>
 </strong></p>
 <p>p.s. We do this in our spare time. Please be patient with us.</p>
 <h3>Acknowledgements</h3>
-<p>Write to Reply web hosting is currently funded by <a title="Eduserv" href="file://data/Politik.xml">Eduserv</a>.</p>
+<p>Write to Reply web hosting is currently funded by <a title="Eduserv" href="file://riko/data/Politik.xml">Eduserv</a>.</p>
 ]]>
       </content:encoded>
       <wfw:commentRss>http://writetoreply.org/about/feed/</wfw:commentRss>
