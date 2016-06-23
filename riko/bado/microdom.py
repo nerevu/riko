@@ -110,6 +110,7 @@ def getElementsByTagName(iNode, name):
     return matches
 
 
+
 def getElementsByTagNameNoCase(iNode, name):
     name = name.lower()
     matches = []
@@ -124,6 +125,7 @@ def getElementsByTagNameNoCase(iNode, name):
         aslice[:0] = c.childNodes
 
     return matches
+
 
 
 class MismatchedTags(Exception):
@@ -508,12 +510,14 @@ class Element(Node):
         self.endTagName = endTagName
 
     def isEqualToElement(self, n):
-        if self.case_insensitive:
-            return ((self.attributes == n.attributes)
-                    and (self.nodeName.lower() == n.nodeName.lower()))
+        same_attrs = self.attributes == n.attributes
 
-        return (
-            self.attributes == n.attributes) and (self.nodeName == n.nodeName)
+        if self.case_insensitive:
+            eq = same_attrs and (self.nodeName.lower() == n.nodeName.lower())
+        else:
+            eq = same_attrs and (self.nodeName == n.nodeName)
+
+        return eq
 
     def isEqualToNode(self, other):
         """

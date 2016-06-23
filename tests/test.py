@@ -30,6 +30,7 @@ try:
 except ImportError:
     _isasync = False
 
+
 def main(script, tests, verbose=False, stop=True):
     """ Main method
 

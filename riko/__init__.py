@@ -48,5 +48,6 @@ __copyright__ = 'Copyright 2015 Reuben Cummings'
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
 
+
 def get_path(name):
     return 'file://%s' % p.join(PARENT_DIR, 'data', name)
