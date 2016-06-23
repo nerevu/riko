@@ -35,10 +35,8 @@ try:
     from lxml import etree, html
 except ImportError:
     from xml.etree import ElementTree as etree
-    LAZY = False
 else:
     from lxml.html import html5parser
-    LAZY = True
 
 try:
     import speedparser
@@ -375,16 +373,15 @@ def _make_content(i, value=None, tag='content', append=True, strip=False):
     return {tag: content} if content else {}
 
 
-def etree2dict(element, lazy=LAZY):
+def etree2dict(element):
     """Convert an element tree into a dict imitating how Yahoo Pipes does it.
     """
     i = dict(element.items())
     i.update(_make_content(i, element.text, strip=True))
-    children = element.iterchildren() if lazy else element.getchildren()
 
-    for child in children:
+    for child in element:
         tag = child.tag
-        value = etree2dict(child, lazy)
+        value = etree2dict(child)
         i.update(_make_content(i, value, tag))
 
     if element.text and not set(i).difference(['content']):
@@ -806,8 +803,14 @@ def extend_entry(entry):
 ############
 def gen_entries(parsed):
     for entry in parsed['entries']:
-        entry['pubDate'] = entry.get('updated_parsed', 'published_parsed')
-        entry['y:published'] = entry.get('updated_parsed', 'published_parsed')
+        # prevent feedparser deprecation warnings
+        if 'published_parsed' in entry:
+            updated = entry['published_parsed']
+        else:
+            updated = entry.get('updated_parsed')
+
+        entry['pubDate'] = updated
+        entry['y:published'] = updated
         entry['dc:creator'] = entry.get('author')
         entry['author.uri'] = entry.get('author_detail', {}).get(
             'href')

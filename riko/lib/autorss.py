@@ -48,10 +48,13 @@ def gen_entries(f, parser):
 
 
 @coroutine
-def asyncGetRSS(url):
+def asyncGetRSS(url, convert_charrefs=False):
     # TODO: implement via an async parser
     # maybe get twisted.web.microdom.parse working for HTML
-    parser = LinkParser()
+    try:
+        parser = LinkParser(convert_charrefs=convert_charrefs)
+    except TypeError:
+        parser = LinkParser()
 
     try:
         f = yield urlOpen(url, timeout=TIMEOUT)
@@ -61,8 +64,11 @@ def asyncGetRSS(url):
     return_value(gen_entries(f, parser))
 
 
-def get_rss(url):
-    parser = LinkParser()
+def get_rss(url, convert_charrefs=False):
+    try:
+        parser = LinkParser(convert_charrefs=convert_charrefs)
+    except TypeError:
+        parser = LinkParser()
 
     try:
         f = urlopen(url, timeout=TIMEOUT)

@@ -176,7 +176,7 @@ def parser(_, objconf, skip, **kwargs):
         # todo: consider paging for large result sets
         root = utils.xml2etree(f).getroot()
         results = root.find('results')
-        stream = map(utils.etree2dict, results.getchildren())
+        stream = map(utils.etree2dict, results)
 
     return stream, skip
 

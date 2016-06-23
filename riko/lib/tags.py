@@ -24,7 +24,11 @@ class LinkParser(HTMLParser):
         self.data.write('%s\n' % decode(data))
 
 
-def get_text(html):
-    parser = LinkParser()
+def get_text(html, convert_charrefs=False):
+    try:
+        parser = LinkParser(convert_charrefs=convert_charrefs)
+    except TypeError:
+        parser = LinkParser()
+
     parser.feed(encode(html))
     return parser.data.getvalue()
