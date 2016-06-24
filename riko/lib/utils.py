@@ -333,12 +333,11 @@ def xpath(tree, path, pos=0):
             elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
         except AttributeError:
             elements = tree.findall('./%s' % '/'.join(tags[1:]))
+        except IndexError:
+            elements = [tree]
         else:
-            if len(tags or [1]) - pos == 1:
-                return elements
-            else:
-                for element in elements:
-                    return xpath(element, path, pos + 1)
+            for element in elements:
+                return xpath(element, path, pos + 1)
 
     return iter(elements)
 
