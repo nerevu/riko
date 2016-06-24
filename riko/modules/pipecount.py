@@ -61,7 +61,7 @@ def parser(stream, _, tuples, **kwargs):
     return {kwargs['assign']: len(list(stream))}
 
 
-@operator(async=True, **OPTS)
+@operator(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously and eagerly counts the number of items
     in a stream. Note that this pipe is not lazy.

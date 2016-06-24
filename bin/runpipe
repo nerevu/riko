@@ -23,10 +23,13 @@ except ImportError:
         io_error = IOError
 else:
     io_error = FileNotFoundError
+
     def load_file(name, src):
-        spec = spec_from_file_location(name, src)
+        location = 'examples/%s.py' % src
+        spec = spec_from_file_location(name, location)
         module = module_from_spec(spec)
-        return spec.loader.exec_module(module)
+        spec.loader.exec_module(module)
+        return module
 
 
 from argparse import RawTextHelpFormatter, ArgumentParser

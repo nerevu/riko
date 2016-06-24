@@ -25,7 +25,12 @@ from contextlib import closing
 from builtins import *
 from six.moves.urllib.parse import quote, urlparse
 from six.moves.urllib.request import urlopen
-from six.moves.urllib_error import URLError
+
+try:
+    from urllib.error import URLError
+except ImportError:
+    from six.moves.urllib_error import URLError
+
 from mezmorize import Cache
 from dateutil import parser
 from ijson import items
@@ -292,7 +297,7 @@ def betwix(iterable, start=None, stop=None, inc=False):
             if not predicate(x):
                 break
 
-    get_pred = lambda sentinel: lambda x: sentinel not in decode(x)
+    get_pred = lambda sentinel: lambda x: sentinel not in x
     first = it.dropwhile(get_pred(start), iterable) if start else iterable
     pred = get_pred(stop)
 
@@ -306,19 +311,56 @@ def betwix(iterable, start=None, stop=None, inc=False):
     return last
 
 
-def parse_rss(url, delay=0):
-    context = SleepyDict(delay=delay)
+def get_response_encoding(response, def_encoding='utf-8'):
+    info = response.info()
 
     try:
-        with closing(urlopen(decode(url), context=context)) as f:
-            content = encode(f.read()) if speedparser else f
-            parsed = rssparser.parse(content)
+        encoding = info.getencoding()
+    except AttributeError:
+        encoding = info.get_charset()
+
+    encoding = None if encoding == '7bit' else encoding
+
+    if not encoding:
+        try:
+            encoding = info.get_content_charset()
+        except AttributeError:
+            pass
+
+    if not encoding:
+        try:
+            content_type = response.getheader('Content-Type', '')
+        except AttributeError:
+            pass
+        else:
+            if 'charset' in content_type:
+                ctype = content_type.split('=')[1]
+                encoding = ctype.strip().strip('"').strip("'")
+
+    return encoding or def_encoding
+
+
+def parse_rss(url, delay=0):
+    context = SleepyDict(delay=delay)
+    response = None
+
+    try:
+        response = urlopen(decode(url), context=context)
     except TypeError:
-        with closing(urlopen(decode(url))) as f:
-            content = encode(f.read()) if speedparser else f
-            parsed = rssparser.parse(content)
+        try:
+            response = urlopen(decode(url))
+        except (ValueError, URLError):
+            parsed = rssparser.parse(url)
     except (ValueError, URLError):
         parsed = rssparser.parse(url)
+
+    if response:
+        content = response.read() if speedparser else response
+
+        try:
+            parsed = rssparser.parse(content)
+        finally:
+            response.close()
 
     return parsed
 
@@ -619,7 +661,8 @@ def listize(item):
     if hasattr(item, 'keys'):
         listlike = False
     else:
-        listlike = {'append', 'next', '__reversed__'}.intersection(dir(item))
+        attrs = {'append', '__next__', 'next', '__reversed__'}
+        listlike = attrs.intersection(dir(item))
 
     return item if listlike else [item]
 

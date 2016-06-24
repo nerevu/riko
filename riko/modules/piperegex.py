@@ -166,7 +166,7 @@ def parser(item, rules, skip, **kwargs):
     return item, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor that asynchronously replaces text in fields of an item
     using regexes.

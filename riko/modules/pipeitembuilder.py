@@ -68,7 +68,7 @@ def parser(_, attrs, skip, **kwargs):
     return stream, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously builds an item.
 

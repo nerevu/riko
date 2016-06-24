@@ -24,7 +24,7 @@ from __future__ import (
 import re
 import itertools as it
 
-from io import StringIO
+from io import open, StringIO
 from functools import partial
 from builtins import *
 
@@ -36,7 +36,7 @@ except ImportError:
     pass
 
 from .sux import XMLParser, ParseError
-
+from riko.lib.utils import combine_dicts
 
 # order is important
 HTML_ESCAPE_CHARS = (('&', '&amp;'),  # don't add any entities before this one
@@ -80,7 +80,7 @@ def _gen_prefix():
         yield 'p' + str(i)
 
 
-def getElementsByTagName(iNode, name):
+def getElementsByTagName(iNode, name, icase=False):
     """
     Return a list of all child elements of C{iNode} with a name matching
     C{name}.
@@ -96,36 +96,25 @@ def getElementsByTagName(iNode, name):
     @return: A C{list} of direct or indirect child elements of C{iNode} with
         the name C{name}.  This may include C{iNode}.
     """
-    matches = []
-    aslice = [iNode]
+    is_node = hasattr(iNode, 'nodeName')
 
-    while len(aslice) > 0:
-        c = aslice.pop(0)
+    if is_node and icase and iNode.nodeName.lower() == name.lower():
+        yield iNode
+    elif is_node and iNode.nodeName == name:
+        yield iNode
 
-        if c.nodeName == name:
-            matches.append(c)
-
-        aslice[:0] = c.childNodes
-
-    return matches
-
+    if hasattr(iNode, 'childNodes'):
+        for c in getElementsByTagName(iNode.childNodes, name, icase):
+            yield c
+    else:
+        for child in iNode:
+            for c in getElementsByTagName(child, name, icase):
+                yield c
 
 
 def getElementsByTagNameNoCase(iNode, name):
-    name = name.lower()
-    matches = []
-    aslice = [iNode]
-
-    while len(aslice) > 0:
-        c = aslice.pop(0)
-
-        if c.nodeName.lower() == name:
-            matches.append(c)
-
-        aslice[:0] = c.childNodes
-
-    return matches
-
+    for c in getElementsByTagName(iNode, name, True):
+        yield c
 
 
 class MismatchedTags(Exception):
@@ -877,6 +866,21 @@ class MicroDOMParser(XMLParser):
             else:
                 yield (k, v)
 
+    def _gen_newspaces(self, unesc_attributes):
+        for k, v in unesc_attributes.items():
+            if k.startswith('xmlns'):
+                spacenames = k.split(':', 1)
+
+                if len(spacenames) == 2:
+                    yield (spacenames[1], v)
+                else:
+                    yield ('', v)
+
+    def _gen_new_attrs(self, unesc_attributes):
+        for k, v in unesc_attributes.items():
+            if not k.startswith('xmlns'):
+                yield (k, v)
+
     def gotTagStart(self, name, attributes):
         # print ' '*self.indentlevel, 'start tag',name
         # self.indentlevel += 1
@@ -885,38 +889,24 @@ class MicroDOMParser(XMLParser):
 
         unesc_attributes = unescape_dict(attributes)
         namespaces = self.nsstack[-1][0]
-        newspaces = {}
-
-        for k, v in unesc_attributes.items():
-            if k.startswith('xmlns'):
-                spacenames = k.split(':', 1)
-
-                if len(spacenames) == 2:
-                    newspaces[spacenames[1]] = v
-                else:
-                    newspaces[''] = v
-
-                del unesc_attributes[k]
-
-        if newspaces:
-            namespaces = namespaces.copy()
-            namespaces.update(newspaces)
-
-        new_attributes = dict(self._gen_attrs(unesc_attributes, namespaces))
+        newspaces = dict(self._gen_newspaces(unesc_attributes))
+        new_unesc_attributes = dict(self._gen_new_attrs(unesc_attributes))
+        new_namespaces = combine_dicts(namespaces, newspaces)
+        gen_attr_args = (new_unesc_attributes, new_namespaces)
+        new_attributes = dict(self._gen_attrs(*gen_attr_args))
         args = (name, new_attributes, parent, self.filename, self.saveMark())
 
         kwargs = {
             'case_insensitive': self.case_insensitive,
-            'namespace': namespaces.get('')}
+            'namespace': new_namespaces.get('')}
 
         el = Element(*args, **kwargs)
         revspaces = invert_dict(newspaces)
         el.addPrefixes(revspaces)
 
         if newspaces:
-            rscopy = self.nsstack[-1][2].copy()
-            rscopy.update(revspaces)
-            self.nsstack.append((namespaces, el, rscopy))
+            rscopy = combine_dicts(self.nsstack[-1][2], revspaces)
+            self.nsstack.append((new_namespaces, el, rscopy))
 
         self.elementstack.append(el)
 
@@ -1034,19 +1024,20 @@ class MicroDOMParser(XMLParser):
                 raise MismatchedTags(*args)
 
 
-def parse(readable, *args, **kwargs):
+def parse(f, *args, **kwargs):
     """Parse HTML or XML readable."""
-    if not hasattr(readable, "read"):
-        readable = open(readable, "rb")
+    fp = f.fp if hasattr(f, 'fp') else f
+    readable = fp if hasattr(fp, 'read') else open(f, 'rb')
 
     mdp = MicroDOMParser(*args, **kwargs)
-    mdp.filename = getattr(readable, "name", "<xmlfile />")
+    mdp.filename = getattr(readable, 'name', '<xmlfile />')
     mdp.makeConnection(None)
 
     try:
         mdp.dataReceived(readable.getvalue())
     except AttributeError:
-        for r in iter(partial(readable.read, 1024), ''):
+        sentinel = b'' if 'BufferedReader' in str(type(readable)) else ''
+        for r in iter(partial(readable.read, 1024), sentinel):
             mdp.dataReceived(r)
 
     mdp.connectionLost(None)

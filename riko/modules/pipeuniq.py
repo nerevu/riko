@@ -77,7 +77,7 @@ def parser(stream, key, tuples, **kwargs):
             yield item
 
 
-@operator(DEFAULTS, async=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An operator that asynchronously filters out non unique items according
     to a specified field.

@@ -74,7 +74,7 @@ def parser(stream, splits, tuples, **kwargs):
         yield map(deepcopy, source)
 
 
-@operator(DEFAULTS, async=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An operator that asynchronously and eagerly splits a stream into identical
     copies. Note that this pipe is not lazy.

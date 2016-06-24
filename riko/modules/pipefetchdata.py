@@ -126,7 +126,7 @@ def parser(_, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.

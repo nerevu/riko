@@ -68,7 +68,7 @@ def parser(stream, objconf, tuples, **kwargs):
     return deque(stream, int(objconf.count))
 
 
-@operator(async=True, **OPTS)
+@operator(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously truncates a stream to the last N items.
 

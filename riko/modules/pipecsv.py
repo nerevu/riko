@@ -82,11 +82,12 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         # TODO: write function to extract encoding from response
         url = utils.get_abspath(objconf.url)
-        f = yield io.urlOpen(url)
+        response = yield io.urlOpen(url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
         rkwargs = utils.combine_dicts(objconf, renamed)
-        stream = read_csv(f, **rkwargs)
+        rkwargs['encoding'] = objconf.encoding
+        stream = read_csv(response, **rkwargs)
 
     result = (stream, skip)
     return_value(result)
@@ -120,14 +121,16 @@ def parser(_, objconf, skip, **kwargs):
         url = utils.get_abspath(objconf.url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
-        f = urlopen(url)
+        response = urlopen(url)
+        encoding = utils.get_response_encoding(response, objconf.encoding)
         rkwargs = utils.combine_dicts(objconf, renamed)
-        stream = read_csv(f, **rkwargs)
+        rkwargs['encoding'] = encoding
+        stream = read_csv(response, **rkwargs)
 
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given web site as
     a string.

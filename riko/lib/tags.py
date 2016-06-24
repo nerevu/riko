@@ -12,7 +12,7 @@ from io import StringIO
 from html.parser import HTMLParser
 
 from builtins import *
-from meza._compat import encode, decode
+from meza._compat import decode
 
 
 class LinkParser(HTMLParser):
@@ -30,5 +30,9 @@ def get_text(html, convert_charrefs=False):
     except TypeError:
         parser = LinkParser()
 
-    parser.feed(encode(html))
+    try:
+        parser.feed(html)
+    except TypeError:
+        parser.feed(decode(html))
+
     return parser.data.getvalue()

@@ -159,7 +159,7 @@ def parser(_, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given website as
     DOM nodes or a string.

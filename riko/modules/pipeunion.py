@@ -72,7 +72,7 @@ def parser(stream, objconf, tuples, **kwargs):
     return chain(stream, multiplex(kwargs['others']))
 
 
-@operator(async=True, **OPTS)
+@operator(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously merges multiple source streams together.
 

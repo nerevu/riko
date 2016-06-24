@@ -57,7 +57,7 @@ def parser(_, parts, skip, **kwargs):
     return parsed, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously concatenates strings.
 

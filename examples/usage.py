@@ -330,11 +330,13 @@ Design Principles
     >>> from riko.modules.pipefetchpage import asyncPipe
     >>> from riko.modules.pipecount import pipe
     >>>
-    >>> resp = {'type': 'processor', 'sub_type': 'source'}
-    >>> asyncPipe.__dict__ == (resp if _isasync else {})
+    >>> async_resp = ('processor', 'source') if _isasync else (None, None)
+    >>> async_pdict = asyncPipe.__dict__
+    >>> (async_pdict.get('type'), async_pdict.get('sub_type')) == async_resp
     True
-    >>> pipe.__dict__ == {
-    ...     'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
+    >>> pdict = pipe.__dict__
+    >>> sync_resp = ('operator', 'count', 'aggregator')
+    >>> (pdict['type'], pdict['name'], pdict['sub_type']) == sync_resp
     True
 
     # SyncPipe usage

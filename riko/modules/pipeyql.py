@@ -26,8 +26,8 @@ A more complex query that finds Flickr photos tagged "fog" in San Francisco:
 Examples:
     basic usage::
 
-        >>> from urllib2 import urlopen
         >>> from contextlib import closing
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.lib.utils import get_abspath
         >>> from riko.modules.pipeyql import pipe
@@ -81,7 +81,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         Deferred: twisted.internet.defer.Deferred Tuple of (stream, skip)
 
     Examples:
-        >>> from urllib2 import urlopen
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
@@ -120,7 +120,7 @@ def asyncParser(_, objconf, skip, **kwargs):
             f = yield treq.content(r)
 
         tree = yield tu.xml2etree(f)
-        results = tree.getElementsByTagName('results')[0]
+        results = next(tree.getElementsByTagName('results'))
         stream = map(tu.etreeToDict, results.childNodes)
 
     result = (stream, skip)
@@ -144,8 +144,8 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from urllib2 import urlopen
         >>> from contextlib import closing
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.lib.utils import Objectify, get_abspath
         >>>
@@ -181,7 +181,7 @@ def parser(_, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given website as
     DOM nodes or a string.
@@ -206,7 +206,7 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred stream of items
 
     Examples:
-        >>> from urllib2 import urlopen
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
@@ -257,8 +257,8 @@ def pipe(*args, **kwargs):
         dict: an item of the result
 
     Examples:
-        >>> from urllib2 import urlopen
         >>> from contextlib import closing
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.lib.utils import get_abspath
         >>>

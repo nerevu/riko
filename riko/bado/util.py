@@ -39,6 +39,7 @@ else:
     asyncReturn = partial(defer.succeed)
     asyncPartial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
+DEF2NAME = {v: k for k, v in entitydefs.items()}
 
 def asyncSleep(seconds):
     d = Deferred()
@@ -58,9 +59,13 @@ def def2unicode(entitydef):
     Double check if I need this since it seems to convert the input back into
     itself!
     """
-    def2name = {v: k for k, v in entitydefs.items()}
-    name = def2name[entitydef]
-    cp = name2codepoint[name]
+    try:
+        name = DEF2NAME[entitydef]
+    except KeyError:
+        cp = int(entitydef.lstrip('&#').rstrip(';'))
+    else:
+        cp = name2codepoint[name]
+
     return chr(cp)
 
 

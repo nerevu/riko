@@ -103,7 +103,7 @@ def parser(item, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor that asynchronously extracts sub-elements from an item.
 

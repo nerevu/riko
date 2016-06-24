@@ -196,7 +196,7 @@ def parser(base, objconf, skip, **kwargs):
     return rate, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor that asynchronously retrieves the current exchange rate
     for a given currency pair.

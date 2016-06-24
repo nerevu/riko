@@ -73,16 +73,14 @@ def parse_rule(rule, item, **kwargs):
         try:
             _x = Decimal(x)
             _y = Decimal(y)
-        except (InvalidOperation, TypeError):
+        except (InvalidOperation, TypeError, ValueError):
             try:
                 _x = utils.cast_date(x)
                 _y = utils.cast_date(y)
             except ValueError:
                 pass
             else:
-                x, y = _x, _y
-        except ValueError:
-            pass
+                x, y = _x['date'], _y['date']
         else:
             x, y = _x, _y
 
@@ -150,7 +148,7 @@ def parser(stream, rules, tuples, **kwargs):
             yield item
 
 
-@operator(DEFAULTS, async=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An operator that asynchronously filters for source items matching
     the given rules.

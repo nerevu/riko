@@ -61,7 +61,7 @@ def parser(stream, objconf, tuples, **kwargs):
     return reversed(list(stream))
 
 
-@operator(async=True, **OPTS)
+@operator(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously reverses the order of source items in
     a stream. Note that this pipe is not lazy.

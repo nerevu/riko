@@ -113,7 +113,7 @@ def assign(item, assignment, key, one=False):
 
 
 class processor(object):
-    def __init__(self, defaults=None, async=False, **opts):
+    def __init__(self, defaults=None, isasync=False, **opts):
         """Creates a sync/async pipe that processes individual items. These
         pipes are classified as `type: processor` and as either
         `sub_type: transformer` or `subtype: source`. To be recognized as
@@ -193,7 +193,7 @@ class processor(object):
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
-            >>> @processor(async=True)
+            >>> @processor(isasync=True)
             ... @coroutine
             ... def async_pipe(item, objconf, skip, **kwargs):
             ...     if skip:
@@ -227,7 +227,7 @@ class processor(object):
         """
         self.defaults = defaults or {}
         self.opts = opts or {}
-        self.async = async
+        self.async = isasync
 
     def __call__(self, pipe):
         """Creates a sync/async pipe that processes individual items
@@ -262,7 +262,7 @@ class processor(object):
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
-            >>> @processor(async=True, **kwargs)
+            >>> @processor(isasync=True, **kwargs)
             ... def async_pipe(content, times, skip, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
@@ -356,12 +356,12 @@ class processor(object):
 
 
 class operator(object):
-    def __init__(self, defaults=None, async=False, **opts):
+    def __init__(self, defaults=None, isasync=False, **opts):
         """Creates a sync/async pipe that processes an entire stream of items
 
         Args:
             defaults (dict): Default `conf` values.
-            async (bool): Wrap an async pipe (default: False)
+            isasync (bool): Wrap an async pipe (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
@@ -431,7 +431,7 @@ class operator(object):
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
-            >>> @operator(async=True, emit=False)
+            >>> @operator(isasync=True, emit=False)
             ... @coroutine
             ... def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in tuples:
@@ -441,7 +441,7 @@ class operator(object):
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
-            >>> @operator(async=True, emit=False)
+            >>> @operator(isasync=True, emit=False)
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     return sum(len(item['content'].split()) for item in stream)
             ...
@@ -473,7 +473,7 @@ class operator(object):
         """
         self.defaults = defaults or {}
         self.opts = opts or {}
-        self.async = async
+        self.async = isasync
 
     def __call__(self, pipe):
         """Creates a wrapper that allows a sync/async pipe to processes a
@@ -517,7 +517,7 @@ class operator(object):
             True
             >>> next(wrapped_pipe2(items, **kwargs)) == {'content': 4}
             True
-            >>> async_wrapper = operator(async=True, **opts)
+            >>> async_wrapper = operator(isasync=True, **opts)
             >>>
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way

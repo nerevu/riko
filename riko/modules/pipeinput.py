@@ -92,7 +92,7 @@ def parser(_, objconf, skip, **kwargs):
     return result, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously prompts for text and parses it
     into a variety of different types, e.g., int, bool, date, etc.

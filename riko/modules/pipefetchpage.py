@@ -14,10 +14,12 @@ Examples:
 
         >>> from riko.modules.pipefetchpage import pipe
         >>> from riko import get_path
+        >>> from meza._compat import decode
         >>>
         >>> url = get_path('cnn.html')
         >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
-        >>> next(pipe(conf=conf))['content'][:21] == 'CNN.com International'
+        >>> resp = next(pipe(conf=conf))['content'][:21]
+        >>> decode(resp) == 'CNN.com International'
         True
 
 Attributes:
@@ -30,6 +32,7 @@ from __future__ import (
 import pygogo as gogo
 
 from contextlib import closing
+from codecs import iterdecode
 
 from builtins import *
 from six.moves.urllib.request import urlopen
@@ -77,9 +80,10 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
+        >>> from meza._compat import decode
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['content'][:32])
+        ...     callback = lambda x: print(decode(next(x[0])['content'][:32]))
         ...     url = get_path('cnn.html')
         ...     conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
@@ -122,13 +126,15 @@ def parser(_, objconf, skip, **kwargs):
     Examples:
         >>> from riko.lib.utils import Objectify
         >>> from riko import get_path
+        >>> from meza._compat import decode
         >>>
         >>> url = get_path('cnn.html')
         >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': {}, 'assign': 'content'}
         >>> result, skip = parser(None, objconf, False, **kwargs)
-        >>> next(result)['content'][:21] == 'CNN.com International'
+        >>> resp = next(result)['content'][:21]
+        >>> decode(resp) == 'CNN.com International'
         True
     """
     if skip:
@@ -136,9 +142,12 @@ def parser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
 
-        with closing(urlopen(url)) as f:
-            sliced = utils.betwix(f, objconf.start, objconf.end, True)
-            content = '\n'.join(map(decode, sliced))
+        with closing(urlopen(url)) as response:
+            f = response.fp
+            encoding = utils.get_response_encoding(response, 'utf-8')
+            decoded = iterdecode(f, encoding)
+            sliced = utils.betwix(decoded, objconf.start, objconf.end, True)
+            content = '\n'.join(sliced)
 
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
@@ -148,7 +157,7 @@ def parser(_, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given web site as
     a string.
@@ -178,10 +187,11 @@ def asyncPipe(*args, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
+        >>> from meza._compat import decode
         >>>
         >>> content = 'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['content'] == content)
+        ...     callback = lambda x: print(decode(next(x)['content']) == content)
         ...     url, path = get_path('bbc.html'), 'value.items'
         ...     conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         ...     d = asyncPipe(conf=conf)
@@ -224,10 +234,12 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
+        >>> from meza._compat import decode
+        >>>
         >>> url = get_path('bbc.html')
         >>> conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         >>> content = 'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
-        >>> next(pipe(conf=conf))['content'] == content
+        >>> decode(next(pipe(conf=conf))['content']) == content
         True
     """
     return parser(*args, **kwargs)

@@ -128,7 +128,7 @@ def parser(word, rules, skip, **kwargs):
     return value, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously replaces the text of a field of
     an item.

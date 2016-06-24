@@ -58,7 +58,7 @@ def parser(amount, objconf, skip, **kwargs):
     return parsed, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously formats a number to a given
     currency string.

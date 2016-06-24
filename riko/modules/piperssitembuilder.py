@@ -86,7 +86,7 @@ def parser(item, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously builds an rss item.
 

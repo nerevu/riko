@@ -124,7 +124,7 @@ def parser(_, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches and parses a feed to return the
     entries.
