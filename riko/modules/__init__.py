@@ -496,47 +496,52 @@ class operator(object):
             ...     'pdictize': False, 'emit': True, 'field': 'content',
             ...     'objectify': False}
             ...
-            >>> @operator(**opts)
-            ... def pipe1(stream, objconf, tuples, **kwargs):
+            >>> wrapper = operator(**opts)
+            >>>
+            >>> def pipe1(stream, objconf, tuples, **kwargs):
             ...     for content, times in tuples:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
-            >>> @operator(**opts)
-            ... def pipe2(stream, objconf, tuples, **kwargs):
+            >>> def pipe2(stream, objconf, tuples, **kwargs):
             ...     word_cnt = sum(len(content.split()) for content in stream)
             ...     return {kwargs['assign']: word_cnt}
             ...
+            >>> wrapped_pipe1 = wrapper(pipe1)
+            >>> wrapped_pipe2 = wrapper(pipe2)
+            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
+            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
+            >>> response = {'content': 'say "hello world" three times!'}
+            >>>
+            >>> next(wrapped_pipe1(items, **kwargs)) == response
+            True
+            >>> next(wrapped_pipe2(items, **kwargs)) == {'content': 4}
+            True
+            >>> async_wrapper = operator(async=True, **opts)
+            >>>
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
-            >>> @operator(async=True, **opts)
-            ... def async_pipe1(stream, objconf, tuples, **kwargs):
+            >>> def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for content, times in tuples:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
-            >>> @operator(async=True, **opts)
-            ... @coroutine
+            >>> @coroutine
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     words = (len(content.split()) for content in stream)
             ...     word_cnt = yield maybeDeferred(sum, words)
             ...     return_value({kwargs['assign']: word_cnt})
             ...
-            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
-            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> response = {'content': 'say "hello world" three times!'}
-            >>> next(pipe1(items, **kwargs)) == response
-            True
-            >>> next(pipe2(items, **kwargs)) == {'content': 4}
-            True
+            >>> wrapped_async_pipe1 = async_wrapper(async_pipe1)
+            >>> wrapped_async_pipe2 = async_wrapper(async_pipe2)
             >>>
             >>> @coroutine
             ... def run(reactor):
-            ...     r1 = yield async_pipe1(items, **kwargs)
+            ...     r1 = yield wrapped_async_pipe1(items, **kwargs)
             ...     print(next(r1) == response)
-            ...     r2 = yield async_pipe2(items, **kwargs)
+            ...     r2 = yield wrapped_async_pipe2(items, **kwargs)
             ...     print(next(r2) == {'content': 4})
             ...
             >>> if _issync:
