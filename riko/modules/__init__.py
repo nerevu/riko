@@ -421,7 +421,7 @@ class operator(object):
             >>> # item dependent version of objconf as the 3rd arg
             >>> @operator(emit=False)
             ... def pipe1(stream, objconf, tuples, **kwargs):
-            ...     for item, objconf in reversed(list(tuples)):
+            ...     for item, objconf in tuples:
             ...         s = 'say "%s" %s times!'
             ...         yield s % (item['content'], objconf.times)
             ...
@@ -434,7 +434,7 @@ class operator(object):
             >>> @operator(async=True, emit=False)
             ... @coroutine
             ... def async_pipe1(stream, objconf, tuples, **kwargs):
-            ...     for item, objconf in reversed(list(tuples)):
+            ...     for item, objconf in tuples:
             ...         content = yield tu.asyncReturn(item['content'])
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
             ...         return_value(value)
@@ -447,7 +447,7 @@ class operator(object):
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> response = {'content': 'say "bye world" three times!'}
+            >>> response = {'content': 'say "hello world" three times!'}
             >>> next(pipe1(items, **kwargs)) == response
             True
             >>> next(pipe2(items, **kwargs)) == {'content': 4}
@@ -498,7 +498,7 @@ class operator(object):
             ...
             >>> @operator(**opts)
             ... def pipe1(stream, objconf, tuples, **kwargs):
-            ...     for content, times in reversed(list(tuples)):
+            ...     for content, times in tuples:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
@@ -511,7 +511,7 @@ class operator(object):
             >>> # they work fine either way
             >>> @operator(async=True, **opts)
             ... def async_pipe1(stream, objconf, tuples, **kwargs):
-            ...     for content, times in reversed(list(tuples)):
+            ...     for content, times in tuples:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
@@ -526,7 +526,7 @@ class operator(object):
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> response = {'content': 'say "bye world" three times!'}
+            >>> response = {'content': 'say "hello world" three times!'}
             >>> next(pipe1(items, **kwargs)) == response
             True
             >>> next(pipe2(items, **kwargs)) == {'content': 4}
