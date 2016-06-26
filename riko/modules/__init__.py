@@ -409,6 +409,9 @@ class operator(object):
             emit (bool): return the stream as is and don't assign it to an item
                 attribute (default: True).
 
+        Returns:
+            func: A function of 1 arg (items) and a `**kwargs`.
+
         Examples:
             >>> from riko.bado import react, util as tu, _issync
             >>> from riko.bado.mock import FakeReactor
@@ -473,16 +476,15 @@ class operator(object):
         self.async = async
 
     def __call__(self, pipe):
-        """Creates a sync/async pipe that processes an entire stream of items
+        """Creates a wrapper that allows a sync/async pipe to processes a
+        stream of items
 
         Args:
-            pipe (Iter[dict]): The entry to process
-
-        Yields:
-            dict: twisted.internet.defer.Deferred item
+            pipe (func): A function of 4 args (stream, objconf, tuples)
+                and a `**kwargs`. TODO: document args & kwargs.
 
         Returns:
-            Deferred: twisted.internet.defer.Deferred generator of items
+            func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
             >>> from riko.bado import react, _issync

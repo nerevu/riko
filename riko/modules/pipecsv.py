@@ -80,6 +80,7 @@ def asyncParser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
+        # TODO: write function to extract encoding from response
         url = utils.get_abspath(objconf.url)
         f = yield io.urlOpen(url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names

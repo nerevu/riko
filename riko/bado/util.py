@@ -55,6 +55,8 @@ def deferToProcess(source, function, *args, **kwargs):
 
 def def2unicode(entitydef):
     """Convert an HTML entity reference into unicode.
+    Double check if I need this since it seems to convert the input back into
+    itself!
     """
     def2name = {v: k for k, v in entitydefs.items()}
     name = def2name[entitydef]

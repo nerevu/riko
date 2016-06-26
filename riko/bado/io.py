@@ -105,6 +105,7 @@ def getFile(filename, transport, protocol=FileReader, **kwargs):
 @coroutine
 def urlOpen(url, timeout=0, **kwargs):
     if url.startswith('http'):
+        # returns unicode in py2 but bytes in py3
         f = StringIO()
         yield downloadPage(encode(url), f, timeout=timeout)
         f.seek(0)
