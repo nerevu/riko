@@ -195,7 +195,7 @@ class processor(object):
             >>> # call an async function
             >>> @processor(async=True)
             ... @coroutine
-            ... def asyncPipe(item, objconf, skip, **kwargs):
+            ... def async_pipe(item, objconf, skip, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
@@ -213,7 +213,7 @@ class processor(object):
             >>>
             >>> def run(reactor):
             ...     callback = lambda x: print(next(x) == response)
-            ...     d = asyncPipe(item, **kwargs)
+            ...     d = async_pipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
             >>> if _issync:
@@ -263,7 +263,7 @@ class processor(object):
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @processor(async=True, **kwargs)
-            ... def asyncPipe(content, times, skip, **kwargs):
+            ... def async_pipe(content, times, skip, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
@@ -280,7 +280,7 @@ class processor(object):
             >>>
             >>> def run(reactor):
             ...     callback = lambda x: print(next(x) == response)
-            ...     d = asyncPipe(item, **kwargs)
+            ...     d = async_pipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
             >>> if _issync:
@@ -430,7 +430,7 @@ class operator(object):
             >>> # call an async function
             >>> @operator(async=True, emit=False)
             ... @coroutine
-            ... def asyncPipe1(stream, objconf, tuples, **kwargs):
+            ... def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in reversed(list(tuples)):
             ...         content = yield tu.asyncReturn(item['content'])
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
@@ -439,7 +439,7 @@ class operator(object):
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @operator(async=True, emit=False)
-            ... def asyncPipe2(stream, objconf, tuples, **kwargs):
+            ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     return sum(len(item['content'].split()) for item in stream)
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
@@ -452,9 +452,9 @@ class operator(object):
             >>>
             >>> @coroutine
             ... def run(reactor):
-            ...     r1 = yield asyncPipe1(items, **kwargs)
+            ...     r1 = yield async_pipe1(items, **kwargs)
             ...     print(next(r1) == response)
-            ...     r2 = yield asyncPipe2(items, **kwargs)
+            ...     r2 = yield async_pipe2(items, **kwargs)
             ...     print(next(r2) == {'content': 4})
             ...
             >>> if _issync:
@@ -508,7 +508,7 @@ class operator(object):
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @operator(async=True, **opts)
-            ... def asyncPipe1(stream, objconf, tuples, **kwargs):
+            ... def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for content, times in reversed(list(tuples)):
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
@@ -517,7 +517,7 @@ class operator(object):
             >>> # call an async function
             >>> @operator(async=True, **opts)
             ... @coroutine
-            ... def asyncPipe2(stream, objconf, tuples, **kwargs):
+            ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     words = (len(content.split()) for content in stream)
             ...     word_cnt = yield maybeDeferred(sum, words)
             ...     return_value({kwargs['assign']: word_cnt})
@@ -532,9 +532,9 @@ class operator(object):
             >>>
             >>> @coroutine
             ... def run(reactor):
-            ...     r1 = yield asyncPipe1(items, **kwargs)
+            ...     r1 = yield async_pipe1(items, **kwargs)
             ...     print(next(r1) == response)
-            ...     r2 = yield asyncPipe2(items, **kwargs)
+            ...     r2 = yield async_pipe2(items, **kwargs)
             ...     print(next(r2) == {'content': 4})
             ...
             >>> if _issync:
