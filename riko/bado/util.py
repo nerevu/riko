@@ -41,6 +41,7 @@ else:
 
 DEF2NAME = {v: k for k, v in entitydefs.items()}
 
+
 def asyncSleep(seconds):
     d = Deferred()
     callLater(seconds, d.callback, None)

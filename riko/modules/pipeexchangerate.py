@@ -28,6 +28,7 @@ import pygogo as gogo
 from json import loads
 from decimal import Decimal
 from contextlib import closing
+from functools import partial
 
 from builtins import *
 from six.moves.urllib.request import urlopen

@@ -157,7 +157,7 @@ class Node(object):
     def writexml(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def toxml(self, **kwargs):
+    def toxml(self, *args, **kwargs):
         s = StringIO()
         self.writexml(s, *args, **kwargs)
         return s.getvalue()
@@ -323,6 +323,7 @@ class Document(Node):
         Node.appendChild(self, child)
 
     def writexml(self, stream, *args, **kwargs):
+        newl = kwargs['newl']
         stream.write('<?xml version="1.0"?>' + newl)
 
         if self.doctype:
@@ -421,7 +422,7 @@ class Text(CharacterData):
             val = decode(self.nodeValue)
         else:
             v = decode(self.nodeValue)
-            v = ' '.join(v.split()) if strip else v
+            v = ' '.join(v.split()) if kwargs.get('strip') else v
             val = escape(v)
 
         val = encode(val)
@@ -837,7 +838,7 @@ class MicroDOMParser(XMLParser):
     def gotDoctype(self, doctype):
         self._mddoctype = doctype
 
-    def _check_parent(self, parent):
+    def _check_parent(self, parent, name):
         if (self.lenient and isinstance(parent, Element)):
             parentName = parent.tagName
             myName = name
@@ -885,7 +886,7 @@ class MicroDOMParser(XMLParser):
         # print ' '*self.indentlevel, 'start tag',name
         # self.indentlevel += 1
         parent = self._getparent()
-        parent = self._check_parent(parent)
+        parent = self._check_parent(parent, name)
 
         unesc_attributes = unescape_dict(attributes)
         namespaces = self.nsstack[-1][0]
@@ -951,7 +952,7 @@ class MicroDOMParser(XMLParser):
                 args = first + self.saveMark() + el._markpos
                 raise MismatchedTags(*args)
 
-    def _update_stacks(self, lastEl, nstuple):
+    def _update_stacks(self, lastEl, nstuple, el, name, cname):
         updated = False
 
         for idx, element in enumerate(reversed(self.elementstack)):
@@ -1003,7 +1004,7 @@ class MicroDOMParser(XMLParser):
 
         if not tn_is_cname and lenient_stack:
             lastEl = self.elementstack[0]
-            updated = self._update_stacks(lastEl, nstuple)
+            updated = self._update_stacks(lastEl, nstuple, el, name, cname)
         elif not tn_is_cname:
             first = (self.filename, el.tagName, name)
             raise MismatchedTags(*(first + self.saveMark() + el._markpos))

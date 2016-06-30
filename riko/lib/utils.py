@@ -13,6 +13,11 @@ import itertools as it
 import time
 import pygogo as gogo
 
+try:
+    import __builtin__ as _builtins
+except ImportError:
+    import builtins as _builtins
+
 from datetime import timedelta, datetime as dt
 from functools import partial
 from operator import itemgetter, add, sub
@@ -20,7 +25,6 @@ from os import path as p, environ
 from calendar import timegm
 from decimal import Decimal
 from json import loads
-from contextlib import closing
 
 from builtins import *
 from six.moves.urllib.parse import quote, urlparse
@@ -34,7 +38,7 @@ except ImportError:
 from mezmorize import Cache
 from dateutil import parser
 from ijson import items
-from meza._compat import encode, decode
+from meza._compat import decode
 
 try:
     from lxml import etree, html
@@ -150,7 +154,7 @@ class Chainable(object):
         self.list = list(data)
 
     def __getattr__(self, name):
-        funcs = (partial(getattr, x) for x in [self.data, __builtin__, it])
+        funcs = (partial(getattr, x) for x in [self.data, _builtins, it])
         zipped = zip(funcs, it.repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)
@@ -821,23 +825,23 @@ def multiplex(sources):
     return it.chain.from_iterable(sources)
 
 
-def extend_entry(entry):
-    if entry.get('k:tags'):
-        if len(tags.split(',')) < 2:
-            tags = tags.replace(' ', ',')
+# def extend_entry(entry):
+#     if entry.get('k:tags'):
+#         if len(tags.split(',')) < 2:
+#             tags = tags.replace(' ', ',')
 
-        tags = tags.replace('/', ',').replace('#', '').replace(' ', '_')
-        tags = filter(None, sorted(set(parse_tags(tags.split(',')))))
-    else:
-        tags = []
+#         tags = tags.replace('/', ',').replace('#', '').replace(' ', '_')
+#         tags = filter(None, sorted(set(parse_tags(tags.split(',')))))
+#     else:
+#         tags = []
 
-    content = entry.get('k:content').replace('<br />', '')
-    content = content.replace('\n', '').strip()
+#     content = entry.get('k:content').replace('<br />', '')
+#     content = content.replace('\n', '').strip()
 
-    entry['k:tags'] = tags
-    entry['k:content'] = content
-    entry['k:summary'] = '%s%s' % (content[:128].replace('...', ''), '...')
-    return entry
+#     entry['k:tags'] = tags
+#     entry['k:content'] = content
+#     entry['k:summary'] = '%s%s' % (content[:128].replace('...', ''), '...')
+#     return entry
 
 
 ############

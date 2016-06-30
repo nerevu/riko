@@ -36,7 +36,7 @@ from codecs import iterdecode
 
 from builtins import *
 from six.moves.urllib.request import urlopen
-from meza._compat import encode, decode
+from meza._compat import encode
 
 from . import processor
 from riko.lib import utils
@@ -189,9 +189,9 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>> from meza._compat import decode
         >>>
-        >>> content = 'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
+        >>> resp = 'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
         >>> def run(reactor):
-        ...     callback = lambda x: print(decode(next(x)['content']) == content)
+        ...     callback = lambda x: print(decode(next(x)['content']) == resp)
         ...     url, path = get_path('bbc.html'), 'value.items'
         ...     conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         ...     d = asyncPipe(conf=conf)

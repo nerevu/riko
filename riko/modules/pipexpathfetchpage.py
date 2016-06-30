@@ -55,6 +55,7 @@ from six.moves.urllib.request import urlopen
 from . import processor
 from riko.lib import utils
 from riko.bado import coroutine, return_value, util as tu, io
+from meza._compat import encode
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
