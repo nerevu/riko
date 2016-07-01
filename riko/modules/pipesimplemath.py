@@ -76,7 +76,7 @@ def parser(num, objconf, skip, **kwargs):
     return parsed, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously performs basic arithmetic, such
     as addition and subtraction.

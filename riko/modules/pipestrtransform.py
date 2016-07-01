@@ -11,8 +11,9 @@ Examples:
 
         >>> from riko.modules.pipestrtransform import pipe
         >>> conf = {'rule': {'transform': 'title'}}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))['strtransform']
-        u'Hello World'
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['strtransform'] == 'Hello World'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -120,15 +121,16 @@ def parser(word, rules, skip, **kwargs):
         >>> item = {'content': 'hello world'}
         >>> conf = {'rule': {'transform': 'title'}}
         >>> rule = Objectify(conf['rule'])
+        >>> args = item['content'], [rule], False
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(item['content'], [rule], False, **kwargs)[0]
-        u'Hello World'
+        >>> parser(*args, **kwargs)[0] == 'Hello World'
+        True
     """
     value = kwargs['stream'] if skip else reduce(reducer, rules, word)
     return value, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously performs string transformations
     on the field of an item.
@@ -209,8 +211,9 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> conf = {'rule': {'transform': 'title'}}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))['strtransform']
-        u'Hello World'
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['strtransform'] == 'Hello World'
+        True
         >>> rules = [
         ...     {'transform': 'lower'}, {'transform': 'count', 'args': 'g'}]
         >>> conf = {'rule': rules}

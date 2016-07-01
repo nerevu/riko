@@ -9,8 +9,6 @@ from __future__ import (
 
 from os import path as p
 from subprocess import call, check_call, CalledProcessError
-
-from builtins import *
 from manager import Manager
 
 manager = Manager()
@@ -19,7 +17,7 @@ BASEDIR = p.dirname(__file__)
 
 def upload_():
     """Upload distribution files"""
-    check_call('twine upload %s' % p.join(BASEDIR, 'dist', '*'), shell=True)
+    check_call(['twine', 'upload', p.join(BASEDIR, 'dist', '*')])
 
 
 def sdist_():
@@ -48,12 +46,13 @@ def check():
 @manager.command
 def lint(where=None, strict=False):
     """Check style with linters"""
-    args = 'pylint --rcfile=tests/standard.rc -rn -fparseable riko'
+    args = [
+        'pylint', '--rcfile=tests/standard.rc', '-rn', '-fparseable', 'riko']
 
     try:
         check_call(['flake8', where] if where else 'flake8')
-        check_call(args.split(' ') + ['--py3k'])
-        check_call(args.split(' ')) if strict else None
+        check_call(args + ['--py3k'])
+        check_call(args) if strict else None
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -61,7 +60,7 @@ def lint(where=None, strict=False):
 @manager.command
 def pipme():
     """Install requirements.txt"""
-    exit(call('pip install -r requirements.txt'.split(' ')))
+    exit(call('pip', 'install', '-r', 'requirements.txt'))
 
 
 @manager.command
@@ -96,7 +95,7 @@ def test(where=None, stop=None, **kwargs):
     opts += ' --processes=-1' if kwargs.get('parallel') else ''
     opts += ' --detailed-errors' if kwargs.get('verbose') else ''
     opts += ' --debug=nose.loader' if kwargs.get('debug') else ''
-    opts += 'w %s' % where if where else ''
+    opts += ' -w %s' % where if where else ''
 
     try:
         if kwargs.get('tox'):
@@ -113,7 +112,7 @@ def test(where=None, stop=None, **kwargs):
 @manager.command
 def register():
     """Register package with PyPI"""
-    exit(call('python %s register' % p.join(BASEDIR, 'setup.py'), shell=True))
+    exit(call('python', p.join(BASEDIR, 'setup.py'), 'register'))
 
 
 @manager.command

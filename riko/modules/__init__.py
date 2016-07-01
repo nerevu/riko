@@ -113,9 +113,9 @@ def assign(item, assignment, key, one=False):
 
 
 class processor(object):
-    def __init__(self, defaults=None, async=False, **opts):
+    def __init__(self, defaults=None, isasync=False, **opts):
         """Creates a sync/async pipe that processes individual items. These
-        pipes are classified with as `type: processor` and as either
+        pipes are classified as `type: processor` and as either
         `sub_type: transformer` or `subtype: source`. To be recognized as
         `subtype: source`, the pipes `ftype` must be set to 'none'.
 
@@ -178,7 +178,7 @@ class processor(object):
                 input `item`.
 
         Examples:
-            >>> from riko.bado import react, util as tu
+            >>> from riko.bado import react, util as tu, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> @processor()
@@ -193,9 +193,9 @@ class processor(object):
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
-            >>> @processor(async=True)
+            >>> @processor(isasync=True)
             ... @coroutine
-            ... def asyncPipe(item, objconf, skip, **kwargs):
+            ... def async_pipe(item, objconf, skip, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
@@ -207,24 +207,27 @@ class processor(object):
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe(item, **kwargs))
-            {u'content': u'say "hello world" three times!'}
+            >>> response = {'content': 'say "hello world" three times!'}
+            >>> next(pipe(item, **kwargs)) == response
+            True
             >>>
             >>> def run(reactor):
-            ...     callback = lambda x: print(next(x))
-            ...     d = asyncPipe(item, **kwargs)
+            ...     callback = lambda x: print(next(x) == response)
+            ...     d = async_pipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
-            >>> try:
-            ...     react(run, _reactor=FakeReactor())
-            ... except SystemExit:
-            ...     pass
-            ...
-            {u'content': u'say "hello world" three times!'}
+            >>> if _issync:
+            ...     True
+            ... else:
+            ...     try:
+            ...         react(run, _reactor=FakeReactor())
+            ...     except SystemExit:
+            ...         pass
+            True
         """
         self.defaults = defaults or {}
         self.opts = opts or {}
-        self.async = async
+        self.async = isasync
 
     def __call__(self, pipe):
         """Creates a sync/async pipe that processes individual items
@@ -239,7 +242,7 @@ class processor(object):
             Deferred: twisted.internet.defer.Deferred generator of items
 
         Examples:
-            >>> from riko.bado import react
+            >>> from riko.bado import react, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> kwargs = {
@@ -259,8 +262,8 @@ class processor(object):
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
-            >>> @processor(async=True, **kwargs)
-            ... def asyncPipe(content, times, skip, **kwargs):
+            >>> @processor(isasync=True, **kwargs)
+            ... def async_pipe(content, times, skip, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
@@ -271,20 +274,23 @@ class processor(object):
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe(item, **kwargs))
-            {u'content': u'say "hello world" three times!'}
+            >>> response = {'content': 'say "hello world" three times!'}
+            >>> next(pipe(item, **kwargs)) == response
+            True
             >>>
             >>> def run(reactor):
-            ...     callback = lambda x: print(next(x))
-            ...     d = asyncPipe(item, **kwargs)
+            ...     callback = lambda x: print(next(x) == response)
+            ...     d = async_pipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
-            >>> try:
-            ...     react(run, _reactor=FakeReactor())
-            ... except SystemExit:
-            ...     pass
-            ...
-            {u'content': u'say "hello world" three times!'}
+            >>> if _issync:
+            ...     True
+            ... else:
+            ...     try:
+            ...         react(run, _reactor=FakeReactor())
+            ...     except SystemExit:
+            ...         pass
+            True
         """
         @wraps(pipe)
         def wrapper(item=None, **kwargs):
@@ -350,12 +356,12 @@ class processor(object):
 
 
 class operator(object):
-    def __init__(self, defaults=None, async=False, **opts):
+    def __init__(self, defaults=None, isasync=False, **opts):
         """Creates a sync/async pipe that processes an entire stream of items
 
         Args:
             defaults (dict): Default `conf` values.
-            async (bool): Wrap an async pipe (default: False)
+            isasync (bool): Wrap an async pipe (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
@@ -403,8 +409,11 @@ class operator(object):
             emit (bool): return the stream as is and don't assign it to an item
                 attribute (default: True).
 
+        Returns:
+            func: A function of 1 arg (items) and a `**kwargs`.
+
         Examples:
-            >>> from riko.bado import react, util as tu
+            >>> from riko.bado import react, util as tu, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> # emit is True by default
@@ -412,7 +421,7 @@ class operator(object):
             >>> # item dependent version of objconf as the 3rd arg
             >>> @operator(emit=False)
             ... def pipe1(stream, objconf, tuples, **kwargs):
-            ...     for item, objconf in reversed(list(tuples)):
+            ...     for item, objconf in tuples:
             ...         s = 'say "%s" %s times!'
             ...         yield s % (item['content'], objconf.times)
             ...
@@ -422,60 +431,63 @@ class operator(object):
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
-            >>> @operator(async=True, emit=False)
+            >>> @operator(isasync=True, emit=False)
             ... @coroutine
-            ... def asyncPipe1(stream, objconf, tuples, **kwargs):
-            ...     for item, objconf in reversed(list(tuples)):
+            ... def async_pipe1(stream, objconf, tuples, **kwargs):
+            ...     for item, objconf in tuples:
             ...         content = yield tu.asyncReturn(item['content'])
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
             ...         return_value(value)
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
-            >>> @operator(async=True, emit=False)
-            ... def asyncPipe2(stream, objconf, tuples, **kwargs):
+            >>> @operator(isasync=True, emit=False)
+            ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     return sum(len(item['content'].split()) for item in stream)
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe1(items, **kwargs))
-            {u'content': u'say "bye world" three times!'}
-            >>> next(pipe2(items, **kwargs))
-            {u'content': 4}
+            >>> response = {'content': 'say "hello world" three times!'}
+            >>> next(pipe1(items, **kwargs)) == response
+            True
+            >>> next(pipe2(items, **kwargs)) == {'content': 4}
+            True
             >>>
             >>> @coroutine
             ... def run(reactor):
-            ...     r1 = yield asyncPipe1(items, **kwargs)
-            ...     print(next(r1))
-            ...     r2 = yield asyncPipe2(items, **kwargs)
-            ...     print(next(r2))
+            ...     r1 = yield async_pipe1(items, **kwargs)
+            ...     print(next(r1) == response)
+            ...     r2 = yield async_pipe2(items, **kwargs)
+            ...     print(next(r2) == {'content': 4})
             ...
-            >>> try:
-            ...     react(run, _reactor=FakeReactor())
-            ... except SystemExit:
-            ...     pass
-            ...
-            {u'content': u'say "bye world" three times!'}
-            {u'content': 4}
+            >>> if _issync:
+            ...     True
+            ...     True
+            ... else:
+            ...     try:
+            ...         react(run, _reactor=FakeReactor())
+            ...     except SystemExit:
+            ...         pass
+            True
+            True
         """
         self.defaults = defaults or {}
         self.opts = opts or {}
-        self.async = async
+        self.async = isasync
 
     def __call__(self, pipe):
-        """Creates a sync/async pipe that processes an entire stream of items
+        """Creates a wrapper that allows a sync/async pipe to processes a
+        stream of items
 
         Args:
-            pipe (Iter[dict]): The entry to process
-
-        Yields:
-            dict: twisted.internet.defer.Deferred item
+            pipe (func): A function of 4 args (stream, objconf, tuples)
+                and a `**kwargs`. TODO: document args & kwargs.
 
         Returns:
-            Deferred: twisted.internet.defer.Deferred generator of items
+            func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import react
+            >>> from riko.bado import react, _issync
             >>> from riko.bado.mock import FakeReactor
             >>> from riko.bado.util import maybeDeferred
             >>>
@@ -484,55 +496,64 @@ class operator(object):
             ...     'pdictize': False, 'emit': True, 'field': 'content',
             ...     'objectify': False}
             ...
-            >>> @operator(**opts)
-            ... def pipe1(stream, objconf, tuples, **kwargs):
-            ...     for content, times in reversed(list(tuples)):
+            >>> wrapper = operator(**opts)
+            >>>
+            >>> def pipe1(stream, objconf, tuples, **kwargs):
+            ...     for content, times in tuples:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
-            >>> @operator(**opts)
-            ... def pipe2(stream, objconf, tuples, **kwargs):
+            >>> def pipe2(stream, objconf, tuples, **kwargs):
             ...     word_cnt = sum(len(content.split()) for content in stream)
             ...     return {kwargs['assign']: word_cnt}
             ...
+            >>> wrapped_pipe1 = wrapper(pipe1)
+            >>> wrapped_pipe2 = wrapper(pipe2)
+            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
+            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
+            >>> response = {'content': 'say "hello world" three times!'}
+            >>>
+            >>> next(wrapped_pipe1(items, **kwargs)) == response
+            True
+            >>> next(wrapped_pipe2(items, **kwargs)) == {'content': 4}
+            True
+            >>> async_wrapper = operator(isasync=True, **opts)
+            >>>
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
-            >>> @operator(async=True, **opts)
-            ... def asyncPipe1(stream, objconf, tuples, **kwargs):
-            ...     for content, times in reversed(list(tuples)):
+            >>> def async_pipe1(stream, objconf, tuples, **kwargs):
+            ...     for content, times in tuples:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         yield {kwargs['assign']: value}
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
-            >>> @operator(async=True, **opts)
-            ... @coroutine
-            ... def asyncPipe2(stream, objconf, tuples, **kwargs):
+            >>> @coroutine
+            ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     words = (len(content.split()) for content in stream)
             ...     word_cnt = yield maybeDeferred(sum, words)
             ...     return_value({kwargs['assign']: word_cnt})
             ...
-            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
-            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> next(pipe1(items, **kwargs))
-            {u'content': u'say "bye world" three times!'}
-            >>> next(pipe2(items, **kwargs))
-            {u'content': 4}
+            >>> wrapped_async_pipe1 = async_wrapper(async_pipe1)
+            >>> wrapped_async_pipe2 = async_wrapper(async_pipe2)
             >>>
             >>> @coroutine
             ... def run(reactor):
-            ...     r1 = yield asyncPipe1(items, **kwargs)
-            ...     print(next(r1))
-            ...     r2 = yield asyncPipe2(items, **kwargs)
-            ...     print(next(r2))
+            ...     r1 = yield wrapped_async_pipe1(items, **kwargs)
+            ...     print(next(r1) == response)
+            ...     r2 = yield wrapped_async_pipe2(items, **kwargs)
+            ...     print(next(r2) == {'content': 4})
             ...
-            >>> try:
-            ...     react(run, _reactor=FakeReactor())
-            ... except SystemExit:
-            ...     pass
-            ...
-            {u'content': u'say "bye world" three times!'}
-            {u'content': 4}
+            >>> if _issync:
+            ...     True
+            ...     True
+            ... else:
+            ...     try:
+            ...         react(run, _reactor=FakeReactor())
+            ...     except SystemExit:
+            ...         pass
+            True
+            True
         """
         @wraps(pipe)
         def wrapper(items=None, **kwargs):

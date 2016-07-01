@@ -13,8 +13,8 @@ Examples:
 
         >>> from riko.modules.pipetail import pipe
         >>> items = ({'x': x} for x in range(5))
-        >>> next(pipe(items, conf={'count': 2}))
-        {u'x': 3}
+        >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -62,13 +62,13 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> objconf = Objectify(kwargs)
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
-        >>> parser(stream, objconf, tuples, **kwargs)[0]
-        {u'x': 3}
+        >>> parser(stream, objconf, tuples, **kwargs)[0] == {'x': 3}
+        True
     """
     return deque(stream, int(objconf.count))
 
 
-@operator(async=True, **OPTS)
+@operator(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously truncates a stream to the last N items.
 
@@ -89,7 +89,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        ...     callback = lambda x: print(next(x) == {'x': 3})
         ...     items = ({'x': x} for x in range(5))
         ...     d = asyncPipe(items, conf={'count': 2})
         ...     return d.addCallbacks(callback, logger.error)
@@ -99,7 +99,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'x': 3}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -122,7 +122,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> items = [{'x': x} for x in range(5)]
-        >>> next(pipe(items, conf={'count': 2}))
-        {u'x': 3}
+        >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
+        True
     """
     return parser(*args, **kwargs)

@@ -20,8 +20,8 @@ Examples:
         >>> from riko.modules.pipefilter import pipe
         >>> items = ({'x': x} for x in range(5))
         >>> rule = {'field': 'x', 'op': 'is', 'value': 3}
-        >>> next(pipe(items, conf={'rule': rule}))
-        {u'x': 3}
+        >>> next(pipe(items, conf={'rule': rule})) == {'x': 3}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -73,16 +73,14 @@ def parse_rule(rule, item, **kwargs):
         try:
             _x = Decimal(x)
             _y = Decimal(y)
-        except (InvalidOperation, TypeError):
+        except (InvalidOperation, TypeError, ValueError):
             try:
                 _x = utils.cast_date(x)
                 _y = utils.cast_date(y)
             except ValueError:
                 pass
             else:
-                x, y = _x, _y
-        except ValueError:
-            pass
+                x, y = _x['date'], _y['date']
         else:
             x, y = _x, _y
 
@@ -125,8 +123,8 @@ def parser(stream, rules, tuples, **kwargs):
         >>> objrule = Objectify(rule)
         >>> stream = (DotDict({'ex': x}) for x in range(5))
         >>> tuples = zip(stream, repeat(objrule))
-        >>> next(parser(stream, [objrule], tuples, **kwargs))
-        {u'ex': 4}
+        >>> next(parser(stream, [objrule], tuples, **kwargs)) == {'ex': 4}
+        True
     """
     conf = kwargs['conf']
     # TODO: add terminal check
@@ -150,7 +148,7 @@ def parser(stream, rules, tuples, **kwargs):
             yield item
 
 
-@operator(DEFAULTS, async=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An operator that asynchronously filters for source items matching
     the given rules.
@@ -188,8 +186,9 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
-        ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
+        ...     title = 'Website Developer'
+        ...     callback = lambda x: print(next(x)['title'] == title)
+        ...     items = [{'title': 'Good job!'}, {'title': title}]
         ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
         ...     d = asyncPipe(items, conf={'rule': rule})
         ...     return d.addCallbacks(callback, logger.error)
@@ -199,7 +198,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'title': u'Website Developer'}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -240,10 +239,11 @@ def pipe(*args, **kwargs):
         dict: the filtered items
 
     Examples:
-        >>> items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
+        >>> title = 'Website Developer'
+        >>> items = [{'title': 'Good job!'}, {'title': title}]
         >>> rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
-        >>> next(pipe(items, conf={'rule': rule}))
-        {u'title': u'Website Developer'}
+        >>> next(pipe(items, conf={'rule': rule})) == {'title': title}
+        True
         >>> rule['value'] = 'kjhlked'
         >>> any(pipe(items, conf={'rule': [rule]}))
         False

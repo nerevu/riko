@@ -9,8 +9,8 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipecount import pipe
-        >>> next(pipe({'x': x} for x in range(5)))
-        {u'count': 5}
+        >>> next(pipe({'x': x} for x in range(5))) == {'count': 5}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -55,13 +55,13 @@ def parser(stream, _, tuples, **kwargs):
         >>>
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(None))
-        >>> parser(stream, None, tuples, assign='content')
-        {u'content': 5}
+        >>> parser(stream, None, tuples, assign='content') == {'content': 5}
+        True
     """
     return {kwargs['assign']: len(list(stream))}
 
 
-@operator(async=True, **OPTS)
+@operator(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously and eagerly counts the number of items
     in a stream. Note that this pipe is not lazy.
@@ -83,7 +83,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        ...     callback = lambda x: print(next(x) == {'count': 5})
         ...     items = ({'x': x} for x in range(5))
         ...     d = asyncPipe(items)
         ...     return d.addCallbacks(callback, logger.error)
@@ -93,7 +93,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'count': 5}
+        True
     """
     return parser(*args, **kwargs)
 

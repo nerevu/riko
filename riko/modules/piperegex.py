@@ -18,8 +18,9 @@ Examples:
         >>> match = r'(\w+)\s(\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule}
-        >>> next(pipe({'content': 'hello world'}, conf=conf))['content']
-        u'worldwide'
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['content'] == 'worldwide'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -165,7 +166,7 @@ def parser(item, rules, skip, **kwargs):
     return item, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor that asynchronously replaces text in fields of an item
     using regexes.
@@ -266,7 +267,7 @@ def pipe(*args, **kwargs):
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> result = next(pipe(item, conf=conf))
-        >>> result == {'content': u'worldwide', 'title': 'greeting'}
+        >>> result == {'content': 'worldwide', 'title': 'greeting'}
         True
         >>> # multiple regex mode
         >>> conf['multi'] = True
@@ -275,11 +276,11 @@ def pipe(*args, **kwargs):
         >>> # case insensitive matching
         >>> item = {'content': 'Hello hello'}
         >>> rule.update({'match': r'hello.*', 'replace': 'bye'})
-        >>> next(pipe(item, conf=conf))['content']
-        u'bye'
+        >>> next(pipe(item, conf=conf))['content'] == 'bye'
+        True
         >>> # case sensitive matching
         >>> rule['casematch'] = True
-        >>> next(pipe(item, conf=conf))['content']
-        u'Hello bye'
+        >>> next(pipe(item, conf=conf))['content'] == 'Hello bye'
+        True
     """
     return parser(*args, **kwargs)

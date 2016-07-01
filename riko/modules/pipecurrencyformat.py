@@ -9,8 +9,8 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipecurrencyformat import pipe
-        >>> next(pipe({'content': '100'}))['currencyformat']
-        u'$100.00'
+        >>> next(pipe({'content': '100'}))['currencyformat'] == '$100.00'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -47,8 +47,8 @@ def parser(amount, objconf, skip, **kwargs):
         >>>
         >>> amount = Decimal('10.33')
         >>> objconf = Objectify({'currency': 'USD'})
-        >>> parser(amount, objconf, False)[0]
-        u'$10.33'
+        >>> parser(amount, objconf, False)[0] == '$10.33'
+        True
     """
     if skip:
         parsed = kwargs['stream']
@@ -58,7 +58,7 @@ def parser(amount, objconf, skip, **kwargs):
     return parsed, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously formats a number to a given
     currency string.
@@ -124,8 +124,8 @@ def pipe(*args, **kwargs):
         dict: an item with formatted date string
 
     Examples:
-        >>> next(pipe({'content': '10.33'}))['currencyformat']
-        u'$10.33'
+        >>> next(pipe({'content': '10.33'}))['currencyformat'] == '$10.33'
+        True
         >>> conf = {'currency': 'GBP'}
         >>> result = next(pipe({'content': '100'}, conf=conf))
         >>> result['currencyformat'] == '£100.00'

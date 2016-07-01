@@ -71,7 +71,7 @@ def parser(stream, objconf, tuples, **kwargs):
     return islice(stream, start, stop)
 
 
-@operator(DEFAULTS, async=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously returns a specified number of items
     from a stream.
@@ -133,7 +133,7 @@ def pipe(*args, **kwargs):
         >>> len(list(pipe(items, conf={'count': '4'})))
         4
         >>> stream = pipe(items, conf={'count': '2', 'start': '2'})
-        >>> next(stream)
-        {u'x': 2}
+        >>> next(stream) == {'x': 2}
+        True
     """
     return parser(*args, **kwargs)

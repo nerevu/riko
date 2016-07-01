@@ -78,8 +78,8 @@ Fetching feeds
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
-    >>> item['list']['resources'][0]['resource']['fields']['symbol']
-    u'KRW=X'
+    >>> item['list']['resources'][0]['resource']['fields']['symbol'] == 'KRW=X'
+    True
 
     >>> ### Fetch an rss feed ###
     >>> stream = fetch(conf={'url': get_path('feed.xml')})
@@ -110,11 +110,14 @@ Fetching feeds
     ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
     ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
     >>> item = next(stream)
-    >>> set(item.keys()).issuperset(intersection)
+    >>> set(item).issuperset(intersection)
     True
-    >>> item['title'], item['author'], item['link']
-    (u'Using NFC tags in the car', u'Liam Green-Hughes', \
-u'http://www.greenhughes.com/content/using-nfc-tags-car')
+    >>> item['title'] == 'Using NFC tags in the car'
+    True
+    >>> item['author'] == 'Liam Green-Hughes'
+    True
+    >>> item['link'] == 'http://www.greenhughes.com/content/using-nfc-tags-car'
+    True
 
 
 Synchronous processing
@@ -167,14 +170,14 @@ Synchronous processing
     >>> # `chain` steps
     >>> from riko.collections.sync import SyncPipe
     >>>
-    >>> output = (SyncPipe('fetch', conf=fetch_conf)
+    >>> stream = (SyncPipe('fetch', conf=fetch_conf)
     ...     .filter(conf={'rule': filter_rule})
     ...     .subelement(conf=sub_conf, emit=True)
     ...     .regex(conf={'rule': regex_rule})
     ...     .sort(conf=sort_conf)
     ...     .output)
     >>>
-    >>> next(output) == {'content': 'mailto:mail@writetoreply.org'}
+    >>> next(stream) == {'content': 'mailto:mail@writetoreply.org'}
     True
 
 
@@ -226,7 +229,7 @@ Parallel processing
 Asynchronous processing
 
     >>> from riko import get_path
-    >>> from riko.bado import coroutine, react
+    >>> from riko.bado import coroutine, react, _issync, _isasync
     >>> from riko.bado.mock import FakeReactor
     >>> from riko.collections.async import AsyncPipe
     >>>
@@ -263,10 +266,13 @@ Asynchronous processing
     ...
     ...     print(len(stream))
     ...
-    >>> try:
-    ...     react(run, _reactor=FakeReactor())
-    ... except SystemExit:
-    ...     pass
+    >>> if _issync:
+    ...     25
+    ... else:
+    ...     try:
+    ...         react(run, _reactor=FakeReactor())
+    ...     except SystemExit:
+    ...         pass
     25
 
 
@@ -276,8 +282,8 @@ Design Principles
     >>> from riko.modules.pipereverse import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(stream))
-    {u'title': u'riko pt. 2'}
+    >>> next(pipe(stream)) == {'title': 'riko pt. 2'}
+    True
 
     # a transformer
     >>> import ctypes
@@ -302,31 +308,35 @@ Design Principles
     True
     >>> # In this case, if we just want the result, we can `emit` it instead
     >>> stream = pipe(item, conf=tokenizer_conf, field='title', emit=True)
-    >>> next(stream)
-    {u'content': 'riko'}
+    >>> next(stream) == {'content': 'riko'}
+    True
 
     # an aggregator
     >>> from riko.modules.pipecount import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(stream))
-    {u'count': 2}
+    >>> next(pipe(stream)) == {'count': 2}
+    True
 
     # a source
     >>> from riko.modules.pipeitembuilder import pipe
     >>>
     >>> attrs = {'key': 'title', 'value': 'riko pt. 1'}
-    >>> next(pipe(conf={'attrs': attrs}))
-    {u'title': u'riko pt. 1'}
+    >>> next(pipe(conf={'attrs': attrs})) == {'title': 'riko pt. 1'}
+    True
+
 
     # check metadata
     >>> from riko.modules.pipefetchpage import asyncPipe
     >>> from riko.modules.pipecount import pipe
     >>>
-    >>> asyncPipe.__dict__ == {'type': 'processor', 'sub_type': 'source'}
+    >>> async_resp = ('processor', 'source') if _isasync else (None, None)
+    >>> async_pdict = asyncPipe.__dict__
+    >>> (async_pdict.get('type'), async_pdict.get('sub_type')) == async_resp
     True
-    >>> pipe.__dict__ == {
-    ...     'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
+    >>> pdict = pipe.__dict__
+    >>> sync_resp = ('operator', 'count', 'aggregator')
+    >>> (pdict['type'], pdict['name'], pdict['sub_type']) == sync_resp
     True
 
     # SyncPipe usage
@@ -352,7 +362,7 @@ Design Principles
     ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
     >>> conf = {'url': {'subkey': 'url'}}
     >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
-    >>> set(next(result).keys()).issuperset(intersection)
+    >>> set(next(result)).issuperset(intersection)
     True
 """
 from __future__ import (

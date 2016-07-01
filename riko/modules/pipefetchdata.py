@@ -15,8 +15,8 @@ Examples:
         >>> from riko.modules.pipefetchdata import pipe
         >>>
         >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> next(pipe(conf=conf))['title']
-        u'Business System Analyst'
+        >>> next(pipe(conf=conf))['title'] == 'Business System Analyst'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -27,18 +27,17 @@ from __future__ import (
 
 import pygogo as gogo
 
-from functools import reduce
 from os.path import splitext
+from contextlib import closing
 
 from builtins import *
 from six.moves.urllib.request import urlopen
 
 from . import processor
 from riko.lib import utils
-from riko.bado import coroutine, return_value, itertools as ait, io
+from riko.bado import coroutine, return_value, io
 
 OPTS = {'ftype': 'none'}
-reducer = lambda element, i: element.get(i) if element else None
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -83,10 +82,8 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
-        path = objconf.path.split('.') if objconf.path else []
         f = yield io.urlOpen(url)
-        element = utils.any2dict(f, ext, objconf.html5)
-        stream = yield ait.coopReduce(reducer, path, element)
+        stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
 
     result = (stream, skip)
     return_value(result)
@@ -114,23 +111,22 @@ def parser(_, objconf, skip, **kwargs):
         >>> url = get_path('gigs.json')
         >>> objconf = Objectify({'url': url, 'path': 'value.items'})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> result[0]['title']
-        u'Business System Analyst'
+        >>> result[0]['title'] == 'Business System Analyst'
+        True
     """
     if skip:
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
-        path = objconf.path.split('.') if objconf.path else []
-        f = urlopen(url)
-        element = utils.any2dict(f, ext, objconf.html5)
-        stream = reduce(reducer, path, element)
+
+        with closing(urlopen(url)) as f:
+            stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
 
     return stream, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -144,8 +140,8 @@ def asyncPipe(*args, **kwargs):
             contain the keys 'path' or 'html5'.
 
             url (str): The web site to fetch
-            path (str): The path to extract (default: None, i.e., return entire
-                page)
+            path (str): Dot separated path to extract (default: None, i.e.,
+                return entire page)
 
             html5 (bool): Use the HTML5 parser (default: False)
 
@@ -188,8 +184,8 @@ def pipe(*args, **kwargs):
             contain the keys 'path' or 'html5'.
 
             url (str): The web site to fetch
-            path (str): The path to extract (default: None, i.e., return entire
-                page)
+            path (str): Dot separated path to extract (default: None, i.e.,
+                return entire page)
 
             html5 (bool): Use the HTML5 parser (default: False)
 
@@ -200,12 +196,12 @@ def pipe(*args, **kwargs):
         >>> from riko import get_path
         >>>
         >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> next(pipe(conf=conf))['title']
-        u'Business System Analyst'
+        >>> next(pipe(conf=conf))['title'] == 'Business System Analyst'
+        True
         >>> path = 'appointment'
         >>> conf = {'url': get_path('places.xml'), 'path': path}
-        >>> next(pipe(conf=conf))['subject']
-        'Bring pizza home'
+        >>> next(pipe(conf=conf))['subject'] == 'Bring pizza home'
+        True
         >>> conf = {'url': get_path('places.xml'), 'path': ''}
         >>> next(pipe(conf=conf))['reminder']
         '15'

@@ -19,8 +19,8 @@ Examples:
 
         >>> from riko.modules.pipeitembuilder import pipe
         >>> attrs = {'key': 'title', 'value': 'the title'}
-        >>> next(pipe(conf={'attrs': attrs}))['title']
-        u'the title'
+        >>> next(pipe(conf={'attrs': attrs}))['title'] == 'the title'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -68,7 +68,7 @@ def parser(_, attrs, skip, **kwargs):
     return stream, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously builds an item.
 
@@ -137,7 +137,7 @@ def pipe(*args, **kwargs):
         ...     {'key': 'title', 'value': 'the title'},
         ...     {'key': 'desc.content', 'value': 'the desc'}]
         >>> next(pipe(conf={'attrs': attrs})) == {
-        ...     u'title': 'the title', u'desc': {u'content': 'the desc'}}
+        ...     'title': 'the title', 'desc': {'content': 'the desc'}}
         True
     """
     return parser(*args, **kwargs)

@@ -8,15 +8,19 @@ Provides functions for finding RSS feeds from a site's LINK tags
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from itertools import chain
 from html.parser import HTMLParser
 
 from builtins import *
 from six.moves.urllib.request import urlopen
+from meza._compat import decode
 from riko.bado import coroutine, return_value
 from riko.bado.io import urlOpen
 
 TIMEOUT = 10
+logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class LinkParser(HTMLParser):
@@ -34,23 +38,23 @@ class LinkParser(HTMLParser):
             entry['tag'] = tag
             self.entry = chain(self.entry, [entry])
 
-import pygogo as gogo
-logger = gogo.Gogo(__name__, monolog=True).logger
-
 
 def gen_entries(f, parser):
     for line in f:
-        parser.feed(line)
+        parser.feed(decode(line))
 
         for entry in parser.entry:
             yield entry
 
 
 @coroutine
-def asyncGetRSS(url):
+def asyncGetRSS(url, convert_charrefs=False):
     # TODO: implement via an async parser
     # maybe get twisted.web.microdom.parse working for HTML
-    parser = LinkParser()
+    try:
+        parser = LinkParser(convert_charrefs=convert_charrefs)
+    except TypeError:
+        parser = LinkParser()
 
     try:
         f = yield urlOpen(url, timeout=TIMEOUT)
@@ -60,8 +64,11 @@ def asyncGetRSS(url):
     return_value(gen_entries(f, parser))
 
 
-def get_rss(url):
-    parser = LinkParser()
+def get_rss(url, convert_charrefs=False):
+    try:
+        parser = LinkParser(convert_charrefs=convert_charrefs)
+    except TypeError:
+        parser = LinkParser()
 
     try:
         f = urlopen(url, timeout=TIMEOUT)

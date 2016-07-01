@@ -26,15 +26,18 @@ A more complex query that finds Flickr photos tagged "fog" in San Francisco:
 Examples:
     basic usage::
 
-        >>> from urllib2 import urlopen
+        >>> from contextlib import closing
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.lib.utils import get_abspath
         >>> from riko.modules.pipeyql import pipe
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> conf = {'query': "select * from feed where url='%s'" % feed}
-        >>> response = urlopen(get_abspath(get_path('yql.xml')))
-        >>> next(pipe(conf=conf, response=response))['title']
+        >>> url = get_abspath(get_path('yql.xml'))
+        >>>
+        >>> with closing(urlopen(url)) as f:
+        ...     next(pipe(conf=conf, response=f))['title']
         'Bring pizza home'
 
 Attributes:
@@ -78,7 +81,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         Deferred: twisted.internet.defer.Deferred Tuple of (stream, skip)
 
     Examples:
-        >>> from urllib2 import urlopen
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
@@ -87,15 +90,17 @@ def asyncParser(_, objconf, skip, **kwargs):
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
         >>> query = "select * from feed where url='%s'" % feed
-        >>> response = urlopen(get_abspath(get_path('yql.xml')))
+        >>> f = urlopen(get_abspath(get_path('yql.xml')))
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x[0])['title'])
         ...     conf = {'query': query, 'url': url, 'debug': False}
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'stream': {}, 'response': response}
+        ...     kwargs = {'stream': {}, 'response': f}
         ...     d = asyncParser(None, objconf, False, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d.addCallbacks(callback, logger.error)
+        ...     d.addCallback(lambda _: f.close())
+        ...     return d
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -114,8 +119,8 @@ def asyncParser(_, objconf, skip, **kwargs):
             r = yield treq.get(objconf.url, params=params)
             f = yield treq.content(r)
 
-        root = yield tu.xml2etree(f)
-        results = root.getElementsByTagName('results')[0]
+        tree = yield tu.xml2etree(f)
+        results = next(tree.getElementsByTagName('results'))
         stream = map(tu.etreeToDict, results.childNodes)
 
     result = (stream, skip)
@@ -139,18 +144,22 @@ def parser(_, objconf, skip, **kwargs):
         Tuple(Iter[dict], bool): Tuple of (stream, skip)
 
     Examples:
-        >>> from urllib2 import urlopen
+        >>> from contextlib import closing
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.lib.utils import Objectify, get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
         >>> query = "select * from feed where url='%s'" % feed
-        >>> response = urlopen(get_abspath(get_path('yql.xml')))
         >>> conf = {'query': query, 'url': url, 'debug': False}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'stream': {}, 'response': response}
-        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> url = get_abspath(get_path('yql.xml'))
+        >>>
+        >>> with closing(urlopen(url)) as f:
+        ...     kwargs = {'stream': {}, 'response': f}
+        ...     result, skip = parser(None, objconf, False, **kwargs)
+        >>>
         >>> next(result)['title']
         'Bring pizza home'
     """
@@ -165,14 +174,14 @@ def parser(_, objconf, skip, **kwargs):
             f = r.raw
 
         # todo: consider paging for large result sets
-        root = utils.xml2etree(f)
+        root = utils.xml2etree(f).getroot()
         results = root.find('results')
-        stream = map(utils.etree2dict, results.getchildren())
+        stream = map(utils.etree2dict, results)
 
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given website as
     DOM nodes or a string.
@@ -197,7 +206,7 @@ def asyncPipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred stream of items
 
     Examples:
-        >>> from urllib2 import urlopen
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
@@ -205,12 +214,14 @@ def asyncPipe(*args, **kwargs):
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> query = "select * from feed where url='%s'" % feed
-        >>> response = urlopen(get_abspath(get_path('yql.xml')))
+        >>> f = urlopen(get_abspath(get_path('yql.xml')))
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
-        ...     d = asyncPipe(conf={'query': query}, response=response)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d = asyncPipe(conf={'query': query}, response=f)
+        ...     d.addCallbacks(callback, logger.error)
+        ...     d.addCallback(lambda _: f.close())
+        ...     return d
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -246,15 +257,18 @@ def pipe(*args, **kwargs):
         dict: an item of the result
 
     Examples:
-        >>> from urllib2 import urlopen
+        >>> from contextlib import closing
+        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.lib.utils import get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> conf = {'query': "select * from feed where url='%s'" % feed}
-        >>> response = urlopen(get_abspath(get_path('yql.xml')))
-        >>> result = next(pipe(conf=conf, response=response))
-        >>> sorted(result.keys())
+        >>> url = get_abspath(get_path('yql.xml'))
+        >>>
+        >>> with closing(urlopen(url)) as f:
+        ...     result = next(pipe(conf=conf, response=f))
+        ...     sorted(result.keys())
         ['alarmTime', 'begin', 'duration', 'place', 'title', 'uid']
         >>> result['title']
         'Bring pizza home'

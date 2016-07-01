@@ -13,8 +13,10 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.modules.pipefetch import pipe
-        >>> next(pipe(conf={'url': get_path('feed.xml')}))['title']
-        u'Donations'
+        >>>
+        >>> url = get_path('feed.xml')
+        >>> next(pipe(conf={'url': url}))['title'] == 'Donations'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -25,14 +27,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-try:
-    import speedparser
-except ImportError:
-    import feedparser as speedparser
-
-
 from builtins import *
-from six.moves.urllib.request import urlopen
 
 from . import processor
 from riko.lib import utils
@@ -87,7 +82,7 @@ def asyncParser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         content = yield io.urlRead(url, delay=objconf.sleep)
-        parsed = speedparser.parse(content)
+        parsed = utils.parse_rss(content)
         stream = utils.gen_entries(parsed)
 
     result = (stream, skip)
@@ -116,22 +111,20 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['title']
-        u'Donations'
+        >>> next(result)['title'] == 'Donations'
+        True
     """
     if skip:
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        context = utils.SleepyDict(delay=objconf.sleep)
-        content = urlopen(url, context=context).read()
-        parsed = speedparser.parse(content)
+        parsed = utils.parse_rss(url, objconf.sleep)
         stream = utils.gen_entries(parsed)
 
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches and parses a feed to return the
     entries.

@@ -1,5 +1,3 @@
-recursive-include data *
-recursive-include examples *
-recursive-include bin *
-recursive-include tests *
-include README.rst
+recursive-include riko/data *
+include *.rst
+include *requirements.txt

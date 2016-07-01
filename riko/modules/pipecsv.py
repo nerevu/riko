@@ -10,8 +10,10 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.modules.pipecsv import pipe
-        >>> next(pipe(conf={'url': get_path('spreadsheet.csv')}))['mileage']
-        u'7213'
+        >>>
+        >>> url = get_path('spreadsheet.csv')
+        >>> next(pipe(conf={'url': url}))['mileage'] == '7213'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -78,13 +80,14 @@ def asyncParser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
+        # TODO: write function to extract encoding from response
         url = utils.get_abspath(objconf.url)
-        f = yield io.urlOpen(url)
-        odd = {
-            'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
-
-        rkwargs = utils.combine_dicts(objconf, odd)
-        stream = read_csv(f, **rkwargs)
+        response = yield io.urlOpen(url)
+        first_row, custom_header = objconf.skip_rows, objconf.col_names
+        renamed = {'first_row': first_row, 'custom_header': custom_header}
+        rkwargs = utils.combine_dicts(objconf, renamed)
+        rkwargs['encoding'] = objconf.encoding
+        stream = read_csv(response, **rkwargs)
 
     result = (stream, skip)
     return_value(result)
@@ -109,23 +112,25 @@ def parser(_, objconf, skip, **kwargs):
         >>> conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
         >>> objconf = Objectify(conf)
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['mileage']
-        u'7213'
+        >>> next(result)['mileage'] == '7213'
+        True
     """
     if skip:
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        f = urlopen(url)
-        odd = {
-            'first_row': objconf.skip_rows, 'custom_header': objconf.col_names}
-        rkwargs = utils.combine_dicts(objconf, odd)
-        stream = read_csv(f, **rkwargs)
+        first_row, custom_header = objconf.skip_rows, objconf.col_names
+        renamed = {'first_row': first_row, 'custom_header': custom_header}
+        response = urlopen(url)
+        encoding = utils.get_response_encoding(response, objconf.encoding)
+        rkwargs = utils.combine_dicts(objconf, renamed)
+        rkwargs['encoding'] = encoding
+        stream = read_csv(response, **rkwargs)
 
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given web site as
     a string.
@@ -208,7 +213,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> next(pipe(conf={'url': get_path('spreadsheet.csv')}))['mileage']
-        u'7213'
+        >>> url = get_path('spreadsheet.csv')
+        >>> next(pipe(conf={'url': url}))['mileage'] == '7213'
+        True
     """
     return parser(*args, **kwargs)

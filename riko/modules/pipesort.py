@@ -10,8 +10,8 @@ Examples:
 
         >>> from riko.modules.pipesort import pipe
         >>> items = [{'content': 'b'}, {'content': 'a'}, {'content': 'c'}]
-        >>> next(pipe(items))
-        {u'content': u'a'}
+        >>> next(pipe(items)) == {'content': 'a'}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -64,12 +64,12 @@ def asyncParser(stream, rules, tuples, **kwargs):
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.bado import react
+        >>> from riko.bado import react, _issync
         >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0])
+        ...     callback = lambda x: print(x[0] == {'content': 4})
         ...     kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
         ...     rule = Objectify(kwargs)
         ...     stream = ({'content': x} for x in range(5))
@@ -77,12 +77,14 @@ def asyncParser(stream, rules, tuples, **kwargs):
         ...     d = asyncParser(stream, [rule], tuples, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
-        {u'content': 4}
+        >>> if _issync:
+        ...     True
+        ... else:
+        ...     try:
+        ...         react(run, _reactor=FakeReactor())
+        ...     except SystemExit:
+        ...         pass
+        True
     """
     return ait.asyncReduce(reducer, rules, stream)
 
@@ -117,13 +119,13 @@ def parser(stream, rules, tuples, **kwargs):
         >>> rule = Objectify(kwargs)
         >>> stream = ({'content': x} for x in range(5))
         >>> tuples = zip(stream, repeat(rule))
-        >>> parser(stream, [rule], tuples, **kwargs)[0]
-        {u'content': 4}
+        >>> parser(stream, [rule], tuples, **kwargs)[0] == {'content': 4}
+        True
     """
     return reduce(reducer, rules, stream)
 
 
-@operator(DEFAULTS, async=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously and eagerly sorts the input source
     according to a specified key. Note that this pipe is not lazy.
@@ -152,7 +154,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        ...     callback = lambda x: print(next(x) == {'rank': 'a'})
         ...     items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]
         ...     d = asyncPipe(items, conf={'rule': {'sort_key': 'rank'}})
         ...     return d.addCallbacks(callback, logger.error)
@@ -162,7 +164,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'rank': u'a'}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -195,12 +197,14 @@ def pipe(*args, **kwargs):
         ...     {'rank': 'b', 'name': 'adam'},
         ...     {'rank': 'a', 'name': 'sue'},
         ...     {'rank': 'c', 'name': 'bill'}]
-        >>> next(pipe(items, conf={'rule': {'sort_key': 'rank'}}))['rank']
-        u'a'
-        >>> next(pipe(items, conf={'rule': {'sort_key': 'name'}}))['name']
-        u'adam'
+        >>> rule = {'sort_key': 'rank'}
+        >>> next(pipe(items, conf={'rule': rule}))['rank'] == 'a'
+        True
+        >>> rule = {'sort_key': 'name'}
+        >>> next(pipe(items, conf={'rule': rule}))['name'] == 'adam'
+        True
         >>> rule = {'sort_key': 'name', 'sort_dir': 'desc'}
-        >>> next(pipe(items, conf={'rule': rule}))['name']
-        u'sue'
+        >>> next(pipe(items, conf={'rule': rule}))['name'] == 'sue'
+        True
     """
     return parser(*args, **kwargs)

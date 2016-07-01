@@ -13,8 +13,8 @@ Examples:
 
         >>> from riko.modules.piperssitembuilder import pipe
         >>> conf = {'title': 'the title', 'description': 'description'}
-        >>> next(pipe(conf=conf))['y:title']
-        u'the title'
+        >>> next(pipe(conf=conf))['y:title'] == 'the title'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -86,7 +86,7 @@ def parser(item, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that asynchronously builds an rss item.
 
@@ -119,7 +119,8 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['media:thumbnail'])
+        ...     resp = {'url': 'image.png'}
+        ...     callback = lambda x: print(next(x)['media:thumbnail'] == resp)
         ...     conf = {
         ...         'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
         ...     d = asyncPipe(conf=conf)
@@ -131,7 +132,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'url': u'image.png'}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -168,10 +169,11 @@ def pipe(*args, **kwargs):
         >>> # conf based
         >>> conf = {'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
         >>> rss = next(pipe(conf=conf))
-        >>> rss['media:thumbnail']
-        {u'url': u'image.png'}
-        >>> sorted(rss.keys())
-        [u'media:thumbnail', u'pubDate', u'y:id', u'y:title']
+        >>> rss['media:thumbnail'] == {'url': 'image.png'}
+        True
+        >>> sorted(rss.keys()) == [
+        ...     'media:thumbnail', 'pubDate', 'y:id', 'y:title']
+        True
         >>>
         >>> # source based
         >>> # TODO: look into subkey

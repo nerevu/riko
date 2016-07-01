@@ -20,18 +20,18 @@ Examples:
         >>> (SyncPipe('fetchdata', conf=fconf)
         ...     .sort(conf=sort_conf)
         ...     .stringtokenizer(conf=str_conf, **str_kwargs)
-        ...     .count().list)
-        [{u'count': 169}]
+        ...     .count().list) == [{'count': 169}]
+        True
         >>> (SyncPipe('fetchdata', conf=fconf, parallel=True)
         ...     .sort(conf=sort_conf)
         ...     .stringtokenizer(conf=str_conf, **str_kwargs)
-        ...     .count().list)
-        [{u'count': 169}]
+        ...     .count().list) == [{'count': 169}]
+        True
         >>> (SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
         ...     .sort(conf=sort_conf)
         ...     .stringtokenizer(conf=str_conf, **str_kwargs)
-        ...     .count().list)
-        [{u'count': 169}]
+        ...     .count().list) == [{'count': 169}]
+        True
         >>> fconf['type'] = 'fetchdata'
         >>> sources = [{'url': {'value': get_path('feed.xml')}}, fconf]
         >>> len(SyncCollection(sources).list)

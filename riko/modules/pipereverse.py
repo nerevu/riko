@@ -9,8 +9,8 @@ Examples:
     basic usage::
 
         >>> from riko.modules.pipereverse import pipe
-        >>> next(pipe({'x': x} for x in range(5)))
-        {u'x': 4}
+        >>> next(pipe({'x': x} for x in range(5))) == {'x': 4}
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -55,13 +55,13 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> kwargs = {}
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(None))
-        >>> next(parser(stream, None, tuples, **kwargs))
-        {u'x': 4}
+        >>> next(parser(stream, None, tuples, **kwargs)) == {'x': 4}
+        True
     """
     return reversed(list(stream))
 
 
-@operator(async=True, **OPTS)
+@operator(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An aggregator that asynchronously reverses the order of source items in
     a stream. Note that this pipe is not lazy.
@@ -79,7 +79,7 @@ def asyncPipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        ...     callback = lambda x: print(next(x) == {'x': 4})
         ...     items = ({'x': x} for x in range(5))
         ...     d = asyncPipe(items)
         ...     return d.addCallbacks(callback, logger.error)
@@ -89,7 +89,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        {u'x': 4}
+        True
     """
     return parser(*args, **kwargs)
 
@@ -107,7 +107,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> items = ({'x': x} for x in range(5))
-        >>> next(pipe(items))
-        {u'x': 4}
+        >>> next(pipe(items)) == {'x': 4}
+        True
     """
     return parser(*args, **kwargs)

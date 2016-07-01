@@ -24,8 +24,10 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.modules.pipefetchsitefeed import pipe
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
-        u'Using NFC tags in the car'
+        >>>
+        >>> title = 'Using NFC tags in the car'
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title'] == title
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -34,15 +36,9 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-try:
-    import speedparser
-except ImportError:
-    import feedparser as speedparser
-
 import pygogo as gogo
 
 from builtins import *
-from six.moves.urllib.request import urlopen
 
 from . import processor
 from riko.bado import coroutine, return_value, io
@@ -94,7 +90,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         rss = yield autorss.asyncGetRSS(url)
         link = utils.get_abspath(next(rss)['link'])
         content = yield io.urlRead(link)
-        parsed = speedparser.parse(content)
+        parsed = utils.parse_rss(content)
         stream = utils.gen_entries(parsed)
 
     result = (stream, skip)
@@ -122,8 +118,8 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['title']
-        u'Using NFC tags in the car'
+        >>> next(result)['title'] == 'Using NFC tags in the car'
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -131,14 +127,13 @@ def parser(_, objconf, skip, **kwargs):
         url = utils.get_abspath(objconf.url)
         rss = autorss.get_rss(url)
         link = utils.get_abspath(next(rss)['link'])
-        content = urlopen(link).read()
-        parsed = speedparser.parse(content)
+        parsed = utils.parse_rss(link)
         stream = utils.gen_entries(parsed)
 
     return stream, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that fetches and parses the first feed found on a site.
 
@@ -193,7 +188,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
-        u'Using NFC tags in the car'
+        >>> title = 'Using NFC tags in the car'
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title'] == title
+        True
     """
     return parser(*args, **kwargs)

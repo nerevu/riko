@@ -31,12 +31,15 @@ else:
     from twisted.internet import defer
     from twisted.internet.utils import getProcessOutput
     from twisted.internet.reactor import callLater
-    from twisted.web import microdom
-    from twisted.web.microdom import EntityReference
+
+    from . import microdom
+    from .microdom import EntityReference
 
     asyncNone = defer.succeed(None)
     asyncReturn = partial(defer.succeed)
     asyncPartial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
+
+DEF2NAME = {v: k for k, v in entitydefs.items()}
 
 
 def asyncSleep(seconds):
@@ -54,10 +57,16 @@ def deferToProcess(source, function, *args, **kwargs):
 
 def def2unicode(entitydef):
     """Convert an HTML entity reference into unicode.
+    Double check if I need this since it seems to convert the input back into
+    itself!
     """
-    def2name = {v: k for k, v in entitydefs.items()}
-    name = def2name[entitydef]
-    cp = name2codepoint[name]
+    try:
+        name = DEF2NAME[entitydef]
+    except KeyError:
+        cp = int(entitydef.lstrip('&#').rstrip(';'))
+    else:
+        cp = name2codepoint[name]
+
     return chr(cp)
 
 

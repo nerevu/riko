@@ -71,7 +71,7 @@ def parser(word, _, skip, **kwargs):
     return parsed, skip
 
 
-@processor(DEFAULTS, async=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously hashes the field of an item.
 

@@ -13,7 +13,11 @@ import itertools as it
 import time
 import pygogo as gogo
 
-# from pprint import pprint
+try:
+    import __builtin__ as _builtins
+except ImportError:
+    import builtins as _builtins
+
 from datetime import timedelta, datetime as dt
 from functools import partial
 from operator import itemgetter, add, sub
@@ -24,20 +28,34 @@ from json import loads
 
 from builtins import *
 from six.moves.urllib.parse import quote, urlparse
+from six.moves.urllib.request import urlopen
+
+try:
+    from urllib.error import URLError
+except ImportError:
+    from six.moves.urllib_error import URLError
+
 from mezmorize import Cache
 from dateutil import parser
+from ijson import items
+from meza._compat import decode
 
 try:
     from lxml import etree, html
 except ImportError:
     from xml.etree import ElementTree as etree
-    LAZY = False
 else:
     from lxml.html import html5parser
-    LAZY = True
+
+try:
+    import speedparser
+except ImportError:
+    import feedparser
+    speedparser = None
 
 global CACHE
 
+rssparser = speedparser or feedparser
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 DATE_FORMAT = '%m/%d/%Y'
@@ -72,7 +90,7 @@ class Objectify(object):
             >>> initialdata = {'one': 1, 'two': 2}
             >>> defaults = {'two': 5, 'three': 3}
             >>> kw = Objectify(initialdata, **defaults)
-            >>> sorted(kw.keys()) == ['one', 'three', 'two']
+            >>> sorted(kw) == ['one', 'three', 'two']
             True
             >>> dict(kw) == {'one': 1, 'two': 2, 'three': 3}
             True
@@ -109,7 +127,7 @@ class Objectify(object):
         return self.func(attr) if self.func else attr
 
     def __iter__(self):
-        return iter(self.data.values())
+        return iter(self.data)
 
 
 class SleepyDict(dict):
@@ -136,7 +154,7 @@ class Chainable(object):
         self.list = list(data)
 
     def __getattr__(self, name):
-        funcs = (partial(getattr, x) for x in [self.data, __builtin__, it])
+        funcs = (partial(getattr, x) for x in [self.data, _builtins, it])
         zipped = zip(funcs, it.repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)
@@ -247,15 +265,138 @@ def unique_everseen(iterable, key=None):
             yield k
 
 
+def betwix(iterable, start=None, stop=None, inc=False):
+    """ Extract selected elements from an iterable. But unlike `islice`,
+    extract based on the element's value instead of its position.
+
+    Args:
+        iterable (iter): The initial sequence
+        start (str): The fragment to begin with (inclusive)
+        stop (str): The fragment to finish at (exclusive)
+        inc (bool): Make stop operate inclusively (useful if reading a file and
+            the start and stop fragments are on the same line)
+
+    Returns:
+        Iter: New dict with specified keys removed
+
+    Examples:
+        >>> from io import StringIO
+        >>>
+        >>> list(betwix('ABCDEFG', stop='C')) == ['A', 'B']
+        True
+        >>> list(betwix('ABCDEFG', 'C', 'E')) == ['C', 'D']
+        True
+        >>> list(betwix('ABCDEFG', 'C')) == ['C', 'D', 'E', 'F', 'G']
+        True
+        >>> f = StringIO('alpha\\n<beta>\\ngamma\\n')
+        >>> list(betwix(f, '<', '>', True)) == ['<beta>\\n']
+        True
+        >>> list(betwix('ABCDEFG', 'C', 'E', True)) == ['C', 'D', 'E']
+        True
+    """
+    def inc_takewhile(predicate, _iter):
+        for x in _iter:
+            yield x
+
+            if not predicate(x):
+                break
+
+    get_pred = lambda sentinel: lambda x: sentinel not in x
+    pred = get_pred(stop)
+    first = it.dropwhile(get_pred(start), iterable) if start else iterable
+
+    if stop and inc:
+        last = inc_takewhile(pred, first)
+    elif stop:
+        last = it.takewhile(pred, first)
+    else:
+        last = first
+
+    return last
+
+
+def get_response_encoding(response, def_encoding='utf-8'):
+    info = response.info()
+
+    try:
+        encoding = info.getencoding()
+    except AttributeError:
+        encoding = info.get_charset()
+
+    encoding = None if encoding == '7bit' else encoding
+
+    if not encoding:
+        try:
+            encoding = info.get_content_charset()
+        except AttributeError:
+            pass
+
+    if not encoding:
+        try:
+            content_type = response.getheader('Content-Type', '')
+        except AttributeError:
+            pass
+        else:
+            if 'charset' in content_type:
+                ctype = content_type.split('=')[1]
+                encoding = ctype.strip().strip('"').strip("'")
+
+    return encoding or def_encoding
+
+
+def parse_rss(url, delay=0):
+    context = SleepyDict(delay=delay)
+    response = None
+
+    try:
+        response = urlopen(decode(url), context=context)
+    except TypeError:
+        try:
+            response = urlopen(decode(url))
+        except (ValueError, URLError):
+            parsed = rssparser.parse(url)
+    except (ValueError, URLError):
+        parsed = rssparser.parse(url)
+
+    if response:
+        content = response.read() if speedparser else response
+
+        try:
+            parsed = rssparser.parse(content)
+        finally:
+            response.close()
+
+    return parsed
+
+
+def xpath(tree, path, pos=0):
+    try:
+        elements = tree.xpath(path)
+    except AttributeError:
+        tags = path.split('/')[1:] or [path]
+
+        try:
+            elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
+        except AttributeError:
+            elements = tree.findall('./%s' % '/'.join(tags[1:]))
+        except IndexError:
+            elements = [tree]
+        else:
+            for element in elements:
+                return xpath(element, path, pos + 1)
+
+    return iter(elements)
+
+
 def xml2etree(f, xml=True, html5=False):
     if xml:
-        parser = etree.parse
+        parser = etree
     elif html5:
-        parser = html5parser.parse
+        parser = html5parser
     else:
-        parser = html.parse
+        parser = html
 
-    return parser(f).getroot()
+    return parser.parse(f)
 
 
 def _make_content(i, value=None, tag='content', append=True, strip=False):
@@ -277,16 +418,15 @@ def _make_content(i, value=None, tag='content', append=True, strip=False):
     return {tag: content} if content else {}
 
 
-def etree2dict(element, lazy=LAZY):
+def etree2dict(element):
     """Convert an element tree into a dict imitating how Yahoo Pipes does it.
     """
     i = dict(element.items())
     i.update(_make_content(i, element.text, strip=True))
-    children = element.iterchildren() if lazy else element.getchildren()
 
-    for child in children:
+    for child in element:
         tag = child.tag
-        value = etree2dict(child, lazy)
+        value = etree2dict(child)
         i.update(_make_content(i, value, tag))
 
     if element.text and not set(i).difference(['content']):
@@ -296,13 +436,15 @@ def etree2dict(element, lazy=LAZY):
     return i
 
 
-def any2dict(f, ext='xml', html5=False):
+def any2dict(f, ext='xml', html5=False, path=None):
     if ext in {'xml', 'html'}:
         xml = ext == 'xml'
-        root = xml2etree(f, xml, html5)
-        content = etree2dict(root)
+        root = xml2etree(f, xml, html5).getroot()
+        replaced = '/%s' % path.replace('.', '/') if '.' in path else path
+        tree = next(xpath(root, replaced)) if replaced else root
+        content = etree2dict(tree)
     elif ext == 'json':
-        content = loads(f.read())
+        content = next(items(f, path or ''))
     else:
         raise TypeError('Invalid file type %s' % ext)
 
@@ -380,7 +522,7 @@ def cast(content, _type='text'):
         'float': {'default': 0.0, 'func': float},
         'decimal': {'default': Decimal(0), 'func': Decimal},
         'int': {'default': 0, 'func': int},
-        'text': {'default': u'', 'func': str},
+        'text': {'default': '', 'func': str},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
         'url': {'default': {}, 'func': cast_url},
         'location': {'default': {}, 'func': cast_location},
@@ -516,14 +658,15 @@ def get_abspath(url):
         abspath = p.abspath(p.join(parent, rel_path))
         url = 'file://%s' % abspath
 
-    return url
+    return decode(url)
 
 
 def listize(item):
     if hasattr(item, 'keys'):
         listlike = False
     else:
-        listlike = {'append', 'next', '__reversed__'}.intersection(dir(item))
+        attrs = {'append', '__next__', 'next', '__reversed__'}
+        listlike = attrs.intersection(dir(item))
 
     return item if listlike else [item]
 
@@ -682,23 +825,23 @@ def multiplex(sources):
     return it.chain.from_iterable(sources)
 
 
-def extend_entry(entry):
-    if entry.get('k:tags'):
-        if len(tags.split(',')) < 2:
-            tags = tags.replace(' ', ',')
+# def extend_entry(entry):
+#     if entry.get('k:tags'):
+#         if len(tags.split(',')) < 2:
+#             tags = tags.replace(' ', ',')
 
-        tags = tags.replace('/', ',').replace('#', '').replace(' ', '_')
-        tags = filter(None, sorted(set(parse_tags(tags.split(',')))))
-    else:
-        tags = []
+#         tags = tags.replace('/', ',').replace('#', '').replace(' ', '_')
+#         tags = filter(None, sorted(set(parse_tags(tags.split(',')))))
+#     else:
+#         tags = []
 
-    content = entry.get('k:content').replace('<br />', '')
-    content = content.replace('\n', '').strip()
+#     content = entry.get('k:content').replace('<br />', '')
+#     content = content.replace('\n', '').strip()
 
-    entry['k:tags'] = tags
-    entry['k:content'] = content
-    entry['k:summary'] = '%s%s' % (content[:128].replace('...', ''), '...')
-    return entry
+#     entry['k:tags'] = tags
+#     entry['k:content'] = content
+#     entry['k:summary'] = '%s%s' % (content[:128].replace('...', ''), '...')
+#     return entry
 
 
 ############
@@ -706,8 +849,14 @@ def extend_entry(entry):
 ############
 def gen_entries(parsed):
     for entry in parsed['entries']:
-        entry['pubDate'] = entry.get('updated_parsed', 'published_parsed')
-        entry['y:published'] = entry.get('updated_parsed', 'published_parsed')
+        # prevent feedparser deprecation warnings
+        if 'published_parsed' in entry:
+            updated = entry['published_parsed']
+        else:
+            updated = entry.get('updated_parsed')
+
+        entry['pubDate'] = updated
+        entry['y:published'] = updated
         entry['dc:creator'] = entry.get('author')
         entry['author.uri'] = entry.get('author_detail', {}).get(
             'href')

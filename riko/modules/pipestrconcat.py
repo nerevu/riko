@@ -14,8 +14,8 @@ Examples:
         >>> from riko.modules.pipestrconcat import pipe
         >>> item = {'word': 'hello'}
         >>> part = [{'subkey': 'word'}, {'value': ' world'}]
-        >>> next(pipe(item, conf={'part': part}))['strconcat']
-        u'hello world'
+        >>> next(pipe(item, conf={'part': part}))['strconcat'] == 'hello world'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -24,10 +24,11 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
-
-from . import processor
 import pygogo as gogo
+
+from builtins import *
+from meza._compat import decode
+from . import processor
 
 OPTS = {'listize': True, 'extract': 'part'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -49,19 +50,14 @@ def parser(_, parts, skip, **kwargs):
         Tuple(str, bool): Tuple of (the concatenated string, skip)
 
     Examples:
-        >>> parser(None, ['one', 'two'], False)[0]
-        u'onetwo'
+        >>> parser(None, ['one', 'two'], False)[0] == 'onetwo'
+        True
     """
-    try:
-        parsed = kwargs['stream'] if skip else ''.join(parts)
-    except UnicodeDecodeError:
-        decoded = [p.decode('utf-8') for p in parts]
-        parsed = ''.join(decoded)
-
+    parsed = kwargs['stream'] if skip else ''.join(map(decode, parts))
     return parsed, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A processor module that asynchronously concatenates strings.
 
@@ -139,9 +135,11 @@ def pipe(*args, **kwargs):
         >>> part = [
         ...     {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
         ... ]
-        >>> next(pipe(item, conf={'part': part}))['strconcat']
-        u'<img src="http://www.site.com">'
-        >>> next(pipe(item, conf={'part': part}, assign='result'))['result']
-        u'<img src="http://www.site.com">'
+        >>> conf = {'part': part}
+        >>> resp = '<img src="http://www.site.com">'
+        >>> next(pipe(item, conf=conf))['strconcat'] == resp
+        True
+        >>> next(pipe(item, conf=conf, assign='result'))['result'] == resp
+        True
     """
     return parser(*args, **kwargs)

@@ -22,10 +22,10 @@ Examples:
         >>> from riko.modules.pipefeedautodiscovery import pipe
         >>>
         >>> entry = next(pipe(conf={'url': get_path('bbc.html')}))
-        >>> sorted(entry.keys()) == ['href', 'hreflang', 'link', 'rel', 'tag']
+        >>> sorted(entry) == ['href', 'hreflang', 'link', 'rel', 'tag']
         True
-        >>> entry['link']
-        'file://data/greenhughes.xml'
+        >>> entry['link'] == 'file://riko/data/greenhughes.xml'
+        True
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -78,7 +78,7 @@ def asyncParser(_, objconf, skip, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        file://data/greenhughes.xml
+        file://riko/data/greenhughes.xml
     """
     if skip:
         stream = kwargs['stream']
@@ -111,8 +111,8 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> result, skip = parser(None, objconf, False, stream={})
-        >>> next(result)['link']
-        'file://data/greenhughes.xml'
+        >>> next(result)['link'] == 'file://riko/data/greenhughes.xml'
+        True
     """
     if skip:
         stream = kwargs['stream']
@@ -123,7 +123,7 @@ def parser(_, objconf, skip, **kwargs):
     return stream, skip
 
 
-@processor(async=True, **OPTS)
+@processor(isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """A source that fetches and parses the first feed found on a site.
 
@@ -155,7 +155,7 @@ def asyncPipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        file://data/greenhughes.xml
+        file://riko/data/greenhughes.xml
     """
     return asyncParser(*args, **kwargs)
 
@@ -178,7 +178,8 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['link']
-        'file://data/greenhughes.xml'
+        >>> conf = {'url': get_path('bbc.html')}
+        >>> next(pipe(conf=conf))['link'] == 'file://riko/data/greenhughes.xml'
+        True
     """
     return parser(*args, **kwargs)

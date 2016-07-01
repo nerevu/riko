@@ -15,7 +15,7 @@ Examples:
         >>> from riko.modules.pipeuniq import pipe
         >>> items = ({'x': x, 'mod': x % 2} for x in range(5))
         >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
-        ...     {u'x': 0, u'mod': 0}, {u'x': 1, u'mod': 1}]
+        ...     {'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
         True
 
 Attributes:
@@ -64,9 +64,8 @@ def parser(stream, key, tuples, **kwargs):
         >>> stream = (DotDict({'x': x, 'mod': x % 2}) for x in range(5))
         >>> tuples = zip(stream, repeat(conf['uniq_key']))
         >>> list(parser(stream, conf['uniq_key'], tuples, **kwargs)) == [
-        ...     {u'x': 0, u'mod': 0}, {u'x': 1, u'mod': 1}]
+        ...     {'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
         True
-
     """
     seen = set()
 
@@ -78,7 +77,7 @@ def parser(stream, key, tuples, **kwargs):
             yield item
 
 
-@operator(DEFAULTS, async=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def asyncPipe(*args, **kwargs):
     """An operator that asynchronously filters out non unique items according
     to a specified field.
@@ -137,7 +136,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> items = [{'content': x, 'mod': x % 2} for x in range(5)]
         >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
-        ...     {u'mod': 0, u'content': 0}, {u'mod': 1, u'content': 1}]
+        ...     {'mod': 0, 'content': 0}, {'mod': 1, 'content': 1}]
         True
         >>> stream = pipe(items)
         >>> next(stream) == {'mod': 0, 'content': 0}
