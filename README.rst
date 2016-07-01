@@ -160,16 +160,16 @@ Usage
 Usage Index
 ^^^^^^^^^^^
 
-- `Fetching streams`_
+- `Fetching feeds`_
 - `Synchronous processing`_
 - `Parallel processing`_
 - `Asynchronous processing`_
 - `Cookbook`_
 
-Fetching streams
-^^^^^^^^^^^^^^^^
+Fetching feeds
+^^^^^^^^^^^^^^
 
-``riko`` can fetching streams from both local and remote filepaths via ``source``
+``riko`` can fetch feeds from both local and remote filepaths via ``source``
 ``pipes``. Each ``source`` ``pipe`` returns a ``stream``, i.e., an iterator of
 dictionaries, aka ``items``.
 
