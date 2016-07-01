@@ -277,7 +277,7 @@ def pipe(test=False):
 
 
 @coroutine
-def asyncPipe(reactor, test=None):
-    source = AsyncCollection(sources).asyncPipe(test=test)
+def async_pipe(reactor, test=None):
+    source = AsyncCollection(sources).async_pipe(test=test)
     stream = yield parse_source(source)
     pprint(stream[-1])

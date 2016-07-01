@@ -75,7 +75,7 @@ def run():
             exit('Pipe examples.%s not found!' % pipeid)
 
     if args.async:
-        pipeline = getattr(module, 'asyncPipe')
+        pipeline = getattr(module, 'async_pipe')
         react(pipeline, [args.test])
     else:
         pipeline = getattr(module, 'pipe')

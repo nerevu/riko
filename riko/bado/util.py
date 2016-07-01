@@ -35,14 +35,14 @@ else:
     from . import microdom
     from .microdom import EntityReference
 
-    asyncNone = defer.succeed(None)
-    asyncReturn = partial(defer.succeed)
-    asyncPartial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
+    async_none = defer.succeed(None)
+    async_return = partial(defer.succeed)
+    async_partial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
 DEF2NAME = {v: k for k, v in entitydefs.items()}
 
 
-def asyncSleep(seconds):
+def async_sleep(seconds):
     d = Deferred()
     callLater(seconds, d.callback, None)
     return d
@@ -79,7 +79,7 @@ def xml2etree(f, html=False):
     return parse(f)
 
 
-def etreeToDict(element, tag='content'):
+def etree2dict(element, tag='content'):
     """Convert a microdom element tree into a dict imitating how Yahoo Pipes
     does it.
 
@@ -95,7 +95,7 @@ def etreeToDict(element, tag='content'):
 
     for child in element.childNodes:
         tag = child.tagName if hasattr(child, 'tagName') else 'content'
-        value = etreeToDict(child, tag)
+        value = etree2dict(child, tag)
 
         # try to join the content first since microdom likes to split up
         # elements that contain a mix of text and entity reference

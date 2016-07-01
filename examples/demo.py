@@ -26,13 +26,13 @@ Word Count
 
 Fetching feeds
 
-    >>> from riko.modules.pipefetch import pipe as fetch
+    >>> from riko.modules import fetch
     >>>
     >>> url = get_path('gawker.xml')
     >>> intersection = [
     ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
     ...     'pubDate', 'summary', 'title', 'y:id', 'y:published', 'y:title']
-    >>> feed = fetch(conf={'url': url})
+    >>> feed = fetch.pipe(conf={'url': url})
     >>> item = next(feed)
     >>> set(item).issuperset(intersection)
     True
@@ -68,7 +68,7 @@ def pipe(test=False):
 
 
 @coroutine
-def asyncPipe(reactor, test=False):
+def async_pipe(reactor, test=False):
     s1 = yield AsyncPipe('fetch', test=test, conf={'url': health}).output
     s2 = yield (AsyncPipe('fetchpage', test=test, conf=fetch_conf)
         .strreplace(conf=replace_conf, assign='content')

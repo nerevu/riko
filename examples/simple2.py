@@ -27,7 +27,7 @@ def pipe(test=False):
 
 
 @coroutine
-def asyncPipe(reactor, test=False):
+def async_pipe(reactor, test=False):
     stream = yield (AsyncPipe('itembuilder', conf=p232_conf, test=test)
         .strreplace(conf=p421_conf, field='author', assign='author')
         .list)

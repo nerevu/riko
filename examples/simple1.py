@@ -29,7 +29,7 @@ def pipe(test=False):
 
 
 @coroutine
-def asyncPipe(reactor, test=False):
+def async_pipe(reactor, test=False):
     stream = yield (AsyncPipe('itembuilder', conf=p1_conf, test=test)
         .regex(conf=p2_conf)
         .list)

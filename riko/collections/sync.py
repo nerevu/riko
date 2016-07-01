@@ -80,8 +80,7 @@ class SyncPipe(PyPipe):
         self.pool = kwargs.get('pool')
 
         if self.name:
-            self.module = import_module('riko.modules.pipe%s' % self.name)
-            self.pipe = self.module.pipe
+            self.pipe = import_module('riko.modules.%s' % self.name).pipe
             self.is_processor = self.pipe.__dict__.get('type') == 'processor'
             self.mapify = self.is_processor and self.source
             self.parallelize = self.parallel and self.mapify
