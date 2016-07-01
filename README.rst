@@ -194,7 +194,7 @@ dictionaries, aka ``items``.
         'author', 'author.name', 'author.uri', 'comments', 'content',
         'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
         'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
-    >>> item['title'], item['author'], item['link']
+    >>> item['title'], item['author']
     (
         'Using NFC tags in the car', 'Liam Green-Hughes',
         'http://www.greenhughes.com/content/using-nfc-tags-car')
@@ -252,7 +252,7 @@ Synchronous processing
     >>> next(stream)
     {'content': 'mailto:mail@writetoreply.org'}
 
-Please see `Alternate workflow creation`_ for an alternative (function based) method for
+Please see `alternate workflow creation`_ for an alternative (function based) method for
 creating a ``stream``. Please see `pipes`_ for a complete list of available ``pipes``.
 
 Parallel processing
@@ -693,7 +693,7 @@ License
 .. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
 .. _cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
 .. _split: https://github.com/nerevu/riko/blob/master/riko/modules/pipesplit.py
-.. _Alternate workflow creation: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#synchronous-processing
+.. _alternate workflow creation: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#synchronous-processing
 .. _Fetching data and feeds: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#fetching-data-and-feeds
 
 .. _pypy: http://pypy.org
