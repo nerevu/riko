@@ -67,7 +67,7 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> #
     >>> # `SyncPipe` is a convenience class that creates chainable flows
     >>> # and allows for parallel processing.
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -175,14 +175,13 @@ dictionaries, aka ``items``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipefetch import pipe as fetch
-    >>> from riko.modules.pipefetchsitefeed import pipe as fetchsitefeed
+    >>> from riko.modules import fetch, fetchsitefeed
     >>>
     >>> ### Fetch an RSS feed ###
-    >>> stream = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
+    >>> stream = fetch.pipe(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
     >>> ### Fetch the first RSS feed found ###
-    >>> stream = fetchsitefeed(conf={'url': 'http://www.bbc.com/news'})
+    >>> stream = fetchsitefeed.pipe(conf={'url': 'http://www.bbc.com/news'})
     >>>
     >>> ### View the fetched RSS feed(s) ###
     >>> #
@@ -240,7 +239,7 @@ Synchronous processing
     >>> #   6. obtain the raw stream
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> flow = (SyncPipe('fetch', conf=fetch_conf)  # 1
     ...     .filter(conf={'rule': filter_rule})     # 2
@@ -263,7 +262,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
 .. code-block:: python
 
     >>> from riko import get_path
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -317,10 +316,9 @@ An example using ``riko``'s asynchronous API.
 
 .. code-block:: python
 
-    >>> from twisted.internet.task import react
-    >>> from twisted.internet.defer import inlineCallbacks
     >>> from riko import get_path
-    >>> from riko.twisted.collections import AsyncPipe
+    >>> from riko.bado import coroutine, react
+    >>> from riko.collections.async import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -338,7 +336,7 @@ An example using ``riko``'s asynchronous API.
     >>> #
     >>> # See `Parallel processing` above for an explanation of the steps this
     >>> # performs
-    >>> @inlineCallbacks
+    >>> @coroutine
     ... def run(reactor):
     ...     flow = yield (AsyncPipe('fetch', conf={'url': url})
     ...         .filter(conf={'rule': filter_rule1})
@@ -397,24 +395,24 @@ can use the output of one ``pipe`` as the input to another ``pipe``.
 
 ``riko`` ``pipes`` come in two flavors; ``operators`` and ``processors``.
 ``operators`` operate on an entire ``stream`` at once and are unable to handle
-individual items. Example ``operators`` include ``pipecount``, ``pipefilter``,
-and ``pipereverse``.
+individual items. Example ``operators`` include ``count``, ``pipefilter``,
+and ``reverse``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipereverse import pipe
+    >>> from riko.modules.reverse import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
     >>> next(pipe(stream))
     {'title': 'riko pt. 2'}
 
 ``processors`` process individual ``items`` and can be parallelized across
-threads or processes. Example ``processors`` include ``pipefetchsitefeed``,
-``pipehash``, ``pipeitembuilder``, and ``piperegex``.
+threads or processes. Example ``processors`` include ``fetchsitefeed``,
+``hash``, ``pipeitembuilder``, and ``piperegex``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipehash import pipe
+    >>> from riko.modules.hash import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> stream = pipe(item, field='title')
@@ -425,7 +423,7 @@ Some ``processors``, e.g., ``pipestringtokenizer``, return multiple results.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipestringtokenizer import pipe
+    >>> from riko.modules.stringtokenizer import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> tokenizer_conf = {'delimiter': ' '}
@@ -444,26 +442,26 @@ Some ``processors``, e.g., ``pipestringtokenizer``, return multiple results.
     {'content': 'riko'}
 
 ``operators`` are split into sub-types of ``aggregators``
-and ``composers``. ``aggregators``, e.g., ``pipecount``, combine
+and ``composers``. ``aggregators``, e.g., ``count``, combine
 all ``items`` of an input ``stream`` into a new ``stream`` with a single ``item``;
-while ``composers``, e.g., ``pipefilter``, create a new ``stream`` containing
+while ``composers``, e.g., ``filter``, create a new ``stream`` containing
 some or all ``items`` of an input ``stream``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipecount import pipe
+    >>> from riko.modules.count import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
     >>> next(pipe(stream))
     {'count': 2}
 
 ``processors`` are split into sub-types of ``source`` and ``transformer``.
-``sources``, e.g., ``pipeitembuilder``, can create a ``stream`` while
-``transformers``, e.g. ``pipehash`` can only transform items in a ``stream``.
+``sources``, e.g., ``itembuilder``, can create a ``stream`` while
+``transformers``, e.g. ``hash`` can only transform items in a ``stream``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipeitembuilder import pipe
+    >>> from riko.modules.itembuilder import pipe
     >>>
     >>> attrs = {'key': 'title', 'value': 'riko pt. 1'}
     >>> next(pipe(conf={'attrs': attrs}))
@@ -487,12 +485,11 @@ If you are unsure of the type of ``pipe`` you have, check its metadata.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipefetchpage import asyncPipe
-    >>> from riko.modules.pipecount import pipe
+    >>> from riko.modules import fetchpage, count
     >>>
-    >>> asyncPipe.__dict__
+    >>> fetchpage.async_pipe.__dict__
     {'type': 'processor', 'name': 'fetchpage', 'sub_type': 'source'}
-    >>> pipe.__dict__
+    >>> count.pipe.__dict__
     {'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
 
 The ``SyncPipe`` and ``AsyncPipe`` classes (among other things) perform this
@@ -501,7 +498,7 @@ parallelization.
 
 .. code-block:: python
 
-    >>> from riko.lib.collections import SyncPipe
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
@@ -537,7 +534,7 @@ CLI Setup
 .. code-block:: python
 
     from __future__ import print_function
-    from riko.lib.collections import SyncPipe
+    from riko.collections.sync import SyncPipe
 
     conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
     conf2 = {'rule': [{'find': 'com', 'replace': 'co.uk'}]}
@@ -565,7 +562,7 @@ then see the following output in your terminal:
 
 .. code-block:: bash
 
-    something...
+    Deadline to clear up health law eligibility near 682
 
 Scripts
 -------

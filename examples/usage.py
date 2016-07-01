@@ -9,10 +9,7 @@ Word Count
 
     >>> import itertools as it
     >>> from riko import get_path
-    >>> from riko.modules.pipefetchpage import pipe as fetchpage
-    >>> from riko.modules.pipestrreplace import pipe as strreplace
-    >>> from riko.modules.pipestringtokenizer import pipe as stringtokenizer
-    >>> from riko.modules.pipecount import pipe as count
+    >>> from riko.modules import fetchpage, strreplace, stringtokenizer, count
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -35,10 +32,10 @@ Word Count
     >>> #
     >>> # Note: because `fetchpage` and `strreplace` each return an iterator of
     >>> # just one item, we can safely call `next` without fear of loosing data
-    >>> page = next(fetchpage(conf=fetch_conf))
-    >>> replaced = next(strreplace(page, conf=replace_conf, assign='content'))
-    >>> words = stringtokenizer(replaced, conf={'delimiter': ' '}, emit=True)
-    >>> counts = count(words)
+    >>> page = next(fetchpage.pipe(conf=fetch_conf))
+    >>> replaced = next(strreplace.pipe(page, conf=replace_conf, assign='content'))
+    >>> words = stringtokenizer.pipe(replaced, conf={'delimiter': ' '}, emit=True)
+    >>> counts = count.pipe(words)
     >>> next(counts) == {'count': 70}
     True
 
@@ -62,19 +59,17 @@ Fetching feeds
 
     >>> from itertools import chain
     >>> from riko import get_path
-    >>> from riko.modules.pipefetch import pipe as fetch
-    >>> from riko.modules.pipefetchdata import pipe as fetchdata
-    >>> from riko.modules.pipefetchsitefeed import pipe as fetchsitefeed
-    >>> from riko.modules.pipefeedautodiscovery import pipe as autodiscovery
+    >>> from riko.modules import (
+    ...     fetch, fetchdata, fetchsitefeed, feedautodiscovery)
     >>>
     >>> ### Fetch a url ###
-    >>> stream = fetchdata(conf={'url': 'http://site.com/file.xml'})
+    >>> stream = fetchdata.pipe(conf={'url': 'http://site.com/file.xml'})
     >>>
     >>> ### Fetch a filepath ###
     >>> #
     >>> # Note: `get_path` just looks up files in the `data` directory
     >>> # to simplify testing
-    >>> stream = fetchdata(conf={'url': get_path('quote.json')})
+    >>> stream = fetchdata.pipe(conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
@@ -82,14 +77,14 @@ Fetching feeds
     True
 
     >>> ### Fetch an rss feed ###
-    >>> stream = fetch(conf={'url': get_path('feed.xml')})
+    >>> stream = fetch.pipe(conf={'url': get_path('feed.xml')})
     >>>
     >>> ### Fetch the first rss feed found ###
-    >>> stream = fetchsitefeed(conf={'url': get_path('cnn.html')})
+    >>> stream = fetchsitefeed.pipe(conf={'url': get_path('cnn.html')})
     >>>
     >>> ### Find all rss links and fetch the feeds ###
     >>> url = get_path('bbc.html')
-    >>> entries = autodiscovery(conf={'url': url})
+    >>> entries = feedautodiscovery.pipe(conf={'url': url})
     >>> urls = (e['link'] for e in entries)
     >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
@@ -124,11 +119,7 @@ Synchronous processing
 
     >>> from itertools import chain
     >>> from riko import get_path
-    >>> from riko.modules.pipefetch import pipe as fetch
-    >>> from riko.modules.pipefilter import pipe as pfilter
-    >>> from riko.modules.pipesubelement import pipe as subelement
-    >>> from riko.modules.piperegex import pipe as regex
-    >>> from riko.modules.pipesort import pipe as sort
+    >>> from riko.modules import fetch, filter, subelement, regex, sort
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -153,13 +144,13 @@ Synchronous processing
     >>> #   5. reverse sort the items by the replaced url
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> stream = fetch(conf=fetch_conf)
-    >>> filtered = pfilter(stream, conf={'rule': filter_rule})
-    >>> extracted = (subelement(i, conf=sub_conf, emit=True) for i in filtered)
+    >>> stream = fetch.pipe(conf=fetch_conf)
+    >>> filtered = filter.pipe(stream, conf={'rule': filter_rule})
+    >>> extracted = (subelement.pipe(i, conf=sub_conf, emit=True) for i in filtered)
     >>> flat_extract = chain.from_iterable(extracted)
-    >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
+    >>> matched = (regex.pipe(i, conf={'rule': regex_rule}) for i in flat_extract)
     >>> flat_match = chain.from_iterable(matched)
-    >>> sorted_match = sort(flat_match, conf=sort_conf)
+    >>> sorted_match = sort.pipe(flat_match, conf=sort_conf)
     >>> next(sorted_match) == {'content': 'mailto:mail@writetoreply.org'}
     True
 
@@ -193,6 +184,7 @@ Parallel processing
     >>> url = get_path('feed.xml')
     >>> filter_rule1 = {
     ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
@@ -279,7 +271,7 @@ Asynchronous processing
 Design Principles
 
     # an operator
-    >>> from riko.modules.pipereverse import pipe
+    >>> from riko.modules.reverse import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
     >>> next(pipe(stream)) == {'title': 'riko pt. 2'}
@@ -287,14 +279,14 @@ Design Principles
 
     # a transformer
     >>> import ctypes
-    >>> from riko.modules.pipehash import pipe
+    >>> from riko.modules.hash import pipe
     >>>
     >>> _hash = ctypes.c_uint(hash('riko pt. 1')).value
     >>> item = {'title': 'riko pt. 1'}
     >>> stream = pipe(item, field='title')
     >>> next(stream) == {'title': 'riko pt. 1', 'hash': _hash}
     True
-    >>> from riko.modules.pipestringtokenizer import pipe
+    >>> from riko.modules.stringtokenizer import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> tokenizer_conf = {'delimiter': ' '}
@@ -312,14 +304,14 @@ Design Principles
     True
 
     # an aggregator
-    >>> from riko.modules.pipecount import pipe
+    >>> from riko.modules.count import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
     >>> next(pipe(stream)) == {'count': 2}
     True
 
     # a source
-    >>> from riko.modules.pipeitembuilder import pipe
+    >>> from riko.modules.itembuilder import pipe
     >>>
     >>> attrs = {'key': 'title', 'value': 'riko pt. 1'}
     >>> next(pipe(conf={'attrs': attrs})) == {'title': 'riko pt. 1'}
@@ -327,14 +319,13 @@ Design Principles
 
 
     # check metadata
-    >>> from riko.modules.pipefetchpage import asyncPipe
-    >>> from riko.modules.pipecount import pipe
+    >>> from riko.modules import fetchpage, count
     >>>
     >>> async_resp = ('processor', 'source') if _isasync else (None, None)
-    >>> async_pdict = asyncPipe.__dict__
+    >>> async_pdict = fetchpage.async_pipe.__dict__
     >>> (async_pdict.get('type'), async_pdict.get('sub_type')) == async_resp
     True
-    >>> pdict = pipe.__dict__
+    >>> pdict = count.pipe.__dict__
     >>> sync_resp = ('operator', 'count', 'aggregator')
     >>> (pdict['type'], pdict['name'], pdict['sub_type']) == sync_resp
     True
@@ -355,7 +346,7 @@ Design Principles
 
     # Alternate conf usage
     >>> from riko import get_path
-    >>> from riko.modules.pipefetch import pipe
+    >>> from riko.modules.fetch import pipe
     >>>
     >>> intersection = [
     ...     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',

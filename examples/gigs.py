@@ -31,7 +31,7 @@ def pipe(test=False):
 
 
 @coroutine
-def asyncPipe(reactor, test=False):
+def async_pipe(reactor, test=False):
     stream = yield (AsyncPipe('fetchdata', conf=p1_conf, test=test)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)

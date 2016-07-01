@@ -9,7 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko import get_path
-        >>> from riko.bado.itertools import coopReduce
+        >>> from riko.bado.itertools import coop_reduce
 """
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
@@ -39,7 +39,7 @@ def cleanup(*args):
 
 
 @coroutine
-def coopReduce(func, iterable, initializer=None):
+def coop_reduce(func, iterable, initializer=None):
     cooperate = cooperator.cooperate if reactor.fake else _cooperate
     iterable = iter(iterable)
     x = initializer or next(iterable)
@@ -56,7 +56,7 @@ def coopReduce(func, iterable, initializer=None):
     return_value(result['value'])
 
 
-def asyncReduce(asyncCallable, iterable, initializer=None):
+def async_reduce(asyncCallable, iterable, initializer=None):
     it = iter(iterable)
     x = initializer or next(it)
 
@@ -71,7 +71,7 @@ def asyncReduce(asyncCallable, iterable, initializer=None):
 
 
 @coroutine
-def pMap(func, iterable, workers=1):
+def async_pmap(func, iterable, workers=1):
     """map for synchronous callables using parallel cooperative
     multitasking
     """
@@ -89,23 +89,23 @@ def pMap(func, iterable, workers=1):
     return_value(results)
 
 
-def asyncImap(asyncCallable, *iterables):
+def async_imap(asyncCallable, *iterables):
     """map for deferred callables
     """
     deferreds = map(asyncCallable, *iterables)
     return gatherResults(deferreds, consumeErrors=True)
 
 
-def asyncStarMap(asyncCallable, iterable):
+def async_starmap(asyncCallable, iterable):
     """itertools.starmap for deferred callables
     """
     deferreds = it.starmap(asyncCallable, iterable)
     return gatherResults(deferreds, consumeErrors=True)
 
 
-def asyncDispatch(split, *asyncCallables, **kwargs):
-    return asyncStarMap(lambda item, f: f(item), zip(split, asyncCallables))
+def async_dispatch(split, *asyncCallables, **kwargs):
+    return async_starmap(lambda item, f: f(item), zip(split, asyncCallables))
 
 
-def asyncBroadcast(item, *asyncCallables, **kwargs):
-    return asyncDispatch(it.repeat(item), *asyncCallables, **kwargs)
+def async_broadcast(item, *asyncCallables, **kwargs):
+    return async_dispatch(it.repeat(item), *asyncCallables, **kwargs)

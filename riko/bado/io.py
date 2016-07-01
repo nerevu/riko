@@ -9,7 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko import get_path
-        >>> from riko.bado.io import urlOpen
+        >>> from riko.bado.io import async_url_open
 """
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
@@ -85,7 +85,7 @@ class FileReader(AccumulatingProtocol):
 
 
 @coroutine
-def readFile(filename, transport, protocol=FileReader, **kwargs):
+def async_read_file(filename, transport, protocol=FileReader, **kwargs):
     proto = protocol(filename.replace('file://', ''), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
@@ -94,7 +94,7 @@ def readFile(filename, transport, protocol=FileReader, **kwargs):
 
 
 @coroutine
-def getFile(filename, transport, protocol=FileReader, **kwargs):
+def async_get_file(filename, transport, protocol=FileReader, **kwargs):
     proto = protocol(filename.replace('file://', ''), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
@@ -103,22 +103,22 @@ def getFile(filename, transport, protocol=FileReader, **kwargs):
 
 
 @coroutine
-def urlOpen(url, timeout=0, **kwargs):
+def async_url_open(url, timeout=0, **kwargs):
     if url.startswith('http'):
         # returns unicode in py2 but bytes in py3
         f = StringIO()
         yield downloadPage(encode(url), f, timeout=timeout)
         f.seek(0)
     else:
-        f = yield getFile(url, StringTransport(), **kwargs)
+        f = yield async_get_file(url, StringTransport(), **kwargs)
 
     return_value(f)
 
 
-def urlRead(url, timeout=0, **kwargs):
+def async_url_read(url, timeout=0, **kwargs):
     if url.startswith('http'):
         content = getPage(encode(url), timeout=timeout)
     else:
-        content = readFile(url, StringTransport(), **kwargs)
+        content = async_read_file(url, StringTransport(), **kwargs)
 
     return content

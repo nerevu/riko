@@ -96,7 +96,7 @@ and ``pipereverse``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipereverse import pipe
+    >>> from riko.modules.reverse import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
     >>> next(pipe(stream))
@@ -107,7 +107,7 @@ and ``pipereverse``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipehash import pipe
+    >>> from riko.modules.hash import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> stream = pipe(item, field='title')
