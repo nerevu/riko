@@ -7,7 +7,7 @@ little bit helps, and credit will always be given.
 
 When contributing, please mimic the coding style/conventions used in this repo.
 If you add new classes or functions, please add the appropriate doc blocks with
-examples. Also, make sure the python linter and nose tests pass.
+examples. Also, make sure the python linter and tests pass.
 
 Ready to contribute? Here's how.
 
@@ -17,7 +17,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://github.com/reubano/riko/issues.
+Report bugs at https://github.com/nerevu/riko/issues.
 
 If you are reporting a bug, please include:
 
@@ -45,7 +45,7 @@ Feel free to contribute any type of documentation.
 Submit Feedback
 ~~~~~~~~~~~~~~~
 
-The best way to send feedback is to file an issue at https://github.com/reubano/riko/issues.
+The best way to send feedback is to file an issue at https://github.com/nerevu/riko/issues.
 
 If you are proposing a feature:
 
@@ -96,6 +96,9 @@ Or, if you only have ``virtualenv`` installed
 .. code-block:: bash
 
     manage lint
+    manage test
+
+    # or to run the full integration tests
     tox
 
 5. Commit your changes and push your branch to GitHub
@@ -118,6 +121,6 @@ Before you submit a pull request, check that it meets these guidelines:
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
 
-.. _issues: https://github.com/reubano/riko/issues
-.. _repo: https://github.com/reubano/riko
+.. _issues: https://github.com/nerevu/riko/issues
+.. _repo: https://github.com/nerevu/riko
 .. _virtualenv: https://virtualenv.pypa.io/en/latest/index.html

@@ -175,4 +175,4 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _What file types are supported: #what-file-types-are-supported
 .. _What protocols are supported: #what-protocols-are-supported
 .. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
-.. _Alternate workflow creation: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#synchronous-processing
+.. _Alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#synchronous-processing
