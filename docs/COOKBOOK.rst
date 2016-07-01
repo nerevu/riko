@@ -175,4 +175,4 @@ Notes
 .. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
 
 .. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
-.. _class based workflows: https://github.com/reubano/riko/blob/master/README.rst#synchronous-processing
+.. _class based workflows: https://github.com/nerevu/riko/blob/master/README.rst#synchronous-processing
