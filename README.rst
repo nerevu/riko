@@ -693,8 +693,8 @@ License
 .. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
 .. _cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
 .. _split: https://github.com/nerevu/riko/blob/master/riko/modules/pipesplit.py
-.. _alternate workflow creation: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#synchronous-processing
-.. _Fetching data and feeds: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#fetching-data-and-feeds
+.. _alternate workflow creation: https://github.com/nerevu/riko/blob/master/COOKBOOK.rst#synchronous-processing
+.. _Fetching data and feeds: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#fetching-data-and-feeds
 
 .. _pypy: http://pypy.org
 .. _Really Simple Syndication: https://en.wikipedia.org/wiki/RSS
