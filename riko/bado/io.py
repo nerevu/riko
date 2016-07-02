@@ -101,6 +101,21 @@ class FileReader(_AccumulatingProtocol):  # type: ignore[misc]
         self.d.addBoth(self.cleanup)
 
 
+class FileProducer(Protocol):
+    def __init__(self, filename):
+        self.f = open(filename, 'rb')
+        self.producer = FileBodyProducer(self.f)
+
+    def dataReceived(self, data):
+        logger.debug('dataReceived')
+        self.transport.write(data)
+
+    def connectionMade(self):
+        logger.debug('Connection made from %s', self.transport.getPeer())
+        self.d = self.producer.startProducing(self.transport)
+        self.d.addErrback(logger.error)
+
+
 async def async_read_file(
     filename: str, transport, protocol=FileReader, encoding=ENCODING, **kwargs
 ) -> str:
@@ -162,6 +177,16 @@ async def async_get_file(  # noqa: E302
     proto.transport.io.seek(0)
     f = proto.transport.io
     return f if binary else NamedTextIOWrapper(f, encoding=encoding)
+
+
+def async_get_file_alt(filename):
+    # FIXME: readFromFD returns 8192 bytes
+    with open(filename.replace('file://', '')) as f:
+        d = Deferred()
+        fd = f.fileno()
+        setNonBlocking(fd)
+        readFromFD(fd, d.callback)
+        return d
 
 
 @overload
