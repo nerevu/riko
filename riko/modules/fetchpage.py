@@ -53,7 +53,7 @@ def get_string(content, start, end):
     # TODO: clean html with Tidy
     content = encode(content)
     start_pos = content.find(encode(start)) if start else 0
-    right = content[start_pos + len(start):]
+    right = content[start_pos + (len(start) if start else 0):]
     end_pos = right[1:].find(encode(end)) + 1 if end else len(right)
     return right[:end_pos] if end_pos > 0 else right
 

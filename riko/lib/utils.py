@@ -369,7 +369,7 @@ def parse_rss(url, delay=0):
     return parsed
 
 
-def xpath(tree, path, pos=0):
+def xpath(tree, path='/', pos=0):
     try:
         elements = tree.xpath(path)
     except AttributeError:
