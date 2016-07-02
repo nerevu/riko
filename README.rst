@@ -72,20 +72,27 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> ### Set the pipe configurations ###
     >>> #
     >>> # Notes:
-    >>> #   1. `get_path` just looks up a file in the `data` directory
-    >>> #   2. the `detag` option will strip all html tags from the result
-    >>> url = get_path('users.jyu.fi.html')                                            # 1
-    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 2
+    >>> #   1. the `detag` option will strip all html tags from the result
+    >>> #   2. fetch the text contained inside the 'body' tag of the hackernews homepage
+    >>> #   3. replace newlines with spaces and assign the result to 'content'
+    >>> #   4. tokenize the resulting text using whitespace as the delimeter
+    >>> #   5. count the number of tokens
+    >>> #   6. obtain the raw stream
+    >>> #   7. extract the token count
+    >>> url = 'https://news.ycombinator.com/'
+    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 1
     >>> replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
     >>>
-    >>> flow = (SyncPipe('fetchpage', conf=fetch_conf)
-    ...     .strreplace(conf=replace_conf, assign='content')
-    ...     .stringtokenizer(conf={'delimiter': ' '}, emit=True)
-    ...     .count())
+    >>> flow = (
+    ...     SyncPipe('fetchpage', conf=fetch_conf)                                     # 2
+    ...         .strreplace(conf=replace_conf, assign='content')                       # 3
+    ...         .stringtokenizer(conf={'delimiter': ' '}, emit=True)                   # 4
+    ...         .count())                                                              # 5
     >>>
-    >>> stream = flow.output
-    >>> next(stream)
-    {'count': 70}
+    >>> stream = flow.output                                                           # 6
+    >>> next(stream)                                                                   # 7
+    {'count': 709}
+
 
 Motivation
 ----------
@@ -169,8 +176,8 @@ Usage Index
 Fetching feeds
 ^^^^^^^^^^^^^^
 
-``riko`` can fetch feeds from both local and remote filepaths via ``source``
-``pipes``. Each ``source`` ``pipe`` returns a ``stream``, i.e., an iterator of
+``riko`` can fetch rss feeds from both local and remote filepaths via "source"
+``pipes``. Each "source" ``pipe`` returns a ``stream``, i.e., an iterator of
 dictionaries, aka ``items``.
 
 .. code-block:: python
@@ -181,26 +188,26 @@ dictionaries, aka ``items``.
     >>> stream = fetch.pipe(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
     >>> ### Fetch the first RSS feed found ###
-    >>> stream = fetchsitefeed.pipe(conf={'url': 'http://www.bbc.com/news'})
+    >>> stream = pipe(conf={'url': 'http://arstechnica.com/rss-feeds/'})
     >>>
     >>> ### View the fetched RSS feed(s) ###
     >>> #
     >>> # Note: regardless of how you fetch an RSS feed, it will have the same
     >>> # structure
     >>> item = next(stream)
-    >>> sorted(item.keys())
-    [
-        'author', 'author.name', 'author.uri', 'comments', 'content',
-        'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
-        'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
-    >>> item['title'], item['author']
-    (
-        'Using NFC tags in the car', 'Liam Green-Hughes',
-        'http://www.greenhughes.com/content/using-nfc-tags-car')
+    >>> item.keys()
+    dict_keys(['title_detail', 'author.uri', 'tags', 'summary_detail', 'author_detail',
+               'author.name', 'y:published', 'y:title', 'content', 'title', 'pubDate',
+               'guidislink', 'id', 'summary', 'dc:creator', 'authors', 'published_parsed',
+               'links', 'y:id', 'author', 'link', 'published'])
+
+    >>> item['title'], item['author'], item['id']
+    ('Gravity doesn’t care about quantum spin',
+     'Chris Lee',
+     'http://arstechnica.com/?p=924009')
 
 Please see the `FAQ`_ for a complete list of supported `file types`_ and
 `protocols`_. Please see `Fetching data and feeds`_ for more examples.
-
 
 Synchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -209,20 +216,14 @@ Synchronous processing
 
 .. code-block:: python
 
-    >>> from itertools import chain
-    >>> from riko import get_path
+    >>> from riko.collections.sync import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
-    >>> #
-    >>> # Notes:
-    >>> #   1. `get_path` just looks up a file in the `data` directory
-    >>> #   2. the `dotall` option is used to match `.*` across newlines
-    >>> fetch_conf = {'url': get_path('feed.xml')}                                          # 1
-    >>> filter_rule = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
-    >>> sub_conf = {'path': 'content.value'}
-    >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}  # 2
-    >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
+    >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
+    >>> filter_rule = {'field': 'link', 'op': 'contains', 'value': '.com'}
+    >>> sort_conf = {'rule': {'sort_key': 'title'}}
+    >>> xpath = '/html/body/center/table/tr[3]/td/table[2]/tr[1]/td/table/tr/td[3]/span/span'
+    >>> xpath_conf = {'url': {'subkey': 'comments'}, 'xpath': xpath}
     >>>
     >>> ### Create a SyncPipe flow ###
     >>> #
@@ -230,26 +231,24 @@ Synchronous processing
     >>> # and allows for parallel processing.
     >>> #
     >>> # The following flow will:
-    >>> #   1. fetch the RSS feed
-    >>> #   2. filter for items published before 2/5/2009
-    >>> #   3. extract the path `content.value` from each feed item
-    >>> #   4. replace the extracted text with the last href url contained
-    >>> #      within it
-    >>> #   5. reverse sort the items by the replaced url
-    >>> #   6. obtain the raw stream
+    >>> #   1. fetch the hackernews RSS feed
+    >>> #   2. filter for items with '.com' in the link
+    >>> #   3. sort the items ascending by title
+    >>> #   4. fetch the first comment from each item
+    >>> #   5. obtain the raw stream
+    >>> #   6. extract the first comment's content
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> from riko.collections.sync import SyncPipe
     >>>
-    >>> flow = (SyncPipe('fetch', conf=fetch_conf)  # 1
-    ...     .filter(conf={'rule': filter_rule})     # 2
-    ...     .subelement(conf=sub_conf, emit=True)   # 3
-    ...     .regex(conf={'rule': regex_rule})       # 4
-    ...     .sort(conf=sort_conf))                  # 5
+    >>> flow = (
+    ...     SyncPipe('fetch', conf=fetch_conf)       # 1
+    ...         .filter(conf={'rule': filter_rule})  # 2
+    ...         .sort(conf=sort_conf)                # 3
+    ...         .xpathfetchpage(conf=xpath_conf))    # 4
     >>>
-    >>> stream = flow.output                        # 6
-    >>> next(stream)
-    {'content': 'mailto:mail@writetoreply.org'}
+    >>> stream = flow.output                         # 5
+    >>> next(stream)['content']                      # 6
+    'Open Artificial Pancreas home:'
 
 Please see `alternate workflow creation`_ for an alternative (function based) method for
 creating a ``stream``. Please see `pipes`_ for a complete list of available ``pipes``.
@@ -261,47 +260,33 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
 
 .. code-block:: python
 
-    >>> from riko import get_path
     >>> from riko.collections.sync import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
-    >>> #
-    >>> # Notes:
-    >>> #   1. `get_path` just looks up a file in the `data` directory
-    >>> #   2. the `dotall` option is used to match `.*` across newlines
-    >>> url = get_path('feed.xml')                                                          # 1
-    >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
-    >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}  # 2
-    >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
-    >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
+    >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
+    >>> filter_rule = {'field': 'link', 'op': 'contains', 'value': '.com'}
+    >>> xpath = '/html/body/center/table/tr[3]/td/table[2]/tr[1]/td/table/tr/td[3]/span/span'
+    >>> xpath_conf = {'url': {'subkey': 'comments'}, 'xpath': xpath}
     >>>
     >>> ### Create a parallel SyncPipe flow ###
     >>> #
     >>> # The following flow will:
-    >>> #   1. fetch the RSS feed
-    >>> #   2. filter for items published before 2/5/2009
-    >>> #   3. extract the path `content.value` from each feed item
-    >>> #   4. replace the extracted text with the last href url contained
-    >>> #      within it
-    >>> #   5. filter for items with local file urls (which happen to be RSS
-    >>> #      feeds)
-    >>> #   6. strip any trailing `\` from the url
-    >>> #   7. remove duplicate urls
-    >>> #   8. fetch each feed
-    >>> #   9. merge the feeds into a single stream of items
-    >>> flow = (SyncPipe('fetch', conf={'url': url}, parallel=True)  # 1
-    ...     .filter(conf={'rule': filter_rule1})                     # 2
-    ...     .subelement(conf=sub_conf, emit=True)                    # 3
-    ...     .regex(conf={'rule': regex_rule})                        # 4
-    ...     .filter(conf={'rule': filter_rule2})                     # 5
-    ...     .strtransform(conf=strtransform_conf)                    # 6
-    ...     .uniq(conf={'uniq_key': 'strtransform'})                 # 7
-    ...     .fetch(conf={'url': {'subkey': 'strtransform'}}))        # 8
+    >>> #   1. fetch the hackernews RSS feed
+    >>> #   2. filter for items with '.com' in the article link
+    >>> #   3. fetch the first comment from all items in parallel (use 4 workers)
+    >>> #   4. obtain the raw stream
+    >>> #   5. extract the first comment's content
+    >>> #
+    >>> # Note: no point in sorting after the filter since parallel fetching doesn't guarantee
+    >>> # order
+    >>> flow = (
+    ...     SyncPipe('fetch', conf=fetch_conf, parallel=True, workers=4)  # 1
+    ...         .filter(conf={'rule': filter_rule})                       # 2
+    ...         .xpathfetchpage(conf=xpath_conf))                         # 3
     >>>
-    >>> stream = flow.list                                           # 9
-    >>> len(stream)
-    25
+    >>> stream = flow.output                                              # 4
+    >>> next(stream)['content']                                           # 5
+    'He uses the following example for when to throw your own errors:'
 
 Asynchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -316,42 +301,43 @@ An example using ``riko``'s asynchronous API.
 
 .. code-block:: python
 
-    >>> from riko import get_path
     >>> from riko.bado import coroutine, react
     >>> from riko.collections.async import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
-    >>> #
-    >>> # Notes:
-    >>> #   1. `get_path` just looks up a file in the `data` directory
-    >>> #   2. the `dotall` option is used to match `.*` across newlines
-    >>> url = get_path('feed.xml')                                                          # 1
-    >>> filter_rule1 = {'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
-    >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2', 'dotall': True}  # 2
-    >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
-    >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
+    >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
+    >>> filter_rule = {'field': 'link', 'op': 'contains', 'value': '.com'}
+    >>> sort_conf = {'rule': {'sort_key': 'title'}}
+    >>> xpath = '/html/body/center/table/tr[3]/td/table[2]/tr[1]/td/table/tr/td[3]/span/span'
+    >>> xpath_conf = {'url': {'subkey': 'comments'}, 'xpath': xpath}
     >>>
-    >>> ### Create a AsyncPipe flow ###
+    >>> ### Create an AsyncPipe flow ###
     >>> #
-    >>> # See `Parallel processing` above for an explanation of the steps this
-    >>> # performs
+    >>> # The following flow will:
+    >>> #   1. asynchronously fetch the arstechnica RSS feeds page and extract a list
+    >>> #      of rss urls
+    >>> #   2. filter for items with '.com' in the article link
+    >>> #   3. asynchronously fetch the first comment from each item (use 4 connections)
+    >>> #   4. flatten the result into one raw stream
+    >>> #   5. extract the first item
+    >>> #
+    >>> # Note: no point in sorting after the filter since async fetching doesn't guarantee
+    >>> # order
     >>> @coroutine
     ... def run(reactor):
-    ...     flow = yield (AsyncPipe('fetch', conf={'url': url})
-    ...         .filter(conf={'rule': filter_rule1})
-    ...         .subelement(conf=sub_conf, emit=True)
-    ...         .regex(conf={'rule': regex_rule})
-    ...         .filter(conf={'rule': filter_rule2})
-    ...         .strtransform(conf=strtransform_conf)
-    ...         .uniq(conf={'uniq_key': 'strtransform'})
-    ...         .fetch(conf={'url': {'subkey': 'strtransform'}}))
+    ...     stream = yield (
+    ...         AsyncPipe('fetch', conf=fetch_conf, connections=4)  # 1
+    ...             .filter(conf={'rule': filter_rule})             # 2
+    ...             .xpathfetchpage(conf=xpath_conf)                # 3
+    ...             .output)                                        # 4
     ...
-    ...     stream = flow.list
-    ...     print(len(stream))
-    ...
-    >>> react(run)
-    25
+    ...     print(next(stream)['content'])                          # 5
+    >>>
+    >>> try:
+    ...     react(run)
+    ... except SystemExit:
+    ...     pass
+    Here's how iteration works ():
 
 Cookbook
 ^^^^^^^^
@@ -429,12 +415,10 @@ Some ``processors``, e.g., ``pipestringtokenizer``, return multiple results.
     >>> tokenizer_conf = {'delimiter': ' '}
     >>> stream = pipe(item, conf=tokenizer_conf, field='title')
     >>> next(stream)
-    {
-        'title': 'riko pt. 1',
-        'stringtokenizer': [
-            {'content': 'riko'},
-            {'content': 'pt.'},
-            {'content': '1'}]}
+    {'stringtokenizer': [{'content': 'riko'},
+       {'content': 'pt.'},
+       {'content': '1'}],
+     'title': 'riko pt. 1'}
 
     >>> # In this case, if we just want the result, we can `emit` it instead
     >>> stream = pipe(item, conf=tokenizer_conf, field='title', emit=True)
@@ -488,7 +472,7 @@ If you are unsure of the type of ``pipe`` you have, check its metadata.
     >>> from riko.modules import fetchpage, count
     >>>
     >>> fetchpage.async_pipe.__dict__
-    {'type': 'processor', 'name': 'fetchpage', 'sub_type': 'source'}
+    {'type': 'processor', 'sub_type': 'source'}
     >>> count.pipe.__dict__
     {'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
 
@@ -505,11 +489,9 @@ parallelization.
     ...     {'key': 'content', 'value': "Let's talk about riko!"}]
     >>> flow = SyncPipe('itembuilder', conf={'attrs': attrs}).hash()
     >>> flow.list[0]
-    [
-        {
-            'title': 'riko pt. 1',
-            'content': "Let's talk about riko!",
-            'hash': 1346301218}]
+    {'title': 'riko pt. 1',
+     'content': "Let's talk about riko!",
+     'hash': 1346301218}
 
 Please see the `cookbook`_ for advanced examples including how to wire in
 vales from other pipes or accept user input.
@@ -540,10 +522,10 @@ CLI Setup
     conf2 = {'rule': [{'find': 'com', 'replace': 'co.uk'}]}
 
     def pipe(test=False):
-        flow = (SyncPipe('itembuilder', conf=conf1, test=test)
-            .strreplace(conf=conf2))
-
+        kwargs = {'conf': conf1, 'test': test}
+        flow = SyncPipe('itembuilder', **kwargs).strreplace(conf=conf2)
         stream = flow.output
+
         for i in stream:
             print(i)
 
