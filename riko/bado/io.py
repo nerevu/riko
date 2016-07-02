@@ -26,11 +26,13 @@ from . import coroutine, return_value
 try:
     from twisted.test.proto_helpers import AccumulatingProtocol
 except ImportError:
-    AccumulatingProtocol = object
+    AccumulatingProtocol, Protocol = object, object
 else:
     from twisted.internet.reactor import callLater
+    from twisted.internet.protocol import Protocol
+    # from twisted.internet.interfaces import IPushProducer
     from twisted.protocols.basic import FileSender
-    from twisted.web.client import getPage, downloadPage
+    from twisted.web.client import getPage, downloadPage, FileBodyProducer
     from twisted.test.proto_helpers import StringTransport
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -84,6 +86,21 @@ class FileReader(AccumulatingProtocol):
         self.d.addBoth(self.cleanup)
 
 
+class FileProducer(Protocol):
+    def __init__(self, filename):
+        self.f = open(filename, 'rb')
+        self.producer = FileBodyProducer(self.f)
+
+    def dataReceived(self, data):
+        logger.debug('dataReceived')
+        self.transport.write(data)
+
+    def connectionMade(self):
+        logger.debug('Connection made from %s', self.transport.getPeer())
+        self.d = self.producer.startProducing(self.transport)
+        self.d.addErrback(logger.error)
+
+
 @coroutine
 def readFile(filename, transport, protocol=FileReader, **kwargs):
     proto = protocol(filename.replace('file://', ''), **kwargs)
@@ -100,6 +117,16 @@ def getFile(filename, transport, protocol=FileReader, **kwargs):
     yield proto.d
     proto.transport.io.seek(0)
     return_value(proto.transport.io)
+
+
+def async_get_file_alt(filename):
+    # FIXME: readFromFD returns 8192 bytes
+    with open(filename.replace('file://', '')) as f:
+        d = Deferred()
+        fd = f.fileno()
+        setNonBlocking(fd)
+        readFromFD(fd, d.callback)
+        return d
 
 
 @coroutine
