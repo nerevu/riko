@@ -761,14 +761,13 @@ class MicroDOMParser(XMLParser):
     }
 
     def __init__(self, lenient=False, case_insensitive=True, **kwargs):
+        super(MicroDOMParser, self).__init__(lenient=lenient, **kwargs)
         self.elementstack = []
         d = {'xmlns': 'xmlns', '': None}
         dr = invert_dict(d)
         self.nsstack = [(d, None, dr)]
         self.documents = []
         self._mddoctype = None
-        self.lenient = lenient
-        self.strict = not lenient
         self.case_insensitive = case_insensitive
         self.preserve_case = case_insensitive
         self.soonClosers = kwargs.get('soonClosers', self.def_soon_closers)

@@ -54,7 +54,7 @@ from six.moves.urllib.request import urlopen
 
 from . import processor
 from riko.lib import utils
-from riko.bado import coroutine, return_value, util as tu, io
+from riko.bado import coroutine, return_value, util, io
 from meza._compat import encode
 
 OPTS = {'ftype': 'none'}
@@ -108,11 +108,12 @@ def async_parser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
-        html = ext == 'html'
+        xml = (ext == 'xml') or objconf.strict
+
         f = yield io.async_url_open(url)
-        tree = yield tu.xml2etree(f, html=html)
+        tree = yield util.xml2etree(f, xml=xml)
         elements = utils.xpath(tree, objconf.xpath)
-        items = map(tu.etree2dict, elements)
+        items = map(util.etree2dict, elements)
         stringified = ({kwargs['assign']: encode(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
@@ -147,7 +148,7 @@ def parser(_, objconf, skip, **kwargs):
     else:
         url = utils.get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
-        xml = ext == 'xml'
+        xml = (ext == 'xml') or objconf.strict
 
         with closing(urlopen(url)) as f:
             root = utils.xml2etree(f, xml=xml, html5=objconf.html5).getroot()
@@ -177,6 +178,7 @@ def async_pipe(*args, **kwargs):
             xpath (str): The XPATH to extract (default: None, i.e., return
                 entire page)
 
+            strict (bool): Use the strict XML parser (default: False)
             html5 (bool): Use the HTML5 parser (default: False)
             stringify (bool): Return the web site as a string (default: False)
             assign (str): Attribute to assign parsed content (default: content)
@@ -223,6 +225,7 @@ def pipe(*args, **kwargs):
             xpath (str): The XPATH to extract (default: None, i.e., return
                 entire page)
 
+            strict (bool): Use the strict XML parser (default: False)
             html5 (bool): Use the HTML5 parser (default: False)
             stringify (bool): Return the web site as a string (default: False)
             assign (str): Attribute to assign parsed content (default: content)

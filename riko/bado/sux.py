@@ -80,10 +80,8 @@ class ParseError(Exception):
 class XMLParser(Protocol):
     state = None
     encoding = None
-    filename = "<xml />"
-    lenient = 0
-    strict = not lenient
     bom = None
+    filename = "<xml />"
     attrname = ''
     attrval = ''
 
@@ -91,6 +89,10 @@ class XMLParser(Protocol):
     # 'bodydata' state, when we "accidentally" read a byte of bodydata
     # in a different state.
     _leadingBodyData = None
+
+    def __init__(self, lenient=False, **kwargs):
+        self.lenient = lenient
+        self.strict = not lenient
 
     def connectionMade(self):
         self.lineno = 1

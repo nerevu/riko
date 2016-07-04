@@ -70,11 +70,17 @@ def def2unicode(entitydef):
     return chr(cp)
 
 
-def xml2etree(f, html=False):
-    if hasattr(f, 'read'):
-        parse = microdom.parse if html else microdom.parseXML
+def xml2etree(f, xml=True):
+    readable = hasattr(f, 'read')
+
+    if xml and readable:
+        parse = microdom.parseXML
+    elif readable:
+        parse = partial(microdom.parse, lenient=True)
+    elif xml:
+        parse = microdom.parseXMLString
     else:
-        parse = microdom.parseString
+        parse = partial(microdom.parseString, lenient=True)
 
     return parse(f)
 
