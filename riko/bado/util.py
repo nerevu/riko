@@ -48,10 +48,7 @@ def async_sleep(seconds):
     return d
 
 
-def deferToProcess(source, function, *args, **kwargs):
-    command = "from %s import %s\n%s(*%s, **%s)" % (
-        source, function, function, args, kwargs)
-
+def defer_to_process(command):
     return getProcessOutput(executable, ['-c', command], environ)
 
 
