@@ -16,7 +16,9 @@ from __future__ import (
 
 import pygogo as gogo
 
-from io import StringIO, open
+from io import open
+from tempfile import NamedTemporaryFile
+from os import remove
 
 from builtins import *
 from meza._compat import encode
@@ -105,12 +107,17 @@ def async_get_file(filename, transport, protocol=FileReader, **kwargs):
 @coroutine
 def async_url_open(url, timeout=0, **kwargs):
     if url.startswith('http'):
-        # returns unicode in py2 but bytes in py3
-        f = StringIO()
-        yield downloadPage(encode(url), f, timeout=timeout)
-        f.seek(0)
+        page = NamedTemporaryFile(delete=False)
+        new_url = page.name
+        yield downloadPage(encode(url), page, timeout=timeout)
     else:
-        f = yield async_get_file(url, StringTransport(), **kwargs)
+        page, new_url = None, url
+
+    f = yield async_get_file(new_url, StringTransport(), **kwargs)
+
+    if page:
+        page.close()
+        remove(page.name)
 
     return_value(f)
 
