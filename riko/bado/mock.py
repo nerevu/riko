@@ -37,7 +37,7 @@ class FakeDelayedCall(object):
     """Fake delayed call which lets us simulate the scheduler.
     """
     def __init__(self, func):
-        """A function to run, later.
+        """A function to run later.
         """
         self.func = func
         self.cancelled = False
@@ -50,8 +50,8 @@ class FakeDelayedCall(object):
 
 @implementer(IReactorCore)
 class FakeReactor(MemoryReactor):
-    """A fake reactor to be used in tests.  This reactor doesn't actually do
-    much that's useful yet.  It accepts TCP connection setup attempts, but
+    """A fake reactor to be used in tests. This reactor doesn't actually do
+    much that's useful yet. It accepts TCP connection setup attempts, but
     they will never succeed.
 
     Examples:
@@ -73,7 +73,7 @@ class FakeReactor(MemoryReactor):
         self.work = []
         self.running = False
 
-    def resolve(self, *args, **kw):
+    def resolve(self, *args, **kwargs):
         """Return a L{twisted.internet.defer.Deferred} that will resolve a hostname.
         """
         pass
@@ -93,27 +93,27 @@ class FakeReactor(MemoryReactor):
         """
         self.running = False
 
-    def iterate(self, *args, **kw):
+    def iterate(self, *args, **kwargs):
         """Fake L{IReactorCore.iterate}.
         """
         pass
 
-    def fireSystemEvent(self, *args, **kw):
+    def fireSystemEvent(self, *args, **kwargs):
         """Fake L{IReactorCore.fireSystemEvent}.
         """
         pass
 
-    def addSystemEventTrigger(self, *args, **kw):
+    def addSystemEventTrigger(self, *args, **kwargs):
         """Fake L{IReactorCore.addSystemEventTrigger}.
         """
         pass
 
-    def removeSystemEventTrigger(self, *args, **kw):
+    def removeSystemEventTrigger(self, *args, **kwargs):
         """Fake L{IReactorCore.removeSystemEventTrigger}.
         """
         pass
 
-    def callWhenRunning(self, *args, **kw):
+    def callWhenRunning(self, *args, **kwargs):
         """Fake L{IReactorCore.callWhenRunning}.
         """
         pass

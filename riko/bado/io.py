@@ -54,9 +54,7 @@ class FileReader(AccumulatingProtocol):
         self.producer.stopProducing()
 
     def resumeProducing(self):
-        chunk = ''
-        if self.file:
-            chunk = self.file.read(self.CHUNK_SIZE)
+        chunk = self.file.read(self.CHUNK_SIZE) if self.file else ''
 
         if not chunk:
             self.file = None

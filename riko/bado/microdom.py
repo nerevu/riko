@@ -112,11 +112,6 @@ def getElementsByTagName(iNode, name, icase=False):
                 yield c
 
 
-def getElementsByTagNameNoCase(iNode, name):
-    for c in getElementsByTagName(iNode, name, True):
-        yield c
-
-
 class MismatchedTags(Exception):
     def __init__(self, *args):
         (
@@ -341,10 +336,8 @@ class Document(Node):
         return Comment(text)
 
     def getElementsByTagName(self, name):
-        if self.documentElement.case_insensitive:
-            return getElementsByTagNameNoCase(self, name)
-
-        return getElementsByTagName(self, name)
+        icase = self.documentElement.case_insensitive
+        return getElementsByTagName(self, name, icase)
 
     def getElementById(self, id):
         childNodes = self.childNodes[:]
@@ -354,7 +347,8 @@ class Document(Node):
 
             if node.childNodes:
                 childNodes.extend(node.childNodes)
-            if hasattr(node, 'getAttribute') and node.getAttribute("id") == id:
+
+            if hasattr(node, 'getAttribute') and node.getAttribute('id') == id:
                 return node
 
 
@@ -536,10 +530,7 @@ class Element(Node):
         return clone
 
     def getElementsByTagName(self, name):
-        if self.case_insensitive:
-            return getElementsByTagNameNoCase(self, name)
-
-        return getElementsByTagName(self, name)
+        return getElementsByTagName(self, name, self.case_insensitive)
 
     def hasAttributes(self):
         return 1
@@ -1056,8 +1047,8 @@ def parse(f, *args, **kwargs):
     return doc
 
 
-def parseString(st, *args, **kw):
-    return parse(StringIO(encode(st)), *args, **kw)
+def parseString(content, *args, **kwargs):
+    return parse(StringIO(encode(content)), *args, **kwargs)
 
 
 def parseXML(readable):
@@ -1065,6 +1056,6 @@ def parseXML(readable):
     return parse(readable, case_insensitive=True)
 
 
-def parseXMLString(st):
+def parseXMLString(content):
     """Parse an XML readable object."""
-    return parseString(st, case_insensitive=True)
+    return parseString(content, case_insensitive=True)

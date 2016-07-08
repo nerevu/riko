@@ -69,8 +69,7 @@ DATES = {
     'today': TODAY,
     'now': TODAY,
     'tomorrow': TODAY + timedelta(days=1),
-    'yesterday': TODAY - timedelta(days=1),
-}
+    'yesterday': TODAY - timedelta(days=1)}
 
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 

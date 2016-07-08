@@ -25,10 +25,8 @@ try:
 except ImportError:
     pass
 else:
+    from twisted.internet import task
     from twisted.internet.defer import gatherResults
-    from twisted.internet.task import (
-        coiterate as _coiterate, cooperate as _cooperate)
-
     cooperator = Cooperator(scheduler=FakeReactor().callLater)
 
 
@@ -40,7 +38,7 @@ def cleanup(*args):
 
 @coroutine
 def coop_reduce(func, iterable, initializer=None):
-    cooperate = cooperator.cooperate if reactor.fake else _cooperate
+    cooperate = cooperator.cooperate if reactor.fake else task.cooperate
     iterable = iter(iterable)
     x = initializer or next(iterable)
     result = {}
@@ -50,24 +48,24 @@ def coop_reduce(func, iterable, initializer=None):
             result['value'] = x = func(x, y)
             yield
 
-    task = cooperate(work(func, iterable, x))
-    yield task.whenDone()
+    _task = cooperate(work(func, iterable, x))
+    yield _task.whenDone()
     cleanup()
     return_value(result['value'])
 
 
-def async_reduce(asyncCallable, iterable, initializer=None):
+def async_reduce(async_func, iterable, initializer=None):
     it = iter(iterable)
     x = initializer or next(it)
 
     @coroutine
-    def work(asyncCallable, it, x):
+    def work(async_func, it, x):
         for y in it:
-            x = yield asyncCallable(x, y)
+            x = yield async_func(x, y)
 
         return_value(x)
 
-    return work(asyncCallable, it, x)
+    return work(async_func, it, x)
 
 
 @coroutine
@@ -75,7 +73,7 @@ def async_pmap(func, iterable, workers=1):
     """map for synchronous callables using parallel cooperative
     multitasking
     """
-    coiterate = cooperator.coiterate if reactor.fake else _coiterate
+    coiterate = cooperator.coiterate if reactor.fake else task.coiterate
     results = []
 
     def work():
@@ -96,16 +94,16 @@ def async_imap(asyncCallable, *iterables):
     return gatherResults(deferreds, consumeErrors=True)
 
 
-def async_starmap(asyncCallable, iterable):
+def async_starmap(async_func, iterable):
     """itertools.starmap for deferred callables
     """
-    deferreds = it.starmap(asyncCallable, iterable)
+    deferreds = it.starmap(async_func, iterable)
     return gatherResults(deferreds, consumeErrors=True)
 
 
-def async_dispatch(split, *asyncCallables, **kwargs):
-    return async_starmap(lambda item, f: f(item), zip(split, asyncCallables))
+def async_dispatch(split, *async_funcs, **kwargs):
+    return async_starmap(lambda item, f: f(item), zip(split, async_funcs))
 
 
-def async_broadcast(item, *asyncCallables, **kwargs):
-    return async_dispatch(it.repeat(item), *asyncCallables, **kwargs)
+def async_broadcast(item, *async_funcs, **kwargs):
+    return async_dispatch(it.repeat(item), *async_funcs, **kwargs)
