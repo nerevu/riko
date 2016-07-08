@@ -143,7 +143,6 @@ class PyCollection(object):
     def __init__(self, sources, parallel=False, workers=None, **kwargs):
         self.sources = sources
         self.parallel = parallel
-        self.workers = workers
         self.sleep = kwargs.get('sleep', 0)
         self.zargs = zip(self.sources, repeat(self.sleep))
         self.length = lenish(self.sources)
@@ -187,7 +186,7 @@ def get_worker_cnt(length, threads=True):
 
 
 def lenish(source, default=50):
-    funcs = (len, lambda x: getattr(x, '__length_hint__')())
+    funcs = (len, lambda x: x.__length_hint__())
     errors = (TypeError, AttributeError)
     zipped = list(zip(funcs, errors))
     return multi_try(source, zipped, default)
