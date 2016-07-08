@@ -431,7 +431,7 @@ def etree2dict(element):
 
     if element.text and not set(i).difference(['content']):
         # element is leaf node and doesn't have attributes
-        i = i['content']
+        i = i.get('content')
 
     return i
 
