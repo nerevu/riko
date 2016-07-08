@@ -52,6 +52,9 @@ SWITCH = {
     'doesnotcontain': lambda x, y: x and y.lower() not in x.lower(),
     'matches': lambda x, y: re.search(x, y),
     'is': op.eq,
+    'isnot': op.ne,
+    'truthy': bool,
+    'falsy': op.not_,
     'greater': op.gt,
     'after': op.gt,
     'less': op.lt,
@@ -60,16 +63,12 @@ SWITCH = {
 
 
 def parse_rule(rule, item, **kwargs):
-    if rule.value is None:
-        result = True
-    else:
-        result = None
-        x = item.get(rule.field, **kwargs)
-        y = rule.value
+    truthieness = rule.op in {'truthy', 'falsy'}
+    x = item.get(rule.field, **kwargs)
+    y = rule.value
+    has_value = y is not None
 
-    if not result and y is None:
-        result = False
-    else:
+    if has_value and not truthieness:
         try:
             _x = Decimal(x)
             _y = Decimal(y)
@@ -84,10 +83,18 @@ def parse_rule(rule, item, **kwargs):
         else:
             x, y = _x, _y
 
+    if has_value or truthieness:
+        operation = SWITCH.get(rule.op)
+
+    if truthieness:
+        result = operation(x)
+    elif has_value:
         try:
-            result = SWITCH.get(rule.op)(x, y)
-        except (UnicodeDecodeError, AttributeError):
+            result = operation(x, y)
+        except AttributeError:
             result = False
+    else:
+        result = False
 
     return result
 
@@ -169,8 +176,8 @@ def async_pipe(*args, **kwargs):
 
                 field (str): the item field to search.
                 op (str): the operation, must be one of 'contains',
-                    'doesnotcontain', 'matches', 'is', 'greater', 'less',
-                    'after', or 'before'.
+                    'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
+                    'falsy', 'greater', 'less', 'after', or 'before'.
 
                 value (scalar): the value to compare the item's field to.
 
@@ -223,8 +230,8 @@ def pipe(*args, **kwargs):
 
                 field (str): the item field to search.
                 op (str): the operation, must be one of 'contains',
-                    'doesnotcontain', 'matches', 'is', 'greater', 'less',
-                    'after', or 'before'.
+                    'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
+                    'falsy', 'greater', 'less', 'after', or 'before'.
 
                 value (scalar): the value to compare the item's field to.
 
