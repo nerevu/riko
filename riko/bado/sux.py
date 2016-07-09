@@ -232,7 +232,7 @@ class XMLParser(Protocol):
         alnum_or_ident = byte.isalnum() or byte in IDENTCHARS
         is_good = alnum_or_ident or byte in '/!?[' or byte.isspace()
 
-        if alnum_or_ident and self.tagName == '!--':
+        if byte == '-' and self.tagName == '!-':
             val = 'comment'
         elif byte.isspace() and self.tagName:
             # properly strict thing to do here is probably to only
@@ -250,9 +250,6 @@ class XMLParser(Protocol):
 
         if not (self.lenient or val or is_good):
             self._parseError('Invalid tag character: %r' % byte)
-        elif self.lenient:
-            self.bodydata = '<'
-            val = 'unentity'
 
         return val
 
@@ -605,12 +602,15 @@ class XMLParser(Protocol):
                 # '&foo' probably was '&amp;foo'
                 if self.erefbuf and self.erefbuf != "amp":
                     self.erefextra = self.erefbuf
+
                 self.erefbuf = "amp"
+
                 if byte == "<":
                     return "tagstart"
                 else:
                     self.erefextra += byte
                     return 'spacebodydata'
+
             self._parseError("Bad entity reference")
         elif byte != ';':
             self.erefbuf += byte

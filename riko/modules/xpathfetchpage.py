@@ -43,6 +43,7 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import traceback
 import pygogo as gogo
 
 from contextlib import closing
@@ -89,12 +90,27 @@ def async_parser(_, objconf, skip, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['title'][:44])
-        ...     url, path = get_path('ouseful.xml'), '/rss/channel/item'
-        ...     objconf = Objectify({'url': url, 'xpath': path})
-        ...     d = async_parser(None, objconf, False, stream={})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> @coroutine
+        ... def run(reactor):
+        ...     xml_url = get_path('ouseful.xml')
+        ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
+        ...     xml_objconf = Objectify(xml_conf)
+        ...     xml_args = (None, xml_objconf, False)
+        ...     html_url = get_path('sciencedaily.html')
+        ...     html_conf = {'url': html_url, 'xpath': '/html/head/title'}
+        ...     html_objconf = Objectify(html_conf)
+        ...     html_args = (None, html_objconf, False)
+        ...     kwargs = {'stream': {}}
+        ...
+        ...     try:
+        ...         xml_stream, _ = yield async_parser(*xml_args, **kwargs)
+        ...         html_stream, _ = yield async_parser(*html_args, **kwargs)
+        ...         print(next(xml_stream)['title'][:44])
+        ...         print(next(html_stream))
+        ...     except Exception as e:
+        ...         logger.error(e)
+        ...         logger.error(traceback.format_exc())
+        ...
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -102,6 +118,7 @@ def async_parser(_, objconf, skip, **kwargs):
         ...     pass
         ...
         Running “Native” Data Wrangling Applications
+        Help Page -- ScienceDaily
     """
     if skip:
         stream = kwargs['stream']
@@ -110,8 +127,13 @@ def async_parser(_, objconf, skip, **kwargs):
         ext = splitext(url)[1].lstrip('.')
         xml = (ext == 'xml') or objconf.strict
 
-        f = yield io.async_url_open(url)
-        tree = yield util.xml2etree(f, xml=xml)
+        try:
+            f = yield io.async_url_open(url)
+            tree = yield util.xml2etree(f, xml=xml)
+        except Exception as e:
+            logger.error(e)
+            logger.error(traceback.format_exc())
+
         elements = utils.xpath(tree, objconf.xpath)
         items = map(util.etree2dict, elements)
         stringified = ({kwargs['assign']: encode(i)} for i in items)
@@ -191,12 +213,22 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['guid']['content'])
-        ...     url = get_path('ouseful.xml')
-        ...     conf = {'url': url, 'xpath': '/rss/channel/item'}
-        ...     d = async_pipe(conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> @coroutine
+        ... def run(reactor):
+        ...     xml_url = get_path('ouseful.xml')
+        ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
+        ...     html_url = get_path('sciencedaily.html')
+        ...     html_conf = {'url': html_url, 'xpath': '/html/head/title'}
+        ...
+        ...     try:
+        ...         xml_stream = yield async_pipe(conf=xml_conf)
+        ...         html_stream = yield async_pipe(conf=html_conf)
+        ...         print(next(xml_stream)['guid']['content'])
+        ...         print(next(html_stream))
+        ...     except Exception as e:
+        ...         logger.error(e)
+        ...         logger.error(traceback.format_exc())
+        ...
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -204,6 +236,7 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         http://blog.ouseful.info/?p=12065
+        Help Page -- ScienceDaily
     """
     return async_parser(*args, **kwargs)
 
@@ -235,9 +268,14 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
+        >>>
         >>> url = get_path('ouseful.xml')
         >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
         >>> next(pipe(conf=conf))['guid']['content']
         'http://blog.ouseful.info/?p=12065'
+        >>> url = get_path('sciencedaily.html')
+        >>> conf = {'url': url, 'xpath': '/html/head/title'}
+        >>> next(pipe(conf=conf))
+        'Help Page -- ScienceDaily'
     """
     return parser(*args, **kwargs)

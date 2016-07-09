@@ -24,7 +24,7 @@ from __future__ import (
 import re
 import itertools as it
 
-from io import open, StringIO
+from io import open, BytesIO, StringIO
 from functools import partial
 from builtins import *
 
@@ -752,7 +752,8 @@ class MicroDOMParser(XMLParser):
     }
 
     def __init__(self, case_insensitive=True, **kwargs):
-        super(MicroDOMParser, self).__init__(**kwargs)
+        # Protocol is an old style class so we can't use super
+        XMLParser.__init__(self, **kwargs)
         self.elementstack = []
         d = {'xmlns': 'xmlns', '': None}
         dr = invert_dict(d)
@@ -867,7 +868,7 @@ class MicroDOMParser(XMLParser):
                 yield (k, v)
 
     def gotTagStart(self, name, attributes):
-        # print ' '*self.indentlevel, 'start tag',name
+        # logger.debug('%s<%s>', ' ' * self.indentlevel, name)
         self.indentlevel += 2
         parent = self._getparent()
         parent = self._check_parent(parent, name)
@@ -970,6 +971,7 @@ class MicroDOMParser(XMLParser):
 
     def gotTagEnd(self, name):
         self.indentlevel -= 2
+        # logger.debug('%s</%s>', ' ' * self.indentlevel, name)
 
         if self.lenient and not self.elementstack:
             return
@@ -1048,7 +1050,8 @@ def parse(f, *args, **kwargs):
 
 
 def parseString(content, *args, **kwargs):
-    return parse(StringIO(encode(content)), *args, **kwargs)
+    f = BytesIO(encode(content))
+    return parse(f, *args, **kwargs)
 
 
 def parseXML(readable):
