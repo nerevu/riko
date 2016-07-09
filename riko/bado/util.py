@@ -17,7 +17,7 @@ from __future__ import (
 from os import environ
 from sys import executable
 from functools import partial
-from html.entities import entitydefs, name2codepoint
+from html.entities import name2codepoint
 
 from builtins import *
 
@@ -39,7 +39,6 @@ else:
     async_return = partial(defer.succeed)
     async_partial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
-DEF2NAME = {v: k for k, v in entitydefs.items()}
 
 
 def async_sleep(seconds):
@@ -54,16 +53,9 @@ def defer_to_process(command):
 
 def def2unicode(entitydef):
     """Convert an HTML entity reference into unicode.
-    Double check if I need this since it seems to convert the input back into
-    itself!
     """
-    try:
-        name = DEF2NAME[entitydef]
-    except KeyError:
-        cp = int(entitydef.lstrip('&#').rstrip(';'))
-    else:
-        cp = name2codepoint[name]
-
+    cleaned = entitydef.lstrip('&').lstrip('#').rstrip(';')
+    cp = int(cleaned) if '&#' in entitydef else name2codepoint[cleaned]
     return chr(cp)
 
 
