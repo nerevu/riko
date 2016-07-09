@@ -53,9 +53,15 @@ def defer_to_process(command):
 
 def def2unicode(entitydef):
     """Convert an HTML entity reference into unicode.
+    http://stackoverflow.com/a/58125/408556
     """
-    cleaned = entitydef.lstrip('&').lstrip('#').rstrip(';')
-    cp = int(cleaned) if '&#' in entitydef else name2codepoint[cleaned]
+    if entitydef.startswith('&#x'):
+        cp = int(entitydef[3:-1], 16)
+    elif entitydef.startswith('&#'):
+        cp = int(entitydef[2:-1])
+    elif entitydef.startswith('&'):
+        cp = name2codepoint[entitydef[1:-1]]
+
     return chr(cp)
 
 
