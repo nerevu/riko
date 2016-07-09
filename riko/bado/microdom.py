@@ -772,7 +772,7 @@ class MicroDOMParser(XMLParser):
         self.preserve_case = case_insensitive
         self.soonClosers = kwargs.get('soonClosers', self.def_soon_closers)
         self.laterClosers = kwargs.get('laterClosers', self.def_later_closers)
-        # self.indentlevel = 0
+        self.indentlevel = 0
 
     def shouldPreserveSpace(self):
         for idx, _ in enumerate(self.elementstack):
@@ -877,7 +877,7 @@ class MicroDOMParser(XMLParser):
 
     def gotTagStart(self, name, attributes):
         # print ' '*self.indentlevel, 'start tag',name
-        # self.indentlevel += 1
+        self.indentlevel += 2
         parent = self._getparent()
         parent = self._check_parent(parent, name)
 
@@ -978,6 +978,8 @@ class MicroDOMParser(XMLParser):
             self._fixScriptElement(el)
 
     def gotTagEnd(self, name):
+        self.indentlevel -= 2
+
         if self.lenient and not self.elementstack:
             return
         elif not self.elementstack:
