@@ -39,10 +39,9 @@ from .sux import XMLParser, ParseError
 from riko.lib.utils import combine_dicts
 
 # order is important
-HTML_ESCAPE_CHARS = (('&', '&amp;'),  # don't add any entities before this one
-                    ('<', '&lt;'),
-                    ('>', '&gt;'),
-                    ('"', '&quot;'))
+HTML_ESCAPE_CHARS = (
+    ('&', '&amp;'),  # don't add any entities before this one
+    ('<', '&lt;'), ('>', '&gt;'), ('"', '&quot;'))
 
 REV_HTML_ESCAPE_CHARS = list(HTML_ESCAPE_CHARS)
 REV_HTML_ESCAPE_CHARS.reverse()
@@ -99,26 +98,22 @@ def getElementsByTagName(iNode, path, icase=False):
     same = lambda x, y: x.lower() == y.lower() if icase else x == y
     is_node = hasattr(iNode, 'nodeName')
     has_bracket = '[' in path
-    nodeless_bracket = has_bracket and not is_node
-    bracketless_node = is_node and not has_bracket
 
-    if nodeless_bracket:
-        name, pos = path[:path.find('[')], int(path[path.find('[') + 1:-1]) - 1
-        nodes = [n for n in iNode if same(n.nodeName, name)]
-
-        if pos < len(nodes):
-            yield nodes[pos]
-    elif bracketless_node and same(iNode.nodeName, path):
+    if is_node and not has_bracket and same(iNode.nodeName, path):
         yield iNode
-    elif not (has_bracket or is_node):
-        for child in iNode:
-            if same(child.nodeName, path):
-                yield child
 
     if is_node and iNode.hasChildNodes():
         for c in getElementsByTagName(iNode.childNodes, path, icase):
             yield c
-    elif not is_node:
+
+    if not is_node:
+        name = path[:path.find('[')] if has_bracket else path
+        pos = int(path[path.find('[') + 1:-1]) - 1 if has_bracket else 0
+        nodes = [n for n in iNode if same(n.nodeName, name)]
+
+        if pos < len(nodes):
+            yield nodes[pos]
+
         for child in iNode:
             for c in getElementsByTagName(child, path, icase):
                 yield c

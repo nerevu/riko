@@ -40,7 +40,6 @@ else:
     async_partial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
 
-
 def async_sleep(seconds):
     d = Deferred()
     callLater(seconds, d.callback, None)

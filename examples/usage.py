@@ -21,6 +21,8 @@ Word Count
     >>> fetch_conf = {
     ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\\n', 'replace': ' '}}
+    >>> replace_kwargs = {'conf': replace_conf, 'assign': 'content'}
+    >>> token_kwargs = {'conf': {'delimiter': ' '}, 'emit': True}
     >>>
     >>> ### Create a workflow ###
     >>> #
@@ -33,8 +35,8 @@ Word Count
     >>> # Note: because `fetchpage` and `strreplace` each return an iterator of
     >>> # just one item, we can safely call `next` without fear of loosing data
     >>> page = next(fetchpage.pipe(conf=fetch_conf))
-    >>> replaced = next(strreplace.pipe(page, conf=replace_conf, assign='content'))
-    >>> words = stringtokenizer.pipe(replaced, conf={'delimiter': ' '}, emit=True)
+    >>> replaced = next(strreplace.pipe(page, **replace_kwargs))
+    >>> words = stringtokenizer.pipe(replaced, **token_kwargs)
     >>> counts = count.pipe(words)
     >>> next(counts) == {'count': 70}
     True
@@ -129,8 +131,10 @@ Synchronous processing
     >>> filter_rule = {
     ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
+    >>> sub_kwargs = {'conf': sub_conf, 'emit': True}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
+    >>> regex_conf = {'rule': regex_rule}
     >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
     >>>
     >>> ### Create a workflow ###
@@ -146,9 +150,9 @@ Synchronous processing
     >>> # Note: sorting is not lazy so take caution when using this pipe
     >>> stream = fetch.pipe(conf=fetch_conf)
     >>> filtered = filter.pipe(stream, conf={'rule': filter_rule})
-    >>> extracted = (subelement.pipe(i, conf=sub_conf, emit=True) for i in filtered)
+    >>> extracted = (subelement.pipe(i, **sub_kwargs) for i in filtered)
     >>> flat_extract = chain.from_iterable(extracted)
-    >>> matched = (regex.pipe(i, conf={'rule': regex_rule}) for i in flat_extract)
+    >>> matched = (regex.pipe(i, conf=regex_conf) for i in flat_extract)
     >>> flat_match = chain.from_iterable(matched)
     >>> sorted_match = sort.pipe(flat_match, conf=sort_conf)
     >>> next(sorted_match) == {'content': 'mailto:mail@writetoreply.org'}
