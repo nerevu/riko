@@ -760,8 +760,8 @@ class MicroDOMParser(XMLParser):
         'option': ['option'],
     }
 
-    def __init__(self, lenient=False, case_insensitive=True, **kwargs):
-        super(MicroDOMParser, self).__init__(lenient=lenient, **kwargs)
+    def __init__(self, case_insensitive=True, **kwargs):
+        super(MicroDOMParser, self).__init__(**kwargs)
         self.elementstack = []
         d = {'xmlns': 'xmlns', '': None}
         dr = invert_dict(d)
@@ -1022,9 +1022,8 @@ def parse(f, *args, **kwargs):
     """Parse HTML or XML readable."""
     fp = f.fp if hasattr(f, 'fp') else f
     readable = fp if hasattr(fp, 'read') else open(f, 'rb')
-
-    mdp = MicroDOMParser(*args, **kwargs)
-    mdp.filename = getattr(readable, 'name', '<xmlfile />')
+    filename = getattr(readable, 'name', 'unnamed')
+    mdp = MicroDOMParser(filename=filename, **kwargs)
     mdp.makeConnection(None)
 
     try:

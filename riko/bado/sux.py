@@ -81,7 +81,6 @@ class XMLParser(Protocol):
     state = None
     encoding = None
     bom = None
-    filename = "<xml />"
     attrname = ''
     attrval = ''
 
@@ -90,9 +89,10 @@ class XMLParser(Protocol):
     # in a different state.
     _leadingBodyData = None
 
-    def __init__(self, lenient=False, **kwargs):
-        self.lenient = lenient
-        self.strict = not lenient
+    def __init__(self, filename='unnamed', **kwargs):
+        self.filename = filename
+        self.lenient = kwargs.get('lenient')
+        self.strict = not self.lenient
 
     def connectionMade(self):
         self.lineno = 1
