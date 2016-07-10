@@ -80,7 +80,7 @@ def _gen_prefix():
         yield 'p' + str(i)
 
 
-def getElementsByTagName(iNode, name, icase=False):
+def getElementsByTagName(iNode, path, icase=False):
     """
     Return a list of all child elements of C{iNode} with a name matching
     C{name}.
@@ -96,19 +96,31 @@ def getElementsByTagName(iNode, name, icase=False):
     @return: A C{list} of direct or indirect child elements of C{iNode} with
         the name C{name}.  This may include C{iNode}.
     """
+    same = lambda x, y: x.lower() == y.lower() if icase else x == y
     is_node = hasattr(iNode, 'nodeName')
+    has_bracket = '[' in path
+    nodeless_bracket = has_bracket and not is_node
+    bracketless_node = is_node and not has_bracket
 
-    if is_node and icase and iNode.nodeName.lower() == name.lower():
-        yield iNode
-    elif is_node and iNode.nodeName == name:
-        yield iNode
+    if nodeless_bracket:
+        name, pos = path[:path.find('[')], int(path[path.find('[') + 1:-1]) - 1
+        nodes = [n for n in iNode if same(n.nodeName, name)]
 
-    if hasattr(iNode, 'childNodes'):
-        for c in getElementsByTagName(iNode.childNodes, name, icase):
-            yield c
-    else:
+        if pos < len(nodes):
+            yield nodes[pos]
+    elif bracketless_node and same(iNode.nodeName, path):
+        yield iNode
+    elif not (has_bracket or is_node):
         for child in iNode:
-            for c in getElementsByTagName(child, name, icase):
+            if same(child.nodeName, path):
+                yield child
+
+    if is_node and iNode.hasChildNodes():
+        for c in getElementsByTagName(iNode.childNodes, path, icase):
+            yield c
+    elif not is_node:
+        for child in iNode:
+            for c in getElementsByTagName(child, path, icase):
                 yield c
 
 
