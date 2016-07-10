@@ -69,29 +69,20 @@ def async_reduce(async_func, iterable, initializer=None):
 
 
 @coroutine
-def async_pmap(func, iterable, workers=1):
-    """map for synchronous callables using parallel cooperative
-    multitasking
+def async_map(async_func, iterable, connections=0):
+    """parallel map for deferred callables using cooperative multitasking
+    http://stackoverflow.com/a/20376166/408556
     """
-    coiterate = cooperator.coiterate if reactor.fake else task.coiterate
-    results = []
+    if connections and not reactor.fake:
+        results = []
+        work = (async_func(x).addCallback(results.append) for x in iterable)
+        deferreds = [task.coiterate(work) for _ in range(connections)]
+        yield gatherResults(deferreds, consumeErrors=True)
+    else:
+        deferreds = map(async_func, iterable)
+        results = yield gatherResults(deferreds, consumeErrors=True)
 
-    def work():
-        for x in iterable:
-            results.append(func(x))
-            yield
-
-    deferreds = it.repeat(coiterate(work()), workers)
-    yield gatherResults(deferreds, consumeErrors=True)
-    cleanup()
     return_value(results)
-
-
-def async_imap(asyncCallable, *iterables):
-    """map for deferred callables
-    """
-    deferreds = map(asyncCallable, *iterables)
-    return gatherResults(deferreds, consumeErrors=True)
 
 
 def async_starmap(async_func, iterable):

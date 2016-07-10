@@ -66,8 +66,9 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 class AsyncPipe(PyPipe):
     """An asynchronous PyPipe object"""
-    def __init__(self, name=None, source=None, **kwargs):
+    def __init__(self, name=None, source=None, connections=16, **kwargs):
         super(AsyncPipe, self).__init__(name, source, **kwargs)
+        self.connections = connections
 
         if self.name:
             self.module = import_module('riko.modules.%s' % self.name)
@@ -80,7 +81,7 @@ class AsyncPipe(PyPipe):
             self.mapify = False
 
     def __getattr__(self, name):
-        return AsyncPipe(name, source=self.output)
+        return AsyncPipe(name, source=self.output, connections=self.connections)
 
     def __call__(self, **kwargs):
         self.kwargs = kwargs
@@ -93,7 +94,8 @@ class AsyncPipe(PyPipe):
         async_pipeline = partial(self.async_pipe, **self.kwargs)
 
         if self.mapify:
-            mapped = yield ait.async_imap(async_pipeline, source)
+            args = (async_pipeline, source, self.connections)
+            mapped = yield ait.async_map(*args)
             output = multiplex(mapped)
         else:
             output = yield async_pipeline(source)
@@ -109,10 +111,15 @@ class AsyncPipe(PyPipe):
 
 class AsyncCollection(PyCollection):
     """An asynchronous PyCollection object"""
+    def __init__(self, sources, connections=16, **kwargs):
+        super(AsyncCollection, self).__init__(sources, **kwargs)
+        self.connections = connections
+
     @coroutine
     def async_fetch(self):
         """Fetch all source urls"""
-        mapped = yield ait.async_imap(async_get_pipe, self.zargs)
+        args = (async_get_pipe, self.zargs, self.connections)
+        mapped = yield ait.async_map(*args)
         return_value(multiplex(mapped))
 
     def async_pipe(self, **kwargs):
