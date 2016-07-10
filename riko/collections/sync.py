@@ -58,22 +58,23 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 class PyPipe(object):
     """A riko module fetching object"""
-    def __init__(self, name=None, parallel=False, **kwargs):
+    def __init__(self, name=None, source=None, parallel=False, **kwargs):
         self.name = name
         self.parallel = parallel
+
+        if kwargs.pop('listize', False) and source:
+            self.source = list(source)
+        else:
+            self.source = source or []
+
         self.kwargs = kwargs
 
 
 class SyncPipe(PyPipe):
     """A synchronous Pipe object"""
     def __init__(self, name=None, source=None, workers=None, **kwargs):
-        super(SyncPipe, self).__init__(name, **kwargs)
+        super(SyncPipe, self).__init__(name, source, **kwargs)
         chunksize = kwargs.get('chunksize')
-
-        if kwargs.pop('listize', False) and source:
-            self.source = list(source)
-        else:
-            self.source = source or []
 
         self.threads = kwargs.get('threads', True)
         self.reuse_pool = kwargs.get('reuse_pool', True)

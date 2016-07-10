@@ -67,8 +67,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 class AsyncPipe(PyPipe):
     """An asynchronous PyPipe object"""
     def __init__(self, name=None, source=None, **kwargs):
-        super(AsyncPipe, self).__init__(name, **kwargs)
-        self.source = source or []
+        super(AsyncPipe, self).__init__(name, source, **kwargs)
 
         if self.name:
             self.module = import_module('riko.modules.%s' % self.name)
