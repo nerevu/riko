@@ -186,19 +186,16 @@ Parallel processing
     >>> # Notes `get_path` just looks up files in the `data` directory to
     >>> # simplify testing
     >>> url = get_path('feed.xml')
-    >>> filter_rule1 = {
-    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
-    >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
+    >>> filter_rule = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
     >>> ### Create a parallel SyncPipe workflow ###
     >>> #
     >>> # The following workflow will:
     >>> #   1. fetch the rss feed
-    >>> #   2. filter for items published before 2/5/2009
     >>> #   3. extract the path `content.value` from each feed item
     >>> #   4. replace the extracted text with the last href url contained
     >>> #      within it
@@ -209,10 +206,9 @@ Parallel processing
     >>> #   8. fetch each rss feed
     >>> #   9. Merge the rss feeds into a list
     >>> stream = (SyncPipe('fetch', conf={'url': url}, parallel=True)
-    ...     .filter(conf={'rule': filter_rule1})
     ...     .subelement(conf=sub_conf, emit=True)
     ...     .regex(conf={'rule': regex_rule})
-    ...     .filter(conf={'rule': filter_rule2})
+    ...     .filter(conf={'rule': filter_rule})
     ...     .strtransform(conf=strtransform_conf)
     ...     .uniq(conf={'uniq_key': 'strtransform'})
     ...     .fetch(conf={'url': {'subkey': 'strtransform'}})
@@ -236,13 +232,12 @@ Asynchronous processing
     >>> #     testing
     >>> #   - the `dotall` option is used to match `.*` across newlines
     >>> url = get_path('feed.xml')
-    >>> filter_rule1 = {
-    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {
     ...     'field': 'content', 'match': match, 'replace': '$2',
     ...     'dotall': True}
-    >>> filter_rule2 = {'field': 'content', 'op': 'contains', 'value': 'file'}
+    >>> filter_rule = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
     >>> ### Create an AsyncPipe workflow ###
@@ -251,10 +246,9 @@ Asynchronous processing
     >>> @coroutine
     ... def run(reactor):
     ...     stream = yield (AsyncPipe('fetch', conf={'url': url})
-    ...         .filter(conf={'rule': filter_rule1})
     ...         .subelement(conf=sub_conf, emit=True)
     ...         .regex(conf={'rule': regex_rule})
-    ...         .filter(conf={'rule': filter_rule2})
+    ...         .filter(conf={'rule': filter_rule})
     ...         .strtransform(conf=strtransform_conf)
     ...         .uniq(conf={'uniq_key': 'strtransform'})
     ...         .fetch(conf={'url': {'subkey': 'strtransform'}})
