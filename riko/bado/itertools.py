@@ -25,20 +25,28 @@ try:
 except ImportError:
     pass
 else:
-    from twisted.internet import task
+    from twisted.internet import task as real_task
     from twisted.internet.defer import gatherResults
-    cooperator = Cooperator(scheduler=FakeReactor().callLater)
 
 
-def cleanup(*args):
-    if reactor.fake and cooperator._delayedCall:
-        cooperator._delayedCall.cancel()
-        cooperator._delayedCall = None
+def get_task():
+    if reactor.fake:
+        task = Cooperator(scheduler=FakeReactor().callLater)
+    else:
+        task = real_task
+
+    return task
+
+
+def cleanup(task):
+    if reactor.fake and task._delayedCall:
+        task._delayedCall.cancel()
+        task._delayedCall = None
 
 
 @coroutine
 def coop_reduce(func, iterable, initializer=None):
-    cooperate = cooperator.cooperate if reactor.fake else task.cooperate
+    task = get_task()
     iterable = iter(iterable)
     x = initializer or next(iterable)
     result = {}
@@ -48,9 +56,9 @@ def coop_reduce(func, iterable, initializer=None):
             result['value'] = x = func(x, y)
             yield
 
-    _task = cooperate(work(func, iterable, x))
+    _task = task.cooperate(work(func, iterable, x))
     yield _task.whenDone()
-    cleanup()
+    cleanup(task)
     return_value(result['value'])
 
 
@@ -76,7 +84,7 @@ def async_map(async_func, iterable, connections=0):
     if connections and not reactor.fake:
         results = []
         work = (async_func(x).addCallback(results.append) for x in iterable)
-        deferreds = [task.coiterate(work) for _ in range(connections)]
+        deferreds = [get_task().coiterate(work) for _ in range(connections)]
         yield gatherResults(deferreds, consumeErrors=True)
     else:
         deferreds = map(async_func, iterable)

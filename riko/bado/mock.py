@@ -70,6 +70,8 @@ class FakeReactor(MemoryReactor):
     def __init__(self):
         super(FakeReactor, self).__init__()
         reactor.fake = True
+        msg = 'Attention! Running fake reactor'
+        logger.debug('%s. Some deffereds may not work as intended.' % msg)
         self.work = []
         self.running = False
 
