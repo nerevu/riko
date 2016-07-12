@@ -39,7 +39,7 @@ def get_task():
 
 
 def cleanup(task):
-    if reactor.fake and task._delayedCall:
+    if task._delayedCall:
         task._delayedCall.cancel()
         task._delayedCall = None
 
@@ -58,7 +58,7 @@ def coop_reduce(func, iterable, initializer=None):
 
     _task = task.cooperate(work(func, iterable, x))
     yield _task.whenDone()
-    cleanup(task)
+    cleanup(task) if reactor.fake else None
     return_value(result['value'])
 
 
