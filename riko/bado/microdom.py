@@ -344,6 +344,7 @@ class Document(Node):
         return getElementsByTagName(self.childNodes, name, icase)
 
     def getElementById(self, id):
+        # TODO: rewrite this!!
         childNodes = self.childNodes[:]
 
         while childNodes:
