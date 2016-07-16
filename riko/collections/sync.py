@@ -69,6 +69,10 @@ class PyPipe(object):
 
         self.kwargs = kwargs
 
+    def __call__(self, **kwargs):
+        self.kwargs = kwargs
+        return self
+
 
 class SyncPipe(PyPipe):
     """A synchronous Pipe object"""
@@ -113,10 +117,6 @@ class SyncPipe(PyPipe):
             'workers': self.workers}
 
         return SyncPipe(name, source=self.output, **kwargs)
-
-    def __call__(self, **kwargs):
-        self.kwargs = kwargs
-        return self
 
     @property
     def output(self):

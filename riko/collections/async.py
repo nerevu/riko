@@ -83,10 +83,6 @@ class AsyncPipe(PyPipe):
     def __getattr__(self, name):
         return AsyncPipe(name, source=self.output, connections=self.connections)
 
-    def __call__(self, **kwargs):
-        self.kwargs = kwargs
-        return self
-
     @property
     @coroutine
     def output(self):
