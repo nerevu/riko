@@ -84,9 +84,6 @@ def getElementsByTagName(iNode, path, icase=False):
     Return a list of all child elements of C{iNode} with a name matching
     C{name}.
 
-    Note that this implementation does not conform to the DOM Level 1 Core
-    specification because it may return C{iNode}.
-
     @param iNode: An element at which to begin searching.  If C{iNode} has a
         name matching C{name}, it will be included in the result.
 
@@ -344,7 +341,7 @@ class Document(Node):
 
     def getElementsByTagName(self, name):
         icase = self.documentElement.case_insensitive
-        return getElementsByTagName(self, name, icase)
+        return getElementsByTagName(self.childNodes, name, icase)
 
     def getElementById(self, id):
         childNodes = self.childNodes[:]
@@ -537,7 +534,8 @@ class Element(Node):
         return clone
 
     def getElementsByTagName(self, name):
-        return getElementsByTagName(self, name, self.case_insensitive)
+        icase = self.case_insensitive
+        return getElementsByTagName(self.childNodes, name, icase)
 
     def hasAttributes(self):
         return 1
