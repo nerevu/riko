@@ -275,7 +275,7 @@ def pipe(*args, **kwargs):
         'http://blog.ouseful.info/?p=12065'
         >>> url = get_path('sciencedaily.html')
         >>> conf = {'url': url, 'xpath': '/html/head/title'}
-        >>> next(pipe(conf=conf))
-        'Help Page -- ScienceDaily'
+        >>> next(pipe(conf=conf)) == 'Help Page -- ScienceDaily'
+        True
     """
     return parser(*args, **kwargs)
