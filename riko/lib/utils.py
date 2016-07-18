@@ -44,6 +44,10 @@ try:
     from lxml import etree, html
 except ImportError:
     from xml.etree import ElementTree as etree
+    import html5lib as html
+    from xml.etree.ElementTree import ElementTree
+
+    html5parser = None
 else:
     from lxml.html import html5parser
 
@@ -70,6 +74,10 @@ DATES = {
     'now': TODAY,
     'tomorrow': TODAY + timedelta(days=1),
     'yesterday': TODAY - timedelta(days=1)}
+
+NAMESPACES = {
+    'owl': 'http://www.w3.org/2002/07/owl#',
+    'xhtml': 'http://www.w3.org/1999/xhtml'}
 
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
@@ -368,7 +376,7 @@ def parse_rss(url, delay=0):
     return parsed
 
 
-def xpath(tree, path='/', pos=0):
+def xpath(tree, path='/', pos=0, namespace=None):
     try:
         elements = tree.xpath(path)
     except AttributeError:
@@ -377,7 +385,17 @@ def xpath(tree, path='/', pos=0):
         try:
             elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
         except AttributeError:
-            elements = tree.findall('./%s' % '/'.join(tags[1:]))
+            element_name = str(tree).split(' ')[1]
+
+            if not namespace and {'{', '}'}.issubset(element_name):
+                start, end = element_name.find('{') + 1, element_name.find('}')
+                ns = element_name[start:end]
+                ns_iter = (name for name in NAMESPACES if name in ns)
+                namespace = next(ns_iter, namespace)
+
+            prefix = ('/%s:' % namespace) if namespace else '/'
+            match = '.%s%s' % (prefix, prefix.join(tags[1:]))
+            elements = tree.findall(match, NAMESPACES)
         except IndexError:
             elements = [tree]
         else:
@@ -389,13 +407,17 @@ def xpath(tree, path='/', pos=0):
 
 def xml2etree(f, xml=True, html5=False):
     if xml:
-        parser = etree
-    elif html5:
-        parser = html5parser
+        element_tree = etree.parse(f)
+    elif html5 and html5parser:
+        element_tree = html5parser.parse(f)
+    elif html5parser:
+        element_tree = html.parse(f)
     else:
-        parser = html
+        # html5lib's parser returns an Element, so we must convert it into an
+        # ElementTree
+        element_tree = ElementTree(html.parse(f))
 
-    return parser.parse(f)
+    return element_tree
 
 
 def _make_content(i, value=None, tag='content', append=True, strip=False):
