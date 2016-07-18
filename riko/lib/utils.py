@@ -43,7 +43,11 @@ from meza._compat import decode
 try:
     from lxml import etree, html
 except ImportError:
-    from xml.etree import ElementTree as etree
+    try:
+        import xml.etree.cElementTree as etree
+    except ImportError:
+        import xml.etree.ElementTree as etree
+
     import html5lib as html
     from xml.etree.ElementTree import ElementTree
 
