@@ -294,7 +294,7 @@ class processor(object):
         """
         @wraps(pipe)
         def wrapper(item=None, **kwargs):
-            module_name = wrapper.__module__.split('.')[-1].replace('pipe', '')
+            module_name = wrapper.__module__.split('.')[-1]
 
             defaults = {
                 'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
@@ -557,7 +557,7 @@ class operator(object):
         """
         @wraps(pipe)
         def wrapper(items=None, **kwargs):
-            module_name = wrapper.__module__.split('.')[-1].replace('pipe', '')
+            module_name = wrapper.__module__.split('.')[-1]
             wrapper.__dict__['name'] = module_name
 
             defaults = {
