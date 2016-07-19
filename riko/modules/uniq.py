@@ -25,10 +25,10 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
-
-from . import operator
 import pygogo as gogo
+
+from builtins import *
+from . import operator
 
 OPTS = {'extract': 'uniq_key'}
 DEFAULTS = {'uniq_key': 'content'}
@@ -56,12 +56,11 @@ def parser(stream, key, tuples, **kwargs):
         dict: The output
 
     Examples:
-        >>> from riko.lib.dotdict import DotDict
         >>> from itertools import repeat
         >>>
         >>> conf = {'uniq_key': 'mod'}
         >>> kwargs = {'conf': conf}
-        >>> stream = (DotDict({'x': x, 'mod': x % 2}) for x in range(5))
+        >>> stream = ({'x': x, 'mod': x % 2} for x in range(5))
         >>> tuples = zip(stream, repeat(conf['uniq_key']))
         >>> list(parser(stream, conf['uniq_key'], tuples, **kwargs)) == [
         ...     {'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
