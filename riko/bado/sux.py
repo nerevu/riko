@@ -208,7 +208,8 @@ class XMLParser(Protocol):
             self._leadingBodyData = byte
             return 'bodydata'
         elif byte != '<':
-            self._raise_parse_error("First char of document [%r] wasn't <" % (byte,))
+            msg = "First char of document [%r] wasn't <" % (byte,)
+            self._raise_parse_error(msg)
 
         return 'tagstart'
 
