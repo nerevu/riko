@@ -27,22 +27,23 @@ from __future__ import (
 
 import pygogo as gogo
 
+from collections import deque
 from builtins import *
 from . import operator
 
-OPTS = {'extract': 'uniq_key'}
-DEFAULTS = {'uniq_key': 'content'}
+OPTS = {}
+DEFAULTS = {'uniq_key': 'content', 'limit': 1024}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, key, tuples, **kwargs):
+def parser(stream, objconf, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        key (str): the field to extract.
+        objconf (obj): The pipe configuration (an Objectify instance)
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, rules)
             `item` is an element in the source stream (a DotDict instance)
@@ -57,22 +58,25 @@ def parser(stream, key, tuples, **kwargs):
 
     Examples:
         >>> from itertools import repeat
+        >>> from riko.lib.utils import Objectify
         >>>
-        >>> conf = {'uniq_key': 'mod'}
+        >>> conf = {'uniq_key': 'mod', 'limit': 256}
+        >>> objconf = Objectify(conf)
         >>> kwargs = {'conf': conf}
         >>> stream = ({'x': x, 'mod': x % 2} for x in range(5))
-        >>> tuples = zip(stream, repeat(conf['uniq_key']))
-        >>> list(parser(stream, conf['uniq_key'], tuples, **kwargs)) == [
+        >>> tuples = zip(stream, repeat(objconf))
+        >>> list(parser(stream, objconf, tuples, **kwargs)) == [
         ...     {'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
         True
     """
-    seen = set()
+    key, limit = objconf.uniq_key, int(objconf.limit)
+    seen = deque(maxlen=limit)
 
     for item in stream:
         value = item.get(key)
 
         if value not in seen:
-            seen.add(value)
+            seen.append(value)
             yield item
 
 
@@ -86,10 +90,13 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'uniq_key'.
+        conf (dict): The pipe configuration. May contain the keys 'uniq_key' or
+            'limit'.
 
             uniq_key (str): Item attribute which should be unique (default:
                 'content').
+            limit (int): Maximum number of unique items to track (default:
+                1024)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred stream
@@ -124,10 +131,13 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'uniq_key'.
+        conf (dict): The pipe configuration. May contain the keys 'uniq_key' or
+            'limit'.
 
             uniq_key (str): Item attribute which should be unique (default:
                 'content').
+            limit (int): Maximum number of unique items to track (default:
+                1024)
 
     Yields:
         dict: an item
