@@ -37,8 +37,12 @@ Word Count
     >>> page = next(fetchpage.pipe(conf=fetch_conf))
     >>> replaced = next(strreplace.pipe(page, **replace_kwargs))
     >>> words = stringtokenizer.pipe(replaced, **token_kwargs)
-    >>> counts = count.pipe(words)
-    >>> next(counts) == {'count': 70}
+    >>> counts = count.pipe(words, conf={'count_key': 'content'})
+    >>> next(counts) == {'$': 2}
+    True
+    >>> next(counts) == {'$Date:': 1}
+    True
+    >>> next(counts) == {'$Revision:': 1}
     True
 
     >>> ### Alternatively, create a SyncPipe workflow ###
@@ -50,10 +54,10 @@ Word Count
     >>> stream = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
     ...     .stringtokenizer(conf={'delimiter': ' '}, emit=True)
-    ...     .count()
+    ...     .count(conf={'count_key': 'content'})
     ...     .output)
     >>>
-    >>> next(stream) == {'count': 70}
+    >>> next(stream) == {'$': 2}
     True
 
 
@@ -319,9 +323,15 @@ Design Principles
     # check metadata
     >>> from riko.modules import fetchpage, count
     >>>
-    >>> async_resp = ('processor', 'source') if _isasync else (None, None)
+    >>> if _isasync:
+    ...     async_resp = ('processor', 'fetchpage', 'source')
+    ... else:
+    ...     async_resp = (None, None, None)
+    >>>
     >>> async_pdict = fetchpage.async_pipe.__dict__
-    >>> (async_pdict.get('type'), async_pdict.get('sub_type')) == async_resp
+    >>> (async_pdict.get('type'), async_pdict.get('name')) == async_resp[:2]
+    True
+    >>> async_pdict.get('sub_type') == async_resp[2]
     True
     >>> pdict = count.pipe.__dict__
     >>> sync_resp = ('operator', 'count', 'aggregator')

@@ -84,6 +84,7 @@ def async_parser(_, objconf, skip, **kwargs):
         ext = splitext(url)[1].lstrip('.')
         f = yield io.async_url_open(url)
         stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
+        f.close()
 
     result = (stream, skip)
     return_value(result)

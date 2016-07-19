@@ -47,7 +47,7 @@ def async_parser(stream, rules, tuples, **kwargs):
         stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        keys (List[obj]): the item independent keys (Objectify instances).
+        rules (List[obj]): the item independent rules (Objectify instances).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
             `item` is an element in the source stream and `objconf` is the item
@@ -96,7 +96,7 @@ def parser(stream, rules, tuples, **kwargs):
         stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        keys (List[obj]): the item independent keys (Objectify instances).
+        rules (List[obj]): the item independent rules (Objectify instances).
 
         tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
             `item` is an element in the source stream and `objconf` is the item
