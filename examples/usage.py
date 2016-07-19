@@ -37,8 +37,12 @@ Word Count
     >>> page = next(fetchpage.pipe(conf=fetch_conf))
     >>> replaced = next(strreplace.pipe(page, **replace_kwargs))
     >>> words = stringtokenizer.pipe(replaced, **token_kwargs)
-    >>> counts = count.pipe(words)
-    >>> next(counts) == {'count': 70}
+    >>> counts = count.pipe(words, conf={'count_key': 'content'})
+    >>> next(counts) == {'$': 2}
+    True
+    >>> next(counts) == {'$Date:': 1}
+    True
+    >>> next(counts) == {'$Revision:': 1}
     True
 
     >>> ### Alternatively, create a SyncPipe workflow ###
@@ -50,10 +54,10 @@ Word Count
     >>> stream = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
     ...     .stringtokenizer(conf={'delimiter': ' '}, emit=True)
-    ...     .count()
+    ...     .count(conf={'count_key': 'content'})
     ...     .output)
     >>>
-    >>> next(stream) == {'count': 70}
+    >>> next(stream) == {'$': 2}
     True
 
 

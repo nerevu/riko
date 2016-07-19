@@ -73,25 +73,30 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> #
     >>> # Notes:
     >>> #   1. the `detag` option will strip all html tags from the result
-    >>> #   2. fetch the text contained inside the 'body' tag of the hackernews homepage
+    >>> #   2. fetch the text contained inside the 'body' tag of the hackernews
+    >>> #      homepage
     >>> #   3. replace newlines with spaces and assign the result to 'content'
     >>> #   4. tokenize the resulting text using whitespace as the delimeter
-    >>> #   5. count the number of tokens
+    >>> #   5. count the number of each token
     >>> #   6. obtain the raw stream
     >>> #   7. extract the token count
     >>> url = 'https://news.ycombinator.com/'
-    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 1
-    >>> replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
+    >>> fetch_conf = {
+    ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 1
+    >>> replace_conf = {
+    ...     'rule': [
+    ...         {'find': '\r\n', 'replace': ' '},
+    ...         {'find': '\n', 'replace': ' '}]}
     >>>
     >>> flow = (
-    ...     SyncPipe('fetchpage', conf=fetch_conf)                                     # 2
-    ...         .strreplace(conf=replace_conf, assign='content')                       # 3
-    ...         .stringtokenizer(conf={'delimiter': ' '}, emit=True)                   # 4
-    ...         .count())                                                              # 5
+    ...     SyncPipe('fetchpage', conf=fetch_conf)                           # 2
+    ...         .strreplace(conf=replace_conf, assign='content')             # 3
+    ...         .stringtokenizer(conf={'delimiter': ' '}, emit=True)         # 4
+    ...         .count(conf={'count_key': 'content'}))                       # 5
     >>>
-    >>> stream = flow.output                                                           # 6
-    >>> next(stream)                                                                   # 7
-    {'count': 709}
+    >>> stream = flow.output                                                 # 6
+    >>> next(stream)                                                         # 7
+    {"'sad": 1}
 
 
 Motivation

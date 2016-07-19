@@ -19,27 +19,31 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import itertools as it
 import pygogo as gogo
+
+from operator import itemgetter
 from builtins import *
 
 from . import operator
 
-# disable `dictize` since we do not need to access the configuration
-OPTS = {'dictize': False, 'ptype': 'none'}
+OPTS = {'extract': 'count_key'}
+DEFAULTS = {'count_key': None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, _, tuples, **kwargs):
+def parser(stream, key, tuples, **kwargs):
     """ Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        _ (None): Ignored.
+        key (str): the field to group by.
 
-        tuples (Iter[(dict, None)]): Iterable of tuples of (item, None)
-            `item` is an element in the source. Note: this shares the
+        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
+            `item` is an element in the source stream and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the
             `stream` iterator, so consuming it will consume `stream` as well.
 
         kwargs (dict): Keyword arguments.
@@ -48,7 +52,7 @@ def parser(stream, _, tuples, **kwargs):
         conf (dict): The pipe configuration.
 
     Returns:
-        dict: The output
+        mixed: The output either a dict or iterable of dicts
 
     Examples:
         >>> from itertools import repeat
@@ -57,11 +61,28 @@ def parser(stream, _, tuples, **kwargs):
         >>> tuples = zip(stream, repeat(None))
         >>> parser(stream, None, tuples, assign='content') == {'content': 5}
         True
+        >>> conf = {'count_key': 'word'}
+        >>> kwargs = {'conf': conf}
+        >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]
+        >>> tuples = zip(stream, repeat(conf['count_key']))
+        >>> counted = parser(stream, conf['count_key'], tuples, **kwargs)
+        >>> next(counted) == {'one': 1}
+        True
+        >>> next(counted) == {'two': 2}
+        True
     """
-    return {kwargs['assign']: len(list(stream))}
+    if key:
+        keyfunc = itemgetter(key)
+        sorted_stream = sorted(stream, key=keyfunc)
+        grouped = it.groupby(sorted_stream, keyfunc)
+        counted = ({key: len(list(group))} for key, group in grouped)
+    else:
+        counted = {kwargs['assign']: len(list(stream))}
+
+    return counted
 
 
-@operator(isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
     """An aggregator that asynchronously and eagerly counts the number of items
     in a stream. Note that this pipe is not lazy.
@@ -71,8 +92,17 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'assign'.
-            assign (str): Attribute to assign parsed content (default: count)
+        conf (dict): The pipe configuration. May contain the keys 'assign' or
+            'count_key'.
+
+            assign (str): Attribute to assign parsed content. If `count_key` is
+                set, this is ignored and the group keys are used instead.
+                (default: content)
+
+            count_key (str): Item attribute to count by. This will group items
+                in the stream by the given key and report a count for each
+                group (default: None).
+
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the number of
@@ -98,7 +128,7 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@operator(**OPTS)
+@operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """An aggregator that eagerly counts the number of items in a stream.
     Note that this pipe is not lazy.
@@ -108,15 +138,29 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'assign'.
-            assign (str): Attribute to assign parsed content (default: content)
+        conf (dict): The pipe configuration. May contain the  keys 'assign' or
+            'count_key'.
+
+            assign (str): Attribute to assign parsed content. If `count_key` is
+                set, this is ignored and the group keys are used instead.
+                (default: content)
+
+            count_key (str): Item attribute to count by. This will group items
+                in the stream by the given key and report a count for each
+                group (default: None).
 
     Yields:
         dict: the number of counted items
 
     Examples:
-        >>> items = ({'x': x} for x in range(5))
-        >>> next(pipe(items))['count']
-        5
+        >>> stream = ({'x': x} for x in range(5))
+        >>> next(pipe(stream)) == {'count': 5}
+        True
+        >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]
+        >>> counted = pipe(stream, conf={'count_key': 'word'})
+        >>> next(counted) == {'one': 1}
+        True
+        >>> next(counted) == {'two': 2}
+        True
     """
     return parser(*args, **kwargs)
