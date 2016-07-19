@@ -135,6 +135,7 @@ def async_parser(_, objconf, skip, **kwargs):
             logger.error(traceback.format_exc())
 
         elements = utils.xpath(tree, objconf.xpath)
+        f.close()
         items = map(util.etree2dict, elements)
         stringified = ({kwargs['assign']: encode(i)} for i in items)
         stream = stringified if objconf.stringify else items
