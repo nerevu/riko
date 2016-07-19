@@ -17,7 +17,7 @@ from __future__ import (
 from os import environ
 from sys import executable
 from functools import partial
-from html.entities import entitydefs, name2codepoint
+from html.entities import name2codepoint
 
 from builtins import *
 
@@ -35,51 +35,51 @@ else:
     from . import microdom
     from .microdom import EntityReference
 
-    asyncNone = defer.succeed(None)
-    asyncReturn = partial(defer.succeed)
-    asyncPartial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
-
-DEF2NAME = {v: k for k, v in entitydefs.items()}
+    async_none = defer.succeed(None)
+    async_return = partial(defer.succeed)
+    async_partial = lambda f, **kwargs: partial(maybeDeferred, f, **kwargs)
 
 
-def asyncSleep(seconds):
+def async_sleep(seconds):
     d = Deferred()
     callLater(seconds, d.callback, None)
     return d
 
 
-def deferToProcess(source, function, *args, **kwargs):
-    command = "from %s import %s\n%s(*%s, **%s)" % (
-        source, function, function, args, kwargs)
-
+def defer_to_process(command):
     return getProcessOutput(executable, ['-c', command], environ)
 
 
 def def2unicode(entitydef):
     """Convert an HTML entity reference into unicode.
-    Double check if I need this since it seems to convert the input back into
-    itself!
+    http://stackoverflow.com/a/58125/408556
     """
-    try:
-        name = DEF2NAME[entitydef]
-    except KeyError:
-        cp = int(entitydef.lstrip('&#').rstrip(';'))
-    else:
-        cp = name2codepoint[name]
+    if entitydef.startswith('&#x'):
+        cp = int(entitydef[3:-1], 16)
+    elif entitydef.startswith('&#'):
+        cp = int(entitydef[2:-1])
+    elif entitydef.startswith('&'):
+        cp = name2codepoint[entitydef[1:-1]]
 
     return chr(cp)
 
 
-def xml2etree(f, html=False):
-    if hasattr(f, 'read'):
-        parse = microdom.parse if html else microdom.parseXML
+def xml2etree(f, xml=True):
+    readable = hasattr(f, 'read')
+
+    if xml and readable:
+        parse = microdom.parseXML
+    elif readable:
+        parse = partial(microdom.parse, lenient=True)
+    elif xml:
+        parse = microdom.parseXMLString
     else:
-        parse = microdom.parseString
+        parse = partial(microdom.parseString, lenient=True)
 
     return parse(f)
 
 
-def etreeToDict(element, tag='content'):
+def etree2dict(element, tag='content'):
     """Convert a microdom element tree into a dict imitating how Yahoo Pipes
     does it.
 
@@ -95,7 +95,7 @@ def etreeToDict(element, tag='content'):
 
     for child in element.childNodes:
         tag = child.tagName if hasattr(child, 'tagName') else 'content'
-        value = etreeToDict(child, tag)
+        value = etree2dict(child, tag)
 
         # try to join the content first since microdom likes to split up
         # elements that contain a mix of text and entity reference

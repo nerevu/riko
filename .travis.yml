@@ -61,6 +61,7 @@ before_install:
       fi
 
 install:
+  - pip install -r dev-requirements.txt
   - |
       if [[ $TRAVIS_PYTHON_VERSION == *"3"* ]]; then
         pip install -r requirements.txt
@@ -72,7 +73,6 @@ install:
         pip wheel -r optional-requirements.txt
         pip install -r optional-requirements.txt
       fi
-  - pip install -r dev-requirements.txt
 
 script:
   - manage lint

@@ -17,7 +17,7 @@ from builtins import *
 from six.moves.urllib.request import urlopen
 from meza._compat import decode
 from riko.bado import coroutine, return_value
-from riko.bado.io import urlOpen
+from riko.bado.io import async_url_open
 
 TIMEOUT = 10
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -57,7 +57,7 @@ def asyncGetRSS(url, convert_charrefs=False):
         parser = LinkParser()
 
     try:
-        f = yield urlOpen(url, timeout=TIMEOUT)
+        f = yield async_url_open(url, timeout=TIMEOUT)
     except ValueError:
         f = filter(None, url.splitlines())
 

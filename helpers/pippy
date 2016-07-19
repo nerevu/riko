@@ -12,7 +12,7 @@ _install () {
     if [ $package == 'wheel' ]; then
       pip install wheel
     else
-      pip download --src="$PIP_CACHE_DIR" $package
+      pip download --cache-dir="$PIP_CACHE_DIR" $package
       pip wheel --wheel-dir="$PIP_WHEEL_DIR" --no-index \
         --find-links="$PIP_CACHE_DIR" $package
       pip install --use-wheel --no-index \

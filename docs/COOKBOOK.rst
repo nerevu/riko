@@ -17,7 +17,7 @@ set of values passed into every pipe).
 
 .. code-block:: python
 
-    >>> from riko.modules.pipeinput import pipe
+    >>> from riko.modules.input import pipe
     >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
     >>> next(pipe(conf=conf, inputs={'content': '30'}))
     {'content': 30}
@@ -33,19 +33,16 @@ aka ``items``.
 
     >>> from itertools import chain
     >>> from riko import get_path
-    >>> from riko.modules.pipefetch import pipe as fetch
-    >>> from riko.modules.pipefetchpage import pipe as fetchpage
-    >>> from riko.modules.pipefetchdata import pipe as fetchdata
-    >>> from riko.modules.pipefetchsitefeed import pipe as fetchsitefeed
-    >>> from riko.modules.pipefeedautodiscovery import pipe as autodiscovery
+    >>> from riko.modules import (
+    ...     fetch, fetchdata, fetchsitefeed, feedautodiscovery)
     >>>
     >>> ### Fetch a url ###
-    >>> stream = fetchpage(conf={'url': 'https://news.ycombinator.com'})
+    >>> stream = fetchpage.pipe(conf={'url': 'https://news.ycombinator.com'})
     >>>
     >>> ### Fetch a filepath ###
     >>> #
     >>> # Note: `get_path` just looks up a file in the `data` directory
-    >>> stream = fetchdata(conf={'url': get_path('quote.json')})
+    >>> stream = fetchdata.pipe(conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
@@ -53,13 +50,14 @@ aka ``items``.
     'KRW=X'
 
     >>> ### Fetch an rss feed ###
-    >>> stream = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
+    >>> stream = fetch.pipe(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
     >>> ### Fetch the first rss feed found ###
-    >>> stream = fetchsitefeed(conf={'url': 'http://www.bbc.com/news'})
+    >>> stream = fetchsitefeed.pipe(conf={'url': 'http://www.bbc.com/news'})
     >>>
     >>> ### Find all rss links and fetch the feeds ###
-    >>> entries = autodiscovery(conf={'url': 'http://edition.cnn.com/services/rss'})
+    >>> url = 'http://edition.cnn.com/services/rss'
+    >>> entries = feedautodiscovery.pipe(conf={'url': url})
     >>> urls = (e['link'] for e in entries)
     >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
@@ -96,7 +94,7 @@ Some workflows have ``conf`` values that are wired from other pipes
 .. code-block:: python
 
     >>> from riko import get_path
-    >>> from riko.modules.pipefetch import pipe
+    >>> from riko.modules.fetch import pipe
     >>>
     >>> conf = {'url': {'subkey': 'url'}}
     >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
@@ -116,10 +114,7 @@ style [#]_.
 
     >>> import itertools as it
     >>> from riko import get_path
-    >>> from riko.modules.pipefetchpage import pipe as fetchpage
-    >>> from riko.modules.pipestrreplace import pipe as strreplace
-    >>> from riko.modules.pipestringtokenizer import pipe as stringtokenizer
-    >>> from riko.modules.pipecount import pipe as count
+    >>> from riko.modules import fetchpage, strreplace, stringtokenizer, count
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -141,13 +136,29 @@ style [#]_.
     >>> #
     >>> # Note: because `fetchpage` and `strreplace` each return an iterator of
     >>> # just one item, we can safely call `next` without fear of loosing data
-    >>> page = next(fetchpage(conf=fetch_conf))
-    >>> replaced = next(strreplace(page, conf=replace_conf, assign='content'))
-    >>> words = stringtokenizer(replaced, conf={'delimiter': ' '}, emit=True)
-    >>> counts = count(words)
+    >>> page = next(fetchpage.pipe(conf=fetch_conf))
+    >>> replaced = next(strreplace.pipe(page, conf=replace_conf, assign='content'))
+    >>> words = stringtokenizer.pipe(replaced, conf={'delimiter': ' '}, emit=True)
+    >>> counts = count.pipe(words)
     >>> next(counts)
     {'count': 70}
 
+    >>> from itertools import chain
+    >>> from riko import get_path
+    >>> from riko.modules import fetch, filter, subelement, regex, sort
+    >>>
+    >>> ### Set the pipe configurations ###
+    >>> #
+    >>> # Note: `get_path` just looks up files in the `data` directory to
+    >>> # simplify testing
+    >>> fetch_conf = {'url': get_path('feed.xml')}
+    >>> filter_rule = {
+    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
+    >>> sub_conf = {'path': 'content.value'}
+    >>> match = r'(.*href=")([\w:/.@]+)(".*)'
+    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
+    >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
+    >>>
     >>> ### Create a workflow ###
     >>> #
     >>> # The following workflow will:
@@ -159,13 +170,13 @@ style [#]_.
     >>> #   5. reverse sort the items by the replaced url
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> stream = fetch(conf=fetch_conf)
-    >>> filtered = pfilter(stream, conf={'rule': filter_rule})
-    >>> extracted = (subelement(i, conf=sub_conf, emit=True) for i in filtered)
+    >>> stream = fetch.pipe(conf=fetch_conf)
+    >>> filtered = filter.pipe(stream, conf={'rule': filter_rule})
+    >>> extracted = (subelement.pipe(i, conf=sub_conf, emit=True) for i in filtered)
     >>> flat_extract = chain.from_iterable(extracted)
-    >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
+    >>> matched = (regex.pipe(i, conf={'rule': regex_rule}) for i in flat_extract)
     >>> flat_match = chain.from_iterable(matched)
-    >>> sorted_match = sort(flat_match, conf=sort_conf)
+    >>> sorted_match = sort.pipe(flat_match, conf=sort_conf)
     >>> next(sorted_match)
     {'content': 'mailto:mail@writetoreply.org'}
 
@@ -175,4 +186,4 @@ Notes
 .. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
 
 .. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
-.. _class based workflows: https://github.com/reubano/riko/blob/master/README.rst#synchronous-processing
+.. _class based workflows: https://github.com/nerevu/riko/blob/master/README.rst#synchronous-processing

@@ -24,7 +24,7 @@ from __future__ import (
 import re
 import itertools as it
 
-from io import open, StringIO
+from io import open, BytesIO, StringIO
 from functools import partial
 from builtins import *
 
@@ -39,10 +39,9 @@ from .sux import XMLParser, ParseError
 from riko.lib.utils import combine_dicts
 
 # order is important
-HTML_ESCAPE_CHARS = (('&', '&amp;'),  # don't add any entities before this one
-                    ('<', '&lt;'),
-                    ('>', '&gt;'),
-                    ('"', '&quot;'))
+HTML_ESCAPE_CHARS = (
+    ('&', '&amp;'),  # don't add any entities before this one
+    ('<', '&lt;'), ('>', '&gt;'), ('"', '&quot;'))
 
 REV_HTML_ESCAPE_CHARS = list(HTML_ESCAPE_CHARS)
 REV_HTML_ESCAPE_CHARS.reverse()
@@ -80,13 +79,10 @@ def _gen_prefix():
         yield 'p' + str(i)
 
 
-def getElementsByTagName(iNode, name, icase=False):
+def getElementsByTagName(iNode, path, icase=False):
     """
     Return a list of all child elements of C{iNode} with a name matching
     C{name}.
-
-    Note that this implementation does not conform to the DOM Level 1 Core
-    specification because it may return C{iNode}.
 
     @param iNode: An element at which to begin searching.  If C{iNode} has a
         name matching C{name}, it will be included in the result.
@@ -96,25 +92,28 @@ def getElementsByTagName(iNode, name, icase=False):
     @return: A C{list} of direct or indirect child elements of C{iNode} with
         the name C{name}.  This may include C{iNode}.
     """
+    same = lambda x, y: x.lower() == y.lower() if icase else x == y
     is_node = hasattr(iNode, 'nodeName')
+    has_bracket = '[' in path
 
-    if is_node and icase and iNode.nodeName.lower() == name.lower():
-        yield iNode
-    elif is_node and iNode.nodeName == name:
+    if is_node and not has_bracket and same(iNode.nodeName, path):
         yield iNode
 
-    if hasattr(iNode, 'childNodes'):
-        for c in getElementsByTagName(iNode.childNodes, name, icase):
+    if is_node and iNode.hasChildNodes():
+        for c in getElementsByTagName(iNode.childNodes, path, icase):
             yield c
-    else:
+
+    if not is_node:
+        name = path[:path.find('[')] if has_bracket else path
+        pos = int(path[path.find('[') + 1:-1]) - 1 if has_bracket else 0
+        nodes = [n for n in iNode if same(n.nodeName, name)]
+
+        if pos < len(nodes):
+            yield nodes[pos]
+
         for child in iNode:
-            for c in getElementsByTagName(child, name, icase):
+            for c in getElementsByTagName(child, path, icase):
                 yield c
-
-
-def getElementsByTagNameNoCase(iNode, name):
-    for c in getElementsByTagName(iNode, name, True):
-        yield c
 
 
 class MismatchedTags(Exception):
@@ -341,12 +340,11 @@ class Document(Node):
         return Comment(text)
 
     def getElementsByTagName(self, name):
-        if self.documentElement.case_insensitive:
-            return getElementsByTagNameNoCase(self, name)
-
-        return getElementsByTagName(self, name)
+        icase = self.documentElement.case_insensitive
+        return getElementsByTagName(self.childNodes, name, icase)
 
     def getElementById(self, id):
+        # TODO: rewrite this!!
         childNodes = self.childNodes[:]
 
         while childNodes:
@@ -354,7 +352,8 @@ class Document(Node):
 
             if node.childNodes:
                 childNodes.extend(node.childNodes)
-            if hasattr(node, 'getAttribute') and node.getAttribute("id") == id:
+
+            if hasattr(node, 'getAttribute') and node.getAttribute('id') == id:
                 return node
 
 
@@ -536,10 +535,8 @@ class Element(Node):
         return clone
 
     def getElementsByTagName(self, name):
-        if self.case_insensitive:
-            return getElementsByTagNameNoCase(self, name)
-
-        return getElementsByTagName(self, name)
+        icase = self.case_insensitive
+        return getElementsByTagName(self.childNodes, name, icase)
 
     def hasAttributes(self):
         return 1
@@ -760,20 +757,20 @@ class MicroDOMParser(XMLParser):
         'option': ['option'],
     }
 
-    def __init__(self, lenient=False, case_insensitive=True, **kwargs):
+    def __init__(self, case_insensitive=True, **kwargs):
+        # Protocol is an old style class so we can't use super
+        XMLParser.__init__(self, **kwargs)
         self.elementstack = []
         d = {'xmlns': 'xmlns', '': None}
         dr = invert_dict(d)
         self.nsstack = [(d, None, dr)]
         self.documents = []
         self._mddoctype = None
-        self.lenient = lenient
-        self.strict = not lenient
         self.case_insensitive = case_insensitive
         self.preserve_case = case_insensitive
         self.soonClosers = kwargs.get('soonClosers', self.def_soon_closers)
         self.laterClosers = kwargs.get('laterClosers', self.def_later_closers)
-        # self.indentlevel = 0
+        self.indentlevel = 0
 
     def shouldPreserveSpace(self):
         for idx, _ in enumerate(self.elementstack):
@@ -877,8 +874,8 @@ class MicroDOMParser(XMLParser):
                 yield (k, v)
 
     def gotTagStart(self, name, attributes):
-        # print ' '*self.indentlevel, 'start tag',name
-        # self.indentlevel += 1
+        # logger.debug('%s<%s>', ' ' * self.indentlevel, name)
+        self.indentlevel += 2
         parent = self._getparent()
         parent = self._check_parent(parent, name)
 
@@ -979,6 +976,9 @@ class MicroDOMParser(XMLParser):
             self._fixScriptElement(el)
 
     def gotTagEnd(self, name):
+        self.indentlevel -= 2
+        # logger.debug('%s</%s>', ' ' * self.indentlevel, name)
+
         if self.lenient and not self.elementstack:
             return
         elif not self.elementstack:
@@ -1023,9 +1023,8 @@ def parse(f, *args, **kwargs):
     """Parse HTML or XML readable."""
     fp = f.fp if hasattr(f, 'fp') else f
     readable = fp if hasattr(fp, 'read') else open(f, 'rb')
-
-    mdp = MicroDOMParser(*args, **kwargs)
-    mdp.filename = getattr(readable, 'name', '<xmlfile />')
+    filename = getattr(readable, 'name', 'unnamed')
+    mdp = MicroDOMParser(filename=filename, **kwargs)
     mdp.makeConnection(None)
 
     try:
@@ -1056,8 +1055,9 @@ def parse(f, *args, **kwargs):
     return doc
 
 
-def parseString(st, *args, **kw):
-    return parse(StringIO(encode(st)), *args, **kw)
+def parseString(content, *args, **kwargs):
+    f = BytesIO(encode(content))
+    return parse(f, *args, **kwargs)
 
 
 def parseXML(readable):
@@ -1065,6 +1065,6 @@ def parseXML(readable):
     return parse(readable, case_insensitive=True)
 
 
-def parseXMLString(st):
+def parseXMLString(content):
     """Parse an XML readable object."""
-    return parseString(st, case_insensitive=True)
+    return parseString(content, case_insensitive=True)

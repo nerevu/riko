@@ -9,14 +9,16 @@ Examples:
     basic usage::
 
         >>> from riko import get_path
-        >>> from riko.bado.io import urlOpen
+        >>> from riko.bado.io import async_url_open
 """
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import pygogo as gogo
 
-from io import StringIO, open
+from io import open
+from tempfile import NamedTemporaryFile
+from os import remove
 
 from builtins import *
 from meza._compat import encode
@@ -52,9 +54,7 @@ class FileReader(AccumulatingProtocol):
         self.producer.stopProducing()
 
     def resumeProducing(self):
-        chunk = ''
-        if self.file:
-            chunk = self.file.read(self.CHUNK_SIZE)
+        chunk = self.file.read(self.CHUNK_SIZE) if self.file else ''
 
         if not chunk:
             self.file = None
@@ -85,7 +85,7 @@ class FileReader(AccumulatingProtocol):
 
 
 @coroutine
-def readFile(filename, transport, protocol=FileReader, **kwargs):
+def async_read_file(filename, transport, protocol=FileReader, **kwargs):
     proto = protocol(filename.replace('file://', ''), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
@@ -94,7 +94,7 @@ def readFile(filename, transport, protocol=FileReader, **kwargs):
 
 
 @coroutine
-def getFile(filename, transport, protocol=FileReader, **kwargs):
+def async_get_file(filename, transport, protocol=FileReader, **kwargs):
     proto = protocol(filename.replace('file://', ''), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
@@ -103,22 +103,27 @@ def getFile(filename, transport, protocol=FileReader, **kwargs):
 
 
 @coroutine
-def urlOpen(url, timeout=0, **kwargs):
+def async_url_open(url, timeout=0, **kwargs):
     if url.startswith('http'):
-        # returns unicode in py2 but bytes in py3
-        f = StringIO()
-        yield downloadPage(encode(url), f, timeout=timeout)
-        f.seek(0)
+        page = NamedTemporaryFile(delete=False)
+        new_url = page.name
+        yield downloadPage(encode(url), page, timeout=timeout)
     else:
-        f = yield getFile(url, StringTransport(), **kwargs)
+        page, new_url = None, url
+
+    f = yield async_get_file(new_url, StringTransport(), **kwargs)
+
+    if page:
+        page.close()
+        remove(page.name)
 
     return_value(f)
 
 
-def urlRead(url, timeout=0, **kwargs):
+def async_url_read(url, timeout=0, **kwargs):
     if url.startswith('http'):
         content = getPage(encode(url), timeout=timeout)
     else:
-        content = readFile(url, StringTransport(), **kwargs)
+        content = async_read_file(url, StringTransport(), **kwargs)
 
     return content
