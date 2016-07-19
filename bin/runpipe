@@ -12,25 +12,28 @@ from os import path as p
 from importlib import import_module
 
 try:
-    from importlib.util import spec_from_file_location, module_from_spec
+    # python 3.3+
+    from importlib.machinery import SourceFileLoader
 except ImportError:
     try:
-        from importlib.machinery import SourceFileLoader
-        io_error = FileNotFoundError
-        load_file = lambda name, src: SourceFileLoader(name, src).load_module()
+        # python 3.4+
+        from importlib.util import spec_from_file_location, module_from_spec
     except ImportError:
+        # python 2.7-
         from imp import load_source as load_file
         io_error = IOError
+    else:
+        io_error = FileNotFoundError
+
+        def load_file(name, src):
+            location = 'examples/%s.py' % src
+            spec = spec_from_file_location(name, location)
+            module = module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
 else:
     io_error = FileNotFoundError
-
-    def load_file(name, src):
-        location = 'examples/%s.py' % src
-        spec = spec_from_file_location(name, location)
-        module = module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-
+    load_file = lambda name, src: SourceFileLoader(name, src).load_module()
 
 from argparse import RawTextHelpFormatter, ArgumentParser
 from riko.bado import react
