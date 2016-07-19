@@ -1,4 +1,5 @@
 *.py[cod]
+*/.ipynb*
 
 # C extensions
 *.so
@@ -9,6 +10,7 @@
 dist
 build
 eggs
+.eggs/*
 parts
 var
 sdist
@@ -24,6 +26,7 @@ pip-log.txt
 .tox
 .noseids
 .scripttest
+.cache/*
 nosetests.xml
 *.ropeproject
 cover/*

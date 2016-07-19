@@ -96,7 +96,7 @@ and ``pipereverse``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipereverse import pipe
+    >>> from riko.modules.reverse import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
     >>> next(pipe(stream))
@@ -107,7 +107,7 @@ and ``pipereverse``.
 
 .. code-block:: python
 
-    >>> from riko.modules.pipehash import pipe
+    >>> from riko.modules.hash import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> stream = pipe(item, field='title')
@@ -175,4 +175,4 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _What file types are supported: #what-file-types-are-supported
 .. _What protocols are supported: #what-protocols-are-supported
 .. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
-.. _Alternate workflow creation: https://github.com/reubano/riko/blob/master/COOKBOOK.rst#synchronous-processing
+.. _Alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#synchronous-processing

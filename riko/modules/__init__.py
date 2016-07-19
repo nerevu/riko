@@ -12,7 +12,7 @@ import pygogo as gogo
 from functools import partial, wraps
 from itertools import chain
 
-from builtins import *
+from builtins import iter, len, list, map, next, sum
 
 from riko.bado import coroutine, return_value
 from riko.lib import utils
@@ -22,62 +22,62 @@ from riko.lib.utils import combine_dicts as cdicts, remove_keys
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 __sources__ = [
-    'pipecsv',
-    'pipefeedautodiscovery',
-    'pipefetch',
-    'pipefetchdata',
-    'pipefetchpage',
-    'pipefetchsitefeed',
-    'pipeitembuilder',
-    'piperssitembuilder',
-    'pipexpathfetchpage',
-    'pipeyql',
-    'pipeinput',
+    'csv',
+    'feedautodiscovery',
+    'fetch',
+    'fetchdata',
+    'fetchpage',
+    'fetchsitefeed',
+    'itembuilder',
+    'rssitembuilder',
+    'xpathfetchpage',
+    'yql',
+    'input',
 ]
 
 __aggregators__ = [
-    'pipecount',
-    # 'pipemean',
-    # 'pipemin',
-    # 'pipemax',
-    # 'pipesum',
+    'count',
+    # 'mean',
+    # 'min',
+    # 'max',
+    # 'sum',
 ]
 
 __composers__ = [
-    'pipefilter',
-    'pipereverse',
-    'pipesort',
-    'pipesplit',
-    'pipetail',
-    'pipetruncate',
-    'pipeunion',
-    'pipeuniq',
-    # 'pipewebservice',
+    'filter',
+    'reverse',
+    'sort',
+    'split',
+    'tail',
+    'truncate',
+    'union',
+    'uniq',
+    # 'webservice',
 ]
 
 __transformers__ = [
-    'piperegex',
-    'piperename',
-    'pipesubelement',
-    # 'pipelocationextractor',
-    'pipeurlbuilder',
-    'pipeexchangerate',
-    'pipehash',
-    'pipestrconcat',
-    'pipestrreplace',
-    'pipestringtokenizer',
-    'pipestrtransform',
-    'pipesubstr',
-    # 'pipetermextractor',
-    # 'pipetranslate',
-    # 'pipeyahooshortcuts',
-    'pipedateformat',
-    'pipesimplemath',
-    'pipecurrencyformat',
-    # 'pipeoutputjson',
-    # 'pipeoutputical',
-    # 'pipeoutputkml',
-    # 'pipeoutputcsv',
+    'regex',
+    'rename',
+    'subelement',
+    # 'locationextractor',
+    'urlbuilder',
+    'exchangerate',
+    'hash',
+    'strconcat',
+    'strreplace',
+    'stringtokenizer',
+    'strtransform',
+    'substr',
+    # 'termextractor',
+    # 'translate',
+    # 'yahooshortcuts',
+    'dateformat',
+    'simplemath',
+    'currencyformat',
+    # 'outputjson',
+    # 'outputical',
+    # 'outputkml',
+    # 'outputcsv',
 ]
 
 __all__ = __sources__ + __composers__ + __transformers__ + __aggregators__
@@ -178,7 +178,7 @@ class processor(object):
                 input `item`.
 
         Examples:
-            >>> from riko.bado import react, util as tu, _issync
+            >>> from riko.bado import react, util, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> @processor()
@@ -199,7 +199,7 @@ class processor(object):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
-            ...         content = yield tu.asyncReturn(item['content'])
+            ...         content = yield util.async_return(item['content'])
             ...         stream = 'say "%s" %s times!' % (content, objconf.times)
             ...
             ...     result = stream, skip
@@ -413,7 +413,7 @@ class operator(object):
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import react, util as tu, _issync
+            >>> from riko.bado import react, util, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> # emit is True by default
@@ -435,7 +435,7 @@ class operator(object):
             ... @coroutine
             ... def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in tuples:
-            ...         content = yield tu.asyncReturn(item['content'])
+            ...         content = yield util.async_return(item['content'])
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
             ...         return_value(value)
             ...

@@ -20,9 +20,9 @@ sys.path.append('../riko')
 
 from riko import get_path
 from riko.bado import coroutine, return_value, react
-from riko.bado.util import asyncSleep
-from riko.bado.itertools import asyncImap
-from riko.modules.pipefetch import pipe, asyncPipe
+from riko.bado.util import async_sleep
+from riko.bado.itertools import async_imap
+from riko.modules.fetch import pipe, async_pipe
 from riko.collections.async import AsyncPipe, AsyncCollection
 from riko.collections.sync import (
     SyncPipe, SyncCollection, get_chunksize, get_worker_cnt)
@@ -92,16 +92,16 @@ def par_sync_collection():
 
 
 def baseline_async():
-    return asyncImap(asyncSleep, iterable)
+    return async_imap(async_sleep, iterable)
 
 
 def async_pipeline():
-    d = asyncImap(lambda conf: asyncPipe(conf=conf), confs)
+    d = async_imap(lambda conf: async_pipe(conf=conf), confs)
     d.addCallbacks(list, print)
 
 def async_pipe():
     asyncCallable = lambda conf: AsyncPipe('fetch', conf=conf).list
-    d = asyncImap(asyncCallable, confs)
+    d = async_imap(asyncCallable, confs)
     d.addCallbacks(list, print)
 
 

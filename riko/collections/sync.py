@@ -58,30 +58,34 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 class PyPipe(object):
     """A riko module fetching object"""
-    def __init__(self, name=None, parallel=False, **kwargs):
+    def __init__(self, name=None, source=None, parallel=False, **kwargs):
         self.name = name
         self.parallel = parallel
-        self.kwargs = kwargs
-
-
-class SyncPipe(PyPipe):
-    """A synchronous Pipe object"""
-    def __init__(self, name=None, source=None, workers=None, **kwargs):
-        super(SyncPipe, self).__init__(name, **kwargs)
-        chunksize = kwargs.get('chunksize')
 
         if kwargs.pop('listize', False) and source:
             self.source = list(source)
         else:
             self.source = source or []
 
+        self.kwargs = kwargs
+
+    def __call__(self, **kwargs):
+        self.kwargs = kwargs
+        return self
+
+
+class SyncPipe(PyPipe):
+    """A synchronous Pipe object"""
+    def __init__(self, name=None, source=None, workers=None, **kwargs):
+        super(SyncPipe, self).__init__(name, source, **kwargs)
+        chunksize = kwargs.get('chunksize')
+
         self.threads = kwargs.get('threads', True)
         self.reuse_pool = kwargs.get('reuse_pool', True)
         self.pool = kwargs.get('pool')
 
         if self.name:
-            self.module = import_module('riko.modules.pipe%s' % self.name)
-            self.pipe = self.module.pipe
+            self.pipe = import_module('riko.modules.%s' % self.name).pipe
             self.is_processor = self.pipe.__dict__.get('type') == 'processor'
             self.mapify = self.is_processor and self.source
             self.parallelize = self.parallel and self.mapify
@@ -114,10 +118,6 @@ class SyncPipe(PyPipe):
 
         return SyncPipe(name, source=self.output, **kwargs)
 
-    def __call__(self, **kwargs):
-        self.kwargs = kwargs
-        return self
-
     @property
     def output(self):
         pipeline = partial(self.pipe, **self.kwargs)
@@ -144,7 +144,6 @@ class PyCollection(object):
     def __init__(self, sources, parallel=False, workers=None, **kwargs):
         self.sources = sources
         self.parallel = parallel
-        self.workers = workers
         self.sleep = kwargs.get('sleep', 0)
         self.zargs = zip(self.sources, repeat(self.sleep))
         self.length = lenish(self.sources)
@@ -188,7 +187,7 @@ def get_worker_cnt(length, threads=True):
 
 
 def lenish(source, default=50):
-    funcs = (len, lambda x: getattr(x, '__length_hint__')())
+    funcs = (len, lambda x: x.__length_hint__())
     errors = (TypeError, AttributeError)
     zipped = list(zip(funcs, errors))
     return multi_try(source, zipped, default)

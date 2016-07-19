@@ -7,3 +7,4 @@ python-dateutil>=2.4.2,<3.0.0
 pygogo~=0.8.13
 requests>=2.10.0,<3.0.0
 six>=1.10.0,<2.0.0
+html5lib==0.9999999

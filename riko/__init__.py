@@ -9,8 +9,8 @@ Examples:
     basic usage::
 
         >>> from itertools import chain
-        >>> from riko.modules.pipeitembuilder import pipe as itembuilder
-        >>> from riko.modules.pipestrreplace import pipe as strreplace
+        >>> from functools import partial
+        >>> from riko.modules import itembuilder, strreplace
         >>> from riko.collections.sync import SyncPipe
         >>>
         >>> ib_conf = {
@@ -22,9 +22,9 @@ Examples:
         >>> sr_conf = {
         ...     'rule': [{'find': 'Tom', 'param': 'first', 'replace': 'Tim'}]}
         >>>
-        >>> items = itembuilder(conf=ib_conf)
-        >>> replaced = (
-        ...     strreplace(i, conf=sr_conf, field='author') for i in items)
+        >>> items = itembuilder.pipe(conf=ib_conf)
+        >>> pipe = partial(strreplace.pipe, conf=sr_conf, field='author')
+        >>> replaced = map(pipe, items)
         >>> next(chain.from_iterable(replaced)) == {
         ...     'link': 'www.google.com', 'title': 'google',
         ...     'strreplace': 'Timmy', 'author': 'Tommy'}
@@ -36,7 +36,7 @@ from __future__ import (
 from os import path as p
 from builtins import *
 
-__version__ = '0.33.0'
+__version__ = '0.34.0'
 
 __title__ = 'riko'
 __package_name__ = 'riko'

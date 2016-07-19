@@ -33,7 +33,7 @@ def pipe(test=False):
 
 
 @coroutine
-def asyncPipe(reactor, test=False):
+def async_pipe(reactor, test=False):
     s1 = yield AsyncPipe('input', test=test, **p120_kwargs).output
     s2 = yield (AsyncPipe('input', conf=p112_conf, test=test)
         .dateformat(conf=p151_conf, format=s1)

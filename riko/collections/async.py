@@ -2,7 +2,8 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.collections.sync
-~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+
 Provides functions for creating asynchronous riko pipes
 
 Examples:
@@ -58,45 +59,42 @@ from builtins import *
 from riko.bado import coroutine, return_value
 from riko.collections.sync import PyPipe, PyCollection, getpipe
 from riko.lib.utils import multiplex
-from riko.bado import util as tu, itertools as ait
+from riko.bado import util, itertools as ait
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class AsyncPipe(PyPipe):
     """An asynchronous PyPipe object"""
-    def __init__(self, name=None, source=None, **kwargs):
-        super(AsyncPipe, self).__init__(name, **kwargs)
-        self.source = source or []
+    def __init__(self, name=None, source=None, connections=16, **kwargs):
+        super(AsyncPipe, self).__init__(name, source, **kwargs)
+        self.connections = connections
 
         if self.name:
-            self.module = import_module('riko.modules.pipe%s' % self.name)
-            self.asyncPipe = self.module.asyncPipe
-            pipe_type = self.asyncPipe.__dict__.get('type')
+            self.module = import_module('riko.modules.%s' % self.name)
+            self.async_pipe = self.module.async_pipe
+            pipe_type = self.async_pipe.__dict__.get('type')
             self.is_processor = pipe_type == 'processor'
             self.mapify = self.is_processor and self.source
         else:
-            self.asyncPipe = lambda source, **kw: tu.asyncReturn(source)
+            self.async_pipe = lambda source, **kw: util.async_return(source)
             self.mapify = False
 
     def __getattr__(self, name):
-        return AsyncPipe(name, source=self.output)
-
-    def __call__(self, **kwargs):
-        self.kwargs = kwargs
-        return self
+        return AsyncPipe(name, source=self.output, connections=self.connections)
 
     @property
     @coroutine
     def output(self):
         source = yield self.source
-        asyncPipeline = partial(self.asyncPipe, **self.kwargs)
+        async_pipeline = partial(self.async_pipe, **self.kwargs)
 
         if self.mapify:
-            mapped = yield ait.asyncImap(asyncPipeline, source)
+            args = (async_pipeline, source, self.connections)
+            mapped = yield ait.async_map(*args)
             output = multiplex(mapped)
         else:
-            output = yield asyncPipeline(source)
+            output = yield async_pipeline(source)
 
         return_value(output)
 
@@ -109,30 +107,35 @@ class AsyncPipe(PyPipe):
 
 class AsyncCollection(PyCollection):
     """An asynchronous PyCollection object"""
+    def __init__(self, sources, connections=16, **kwargs):
+        super(AsyncCollection, self).__init__(sources, **kwargs)
+        self.connections = connections
+
     @coroutine
-    def asyncFetch(self):
+    def async_fetch(self):
         """Fetch all source urls"""
-        mapped = yield ait.asyncImap(asyncGetPipe, self.zargs)
+        args = (async_get_pipe, self.zargs, self.connections)
+        mapped = yield ait.async_map(*args)
         return_value(multiplex(mapped))
 
-    def asyncPipe(self, **kwargs):
+    def async_pipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""
-        return AsyncPipe(source=self.asyncFetch(), **kwargs)
+        return AsyncPipe(source=self.async_fetch(), **kwargs)
 
     @property
     @coroutine
     def list(self):
-        result = yield self.asyncFetch()
+        result = yield self.async_fetch()
         return_value(list(result))
 
 
 @coroutine
-def asyncListPipe(args):
-    source, asyncPipeline = args
-    output = yield asyncPipeline(source)
+def async_list_pipe(args):
+    source, async_pipeline = args
+    output = yield async_pipeline(source)
     return_value(list(output))
 
 
-def asyncGetPipe(args):
+def async_get_pipe(args):
     source, sleep = args
     return getpipe((source, sleep), pipe=AsyncPipe)
