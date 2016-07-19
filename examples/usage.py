@@ -323,9 +323,15 @@ Design Principles
     # check metadata
     >>> from riko.modules import fetchpage, count
     >>>
-    >>> async_resp = ('processor', 'source') if _isasync else (None, None)
+    >>> if _isasync:
+    ...     async_resp = ('processor', 'fetchpage', 'source')
+    ... else:
+    ...     async_resp = (None, None, None)
+    >>>
     >>> async_pdict = fetchpage.async_pipe.__dict__
-    >>> (async_pdict.get('type'), async_pdict.get('sub_type')) == async_resp
+    >>> (async_pdict.get('type'), async_pdict.get('name')) == async_resp[:2]
+    True
+    >>> async_pdict.get('sub_type') == async_resp[2]
     True
     >>> pdict = count.pipe.__dict__
     >>> sync_resp = ('operator', 'count', 'aggregator')

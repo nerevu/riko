@@ -295,7 +295,6 @@ class processor(object):
         @wraps(pipe)
         def wrapper(item=None, **kwargs):
             module_name = wrapper.__module__.split('.')[-1].replace('pipe', '')
-            wrapper.__dict__['name'] = module_name
 
             defaults = {
                 'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
@@ -350,6 +349,7 @@ class processor(object):
                     yield s
 
         is_source = self.opts.get('ftype') == 'none'
+        wrapper.__dict__['name'] = wrapper.__module__.split('.')[-1]
         wrapper.__dict__['type'] = 'processor'
         wrapper.__dict__['sub_type'] = 'source' if is_source else 'transformer'
         return coroutine(wrapper) if self.async else wrapper

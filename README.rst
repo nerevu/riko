@@ -477,7 +477,7 @@ If you are unsure of the type of ``pipe`` you have, check its metadata.
     >>> from riko.modules import fetchpage, count
     >>>
     >>> fetchpage.async_pipe.__dict__
-    {'type': 'processor', 'sub_type': 'source'}
+    {'type': 'processor', 'name': 'fetchpage', 'sub_type': 'source'}
     >>> count.pipe.__dict__
     {'type': 'operator', 'name': 'count', 'sub_type': 'aggregator'}
 
