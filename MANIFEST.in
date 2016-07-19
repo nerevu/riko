@@ -1,3 +1,4 @@
 recursive-include riko/data *
 include *.rst
 include *requirements.txt
+recursive-include helpers *
