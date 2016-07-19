@@ -16,13 +16,13 @@ Introduction
 **riko** is a pure Python `library`_ for analyzing and processing ``streams`` of
 structured data. ``riko`` has `synchronous`_ and `asynchronous`_ APIs, supports `parallel
 execution`_, and is well suited for processing RSS feeds [#]_. ``riko`` also supplies
-a `command-line interface`_ for executing ``flows``.
+a `command-line interface`_ for executing ``flows``, i.e., stream processors aka ``workflows``.
 
 With ``riko``, you can
 
 - Read csv/xml/json/html files
-- Create text and data processing ``flows`` via modular `pipes`_
-- Parse, extract, and process RSS feeds
+- Create text and data based ``flows`` via modular `pipes`_
+- Parse, extract, and process RSS/ATOM feeds
 - Create awesome mashups [#]_, APIs, and maps
 - Perform `parallel processing`_ via cpus/processors or threads
 - and much more...
@@ -77,9 +77,11 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> #      homepage
     >>> #   3. replace newlines with spaces and assign the result to 'content'
     >>> #   4. tokenize the resulting text using whitespace as the delimeter
-    >>> #   5. count the number of each token
+    >>> #   5. count the number of times each token appears
     >>> #   6. obtain the raw stream
-    >>> #   7. extract the token count
+    >>> #   7. extract the first word and its count
+    >>> #   8. extract the second word and its count
+    >>> #   9. extract the third word and its count
     >>> url = 'https://news.ycombinator.com/'
     >>> fetch_conf = {
     ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 1
@@ -97,7 +99,10 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> stream = flow.output                                                 # 6
     >>> next(stream)                                                         # 7
     {"'sad": 1}
-
+    >>> next(stream)                                                         # 8
+    {'(': 28}
+    >>> next(stream)                                                         # 9
+    {'(1999)': 1}
 
 Motivation
 ----------
@@ -105,16 +110,16 @@ Motivation
 Why I built riko
 ^^^^^^^^^^^^^^^^
 
-Yahoo! Pipes [#]_ was a user friendly web application used to::
+Yahoo! Pipes [#]_ was a user friendly web application used to
 
-    aggregate, manipulate, and mashup content from around the web
+  aggregate, manipulate, and mashup content from around the web
 
 Wanting to create custom pipes, I came across `pipe2py`_ which translated a
-Yahoo! Pipes `pipe` into python code. ``pipe2py`` suited my needs at the time
-but was unmaintained and lacked asynchronous or parallel processing APIs.
+Yahoo! Pipe into python code. ``pipe2py`` suited my needs at the time
+but was unmaintained and lacked asynchronous or parallel processing.
 
 ``riko`` addresses the shortcomings of ``pipe2py`` but removed support for
-importing Yahoo! Pipes json workflow schemas. ``riko`` contains ~40 built-in
+importing Yahoo! Pipes json workflows. ``riko`` contains ~40 built-in
 modules, aka ``pipes``, that allow you to programatically perform most of the
 tasks Yahoo! Pipes allowed.
 
@@ -125,10 +130,10 @@ Why you should use riko
 applications such as Huginn, Flink, Spark, and Storm [#]_. Namely:
 
 - a small footprint (CPU and memory usage)
-- native RSS support
+- native RSS/ATOM support
 - simple installation and usage
 - a pure python library with `pypy`_ support
-- modular ``pipes`` to filter, sort, and modify ``streams``
+- builtin modular ``pipes`` to filter, sort, and modify ``streams``
 
 The subsequent tradeoffs ``riko`` makes are:
 
@@ -162,7 +167,7 @@ Notes
 .. [#] Huginn doesn't appear to make `async web requests`_
 .. [#] Many libraries can't parse RSS streams without the use of 3rd party libraries
 .. [#] While most libraries offer a local mode, many require integrating with a data ingestor (e.g., Flume/Kafka) to do anything useful
-.. [#] I can't find evidence that these libraries offer a async APIs (and apparently `Spark doesn't`_)
+.. [#] I can't find evidence that these libraries offer an async APIs (and apparently `Spark doesn't`_)
 
 Usage
 -----
@@ -193,7 +198,7 @@ dictionaries, aka ``items``.
     >>> stream = fetch.pipe(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
     >>> ### Fetch the first RSS feed found ###
-    >>> stream = pipe(conf={'url': 'http://arstechnica.com/rss-feeds/'})
+    >>> stream = fetchsitefeed.pipe(conf={'url': 'http://arstechnica.com/rss-feeds/'})
     >>>
     >>> ### View the fetched RSS feed(s) ###
     >>> #
@@ -226,7 +231,6 @@ Synchronous processing
     >>> ### Set the pipe configurations ###
     >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
     >>> filter_rule = {'field': 'link', 'op': 'contains', 'value': '.com'}
-    >>> sort_conf = {'rule': {'sort_key': 'title'}}
     >>> xpath = '/html/body/center/table/tr[3]/td/table[2]/tr[1]/td/table/tr/td[3]/span/span'
     >>> xpath_conf = {'url': {'subkey': 'comments'}, 'xpath': xpath}
     >>>
@@ -240,19 +244,19 @@ Synchronous processing
     >>> #   2. filter for items with '.com' in the link
     >>> #   3. sort the items ascending by title
     >>> #   4. fetch the first comment from each item
-    >>> #   5. obtain the raw stream
-    >>> #   6. extract the first comment's content
+    >>> #   5. flatten the result into one raw stream
+    >>> #   6. extract the first item's content
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
     >>>
     >>> flow = (
-    ...     SyncPipe('fetch', conf=fetch_conf)       # 1
-    ...         .filter(conf={'rule': filter_rule})  # 2
-    ...         .sort(conf=sort_conf)                # 3
-    ...         .xpathfetchpage(conf=xpath_conf))    # 4
+    ...     SyncPipe('fetch', conf=fetch_conf)               # 1
+    ...         .filter(conf={'rule': filter_rule})          # 2
+    ...         .sort(conf={'rule': {'sort_key': 'title'}})  # 3
+    ...         .xpathfetchpage(conf=xpath_conf))            # 4
     >>>
-    >>> stream = flow.output                         # 5
-    >>> next(stream)['content']                      # 6
+    >>> stream = flow.output                                 # 5
+    >>> next(stream)['content']                              # 6
     'Open Artificial Pancreas home:'
 
 Please see `alternate workflow creation`_ for an alternative (function based) method for
@@ -278,9 +282,9 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
     >>> # The following flow will:
     >>> #   1. fetch the hackernews RSS feed
     >>> #   2. filter for items with '.com' in the article link
-    >>> #   3. fetch the first comment from all items in parallel (use 4 workers)
-    >>> #   4. obtain the raw stream
-    >>> #   5. extract the first comment's content
+    >>> #   3. fetch the first comment from all items in parallel (using 4 workers)
+    >>> #   4. flatten the result into one raw stream
+    >>> #   5. extract the first item's content
     >>> #
     >>> # Note: no point in sorting after the filter since parallel fetching doesn't guarantee
     >>> # order
@@ -312,19 +316,17 @@ An example using ``riko``'s asynchronous API.
     >>> ### Set the pipe configurations ###
     >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
     >>> filter_rule = {'field': 'link', 'op': 'contains', 'value': '.com'}
-    >>> sort_conf = {'rule': {'sort_key': 'title'}}
     >>> xpath = '/html/body/center/table/tr[3]/td/table[2]/tr[1]/td/table/tr/td[3]/span/span'
     >>> xpath_conf = {'url': {'subkey': 'comments'}, 'xpath': xpath}
     >>>
     >>> ### Create an AsyncPipe flow ###
     >>> #
     >>> # The following flow will:
-    >>> #   1. asynchronously fetch the arstechnica RSS feeds page and extract a list
-    >>> #      of rss urls
+    >>> #   1. fetch the hackernews RSS feed
     >>> #   2. filter for items with '.com' in the article link
-    >>> #   3. asynchronously fetch the first comment from each item (use 4 connections)
+    >>> #   3. asynchronously fetch the first comment from each item (using 4 connections)
     >>> #   4. flatten the result into one raw stream
-    >>> #   5. extract the first item
+    >>> #   5. extract the first item's content
     >>> #
     >>> # Note: no point in sorting after the filter since async fetching doesn't guarantee
     >>> # order
@@ -444,6 +446,17 @@ some or all ``items`` of an input ``stream``.
     >>> next(pipe(stream))
     {'count': 2}
 
+In case you are confused from the "Word Count" example up top, ``count`` can return
+multiple items if you pass in the ``count_key`` config option.
+
+.. code-block:: python
+
+    >>> counted = pipe(stream, conf={'count_key': 'title'})
+    >>> next(counted)
+    {'riko pt. 1': 1}
+    >>> next(counted)
+    {'riko pt. 2': 1}
+
 ``processors`` are split into sub-types of ``source`` and ``transformer``.
 ``sources``, e.g., ``itembuilder``, can create a ``stream`` while
 ``transformers``, e.g. ``hash`` can only transform items in a ``stream``.
@@ -513,6 +526,22 @@ Command-line Interface
 ``workflow`` is simply a file containing a function named ``pipe`` that creates
 a ``flow`` and processes the resulting ``stream``.
 
+CLI Usage
+^^^^^^^^^
+
+  usage: runpipe [pipeid]
+
+  description: Runs a riko pipe
+
+  positional arguments:
+    pipeid       The pipe to run (default: reads from stdin).
+
+  optional arguments:
+    -h, --help   show this help message and exit
+    -a, --async  Load async pipe.
+
+    -t, --test   Run in test mode (uses default inputs).
+
 CLI Setup
 ^^^^^^^^^
 
@@ -534,8 +563,8 @@ CLI Setup
         for i in stream:
             print(i)
 
-CLI Usage
-^^^^^^^^^
+CLI Examples
+^^^^^^^^^^^^
 
 Now to execute ``flow.py``, type the command ``runpipe flow``. You should
 then see the following output in your terminal:
