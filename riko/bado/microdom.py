@@ -101,6 +101,15 @@ def getElementsByTagName(iNode, path, icase=False):
                 yield c
 
 
+def getElementById(nodes, node_id):
+    for node in nodes:
+        if node.getAttribute('id') == node_id:
+            return node
+    else:
+        for node in nodes:
+            return getElementById(node.childNodes, node_id)
+
+
 class MismatchedTags(Exception):
     def __init__(self, *args):
         (
@@ -313,18 +322,8 @@ class Document(Node):
         icase = self.documentElement.case_insensitive
         return getElementsByTagName(self.childNodes, name, icase)
 
-    def getElementById(self, id):
-        # TODO: rewrite this!!
-        childNodes = self.childNodes[:]
-
-        while childNodes:
-            node = childNodes.pop(0)
-
-            if node.childNodes:
-                childNodes.extend(node.childNodes)
-
-            if hasattr(node, 'getAttribute') and node.getAttribute('id') == id:
-                return node
+    def getElementById(self, node_id):
+        return getElementById(self.childNodes, node_id)
 
 
 class EntityReference(Node):
