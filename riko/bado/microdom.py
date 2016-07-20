@@ -74,11 +74,6 @@ def invert_dict(d):
     return {v: k for k, v in d.items()}
 
 
-def _gen_prefix():
-    for i in it.count():
-        yield 'p' + str(i)
-
-
 def getElementsByTagName(iNode, path, icase=False):
     """
     Return a list of all child elements of C{iNode} with a name matching
@@ -608,6 +603,8 @@ class Element(Node):
             # namespace.  Nothing extra to do here.
             begin.extend(self.tagName)
 
+        prefixes = ('p%s' % str(i) for i in it.count())
+
         for attr, val in sorted(self.attributes.items()):
             if val and isinstance(attr, tuple):
                 ns, key = attr
@@ -615,7 +612,7 @@ class Element(Node):
                 if ns in nsprefixes:
                     prefix = nsprefixes[ns]
                 else:
-                    newprefixes[ns] = prefix = next(_gen_prefix())
+                    newprefixes[ns] = prefix = next(prefixes)
 
                 begin.extend(self.create_attr(prefix + ':' + key, val))
             elif val:
