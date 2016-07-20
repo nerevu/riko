@@ -36,31 +36,28 @@ except ImportError:
     pass
 
 from .sux import XMLParser, ParseError
-from riko.lib.utils import combine_dicts
+from riko.lib.utils import combine_dicts, entity2text
+
+HTML_ESCAPE_CHARS = {'&amp;', '&lt;', '&gt;', '&quot;'}
+entity_prog = re.compile('&(.*?);')
 
 # order is important
-HTML_ESCAPE_CHARS = (
+HTML_ESCAPE_PAIRS = (
     ('&', '&amp;'),  # don't add any entities before this one
     ('<', '&lt;'), ('>', '&gt;'), ('"', '&quot;'))
 
-REV_HTML_ESCAPE_CHARS = list(HTML_ESCAPE_CHARS)
-REV_HTML_ESCAPE_CHARS.reverse()
-XML_ESCAPE_CHARS = HTML_ESCAPE_CHARS + (("'", '&apos;'),)
-REV_XML_ESCAPE_CHARS = list(XML_ESCAPE_CHARS)
-REV_XML_ESCAPE_CHARS.reverse()
+
+def unescape(text):
+    def repl(matchobj):
+        match = matchobj.group(0)
+        return entity2text(match) if match in HTML_ESCAPE_CHARS else match
+
+    return entity_prog.sub(repl, text)
 
 
-def unescape(text, chars=REV_HTML_ESCAPE_CHARS):
-    "Perform the exact opposite of 'escape'."
-    for s, h in chars:
-        text = text.replace(h, s)
-
-    return text
-
-
-def escape(text, chars=HTML_ESCAPE_CHARS):
+def escape(text, pairs=HTML_ESCAPE_PAIRS):
     "Escape a few XML special chars with XML entities."
-    for s, h in chars:
+    for s, h in pairs:
         text = text.replace(s, h)
 
     return text

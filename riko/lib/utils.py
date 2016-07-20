@@ -25,6 +25,7 @@ from os import path as p, environ
 from calendar import timegm
 from decimal import Decimal
 from json import loads
+from html.entities import name2codepoint
 
 from builtins import *
 from six.moves.urllib.parse import quote, urlparse
@@ -852,6 +853,23 @@ def get_new_rule(rule, recompile=False):
 def multiplex(sources):
     """Combine multiple generators into one"""
     return it.chain.from_iterable(sources)
+
+
+def entity2text(entitydef):
+    """Convert an HTML entity reference into unicode.
+    http://stackoverflow.com/a/58125/408556
+    """
+    if entitydef.startswith('&#x'):
+        cp = int(entitydef[3:-1], 16)
+    elif entitydef.startswith('&#'):
+        cp = int(entitydef[2:-1])
+    elif entitydef.startswith('&'):
+        cp = name2codepoint[entitydef[1:-1]]
+    else:
+        logger.debug(entitydef)
+        cp = None
+
+    return chr(cp) if cp else entitydef
 
 
 ############
