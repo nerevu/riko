@@ -92,6 +92,10 @@ NAMESPACES = {
     'owl': 'http://www.w3.org/2002/07/owl#',
     'xhtml': 'http://www.w3.org/1999/xhtml'}
 
+ESCAPE = {
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'}
+
+
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
 
@@ -853,6 +857,12 @@ def get_new_rule(rule, recompile=False):
 def multiplex(sources):
     """Combine multiple generators into one"""
     return it.chain.from_iterable(sources)
+
+
+def text2entity(text):
+    """Convert HTML/XML special chars to entity references
+    """
+    return ESCAPE.get(text, text)
 
 
 def entity2text(entitydef):
