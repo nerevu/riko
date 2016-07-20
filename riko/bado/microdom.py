@@ -36,32 +36,28 @@ except ImportError:
     pass
 
 from .sux import XMLParser, ParseError
-from riko.lib.utils import combine_dicts, entity2text, text2entity, ESCAPE
+from riko.lib import utils
 
 HTML_ESCAPE_CHARS = {'&amp;', '&lt;', '&gt;', '&quot;'}
 entity_prog = re.compile('&(.*?);')
-escape_prog = re.compile("['%s']" % ''.join(ESCAPE))
+escape_prog = re.compile("['%s']" % ''.join(utils.ESCAPE))
 
 
 def unescape(text):
     def repl(matchobj):
         match = matchobj.group(0)
-        return entity2text(match) if match in HTML_ESCAPE_CHARS else match
+        return utils.entity2text(match) if match in HTML_ESCAPE_CHARS else match
 
     return entity_prog.sub(repl, text)
 
 
 def escape(text):
-    repl = lambda matchobj: text2entity(matchobj.group(0))
+    repl = lambda matchobj: utils.text2entity(matchobj.group(0))
     return escape_prog.sub(repl, text)
 
 
 def unescape_dict(d):
     return {k: unescape(v) for k, v in d.items()}
-
-
-def invert_dict(d):
-    return {v: k for k, v in d.items()}
 
 
 def getElementsByTagName(iNode, path, icase=False):
@@ -390,7 +386,7 @@ class Text(CharacterData):
         else:
             v = decode(self.nodeValue)
             v = ' '.join(v.split()) if kwargs.get('strip') else v
-            val = escape(v)
+            val = utils.escape(v)
 
         val = encode(val)
         stream.write(val)
@@ -415,7 +411,7 @@ class _Attr(CharacterData):
 
 class Element(Node):
     nsprefixes = None
-    create_attr = lambda k, v: (' ', k, '="', escape(v), '"')
+    create_attr = lambda k, v: (' ', k, '="', utils.escape(v), '"')
 
     SINGLETONS = (
         'img', 'br', 'hr', 'base', 'meta', 'link', 'param',
@@ -733,7 +729,7 @@ class MicroDOMParser(XMLParser):
         XMLParser.__init__(self, **kwargs)
         self.elementstack = []
         d = {'xmlns': 'xmlns', '': None}
-        dr = invert_dict(d)
+        dr = utils.invert_dict(d)
         self.nsstack = [(d, None, dr)]
         self.documents = []
         self._mddoctype = None
@@ -854,7 +850,7 @@ class MicroDOMParser(XMLParser):
         namespaces = self.nsstack[-1][0]
         newspaces = dict(self._gen_newspaces(unesc_attributes))
         new_unesc_attributes = dict(self._gen_new_attrs(unesc_attributes))
-        new_namespaces = combine_dicts(namespaces, newspaces)
+        new_namespaces = utils.combine_dicts(namespaces, newspaces)
         gen_attr_args = (new_unesc_attributes, new_namespaces)
         new_attributes = dict(self._gen_attrs(*gen_attr_args))
         el_args = (name, new_attributes, parent, self.filename, self.saveMark())
@@ -864,11 +860,11 @@ class MicroDOMParser(XMLParser):
             'namespace': new_namespaces.get('')}
 
         el = Element(*el_args, **kwargs)
-        revspaces = invert_dict(newspaces)
+        revspaces = utils.invert_dict(newspaces)
         el.addPrefixes(revspaces)
 
         if newspaces:
-            rscopy = combine_dicts(self.nsstack[-1][2], revspaces)
+            rscopy = utils.combine_dicts(self.nsstack[-1][2], revspaces)
             self.nsstack.append((new_namespaces, el, rscopy))
 
         self.elementstack.append(el)

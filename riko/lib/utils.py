@@ -195,6 +195,10 @@ def combine_dicts(*dicts):
     return dict(it.chain.from_iterable(iterable))
 
 
+def invert_dict(d):
+    return {v: k for k, v in d.items()}
+
+
 def multi_try(source, zipped, default=None):
     value = None
 
