@@ -84,7 +84,7 @@ def async_parser(_, objconf, skip, **kwargs):
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        stream = yield autorss.asyncGetRSS(url)
+        stream = yield autorss.async_get_rss(url)
 
     result = (stream, skip)
     return_value(result)
