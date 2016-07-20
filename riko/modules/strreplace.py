@@ -40,7 +40,7 @@ OPTS = {
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
-PARAMS = {
+OPS = {
     'first': lambda word, rule: word.replace(rule.find, rule.replace, 1),
     'last': lambda word, rule: rule.replace.join(word.rsplit(rule.find, 1)),
     'every': lambda word, rule: word.replace(rule.find, rule.replace),
@@ -48,7 +48,7 @@ PARAMS = {
 
 
 def reducer(word, rule):
-    return PARAMS.get(rule.param, PARAMS['every'])(word, rule)
+    return OPS.get(rule.param, OPS['every'])(word, rule)
 
 
 @coroutine

@@ -42,7 +42,7 @@ from riko.bado import coroutine, return_value, requests as treq, io
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
 # EXCHANGE_API = 'https://openexchangerates.org/api/latest.json'
-# PARAMS = {'app_id': 'API_KEY'}
+# PARAMS = {'app_id': OPEN_EXCHANGE_RATES_APP_ID}
 
 OPTS = {'field': 'content', 'ftype': 'text'}
 DEFAULTS = {
@@ -65,6 +65,7 @@ def parse_response(json):
 def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
     def get_rate(currency):
         rate = rates.get('USD/%s' % currency, Decimal('nan'))
+
         if not rate:
             logger.warning('rate USD/%s not found in rates' % currency)
 

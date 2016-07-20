@@ -344,21 +344,15 @@ def get_response_encoding(response, def_encoding='utf-8'):
 
     encoding = None if encoding == '7bit' else encoding
 
-    if not encoding:
-        try:
-            encoding = info.get_content_charset()
-        except AttributeError:
-            pass
+    if not encoding and hasattr(info, 'get_content_charset'):
+        encoding = info.get_content_charset()
 
-    if not encoding:
-        try:
-            content_type = response.getheader('Content-Type', '')
-        except AttributeError:
-            pass
-        else:
-            if 'charset' in content_type:
-                ctype = content_type.split('=')[1]
-                encoding = ctype.strip().strip('"').strip("'")
+    if not encoding and hasattr(info, 'getheader'):
+        content_type = response.getheader('Content-Type', '')
+
+        if 'charset' in content_type:
+            ctype = content_type.split('=')[1]
+            encoding = ctype.strip().strip('"').strip("'")
 
     return encoding or def_encoding
 
@@ -858,25 +852,6 @@ def get_new_rule(rule, recompile=False):
 def multiplex(sources):
     """Combine multiple generators into one"""
     return it.chain.from_iterable(sources)
-
-
-# def extend_entry(entry):
-#     if entry.get('k:tags'):
-#         if len(tags.split(',')) < 2:
-#             tags = tags.replace(' ', ',')
-
-#         tags = tags.replace('/', ',').replace('#', '').replace(' ', '_')
-#         tags = filter(None, sorted(set(parse_tags(tags.split(',')))))
-#     else:
-#         tags = []
-
-#     content = entry.get('k:content').replace('<br />', '')
-#     content = content.replace('\n', '').strip()
-
-#     entry['k:tags'] = tags
-#     entry['k:content'] = content
-#     entry['k:summary'] = '%s%s' % (content[:128].replace('...', ''), '...')
-#     return entry
 
 
 ############

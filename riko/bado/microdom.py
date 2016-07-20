@@ -239,7 +239,7 @@ class Node(object):
 
         @raise ValueError: If C{oldChild} is not a child of this C{Node}.
         """
-        if not isinstance(newChild, Node) or not isinstance(oldChild, Node):
+        if not (isinstance(newChild, Node) or isinstance(oldChild, Node)):
             raise TypeError("expected Node instance")
 
         if oldChild.parentNode is not self:
@@ -252,22 +252,7 @@ class Node(object):
         return self.childNodes[-1]
 
     def firstChild(self):
-        if len(self.childNodes):
-            return self.childNodes[0]
-        return None
-
-    # def get_ownerDocument(self):
-    #     """This doesn't really get the owner document; microdom nodes
-    #     don't even have one necessarily.  This gets the root node,
-    #     which is usually what you really meant.
-    #     *NOT DOM COMPLIANT.*
-    #     """
-    #     node = self
-    #     while (node.parentNode): node=node.parentNode
-    #     return node
-
-    # ownerDocument = node.get_ownerDocument()
-    # leaving commented for discussion; see also domhelpers.getParents(node)
+        return self.childNodes[0]
 
 
 class Document(Node):

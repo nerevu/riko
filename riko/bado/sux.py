@@ -55,11 +55,6 @@ def zipfndict(*args):
             yield (key, tuple(x.get(key, nop) for x in args))
 
 
-def get_method_class_dict(clazz, prefix):
-    names = find_method_names(clazz, prefix)
-    return {name: getattr(clazz, prefix + name) for name in names}
-
-
 def get_method_obj_dict(obj, prefix):
     names = find_method_names(obj.__class__, prefix)
     return {name: getattr(obj, prefix + name) for name in names}
