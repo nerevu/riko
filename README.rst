@@ -22,7 +22,7 @@ With ``riko``, you can
 
 - Read csv/xml/json/html files
 - Create text and data based ``flows`` via modular `pipes`_
-- Parse, extract, and process RSS/ATOM feeds
+- Parse, extract, and process RSS/Atom feeds
 - Create awesome mashups [#]_, APIs, and maps
 - Perform `parallel processing`_ via cpus/processors or threads
 - and much more...
@@ -131,7 +131,7 @@ Why you should use riko
 applications such as Huginn, Flink, Spark, and Storm [#]_. Namely:
 
 - a small footprint (CPU and memory usage)
-- native RSS/ATOM support
+- native RSS/Atom support
 - simple installation and usage
 - a pure python library with `pypy`_ support
 - builtin modular ``pipes`` to filter, sort, and modify ``streams``
