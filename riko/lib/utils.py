@@ -398,6 +398,7 @@ def xpath(tree, path='/', pos=0, namespace=None):
         tags = path.split('/')[1:] or [path]
 
         try:
+            # TODO: consider replacing with twisted.words.xish.xpath
             elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
         except AttributeError:
             element_name = str(tree).split(' ')[1]
