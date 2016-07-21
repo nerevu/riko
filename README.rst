@@ -141,7 +141,7 @@ The subsequent tradeoffs ``riko`` makes are:
 - no GUI for creating ``flows``
 - doesn't continually monitor ``streams`` for new data
 - can't react to specific events
-- iterator (pull) based so streams only supports a single consumer [#]_
+- iterator (pull) based so streams only support a single consumer [#]_
 
 The following table summaries these observations:
 
