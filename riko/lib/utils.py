@@ -356,7 +356,7 @@ def get_response_encoding(response, def_encoding='utf-8'):
     if not encoding and hasattr(info, 'get_content_charset'):
         encoding = info.get_content_charset()
 
-    if not encoding and hasattr(info, 'getheader'):
+    if not encoding and hasattr(response, 'getheader'):
         content_type = response.getheader('Content-Type', '')
 
         if 'charset' in content_type:
