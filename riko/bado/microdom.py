@@ -60,7 +60,7 @@ def unescape_dict(d):
     return {k: unescape(v) for k, v in d.items()}
 
 
-def getElementsByTagName(iNode, path, icase=False):
+def get_elements_by_tag_name(iNode, path, icase=False):
     """
     Return a list of all child elements of C{iNode} with a name matching
     C{name}.
@@ -81,7 +81,7 @@ def getElementsByTagName(iNode, path, icase=False):
         yield iNode
 
     if is_node and iNode.hasChildNodes():
-        for c in getElementsByTagName(iNode.childNodes, path, icase):
+        for c in get_elements_by_tag_name(iNode.childNodes, path, icase):
             yield c
 
     if not is_node:
@@ -93,17 +93,17 @@ def getElementsByTagName(iNode, path, icase=False):
             yield nodes[pos]
 
         for child in iNode:
-            for c in getElementsByTagName(child, path, icase):
+            for c in get_elements_by_tag_name(child, path, icase):
                 yield c
 
 
-def getElementById(nodes, node_id):
+def get_element_by_id(nodes, node_id):
     for node in nodes:
         if node.getAttribute('id') == node_id:
             return node
     else:
         for node in nodes:
-            return getElementById(node.childNodes, node_id)
+            return get_element_by_id(node.childNodes, node_id)
 
 
 class MismatchedTags(Exception):
@@ -316,10 +316,10 @@ class Document(Node):
 
     def getElementsByTagName(self, name):
         icase = self.documentElement.case_insensitive
-        return getElementsByTagName(self.childNodes, name, icase)
+        return get_elements_by_tag_name(self.childNodes, name, icase)
 
     def getElementById(self, node_id):
-        return getElementById(self.childNodes, node_id)
+        return get_element_by_id(self.childNodes, node_id)
 
 
 class EntityReference(Node):
@@ -501,7 +501,7 @@ class Element(Node):
 
     def getElementsByTagName(self, name):
         icase = self.case_insensitive
-        return getElementsByTagName(self.childNodes, name, icase)
+        return get_elements_by_tag_name(self.childNodes, name, icase)
 
     def hasAttributes(self):
         return 1
