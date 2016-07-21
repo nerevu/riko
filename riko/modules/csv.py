@@ -80,13 +80,11 @@ def async_parser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        # TODO: write function to extract encoding from response
         url = utils.get_abspath(objconf.url)
         response = yield io.async_url_open(url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
         rkwargs = utils.combine_dicts(objconf, renamed)
-        rkwargs['encoding'] = objconf.encoding
         stream = read_csv(response, **rkwargs)
 
     result = (stream, skip)
