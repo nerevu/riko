@@ -706,7 +706,7 @@ License
 .. _protocols: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-protocols-are-supported
 .. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
 .. _cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
-.. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py#L59-L68
+.. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py#L15-L18
 .. _alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#alternate-workflow-creation
 .. _Fetching data and feeds: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#fetching-data-and-feeds
 
