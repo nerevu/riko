@@ -85,6 +85,7 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> url = 'https://news.ycombinator.com/'
     >>> fetch_conf = {
     ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 1
+    >>>
     >>> replace_conf = {
     ...     'rule': [
     ...         {'find': '\r\n', 'replace': ' '},
