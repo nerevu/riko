@@ -113,7 +113,7 @@ def assign(item, assignment, key, one=False):
 
 
 class processor(object):
-    def __init__(self, defaults=None, isasync=False, **opts):
+    def __init__(self, defaults=None, isasync=False, debug=False, **opts):
         """Creates a sync/async pipe that processes individual items. These
         pipes are classified as `type: processor` and as either
         `sub_type: transformer` or `subtype: source`. To be recognized as
@@ -122,6 +122,7 @@ class processor(object):
         Args:
             defaults (dict): Default `conf` values.
             async (bool): Wrap an async pipe (default: False)
+            debug (bool): Print pipe content to stdout (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
@@ -228,6 +229,7 @@ class processor(object):
         self.defaults = defaults or {}
         self.opts = opts or {}
         self.async = isasync
+        self.debug = debug
 
     def __call__(self, pipe):
         """Creates a sync/async pipe that processes individual items
