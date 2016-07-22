@@ -40,6 +40,15 @@ DEFAULTS = {
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
+# https://docs.python.org/3.3/reference/expressions.html#examples
+def auto_close(stream, f):
+    try:
+        for record in stream:
+            yield record
+    finally:
+        f.close()
+
+
 @coroutine
 def async_parser(_, objconf, skip, **kwargs):
     """ Asynchronously parses the pipe content
@@ -85,7 +94,8 @@ def async_parser(_, objconf, skip, **kwargs):
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
         rkwargs = utils.combine_dicts(objconf, renamed)
-        stream = read_csv(response, **rkwargs)
+        _stream = read_csv(response, **rkwargs)
+        stream = auto_close(_stream, response)
 
     result = (stream, skip)
     return_value(result)
@@ -123,7 +133,8 @@ def parser(_, objconf, skip, **kwargs):
         encoding = utils.get_response_encoding(response, objconf.encoding)
         rkwargs = utils.combine_dicts(objconf, renamed)
         rkwargs['encoding'] = encoding
-        stream = read_csv(response, **rkwargs)
+        _stream = read_csv(response, **rkwargs)
+        stream = auto_close(_stream, response)
 
     return stream, skip
 
@@ -167,7 +178,8 @@ def async_pipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['mileage'])
         ...     d = async_pipe(conf={'url': get_path('spreadsheet.csv')})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d.addCallbacks(callback, logger.error)
+        ...     return d.addCallback(lambda _: d.close())
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
