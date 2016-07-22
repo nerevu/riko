@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import (
-    absolute_import, division, print_function, with_statement)
+from __future__ import absolute_import, division, print_function
 
 import sys
 import pkutils
@@ -14,6 +13,8 @@ try:
 except ImportError:
     from distutils.core import setup, find_packages
 
+PARENT_DIR = p.abspath(p.dirname(__file__))
+
 sys.dont_write_bytecode = True
 py2_requirements = set(pkutils.parse_requirements('py2-requirements.txt'))
 py3_requirements = set(pkutils.parse_requirements('requirements.txt'))
@@ -22,7 +23,7 @@ optional = 'optional-requirements.txt'
 opt_requirements = set(pkutils.parse_requirements(optional))
 readme = pkutils.read('README.rst')
 # changes = pkutils.read('CHANGES.rst').replace('.. :changelog:', '')
-module = pkutils.parse_module('riko/__init__.py')
+module = pkutils.parse_module(p.join(PARENT_DIR, 'riko', '__init__.py'))
 license = module.__license__
 version = module.__version__
 project = module.__title__
@@ -55,7 +56,13 @@ setup(
     download_url=pkutils.get_dl_url(project, user, version),
     packages=find_packages(exclude=['tests']),
     include_package_data=True,
-    package_data={'data': ['data/*']},
+    package_data={
+        'data': ['data/*'],
+        'helpers': ['helpers/*'],
+        'tests': ['tests/*'],
+        'docs': ['docs/*'],
+        'examples': ['examples/*']
+    },
     install_requires=requirements,
     extras_require={
         'python_version<3.0': py2_require,
