@@ -27,7 +27,7 @@ require:
 	pip freeze -l | grep -vxFf dev-requirements.txt > requirements.txt
 
 lint:
-	flake8 meza tests
+	flake8 riko tests
 
 test:
 	nosetests -xv

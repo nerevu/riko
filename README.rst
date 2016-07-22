@@ -22,7 +22,7 @@ With ``riko``, you can
 
 - Read csv/xml/json/html files
 - Create text and data based ``flows`` via modular `pipes`_
-- Parse, extract, and process RSS/ATOM feeds
+- Parse, extract, and process RSS/Atom feeds
 - Create awesome mashups [#]_, APIs, and maps
 - Perform `parallel processing`_ via cpus/processors or threads
 - and much more...
@@ -85,6 +85,7 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> url = 'https://news.ycombinator.com/'
     >>> fetch_conf = {
     ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 1
+    >>>
     >>> replace_conf = {
     ...     'rule': [
     ...         {'find': '\r\n', 'replace': ' '},
@@ -130,7 +131,7 @@ Why you should use riko
 applications such as Huginn, Flink, Spark, and Storm [#]_. Namely:
 
 - a small footprint (CPU and memory usage)
-- native RSS/ATOM support
+- native RSS/Atom support
 - simple installation and usage
 - a pure python library with `pypy`_ support
 - builtin modular ``pipes`` to filter, sort, and modify ``streams``
@@ -141,7 +142,7 @@ The subsequent tradeoffs ``riko`` makes are:
 - no GUI for creating ``flows``
 - doesn't continually monitor ``streams`` for new data
 - can't react to specific events
-- iterator (pull) based so streams only supports a single consumer [#]_
+- iterator (pull) based so streams only support a single consumer [#]_
 
 The following table summaries these observations:
 
@@ -705,7 +706,7 @@ License
 .. _protocols: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-protocols-are-supported
 .. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
 .. _cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
-.. _split: https://github.com/nerevu/riko/blob/master/riko/modules/pipesplit.py
+.. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py#L15-L18
 .. _alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#alternate-workflow-creation
 .. _Fetching data and feeds: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#fetching-data-and-feeds
 

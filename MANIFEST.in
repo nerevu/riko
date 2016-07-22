@@ -1,4 +1,8 @@
 recursive-include riko/data *
+recursive-include tests *
+recursive-include helpers *
+recursive-include docs *
+recursive-include examples *
+include LICENSE
 include *.rst
 include *requirements.txt
-recursive-include helpers *
