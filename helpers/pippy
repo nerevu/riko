@@ -4,7 +4,7 @@
 _install () {
   package=$1
   echo "installing $package from $PIP_WHEEL_DIR..."
-  pip install --use-wheel --no-index --find-links="$PIP_FIND_LINKS" $package
+  pip install --use-wheel --no-index --find-links="$PIP_WHEEL_DIR" $package
 
   if [ $? -eq 1 ]; then
     echo "$package not found in cache, downloading..."
@@ -12,11 +12,10 @@ _install () {
     if [ $package == 'wheel' ]; then
       pip install wheel
     else
-      pip download --cache-dir="$PIP_CACHE_DIR" $package
-      pip wheel --wheel-dir="$PIP_WHEEL_DIR" --no-index \
-        --find-links="$PIP_CACHE_DIR" $package
-      pip install --use-wheel --no-index \
-        --find-links="$PIP_FIND_LINKS" $package
+      pip download --dest="$PIP_CACHE_DIR" $package
+      pip wheel --no-index --find-links="$PIP_CACHE_DIR" \
+        --wheel-dir="$PIP_WHEEL_DIR" $package
+      pip install --use-wheel --no-index --find-links="$PIP_WHEEL_DIR" $package
     fi
   fi
 }
