@@ -71,9 +71,6 @@ Ready to contribute? Here's how to set up ``riko`` for local development.
 .. code-block:: bash
 
     mkvirtualenv --no-site-packages riko
-    pip install -r dev-requirements.txt
-    pip install -r optional-requirements.txt
-    python setup.py develop
 
 Or, if you only have ``virtualenv`` installed
 
@@ -81,17 +78,38 @@ Or, if you only have ``virtualenv`` installed
 
     virtualenv --no-site-packages ~/.venvs/riko
     source ~/.venvs/riko/bin/activate
+
+3. Install required modules
+
+Python3
+
+.. code-block:: bash
+
     pip install -r dev-requirements.txt
     pip install -r optional-requirements.txt
+    pip install -r requirements.txt
+
+Python2
+
+.. code-block:: bash
+
+    pip install -r dev-requirements.txt
+    pip install -r optional-requirements.txt
+    pip install -r py2-requirements.txt
+
+4. Run setup develop script
+
+.. code-block:: bash
+
     python setup.py develop
 
-3. Create a branch for local development
+5. Create a branch for local development
 
 .. code-block:: bash
 
     git checkout -b name-of-your-bugfix-or-feature
 
-4. Make your changes and run linter and tests
+6. Make your changes and run linter and tests
 
 .. code-block:: bash
 
