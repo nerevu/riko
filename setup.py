@@ -31,9 +31,8 @@ description = module.__description__
 user = 'nerevu'
 
 # Conditional sdist dependencies:
-bdist = 'bdist_wheel' in sys.argv
 py2 = sys.version_info.major == 2
-requirements = py2_requirements if py2 and not bdist else py3_requirements
+requirements = py2_requirements if py2 else py3_requirements
 
 # Conditional bdist_wheel dependencies:
 py2_require = py2_requirements.difference(py3_requirements)
