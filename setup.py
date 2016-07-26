@@ -22,7 +22,7 @@ dev_requirements = set(pkutils.parse_requirements('dev-requirements.txt'))
 optional = 'optional-requirements.txt'
 opt_requirements = set(pkutils.parse_requirements(optional))
 readme = pkutils.read('README.rst')
-# changes = pkutils.read('CHANGES.rst').replace('.. :changelog:', '')
+changes = pkutils.read(p.join(PARENT_DIR, 'docs', 'CHANGES.rst'))
 module = pkutils.parse_module(p.join(PARENT_DIR, 'riko', '__init__.py'))
 license = module.__license__
 version = module.__version__
@@ -48,7 +48,7 @@ setup(
     name=project,
     version=version,
     description=description,
-    long_description=readme,
+    long_description='%s\n\n%s' % (readme, changes),
     author=module.__author__,
     author_email=module.__email__,
     url=pkutils.get_url(project, user),
