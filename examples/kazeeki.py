@@ -222,7 +222,7 @@ def parse_source(source):
         .strtransform(
             conf={'rule': {'transform': 'lower'}},
             field='k:tags', assign='k:tags')
-        .stringtokenizer(conf=tokenizer_conf, field='k:tags', assign='k:tags')
+        .tokenizer(conf=tokenizer_conf, field='k:tags', assign='k:tags')
         .simplemath(
             conf=simplemath1_conf,
             field='k:budget_raw1_num',

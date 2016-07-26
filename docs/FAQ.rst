@@ -70,8 +70,6 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `strconcat`_         | processor | transformer   | concatenates strings                                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `stringtokenizer`_   | processor | transformer   | splits a string by a delimiter                                                               |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `strfind`_           | processor | transformer   | finds text located before, after, or between substrings                                      |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `strreplace`_        | processor | transformer   | replaces the text of a field of a feed item                                                  |
@@ -85,6 +83,8 @@ riko's available pipes are outlined below [#]_:
 | `sum`_               | operator  | aggregator    | sums a field of items in a feed                                                              |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `tail`_              | operator  | composer      | truncates a feed to the last N items                                                         |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `tokenizer`_         | processor | transformer   | splits a string by a delimiter                                                               |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `truncate`_          | operator  | composer      | returns a specified number of items from a feed                                              |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
@@ -217,7 +217,6 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _sort: https://github.com/nerevu/riko/blob/master/riko/modules/sort.py
 .. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py
 .. _strconcat: https://github.com/nerevu/riko/blob/master/riko/modules/strconcat.py
-.. _stringtokenizer: https://github.com/nerevu/riko/blob/master/riko/modules/stringtokenizer.py
 .. _strfind: https://github.com/nerevu/riko/blob/master/riko/modules/strfind.py
 .. _strreplace: https://github.com/nerevu/riko/blob/master/riko/modules/strreplace.py
 .. _strtransform: https://github.com/nerevu/riko/blob/master/riko/modules/strtransform.py
@@ -225,6 +224,7 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _substr: https://github.com/nerevu/riko/blob/master/riko/modules/substr.py
 .. _sum: https://github.com/nerevu/riko/blob/master/riko/modules/sum.py
 .. _tail: https://github.com/nerevu/riko/blob/master/riko/modules/tail.py
+.. _tokenizer: https://github.com/nerevu/riko/blob/master/riko/modules/tokenizer.py
 .. _truncate: https://github.com/nerevu/riko/blob/master/riko/modules/truncate.py
 .. _union: https://github.com/nerevu/riko/blob/master/riko/modules/union.py
 .. _uniq: https://github.com/nerevu/riko/blob/master/riko/modules/uniq.py

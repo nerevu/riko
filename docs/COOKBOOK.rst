@@ -114,7 +114,7 @@ style [#]_.
 
     >>> import itertools as it
     >>> from riko import get_path
-    >>> from riko.modules import fetchpage, strreplace, stringtokenizer, count
+    >>> from riko.modules import fetchpage, strreplace, tokenizer, count
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -138,7 +138,7 @@ style [#]_.
     >>> # just one item, we can safely call `next` without fear of loosing data
     >>> page = next(fetchpage.pipe(conf=fetch_conf))
     >>> replaced = next(strreplace.pipe(page, conf=replace_conf, assign='content'))
-    >>> words = stringtokenizer.pipe(replaced, conf={'delimiter': ' '}, emit=True)
+    >>> words = tokenizer.pipe(replaced, conf={'delimiter': ' '}, emit=True)
     >>> counts = count.pipe(words)
     >>> next(counts)
     {'count': 70}

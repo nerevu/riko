@@ -9,7 +9,7 @@ Word Count
 
     >>> import itertools as it
     >>> from riko import get_path
-    >>> from riko.modules import fetchpage, strreplace, stringtokenizer, count
+    >>> from riko.modules import fetchpage, strreplace, tokenizer, count
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -36,7 +36,7 @@ Word Count
     >>> # just one item, we can safely call `next` without fear of loosing data
     >>> page = next(fetchpage.pipe(conf=fetch_conf))
     >>> replaced = next(strreplace.pipe(page, **replace_kwargs))
-    >>> words = stringtokenizer.pipe(replaced, **token_kwargs)
+    >>> words = tokenizer.pipe(replaced, **token_kwargs)
     >>> counts = count.pipe(words, conf={'count_key': 'content'})
     >>> next(counts) == {'$': 2}
     True
@@ -53,7 +53,7 @@ Word Count
     >>>
     >>> stream = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
-    ...     .stringtokenizer(conf={'delimiter': ' '}, emit=True)
+    ...     .tokenizer(conf={'delimiter': ' '}, emit=True)
     ...     .count(conf={'count_key': 'content'})
     ...     .output)
     >>>
@@ -288,14 +288,14 @@ Design Principles
     >>> stream = pipe(item, field='title')
     >>> next(stream) == {'title': 'riko pt. 1', 'hash': _hash}
     True
-    >>> from riko.modules.stringtokenizer import pipe
+    >>> from riko.modules.tokenizer import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> tokenizer_conf = {'delimiter': ' '}
     >>> stream = pipe(item, conf=tokenizer_conf, field='title')
     >>> next(stream) == {
     ...     'title': 'riko pt. 1',
-    ...     'stringtokenizer': [
+    ...     'tokenizer': [
     ...         {'content': 'riko'},
     ...         {'content': 'pt.'},
     ...         {'content': '1'}]}

@@ -19,17 +19,17 @@ Examples:
         >>>
         >>> (SyncPipe('fetchdata', conf=fconf)
         ...     .sort(conf=sort_conf)
-        ...     .stringtokenizer(conf=str_conf, **str_kwargs)
+        ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count().list) == [{'count': 169}]
         True
         >>> (SyncPipe('fetchdata', conf=fconf, parallel=True)
         ...     .sort(conf=sort_conf)
-        ...     .stringtokenizer(conf=str_conf, **str_kwargs)
+        ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count().list) == [{'count': 169}]
         True
         >>> (SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
         ...     .sort(conf=sort_conf)
-        ...     .stringtokenizer(conf=str_conf, **str_kwargs)
+        ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count().list) == [{'count': 169}]
         True
         >>> fconf['type'] = 'fetchdata'

@@ -94,7 +94,7 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> flow = (
     ...     SyncPipe('fetchpage', conf=fetch_conf)                           # 2
     ...         .strreplace(conf=replace_conf, assign='content')             # 3
-    ...         .stringtokenizer(conf={'delimiter': ' '}, emit=True)         # 4
+    ...         .tokenizer(conf={'delimiter': ' '}, emit=True)         # 4
     ...         .count(conf={'count_key': 'content'}))                       # 5
     >>>
     >>> stream = flow.output                                                 # 6
@@ -413,17 +413,17 @@ threads or processes. Example ``processors`` include ``fetchsitefeed``,
     >>> next(stream)
     {'title': 'riko pt. 1', 'hash': 2853617420}
 
-Some ``processors``, e.g., ``pipestringtokenizer``, return multiple results.
+Some ``processors``, e.g., ``pipetokenizer``, return multiple results.
 
 .. code-block:: python
 
-    >>> from riko.modules.stringtokenizer import pipe
+    >>> from riko.modules.tokenizer import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> tokenizer_conf = {'delimiter': ' '}
     >>> stream = pipe(item, conf=tokenizer_conf, field='title')
     >>> next(stream)
-    {'stringtokenizer': [{'content': 'riko'},
+    {'tokenizer': [{'content': 'riko'},
        {'content': 'pt.'},
        {'content': '1'}],
      'title': 'riko pt. 1'}

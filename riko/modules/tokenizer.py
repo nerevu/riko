@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.stringtokenizer
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+riko.modules.tokenizer
+~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for splitting a string into an array of strings.
 
 A delimiter string (often just a single character) tells the module where to
@@ -11,9 +11,9 @@ split the input string. The delimiter string doesn't appear in the output.
 Examples:
     basic usage::
 
-        >>> from riko.modules.stringtokenizer import pipe
+        >>> from riko.modules.tokenizer import pipe
         >>> item = {'content': 'Once,twice,thrice'}
-        >>> next(pipe(item))['stringtokenizer'][0] == {'content': 'Once'}
+        >>> next(pipe(item))['tokenizer'][0] == {'content': 'Once'}
         True
 
 Attributes:
@@ -81,7 +81,7 @@ def async_pipe(*args, **kwargs):
             dedupe (bool): Remove duplicates (default: False).
             sort (bool): Sort tokens (default: False)
             assign (str): Attribute to assign parsed content (default:
-                stringtokenizer)
+                tokenizer)
 
             token_key (str): Attribute to assign individual tokens (default:
                 content)
@@ -98,7 +98,7 @@ def async_pipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     resp = {'content': 'Once'}
-        ...     attr = 'stringtokenizer'
+        ...     attr = 'tokenizer'
         ...     callback = lambda x: print(next(x)[attr][0] == resp)
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     d = async_pipe(item)
@@ -130,7 +130,7 @@ def pipe(*args, **kwargs):
             dedupe (bool): Remove duplicates (default: False).
             sort (bool): Sort tokens (default: False)
             assign (str): Attribute to assign parsed content (default:
-                stringtokenizer)
+                tokenizer)
             token_key (str): Attribute to assign individual tokens (default:
                 content)
 
