@@ -50,7 +50,7 @@ COMBINE_BOOLEAN = {'and': all, 'or': any}
 SWITCH = {
     'contains': lambda x, y: x and y.lower() in x.lower(),
     'doesnotcontain': lambda x, y: x and y.lower() not in x.lower(),
-    'matches': lambda x, y: re.search(x, y),
+    'matches': lambda x, y: re.search(y, x),
     'is': op.eq,
     'isnot': op.ne,
     'truthy': bool,
