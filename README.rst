@@ -94,7 +94,7 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> flow = (
     ...     SyncPipe('fetchpage', conf=fetch_conf)                           # 2
     ...         .strreplace(conf=replace_conf, assign='content')             # 3
-    ...         .tokenizer(conf={'delimiter': ' '}, emit=True)         # 4
+    ...         .tokenizer(conf={'delimiter': ' '}, emit=True)               # 4
     ...         .count(conf={'count_key': 'content'}))                       # 5
     >>>
     >>> stream = flow.output                                                 # 6
