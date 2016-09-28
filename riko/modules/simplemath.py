@@ -4,7 +4,7 @@
 riko.modules.simplemath
 ~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for performing simple mathematical operations, e.g.,
-addition, substraction, multiplication, division, modulo, averages, etc.
+addition, subtraction, multiplication, division, modulo, averages, etc.
 
 Examples:
     basic usage::
