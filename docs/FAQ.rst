@@ -72,6 +72,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `substr`_            | processor | transformer   | returns a substring of a field of a feed item                                                |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `sum`_               | operator  | aggregator    | sums a field of items in a feed                                                              |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `tail`_              | operator  | composer      | truncates a feed to the last N items                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `truncate`_          | operator  | composer      | returns a specified number of items from a feed                                              |
@@ -204,6 +206,7 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _strtransform: https://github.com/nerevu/riko/blob/master/riko/modules/strtransform.py
 .. _subelement: https://github.com/nerevu/riko/blob/master/riko/modules/subelement.py
 .. _substr: https://github.com/nerevu/riko/blob/master/riko/modules/substr.py
+.. _sum: https://github.com/nerevu/riko/blob/master/riko/modules/sum.py
 .. _tail: https://github.com/nerevu/riko/blob/master/riko/modules/tail.py
 .. _truncate: https://github.com/nerevu/riko/blob/master/riko/modules/truncate.py
 .. _union: https://github.com/nerevu/riko/blob/master/riko/modules/union.py
