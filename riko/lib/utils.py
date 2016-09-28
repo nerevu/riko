@@ -462,14 +462,15 @@ def etree2dict(element):
 
 
 def any2dict(f, ext='xml', html5=False, path=None):
+    path = path or ''
     if ext in {'xml', 'html'}:
         xml = ext == 'xml'
         root = xml2etree(f, xml, html5).getroot()
-        replaced = '/%s' % path.replace('.', '/') if '.' in path else path
+        replaced = '/'.join(path.split('.'))
         tree = next(xpath(root, replaced)) if replaced else root
         content = etree2dict(tree)
     elif ext == 'json':
-        content = next(items(f, path or ''))
+        content = next(items(f, path))
     else:
         raise TypeError('Invalid file type %s' % ext)
 
