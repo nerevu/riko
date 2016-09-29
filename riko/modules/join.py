@@ -37,7 +37,7 @@ from riko.lib.utils import multiplex
 
 # disable `dictize` since we do not need to access the configuration
 OPTS = {'dictize': False}
-DEFAULTS = {'join_key': None}
+DEFAULTS = {'join_key': None, 'lower': False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -86,12 +86,22 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> len(list(joined))
         4
     """
+    def compare(x, y):
+        if objconf.lower:
+            x_value, y_value = x.get(x_key, ''), y.get(y_key, '')
+            equal = x_value.lower() == y_value.lower()
+        else:
+            equal = x.get(x_key) == y.get(y_key)
+
+        return equal
+
     if objconf.join_key or objconf.other_join_key:
         x_key = objconf.join_key or objconf.other_join_key
         y_key = objconf.other_join_key or x_key
         prod = product(stream, kwargs['other'])
+
         joined = (
-            merge([x, y]) for x, y in prod if x.get(x_key) == y.get(y_key))
+            merge([x, y]) for x, y in prod if compare(x, y))
     else:
         joined = join(stream, kwargs['other'])
 
@@ -113,6 +123,8 @@ def async_pipe(*args, **kwargs):
                 (default: value of `other_join_key`).
             other_join_key (str): Item attribute to join `other` on.
                 (default: value of `join_key`).
+            lower (str): Transform values to lower case before comparing
+                (for joining purposes, default: False)
 
 
         other (Iter[dict]): stream to join
@@ -157,6 +169,8 @@ def pipe(*args, **kwargs):
                 (default: value of `other_join_key`).
             other_join_key (str): Item attribute to join `other` on.
                 (default: value of `join_key`).
+            lower (str): Transform values to lower case before comparing
+                (for joining purposes, default: False)
 
         other (Iter[dict]): stream to join
 
@@ -164,13 +178,20 @@ def pipe(*args, **kwargs):
         dict: a merged stream item
 
     Examples:
-        >>> items = ({'x': 'foo-%s' % x, 'sum': x} for x in range(5))
+        >>> items = [{'x': 'foo-%s' % x, 'sum': x} for x in range(5)]
         >>> other = ({'y': 'foo-%s' % x, 'count': x + 5} for x in range(5))
         >>> conf = {'join_key': 'x', 'other_join_key': 'y'}
         >>> joined = pipe(items, conf=conf, other=other)
         >>> next(joined) == {'count': 5, 'x': 'foo-0', 'sum': 0, 'y': 'foo-0'}
         True
         >>> next(joined) == {'count': 6, 'x': 'foo-1', 'sum': 1, 'y': 'foo-1'}
+        True
+        >>> other = ({'y': 'FOO-%s' % x, 'count': x + 5} for x in range(5))
+        >>> conf = {'join_key': 'x', 'other_join_key': 'y', 'lower': True}
+        >>> joined = pipe(items, conf=conf, other=other)
+        >>> next(joined) == {'count': 5, 'x': 'foo-0', 'sum': 0, 'y': 'FOO-0'}
+        True
+        >>> next(joined) == {'count': 6, 'x': 'foo-1', 'sum': 1, 'y': 'FOO-1'}
         True
     """
     return parser(*args, **kwargs)
