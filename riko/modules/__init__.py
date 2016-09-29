@@ -12,7 +12,7 @@ import pygogo as gogo
 from functools import partial, wraps
 from itertools import chain
 
-from builtins import iter, len, list, map, next, sum
+from builtins import iter, len, list, map, next, sum as _sum
 
 from riko.bado import coroutine, return_value
 from riko.lib import utils
@@ -37,10 +37,10 @@ __sources__ = [
 
 __aggregators__ = [
     'count',
+    'sum',
     # 'mean',
     # 'min',
     # 'max',
-    # 'sum',
 ]
 
 __composers__ = [
@@ -427,7 +427,7 @@ class operator(object):
             ...
             >>> @operator(emit=False)
             ... def pipe2(stream, objconf, tuples, **kwargs):
-            ...     return sum(len(item['content'].split()) for item in stream)
+            ...     return _sum(len(item['content'].split()) for item in stream)
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
@@ -443,7 +443,7 @@ class operator(object):
             >>> # they work fine either way
             >>> @operator(isasync=True, emit=False)
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
-            ...     return sum(len(item['content'].split()) for item in stream)
+            ...     return _sum(len(item['content'].split()) for item in stream)
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -504,7 +504,7 @@ class operator(object):
             ...         yield {kwargs['assign']: value}
             ...
             >>> def pipe2(stream, objconf, tuples, **kwargs):
-            ...     word_cnt = sum(len(content.split()) for content in stream)
+            ...     word_cnt = _sum(len(content.split()) for content in stream)
             ...     return {kwargs['assign']: word_cnt}
             ...
             >>> wrapped_pipe1 = wrapper(pipe1)
@@ -531,7 +531,7 @@ class operator(object):
             >>> @coroutine
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     words = (len(content.split()) for content in stream)
-            ...     word_cnt = yield maybeDeferred(sum, words)
+            ...     word_cnt = yield maybeDeferred(_sum, words)
             ...     return_value({kwargs['assign']: word_cnt})
             ...
             >>> wrapped_async_pipe1 = async_wrapper(async_pipe1)

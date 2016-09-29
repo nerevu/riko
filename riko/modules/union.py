@@ -22,12 +22,12 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
 from itertools import chain
 
 from builtins import *
 
 from . import operator
-import pygogo as gogo
 from riko.lib.utils import multiplex
 
 # disable `dictize` since we do not need to access the configuration

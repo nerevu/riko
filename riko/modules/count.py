@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.count
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 Provides functions for counting the number of items in a stream.
 
 Examples:

@@ -120,7 +120,7 @@ Yahoo! Pipe into python code. ``pipe2py`` suited my needs at the time
 but was unmaintained and lacked asynchronous or parallel processing.
 
 ``riko`` addresses the shortcomings of ``pipe2py`` but removed support for
-importing Yahoo! Pipes json workflows. ``riko`` contains ~40 built-in
+importing Yahoo! Pipes json workflows. ``riko`` contains ~`40 built-in`_
 modules, aka ``pipes``, that allow you to programatically perform most of the
 tasks Yahoo! Pipes allowed.
 
@@ -223,7 +223,7 @@ Please see the `FAQ`_ for a complete list of supported `file types`_ and
 Synchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^
 
-``riko`` can modify ``streams`` via the 40 built-in ``pipes``
+``riko`` can modify ``streams`` via the `40 built-in`_ ``pipes``
 
 .. code-block:: python
 
@@ -702,6 +702,7 @@ License
 .. _contributing doc: https://github.com/nerevu/riko/blob/master/CONTRIBUTING.rst
 .. _FAQ: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst
 .. _pipes: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-pipes-are-available
+.. _40 built-in: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-pipes-are-available
 .. _file types: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-file-types-are-supported
 .. _protocols: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-protocols-are-supported
 .. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
