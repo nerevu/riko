@@ -46,6 +46,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `itembuilder`_       | processor | source        | builds an item                                                                               |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `join`_              | operator  | aggregator    | perform a SQL like join on two feeds                                                         |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `regex`_             | processor | transformer   | replaces text in fields of a feed item using regexes                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `rename`_            | processor | transformer   | renames or copies fields in a feed item                                                      |
@@ -194,6 +196,7 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _hash: https://github.com/nerevu/riko/blob/master/riko/modules/hash.py
 .. _input: https://github.com/nerevu/riko/blob/master/riko/modules/input.py
 .. _itembuilder: https://github.com/nerevu/riko/blob/master/riko/modules/itembuilder.py
+.. _join: https://github.com/nerevu/riko/blob/master/riko/modules/join.py
 .. _regex: https://github.com/nerevu/riko/blob/master/riko/modules/regex.py
 .. _rename: https://github.com/nerevu/riko/blob/master/riko/modules/rename.py
 .. _rssitembuilder: https://github.com/nerevu/riko/blob/master/riko/modules/rssitembuilder.py
