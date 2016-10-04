@@ -38,6 +38,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `fetchsitefeed`_     | processor | source        | fetches and parses the first feed found on a site                                            |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `fetchtext`_         | processor | source        | fetches and parses a text file                                                               |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `filter`_            | operator  | composer      | extracts items matching the given rules                                                      |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `hash`_              | processor | transformer   | hashes the field of a feed item                                                              |
@@ -192,6 +194,7 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _fetchdata: https://github.com/nerevu/riko/blob/master/riko/modules/fetchdata.py
 .. _fetchpage: https://github.com/nerevu/riko/blob/master/riko/modules/fetchpage.py
 .. _fetchsitefeed: https://github.com/nerevu/riko/blob/master/riko/modules/fetchsitefeed.py
+.. _fetchtext: https://github.com/nerevu/riko/blob/master/riko/modules/fetchtext.py
 .. _filter: https://github.com/nerevu/riko/blob/master/riko/modules/filter.py
 .. _hash: https://github.com/nerevu/riko/blob/master/riko/modules/hash.py
 .. _input: https://github.com/nerevu/riko/blob/master/riko/modules/input.py
