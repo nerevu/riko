@@ -51,6 +51,7 @@ SWITCH = {
     'contains': lambda x, y: x and y.lower() in x.lower(),
     'doesnotcontain': lambda x, y: x and y.lower() not in x.lower(),
     'matches': lambda x, y: re.search(y, x),
+    'eq': op.eq,
     'is': op.eq,
     'isnot': op.ne,
     'truthy': bool,
