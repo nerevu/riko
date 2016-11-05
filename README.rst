@@ -623,8 +623,9 @@ More Info
 ---------
 
 - `FAQ`_
-- `cookbook`_
-- `ipython notebook`_
+- `Cookbook`_
+- `iPython Notebook`_
+- `Step-by-Step Intro. Tutorial`_
 
 Project Structure
 -----------------
@@ -706,7 +707,7 @@ License
 .. _file types: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-file-types-are-supported
 .. _protocols: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-protocols-are-supported
 .. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
-.. _cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
+.. _Cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
 .. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py#L15-L18
 .. _alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#alternate-workflow-creation
 .. _Fetching data and feeds: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#fetching-data-and-feeds
@@ -728,4 +729,5 @@ License
 .. _speedparser: https://github.com/jmoiron/speedparser
 .. _MIT License: http://opensource.org/licenses/MIT
 .. _virtualenv: http://www.virtualenv.org/en/latest/index.html
-.. _ipython notebook: http://nbviewer.jupyter.org/github/nerevu/riko/blob/master/examples/usage.ipynb
+.. _iPython Notebook: http://nbviewer.jupyter.org/github/nerevu/riko/blob/master/examples/usage.ipynb
+.. _Step-by-Step Intro. Tutorial: http://nbviewer.jupyter.org/github/aemreunal/riko-tutorial/blob/master/Tutorial.ipynb
