@@ -6,7 +6,7 @@
 tests.test
 ~~~~~~~~~~
 
-Provides scripttests riko runpipe CLI functionality.
+Provides scripttests to test riko runpipe CLI functionality.
 """
 
 from __future__ import (
