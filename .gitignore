@@ -1,15 +1,15 @@
+# Python
 *.py[cod]
 .cookiecutter
 .ipynb_checkpoints/*
-examples/.ipynb_checkpoints/*
+*checkpoint.ipynb
 
 # C extensions
 *.so
 
 # Packages
-*.egg
-.eggs
-*.egg-info
+*.egg*
+.installed.cfg
 dist
 build
 eggs
@@ -17,7 +17,6 @@ parts
 var
 sdist
 develop-eggs
-.installed.cfg
 lib
 lib64
 
@@ -25,6 +24,10 @@ lib64
 pip-log.txt
 
 # Unit test / coverage reports
+*.wpu
+*.rope
+*.noseids
+*.ropeproject
 .coverage
 .tox
 .noseids
@@ -47,3 +50,4 @@ output/*/index.html
 
 # Sphinx
 docs/_build
+build/*

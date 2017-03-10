@@ -52,6 +52,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `regex`_             | processor | transformer   | replaces text in fields of a feed item using regexes                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `refind`_            | processor | transformer   | finds text located before, after, or between substrings using regular expressions            |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `rename`_            | processor | transformer   | renames or copies fields in a feed item                                                      |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `reverse`_           | operator  | composer      | reverses the order of source items in a feed                                                 |
@@ -60,13 +62,15 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `simplemath`_        | processor | transformer   | performs basic arithmetic, such as addition and subtraction                                  |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `slugify`_           | operator  | transformer   | slugifies text                                                                               |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `sort`_              | operator  | composer      | sorts a feed according to a specified key                                                    |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `split`_             | operator  | composer      | splits a feed into identical copies                                                          |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `strconcat`_         | processor | transformer   | concatenates strings                                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `stringtokenizer`_   | processor | transformer   | splits a string by a delimiter                                                               |
+| `strfind`_           | processor | transformer   | finds text located before, after, or between substrings                                      |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `strreplace`_        | processor | transformer   | replaces the text of a field of a feed item                                                  |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
@@ -80,6 +84,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `tail`_              | operator  | composer      | truncates a feed to the last N items                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `tokenizer`_         | processor | transformer   | splits a string by a delimiter                                                               |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `truncate`_          | operator  | composer      | returns a specified number of items from a feed                                              |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `union`_             | operator  | composer      | merges multiple feeds together                                                               |
@@ -87,6 +93,8 @@ riko's available pipes are outlined below [#]_:
 | `uniq`_              | operator  | composer      | filters out non unique items according to a specified field                                  |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `urlbuilder`_        | processor | transformer   | builds a url                                                                                 |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `urlparse`_          | processor | transformer   | concatenates strings                                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `xpathfetchpage`_    | processor | source        | fetches the content of a given website as DOM nodes or a string                              |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
@@ -201,22 +209,26 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _itembuilder: https://github.com/nerevu/riko/blob/master/riko/modules/itembuilder.py
 .. _join: https://github.com/nerevu/riko/blob/master/riko/modules/join.py
 .. _regex: https://github.com/nerevu/riko/blob/master/riko/modules/regex.py
+.. _refind: https://github.com/nerevu/riko/blob/master/riko/modules/refind.py
 .. _rename: https://github.com/nerevu/riko/blob/master/riko/modules/rename.py
 .. _rssitembuilder: https://github.com/nerevu/riko/blob/master/riko/modules/rssitembuilder.py
 .. _simplemath: https://github.com/nerevu/riko/blob/master/riko/modules/simplemath.py
+.. _slugify: https://github.com/nerevu/riko/blob/master/riko/modules/slugify.py
 .. _sort: https://github.com/nerevu/riko/blob/master/riko/modules/sort.py
 .. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py
 .. _strconcat: https://github.com/nerevu/riko/blob/master/riko/modules/strconcat.py
-.. _stringtokenizer: https://github.com/nerevu/riko/blob/master/riko/modules/stringtokenizer.py
+.. _strfind: https://github.com/nerevu/riko/blob/master/riko/modules/strfind.py
 .. _strreplace: https://github.com/nerevu/riko/blob/master/riko/modules/strreplace.py
 .. _strtransform: https://github.com/nerevu/riko/blob/master/riko/modules/strtransform.py
 .. _subelement: https://github.com/nerevu/riko/blob/master/riko/modules/subelement.py
 .. _substr: https://github.com/nerevu/riko/blob/master/riko/modules/substr.py
 .. _sum: https://github.com/nerevu/riko/blob/master/riko/modules/sum.py
 .. _tail: https://github.com/nerevu/riko/blob/master/riko/modules/tail.py
+.. _tokenizer: https://github.com/nerevu/riko/blob/master/riko/modules/tokenizer.py
 .. _truncate: https://github.com/nerevu/riko/blob/master/riko/modules/truncate.py
 .. _union: https://github.com/nerevu/riko/blob/master/riko/modules/union.py
 .. _uniq: https://github.com/nerevu/riko/blob/master/riko/modules/uniq.py
 .. _urlbuilder: https://github.com/nerevu/riko/blob/master/riko/modules/urlbuilder.py
+.. _urlparse: https://github.com/nerevu/riko/blob/master/riko/modules/urlparse.py
 .. _xpathfetchpage: https://github.com/nerevu/riko/blob/master/riko/modules/xpathfetchpage.py
 .. _yql: https://github.com/nerevu/riko/blob/master/riko/modules/yql.py

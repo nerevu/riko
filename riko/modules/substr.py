@@ -49,7 +49,7 @@ def parser(word, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: strtransform)
+        assign (str): Attribute to assign parsed content (default: substr)
         stream (dict): The original item
 
     Returns:

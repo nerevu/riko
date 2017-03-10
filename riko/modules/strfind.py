@@ -1,22 +1,18 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.strreplace
-~~~~~~~~~~~~~~~~~~~~~~~
-Provides functions for string search-and-replace.
-
-You provide the module with the text string to search for, and what to replace
-it with. Multiple search-and-replace pairs can be added. You can specify to
-replace all occurrences of the search string, just the first occurrence, or the
-last occurrence.
+riko.modules.strfind
+~~~~~~~~~~~~~~~~~~~~
+Provides functions for finding text located before, after, or between
+substrings.
 
 Examples:
     basic usage::
 
-        >>> from riko.modules.strreplace import pipe
-        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        >>> from riko.modules.strfind import pipe
+        >>> conf = {'rule': {'find': 'o'}}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['strreplace'] == 'bye world'
+        >>> next(pipe(item, conf=conf))['strfind'] == 'hell'
         True
 
 Attributes:
@@ -40,15 +36,18 @@ OPTS = {
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
+PARAMS = {
+    'first': lambda word, rule: word.split(rule.find, 1),
+    'last': lambda word, rule: word.split(rule.find)}
+
 OPS = {
-    'first': lambda word, rule: word.replace(rule.find, rule.replace, 1),
-    'last': lambda word, rule: rule.replace.join(word.rsplit(rule.find, 1)),
-    'every': lambda word, rule: word.replace(rule.find, rule.replace),
-}
+    'before': lambda splits, rule: rule.find.join(splits[:len(splits) - 1]),
+    'after': lambda splits, rule: splits[-1]}
 
 
 def reducer(word, rule):
-    return OPS.get(rule.param, OPS['every'])(word, rule)
+    splits = PARAMS.get(rule.param, PARAMS['first'])(word, rule)
+    return OPS.get(rule.location, OPS['before'])(splits, rule).strip()
 
 
 @coroutine
@@ -62,7 +61,7 @@ def async_parser(word, rules, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: exchangerate)
+        assign (str): Attribute to assign parsed content (default: strfind)
         stream (dict): The original item
 
     Returns:
@@ -76,7 +75,7 @@ def async_parser(word, rules, skip, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0])
         ...     item = {'content': 'hello world'}
-        ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        ...     conf = {'rule': {'find': 'o'}}
         ...     rule = Objectify(conf['rule'])
         ...     kwargs = {'stream': item, 'conf': conf}
         ...     d = async_parser(item['content'], [rule], False, **kwargs)
@@ -87,7 +86,7 @@ def async_parser(word, rules, skip, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        bye world
+        hell
     """
     if skip:
         value = kwargs['stream']
@@ -108,7 +107,7 @@ def parser(word, rules, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: strtransform)
+        assign (str): Attribute to assign parsed content (default: strfind)
         stream (dict): The original item
 
     Returns:
@@ -118,10 +117,11 @@ def parser(word, rules, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> item = {'content': 'hello world'}
-        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        >>> conf = {'rule': {'find': 'o'}}
         >>> rule = Objectify(conf['rule'])
+        >>> args = item['content'], [rule], False
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(item['content'], [rule], False, **kwargs)[0] == 'bye world'
+        >>> parser(*args, **kwargs)[0] == 'hell'
         True
     """
     value = kwargs['stream'] if skip else reduce(reducer, rules, word)
@@ -130,8 +130,8 @@ def parser(word, rules, skip, **kwargs):
 
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously replaces the text of a field of
-    an item.
+    """A processor module that asynchronously finds text within the field of an
+    item.
 
     Args:
         item (dict): The entry to process
@@ -141,27 +141,30 @@ def async_pipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'rule'.
 
             rule (dict): can be either a dict or list of dicts. Must contain
-                the keys 'find' and 'replace'. May contain the key 'param'.
+                the key 'find'. May contain the keys 'location' or 'param'.
 
                 find (str): The string to find.
-                replace (str): The string replacement.
-                param (str): The type of replacement. Must be one of: 'first',
-                    'last', or 'every' (default: 'every').
 
-        assign (str): Attribute to assign parsed content (default: strreplace)
+                location (str): Direction of the substring to return. Must be
+                    either 'before' or 'after' (default: 'before').
+
+                param (str): The type of replacement. Must be either 'first'
+                    or 'last' (default: 'first').
+
+        assign (str): Attribute to assign parsed content (default: strfind)
         field (str): Item attribute from which to obtain the first number to
             operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with replaced content
+       Deferred: twisted.internet.defer.Deferred item with transformed content
 
     Examples:
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['strreplace'])
-        ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        ...     callback = lambda x: print(next(x)['strfind'])
+        ...     conf = {'rule': {'find': 'o'}}
         ...     d = async_pipe({'content': 'hello world'}, conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -170,14 +173,14 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        bye world
+        hell
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(**OPTS)
 def pipe(*args, **kwargs):
-    """A processor that replaces the text of a field of an item.
+    """A processor that finds text within the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -187,32 +190,39 @@ def pipe(*args, **kwargs):
         conf (dict): The pipe configuration. Must contain the key 'rule'.
 
             rule (dict): can be either a dict or list of dicts. Must contain
-                the keys 'find' and 'replace'. May contain the key 'param'.
+                the key 'find'. May contain the keys  'location' or 'param'.
 
                 find (str): The string to find.
-                replace (str): The string replacement.
-                param (str): The type of replacement. Must be one of: 'first',
-                    'last', or 'every' (default: 'every').
 
-        assign (str): Attribute to assign parsed content (default: strreplace)
+                location (str): Direction of the substring to return. Must be
+                    either 'before' or 'after' (default: 'before').
+
+                param (str): The type of replacement. Must be either 'first'
+                    or 'last' (default: 'first').
+
+        assign (str): Attribute to assign parsed content (default: strfind)
         field (str): Item attribute from which to obtain the first number to
             operate on (default: 'content')
 
     Yields:
-        dict: an item with replaced content
+        dict: an item with transformed content
 
     Examples:
-        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
+        >>> conf = {'rule': {'find': 'o'}}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['strreplace'] == 'bye world'
+        >>> next(pipe(item, conf=conf))['strfind'] == 'hell'
         True
-        >>> rules = [
-        ...     {'find': 'Gr', 'replace': 'M'},
-        ...     {'find': 'e', 'replace': 'a', 'param': 'last'}]
-        >>> conf = {'rule': rules}
+        >>> conf = {'rule': {'find': 'w', 'location': 'after'}}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> item = {'title': 'Greetings'}
-        >>> next(pipe(item, **kwargs))['result'] == 'Meatings'
+        >>> item = {'title': 'hello world'}
+        >>> next(pipe(item, **kwargs))['result'] == 'orld'
+        True
+        >>> conf = {
+        ...     'rule': [
+        ...         {'find': 'o', 'location': 'after', 'param': 'last'},
+        ...         {'find': 'l'}]}
+        >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['strfind'] == 'r'
         True
     """
     return parser(*args, **kwargs)

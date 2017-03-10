@@ -24,7 +24,7 @@ Examples:
         ... def run(reactor):
         ...     d1 = yield (AsyncPipe('fetchdata', conf=fconf)
         ...         .sort(conf=sort_conf)
-        ...         .stringtokenizer(conf=str_conf, **str_kwargs)
+        ...         .tokenizer(conf=str_conf, **str_kwargs)
         ...         .count()
         ...         .list)
         ...

@@ -25,6 +25,7 @@ from os import path as p, environ
 from calendar import timegm
 from decimal import Decimal
 from json import loads
+from html.entities import name2codepoint
 
 from builtins import *
 from six.moves.urllib.parse import quote, urlparse
@@ -90,6 +91,10 @@ DATES = {
 NAMESPACES = {
     'owl': 'http://www.w3.org/2002/07/owl#',
     'xhtml': 'http://www.w3.org/1999/xhtml'}
+
+ESCAPE = {
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'}
+
 
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
@@ -188,6 +193,10 @@ class Chainable(object):
 def combine_dicts(*dicts):
     iterable = (d.items() for d in dicts)
     return dict(it.chain.from_iterable(iterable))
+
+
+def invert_dict(d):
+    return {v: k for k, v in d.items()}
 
 
 def multi_try(source, zipped, default=None):
@@ -344,21 +353,15 @@ def get_response_encoding(response, def_encoding='utf-8'):
 
     encoding = None if encoding == '7bit' else encoding
 
-    if not encoding:
-        try:
-            encoding = info.get_content_charset()
-        except AttributeError:
-            pass
+    if not encoding and hasattr(info, 'get_content_charset'):
+        encoding = info.get_content_charset()
 
-    if not encoding:
-        try:
-            content_type = response.getheader('Content-Type', '')
-        except AttributeError:
-            pass
-        else:
-            if 'charset' in content_type:
-                ctype = content_type.split('=')[1]
-                encoding = ctype.strip().strip('"').strip("'")
+    if not encoding and hasattr(response, 'getheader'):
+        content_type = response.getheader('Content-Type', '')
+
+        if 'charset' in content_type:
+            ctype = content_type.split('=')[1]
+            encoding = ctype.strip().strip('"').strip("'")
 
     return encoding or def_encoding
 
@@ -395,6 +398,7 @@ def xpath(tree, path='/', pos=0, namespace=None):
         tags = path.split('/')[1:] or [path]
 
         try:
+            # TODO: consider replacing with twisted.words.xish.xpath
             elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
         except AttributeError:
             element_name = str(tree).split(' ')[1]
@@ -860,23 +864,27 @@ def multiplex(sources):
     return it.chain.from_iterable(sources)
 
 
-# def extend_entry(entry):
-#     if entry.get('k:tags'):
-#         if len(tags.split(',')) < 2:
-#             tags = tags.replace(' ', ',')
+def text2entity(text):
+    """Convert HTML/XML special chars to entity references
+    """
+    return ESCAPE.get(text, text)
 
-#         tags = tags.replace('/', ',').replace('#', '').replace(' ', '_')
-#         tags = filter(None, sorted(set(parse_tags(tags.split(',')))))
-#     else:
-#         tags = []
 
-#     content = entry.get('k:content').replace('<br />', '')
-#     content = content.replace('\n', '').strip()
+def entity2text(entitydef):
+    """Convert an HTML entity reference into unicode.
+    http://stackoverflow.com/a/58125/408556
+    """
+    if entitydef.startswith('&#x'):
+        cp = int(entitydef[3:-1], 16)
+    elif entitydef.startswith('&#'):
+        cp = int(entitydef[2:-1])
+    elif entitydef.startswith('&'):
+        cp = name2codepoint[entitydef[1:-1]]
+    else:
+        logger.debug(entitydef)
+        cp = None
 
-#     entry['k:tags'] = tags
-#     entry['k:content'] = content
-#     entry['k:summary'] = '%s%s' % (content[:128].replace('...', ''), '...')
-#     return entry
+    return chr(cp) if cp else entitydef
 
 
 ############

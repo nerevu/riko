@@ -36,45 +36,31 @@ except ImportError:
     pass
 
 from .sux import XMLParser, ParseError
-from riko.lib.utils import combine_dicts
+from riko.lib import utils
 
-# order is important
-HTML_ESCAPE_CHARS = (
-    ('&', '&amp;'),  # don't add any entities before this one
-    ('<', '&lt;'), ('>', '&gt;'), ('"', '&quot;'))
-
-REV_HTML_ESCAPE_CHARS = list(HTML_ESCAPE_CHARS)
-REV_HTML_ESCAPE_CHARS.reverse()
-XML_ESCAPE_CHARS = HTML_ESCAPE_CHARS + (("'", '&apos;'),)
-REV_XML_ESCAPE_CHARS = list(XML_ESCAPE_CHARS)
-REV_XML_ESCAPE_CHARS.reverse()
+HTML_ESCAPE_CHARS = {'&amp;', '&lt;', '&gt;', '&quot;'}
+entity_prog = re.compile('&(.*?);')
+escape_prog = re.compile("['%s']" % ''.join(utils.ESCAPE))
 
 
-def unescape(text, chars=REV_HTML_ESCAPE_CHARS):
-    "Perform the exact opposite of 'escape'."
-    for s, h in chars:
-        text = text.replace(h, s)
+def unescape(text):
+    def repl(matchobj):
+        match = matchobj.group(0)
+        return utils.entity2text(match) if match in HTML_ESCAPE_CHARS else match
 
-    return text
+    return entity_prog.sub(repl, text)
 
 
-def escape(text, chars=HTML_ESCAPE_CHARS):
-    "Escape a few XML special chars with XML entities."
-    for s, h in chars:
-        text = text.replace(s, h)
-
-    return text
+def escape(text):
+    repl = lambda matchobj: utils.text2entity(matchobj.group(0))
+    return escape_prog.sub(repl, text)
 
 
 def unescape_dict(d):
     return {k: unescape(v) for k, v in d.items()}
 
 
-def invert_dict(d):
-    return {v: k for k, v in d.items()}
-
-
-def getElementsByTagName(iNode, path, icase=False):
+def get_elements_by_tag_name(iNode, path, icase=False):
     """
     Return a list of all child elements of C{iNode} with a name matching
     C{name}.
@@ -95,7 +81,7 @@ def getElementsByTagName(iNode, path, icase=False):
         yield iNode
 
     if is_node and iNode.hasChildNodes():
-        for c in getElementsByTagName(iNode.childNodes, path, icase):
+        for c in get_elements_by_tag_name(iNode.childNodes, path, icase):
             yield c
 
     if not is_node:
@@ -107,8 +93,17 @@ def getElementsByTagName(iNode, path, icase=False):
             yield nodes[pos]
 
         for child in iNode:
-            for c in getElementsByTagName(child, path, icase):
+            for c in get_elements_by_tag_name(child, path, icase):
                 yield c
+
+
+def get_element_by_id(nodes, node_id):
+    for node in nodes:
+        if node.getAttribute('id') == node_id:
+            return node
+    else:
+        for node in nodes:
+            return get_element_by_id(node.childNodes, node_id)
 
 
 class MismatchedTags(Exception):
@@ -239,7 +234,7 @@ class Node(object):
 
         @raise ValueError: If C{oldChild} is not a child of this C{Node}.
         """
-        if not isinstance(newChild, Node) or not isinstance(oldChild, Node):
+        if not (isinstance(newChild, Node) or isinstance(oldChild, Node)):
             raise TypeError("expected Node instance")
 
         if oldChild.parentNode is not self:
@@ -252,22 +247,7 @@ class Node(object):
         return self.childNodes[-1]
 
     def firstChild(self):
-        if len(self.childNodes):
-            return self.childNodes[0]
-        return None
-
-    # def get_ownerDocument(self):
-    #     """This doesn't really get the owner document; microdom nodes
-    #     don't even have one necessarily.  This gets the root node,
-    #     which is usually what you really meant.
-    #     *NOT DOM COMPLIANT.*
-    #     """
-    #     node = self
-    #     while (node.parentNode): node=node.parentNode
-    #     return node
-
-    # ownerDocument = node.get_ownerDocument()
-    # leaving commented for discussion; see also domhelpers.getParents(node)
+        return self.childNodes[0]
 
 
 class Document(Node):
@@ -336,20 +316,10 @@ class Document(Node):
 
     def getElementsByTagName(self, name):
         icase = self.documentElement.case_insensitive
-        return getElementsByTagName(self.childNodes, name, icase)
+        return get_elements_by_tag_name(self.childNodes, name, icase)
 
-    def getElementById(self, id):
-        # TODO: rewrite this!!
-        childNodes = self.childNodes[:]
-
-        while childNodes:
-            node = childNodes.pop(0)
-
-            if node.childNodes:
-                childNodes.extend(node.childNodes)
-
-            if hasattr(node, 'getAttribute') and node.getAttribute('id') == id:
-                return node
+    def getElementById(self, node_id):
+        return get_element_by_id(self.childNodes, node_id)
 
 
 class EntityReference(Node):
@@ -416,7 +386,7 @@ class Text(CharacterData):
         else:
             v = decode(self.nodeValue)
             v = ' '.join(v.split()) if kwargs.get('strip') else v
-            val = escape(v)
+            val = utils.escape(v)
 
         val = encode(val)
         stream.write(val)
@@ -441,7 +411,7 @@ class _Attr(CharacterData):
 
 class Element(Node):
     nsprefixes = None
-    create_attr = lambda k, v: (' ', k, '="', escape(v), '"')
+    create_attr = lambda k, v: (' ', k, '="', utils.escape(v), '"')
 
     SINGLETONS = (
         'img', 'br', 'hr', 'base', 'meta', 'link', 'param',
@@ -531,7 +501,7 @@ class Element(Node):
 
     def getElementsByTagName(self, name):
         icase = self.case_insensitive
-        return getElementsByTagName(self.childNodes, name, icase)
+        return get_elements_by_tag_name(self.childNodes, name, icase)
 
     def hasAttributes(self):
         return 1
@@ -759,7 +729,7 @@ class MicroDOMParser(XMLParser):
         XMLParser.__init__(self, **kwargs)
         self.elementstack = []
         d = {'xmlns': 'xmlns', '': None}
-        dr = invert_dict(d)
+        dr = utils.invert_dict(d)
         self.nsstack = [(d, None, dr)]
         self.documents = []
         self._mddoctype = None
@@ -880,7 +850,7 @@ class MicroDOMParser(XMLParser):
         namespaces = self.nsstack[-1][0]
         newspaces = dict(self._gen_newspaces(unesc_attributes))
         new_unesc_attributes = dict(self._gen_new_attrs(unesc_attributes))
-        new_namespaces = combine_dicts(namespaces, newspaces)
+        new_namespaces = utils.combine_dicts(namespaces, newspaces)
         gen_attr_args = (new_unesc_attributes, new_namespaces)
         new_attributes = dict(self._gen_attrs(*gen_attr_args))
         el_args = (name, new_attributes, parent, self.filename, self.saveMark())
@@ -890,11 +860,11 @@ class MicroDOMParser(XMLParser):
             'namespace': new_namespaces.get('')}
 
         el = Element(*el_args, **kwargs)
-        revspaces = invert_dict(newspaces)
+        revspaces = utils.invert_dict(newspaces)
         el.addPrefixes(revspaces)
 
         if newspaces:
-            rscopy = combine_dicts(self.nsstack[-1][2], revspaces)
+            rscopy = utils.combine_dicts(self.nsstack[-1][2], revspaces)
             self.nsstack.append((new_namespaces, el, rscopy))
 
         self.elementstack.append(el)
