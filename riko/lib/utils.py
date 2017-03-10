@@ -463,6 +463,7 @@ def etree2dict(element):
 
 def any2dict(f, ext='xml', html5=False, path=None):
     path = path or ''
+
     if ext in {'xml', 'html'}:
         xml = ext == 'xml'
         root = xml2etree(f, xml, html5).getroot()
