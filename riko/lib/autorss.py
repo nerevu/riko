@@ -26,7 +26,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 class LinkParser(HTMLParser):
     def reset(self):
         HTMLParser.reset(self)
-        self.entry = []
+        self.entry = iter([])
 
     def handle_starttag(self, tag, attrs):
         entry = dict(attrs)
