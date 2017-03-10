@@ -47,10 +47,10 @@ except ImportError:
         import xml.etree.cElementTree as etree
     except ImportError:
         import xml.etree.ElementTree as etree
+    else:
+        from xml.etree.cElementTree import ElementTree
 
     import html5lib as html
-    from xml.etree.ElementTree import ElementTree
-
     html5parser = None
 else:
     from lxml.html import html5parser
