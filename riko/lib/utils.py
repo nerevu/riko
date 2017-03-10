@@ -40,31 +40,39 @@ from dateutil import parser
 from ijson import items
 from meza._compat import decode
 
+logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+
 try:
     from lxml import etree, html
 except ImportError:
     try:
         import xml.etree.cElementTree as etree
     except ImportError:
+        logger.debug('xml parser: ElementTree')
         import xml.etree.ElementTree as etree
+        from xml.etree.ElementTree import ElementTree
+    else:
+        logger.debug('xml parser: cElementTree')
+        from xml.etree.cElementTree import ElementTree
 
     import html5lib as html
-    from xml.etree.ElementTree import ElementTree
-
     html5parser = None
 else:
+    logger.debug('xml parser: lxml')
     from lxml.html import html5parser
 
 try:
     import speedparser
 except ImportError:
     import feedparser
+    logger.debug('rss parser: feedparser')
     speedparser = None
+else:
+    logger.debug('rss parser: speedparser')
 
 global CACHE
 
 rssparser = speedparser or feedparser
-logger = gogo.Gogo(__name__, monolog=True).logger
 
 DATE_FORMAT = '%m/%d/%Y'
 DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
@@ -463,6 +471,7 @@ def etree2dict(element):
 
 def any2dict(f, ext='xml', html5=False, path=None):
     path = path or ''
+
     if ext in {'xml', 'html'}:
         xml = ext == 'xml'
         root = xml2etree(f, xml, html5).getroot()

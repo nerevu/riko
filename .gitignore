@@ -1,21 +1,24 @@
 *.py[cod]
-*/.ipynb*
+.cookiecutter
+.ipynb_checkpoints/*
+examples/.ipynb_checkpoints/*
 
 # C extensions
 *.so
 
 # Packages
 *.egg
+.eggs
 *.egg-info
 dist
 build
 eggs
-.eggs/*
 parts
 var
 sdist
 develop-eggs
 .installed.cfg
+lib
 lib64
 
 # Installer logs
@@ -25,12 +28,10 @@ pip-log.txt
 .coverage
 .tox
 .noseids
-.scripttest
+.scripttest/*
 .cache/*
-nosetests.xml
-*.ropeproject
+*.xml
 cover/*
-coverage.xml
 
 # Translations
 *.mo

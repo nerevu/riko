@@ -6,7 +6,7 @@
 tests.test
 ~~~~~~~~~~
 
-Provides scripttests riko runpipe CLI functionality.
+Provides scripttests to test riko runpipe CLI functionality.
 """
 
 from __future__ import (
@@ -71,9 +71,8 @@ def main(script, tests, verbose=False, stop=True):
         args = [checklines, outlines]
         kwargs = {'fromfile': 'expected', 'tofile': 'got'}
         diffs = ''.join(unified_diff(*args, **kwargs))
-        passed = not diffs
 
-        if not passed:
+        if diffs:
             failures += 1
             msg = "ERROR! Output from test #%i:\n  %s\n" % (num, short_command)
             msg += "doesn't match:\n  %s\n" % expected
