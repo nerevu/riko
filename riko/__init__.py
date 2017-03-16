@@ -36,7 +36,7 @@ from __future__ import (
 from os import path as p
 from builtins import *
 
-__version__ = '0.40.0'
+__version__ = '0.40.1'
 
 __title__ = 'riko'
 __package_name__ = 'riko'
