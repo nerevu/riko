@@ -1,4 +1,4 @@
 lxml>=3.6.0,<4.0.0
 treq>=15.1.0,<17.0.0
-Twisted>=16.2.0,<17.0.0
+Twisted==17.1.0
 speedparser~=0.2.0
