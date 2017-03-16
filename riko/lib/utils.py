@@ -395,7 +395,8 @@ def xpath(tree, path='/', pos=0, namespace=None):
     try:
         elements = tree.xpath(path)
     except AttributeError:
-        tags = path.split('/')[1:] or [path]
+        stripped = path.lstrip('/')
+        tags = stripped.split('/') if stripped else []
 
         try:
             # TODO: consider replacing with twisted.words.xish.xpath
@@ -410,7 +411,7 @@ def xpath(tree, path='/', pos=0, namespace=None):
                 namespace = next(ns_iter, namespace)
 
             prefix = ('/%s:' % namespace) if namespace else '/'
-            match = '.%s%s' % (prefix, prefix.join(tags[1:]))
+            match = './%s%s' % (prefix, prefix.join(tags[1:]))
             elements = tree.findall(match, NAMESPACES)
         except IndexError:
             elements = [tree]
