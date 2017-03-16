@@ -161,11 +161,11 @@ def async_pipe(*args, **kwargs):
                 location (str): Direction of the substring to return. Must be
                     either 'before', 'after', or 'at' (default: 'before').
 
-                param (str): The type of replacement. Must be either 'first'
+                param (str): The type of search. Must be either 'first'
                     or 'last' (default: 'first').
 
         assign (str): Attribute to assign parsed content (default: strfind)
-        field (str): Item attribute from which to obtain the first number to
+        field (str): Item attribute from which to obtain the word to
             operate on (default: 'content')
 
     Returns:
@@ -210,11 +210,11 @@ def pipe(*args, **kwargs):
                 location (str): Direction of the substring to return. Must be
                     either 'before', 'after', or 'at' (default: 'before').
 
-                param (str): The type of replacement. Must be either 'first'
+                param (str): The type of search. Must be either 'first'
                     or 'last' (default: 'first').
 
         assign (str): Attribute to assign parsed content (default: strfind)
-        field (str): Item attribute from which to obtain the first number to
+        field (str): Item attribute from which to obtain the word to
             operate on (default: 'content')
 
     Yields:

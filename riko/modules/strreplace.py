@@ -149,8 +149,7 @@ def async_pipe(*args, **kwargs):
                     'last', or 'every' (default: 'every').
 
         assign (str): Attribute to assign parsed content (default: strreplace)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with replaced content
@@ -195,8 +194,7 @@ def pipe(*args, **kwargs):
                     'last', or 'every' (default: 'every').
 
         assign (str): Attribute to assign parsed content (default: strreplace)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Yields:
         dict: an item with replaced content

@@ -154,8 +154,7 @@ def async_pipe(*args, **kwargs):
                     transformer.
 
         assign (str): Attribute to assign parsed content (default: strtransform)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with transformed content
@@ -203,8 +202,7 @@ def pipe(*args, **kwargs):
                     transformer.
 
         assign (str): Attribute to assign parsed content (default: strtransform)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Yields:
         dict: an item with transformed content
