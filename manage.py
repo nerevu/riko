@@ -46,13 +46,13 @@ def check():
 @manager.command
 def lint(where=None, strict=False):
     """Check style with linters"""
-    args = [
-        'pylint', '--rcfile=tests/standard.rc', '-rn', '-fparseable', 'riko']
+    args = 'pylint --rcfile=tests/standard.rc -rn -fparseable'.split(' ')
+    extra = where.split(' ') if where else ['riko', 'tests']
 
     try:
-        check_call(['flake8', where] if where else 'flake8')
-        check_call(args + ['--py3k'])
-        check_call(args) if strict else None
+        check_call(['flake8'] + extra)
+        check_call(args + extra + ['--py3k'])
+        check_call(args + extra) if strict else None
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -63,11 +63,13 @@ def pipme():
     exit(call('pip', 'install', '-r', 'requirements.txt'))
 
 
+@manager.arg('where', 'w', help='requirements file', default=None)
 @manager.command
-def require():
+def require(where=None):
     """Create requirements.txt"""
-    cmd = 'pip freeze -l | grep -vxFf dev-requirements.txt > requirements.txt'
-    exit(call(cmd, shell=True))
+    prefix = '%s-' % where if where else ''
+    cmd = 'pip freeze -l | grep -xFf %srequirements.txt' % prefix
+    exit(check_call(cmd, shell=True))
 
 
 @manager.arg('where', 'w', help='test path', default=None)
@@ -95,7 +97,7 @@ def test(where=None, stop=None, **kwargs):
     opts += ' --processes=-1' if kwargs.get('parallel') else ''
     opts += ' --detailed-errors' if kwargs.get('verbose') else ''
     opts += ' --debug=nose.loader' if kwargs.get('debug') else ''
-    opts += ' -w %s' % where if where else ''
+    opts += ' -w {}'.format(where or '')
 
     try:
         if kwargs.get('tox'):
@@ -103,16 +105,10 @@ def test(where=None, stop=None, **kwargs):
         elif kwargs.get('detox'):
             check_call('detox')
         else:
-            check_call(('nosetests %s' % opts).split(' '))
+            check_call(('nosetests {}'.format(opts)).split(' '))
             check_call(['python', p.join(BASEDIR, 'tests', 'test.py')])
     except CalledProcessError as e:
         exit(e.returncode)
-
-
-@manager.command
-def register():
-    """Register package with PyPI"""
-    exit(call('python', p.join(BASEDIR, 'setup.py'), 'register'))
 
 
 @manager.command

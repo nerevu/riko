@@ -206,5 +206,9 @@ def pipe(*args, **kwargs):
         >>> conf = {'url': get_path('places.xml'), 'path': ''}
         >>> next(pipe(conf=conf))['reminder']
         '15'
+        >>> conf = {'url': get_path('schools.xml'), 'path': 'data.row'}
+        >>> next(pipe(conf=conf))['district_name'] == 'Turkana'
+        True
+
     """
     return parser(*args, **kwargs)

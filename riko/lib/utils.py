@@ -95,6 +95,11 @@ NAMESPACES = {
 ESCAPE = {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'}
 
+MATH_WORDS = {'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years'}
+TEXT_WORDS = {'last', 'next', 'week', 'month', 'year'}
+TT_KEYS = (
+    'year', 'month', 'day', 'hour', 'minute', 'second', 'day_of_week',
+    'day_of_year', 'daylight_savings')
 
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
@@ -395,7 +400,8 @@ def xpath(tree, path='/', pos=0, namespace=None):
     try:
         elements = tree.xpath(path)
     except AttributeError:
-        tags = path.split('/')[1:] or [path]
+        stripped = path.lstrip('/')
+        tags = stripped.split('/') if stripped else []
 
         try:
             # TODO: consider replacing with twisted.words.xish.xpath
@@ -410,7 +416,7 @@ def xpath(tree, path='/', pos=0, namespace=None):
                 namespace = next(ns_iter, namespace)
 
             prefix = ('/%s:' % namespace) if namespace else '/'
-            match = '.%s%s' % (prefix, prefix.join(tags[1:]))
+            match = './%s%s' % (prefix, prefix.join(tags[1:]))
             elements = tree.findall(match, NAMESPACES)
         except IndexError:
             elements = [tree]
@@ -497,11 +503,8 @@ def cast_date(date_str):
         date = date_str
     else:
         date = None
-        math_words = {
-            'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years'}
-        text_words = {'last', 'next', 'week', 'month', 'year'}
-        mathish = set(words).intersection(math_words)
-        textish = set(words).intersection(text_words)
+        mathish = set(words).intersection(MATH_WORDS)
+        textish = set(words).intersection(TEXT_WORDS)
 
     if date:
         pass
@@ -513,15 +516,10 @@ def cast_date(date_str):
         date = get_date('%ss' % words[1], 1, op)
     elif date_str in DATES:
         date = DATES.get(date_str)
+    elif hasattr(date_str, 'real'):
+        date = time.gmtime(date_str)
     else:
-        try:
-            date = parser.parse(date_str)
-        except AttributeError:
-            date = time.gmtime(date_str)
-
-    keys = (
-        'year', 'month', 'day', 'hour', 'minute', 'second', 'day_of_week',
-        'day_of_year', 'daylight_savings')
+        date = parser.parse(date_str)
 
     try:
         tt = date.timetuple()
@@ -532,7 +530,7 @@ def cast_date(date_str):
     day_of_w = 0 if tt[6] == 6 else tt[6] + 1
     isdst = None if tt[8] == -1 else bool(tt[8])
     result = {'utime': timegm(tt), 'timezone': 'UTC', 'date': date}
-    result.update(zip(keys, tt))
+    result.update(zip(TT_KEYS, tt))
     result.update({'day_of_week': day_of_w, 'daylight_savings': isdst})
     return result
 

@@ -63,31 +63,34 @@ SWITCH = {
 }
 
 
-def parse_rule(rule, item, **kwargs):
-    truthieness = rule.op in {'truthy', 'falsy'}
-    x = item.get(rule.field, **kwargs)
-    y = rule.value
-    has_value = y is not None
-
-    if has_value and not truthieness:
+def _parse_x_y(_x, _y):
+    try:
+        x = Decimal(_x)
+        y = Decimal(_y)
+    except (InvalidOperation, TypeError, ValueError):
         try:
-            _x = Decimal(x)
-            _y = Decimal(y)
-        except (InvalidOperation, TypeError, ValueError):
-            try:
-                _x = utils.cast_date(x)
-                _y = utils.cast_date(y)
-            except ValueError:
-                pass
-            else:
-                x, y = _x['date'], _y['date']
-        else:
+            x = utils.cast_date(_x)['date']
+            y = utils.cast_date(_y)['date']
+        except (ValueError, KeyError):
             x, y = _x, _y
 
-    if has_value or truthieness:
+    return x, y
+
+
+def parse_rule(rule, item, **kwargs):
+    truthy_like = rule.op in {'truthy', 'falsy'}
+    _x, _y = item.get(rule.field, **kwargs), rule.value
+    has_value = _y is not None
+
+    if has_value and not truthy_like:
+        x, y = _parse_x_y(_x, _y)
+    else:
+        x, y = _x, _y
+
+    if has_value or truthy_like:
         operation = SWITCH.get(rule.op)
 
-    if truthieness:
+    if truthy_like:
         result = operation(x)
     elif has_value:
         try:
