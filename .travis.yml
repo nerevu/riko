@@ -75,8 +75,7 @@ install:
       fi
 
 script:
-  - manage lint
-  - manage test
+  - manage lint && manage test
 
 after_success:
   - if [[ "$TRAVIS_PULL_REQUEST" == "true" ]]; then exit 0; fi
