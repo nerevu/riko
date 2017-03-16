@@ -5,10 +5,21 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from pprint import pprint
+from functools import partial
+
 from riko import get_path
 from riko.bado import coroutine
 from riko.lib.utils import combine_dicts as cdict
-from riko.collections import SyncCollection, AsyncCollection
+from riko.collections import SyncPipe, AsyncPipe
+from riko.modules import union
+
+BR = {'find': '<br>'}
+DEF_CUR_CODE = 'USD'
+
+odesk_conf = {'url': get_path('odesk.json'), 'path': 'items'}
+guru_conf = {'url': get_path('guru.json'), 'path': 'items'}
+elance_conf = {'url': get_path('elance.json'), 'path': 'items'}
+freelancer_conf = {'url': get_path('freelancer.json'), 'path': 'items'}
 
 
 def make_regex(field, match, replace, default=None):
@@ -22,261 +33,470 @@ def make_simplemath(other, op):
     return {'other': {'subkey': other, 'type': 'number'}, 'op': op}
 
 
-DEF_CUR_CODE = 'USD'
-pmatch = {'seriesmatch': False}
-smatch = {'singlematch': True}
+def add_source(source):
+    subelement_conf = {'path': 'k:source.content.1', 'token_key': None}
 
-subelement_conf = {'path': 'content.value', 'token_key': None}
-rename1_rule = [
-    {'newval': 'k:marketplace', 'field': 'link', 'copy': True},
-    {'newval': 'k:job_type', 'field': 'description', 'copy': True},
-    {'newval': 'k:content', 'field': 'description', 'copy': True},
-    {'newval': 'k:submissions', 'field': 'description', 'copy': True},
-    {'newval': 'k:author', 'field': 'title', 'copy': True},
-    {'newval': 'k:work_location', 'field': 'description', 'copy': True},
-    {'newval': 'k:client_location', 'field': 'description', 'copy': True},
-    {'newval': 'k:tags', 'field': 'description', 'copy': True},
-    {'newval': 'k:due', 'field': 'description', 'copy': True},
-    {'newval': 'k:budget_raw', 'field': 'description', 'copy': True},
-    {'newval': 'k:posted', 'field': 'updated'},
-    # # {'newval': 'k:category', 'field': 'description', 'copy': True},
-]
+    sourced = (source
+        .urlparse(field='link', assign='k:source')
+        .subelement(conf=subelement_conf, emit=False, assign='k:source'))
 
-rename2_rule = [
-    {'newval': 'k:parsed_type', 'field': 'k:budget_raw', 'copy': True},
-    {'newval': 'k:budget_raw1', 'field': 'k:budget_raw', 'copy': True},
-    {'newval': 'k:budget_raw2', 'field': 'k:budget_raw', 'copy': True}]
+    return sourced
 
-rename3_rule = [
-    {'newval': 'k:budget_raw1_num', 'field': 'k:budget_raw1', 'copy': True},
-    {'newval': 'k:budget_raw1_sym', 'field': 'k:budget_raw1', 'copy': True},
-    {'newval': 'k:budget_raw1_code', 'field': 'k:budget_raw1', 'copy': True},
-    {'newval': 'k:budget_raw2_num', 'field': 'k:budget_raw2', 'copy': True},
-    {'newval': 'k:budget_raw2_sym', 'field': 'k:budget_raw2', 'copy': True},
-    {'newval': 'k:budget_raw2_code', 'field': 'k:budget_raw2', 'copy': True}]
 
-rename4_rule = [
-    {'newval': 'k:budget_full', 'field': 'k:budget_w_sym', 'copy': True}]
+def add_id(source, rule, field='link'):
+    make_id_part = [{'subkey': 'k:source'}, {'value': '-'}, {'subkey': 'id'}]
 
-rename5_rule = [
-    {'field': 'pubDate'},
-    {'field': 'summary'},
-    {'field': 'content'},
-    {'field': 'dc:creator'},
-    {'field': 'updated_parsed'},
-    {'field': 'k:budget_raw'},
-    {'field': 'k:budget_raw1'},
-    {'field': 'k:budget_raw1_code'},
-    {'field': 'k:budget_raw1_num'},
-    {'field': 'k:budget_raw1_sym'},
-    {'field': 'k:budget_raw2'},
-    {'field': 'k:budget_raw2_code'},
-    {'field': 'k:budget_raw2_num'},
-    {'field': 'k:budget_raw2_sym'},
-    {'field': 'k:budget_sym'},
-    {'field': 'y:title'},
-    {'field': 'y:published'},
-    {'field': 'y:id'}]
+    ideed = (source
+        .strfind(conf={'rule': rule}, field=field, assign='id')
+        .strconcat(conf={'part': make_id_part}, assign='id'))
 
-match1_01 = r'(.*)( - oDesk|\| Elance Job)'
-match1_02 = r'^(http[s]?:\/\/)?\/?([^\/\.]+\.)*([^\/\.]+\.[^:\/\s\.]{2,3})(.*)'
-match1_03 = r'.*(Hourly budget:|Budget:<.*?> Hourly).*'
-match1_04 = r'.*(Fixed Price budget:|Budget:<.*?> Fixed Price).*'
-match1_05 = r'^(?!\b(hourly|fixed)\b).*'
-match1_06 = r'.*?[Description]?.*?<.*?>(.*?)\s*?<.*?>.*'
-match1_08 = r'(.*)(<b>Proposals:<.*?>).*?(\d+).*?(<a href)(.*)'
-match1_11 = r'(.*)(\bby\b)(.*)'
-match1_13 = r'(.*)((Freelancer|Preferred Job) Location:<.*?>)(.*?)(<.*?>)(.*)'
-m1_14 = 'Client Location:<.*?>|Country<.*?>:'
-match1_14 = r'(.*)(%s).*?(\w.*?)\s*?(<.*?>)(.*)' % m1_14
-match1_15 = r'(.*)(<b>(Category:?<.*?>:?))(.*?)(<.*?>|<b>Skills<.*?>)(.*)'
-match1_16 = r'(.*)(<b>(Required skills|Desired Skills):<.*?>)(.*?)(<.*?>)(.*)'
-match1_17 = r'(.*)(Jobs:)(.*?)(\))(.*)'
-match1_18 = r'&gt;|<br>'
-match1_19 = r'(\w+)(?!.*,)'
-match1_20 = r'\/|\s*&amp;'
-match1_21 = r'[^\w|\-,]+'
-match1_23 = r'.*Time Left.*Ends\s*?(.*?)\)?\s*?<.*?>.*'
-m1_24 = 'Fixed Price budget:<.*?>|Hourly budget.*Rate:|Fixed Price\s+\('
-match1_24 = r'(.*)(%s)(.*?)\)*(<.*?>|, Jobs:)(.*)' % m1_24
-match1_25 = r'Under|Upto|Less than|or less'
-match1_26 = r'^(?!.*-.*)(.*)'
+    return ideed
 
-regex1_rule = [
-    make_regex('title', match1_01, '$1'),
-    make_regex('k:marketplace', match1_02, '$3'),
-    make_regex('k:job_type', match1_03, 'hourly'),
-    make_regex('k:job_type', match1_04, 'fixed'),
-    make_regex('k:job_type', match1_05, 'unknown'),
-    cdict(smatch, make_regex('k:content', match1_06, '$1', 'N/A')),
-    make_regex('k:submissions', match1_08, '$3', 'unknown'),
-    make_regex('k:author', match1_11, '$3', 'unknown'),
-    make_regex('k:work_location', match1_13, '$4', 'unknown'),
-    make_regex('k:client_location', match1_14, '$3', 'unknown'),
-    cdict(pmatch, make_regex('k:tags', match1_15, '$4')),
-    cdict(pmatch, make_regex('k:tags', match1_16, '$4')),
-    cdict(pmatch, make_regex('k:tags', match1_17, '$3')),
-    cdict(make_regex('k:tags', match1_18, ',')),
-    # cdict(make_regex('k:tags', match1_19, '$1,')),
-    make_regex('k:tags', match1_20, ','),
-    make_regex('k:tags', match1_21, '-'),
-    make_regex('k:tags', '^-|-$', ''),
-    make_regex('k:tags', '-,-|,-|-,', ','),
-    make_regex('k:tags', '^,|,$', ''),
-    make_regex('k:due', match1_23, '$1', 'unknown'),
-    make_regex('k:budget_raw', match1_24, '$3', '0'),
-    make_regex('k:budget_raw', 'k', '000'),
-    make_regex('k:budget_raw', 'Under|Upto|Less than', '0 -'),
-    make_regex('k:budget_raw', 'or less', '- 0'),
-    make_regex('k:budget_raw', r'.*Not Sure.*', '0'),
-    make_regex('k:budget_raw', match1_25, '-'),
-    make_regex('k:budget_raw', match1_26, '$1 - $1'),
-]
 
-regex2_rule = [
-    make_regex('k:budget_raw1', '(.*)-(.*)', '$1'),
-    make_regex('k:budget_raw2', '(.*)-(.*)', '$2')
-]
+def add_posted(source, rule='', field='summary'):
+    if rule:
+        conf = {'rule': rule}
+        source = source.strfind(conf=conf, field=field, assign='k:posted')
+    else:
+        rule = {'field': 'updated', 'newval': 'k:posted'}
+        source = source.rename(conf={'rule': rule})
 
-regex3_rule = [
-    make_regex('k:budget_raw1_num', r'[,.\s]', ''),
-    make_regex('k:budget_raw1_num', r'[^\d]*(\d+).*', '$1'),
-    make_regex('k:budget_raw1_sym', r'.*([$£€₹]).*', '$1'),
-    make_regex('k:budget_raw1_code', r'.*(\b[A-Z]{3}\b).*', '$1', ''),
-    make_regex('k:budget_raw2_num', r'[,.\s]', ''),
-    make_regex('k:budget_raw2_num', r'[^\d]*(\d+).*', '$1'),
-    make_regex('k:budget_raw2_sym', r'.*([$£€₹]).*', '$1'),
-    make_regex('k:budget_raw2_code', r'.*(\b[A-Z]{3}\b).*', '$1', ''),
-    make_regex('k:parsed_type', r'.*hr.*', 'hourly'),
-    make_regex('k:parsed_type', r'.*unknown.*', 'unknown'),
-    make_regex('k:parsed_type', r'.*(?!(hourly|unknown)).*', 'fixed')
-]
+    return source
 
-strreplace_rule = {'find': 'unknown', 'replace': {'subkey': 'k:parsed_type'}}
 
-strreplace2_rule = [
-    {'find': '$', 'replace': 'USD'},
-    {'find': '£', 'replace': 'GBP'},
-    {'find': '€', 'replace': 'EUR'},
-    {'find': '₹', 'replace': 'INR'},
-]
+def add_tags(source, rule, field='summary', assign='k:tags'):
+    tokenizer_conf = {'dedupe': True, 'sort': True}
+    no_tags = {'field': assign}
 
-regex4_rule = make_regex('k:cur_code', r'^(?![A-Z]{3}\b)(.*)', DEF_CUR_CODE)
-regex5_conf = {
-    'rule': [
-        make_regex('k:job_type', 'fixed', '1'),
-        make_regex('k:job_type', 'hourly', '2'),
-        make_regex('k:job_type', 'unknown', '3')
+    tag_strreplace_rule = [
+        {'find': '  ', 'replace': ','},
+        {'find': '&gt;', 'replace': ','},
+        {'find': '&amp;', 'replace': '&'},
+        {'find': 'Other -', 'replace': ''},
+        # {'find': '-', 'replace': ''},
     ]
-}
 
-strconcat1_conf = {
-    'part': [
-        {'subkey': 'k:budget_raw1_code'}, {'subkey': 'k:budget_raw2_code'}]}
+    tagged = (source
+        .strfind(conf={'rule': rule}, field=field, assign=assign)
+        .strreplace(
+            conf={'rule': tag_strreplace_rule}, field=assign,
+            assign=assign, skip_if=no_tags)
+        .strtransform(
+            conf={'rule': {'transform': 'lower'}}, field=assign,
+            assign=assign, skip_if=no_tags)
+        .tokenizer(
+            conf=tokenizer_conf, field=assign, assign=assign, skip_if=no_tags)
+    )
 
-strconcat2_conf = {
-    'part': [{'subkey': 'k:budget_raw1_sym'}, {'subkey': 'k:budget_raw2_sym'}]}
+    return tagged
 
-strconcat3_conf = {
-    'part': [
+
+def add_budget(source, budget_text, fixed_text='', hourly_text='', double=True):
+    codes = '$£€₹'
+    no_raw_budget = {'field': 'k:budget_raw'}
+    has_code = {'field': 'k:cur_code', 'include': True}
+    is_def_cur = {'field': 'k:cur_code', 'text': DEF_CUR_CODE, 'include': True}
+    not_def_cur = {'field': 'k:cur_code', 'text': DEF_CUR_CODE}
+    isnt_fixed = {'field': 'summary', 'text': fixed_text}
+    isnt_hourly = {'field': 'summary', 'text': hourly_text}
+    no_symbol = {'field': 'k:budget_raw', 'text': codes, 'op': 'intersection'}
+    code_or_no_raw_budget = [has_code, no_raw_budget]
+    def_cur_or_no_raw_budget = [is_def_cur, no_raw_budget]
+    not_def_cur_or_no_raw_budget = [not_def_cur, no_raw_budget]
+
+    first_num_rule = {'find': r'\d+', 'location': 'at'}
+    last_num_rule = {'find': r'\d+', 'location': 'at', 'param': 'last'}
+    cur_rule = {'find': r'\b[A-Z]{3}\b', 'location': 'at'}
+    sym_rule = {'find': '[%s]' % codes, 'location': 'at'}
+
+    # make_regex('k:budget_raw', r'[(),.\s]', ''),
+    invalid_budgets = [
+        {'find': 'Less than', 'replace': '0-'},
+        {'find': 'Under', 'replace': '0-'},
+        {'find': 'Upto', 'replace': '0-'},
+        {'find': 'or less', 'replace': '-0'},
+        {'find': 'k', 'replace': '000'},
+        {'find': 'Not Sure', 'replace': ''},
+        {'find': 'Not sure', 'replace': ''},
+        {'find': '(', 'replace': ''},
+        {'find': ')', 'replace': ''},
+        {'find': '.', 'replace': ''},
+        {'find': ',', 'replace': ''},
+        {'find': ' ', 'replace': ''},
+    ]
+
+    cur_strreplace_rule = [
+        {'find': '$', 'replace': 'USD'},
+        {'find': '£', 'replace': 'GBP'},
+        {'find': '€', 'replace': 'EUR'},
+        {'find': '₹', 'replace': 'INR'},
+    ]
+
+    converted_budget_part = [
         {'subkey': 'k:budget_w_sym'},
         {'value': ' ('},
         {'subkey': 'k:budget_converted_w_sym'},
-        {'value': ')'}]}
+        {'value': ')'}
+    ]
 
-strconcat4_conf = {'part': [{'subkey': 'k:budget_full'}, {'value': ' / hr'}]}
-tokenizer_conf = {'dedupe': True, 'sort': True}
-substring1_conf = {'from': 0, 'length': 3}
-substring2_conf = {'from': 0, 'length': 1}
-currencyformat1_conf = {'currency': {'subkey': 'k:cur_code'}}
-exchangerate_conf = {'url': get_path('quote.json')}
-currencyformat2_conf = {'currency': DEF_CUR_CODE}
-simplemath1_conf = make_simplemath('k:budget_raw2_num', 'mean')
-simplemath2_conf = make_simplemath('k:rate', 'multiply')
-test1 = lambda item: item.get('k:cur_code')
-test2 = lambda item: item.get('k:cur_code') != DEF_CUR_CODE
-test3 = lambda item: item.get('k:cur_code') == DEF_CUR_CODE
-test4 = lambda item: item.get('k:job_type') != 'hourly'
+    def_full_budget_part = {'subkey': 'k:budget_w_sym'}
+    hourly_budget_part = [{'subkey': 'k:budget_full'}, {'value': ' / hr'}]
+    exchangerate_conf = {'url': get_path('quote.json')}
+    native_currencyformat_conf = {'currency': {'subkey': 'k:cur_code'}}
+    def_currencyformat_conf = {'currency': DEF_CUR_CODE}
+    ave_budget_conf = make_simplemath('k:budget_raw2_num', 'mean')
+    convert_budget_conf = make_simplemath('k:rate', 'multiply')
 
-sources = [
-    {'url': get_path('kazeeki_1.json'), 'type': 'fetchdata', 'path': 'items'},
-    {'url': get_path('kazeeki_2.json'), 'type': 'fetchdata', 'path': 'items'},
-    {'url': get_path('kazeeki_3.json'), 'type': 'fetchdata', 'path': 'items'},
-]
+    if fixed_text:
+        source = source.strconcat(
+            conf={'part': {'value': 'fixed'}}, assign='k:job_type',
+            skip_if=isnt_fixed)
 
+    if hourly_text:
+        source = source.strconcat(
+            conf={'part': {'value': 'hourly'}}, assign='k:job_type',
+            skip_if=isnt_hourly)
 
-def parse_source(source):
-    pipe = (source
-        .subelement(conf=subelement_conf, emit=False, assign='content')
-        .rename(conf={'rule': rename1_rule})
-        .regex(conf={'rule': regex1_rule})
-        .rename(conf={'rule': rename2_rule})
-        .regex(conf={'rule': regex2_rule})
-        .rename(conf={'rule': rename3_rule})
-        .regex(conf={'rule': regex3_rule})
+    source = (source
+        .refind(
+            conf={'rule': cur_rule}, field='k:budget_raw',
+            assign='k:cur_code', skip_if=no_raw_budget)
         .strreplace(
-            conf={'rule': strreplace_rule},
-            field='k:job_type',
-            assign='k:job_type')
-        .strtransform(
-            conf={'rule': {'transform': 'lower'}},
-            field='k:tags', assign='k:tags')
-        .tokenizer(conf=tokenizer_conf, field='k:tags', assign='k:tags')
-        .simplemath(
-            conf=simplemath1_conf,
-            field='k:budget_raw1_num',
-            assign='k:budget')
-        .strconcat(conf=strconcat1_conf, assign='k:cur_code')
-        .substr(conf=substring1_conf, field='k:cur_code', assign='k:cur_code')
-        .strconcat(
-            conf=strconcat2_conf,
-            field='k:budget_sym',
-            assign='k:budget_sym')
-        .substr(
-            conf=substring2_conf,
-            field='k:budget_sym',
-            assign='k:budget_sym')
+            conf={'rule': invalid_budgets}, field='k:budget_raw',
+            assign='k:budget_raw', skip_if=no_raw_budget))
+
+    if double:
+        source = (source
+            .refind(
+                conf={'rule': first_num_rule}, field='k:budget_raw',
+                assign='k:budget_raw_num', skip_if=no_raw_budget)
+            .refind(
+                conf={'rule': last_num_rule}, field='k:budget_raw',
+                assign='k:budget_raw2_num', skip_if=no_raw_budget)
+            .simplemath(
+                conf=ave_budget_conf, field='k:budget_raw_num',
+                assign='k:budget', skip_if=no_raw_budget)
+        )
+    else:
+        source = source.refind(
+            conf={'rule': first_num_rule}, field='k:budget_raw',
+            assign='k:budget', skip_if=no_raw_budget)
+
+    source = (source
+        .refind(
+            conf={'rule': sym_rule}, field='k:budget_raw',
+            assign='k:budget_raw_sym', skip_if=no_symbol)
         .strreplace(
-            conf={'rule': strreplace2_rule},
-            field='k:budget_sym',
-            assign='k:cur_code',
-            skip_if=test1)
-        .regex(conf={'rule': regex4_rule})
-        .regex(conf=regex5_conf, assign='k:job_type_code')
-        .hash(field='content', assign='id')
+            conf={'rule': cur_strreplace_rule}, field='k:budget_raw_sym',
+            assign='k:cur_code', skip_if=code_or_no_raw_budget)
         .currencyformat(
-            conf=currencyformat1_conf,
-            field='k:budget',
-            assign='k:budget_w_sym')
+            conf=native_currencyformat_conf, field='k:budget',
+            assign='k:budget_w_sym', skip_if=no_raw_budget)
         .exchangerate(
-            conf=exchangerate_conf,
-            field='k:cur_code',
-            assign='k:rate')
+            conf=exchangerate_conf, field='k:cur_code', assign='k:rate',
+            skip_if=def_cur_or_no_raw_budget)
         .simplemath(
-            conf=simplemath2_conf,
-            field='k:budget',
-            assign='k:budget_converted')
+            conf=convert_budget_conf, field='k:budget',
+            assign='k:budget_converted', skip_if=def_cur_or_no_raw_budget)
         .currencyformat(
-            conf=currencyformat2_conf,
-            field='k:budget_converted',
-            assign='k:budget_converted_w_sym')
-        .rename(conf={'rule': rename4_rule}, skip_if=test2)
-        .strconcat(conf=strconcat3_conf, assign='k:budget_full', skip_if=test3)
-        .strconcat(conf=strconcat4_conf, field='k:budget_full', skip_if=test4)
-        .rename(conf={'rule': rename5_rule}))
+            conf=def_currencyformat_conf, field='k:budget_converted',
+            assign='k:budget_converted_w_sym', skip_if=def_cur_or_no_raw_budget)
+        .strconcat(
+            conf={'part': converted_budget_part}, assign='k:budget_full',
+            skip_if=def_cur_or_no_raw_budget)
+        .strconcat(
+            conf={'part': def_full_budget_part}, assign='k:budget_full',
+            skip_if=not_def_cur_or_no_raw_budget)
+    )
 
-    return pipe.list
+    if hourly_text:
+        source = (source
+            .strconcat(
+                conf={'part': hourly_budget_part}, assign='k:budget_full',
+                skip_if=isnt_hourly)
+        )
+
+    return source
 
 
-def pipe(test=False):
-    source = SyncCollection(sources).pipe(test=test)
-    stream = parse_source(source)
+def clean_locations(source):
+    no_client_loc = {'field': 'k:client_location'}
+    no_work_loc = {'field': 'k:work_location'}
+
+    rule = {'find': ', ', 'replace': ''}
+    cleaned = (source
+        .strreplace(
+            conf={'rule': rule}, field='k:client_location',
+            assign='k:client_location', skip_if=no_client_loc)
+        .strreplace(
+            conf={'rule': rule}, field='k:work_location',
+            assign='k:work_location', skip_if=no_work_loc)
+    )
+
+    return cleaned
+
+
+def remove_cruft(source):
+    remove_rule = [
+        {'field': 'author'},
+        {'field': 'content'},
+        {'field': 'dc:creator'},
+        {'field': 'links'},
+        {'field': 'pubDate'},
+        {'field': 'summary'},
+        {'field': 'updated'},
+        {'field': 'updated_parsed'},
+        {'field': 'y:id'},
+        {'field': 'y:title'},
+        {'field': 'y:published'},
+        {'field': 'k:budget_raw'},
+        {'field': 'k:budget_raw2_num'},
+        {'field': 'k:budget_raw_num'},
+        {'field': 'k:budget_raw_sym'},
+    ]
+
+    return source.rename(conf={'rule': remove_rule})
+
+
+def parse_odesk(source, stream=True):
+    budget_text = 'Budget</b>:'
+    no_budget = {'field': 'summary', 'text': budget_text}
+    raw_budget_rule = [{'find': budget_text, 'location': 'after'}, BR]
+    title_rule = {'find': '- oDesk'}
+    find_id_rule = [{'find': 'ID</b>:', 'location': 'after'}, BR]
+    categ_rule = [{'find': 'Category</b>:', 'location': 'after'}, BR]
+    skills_rule = [{'find': 'Skills</b>:', 'location': 'after'}, BR]
+    client_loc_rule = [{'find': 'Country</b>:', 'location': 'after'}, BR]
+    posted_rule = [{'find': 'Posted On</b>:', 'location': 'after'}, BR]
+    desc_rule = [{'find': '<p>', 'location': 'after'}, {'find': '<br><br><b>'}]
+
+    source = (source
+        .strfind(conf={'rule': title_rule}, field='title', assign='title')
+        .strfind(
+            conf={'rule': client_loc_rule}, field='summary',
+            assign='k:client_location')
+        .strfind(
+            conf={'rule': desc_rule}, field='summary', assign='description')
+        .strfind(
+            conf={'rule': raw_budget_rule}, field='summary',
+            assign='k:budget_raw', skip_if=no_budget)
+    )
+
+    source = add_source(source)
+    source = add_posted(source, posted_rule)
+    source = add_id(source, find_id_rule, field='summary')
+    source = add_budget(source, budget_text, double=False)
+    source = add_tags(source, skills_rule)
+    source = add_tags(source, categ_rule, assign='k:categories')
+    source = clean_locations(source)
+    source = remove_cruft(source)
+    return source.output if stream else source
+
+
+def parse_guru(source, stream=True):
+    budget_text = 'budget:</b>'
+    fixed_text = 'Fixed Price budget:</b>'
+    hourly_text = 'Hourly budget:</b>'
+
+    no_budget = {'field': 'summary', 'text': budget_text}
+    isnt_hourly = {'field': 'summary', 'text': hourly_text}
+    raw_budget_rule = [{'find': budget_text, 'location': 'after'}, BR]
+    after_hourly = {'rule': {'find': 'Rate:', 'location': 'after'}}
+    find_id_rule = {'find': '/', 'location': 'after', 'param': 'last'}
+    categ_rule = [{'find': 'Category:</b>', 'location': 'after'}, BR]
+    skills_rule = [{'find': 'Required skills:</b>', 'location': 'after'}, BR]
+
+    job_loc_conf = {
+        'rule': [{'find': 'Freelancer Location:</b>', 'location': 'after'}, BR]}
+
+    desc_conf = {
+        'rule': [{'find': 'Description:</b>', 'location': 'after'}, BR]}
+
+    source = (source
+        .strfind(conf=job_loc_conf, field='summary', assign='k:work_location')
+        .strfind(conf=desc_conf, field='summary', assign='description')
+        .strfind(
+            conf={'rule': raw_budget_rule}, field='summary',
+            assign='k:budget_raw', skip_if=no_budget)
+        .strfind(
+            conf=after_hourly, field='k:budget_raw', assign='k:budget_raw',
+            skip_if=isnt_hourly)
+    )
+
+    kwargs = {'fixed_text': fixed_text, 'hourly_text': hourly_text}
+    source = add_source(source)
+    source = add_posted(source)
+    source = add_id(source, find_id_rule)
+    source = add_budget(source, budget_text, **kwargs)
+    source = add_tags(source, skills_rule)
+    source = add_tags(source, categ_rule, assign='k:categories')
+    source = clean_locations(source)
+    source = remove_cruft(source)
+    return source.output if stream else source
+
+
+def parse_elance(source, stream=True):
+    budget_text = 'Budget:</b>'
+    fixed_text = 'Budget:</b> Fixed Price'
+    hourly_text = 'Budget:</b> Hourly'
+
+    no_job_loc = {'field': 'summary', 'text': 'Preferred Job Location'}
+    no_client_loc = {'field': 'summary', 'text': 'Client Location'}
+    no_budget = {'field': 'summary', 'text': budget_text}
+    isnt_fixed = {'field': 'summary', 'text': fixed_text}
+    isnt_hourly = {'field': 'summary', 'text': hourly_text}
+    raw_budget_rule = [{'find': budget_text, 'location': 'after'}, BR]
+    after_hourly = {'rule': {'find': 'Hourly', 'location': 'after'}}
+    after_fixed = {'rule': {'find': 'Fixed Price', 'location': 'after'}}
+    title_conf = {'rule': {'find': '| Elance Job'}}
+
+    find_id_rule = [
+        {'find': '/', 'param': 'last'},
+        {'find': '/', 'location': 'after', 'param': 'last'}]
+
+    categ_rule = [{'find': 'Category:</b>', 'location': 'after'}, BR]
+    skills_rule = [{'find': 'Desired Skills:</b>', 'location': 'after'}, BR]
+
+    job_loc_conf = {
+        'rule': [
+            {'find': 'Preferred Job Location:</b>', 'location': 'after'}, BR]}
+
+    client_loc_conf = {
+        'rule': [{'find': 'Client Location:</b>', 'location': 'after'}, BR]}
+
+    desc_rule = [
+        {'find': '<p>', 'location': 'after'}, {'find': '...\n    <br>'}]
+
+    proposals_conf = {
+        'rule': [
+            {'find': 'Proposals:</b>', 'location': 'after'}, {'find': '('}]}
+
+    jobs_posted_conf = {
+        'rule': [
+            {'find': 'Client:</b> Client (', 'location': 'after'},
+            {'find': 'jobs posted'}]}
+
+    jobs_awarded_conf = {
+        'rule': [
+            {'find': 'jobs posted,', 'location': 'after'},
+            {'find': 'awarded'}]}
+
+    purchased_conf = {
+        'rule': [
+            {'find': 'total purchased'},
+            {'find': ',', 'location': 'after', 'param': 'last'}]}
+
+    ends_conf = {
+        'rule': [
+            {'find': 'Time Left:</b>', 'location': 'after'},
+            {'find': ') <br>'},
+            {'find': 'h (Ends', 'location': 'after'}]}
+
+    source = (source
+        .strfind(conf=title_conf, field='title', assign='title')
+        .strfind(conf=proposals_conf, field='summary', assign='k:submissions')
+        .strfind(conf=jobs_posted_conf, field='summary', assign='k:num_jobs')
+        .strfind(
+            conf=jobs_awarded_conf, field='summary', assign='k:per_awarded')
+        .strfind(conf=purchased_conf, field='summary', assign='k:tot_purchased')
+        .strfind(conf=ends_conf, field='summary', assign='k:due')
+        .strfind(
+            conf=job_loc_conf, field='summary', assign='k:work_location',
+            skip_if=no_job_loc)
+        .strfind(
+            conf=client_loc_conf, field='summary', assign='k:client_location',
+            skip_if=no_client_loc)
+        .strfind(
+            conf={'rule': desc_rule}, field='summary', assign='description')
+        .strfind(
+            conf={'rule': raw_budget_rule}, field='summary',
+            assign='k:budget_raw', skip_if=no_budget)
+        .strfind(
+            conf=after_hourly, field='k:budget_raw', assign='k:budget_raw',
+            skip_if=isnt_hourly)
+        .strfind(
+            conf=after_fixed, field='k:budget_raw', assign='k:budget_raw',
+            skip_if=isnt_fixed)
+    )
+
+    kwargs = {'fixed_text': fixed_text, 'hourly_text': hourly_text}
+    source = add_source(source)
+    source = add_posted(source)
+    source = add_id(source, find_id_rule)
+    source = add_budget(source, budget_text, **kwargs)
+    source = add_tags(source, skills_rule)
+    source = add_tags(source, categ_rule, assign='k:categories')
+    source = clean_locations(source)
+    source = remove_cruft(source)
+    return source.output if stream else source
+
+
+def parse_freelancer(source, stream=True):
+    budget_text = '(Budget:'
+    no_budget = {'field': 'summary', 'text': budget_text}
+    raw_budget_rule = [
+        {'find': budget_text, 'location': 'after'}, {'find': ','}]
+
+    title_rule = {'find': ' by '}
+    skills_rule = [{'find': ', Jobs:', 'location': 'after'}, {'find': ')</p>'}]
+    desc_rule = [{'find': '<p>', 'location': 'after'}, {'find': '(Budget:'}]
+
+    source = (source
+        .strfind(conf={'rule': title_rule}, field='title', assign='title')
+        .strfind(
+            conf={'rule': desc_rule}, field='summary', assign='description')
+        .strfind(
+            conf={'rule': raw_budget_rule}, field='summary',
+            assign='k:budget_raw', skip_if=no_budget)
+    )
+
+    source = add_source(source)
+    source = add_posted(source)
+    source = add_budget(source, budget_text)
+    source = add_tags(source, skills_rule)
+    source = clean_locations(source)
+    source = remove_cruft(source)
+    return source.output if stream else source
+
+
+def pipe(test=False, parallel=False, threads=False):
+    kwargs = {'parallel': parallel, 'threads': threads}
+
+    Pipe = partial(SyncPipe, 'fetchdata', **kwargs)
+    odesk_source = Pipe(conf=odesk_conf)
+    guru_source = Pipe(conf=guru_conf)
+    freelancer_source = Pipe(conf=freelancer_conf)
+    elance_source = Pipe(conf=elance_conf)
+    # odesk_source = SyncPipe('fetchdata', conf=odesk_conf, **kwargs)
+    # guru_source = SyncPipe('fetchdata', conf=guru_conf, **kwargs)
+    # elance_source = SyncPipe('fetchdata', conf=elance_conf, **kwargs)
+    # freelancer_source = SyncPipe('fetchdata', conf=freelancer_conf, **kwargs)
+
+    odesk_pipe = parse_odesk(odesk_source, stream=False)
+    guru_stream = parse_guru(guru_source)
+    elance_stream = parse_elance(elance_source)
+    freelancer_stream = parse_freelancer(freelancer_source)
+
+    others = [guru_stream, freelancer_stream, elance_stream]
+    stream = odesk_pipe.union(others=others).list
+
     pprint(stream[-1])
     return stream
 
 
 @coroutine
 def async_pipe(reactor, test=None):
-    source = AsyncCollection(sources).async_pipe(test=test)
-    stream = yield parse_source(source)
+    Pipe = partial(AsyncPipe, 'fetchdata')
+    odesk_source = Pipe(conf=odesk_conf)
+    guru_source = Pipe(conf=guru_conf)
+    freelancer_source = Pipe(conf=freelancer_conf)
+    elance_source = Pipe(conf=elance_conf)
+
+    odesk_pipe = yield parse_odesk(odesk_source, stream=False)
+    guru_stream = yield parse_guru(guru_source)
+    elance_stream = yield parse_elance(elance_source)
+    freelancer_stream = yield parse_freelancer(freelancer_source)
+
+    others = [guru_stream, freelancer_stream, elance_stream]
+    stream = odesk_pipe.union(others=others).list
     pprint(stream[-1])
