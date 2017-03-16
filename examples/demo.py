@@ -8,7 +8,7 @@ riko demo
 Word Count
 
     >>> from riko import get_path
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> url = get_path('users.jyu.fi.html')
     >>> fetch_conf = {
@@ -46,8 +46,7 @@ from __future__ import (
 
 from riko import get_path
 from riko.bado import coroutine
-from riko.collections.sync import SyncPipe
-from riko.collections.async import AsyncPipe
+from riko.collections import SyncPipe, AsyncPipe
 
 replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
 health = get_path('health.xml')

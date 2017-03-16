@@ -49,7 +49,7 @@ Word Count
     >>> #
     >>> # `SyncPipe` is a workflow convenience class that enables method
     >>> # chaining and parallel processing
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> stream = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
@@ -98,7 +98,7 @@ Fetching feeds
     >>> #
     >>> # `SyncCollection` is a url fetching convenience class with support for
     >>> # parallel processing
-    >>> from riko.collections.sync import SyncCollection
+    >>> from riko.collections import SyncCollection
     >>>
     >>> sources = [{'url': url} for url in urls]
     >>> stream = SyncCollection(sources).fetch()
@@ -167,7 +167,7 @@ Synchronous processing
     >>> # `SyncPipe` is a workflow convenience class that enables method
     >>> # chaining, parallel processing, and eliminates the manual `map` and
     >>> # `chain` steps
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> stream = (SyncPipe('fetch', conf=fetch_conf)
     ...     .filter(conf={'rule': filter_rule})
@@ -183,7 +183,7 @@ Synchronous processing
 Parallel processing
 
     >>> from riko import get_path
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -227,7 +227,7 @@ Asynchronous processing
     >>> from riko import get_path
     >>> from riko.bado import coroutine, react, _issync, _isasync
     >>> from riko.bado.mock import FakeReactor
-    >>> from riko.collections.async import AsyncPipe
+    >>> from riko.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -339,7 +339,7 @@ Design Principles
     True
 
     # SyncPipe usage
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> _hash = ctypes.c_uint(hash("Let's talk about riko!")).value
     >>> attrs = [
@@ -370,7 +370,7 @@ from __future__ import (
 from builtins import *
 
 from pprint import pprint
-from riko.collections.sync import SyncPipe
+from riko.collections import SyncPipe
 
 attrs = [
     {'key': 'title', 'value': 'riko pt. 1'},

@@ -8,8 +8,7 @@ from pprint import pprint
 from riko import get_path
 from riko.bado import coroutine
 from riko.lib.utils import combine_dicts as cdict
-from riko.collections.sync import SyncCollection
-from riko.collections.async import AsyncCollection
+from riko.collections import SyncCollection, AsyncCollection
 
 
 def make_regex(field, match, replace, default=None):

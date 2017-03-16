@@ -3,8 +3,7 @@ from __future__ import (
 
 from pprint import pprint
 from riko.bado import coroutine
-from riko.collections.sync import SyncPipe
-from riko.collections.async import AsyncPipe
+from riko.collections import SyncPipe, AsyncPipe
 
 p385_conf = {'type': 'date'}
 p385_in = {'content': '12/2/2014'}

@@ -3,8 +3,7 @@ from __future__ import (
 
 from pprint import pprint
 from riko.bado import coroutine
-from riko.collections.sync import SyncPipe
-from riko.collections.async import AsyncPipe
+from riko.collections import SyncPipe, AsyncPipe
 
 p120_conf = {'type': 'text'}
 p120_inputs = {'format': '%B %d, %Y'}
