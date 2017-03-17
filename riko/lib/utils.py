@@ -556,8 +556,8 @@ def cast_location(location_str):
 
 def cast(content, _type='text'):
     switch = {
-        'float': {'default': 0.0, 'func': float},
-        'decimal': {'default': Decimal(0), 'func': Decimal},
+        'float': {'default': float('nan'), 'func': float},
+        'decimal': {'default': Decimal('NaN'), 'func': Decimal},
         'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': str},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
