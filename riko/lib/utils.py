@@ -9,8 +9,13 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import re
+import sys
 import itertools as it
 import time
+import fcntl
+
+from os import O_NONBLOCK
+
 import pygogo as gogo
 
 try:
@@ -102,6 +107,22 @@ TT_KEYS = (
     'day_of_year', 'daylight_savings')
 
 url_quote = lambda url: quote(url, safe=URL_SAFE)
+
+
+# https://trac.edgewall.org/ticket/2066#comment:1
+# http://stackoverflow.com/a/22675049/408556
+def make_blocking(f):
+    fd = f.fileno()
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+
+    if flags & O_NONBLOCK:
+        blocking = flags & ~O_NONBLOCK
+        fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
+
+
+if 'nose' in sys.modules.keys():
+    logger.debug('Running in nose environment...')
+    make_blocking(sys.stderr)
 
 
 class Objectify(object):
