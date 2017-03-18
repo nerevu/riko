@@ -326,7 +326,12 @@ class processor(object):
             item = item or {}
             _input = DotDict(item) if combined.get('dictize') else item
             bfuncs = get_broadcast_funcs(**combined)
-            types = {combined['ftype'], combined['ptype']}
+            skip = bfuncs[2](_input)
+
+            if skip:
+                types = set([])
+            else:
+                types = {combined['ftype'], combined['ptype']}
 
             if types.difference({'pass', 'none'}):
                 dfuncs = get_dispatch_funcs(**combined)
@@ -336,6 +341,7 @@ class processor(object):
             parsed, orig_item = dispatch(_input, bfuncs, dfuncs=dfuncs)
 
             if self.async:
+                # TODO: Remove `skip` here since I already know it
                 stream, skip = yield pipe(*parsed, stream=orig_item, **kwargs)
             else:
                 stream, skip = pipe(*parsed, stream=orig_item, **kwargs)
