@@ -124,8 +124,12 @@ def async_parser(base, objconf, skip, **kwargs):
         ...
         1.545801
     """
+    same_currency = base == objconf.currency
+
     if skip:
         rate = kwargs['stream']
+    elif same_currency:
+        rate = Decimal(1)
     elif objconf.url.startswith('http'):
         r = yield treq.get(objconf.url, params=objconf.params)
         json = yield treq.json(r)
@@ -134,7 +138,7 @@ def async_parser(base, objconf, skip, **kwargs):
         content = yield io.async_url_read(url, delay=objconf.sleep)
         json = loads(decode(content))
 
-    if not skip:
+    if not (skip or same_currency):
         places = Decimal(10) ** -objconf.precision
         rates = parse_response(json)
         rate = calc_rate(base, objconf.currency, rates, places=places)
@@ -172,8 +176,12 @@ def parser(base, objconf, skip, **kwargs):
         >>> result
         Decimal('1.545801')
     """
+    same_currency = base == objconf.currency
+
     if skip:
         rate = kwargs['stream']
+    elif same_currency:
+        rate = Decimal(1)
     elif objconf.url.startswith('http'):
         get = partial(requests.get, stream=True)
         sget = utils.memoize(utils.HALF_DAY)(get) if objconf.memoize else get
@@ -183,14 +191,14 @@ def parser(base, objconf, skip, **kwargs):
         context = utils.SleepyDict(delay=objconf.sleep)
         url = utils.get_abspath(objconf.url)
 
-    try:
-        with closing(urlopen(url, context=context)) as f:
-            json = next(items(f, ''))
-    except TypeError:
-        with closing(urlopen(url)) as f:
-            json = next(items(f, ''))
+        try:
+            with closing(urlopen(url, context=context)) as f:
+                json = next(items(f, ''))
+        except TypeError:
+            with closing(urlopen(url)) as f:
+                json = next(items(f, ''))
 
-    if not skip:
+    if not (skip or same_currency):
         places = Decimal(10) ** -objconf.precision
         rates = parse_response(json)
         rate = calc_rate(base, objconf.currency, rates, places=places)
