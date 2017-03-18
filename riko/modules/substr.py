@@ -87,8 +87,7 @@ def async_pipe(*args, **kwargs):
             length (int): count of characters to return (default: 0, i.e., all)
 
         assign (str): Attribute to assign parsed content (default: substr)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with transformed content
@@ -129,8 +128,7 @@ def pipe(*args, **kwargs):
             length (int): count of characters to return (default: 0, i.e., all)
 
         assign (str): Attribute to assign parsed content (default: substr)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Yields:
         dict: an item with the substring

@@ -9,8 +9,13 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import re
+import sys
 import itertools as it
 import time
+import fcntl
+
+from os import O_NONBLOCK
+
 import pygogo as gogo
 
 try:
@@ -102,6 +107,22 @@ TT_KEYS = (
     'day_of_year', 'daylight_savings')
 
 url_quote = lambda url: quote(url, safe=URL_SAFE)
+
+
+# https://trac.edgewall.org/ticket/2066#comment:1
+# http://stackoverflow.com/a/22675049/408556
+def make_blocking(f):
+    fd = f.fileno()
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+
+    if flags & O_NONBLOCK:
+        blocking = flags & ~O_NONBLOCK
+        fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
+
+
+if 'nose' in sys.modules.keys():
+    logger.debug('Running in nose environment...')
+    make_blocking(sys.stderr)
 
 
 class Objectify(object):
@@ -240,6 +261,7 @@ def get_cache_config(cache_type='simple'):
 def set_cache(cache_config):
     global CACHE
     CACHE = Cache(**cache_config)
+
 
 CACHE = Cache(**get_cache_config())
 
@@ -556,8 +578,8 @@ def cast_location(location_str):
 
 def cast(content, _type='text'):
     switch = {
-        'float': {'default': 0.0, 'func': float},
-        'decimal': {'default': Decimal(0), 'func': Decimal},
+        'float': {'default': float('nan'), 'func': float},
+        'decimal': {'default': Decimal('NaN'), 'func': Decimal},
         'int': {'default': 0, 'func': int},
         'text': {'default': '', 'func': str},
         'date': {'default': {'date': TODAY}, 'func': cast_date},
@@ -661,7 +683,33 @@ def parse_conf(item, **kwargs):
 
 def get_skip(item, skip_if=None, **kwargs):
     item = item or {}
-    return skip_if and skip_if(item)
+
+    if callable(skip_if):
+        skip = skip_if(item)
+    elif skip_if:
+        skips = listize(skip_if)
+
+        for _skip in skips:
+            value = item.get(_skip['field'], '')
+            text = _skip.get('text')
+            op = _skip.get('op', 'contains')
+
+            if text and op == 'contains':
+                skip = text in value
+            elif text and op == 'intersection':
+                skip = set(text).intersection(value)
+            else:
+                skip = value
+
+            if not _skip.get('include'):
+                skip = not skip
+
+            if skip:
+                break
+    else:
+        skip = False
+
+    return skip
 
 
 def get_field(item, field=None, **kwargs):

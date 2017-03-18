@@ -47,7 +47,7 @@ def check():
 def lint(where=None, strict=False):
     """Check style with linters"""
     args = 'pylint --rcfile=tests/standard.rc -rn -fparseable'.split(' ')
-    extra = where.split(' ') if where else ['riko', 'tests']
+    extra = where.split(' ') if where else ['riko', 'tests', 'examples']
 
     try:
         check_call(['flake8'] + extra)

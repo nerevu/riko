@@ -80,9 +80,8 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: simplemath)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        assign (str): Attribute to assign parsed content (default: hash)
+        field (str): Item attribute to operate on (default: 'content')
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with concatenated content
@@ -118,8 +117,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: hash)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Yields:
         dict: an item with concatenated content

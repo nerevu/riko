@@ -67,7 +67,7 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> #
     >>> # `SyncPipe` is a convenience class that creates chainable flows
     >>> # and allows for parallel processing.
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -227,7 +227,7 @@ Synchronous processing
 
 .. code-block:: python
 
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
@@ -270,7 +270,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
 
 .. code-block:: python
 
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
@@ -312,7 +312,7 @@ An example using ``riko``'s asynchronous API.
 .. code-block:: python
 
     >>> from riko.bado import coroutine, react
-    >>> from riko.collections.async import AsyncPipe
+    >>> from riko.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
@@ -501,7 +501,7 @@ parallelization.
 
 .. code-block:: python
 
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
@@ -551,7 +551,7 @@ CLI Setup
 .. code-block:: python
 
     from __future__ import print_function
-    from riko.collections.sync import SyncPipe
+    from riko.collections import SyncPipe
 
     conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
     conf2 = {'rule': [{'find': 'com', 'replace': 'co.uk'}]}

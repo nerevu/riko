@@ -11,7 +11,7 @@ Examples:
         >>> from itertools import chain
         >>> from functools import partial
         >>> from riko.modules import itembuilder, strreplace
-        >>> from riko.collections.sync import SyncPipe
+        >>> from riko.collections import SyncPipe
         >>>
         >>> ib_conf = {
         ...     'attrs': [
@@ -36,7 +36,7 @@ from __future__ import (
 from os import path as p
 from builtins import *
 
-__version__ = '0.40.1'
+__version__ = '0.41.0'
 
 __title__ = 'riko'
 __package_name__ = 'riko'

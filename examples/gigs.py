@@ -4,8 +4,7 @@ from __future__ import (
 from pprint import pprint
 from riko import get_path
 from riko.bado import coroutine
-from riko.collections.sync import SyncPipe
-from riko.collections.async import AsyncPipe
+from riko.collections import SyncPipe, AsyncPipe
 
 p1_conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
 p2_conf = {'uniq_key': 'link'}

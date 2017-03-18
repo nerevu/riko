@@ -41,6 +41,7 @@ def mean(*nums):
     except ZeroDivisionError:
         return 0.0
 
+
 OPS = {
     'add': operator.add,
     'subtract': operator.sub,
@@ -91,7 +92,7 @@ def async_pipe(*args, **kwargs):
 
             other (number): The second number to operate on.
             op (str): The math operation. Must be one of 'addition',
-                'substraction', 'multiplication', 'division', 'modulo',
+                'subtraction', 'multiplication', 'division', 'modulo',
                 'floor', 'power', or 'mean'.
 
         assign (str): Attribute to assign parsed content (default: simplemath)
@@ -136,7 +137,7 @@ def pipe(*args, **kwargs):
 
             other (number): The second number to operate on.
             op (str): The math operation. Must be one of 'addition',
-                'substraction', 'multiplication', 'division', 'modulo',
+                'subtraction', 'multiplication', 'division', 'modulo',
                 'floor', 'power', or 'mean'.
 
         assign (str): Attribute to assign parsed content (default: simplemath)

@@ -23,9 +23,9 @@ from riko.bado import coroutine, return_value, react
 from riko.bado.util import async_sleep
 from riko.bado.itertools import async_imap
 from riko.modules.fetch import pipe, async_pipe
-from riko.collections.async import AsyncPipe, AsyncCollection
-from riko.collections.sync import (
-    SyncPipe, SyncCollection, get_chunksize, get_worker_cnt)
+from riko.collections import (
+    SyncPipe, SyncCollection, AsyncPipe, AsyncCollection, get_chunksize,
+    get_worker_cnt)
 
 NUMBER = 1
 LOOPS = 1

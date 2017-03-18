@@ -19,6 +19,7 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+from decimal import Decimal
 from builtins import *
 from babel.numbers import format_currency
 
@@ -27,6 +28,8 @@ import pygogo as gogo
 
 OPTS = {'ftype': 'decimal', 'field': 'content'}
 DEFAULTS = {'currency': 'USD'}
+NaN = Decimal('NaN')
+
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -52,8 +55,13 @@ def parser(amount, objconf, skip, **kwargs):
     """
     if skip:
         parsed = kwargs['stream']
+    elif amount is not None:
+        try:
+            parsed = format_currency(amount, objconf.currency)
+        except ValueError:
+            parsed = NaN
     else:
-        parsed = format_currency(amount, objconf.currency)
+        parsed = NaN
 
     return parsed, skip
 

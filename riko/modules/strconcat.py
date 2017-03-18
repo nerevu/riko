@@ -53,7 +53,11 @@ def parser(_, parts, skip, **kwargs):
         >>> parser(None, ['one', 'two'], False)[0] == 'onetwo'
         True
     """
-    parsed = kwargs['stream'] if skip else ''.join(map(decode, parts))
+    if skip:
+        parsed = kwargs['stream']
+    else:
+        parsed = ''.join(p for p in parts if p)
+
     return parsed, skip
 
 

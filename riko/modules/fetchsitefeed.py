@@ -87,7 +87,7 @@ def async_parser(_, objconf, skip, **kwargs):
         stream = kwargs['stream']
     else:
         url = utils.get_abspath(objconf.url)
-        rss = yield autorss.asyncGetRSS(url)
+        rss = yield autorss.async_get_rss(url)
         link = utils.get_abspath(next(rss)['link'])
         content = yield io.async_url_read(link)
         parsed = utils.parse_rss(content)
