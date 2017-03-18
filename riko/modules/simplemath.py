@@ -41,6 +41,7 @@ def mean(*nums):
     except ZeroDivisionError:
         return 0.0
 
+
 OPS = {
     'add': operator.add,
     'subtract': operator.sub,

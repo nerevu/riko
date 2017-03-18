@@ -92,6 +92,7 @@ def main(script, tests, verbose=False, stop=True):
     logger.info('Ran %i scripttests in %0.3fs\n\n%s' % (num, time, end))
     sys.exit(failures)
 
+
 if __name__ == '__main__':
     demo = p.join(PARENT_DIR, 'bin', 'runpipe')
     benchmark = p.join(PARENT_DIR, 'bin', 'benchmark')

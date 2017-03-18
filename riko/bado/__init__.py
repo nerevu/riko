@@ -32,6 +32,7 @@ else:
 class Reactor(object):
     fake = False
 
+
 reactor = Reactor()
 coroutine = inlineCallbacks
 return_value = returnValue

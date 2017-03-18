@@ -241,6 +241,7 @@ def set_cache(cache_config):
     global CACHE
     CACHE = Cache(**cache_config)
 
+
 CACHE = Cache(**get_cache_config())
 
 
