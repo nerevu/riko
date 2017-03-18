@@ -3,7 +3,7 @@
 """
 riko.modules.refind
 ~~~~~~~~~~~~~~~~~~~
-Provides functions for finding text located before, after, or between
+Provides functions for finding text located before, after, at, or between
 substrings using regular expressions, a powerful type of pattern matching.
 
 Examples:
@@ -41,20 +41,34 @@ PARAMS = {
     'first': lambda word, rule: re.split(rule.find, word, maxsplit=1),
     'last': lambda word, rule: re.split(rule.find, word)}
 
+AT_PARAMS = {
+    'first': lambda word, rule: re.search(rule.find, word),
+    'last': lambda word, rule: re.findall(rule.find, word)}
+
 OPS = {
     'before': lambda splits, rule: rule.find.join(splits[:len(splits) - 1]),
-    'after': lambda splits, rule: splits[-1]}
+    'after': lambda splits, rule: splits[-1],
+    'at': lambda splits, rule: splits,
+}
 
 
 def reducer(word, rule):
-    splits = PARAMS.get(rule.param, PARAMS['first'])(word, rule)
+    param = rule.param or 'first'
+    default = rule.default or ''
 
-    if rule.param != 'last' and len(splits) > 2:
-        joined = splits[:1] + [''.join(splits[1:])]
+    if rule.location == 'at':
+        result = AT_PARAMS.get(param, AT_PARAMS['first'])(word, rule)
+
+        if result and param == 'first':
+            splits = result.group(0)
+        elif result and param == 'last':
+            splits = result[-1]
+        else:
+            splits = default
     else:
-        joined = splits
+        splits = PARAMS.get(param, PARAMS['first'])(word, rule)
 
-    return OPS.get(rule.location, OPS['before'])(joined, rule).strip()
+    return OPS.get(rule.location, OPS['before'])(splits, rule).strip()
 
 
 @coroutine
@@ -153,7 +167,7 @@ def async_pipe(*args, **kwargs):
                 find (str): The string to find.
 
                 location (str): Direction of the substring to return. Must be
-                    either 'before' or 'after' (default: 'before').
+                    either 'before', 'after', or 'at' (default: 'before').
 
                 param (str): The type of replacement. Must be either 'first'
                     or 'last' (default: 'first').
@@ -202,7 +216,7 @@ def pipe(*args, **kwargs):
                 find (str): The string to find.
 
                 location (str): Direction of the substring to return. Must be
-                    either 'before' or 'after' (default: 'before').
+                    either 'before', 'after', or 'at' (default: 'before').
 
                 param (str): The type of replacement. Must be either 'first'
                     or 'last' (default: 'first').
@@ -226,10 +240,9 @@ def pipe(*args, **kwargs):
         True
         >>> conf = {
         ...     'rule': [
-        ...         {'find': 'o([a-z])', 'location': 'after'},
-        ...         {'find': '[ld]'}]}
+        ...         {'find': 'o([a-z])', 'location': 'after'}, {'find': 'd'}]}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['refind'] == 'r'
+        >>> next(pipe(item, conf=conf))['refind'] == 'l'
         True
     """
     return parser(*args, **kwargs)

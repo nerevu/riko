@@ -3,7 +3,7 @@
 """
 riko.modules.strfind
 ~~~~~~~~~~~~~~~~~~~~
-Provides functions for finding text located before, after, or between
+Provides functions for finding text located before, after, at, or between
 substrings.
 
 Examples:
@@ -40,13 +40,26 @@ PARAMS = {
     'first': lambda word, rule: word.split(rule.find, 1),
     'last': lambda word, rule: word.split(rule.find)}
 
+AT_PARAMS = {
+    'first': lambda word, rule: word.find(rule.find),
+    'last': lambda word, rule: word.rfind(rule.find)}
+
 OPS = {
     'before': lambda splits, rule: rule.find.join(splits[:len(splits) - 1]),
-    'after': lambda splits, rule: splits[-1]}
+    'after': lambda splits, rule: splits[-1],
+    'at': lambda splits, rule: splits,
+}
 
 
 def reducer(word, rule):
-    splits = PARAMS.get(rule.param, PARAMS['first'])(word, rule)
+    default = rule.default or ''
+
+    if rule.location == 'at':
+        result = AT_PARAMS.get(rule.param, AT_PARAMS['first'])(word, rule)
+        splits = word[result:len(rule.find)] if result != -1 else default
+    else:
+        splits = PARAMS.get(rule.param, PARAMS['first'])(word, rule)
+
     return OPS.get(rule.location, OPS['before'])(splits, rule).strip()
 
 
@@ -146,7 +159,7 @@ def async_pipe(*args, **kwargs):
                 find (str): The string to find.
 
                 location (str): Direction of the substring to return. Must be
-                    either 'before' or 'after' (default: 'before').
+                    either 'before', 'after', or 'at' (default: 'before').
 
                 param (str): The type of replacement. Must be either 'first'
                     or 'last' (default: 'first').
@@ -195,7 +208,7 @@ def pipe(*args, **kwargs):
                 find (str): The string to find.
 
                 location (str): Direction of the substring to return. Must be
-                    either 'before' or 'after' (default: 'before').
+                    either 'before', 'after', or 'at' (default: 'before').
 
                 param (str): The type of replacement. Must be either 'first'
                     or 'last' (default: 'first').
