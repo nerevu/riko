@@ -661,7 +661,33 @@ def parse_conf(item, **kwargs):
 
 def get_skip(item, skip_if=None, **kwargs):
     item = item or {}
-    return skip_if and skip_if(item)
+
+    if callable(skip_if):
+        skip = skip_if(item)
+    elif skip_if:
+        skips = listize(skip_if)
+
+        for _skip in skips:
+            value = item.get(_skip['field'], '')
+            text = _skip.get('text')
+            op = _skip.get('op', 'contains')
+
+            if text and op == 'contains':
+                skip = text in value
+            elif text and op == 'intersection':
+                skip = set(text).intersection(value)
+            else:
+                skip = value
+
+            if not _skip.get('include'):
+                skip = not skip
+
+            if skip:
+                break
+    else:
+        skip = False
+
+    return skip
 
 
 def get_field(item, field=None, **kwargs):
