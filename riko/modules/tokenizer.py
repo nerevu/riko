@@ -57,9 +57,10 @@ def parser(content, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        splits = filter(None, content.split(objconf.delimiter))
+        splits = [s.strip() for s in content.split(objconf.delimiter) if s]
         deduped = set(splits) if objconf.dedupe else splits
-        chunks = sorted(deduped, key=str.lower) if objconf.sort else deduped
+        keyfunc = lambda s: s.lower()
+        chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
         stream = ({objconf.token_key: chunk} for chunk in chunks)
 
     return stream, skip
