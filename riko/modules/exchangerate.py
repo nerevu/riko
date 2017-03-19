@@ -186,6 +186,7 @@ def parser(base, objconf, skip, **kwargs):
         get = partial(requests.get, stream=True)
         sget = utils.memoize(utils.HALF_DAY)(get) if objconf.memoize else get
         r = sget(objconf.url, params=objconf.params)
+        r.raw.decode_content = True
         json = next(items(r.raw, ''))
     else:
         context = utils.SleepyDict(delay=objconf.sleep)
