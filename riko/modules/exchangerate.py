@@ -59,12 +59,12 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 def parse_response(json):
     resources = json['list']['resources']
     fields = (r['resource']['fields'] for r in resources)
-    return {i['name']: Decimal(i['price']) for i in fields}
+    return {i['symbol']: Decimal(i['price']) for i in fields}
 
 
 def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
     def get_rate(currency):
-        rate = rates.get('USD/%s' % currency, Decimal('nan'))
+        rate = rates.get('%s=X' % currency, Decimal('nan'))
 
         if not rate:
             logger.warning('rate USD/%s not found in rates' % currency)
@@ -186,6 +186,7 @@ def parser(base, objconf, skip, **kwargs):
         get = partial(requests.get, stream=True)
         sget = utils.memoize(utils.HALF_DAY)(get) if objconf.memoize else get
         r = sget(objconf.url, params=objconf.params)
+        r.raw.decode_content = True
         json = next(items(r.raw, ''))
     else:
         context = utils.SleepyDict(delay=objconf.sleep)

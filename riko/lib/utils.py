@@ -15,6 +15,7 @@ import time
 import fcntl
 
 from os import O_NONBLOCK
+from math import isnan
 
 import pygogo as gogo
 
@@ -106,6 +107,12 @@ TT_KEYS = (
     'year', 'month', 'day', 'hour', 'minute', 'second', 'day_of_week',
     'day_of_year', 'daylight_savings')
 
+SKIP_SWITCH = {
+    'contains': lambda text, value: text in value,
+    'intersection': lambda text, value: set(text).intersection(value),
+    're.search': lambda text, value: re.search(text, value),
+}
+
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
 
@@ -120,7 +127,7 @@ def make_blocking(f):
         fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
 
 
-if 'nose' in sys.modules.keys():
+if 'nose' in sys.modules:
     logger.debug('Running in nose environment...')
     make_blocking(sys.stderr)
 
@@ -294,13 +301,28 @@ def remove_keys(content, *args):
     return {k: v for k, v in content.items() if k not in args}
 
 
-def group_by(iterable, attr, default=None):
+def def_itemgetter(attr, default=0, _type=None):
     # like operator.itemgetter but fills in missing keys with a default value
-    keyfunc = lambda item: lambda obj: obj.get(item, default)
+    def keyfunc(item):
+        value = item.get(attr, default)
+        casted = cast(value, _type) if _type else value
+
+        try:
+            is_nan = isnan(casted)
+        except TypeError:
+            is_nan = False
+
+        return default if is_nan else casted
+
+    return keyfunc
+
+
+def group_by(iterable, attr, default=None):
+    keyfunc = def_itemgetter(attr, default)
     data = list(iterable)
-    order = unique_everseen(data, keyfunc(attr))
-    sorted_iterable = sorted(data, key=keyfunc(attr))
-    grouped = it.groupby(sorted_iterable, keyfunc(attr))
+    order = unique_everseen(data, keyfunc)
+    sorted_iterable = sorted(data, key=keyfunc)
+    grouped = it.groupby(sorted_iterable, keyfunc)
     groups = {str(k): list(v) for k, v in grouped}
 
     # return groups in original order
@@ -575,25 +597,25 @@ def cast_location(location_str):
 
     return location
 
+CAST_SWITCH = {
+    'float': {'default': float('nan'), 'func': float},
+    'decimal': {'default': Decimal('NaN'), 'func': Decimal},
+    'int': {'default': 0, 'func': int},
+    'text': {'default': '', 'func': str},
+    'date': {'default': {'date': TODAY}, 'func': cast_date},
+    'url': {'default': {}, 'func': cast_url},
+    'location': {'default': {}, 'func': cast_location},
+    'bool': {'default': False, 'func': lambda i: bool(loads(i))},
+    'pass': {'default': None, 'func': lambda i: i},
+    'none': {'default': None, 'func': lambda _: None},
+}
+
 
 def cast(content, _type='text'):
-    switch = {
-        'float': {'default': float('nan'), 'func': float},
-        'decimal': {'default': Decimal('NaN'), 'func': Decimal},
-        'int': {'default': 0, 'func': int},
-        'text': {'default': '', 'func': str},
-        'date': {'default': {'date': TODAY}, 'func': cast_date},
-        'url': {'default': {}, 'func': cast_url},
-        'location': {'default': {}, 'func': cast_location},
-        'bool': {'default': False, 'func': lambda i: bool(loads(i))},
-        'pass': {'default': None, 'func': lambda i: i},
-        'none': {'default': None, 'func': lambda _: None},
-    }
-
     if content is None:
-        value = switch[_type]['default']
+        value = CAST_SWITCH[_type]['default']
     else:
-        value = switch[_type]['func'](content)
+        value = CAST_SWITCH[_type]['func'](content)
 
     return value
 
@@ -693,13 +715,7 @@ def get_skip(item, skip_if=None, **kwargs):
             value = item.get(_skip['field'], '')
             text = _skip.get('text')
             op = _skip.get('op', 'contains')
-
-            if text and op == 'contains':
-                skip = text in value
-            elif text and op == 'intersection':
-                skip = set(text).intersection(value)
-            else:
-                skip = value
+            skip = SKIP_SWITCH[op](text, value) if text else value
 
             if not _skip.get('include'):
                 skip = not skip

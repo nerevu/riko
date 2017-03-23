@@ -71,7 +71,7 @@ def _parse_x_y(_x, _y):
         try:
             x = utils.cast_date(_x)['date']
             y = utils.cast_date(_y)['date']
-        except (ValueError, KeyError):
+        except (ValueError, KeyError, IndexError):
             x, y = _x, _y
 
     return x, y

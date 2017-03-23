@@ -23,12 +23,12 @@ from __future__ import (
 import pygogo as gogo
 
 from functools import reduce
-from operator import itemgetter
 
 from builtins import *
 
 from . import operator
 from riko.bado import itertools as ait
+from riko.lib.utils import def_itemgetter as itemgetter
 
 OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'content'}}
@@ -37,7 +37,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 def reducer(stream, rule):
     reverse = rule.sort_dir == 'desc'
-    return sorted(stream, key=itemgetter(rule.sort_key), reverse=reverse)
+    keyfunc = itemgetter(rule.sort_key, _type=rule.type)
+    return sorted(stream, key=keyfunc, reverse=reverse)
 
 
 def async_parser(stream, rules, tuples, **kwargs):
@@ -138,7 +139,12 @@ def async_pipe(*args, **kwargs):
         conf (dict): The pipe configuration. May contain the key 'rule'
 
             rule (dict): The sort configuration, can be either a dict or list
-            of dicts. May contain the keys 'sort_key' or 'dir'.
+                of dicts (default: {'sort_dir': 'asc', 'sort_key': 'content'}).
+                Must contain the key 'sort_key'. May contain the key 'sort_dir',
+                    or 'cast'.
+
+                type (str): Expected value type. Must be one of
+                    `utils.CAST_SWITCH` (default: None).
 
                 sort_key (str): Item attribute on which to sort by (default:
                     'content').
@@ -183,8 +189,11 @@ def pipe(*args, **kwargs):
 
             rule (dict): The sort configuration, can be either a dict or list
                 of dicts (default: {'sort_dir': 'asc', 'sort_key': 'content'}).
-                Must contain the key 'sort_key'. May contain the key 'sort_dir'.
+                Must contain the key 'sort_key'. May contain the key 'sort_dir',
+                    or 'cast'.
 
+                type (str): Expected value type. Must be one of
+                    `utils.CAST_SWITCH` (default: None).
                 sort_key (str): Item attribute on which to sort by.
                 sort_dir (str): The sort direction. Must be either 'asc' or
                     'desc'.
