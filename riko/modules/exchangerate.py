@@ -59,12 +59,12 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 def parse_response(json):
     resources = json['list']['resources']
     fields = (r['resource']['fields'] for r in resources)
-    return {i['name']: Decimal(i['price']) for i in fields}
+    return {i['symbol']: Decimal(i['price']) for i in fields}
 
 
 def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
     def get_rate(currency):
-        rate = rates.get('USD/%s' % currency, Decimal('nan'))
+        rate = rates.get('%s=X' % currency, Decimal('nan'))
 
         if not rate:
             logger.warning('rate USD/%s not found in rates' % currency)
