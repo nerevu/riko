@@ -15,6 +15,7 @@ import time
 import fcntl
 
 from os import O_NONBLOCK
+from math import isnan
 
 import pygogo as gogo
 
@@ -300,13 +301,28 @@ def remove_keys(content, *args):
     return {k: v for k, v in content.items() if k not in args}
 
 
-def group_by(iterable, attr, default=None):
+def def_itemgetter(attr, default=0, _type=None):
     # like operator.itemgetter but fills in missing keys with a default value
-    keyfunc = lambda item: lambda obj: obj.get(item, default)
+    def keyfunc(item):
+        value = item.get(attr, default)
+        casted = cast(value, _type) if _type else value
+
+        try:
+            is_nan = isnan(casted)
+        except TypeError:
+            is_nan = False
+
+        return default if is_nan else casted
+
+    return keyfunc
+
+
+def group_by(iterable, attr, default=None):
+    keyfunc = def_itemgetter(attr, default)
     data = list(iterable)
-    order = unique_everseen(data, keyfunc(attr))
-    sorted_iterable = sorted(data, key=keyfunc(attr))
-    grouped = it.groupby(sorted_iterable, keyfunc(attr))
+    order = unique_everseen(data, keyfunc)
+    sorted_iterable = sorted(data, key=keyfunc)
+    grouped = it.groupby(sorted_iterable, keyfunc)
     groups = {str(k): list(v) for k, v in grouped}
 
     # return groups in original order
