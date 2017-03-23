@@ -120,7 +120,7 @@ def make_blocking(f):
         fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
 
 
-if 'nose' in sys.modules.keys():
+if 'nose' in sys.modules:
     logger.debug('Running in nose environment...')
     make_blocking(sys.stderr)
 
@@ -575,25 +575,25 @@ def cast_location(location_str):
 
     return location
 
+CAST_SWITCH = {
+    'float': {'default': float('nan'), 'func': float},
+    'decimal': {'default': Decimal('NaN'), 'func': Decimal},
+    'int': {'default': 0, 'func': int},
+    'text': {'default': '', 'func': str},
+    'date': {'default': {'date': TODAY}, 'func': cast_date},
+    'url': {'default': {}, 'func': cast_url},
+    'location': {'default': {}, 'func': cast_location},
+    'bool': {'default': False, 'func': lambda i: bool(loads(i))},
+    'pass': {'default': None, 'func': lambda i: i},
+    'none': {'default': None, 'func': lambda _: None},
+}
+
 
 def cast(content, _type='text'):
-    switch = {
-        'float': {'default': float('nan'), 'func': float},
-        'decimal': {'default': Decimal('NaN'), 'func': Decimal},
-        'int': {'default': 0, 'func': int},
-        'text': {'default': '', 'func': str},
-        'date': {'default': {'date': TODAY}, 'func': cast_date},
-        'url': {'default': {}, 'func': cast_url},
-        'location': {'default': {}, 'func': cast_location},
-        'bool': {'default': False, 'func': lambda i: bool(loads(i))},
-        'pass': {'default': None, 'func': lambda i: i},
-        'none': {'default': None, 'func': lambda _: None},
-    }
-
     if content is None:
-        value = switch[_type]['default']
+        value = CAST_SWITCH[_type]['default']
     else:
-        value = switch[_type]['func'](content)
+        value = CAST_SWITCH[_type]['func'](content)
 
     return value
 
