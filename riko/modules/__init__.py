@@ -107,7 +107,8 @@ def get_assignment(result, skip, **kwargs):
         multiple = True
 
     first = kwargs.get('count') == 'first'
-    one = first or not multiple
+    _all = kwargs.get('count') == 'all'
+    one = first or not (multiple or _all)
     return one, iter([first_result]) if one else result
 
 
@@ -167,8 +168,10 @@ class processor(object):
                 or 'decimal'. Default: 'pass', i.e., return the item as is.
                 Note: setting to 'none' automatically enables `emit`.
 
-            count (str): Stream count. Must be either 'first' or 'all'
-                (default: 'all', i.e., output all results).
+            count (str): Stream count. Must be either 'first' (yields only the
+                first result) or 'all' (yields all results in a list). Default:
+                None (yield all results, but only return a list if there is
+                more than one result).
 
             assign (str): Attribute to assign stream (default: 'content' if
                 `ftype` is 'none', pipe name otherwise)
@@ -413,8 +416,10 @@ class operator(object):
                 `items`. Must be one of 'pass', 'none', 'text', or 'num' (
                 default: 'pass', i.e., return the item as is)
 
-            count (str): Stream count. Must be either 'first' or 'all'
-                (default: 'all').
+            count (str): Stream count. Must be either 'first' (yields only the
+                first result) or 'all' (yields all results in a list). Default:
+                None (yield all results, but only return a list if there is
+                more than one result).
 
             assign (str): Attribute to assign stream (default: the pipe name)
 
