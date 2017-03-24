@@ -47,11 +47,12 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
-
-from . import processor
-from riko.lib import utils
 import pygogo as gogo
+
+from builtins import *
+from . import processor
+from riko.lib.utils import cast
+
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {'type': 'text', 'default': ''}
@@ -87,7 +88,7 @@ def parser(_, objconf, skip=False, **kwargs):
         raw = input("%s (default=%s) " % (objconf.prompt, objconf.default))
         value = raw or objconf.default
 
-    casted = utils.cast(value, objconf.type)
+    casted = cast(value, objconf.type)
     return casted if hasattr(casted, 'keys') else {kwargs['assign']: casted}
 
 
@@ -222,9 +223,8 @@ def pipe(*args, **kwargs):
         >>> # location
         >>> inputs = {'content': 'palo alto, ca'}
         >>> result = next(pipe(conf={'type': 'location'}, inputs=inputs))
-        >>> sorted(result.keys()) == [
-        ...     'admin1', 'admin2', 'admin3', 'city', 'country', 'lat',
-        ...     'lon', 'postal', 'quality', 'street']
+        >>> keys = ['admin1', 'admin2', 'admin3', 'city', 'country']
+        >>> sorted(result.keys())[:5] == keys
         True
         >>> result['city'] == 'city'
         True

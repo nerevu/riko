@@ -46,6 +46,8 @@ from mezmorize import Cache
 from dateutil import parser
 from ijson import items
 from meza._compat import decode
+from riko.lib.currencies import CURRENCY_CODES
+from riko.lib.locations import LOCATIONS
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
@@ -588,14 +590,47 @@ def cast_url(url_str):
     return response
 
 
-def cast_location(location_str):
-    # TODO: Fix this for real!
+def lookup_street_address(address):
     location = {
-        'lat': 0, 'lon': 0, 'quality': 0, 'country': 'US', 'admin1': 'state',
+        'lat': 0, 'lon': 0, 'country': 'United States', 'admin1': 'state',
         'admin2': 'county', 'admin3': 'city', 'city': 'city',
         'street': 'street', 'postal': '61605'}
 
     return location
+
+
+def lookup_ip_address(address):
+    location = {
+        'country': 'United States', 'admin1': 'state', 'admin2': 'county',
+        'admin3': 'city', 'city': 'city'}
+
+    return location
+
+
+def lookup_coordinates(lat, lon):
+    location = {
+        'lat': lat, 'lon': lon, 'country': 'United States', 'admin1': 'state',
+        'admin2': 'county', 'admin3': 'city', 'city': 'city',
+        'street': 'street', 'postal': '61605'}
+
+    return location
+
+
+def cast_location(address, loc_type='street_address'):
+    GEOLOCATERS = {
+        'coordinates': lambda x: lookup_coordinates(*x),
+        'street_address': lambda x: lookup_street_address(x),
+        'ip_address': lambda x: lookup_ip_address(x),
+        'currency': lambda x: CURRENCY_CODES.get(x, {}),
+    }
+
+    result = GEOLOCATERS[loc_type](address)
+
+    if result.get('location'):
+        extra = LOCATIONS.get(result['location'], {})
+        result.update(extra)
+
+    return result
 
 CAST_SWITCH = {
     'float': {'default': float('nan'), 'func': float},
@@ -611,9 +646,11 @@ CAST_SWITCH = {
 }
 
 
-def cast(content, _type='text'):
+def cast(content, _type='text', **kwargs):
     if content is None:
         value = CAST_SWITCH[_type]['default']
+    elif kwargs:
+        value = CAST_SWITCH[_type]['func'](content, **kwargs)
     else:
         value = CAST_SWITCH[_type]['func'](content)
 
