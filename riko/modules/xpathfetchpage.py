@@ -68,7 +68,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -82,7 +82,7 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
@@ -95,16 +95,16 @@ def async_parser(_, objconf, skip, **kwargs):
         ...     xml_url = get_path('ouseful.xml')
         ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
         ...     xml_objconf = Objectify(xml_conf)
-        ...     xml_args = (None, xml_objconf, False)
+        ...     xml_args = (None, xml_objconf)
         ...     html_url = get_path('sciencedaily.html')
         ...     html_conf = {'url': html_url, 'xpath': '/html/head/title'}
         ...     html_objconf = Objectify(html_conf)
-        ...     html_args = (None, html_objconf, False)
+        ...     html_args = (None, html_objconf)
         ...     kwargs = {'stream': {}}
         ...
         ...     try:
-        ...         xml_stream, _ = yield async_parser(*xml_args, **kwargs)
-        ...         html_stream, _ = yield async_parser(*html_args, **kwargs)
+        ...         xml_stream = yield async_parser(*xml_args, **kwargs)
+        ...         html_stream = yield async_parser(*html_args, **kwargs)
         ...         print(next(xml_stream)['title'][:44])
         ...         print(next(html_stream))
         ...     except Exception as e:
@@ -140,11 +140,10 @@ def async_parser(_, objconf, skip, **kwargs):
         stringified = ({kwargs['assign']: encode(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -153,7 +152,7 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -161,7 +160,7 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> url = get_path('ouseful.xml')
         >>> objconf = Objectify({'url': url, 'xpath': '/rss/channel/item'})
-        >>> result, skip = parser(None, objconf, False, stream={})
+        >>> result = parser(None, objconf, stream={})
         >>> title = 'Running “Native” Data Wrangling Applications'
         >>> next(result)['title'][:44] == title
         True
@@ -181,7 +180,7 @@ def parser(_, objconf, skip, **kwargs):
         stringified = ({kwargs['assign']: str(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
-    return stream, skip
+    return stream
 
 
 @processor(isasync=True, **OPTS)

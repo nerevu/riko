@@ -30,7 +30,7 @@ DEFAULTS = {'separator': '-'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word, separator, skip, **kwargs):
+def parser(word, separator, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -44,14 +44,14 @@ def parser(word, separator, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
         >>> from riko.lib.utils import Objectify
         >>>
         >>> item = {'content': 'hello world'}
         >>> kwargs = {'stream': item}
-        >>> parser(item['content'], '-', False, **kwargs)[0] == 'hello-world'
+        >>> parser(item['content'], '-', **kwargs) == 'hello-world'
         True
     """
     if skip:
@@ -59,7 +59,7 @@ def parser(word, separator, skip, **kwargs):
     else:
         parsed = slugify(word.strip(), separator=separator)
 
-    return parsed, skip
+    return parsed
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

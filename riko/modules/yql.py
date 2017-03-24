@@ -64,7 +64,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -78,7 +78,7 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (stream, skip)
+        Deferred: twisted.internet.defer.Deferred stream
 
     Examples:
         >>> from six.moves.urllib.request import urlopen
@@ -93,11 +93,11 @@ def async_parser(_, objconf, skip, **kwargs):
         >>> f = urlopen(get_abspath(get_path('yql.xml')))
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     conf = {'query': query, 'url': url, 'debug': False}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}, 'response': f}
-        ...     d = async_parser(None, objconf, False, **kwargs)
+        ...     d = async_parser(None, objconf, **kwargs)
         ...     d.addCallbacks(callback, logger.error)
         ...     d.addCallback(lambda _: f.close())
         ...     return d
@@ -123,11 +123,10 @@ def async_parser(_, objconf, skip, **kwargs):
         results = next(tree.getElementsByTagName('results'))
         stream = map(util.etree2dict, results.childNodes)
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -141,7 +140,7 @@ def parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from contextlib import closing
@@ -158,7 +157,7 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> with closing(urlopen(url)) as f:
         ...     kwargs = {'stream': {}, 'response': f}
-        ...     result, skip = parser(None, objconf, False, **kwargs)
+        ...     result = parser(None, objconf, **kwargs)
         >>>
         >>> next(result)['title']
         'Bring pizza home'
@@ -178,7 +177,7 @@ def parser(_, objconf, skip, **kwargs):
         results = root.find('results')
         stream = map(utils.etree2dict, results)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

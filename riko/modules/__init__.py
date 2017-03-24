@@ -87,7 +87,7 @@ __transformers__ = [
 __all__ = __sources__ + __composers__ + __transformers__ + __aggregators__
 
 
-def get_assignment(result, skip, **kwargs):
+def get_assignment(result, skip=False, **kwargs):
     result = iter(utils.listize(result))
 
     if skip:
@@ -190,28 +190,27 @@ class processor(object):
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> @processor()
-            ... def pipe(item, objconf, skip, **kwargs):
+            ... def pipe(item, objconf, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
             ...         content = item['content']
             ...         stream = 'say "%s" %s times!' % (content, objconf.times)
             ...
-            ...     return stream, skip
+            ...     return stream
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
             >>> @processor(isasync=True)
             ... @coroutine
-            ... def async_pipe(item, objconf, skip, **kwargs):
+            ... def async_pipe(item, objconf, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
             ...         content = yield util.async_return(item['content'])
             ...         stream = 'say "%s" %s times!' % (content, objconf.times)
             ...
-            ...     result = stream, skip
-            ...     return_value(result)
+            ...     return_value(stream)
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -260,26 +259,26 @@ class processor(object):
             ...     'objectify': False}
             ...
             >>> @processor(**kwargs)
-            ... def pipe(content, times, skip, **kwargs):
+            ... def pipe(content, times, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         stream = {kwargs['assign']: value}
             ...
-            ...     return stream, skip
+            ...     return stream
             ...
             >>> # async pipes don't have to return a deffered,
             >>> # they work fine either way
             >>> @processor(isasync=True, **kwargs)
-            ... def async_pipe(content, times, skip, **kwargs):
+            ... def async_pipe(content, times, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         stream = {kwargs['assign']: value}
             ...
-            ...     return stream, skip
+            ...     return stream
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -329,12 +328,8 @@ class processor(object):
             item = item or {}
             _input = DotDict(item) if combined.get('dictize') else item
             bfuncs = get_broadcast_funcs(**combined)
-            skip = bfuncs[2](_input)
-
-            if skip:
-                types = set([])
-            else:
-                types = {combined['ftype'], combined['ptype']}
+            skip = utils.get_skip(_input, **combined)
+            types = set([]) if skip else {combined['ftype'], combined['ptype']}
 
             if types.difference({'pass', 'none'}):
                 dfuncs = get_dispatch_funcs(**combined)
@@ -342,14 +337,14 @@ class processor(object):
                 dfuncs = None
 
             parsed, orig_item = dispatch(_input, bfuncs, dfuncs=dfuncs)
+            kwargs.update({'skip': skip, 'stream': orig_item})
 
             if self.async:
-                # TODO: Remove `skip` here since I already know it
-                stream, skip = yield pipe(*parsed, stream=orig_item, **kwargs)
+                stream = yield pipe(*parsed, **kwargs)
             else:
-                stream, skip = pipe(*parsed, stream=orig_item, **kwargs)
+                stream = pipe(*parsed, **kwargs)
 
-            one, assignment = get_assignment(stream, skip, **combined)
+            one, assignment = get_assignment(stream, skip=skip, **combined)
 
             if skip or combined.get('emit'):
                 stream = assignment
@@ -626,7 +621,7 @@ class operator(object):
             wrapper.__dict__['sub_type'] = sub_type
 
             # operators can only assign one value per item and can't skip items
-            _, assignment = get_assignment(stream, False, **combined)
+            _, assignment = get_assignment(stream, **combined)
 
             if combined.get('emit'):
                 stream = assignment
@@ -672,7 +667,7 @@ def get_broadcast_funcs(**kwargs):
 
     ffunc = partial(utils.get_field, **kwargs)
     get_field = noop if kw.ftype == 'none' else ffunc
-    return (get_field, get_pieces, partial(utils.get_skip, **kwargs))
+    return (get_field, get_pieces)
 
 
 def get_dispatch_funcs(**kwargs):
@@ -684,4 +679,4 @@ def get_dispatch_funcs(**kwargs):
     else:
         piece_dispatch = pfunc
 
-    return [field_dispatch, piece_dispatch, partial(utils.cast, _type='pass')]
+    return [field_dispatch, piece_dispatch]

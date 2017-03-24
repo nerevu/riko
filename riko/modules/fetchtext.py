@@ -43,7 +43,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -56,7 +56,7 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
@@ -65,10 +65,10 @@ def async_parser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0][0]['content'])
+        ...     callback = lambda x: print(x[0]['content'])
         ...     url = get_path('lorem.txt')
         ...     objconf = Objectify({'url': url, 'encoding': 'utf-8'})
-        ...     d = async_parser(None, objconf, False, assign='content')
+        ...     d = async_parser(None, objconf, assign='content')
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -87,11 +87,10 @@ def async_parser(_, objconf, skip, **kwargs):
         stream = [{assign: line.strip().decode(objconf.encoding)} for line in f]
         f.close()
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -104,7 +103,7 @@ def parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
@@ -112,7 +111,7 @@ def parser(_, objconf, skip, **kwargs):
         >>>
         >>> url = get_path('lorem.txt')
         >>> objconf = Objectify({'url': url, 'encoding': 'utf-8'})
-        >>> result, skip = parser(None, objconf, False, assign='content')
+        >>> result = parser(None, objconf, assign='content')
         >>> result[0]['content'] == 'What is Lorem Ipsum?'
         True
     """
@@ -125,7 +124,7 @@ def parser(_, objconf, skip, **kwargs):
             assign, encoding = kwargs['assign'], objconf.encoding
             stream = [{assign: line.strip().decode(encoding)} for line in f]
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

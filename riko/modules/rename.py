@@ -54,7 +54,7 @@ def reducer(item, rule):
 
 
 @coroutine
-def async_parser(item, rules, skip, **kwargs):
+def async_parser(item, rules, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -67,7 +67,7 @@ def async_parser(item, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
+        Deferred: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from riko.bado import react
@@ -76,11 +76,11 @@ def async_parser(item, rules, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0] == {'greeting': 'hello world'})
+        ...     callback = lambda x: print(x == {'greeting': 'hello world'})
         ...     item = DotDict({'content': 'hello world'})
         ...     rule = {'field': 'content', 'newval': 'greeting'}
         ...     kwargs = {'stream': item}
-        ...     d = async_parser(item, [Objectify(rule)], False, **kwargs)
+        ...     d = async_parser(item, [Objectify(rule)], **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -95,11 +95,10 @@ def async_parser(item, rules, skip, **kwargs):
     else:
         item = yield ait.coop_reduce(reducer, rules, item)
 
-    result = (item, skip)
-    return_value(result)
+    return_value(item)
 
 
-def parser(item, rules, skip, **kwargs):
+def parser(item, rules, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -112,7 +111,7 @@ def parser(item, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple (dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
         >>> from riko.lib.dotdict import DotDict
@@ -122,11 +121,10 @@ def parser(item, rules, skip, **kwargs):
         >>> rule = {'field': 'content', 'newval': 'greeting'}
         >>> kwargs = {'stream': item}
         >>> args = [item, [Objectify(rule)], False]
-        >>> parser(*args, **kwargs)[0] == {'greeting': 'hello world'}
+        >>> parser(*args, **kwargs) == {'greeting': 'hello world'}
         True
     """
-    item = kwargs['stream'] if skip else reduce(reducer, rules, item)
-    return item, skip
+    return kwargs['stream'] if skip else reduce(reducer, rules, item)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

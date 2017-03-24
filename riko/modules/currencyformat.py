@@ -33,7 +33,7 @@ NaN = Decimal('NaN')
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(amount, objconf, skip, **kwargs):
+def parser(amount, objconf, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -42,15 +42,14 @@ def parser(amount, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(dict, bool): Tuple of (the formatted , skip)
+        dict: The formatted item
 
     Examples:
         >>> from decimal import Decimal
         >>> from riko.lib.utils import Objectify
         >>>
-        >>> amount = Decimal('10.33')
         >>> objconf = Objectify({'currency': 'USD'})
-        >>> parser(amount, objconf, False)[0] == '$10.33'
+        >>> parser(Decimal('10.33'), objconf) == '$10.33'
         True
     """
     if skip:
@@ -63,7 +62,7 @@ def parser(amount, objconf, skip, **kwargs):
     else:
         parsed = NaN
 
-    return parsed, skip
+    return parsed
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -50,7 +50,7 @@ def auto_close(stream, f):
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -63,7 +63,7 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
@@ -72,11 +72,11 @@ def async_parser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['mileage'])
+        ...     callback = lambda x: print(next(x)['mileage'])
         ...     url = get_path('spreadsheet.csv')
         ...     conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
         ...     objconf = Objectify(conf)
-        ...     d = async_parser(None, objconf, False, stream={})
+        ...     d = async_parser(None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -97,11 +97,10 @@ def async_parser(_, objconf, skip, **kwargs):
         _stream = read_csv(response, **rkwargs)
         stream = auto_close(_stream, response)
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -110,7 +109,7 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
@@ -119,7 +118,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> url = get_path('spreadsheet.csv')
         >>> conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
         >>> objconf = Objectify(conf)
-        >>> result, skip = parser(None, objconf, False, stream={})
+        >>> result = parser(None, objconf, stream={})
         >>> next(result)['mileage'] == '7213'
         True
     """
@@ -136,7 +135,7 @@ def parser(_, objconf, skip, **kwargs):
         _stream = read_csv(response, **rkwargs)
         stream = auto_close(_stream, response)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

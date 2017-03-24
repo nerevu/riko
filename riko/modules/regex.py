@@ -46,7 +46,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(item, rules, skip, **kwargs):
+def async_parser(item, rules, skip=False, **kwargs):
     """ Asynchronously parsers the pipe content
 
     Args:
@@ -59,7 +59,7 @@ def async_parser(item, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple(dict, bool)
+        Deferred: twisted.internet.defer.Deferred dict
 
     Examples:
         >>> from riko.bado import react
@@ -71,12 +71,12 @@ def async_parser(item, rules, skip, **kwargs):
         >>> replace = '$2wide'
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0]['content'])
+        ...     callback = lambda x: print(x['content'])
         ...     rule = {'field': 'content', 'match': match, 'replace': replace}
         ...     conf = {'rule': rule, 'multi': False, 'convert': True}
         ...     rules = [Objectify(rule)]
         ...     kwargs = {'stream': item, 'conf': conf}
-        ...     d = async_parser(item, rules, False, **kwargs)
+        ...     d = async_parser(item, rules, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -108,11 +108,10 @@ def async_parser(item, rules, skip, **kwargs):
         field_rules = [g[1] for g in grouped]
         item = yield ait.async_reduce(async_reducer, field_rules, item)
 
-    result = (item, skip)
-    return_value(result)
+    return_value(item)
 
 
-def parser(item, rules, skip, **kwargs):
+def parser(item, rules, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -125,7 +124,7 @@ def parser(item, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple (dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -136,11 +135,11 @@ def parser(item, rules, skip, **kwargs):
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> rules = [Objectify(rule)]
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> regexed, skip = parser(item, rules, False, **kwargs)
+        >>> regexed = parser(item, rules, **kwargs)
         >>> regexed == {'content': 'worldwide', 'title': 'greeting'}
         True
         >>> conf['multi'] = True
-        >>> parser(item, rules, False, **kwargs)[0] == regexed
+        >>> parser(item, rules, **kwargs) == regexed
         True
     """
     multi = kwargs['conf']['multi']
@@ -163,7 +162,7 @@ def parser(item, rules, skip, **kwargs):
         field_rules = [g[1] for g in grouped]
         item = reduce(meta_reducer, field_rules, item)
 
-    return item, skip
+    return item
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

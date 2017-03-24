@@ -39,7 +39,7 @@ def mean(*nums):
     try:
         return sum(nums) / len(nums)
     except ZeroDivisionError:
-        return 0.0
+        return float('inf')
 
 
 OPS = {
@@ -54,7 +54,7 @@ OPS = {
 }
 
 
-def parser(num, objconf, skip, **kwargs):
+def parser(num, objconf, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -63,18 +63,17 @@ def parser(num, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(dict, bool): Tuple of (the formatted , skip)
+        dict: The formatted item
 
     Examples:
         >>> from riko.lib.utils import Objectify
         >>> conf = {'op': 'divide', 'other': 4}
         >>> objconf = Objectify(conf)
-        >>> parser(10, objconf, False, conf=conf)[0]
+        >>> parser(10, objconf, conf=conf)
         2.5
     """
     operation = OPS[kwargs['conf']['op']]
-    parsed = kwargs['stream'] if skip else operation(num, objconf.other)
-    return parsed, skip
+    return kwargs['stream'] if skip else operation(num, objconf.other)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

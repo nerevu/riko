@@ -17,7 +17,6 @@ parts
 var
 sdist
 develop-eggs
-lib
 lib64
 
 # Installer logs

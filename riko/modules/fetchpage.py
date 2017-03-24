@@ -59,7 +59,7 @@ def get_string(content, start, end):
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -73,7 +73,7 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
@@ -83,12 +83,12 @@ def async_parser(_, objconf, skip, **kwargs):
         >>> from meza._compat import decode
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(decode(next(x[0])['content'][:32]))
+        ...     callback = lambda x: print(decode(next(x)['content'][:32]))
         ...     url = get_path('cnn.html')
         ...     conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}, 'assign': 'content'}
-        ...     d = async_parser(None, objconf, False, **kwargs)
+        ...     d = async_parser(None, objconf, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -108,11 +108,10 @@ def async_parser(_, objconf, skip, **kwargs):
         splits = detagged.split(objconf.token) if objconf.token else [detagged]
         stream = ({kwargs['assign']: chunk} for chunk in splits)
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -121,7 +120,7 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -132,7 +131,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': {}, 'assign': 'content'}
-        >>> result, skip = parser(None, objconf, False, **kwargs)
+        >>> result = parser(None, objconf, **kwargs)
         >>> resp = next(result)['content'][:21]
         >>> decode(resp) == 'CNN.com International'
         True
@@ -154,7 +153,7 @@ def parser(_, objconf, skip, **kwargs):
         splits = detagged.split(objconf.token) if objconf.token else [detagged]
         stream = ({kwargs['assign']: chunk} for chunk in splits)
 
-    return stream, skip
+    return stream
 
 
 @processor(isasync=True, **OPTS)

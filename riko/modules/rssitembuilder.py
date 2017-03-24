@@ -49,7 +49,7 @@ RSS = {
     'mediaContentWidth': 'media:content.width'}
 
 
-def parser(item, objconf, skip, **kwargs):
+def parser(item, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -62,7 +62,7 @@ def parser(item, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko.lib.dotdict import DotDict
@@ -72,7 +72,7 @@ def parser(item, objconf, skip, **kwargs):
         >>> conf = {'guid': 'a1', 'mediaThumbURL': 'image.png'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item}
-        >>> result, skip = parser(item, objconf, False, **kwargs)
+        >>> result = parser(item, objconf, **kwargs)
         >>> result == {'media:thumbnail': {'url': 'image.png'}, 'y:id': 'a1'}
         True
     """
@@ -83,7 +83,7 @@ def parser(item, objconf, skip, **kwargs):
         rdict = ((RSS.get(k, k), item.get(v, v, **kwargs)) for k, v in items)
         stream = DotDict(rdict)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

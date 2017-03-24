@@ -66,7 +66,7 @@ DEFAULTS = {'token_key': 'content'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(item, objconf, skip, **kwargs):
+def parser(item, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -75,7 +75,7 @@ def parser(item, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko.lib.dotdict import DotDict
@@ -85,13 +85,13 @@ def parser(item, objconf, skip, **kwargs):
         >>> args = [objconf, False]
         >>>
         >>> sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
-        >>> next(parser(DotDict(sonnet), *args)[0]) == {'content': 'verse1'}
+        >>> next(parser(DotDict(sonnet), *args)) == {'content': 'verse1'}
         True
         >>> sonnet = {'stanzas': {'verses': ['verse1', 'verse2']}}
-        >>> next(parser(DotDict(sonnet), *args)[0]) == {'content': 'verse1'}
+        >>> next(parser(DotDict(sonnet), *args)) == {'content': 'verse1'}
         True
         >>> sonnet = {'stanzas': {'verses': 'verse1'}}
-        >>> next(parser(DotDict(sonnet), *args)[0]) == {'content': 'verse1'}
+        >>> next(parser(DotDict(sonnet), *args)) == {'content': 'verse1'}
         True
     """
     if skip:
@@ -100,7 +100,7 @@ def parser(item, objconf, skip, **kwargs):
         element = item.get(objconf.path, **kwargs)
         stream = utils.gen_items(element, objconf.token_key)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
