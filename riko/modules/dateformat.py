@@ -46,7 +46,7 @@ DEFAULTS = {'format': '%m/%d/%Y %H:%M:%S'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(date, objconf, skip, **kwargs):
+def parser(date, objconf, skip=False, **kwargs):
     """ Obtains the user input
 
     Args:
@@ -55,19 +55,18 @@ def parser(date, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(dict, bool): Tuple of (the formatted date, skip)
+        dict: The formatted date
 
     Examples:
         >>> from datetime import date
         >>> from riko.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'format': '%m/%d/%Y'})
-        >>> parser({'date': date(2015, 5, 4)}, objconf, False)[0]
+        >>> parser({'date': date(2015, 5, 4)}, objconf)
         '05/04/2015'
     """
     timetuple = date['date'].timetuple()
-    parsed = kwargs['stream'] if skip else strftime(objconf.format, timetuple)
-    return parsed, skip
+    return kwargs['stream'] if skip else strftime(objconf.format, timetuple)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

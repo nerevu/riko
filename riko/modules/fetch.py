@@ -42,7 +42,7 @@ intersection = [
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -56,7 +56,7 @@ def async_parser(_, objconf, skip, **kwargs):
         conf (dict): The pipe configuration
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple(Iter[dict], bool)
+        Deferred: twisted.internet.defer.Deferred Iter[dict]
 
     Examples:
         >>> from riko import get_path
@@ -65,9 +65,9 @@ def async_parser(_, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
-        ...     d = async_parser(None, objconf, False, stream={})
+        ...     d = async_parser(None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -85,11 +85,10 @@ def async_parser(_, objconf, skip, **kwargs):
         parsed = utils.parse_rss(content)
         stream = utils.gen_entries(parsed)
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -103,14 +102,14 @@ def parser(_, objconf, skip, **kwargs):
         conf (dict): The pipe configuration
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
         >>> from riko.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
-        >>> result, skip = parser(None, objconf, False, stream={})
+        >>> result = parser(None, objconf, stream={})
         >>> next(result)['title'] == 'Donations'
         True
     """
@@ -121,7 +120,7 @@ def parser(_, objconf, skip, **kwargs):
         parsed = utils.parse_rss(url, objconf.sleep)
         stream = utils.gen_entries(parsed)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

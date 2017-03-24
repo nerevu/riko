@@ -35,7 +35,7 @@ DEFAULTS = {
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content, objconf, skip, **kwargs):
+def parser(content, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -44,13 +44,13 @@ def parser(content, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko.lib.utils import Objectify
         >>> objconf = Objectify({'delimiter': '//', 'token_key': 'token'})
         >>> content = 'Once//twice//thrice//no more'
-        >>> result, skip = parser(content, objconf, False)
+        >>> result = parser(content, objconf)
         >>> next(result) == {'token': 'Once'}
         True
     """
@@ -63,7 +63,7 @@ def parser(content, objconf, skip, **kwargs):
         chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
         stream = ({objconf.token_key: chunk} for chunk in chunks)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

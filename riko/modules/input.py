@@ -58,7 +58,7 @@ DEFAULTS = {'type': 'text', 'default': ''}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Obtains the user input
 
     Args:
@@ -67,7 +67,7 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't prompt for input
 
     Returns:
-        Tuple(dict, bool): Tuple of (the casted user input, skip)
+        dict: The casted user input
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -76,7 +76,7 @@ def parser(_, objconf, skip, **kwargs):
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'inputs': inputs, 'assign': 'age'}
-        >>> parser(None, objconf, False, **kwargs)[0] == {'age': 30}
+        >>> parser(None, objconf, **kwargs) == {'age': 30}
         True
     """
     if kwargs.get('inputs'):
@@ -88,8 +88,7 @@ def parser(_, objconf, skip, **kwargs):
         value = raw or objconf.default
 
     casted = utils.cast(value, objconf.type)
-    result = casted if hasattr(casted, 'keys') else {kwargs['assign']: casted}
-    return result, skip
+    return casted if hasattr(casted, 'keys') else {kwargs['assign']: casted}
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

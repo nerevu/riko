@@ -52,7 +52,7 @@ def reducer(word, rule):
 
 
 @coroutine
-def async_parser(word, rules, skip, **kwargs):
+def async_parser(word, rules, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -66,7 +66,7 @@ def async_parser(word, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
+        Deferred: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from riko.bado import react
@@ -74,13 +74,12 @@ def async_parser(word, rules, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0])
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         ...     rule = Objectify(conf['rule'])
         ...     kwargs = {'stream': item, 'conf': conf}
-        ...     d = async_parser(item['content'], [rule], False, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d = async_parser(item['content'], [rule], **kwargs)
+        ...     return d.addCallbacks(print, logger.error)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -94,11 +93,10 @@ def async_parser(word, rules, skip, **kwargs):
     else:
         value = yield ait.coop_reduce(reducer, rules, word)
 
-    result = (value, skip)
-    return_value(result)
+    return_value(value)
 
 
-def parser(word, rules, skip, **kwargs):
+def parser(word, rules, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -112,7 +110,7 @@ def parser(word, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -121,11 +119,10 @@ def parser(word, rules, skip, **kwargs):
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         >>> rule = Objectify(conf['rule'])
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(item['content'], [rule], False, **kwargs)[0] == 'bye world'
+        >>> parser(item['content'], [rule], **kwargs) == 'bye world'
         True
     """
-    value = kwargs['stream'] if skip else reduce(reducer, rules, word)
-    return value, skip
+    return kwargs['stream'] if skip else reduce(reducer, rules, word)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

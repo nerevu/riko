@@ -34,7 +34,7 @@ OPTS = {'listize': True, 'extract': 'part'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, parts, skip, **kwargs):
+def parser(_, parts, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -47,10 +47,10 @@ def parser(_, parts, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(str, bool): Tuple of (the concatenated string, skip)
+        str: The concatenated string
 
     Examples:
-        >>> parser(None, ['one', 'two'], False)[0] == 'onetwo'
+        >>> parser(None, ['one', 'two']) == 'onetwo'
         True
     """
     if skip:
@@ -58,7 +58,7 @@ def parser(_, parts, skip, **kwargs):
     else:
         parsed = ''.join(p for p in parts if p)
 
-    return parsed, skip
+    return parsed
 
 
 @processor(isasync=True, **OPTS)

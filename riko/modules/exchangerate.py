@@ -84,7 +84,7 @@ def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
 
 
 @coroutine
-def async_parser(base, objconf, skip, **kwargs):
+def async_parser(base, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -98,7 +98,7 @@ def async_parser(base, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
+        Deferred: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from riko import get_path
@@ -107,15 +107,14 @@ def async_parser(base, objconf, skip, **kwargs):
         >>> from riko.lib.utils import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0])
         ...     url = get_path('quote.json')
         ...     conf = {
         ...         'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': item, 'assign': 'content'}
-        ...     d = async_parser(item['content'], objconf, False, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d = async_parser(item['content'], objconf, **kwargs)
+        ...     return d.addCallbacks(print, logger.error)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -143,11 +142,10 @@ def async_parser(base, objconf, skip, **kwargs):
         rates = parse_response(json)
         rate = calc_rate(base, objconf.currency, rates, places=places)
 
-    result = (rate, skip)
-    return_value(result)
+    return_value(rate)
 
 
-def parser(base, objconf, skip, **kwargs):
+def parser(base, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -161,7 +159,7 @@ def parser(base, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
         >>> from riko import get_path
@@ -172,8 +170,7 @@ def parser(base, objconf, skip, **kwargs):
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> result, skip = parser(item['content'], objconf, False, **kwargs)
-        >>> result
+        >>> parser(item['content'], objconf, **kwargs)
         Decimal('1.545801')
     """
     same_currency = base == objconf.currency
@@ -204,7 +201,7 @@ def parser(base, objconf, skip, **kwargs):
         rates = parse_response(json)
         rate = calc_rate(base, objconf.currency, rates, places=places)
 
-    return rate, skip
+    return rate
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -33,7 +33,7 @@ DEFAULTS = {'parse_key': 'content'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(url, objconf, skip, **kwargs):
+def parser(url, objconf, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -47,13 +47,13 @@ def parser(url, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
         >>> from riko.lib.utils import Objectify
         >>>
         >>> objconf = Objectify({'parse_key': 'value'})
-        >>> result, skip = parser('http://yahoo.com', objconf, False)
+        >>> result = parser('http://yahoo.com', objconf)
         >>> next(result) == {'component': 'scheme', 'value': 'http'}
         True
     """
@@ -64,7 +64,7 @@ def parser(url, objconf, skip, **kwargs):
         items = parsed._asdict().items()
         stream = ({'component': k, objconf.parse_key: v} for k, v in items)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

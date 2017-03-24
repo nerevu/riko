@@ -42,7 +42,7 @@ DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word, _, skip, **kwargs):
+def parser(word, _, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -56,7 +56,7 @@ def parser(word, _, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
         >>> from riko.lib.utils import Objectify
@@ -64,11 +64,10 @@ def parser(word, _, skip, **kwargs):
         >>> _hash = ctypes.c_uint(hash('hello world')).value
         >>> item = {'content': 'hello world'}
         >>> kwargs = {'stream': item}
-        >>> parser(item['content'], None, False, **kwargs)[0] == _hash
+        >>> parser(item['content'], None, **kwargs) == _hash
         True
     """
-    parsed = kwargs['stream'] if skip else ctypes.c_uint(hash(word)).value
-    return parsed, skip
+    return kwargs['stream'] if skip else ctypes.c_uint(hash(word)).value
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
