@@ -27,9 +27,6 @@ LOCATIONS = {
     'Oceania': {
         'code_2': 'OC',
         'continent': 'Oceania'},
-    'Antarctica': {
-        'code_2': 'AN',
-        'continent': 'Antarctica'},
     'Afghanistan': {
         'code_2': 'AF',
         'code_3': 'AFG',
