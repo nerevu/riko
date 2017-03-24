@@ -632,6 +632,7 @@ def cast_location(address, loc_type='street_address'):
 
     return result
 
+
 CAST_SWITCH = {
     'float': {'default': float('nan'), 'func': float},
     'decimal': {'default': Decimal('NaN'), 'func': Decimal},
