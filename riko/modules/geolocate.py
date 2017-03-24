@@ -12,8 +12,9 @@ Examples:
         >>> from riko.modules.geolocate import pipe
         >>>
         >>> address = '123 Bakersville St., London'
-        >>> next(pipe({'content': address}))['geolocate']['country']
-        'United States'
+        >>> geolocate = next(pipe({'content': address}))['geolocate']
+        >>> geolocate['country'] == 'United States'
+        True
 
 
 Attributes:
@@ -59,8 +60,9 @@ def parser(address, objconf, skip=False, **kwargs):
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify({'type': 'currency'})
         >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> parser(item['content'], objconf, **kwargs)['country']
-        'United Kingdom'
+        >>> country = 'United Kingdom'
+        >>> parser(item['content'], objconf, **kwargs)['country'] == country
+        True
     """
     if skip:
         location = kwargs['stream']
@@ -138,11 +140,13 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> conf = {'type': 'currency'}
-        >>> next(pipe({'content': 'INR'}, conf=conf))['geolocate']['country']
-        'India'
+        >>> geolocate = next(pipe({'content': 'INR'}, conf=conf))['geolocate']
+        >>> geolocate['country'] == 'India'
+        True
         >>> address = '123 Bakersville St., London'
         >>> kwargs = {'field': 'address', 'assign': 'result'}
-        >>> next(pipe({'address': address}, **kwargs))['result']['country']
-        'United States'
+        >>> geolocate = next(pipe({'address': address}, **kwargs))['result']
+        >>> geolocate['country'] == 'United States'
+        True
     """
     return parser(*args, **kwargs)
