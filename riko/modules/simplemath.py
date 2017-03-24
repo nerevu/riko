@@ -39,7 +39,7 @@ def mean(*nums):
     try:
         return sum(nums) / len(nums)
     except ZeroDivisionError:
-        return 0.0
+        return float('inf')
 
 
 OPS = {
