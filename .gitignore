@@ -32,7 +32,7 @@ pip-log.txt
 .noseids
 .scripttest/*
 .cache/*
-*.xml
+coverage.xml
 cover/*
 
 # Translations

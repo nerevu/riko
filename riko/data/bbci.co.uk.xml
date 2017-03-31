@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet title="XSL_formatting" type="text/xsl" href="/shared/bsp/xsl/rss/nolsol.xsl"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+    <channel>
+        <title><![CDATA[BBC News - Home]]></title>
+        <description><![CDATA[BBC News - Home]]></description>
+        <link>http://www.bbc.co.uk/news/</link>
+        <image>
+            <url>http://news.bbcimg.co.uk/nol/shared/img/bbc_news_120x60.gif</url>
+            <title>BBC News - Home</title>
+            <link>http://www.bbc.co.uk/news/</link>
+        </image>
+        <generator>RSS for Node</generator>
+        <lastBuildDate>Fri, 31 Mar 2017 14:20:51 GMT</lastBuildDate>
+        <copyright><![CDATA[Copyright: (C) British Broadcasting Corporation, see http://news.bbc.co.uk/2/hi/help/rss/4498287.stm for terms and conditions of reuse.]]></copyright>
+        <language><![CDATA[en-gb]]></language>
+        <ttl>15</ttl>
+        <item>
+            <title><![CDATA[EU sets out 'phased' Brexit strategy]]></title>
+            <description><![CDATA[Talks on a trade deal may begin once progress in Brexit talks has been made, the bloc suggests.]]></description>
+            <link>http://www.bbc.co.uk/news/world-europe-39453338</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-europe-39453338</guid>
+            <pubDate>Fri, 31 Mar 2017 14:18:09 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/1F9A/production/_95409080_mediaitem95409079.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[NHS operations: Waiting times to rise in 'trade-off', boss says]]></title>
+            <description><![CDATA[Cancer care and A&E to be prioritised as health service leader in England says something has to give.]]></description>
+            <link>http://www.bbc.co.uk/news/health-39420662</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/health-39420662</guid>
+            <pubDate>Fri, 31 Mar 2017 10:01:22 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/178D0/production/_95346469_waitingroom.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Nicola Sturgeon: 'No rational reason' for Theresa May to block indyref2]]></title>
+            <description><![CDATA[Nicola Sturgeon sends a letter to Theresa May seeking powers to hold an independence referendum.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-scotland-scotland-politics-39454457</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-scotland-scotland-politics-39454457</guid>
+            <pubDate>Fri, 31 Mar 2017 12:53:20 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/17ECF/production/_95399979_c8l0mpcw4aam4hn.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Google reveals latest UK tax bill]]></title>
+            <description><![CDATA[The search giant was charged £36.4m in UK corporation tax in the year to June 2016.]]></description>
+            <link>http://www.bbc.co.uk/news/business-39456662</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/business-39456662</guid>
+            <pubDate>Fri, 31 Mar 2017 14:19:00 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/6428/production/_95404652_googlehq.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Brexit: MPs angered by EU 'veto' over Gibraltar]]></title>
+            <description><![CDATA[British sovereignty is non-negotiable, MPs say, as the EU suggests Spain has a say on future arrangements.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-politics-39453535</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-politics-39453535</guid>
+            <pubDate>Fri, 31 Mar 2017 14:16:27 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/E6DD/production/_95410195_mediaitem95404515.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Meet the fish with the heroin-like bite]]></title>
+            <description><![CDATA[Research reveals the toxic secret behind the fang blenny's pain-free bite.]]></description>
+            <link>http://www.bbc.co.uk/news/science-environment-39457279</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/science-environment-39457279</guid>
+            <pubDate>Fri, 31 Mar 2017 12:27:08 GMT</pubDate>
+            <media:thumbnail width="640" height="360" url="http://c.files.bbci.co.uk/185C4/production/_95408799_mediaitem95395107.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Bin lorry deaths driver Harry Clarke banned from driving]]></title>
+            <description><![CDATA[Harry Clarke was found behind the wheel nine months after the tragedy, despite being unfit to drive.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-scotland-glasgow-west-39453847</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-scotland-glasgow-west-39453847</guid>
+            <pubDate>Fri, 31 Mar 2017 11:21:22 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/113FA/production/_95405607_harrypa.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[British endurance cyclist Mike Hall killed in road race]]></title>
+            <description><![CDATA[The Indian Pacific Wheel Race was cancelled shortly after Mike Hall died in a collision with a car.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-39452786</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-39452786</guid>
+            <pubDate>Fri, 31 Mar 2017 09:41:59 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/C04E/production/_95403294_img_0311.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Kim Jong-nam: Body 'arrives in Pyongyang' in exchange deal]]></title>
+            <description><![CDATA[Nine Malaysians also return home under a deal to end the diplomatic row that followed his death.]]></description>
+            <link>http://www.bbc.co.uk/news/world-asia-39452470</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-asia-39452470</guid>
+            <pubDate>Fri, 31 Mar 2017 11:52:18 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/DEC6/production/_95403075_mediaitem95403071.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Household savings ratio falls to record low, says ONS]]></title>
+            <description><![CDATA[The economy was "robust" in late 2016, but economists warn of worrying signs as savings ratio falls.]]></description>
+            <link>http://www.bbc.co.uk/news/business-39453844</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/business-39453844</guid>
+            <pubDate>Fri, 31 Mar 2017 11:50:22 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/14AA0/production/_95404648_shoppingbagsafp.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Stourbridge stabbing Land Rover chase caught on dashcam]]></title>
+            <description><![CDATA[The 4x4 was taken from the house in Stourbridge where a husband, wife and their son were attacked.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-england-birmingham-39450047</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-england-birmingham-39450047</guid>
+            <pubDate>Fri, 31 Mar 2017 10:33:37 GMT</pubDate>
+            <media:thumbnail width="464" height="261" url="http://c.files.bbci.co.uk/B734/production/_95400964_p04yk0jw.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Fallon and Mattis discussing Nato spending]]></title>
+            <description><![CDATA[Defence secretary says other nations should be "shamed" into spending more as he meets US counterpart.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-politics-39453527</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-politics-39453527</guid>
+            <pubDate>Fri, 31 Mar 2017 11:05:16 GMT</pubDate>
+            <media:thumbnail width="1920" height="1080" url="http://c.files.bbci.co.uk/7B34/production/_95404513_mattisfallon.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Pamela Anderson's 'love' for Julian Assange]]></title>
+            <description><![CDATA[Pamela Anderson says the Wikileaks founder "might be the most famous refugee of our time".]]></description>
+            <link>http://www.bbc.co.uk/news/uk-39453297</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-39453297</guid>
+            <pubDate>Fri, 31 Mar 2017 11:43:37 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/7256/production/_95407292_3f06abae-a00f-4d1e-b1b0-917a9a14cd29.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Quiz: Which airline stopped girls in leggings from flying?]]></title>
+            <description><![CDATA[A weekly quiz of the news, 7 days 7 questions.]]></description>
+            <link>http://www.bbc.co.uk/news/magazine-39432281</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/magazine-39432281</guid>
+            <pubDate>Thu, 30 Mar 2017 23:52:21 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/131F9/production/_95392387_leggings.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[James Van Der Beek and his awkward Dawson's Creek interview questions]]></title>
+            <description><![CDATA[Why are chat show hosts putting the former Dawson's Creek star through such awkward interviews?]]></description>
+            <link>http://www.bbc.co.uk/news/entertainment-arts-39453507</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/entertainment-arts-39453507</guid>
+            <pubDate>Fri, 31 Mar 2017 12:13:55 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/9F38/production/_95406704_cryingface_tns.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[The rapping hijabi lights up social media]]></title>
+            <description><![CDATA[Find out what's buzzing in the social media world today.]]></description>
+            <link>http://www.bbc.co.uk/news/blogs-trending-39453357</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/blogs-trending-39453357</guid>
+            <pubDate>Fri, 31 Mar 2017 13:25:57 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/5DB6/production/_95409932_video.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[What gifts has Theresa May been given?]]></title>
+            <description><![CDATA[Like all prime ministers, Theresa May is showered with gifts but she does not keep many of them.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-politics-39453348</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-politics-39453348</guid>
+            <pubDate>Fri, 31 Mar 2017 09:38:00 GMT</pubDate>
+            <media:thumbnail width="768" height="432" url="http://c.files.bbci.co.uk/1A54/production/_95404760_mediaitem95404759.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Flying Scotsman marks Carlisle-to-Settle line reopening]]></title>
+            <description><![CDATA[The Settle-to-Carlisle line was closed for 13 months after a 500,000-tonne landslip.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-england-39447835</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-england-39447835</guid>
+            <pubDate>Fri, 31 Mar 2017 11:44:29 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/5FF0/production/_95406542_hi038779955.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Hedgehog-like critters arrive at Chester Zoo]]></title>
+            <description><![CDATA[Its stripes are more like a bumblebee's.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-39450981</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-39450981</guid>
+            <pubDate>Fri, 31 Mar 2017 05:25:23 GMT</pubDate>
+            <media:thumbnail width="1024" height="576" url="http://c.files.bbci.co.uk/16A80/production/_95400829_p04yl72d.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA['Inspiring' ex-teacher helps disabled children]]></title>
+            <description><![CDATA[The story of the former teacher who has set up a Facebook page for interviews with the children.]]></description>
+            <link>http://www.bbc.co.uk/news/education-39387883</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/education-39387883</guid>
+            <pubDate>Thu, 30 Mar 2017 23:53:19 GMT</pubDate>
+            <media:thumbnail width="1024" height="579" url="http://c.files.bbci.co.uk/126AF/production/_95393457_p04yhg6n.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Africa's top shots: 24-30 March 2017]]></title>
+            <description><![CDATA[A selection of the best photos from across Africa this week.]]></description>
+            <link>http://www.bbc.co.uk/news/world-africa-39442192</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-africa-39442192</guid>
+            <pubDate>Thu, 30 Mar 2017 23:46:14 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/DE25/production/_95396865_mediaitem95395499.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Ivanka Trump steps into White House ethics minefield]]></title>
+            <description><![CDATA[Donald Trump's daughter has to circumvent conflicts of interest laws in her new job.]]></description>
+            <link>http://www.bbc.co.uk/news/world-us-canada-32022516</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-us-canada-32022516</guid>
+            <pubDate>Thu, 30 Mar 2017 22:36:43 GMT</pubDate>
+            <media:thumbnail width="2048" height="1152" url="http://c.files.bbci.co.uk/0C1C/production/_95400130_hi038717283.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Cat ownership rise driven by men, survey suggests]]></title>
+            <description><![CDATA[There are now eight million pet cats in the UK - 500,000 more than in 2016, a survey suggests.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-39440934</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-39440934</guid>
+            <pubDate>Thu, 30 Mar 2017 10:18:11 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/ECB6/production/_95389506_hughwithnigel.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Is 'luxury co-living' a solution to loneliness in big cities?]]></title>
+            <description><![CDATA[Could student hall-style accommodation for young professionals tackle loneliness in big cities?]]></description>
+            <link>http://www.bbc.co.uk/news/magazine-39381920</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/magazine-39381920</guid>
+            <pubDate>Wed, 29 Mar 2017 23:31:45 GMT</pubDate>
+            <media:thumbnail width="1920" height="1080" url="http://c.files.bbci.co.uk/13AD5/production/_95379508_womenlaughingcut.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Thirsty snake drinks from water bottle]]></title>
+            <description><![CDATA[A cobra in a drought-hit village in India has been filmed drinking water from a bottle.]]></description>
+            <link>http://www.bbc.co.uk/news/world-asia-39444601</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-asia-39444601</guid>
+            <pubDate>Thu, 30 Mar 2017 12:26:18 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/1011B/production/_95391856_p04yh96f.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[BBC News Channel]]></title>
+            <description><![CDATA[BBC coverage of latest developments]]></description>
+            <link>http://www.bbc.co.uk/news/10318089</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/10318089</guid>
+            <pubDate>Fri, 17 Feb 2017 09:41:12 GMT</pubDate>
+            <media:thumbnail width="2048" height="1152" url="http://news.bbcimg.co.uk/media/images/83122000/png/_83122356_globe_2048x1152.png"/>
+        </item>
+        <item>
+            <title><![CDATA[Peter Taylor: How has terror changed in 50 years?]]></title>
+            <description><![CDATA[The threat from terrorism is always evolving, but some things are constant, writes Peter Taylor.]]></description>
+            <link>http://www.bbc.co.uk/news/uk-39432041</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/uk-39432041</guid>
+            <pubDate>Thu, 30 Mar 2017 23:54:44 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/7403/production/_95399692_car_bbc_976.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Meet the Hunter Troop: Norway's tough-as-nails female soldiers]]></title>
+            <description><![CDATA[Meet the Norwegian women going through gruelling special forces training.]]></description>
+            <link>http://www.bbc.co.uk/news/world-europe-39434655</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-europe-39434655</guid>
+            <pubDate>Thu, 30 Mar 2017 23:17:14 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/13EDD/production/_95392618_screenshot2017-03-28at12.09.02.png"/>
+        </item>
+        <item>
+            <title><![CDATA[Inside France's young far-right]]></title>
+            <description><![CDATA[A new generation of far-right activists have found a home in the Front National.]]></description>
+            <link>http://www.bbc.co.uk/news/world-europe-39448615</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-europe-39448615</guid>
+            <pubDate>Fri, 31 Mar 2017 02:32:02 GMT</pubDate>
+            <media:thumbnail width="1024" height="576" url="http://c.files.bbci.co.uk/A51E/production/_95407224_p04ymgvl.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Prince's Sign O' The Times, 30 years on]]></title>
+            <description><![CDATA[A look at the making of Prince's masterpiece, by the people who were there.]]></description>
+            <link>http://www.bbc.co.uk/news/entertainment-arts-39441461</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/entertainment-arts-39441461</guid>
+            <pubDate>Thu, 30 Mar 2017 23:56:02 GMT</pubDate>
+            <media:thumbnail width="1024" height="576" url="http://c.files.bbci.co.uk/1764/production/_95388950_prince-sign-wanrers.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Masters 2017: Danny Willett - inside the ropes with a Masters winner]]></title>
+            <description><![CDATA[Masters champion Danny Willett and his caddie Jonathan Swift talk us through their sensational back nine at Augusta to win the 2016 title.]]></description>
+            <link>http://www.bbc.co.uk/sport/golf/39420176</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/sport/golf/39420176</guid>
+            <pubDate>Fri, 31 Mar 2017 05:50:42 GMT</pubDate>
+            <media:thumbnail width="624" height="351" url="http://c.files.bbci.co.uk/16198/production/_95402509_willett_green.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Information warfare: Is Russia really interfering in European states?]]></title>
+            <description><![CDATA[How Russia became an expert at information warfare - and the risks that poses for Europe.]]></description>
+            <link>http://www.bbc.co.uk/news/world-europe-39401637</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-europe-39401637</guid>
+            <pubDate>Thu, 30 Mar 2017 23:53:30 GMT</pubDate>
+            <media:thumbnail width="976" height="549" url="http://c.files.bbci.co.uk/9218/production/_95400473_038660798-1.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Can China's ivory trade ban save elephants?]]></title>
+            <description><![CDATA[China begins closing down its legal ivory trade, but will consumer attitudes to prized artwork change?]]></description>
+            <link>http://www.bbc.co.uk/news/world-asia-china-39440486</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-asia-china-39440486</guid>
+            <pubDate>Thu, 30 Mar 2017 23:27:04 GMT</pubDate>
+            <media:thumbnail width="2048" height="1152" url="http://c.files.bbci.co.uk/16B15/production/_95394929_gettyimages-141628727.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Three words to set alarm bells off for every firm]]></title>
+            <description><![CDATA[Incidents of fraudsters posing as the boss and demanding staff make payments is on the rise.]]></description>
+            <link>http://www.bbc.co.uk/news/business-39429819</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/business-39429819</guid>
+            <pubDate>Thu, 30 Mar 2017 23:05:39 GMT</pubDate>
+            <media:thumbnail width="2048" height="1152" url="http://c.files.bbci.co.uk/1520C/production/_95404568_womanheadinhandsgetty.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[The joy and sadness of returning to Mosul]]></title>
+            <description><![CDATA[BBC Arabic's Basheer Al Zaidi returns to his hometown of Mosul to find out how life has changed after the end of occupation by so-called Islamic State.]]></description>
+            <link>http://www.bbc.co.uk/news/world-middle-east-39437227</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/news/world-middle-east-39437227</guid>
+            <pubDate>Thu, 30 Mar 2017 23:21:32 GMT</pubDate>
+            <media:thumbnail width="1920" height="1080" url="http://c.files.bbci.co.uk/14F95/production/_95390958_mosul2.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Man Utd: Chris Smalling & Phil Jones suffered 'long term' injuries]]></title>
+            <description><![CDATA[The injuries suffered by defenders Chris Smalling and Phil Jones on England duty are "long term", says their Manchester United manager Jose Mourinho.]]></description>
+            <link>http://www.bbc.co.uk/sport/football/39454470</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/sport/football/39454470</guid>
+            <pubDate>Fri, 31 Mar 2017 14:03:48 GMT</pubDate>
+            <media:thumbnail width="2048" height="1152" url="http://c.files.bbci.co.uk/373C/production/_95404141_jones_smalling_empics.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Saido Berahino: Drugs ban from a spiked drink, says Stoke striker]]></title>
+            <description><![CDATA[Stoke striker Saido Berahino tells Football Focus the eight-week drugs ban he served this season came after his drink was spiked.]]></description>
+            <link>http://www.bbc.co.uk/sport/football/39450446</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/sport/football/39450446</guid>
+            <pubDate>Thu, 30 Mar 2017 20:33:06 GMT</pubDate>
+            <media:thumbnail width="624" height="351" url="http://c.files.bbci.co.uk/A6CC/production/_95400724_saidoberahino.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[PFA Player of the Year: BBC pundits pick the Premier League's best player]]></title>
+            <description><![CDATA[With voting for the PFA Player of the Year award about to close, 15 BBC pundits reveal who they think should land the prize.]]></description>
+            <link>http://www.bbc.co.uk/sport/football/39429946</link>
+            <guid isPermaLink="true">http://www.bbc.co.uk/sport/football/39429946</guid>
+            <pubDate>Thu, 30 Mar 2017 23:04:42 GMT</pubDate>
+            <media:thumbnail width="2048" height="1152" url="http://c.files.bbci.co.uk/C47C/production/_95400305_kantezlatanhazard.jpg"/>
+        </item>
+    </channel>
+</rss>
