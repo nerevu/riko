@@ -33,7 +33,7 @@ from builtins import *
 from meza.process import merge, join
 
 from . import operator
-from riko.lib.utils import multiplex
+from riko.utils import multiplex
 
 # disable `dictize` since we do not need to access the configuration
 OPTS = {'dictize': False}
@@ -65,7 +65,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> stream = ({'x': 'foo', 'sum': x} for x in range(5))
         >>> other = ({'x': 'foo', 'count': x + 5} for x in range(5))

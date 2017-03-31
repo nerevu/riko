@@ -46,7 +46,7 @@ def parser(amount, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from decimal import Decimal
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'currency': 'USD'})
         >>> parser(Decimal('10.33'), objconf) == '$10.33'

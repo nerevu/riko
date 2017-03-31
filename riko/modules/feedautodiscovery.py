@@ -34,12 +34,15 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import pygogo as gogo
+
 from builtins import *
-from riko.bado import coroutine, return_value
 
 from . import processor
-from riko.lib import utils, autorss
-import pygogo as gogo
+from riko import autorss
+from riko.parsers import get_abspath
+from riko.bado import coroutine, return_value
+
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -65,7 +68,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['link'])
@@ -83,7 +86,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         stream = yield autorss.async_get_rss(url)
 
     return_value(stream)
@@ -106,7 +109,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> result = parser(None, objconf, stream={})
@@ -116,7 +119,7 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         stream = autorss.get_rss(url)
 
     return stream

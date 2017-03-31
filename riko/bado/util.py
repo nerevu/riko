@@ -20,7 +20,7 @@ from functools import partial
 
 from builtins import *
 
-from riko.lib.utils import _make_content, entity2text
+from riko.parsers import _make_content, entity2text
 
 try:
     from twisted.internet.defer import maybeDeferred, Deferred

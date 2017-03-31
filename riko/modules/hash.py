@@ -59,7 +59,7 @@ def parser(word, _, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> _hash = ctypes.c_uint(hash('hello world')).value
         >>> item = {'content': 'hello world'}

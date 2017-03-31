@@ -35,12 +35,11 @@ import operator as op
 
 from decimal import Decimal, InvalidOperation
 
-from builtins import *
-
-from . import operator
-from riko.lib import utils
-from riko.lib.utils import parse_conf
 import pygogo as gogo
+
+from builtins import *
+from . import operator
+from riko.parsers import parse_conf, cast_date
 
 OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'combine': 'and', 'mode': 'permit'}
@@ -58,8 +57,10 @@ SWITCH = {
     'falsy': op.not_,
     'greater': op.gt,
     'after': op.gt,
+    'atleast': op.ge,
     'less': op.lt,
     'before': op.lt,
+    'atmost': op.le,
 }
 
 
@@ -69,8 +70,8 @@ def _parse_x_y(_x, _y):
         y = Decimal(_y)
     except (InvalidOperation, TypeError, ValueError):
         try:
-            x = utils.cast_date(_x)['date']
-            y = utils.cast_date(_y)['date']
+            x = cast_date(_x)['date']
+            y = cast_date(_y)['date']
         except (ValueError, KeyError, IndexError):
             x, y = _x, _y
 
@@ -124,8 +125,8 @@ def parser(stream, rules, tuples, **kwargs):
         dict: The output
 
     Examples:
-        >>> from riko.lib.utils import Objectify
-        >>> from riko.lib.dotdict import DotDict
+        >>> from meza.fntools import Objectify
+        >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
         >>>
         >>> conf = DotDict({'mode': 'permit', 'combine': 'and'})
@@ -181,7 +182,8 @@ def async_pipe(*args, **kwargs):
                 field (str): the item field to search.
                 op (str): the operation, must be one of 'contains',
                     'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
-                    'falsy', 'greater', 'less', 'after', or 'before'.
+                    'falsy', 'greater', 'less', 'after', or 'before',
+                    'atleast', 'atmost'.
 
                 value (scalar): the value to compare the item's field to.
 
@@ -235,7 +237,8 @@ def pipe(*args, **kwargs):
                 field (str): the item field to search.
                 op (str): the operation, must be one of 'contains',
                     'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
-                    'falsy', 'greater', 'less', 'after', or 'before'.
+                    'falsy', 'greater', 'less', 'after', or 'before',
+                    'atleast', 'atmost'.
 
                 value (scalar): the value to compare the item's field to.
 

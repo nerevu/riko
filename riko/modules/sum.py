@@ -58,7 +58,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> stream = ({'content': x} for x in range(5))
         >>> objconf = Objectify({'sum_key': 'content'})

@@ -91,8 +91,10 @@ Fetching feeds
     >>> ### Find all rss links and fetch the feeds ###
     >>> url = get_path('bbc.html')
     >>> entries = feedautodiscovery.pipe(conf={'url': url})
-    >>> urls = (e['link'] for e in entries)
-    >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
+    >>> urls = [e['link'] for e in entries]
+    >>>
+    >>> stream = chain.from_iterable(
+    ...     fetch.pipe(conf={'url': url}) for url in urls)
     >>>
     >>> ### Alternatively, create a SyncCollection ###
     >>> #

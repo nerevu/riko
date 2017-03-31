@@ -39,8 +39,9 @@ from builtins import *
 
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
-from riko.lib.dotdict import DotDict
-from riko.lib.utils import combine_dicts as cdicts, remove_keys
+from riko.dotdict import DotDict
+from meza.fntools import remove_keys
+from meza.process import merge
 
 OPTS = {'extract': 'rule', 'listize': True, 'emit': True}
 DEFAULTS = {}
@@ -50,7 +51,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 def reducer(item, rule):
     new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
     old_dict = item if rule.copy else remove_keys(item, rule.field)
-    return DotDict(cdicts(old_dict, new_dict))
+    return DotDict(merge([old_dict, new_dict]))
 
 
 @coroutine
@@ -71,9 +72,9 @@ def async_parser(item, rules, skip=False, **kwargs):
 
     Examples:
         >>> from riko.bado import react
-        >>> from riko.lib.dotdict import DotDict
+        >>> from riko.dotdict import DotDict
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x == {'greeting': 'hello world'})
@@ -114,8 +115,8 @@ def parser(item, rules, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from riko.lib.dotdict import DotDict
-        >>> from riko.lib.utils import Objectify
+        >>> from riko.dotdict import DotDict
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world'})
         >>> rule = {'field': 'content', 'newval': 'greeting'}

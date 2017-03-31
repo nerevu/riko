@@ -35,10 +35,10 @@ from functools import reduce
 from builtins import *
 
 from . import processor
+from riko.utils import get_new_rule, substitute, multi_substitute, group_by
 from riko.bado import coroutine, return_value, itertools as ait
-from riko.lib import utils
-from riko.lib.utils import combine_dicts as cdicts
-from riko.lib.dotdict import DotDict
+from riko.dotdict import DotDict
+from meza.process import merge
 
 OPTS = {'listize': True, 'extract': 'rule', 'emit': True}
 DEFAULTS = {'convert': True, 'multi': False}
@@ -64,7 +64,7 @@ def async_parser(item, rules, skip=False, **kwargs):
     Examples:
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
         >>> match = r'(\w+)\s(\w+)'
@@ -93,18 +93,18 @@ def async_parser(item, rules, skip=False, **kwargs):
     def async_reducer(item, rules):
         field = rules[0]['field']
         word = item.get(field, **kwargs)
-        grouped = utils.group_by(rules, 'flags')
+        grouped = group_by(rules, 'flags')
         group_rules = [g[1] for g in grouped] if multi else rules
-        reducer = utils.multi_substitute if multi else utils.substitute
+        reducer = multi_substitute if multi else substitute
         replacement = yield ait.coop_reduce(reducer, group_rules, word)
-        combined = cdicts(item, {field: replacement})
+        combined = merge([item, {field: replacement}])
         return_value(DotDict(combined))
 
     if skip:
         item = kwargs['stream']
     else:
-        new_rules = [utils.get_new_rule(r, recompile=recompile) for r in rules]
-        grouped = utils.group_by(new_rules, 'field')
+        new_rules = [get_new_rule(r, recompile=recompile) for r in rules]
+        grouped = group_by(new_rules, 'field')
         field_rules = [g[1] for g in grouped]
         item = yield ait.async_reduce(async_reducer, field_rules, item)
 
@@ -127,7 +127,7 @@ def parser(item, rules, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
         >>> match = r'(\w+)\s(\w+)'
@@ -148,17 +148,17 @@ def parser(item, rules, skip=False, **kwargs):
     def meta_reducer(item, rules):
         field = rules[0]['field']
         word = item.get(field, **kwargs)
-        grouped = utils.group_by(rules, 'flags')
+        grouped = group_by(rules, 'flags')
         group_rules = [g[1] for g in grouped] if multi else rules
-        reducer = utils.multi_substitute if multi else utils.substitute
+        reducer = multi_substitute if multi else substitute
         replacement = reduce(reducer, group_rules, word)
-        return DotDict(cdicts(item, {field: replacement}))
+        return DotDict(merge([item, {field: replacement}]))
 
     if skip:
         item = kwargs['stream']
     else:
-        new_rules = [utils.get_new_rule(r, recompile=recompile) for r in rules]
-        grouped = utils.group_by(new_rules, 'field')
+        new_rules = [get_new_rule(r, recompile=recompile) for r in rules]
+        grouped = group_by(new_rules, 'field')
         field_rules = [g[1] for g in grouped]
         item = reduce(meta_reducer, field_rules, item)
 

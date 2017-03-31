@@ -50,3 +50,8 @@ output/*/index.html
 # Sphinx
 docs/_build
 build/*
+
+# Misc
+*.pstats
+callgraph.svg
+ttyrecord

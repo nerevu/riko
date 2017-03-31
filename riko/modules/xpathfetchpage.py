@@ -54,7 +54,7 @@ from six.moves.urllib.request import urlopen
 
 
 from . import processor
-from riko.lib import utils
+from riko.parsers import xml2etree, etree2dict, xpath, get_abspath
 from riko.bado import coroutine, return_value, util, io
 from meza._compat import encode
 
@@ -88,7 +88,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> @coroutine
         ... def run(reactor):
@@ -123,7 +123,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         xml = (ext == 'xml') or objconf.strict
 
@@ -134,7 +134,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
             logger.error(e)
             logger.error(traceback.format_exc())
 
-        elements = utils.xpath(tree, objconf.xpath)
+        elements = xpath(tree, objconf.xpath)
         f.close()
         items = map(util.etree2dict, elements)
         stringified = ({kwargs['assign']: encode(i)} for i in items)
@@ -155,7 +155,7 @@ def parser(_, objconf, skip=False, **kwargs):
         Iter[dict]: The stream of items
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> from riko import get_path
         >>>
         >>> url = get_path('ouseful.xml')
@@ -168,15 +168,15 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         xml = (ext == 'xml') or objconf.strict
 
         with closing(urlopen(url)) as f:
-            root = utils.xml2etree(f, xml=xml, html5=objconf.html5).getroot()
-            elements = utils.xpath(root, objconf.xpath)
+            root = xml2etree(f, xml=xml, html5=objconf.html5).getroot()
+            elements = xpath(root, objconf.xpath)
 
-        items = map(utils.etree2dict, elements)
+        items = map(etree2dict, elements)
         stringified = ({kwargs['assign']: str(i)} for i in items)
         stream = stringified if objconf.stringify else items
 

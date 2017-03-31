@@ -29,7 +29,7 @@ from builtins import *
 
 from . import processor
 import pygogo as gogo
-from riko.lib.dotdict import DotDict
+from riko.dotdict import DotDict
 
 OPTS = {'emit': True}
 DEFAULTS = {'pubDate': dt.now().isoformat()}
@@ -65,8 +65,8 @@ def parser(item, objconf, skip=False, **kwargs):
         Iter[dict]: The stream of items
 
     Examples:
-        >>> from riko.lib.dotdict import DotDict
-        >>> from riko.lib.utils import Objectify
+        >>> from riko.dotdict import DotDict
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict()
         >>> conf = {'guid': 'a1', 'mediaThumbURL': 'image.png'}

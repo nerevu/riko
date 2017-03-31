@@ -65,7 +65,7 @@ aka ``items``.
     >>> #
     >>> # `SyncCollection` is a url fetching convenience class with support for
     >>> # parallel processing
-    >>> from riko.lib.collections import SyncCollection
+    >>> from riko.collections import SyncCollection
     >>>
     >>> sources = [{'url': url} for url in urls]
     >>> stream = SyncCollection(sources).fetch()

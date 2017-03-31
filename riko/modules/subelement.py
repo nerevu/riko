@@ -58,7 +58,7 @@ from __future__ import (
 from builtins import *
 
 from . import processor
-from riko.lib import utils
+from riko.utils import gen_items
 import pygogo as gogo
 
 OPTS = {'emit': True}
@@ -78,10 +78,11 @@ def parser(item, objconf, skip=False, **kwargs):
         Iter[dict]: The stream of items
 
     Examples:
-        >>> from riko.lib.dotdict import DotDict
+        >>> from riko.dotdict import DotDict
+        >>> from meza.fntools import Objectify
         >>>
         >>> conf = {'path': 'stanzas.verses', 'token_key': 'content'}
-        >>> objconf = utils.Objectify(conf)
+        >>> objconf = Objectify(conf)
         >>> args = [objconf, False]
         >>>
         >>> sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
@@ -98,7 +99,7 @@ def parser(item, objconf, skip=False, **kwargs):
         stream = kwargs['stream']
     else:
         element = item.get(objconf.path, **kwargs)
-        stream = utils.gen_items(element, objconf.token_key)
+        stream = gen_items(element, objconf.token_key)
 
     return stream
 

@@ -50,7 +50,7 @@ def parser(url, objconf, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'parse_key': 'value'})
         >>> result = parser('http://yahoo.com', objconf)

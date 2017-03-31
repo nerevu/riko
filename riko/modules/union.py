@@ -28,7 +28,7 @@ from itertools import chain
 from builtins import *
 
 from . import operator
-from riko.lib.utils import multiplex
+from riko.utils import multiplex
 
 # disable `dictize` since we do not need to access the configuration
 OPTS = {'dictize': False}

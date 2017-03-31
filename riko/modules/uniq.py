@@ -58,7 +58,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> conf = {'uniq_key': 'mod', 'limit': 256}
         >>> objconf = Objectify(conf)

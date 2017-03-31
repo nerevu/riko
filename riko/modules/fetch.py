@@ -30,8 +30,9 @@ import pygogo as gogo
 from builtins import *
 
 from . import processor
-from riko.lib import utils
 from riko.bado import coroutine, return_value, io
+from riko.parsers import get_abspath, parse_rss
+from riko.utils import gen_entries
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {'sleep': 0}
@@ -62,7 +63,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
@@ -80,10 +81,10 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         content = yield io.async_url_read(url, delay=objconf.sleep)
-        parsed = utils.parse_rss(content)
-        stream = utils.gen_entries(parsed)
+        parsed = parse_rss(content)
+        stream = gen_entries(parsed)
 
     return_value(stream)
 
@@ -106,7 +107,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
         >>> result = parser(None, objconf, stream={})
@@ -116,9 +117,9 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
-        parsed = utils.parse_rss(url, objconf.sleep)
-        stream = utils.gen_entries(parsed)
+        url = get_abspath(objconf.url)
+        parsed = parse_rss(url, objconf.sleep)
+        stream = gen_entries(parsed)
 
     return stream
 

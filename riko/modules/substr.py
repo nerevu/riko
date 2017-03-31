@@ -56,7 +56,7 @@ def parser(word, objconf, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = {'content': 'hello world'}
         >>> conf = {'start': 3, 'length': 4}

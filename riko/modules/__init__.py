@@ -15,9 +15,11 @@ from itertools import chain
 from builtins import iter, len, list, map, next, sum as _sum
 
 from riko.bado import coroutine, return_value
-from riko.lib import utils
-from riko.lib.dotdict import DotDict
-from riko.lib.utils import combine_dicts as cdicts, remove_keys
+from riko.utils import cast, multiplex, broadcast, dispatch
+from riko.parsers import parse_conf, get_skip, get_field
+from riko.dotdict import DotDict
+from meza.fntools import remove_keys, listize, Objectify
+from meza.process import merge
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -88,7 +90,8 @@ __all__ = __sources__ + __composers__ + __transformers__ + __aggregators__
 
 
 def get_assignment(result, skip=False, **kwargs):
-    result = iter(utils.listize(result))
+    # print(result)
+    result = iter(listize(result))
 
     if skip:
         return None, result
@@ -114,7 +117,7 @@ def get_assignment(result, skip=False, **kwargs):
 
 def assign(item, assignment, key, one=False):
     value = next(assignment) if one else list(assignment)
-    yield DotDict(cdicts(item, {key: value}))
+    yield DotDict(merge([item, {key: value}]))
 
 
 class processor(object):
@@ -140,10 +143,10 @@ class processor(object):
                 list-like (default: False)
 
             pdictize (bool): Convert `conf` or an `extract` to a
-                riko.lib.dotdict.DotDict instance (default: True unless
+                riko.dotdict.DotDict instance (default: True unless
                 `listize` is False and `extract` is True)
 
-            objectify (bool): Convert `conf` to a riko.lib.utils.Objectify
+            objectify (bool): Convert `conf` to a meza.fntools.Objectify
                 instance (default: True unless  `ptype` is 'none').
 
             ptype (str): Used to convert `conf` items to a specific type.
@@ -308,7 +311,7 @@ class processor(object):
                 'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
                 'objectify': True}
 
-            combined = cdicts(self.defaults, defaults, self.opts, kwargs)
+            combined = merge([self.defaults, defaults, self.opts, kwargs])
             is_source = combined['ftype'] == 'none'
             def_assign = 'content' if is_source else module_name
             extracted = 'extract' in combined
@@ -328,7 +331,7 @@ class processor(object):
             item = item or {}
             _input = DotDict(item) if combined.get('dictize') else item
             bfuncs = get_broadcast_funcs(**combined)
-            skip = utils.get_skip(_input, **combined)
+            skip = get_skip(_input, **combined)
             types = set([]) if skip else {combined['ftype'], combined['ptype']}
 
             if types.difference({'pass', 'none'}):
@@ -336,7 +339,7 @@ class processor(object):
             else:
                 dfuncs = None
 
-            parsed, orig_item = dispatch(_input, bfuncs, dfuncs=dfuncs)
+            parsed, orig_item = _dispatch(_input, bfuncs, dfuncs=dfuncs)
             kwargs.update({'skip': skip, 'stream': orig_item})
 
             if self.async:
@@ -384,10 +387,10 @@ class operator(object):
                 list-like (default: False)
 
             pdictize (bool): Convert `conf` or an `extract` to a
-                riko.lib.dotdict.DotDict instance (default: True if either
+                riko.dotdict.DotDict instance (default: True if either
                 `extract` is False or both `listize` and `extract` are True)
 
-            objectify (bool): Convert `conf` to a riko.lib.utils.Objectify
+            objectify (bool): Convert `conf` to a meza.fntools.Objectify
                 instance (default: True unless  `ptype` is 'none').
 
             ptype (str): Used to convert `conf` items to a specific type.
@@ -576,7 +579,7 @@ class operator(object):
                 'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
                 'objectify': True, 'emit': True, 'assign': module_name}
 
-            combined = cdicts(self.defaults, defaults, self.opts, kwargs)
+            combined = merge([self.defaults, defaults, self.opts, kwargs])
             extracted = 'extract' in combined
             pdictize = combined.get('listize') if extracted else True
 
@@ -600,8 +603,8 @@ class operator(object):
             else:
                 dfuncs = None
 
-            pairs = (dispatch(item, bfuncs, dfuncs=dfuncs) for item in _INPUT)
-            parsed, _ = dispatch(DotDict(), bfuncs, dfuncs=dfuncs)
+            pairs = (_dispatch(item, bfuncs, dfuncs=dfuncs) for item in _INPUT)
+            parsed, _ = _dispatch(DotDict(), bfuncs, dfuncs=dfuncs)
 
             # - operators can't skip items
             # - purposely setting both variables to maps of the same iterable
@@ -629,7 +632,7 @@ class operator(object):
                 singles = (iter([v]) for v in assignment)
                 key = combined.get('assign')
                 assigned = (assign({}, s, key, one=True) for s in singles)
-                stream = utils.multiplex(assigned)
+                stream = multiplex(assigned)
 
             if self.async:
                 return_value(stream)
@@ -641,41 +644,40 @@ class operator(object):
         return coroutine(wrapper) if self.async else wrapper
 
 
-def dispatch(item, bfuncs, dfuncs=None):
-    split = utils.broadcast(item, *bfuncs)
-    parsed = utils.dispatch(split, *dfuncs) if dfuncs else split
+def _dispatch(item, bfuncs, dfuncs=None):
+    split = broadcast(item, *bfuncs)
+    parsed = dispatch(split, *dfuncs) if dfuncs else split
     return parsed, item
 
 
 def get_broadcast_funcs(**kwargs):
-    kw = utils.Objectify(kwargs, conf={})
+    kw = Objectify(kwargs, conf={})
     pieces = kw.conf[kw.extract] if kw.extract else kw.conf
     no_conf = remove_keys(kwargs, 'conf')
-    noop = partial(utils.cast, _type='none')
+    noop = partial(cast, _type='none')
 
     if kw.listize:
-        listed = utils.listize(pieces)
+        listed = listize(pieces)
         piece_defs = map(DotDict, listed) if kw.pdictize else listed
-        parser = partial(utils.parse_conf, **no_conf)
+        parser = partial(parse_conf, **no_conf)
         pfuncs = [partial(parser, conf=conf) for conf in piece_defs]
-        get_pieces = lambda item: utils.broadcast(item, *pfuncs)
+        get_pieces = lambda item: broadcast(item, *pfuncs)
     elif kw.ptype != 'none':
         conf = DotDict(pieces) if kw.pdictize and pieces else pieces
-        get_pieces = partial(utils.parse_conf, conf=conf, **no_conf)
+        get_pieces = partial(parse_conf, conf=conf, **no_conf)
     else:
         get_pieces = noop
 
-    ffunc = partial(utils.get_field, **kwargs)
-    get_field = noop if kw.ftype == 'none' else ffunc
-    return (get_field, get_pieces)
+    ffunc = noop if kw.ftype == 'none' else partial(get_field, **kwargs)
+    return (ffunc, get_pieces)
 
 
 def get_dispatch_funcs(**kwargs):
-    pfunc = partial(utils.cast, _type=kwargs['ptype'])
-    field_dispatch = partial(utils.cast, _type=kwargs['ftype'])
+    pfunc = partial(cast, _type=kwargs['ptype'])
+    field_dispatch = partial(cast, _type=kwargs['ftype'])
 
     if kwargs['objectify'] and kwargs['ptype'] not in {'none', 'pass'}:
-        piece_dispatch = lambda p: utils.Objectify(p.items(), func=pfunc)
+        piece_dispatch = lambda p: Objectify(p.items(), func=pfunc)
     else:
         piece_dispatch = pfunc
 

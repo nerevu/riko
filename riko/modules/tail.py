@@ -55,7 +55,7 @@ def parser(stream, objconf, tuples, **kwargs):
         List(dict): The output stream
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
         >>> kwargs = {'count': 2}

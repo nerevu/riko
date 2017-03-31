@@ -62,8 +62,8 @@ from six.moves.urllib.parse import urljoin, urlencode
 
 from . import processor
 import pygogo as gogo
-from riko.lib.dotdict import DotDict
-from riko.lib.utils import get_value, cast_url
+from riko.dotdict import DotDict
+from riko.parsers import get_value, cast_url
 
 OPTS = {'extract': 'params', 'listize': True, 'emit': True}
 DEFAULTS = {}
@@ -86,7 +86,7 @@ def parser(item, params, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict()
         >>> params = {'key': 's', 'value': 'gm'}

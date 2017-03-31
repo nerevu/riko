@@ -39,9 +39,9 @@ from six.moves.urllib.request import urlopen
 from meza._compat import encode
 
 from . import processor
-from riko.lib import utils
 from riko.bado import coroutine, return_value, io
-from riko.lib.tags import get_text
+from riko.parsers import get_text, get_abspath, get_response_encoding
+from riko.utils import betwix
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -79,7 +79,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> from meza._compat import decode
         >>>
         >>> def run(reactor):
@@ -101,7 +101,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         content = yield io.async_url_read(url)
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
@@ -123,7 +123,7 @@ def parser(_, objconf, skip=False, **kwargs):
         Iter[dict]: The stream of items
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> from riko import get_path
         >>> from meza._compat import decode
         >>>
@@ -139,13 +139,13 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
 
         with closing(urlopen(url)) as response:
             f = response.fp
-            encoding = utils.get_response_encoding(response, 'utf-8')
+            encoding = get_response_encoding(response, 'utf-8')
             decoded = iterdecode(f, encoding)
-            sliced = utils.betwix(decoded, objconf.start, objconf.end, True)
+            sliced = betwix(decoded, objconf.start, objconf.end, True)
             content = '\n'.join(sliced)
 
         parsed = get_string(content, objconf.start, objconf.end)

@@ -59,7 +59,7 @@ def parser(date, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from datetime import date
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'format': '%m/%d/%Y'})
         >>> parser({'date': date(2015, 5, 4)}, objconf)

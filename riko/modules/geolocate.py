@@ -29,7 +29,7 @@ import pygogo as gogo
 
 from builtins import *
 from . import processor
-from riko.lib.utils import cast
+from riko.utils import cast
 
 
 OPTS = {'ftype': 'text', 'field': 'content'}
@@ -55,7 +55,7 @@ def parser(address, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify({'type': 'currency'})

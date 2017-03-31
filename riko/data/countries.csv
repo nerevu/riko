@@ -1,0 +1,260 @@
+continent,code_2,code_3,num,name
+Africa,AO,AGO,24,Angola
+Africa,BF,BFA,854,Burkina Faso
+Africa,BI,BDI,108,Burundi
+Africa,BJ,BEN,204,Benin
+Africa,BW,BWA,72,Botswana
+Africa,CD,COD,180,Democratic Republic of the Congo
+Africa,CF,CAF,140,Central African Republic
+Africa,CG,COG,178,Congo
+Africa,CI,CIV,384,Cote d'Ivoire
+Africa,CM,CMR,120,Cameroon
+Africa,CV,CPV,132,Cape Verde
+Africa,DJ,DJI,262,Djibouti
+Africa,DZ,DZA,12,Algeria
+Africa,EG,EGY,818,Egypt
+Africa,EH,ESH,732,Western Sahara
+Africa,ER,ERI,232,Eritrea
+Africa,ET,ETH,231,Ethiopia
+Africa,GA,GAB,266,Gabon
+Africa,GH,GHA,288,Ghana
+Africa,GM,GMB,270,Gambia the
+Africa,GN,GIN,324,Guinea
+Africa,GQ,GNQ,226,Equatorial Guinea
+Africa,GW,GNB,624,Guinea-Bissau
+Africa,KE,KEN,404,Kenya
+Africa,KM,COM,174,Comoros
+Africa,LR,LBR,430,Liberia
+Africa,LS,LSO,426,Lesotho
+Africa,LY,LBY,434,Libyan Arab Jamahiriya
+Africa,MA,MAR,504,Morocco
+Africa,MG,MDG,450,Madagascar
+Africa,ML,MLI,466,Mali
+Africa,MR,MRT,478,Mauritania
+Africa,MU,MUS,480,Mauritius
+Africa,MW,MWI,454,Malawi
+Africa,MZ,MOZ,508,Mozambique
+Africa,NA,NAM,516,Namibia
+Africa,NE,NER,562,Niger
+Africa,NG,NGA,566,Nigeria
+Africa,RE,REU,638,Reunion
+Africa,RW,RWA,646,Rwanda
+Africa,SC,SYC,690,Seychelles
+Africa,SD,SDN,736,Sudan
+Africa,SH,SHN,654,Saint Helena
+Africa,SL,SLE,694,Sierra Leone
+Africa,SN,SEN,686,Senegal
+Africa,SO,SOM,706,Somalia
+Africa,SS,SSD,728,South Sudan
+Africa,ST,STP,678,Sao Tome and Principe
+Africa,SZ,SWZ,748,Swaziland
+Africa,TD,TCD,148,Chad
+Africa,TG,TGO,768,Togo
+Africa,TN,TUN,788,Tunisia
+Africa,TZ,TZA,834,Tanzania
+Africa,UG,UGA,800,Uganda
+Africa,YT,MYT,175,Mayotte
+Africa,ZA,ZAF,710,South Africa
+Africa,ZM,ZMB,894,Zambia
+Africa,ZW,ZWE,716,Zimbabwe
+Antarctica,AQ,ATA,10,Antarctica
+Antarctica,BV,BVT,74,Bouvet Island
+Antarctica,GS,SGS,239,South Georgia and the South Sandwich Islands
+Antarctica,HM,HMD,334,Heard Island and McDonald Islands
+Antarctica,TF,ATF,260,French Southern Territories
+Asia,AE,ARE,784,United Arab Emirates
+Asia,AF,AFG,4,Afghanistan
+Asia,AM,ARM,51,Armenia
+Asia,AZ,AZE,31,Azerbaijan
+Asia,BD,BGD,50,Bangladesh
+Asia,BH,BHR,48,Bahrain
+Asia,BN,BRN,96,Brunei Darussalam
+Asia,BT,BTN,64,Bhutan
+Asia,CC,CCK,166,Cocos (Keeling) Islands
+Asia,CN,CHN,156,China
+Asia,CX,CXR,162,Christmas Island
+Asia,CY,CYP,196,Cyprus
+Asia,GE,GEO,268,Georgia
+Asia,HK,HKG,344,Hong Kong
+Asia,ID,IDN,360,Indonesia
+Asia,IL,ISR,376,Israel
+Asia,IN,IND,356,India
+Asia,IO,IOT,86,Chagos Archipelago
+Asia,IQ,IRQ,368,Iraq
+Asia,IR,IRN,364,Iran
+Asia,JO,JOR,400,Jordan
+Asia,JP,JPN,392,Japan
+Asia,KG,KGZ,417,Kyrgyz Republic
+Asia,KH,KHM,116,Cambodia
+Asia,KP,PRK,408,Korea
+Asia,KR,KOR,410,Korea
+Asia,KW,KWT,414,Kuwait
+Asia,KZ,KAZ,398,Kazakhstan
+Asia,LA,LAO,418,Lao
+Asia,LB,LBN,422,Lebanon
+Asia,LK,LKA,144,Sri Lanka
+Asia,MM,MMR,104,Myanmar
+Asia,MN,MNG,496,Mongolia
+Asia,MO,MAC,446,Macao
+Asia,MV,MDV,462,Maldives
+Asia,MY,MYS,458,Malaysia
+Asia,NP,NPL,524,Nepal
+Asia,OM,OMN,512,Oman
+Asia,PH,PHL,608,Philippines the
+Asia,PK,PAK,586,Pakistan
+Asia,PS,PSE,275,Palestinian
+Asia,QA,QAT,634,Qatar
+Asia,RU,RUS,643,Russian Federation
+Asia,SA,SAU,682,Saudi Arabia
+Asia,SG,SGP,702,Singapore
+Asia,SY,SYR,760,Syrian Arab Republic
+Asia,TH,THA,764,Thailand
+Asia,TJ,TJK,762,Tajikistan
+Asia,TL,TLS,626,Timor-Leste
+Asia,TM,TKM,795,Turkmenistan
+Asia,TR,TUR,792,Turkey
+Asia,TW,TWN,158,Taiwan
+Asia,UZ,UZB,860,Uzbekistan
+Asia,VN,VNM,704,Vietnam
+Asia,XS,null,null,Spratly Islands
+Asia,YE,YEM,887,Yemen
+Europe,AD,AND,20,Andorra
+Europe,AL,ALB,8,Albania
+Europe,AM,ARM,51,Armenia
+Europe,AT,AUT,40,Austria
+Europe,AX,ALA,248,Åland Islands
+Europe,AZ,AZE,31,Azerbaijan
+Europe,BA,BIH,70,Bosnia and Herzegovina
+Europe,BE,BEL,56,Belgium
+Europe,BG,BGR,100,Bulgaria
+Europe,BY,BLR,112,Belarus
+Europe,CH,CHE,756,Switzerland
+Europe,CY,CYP,196,Cyprus
+Europe,CZ,CZE,203,Czech Republic
+Europe,DE,DEU,276,Germany
+Europe,DK,DNK,208,Denmark
+Europe,EE,EST,233,Estonia
+Europe,ES,ESP,724,Spain
+Europe,FI,FIN,246,Finland
+Europe,FO,FRO,234,Faroe Islands
+Europe,FR,FRA,250,France
+Europe,GB,GBR,826,United Kingdom
+Europe,GE,GEO,268,Georgia
+Europe,GG,GGY,831,Guernsey
+Europe,GI,GIB,292,Gibraltar
+Europe,GR,GRC,300,Greece
+Europe,HR,HRV,191,Croatia
+Europe,HU,HUN,348,Hungary
+Europe,IE,IRL,372,Ireland
+Europe,IM,IMN,833,Isle of Man
+Europe,IS,ISL,352,Iceland
+Europe,IT,ITA,380,Italy
+Europe,JE,JEY,832,Jersey
+Europe,KZ,KAZ,398,Kazakhstan
+Europe,LI,LIE,438,Liechtenstein
+Europe,LT,LTU,440,Lithuania
+Europe,LU,LUX,442,Luxembourg
+Europe,LV,LVA,428,Latvia
+Europe,MC,MCO,492,Monaco
+Europe,MD,MDA,498,Moldova
+Europe,ME,MNE,499,Montenegro
+Europe,MK,MKD,807,Macedonia
+Europe,MT,MLT,470,Malta
+Europe,NL,NLD,528,Netherlands the
+Europe,NO,NOR,578,Norway
+Europe,PL,POL,616,Poland
+Europe,PT,PRT,620,Portugal
+Europe,RO,ROU,642,Romania
+Europe,RS,SRB,688,Serbia
+Europe,RU,RUS,643,Russian Federation
+Europe,SE,SWE,752,Sweden
+Europe,SI,SVN,705,Slovenia
+Europe,SJ,SJM,744,Svalbard & Jan Mayen Islands
+Europe,SK,SVK,703,Slovakia
+Europe,SM,SMR,674,San Marino
+Europe,TR,TUR,792,Turkey
+Europe,UA,UKR,804,Ukraine
+Europe,VA,VAT,336,Holy See (Vatican City State)
+North America,AG,ATG,28,Antigua and Barbuda
+North America,AI,AIA,660,Anguilla
+North America,AN,ANT,530,Netherlands Antilles
+North America,AW,ABW,533,Aruba
+North America,BB,BRB,52,Barbados
+North America,BL,BLM,652,Saint Barthelemy
+North America,BM,BMU,60,Bermuda
+North America,BQ,BES,535,Bonaire
+North America,BS,BHS,44,Bahamas
+North America,BZ,BLZ,84,Belize
+North America,CA,CAN,124,Canada
+North America,CR,CRI,188,Costa Rica
+North America,CU,CUB,192,Cuba
+North America,CW,CUW,531,Curaao
+North America,DM,DMA,212,Dominica
+North America,DO,DOM,214,Dominican Republic
+North America,GD,GRD,308,Grenada
+North America,GL,GRL,304,Greenland
+North America,GP,GLP,312,Guadeloupe
+North America,GT,GTM,320,Guatemala
+North America,HN,HND,340,Honduras
+North America,HT,HTI,332,Haiti
+North America,JM,JAM,388,Jamaica
+North America,KN,KNA,659,Saint Kitts and Nevis
+North America,KY,CYM,136,Cayman Islands
+North America,LC,LCA,662,Saint Lucia
+North America,MF,MAF,663,Saint Martin
+North America,MQ,MTQ,474,Martinique
+North America,MS,MSR,500,Montserrat
+North America,MX,MEX,484,Mexico
+North America,NI,NIC,558,Nicaragua
+North America,PA,PAN,591,Panama
+North America,PM,SPM,666,Saint Pierre and Miquelon
+North America,PR,PRI,630,Puerto Rico
+North America,SV,SLV,222,El Salvador
+North America,SX,SXM,534,Sint Maarten (Netherlands)
+North America,TC,TCA,796,Turks and Caicos Islands
+North America,TT,TTO,780,Trinidad and Tobago
+North America,UM,UMI,581,United States Minor Outlying Islands
+North America,US,USA,840,United States of America
+North America,VC,VCT,670,Saint Vincent and the Grenadines
+North America,VG,VGB,92,British Virgin Islands
+North America,VI,VIR,850,United States Virgin Islands
+Oceania,AS,ASM,16,American Samoa
+Oceania,AU,AUS,36,Australia
+Oceania,CK,COK,184,Cook Islands
+Oceania,FJ,FJI,242,Fiji
+Oceania,FM,FSM,583,Micronesia
+Oceania,GU,GUM,316,Guam
+Oceania,KI,KIR,296,Kiribati
+Oceania,MH,MHL,584,Marshall Islands the
+Oceania,MP,MNP,580,Northern Mariana Islands
+Oceania,NC,NCL,540,New Caledonia
+Oceania,NF,NFK,574,Norfolk Island
+Oceania,NR,NRU,520,Nauru
+Oceania,NU,NIU,570,Niue
+Oceania,NZ,NZL,554,New Zealand
+Oceania,PF,PYF,258,French Polynesia
+Oceania,PG,PNG,598,Papua New Guinea
+Oceania,PN,PCN,612,Pitcairn Islands
+Oceania,PW,PLW,585,Palau
+Oceania,SB,SLB,90,Solomon Islands
+Oceania,TK,TKL,772,Tokelau
+Oceania,TO,TON,776,Tonga
+Oceania,TV,TUV,798,Tuvalu
+Oceania,UM,UMI,581,United States Minor Outlying Islands
+Oceania,VU,VUT,548,Vanuatu
+Oceania,WF,WLF,876,Wallis and Futuna
+Oceania,WS,WSM,882,Samoa
+South America,AR,ARG,32,Argentina
+South America,BO,BOL,68,Bolivia
+South America,BR,BRA,76,Brazil
+South America,CL,CHL,152,Chile
+South America,CO,COL,170,Colombia
+South America,EC,ECU,218,Ecuador
+South America,FK,FLK,238,Falkland Islands (Malvinas)
+South America,GF,GUF,254,French Guiana
+South America,GY,GUY,328,Guyana
+South America,PE,PER,604,Peru
+South America,PY,PRY,600,Paraguay
+South America,SR,SUR,740,Suriname
+South America,UY,URY,858,Uruguay
+South America,VE,VEN,862,Venezuela
