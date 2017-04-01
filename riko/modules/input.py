@@ -51,7 +51,7 @@ import pygogo as gogo
 
 from builtins import *
 from . import processor
-from riko.lib.utils import cast
+from riko.utils import cast
 
 
 OPTS = {'ftype': 'none'}
@@ -71,7 +71,7 @@ def parser(_, objconf, skip=False, **kwargs):
         dict: The casted user input
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> inputs = {'age': '30'}
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
@@ -177,6 +177,7 @@ def pipe(*args, **kwargs):
         >>>
         >>> # date
         >>> import datetime
+        >>> from pytz import utc
         >>>
         >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
         >>> result = next(pipe(conf=conf, inputs={'content': '5/4/82'}))
@@ -185,8 +186,8 @@ def pipe(*args, **kwargs):
         ...     'daylight_savings', 'hour', 'minute', 'month',
         ...     'second', 'timezone', 'utime', 'year']
         True
-        >>> result['date']
-        datetime.datetime(1982, 5, 4, 0, 0)
+        >>> result['date'].isoformat() == '1982-05-04T00:00:00+00:00'
+        True
         >>>
         >>> stream = pipe(conf={'type': 'date'}, inputs={'content': 'tomorrow'})
         >>> d = next(stream)
@@ -195,7 +196,8 @@ def pipe(*args, **kwargs):
         ...     'daylight_savings', 'hour', 'minute', 'month', 'second',
         ...     'timezone', 'utime', 'year']
         True
-        >>> td = d['date'] - datetime.datetime.utcnow()
+        >>> now = utc.localize(datetime.datetime.utcnow())
+        >>> td = d['date'] - now
         >>> hours = td.total_seconds() / 3600
         >>> 24 > hours > 23
         True

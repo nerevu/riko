@@ -91,9 +91,10 @@ import pygogo as gogo
 
 from builtins import *
 
-from riko.lib.utils import multiplex, multi_try, combine_dicts as cdicts
+from riko.utils import multiplex, multi_try
 from riko.bado import coroutine, return_value
 from riko.bado import util, itertools as ait
+from meza.process import merge
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -308,7 +309,7 @@ def listpipe(args):
 def getpipe(args, pipe=SyncPipe):
     source, sleep = args
     ptype = source.get('type', 'fetch')
-    conf = cdicts({'sleep': sleep}, source)
+    conf = merge([{'sleep': sleep}, source])
     return pipe(ptype, conf=conf).list
 
 

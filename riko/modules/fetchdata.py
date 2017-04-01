@@ -34,8 +34,8 @@ from builtins import *
 from six.moves.urllib.request import urlopen
 
 from . import processor
-from riko.lib import utils
 from riko.bado import coroutine, return_value, io
+from riko.parsers import get_abspath, any2dict
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -61,7 +61,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0]['title'])
@@ -80,10 +80,10 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         f = yield io.async_url_open(url)
-        stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
+        stream = any2dict(f, ext, objconf.html5, path=objconf.path)
         f.close()
 
     return_value(stream)
@@ -106,7 +106,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('gigs.json')
         >>> objconf = Objectify({'url': url, 'path': 'value.items'})
@@ -117,11 +117,11 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
 
         with closing(urlopen(url)) as f:
-            stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
+            stream = any2dict(f, ext, objconf.html5, path=objconf.path)
 
     return stream
 

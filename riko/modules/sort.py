@@ -28,7 +28,7 @@ from builtins import *
 
 from . import operator
 from riko.bado import itertools as ait
-from riko.lib.utils import def_itemgetter as itemgetter
+from riko.utils import def_itemgetter as itemgetter
 
 OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'content'}}
@@ -67,7 +67,7 @@ def async_parser(stream, rules, tuples, **kwargs):
         >>> from itertools import repeat
         >>> from riko.bado import react, _issync
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0] == {'content': 4})
@@ -113,7 +113,7 @@ def parser(stream, rules, tuples, **kwargs):
         List(dict): The output stream
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
         >>> kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
@@ -144,7 +144,7 @@ def async_pipe(*args, **kwargs):
                     or 'cast'.
 
                 type (str): Expected value type. Must be one of
-                    `utils.CAST_SWITCH` (default: None).
+                    `CAST_SWITCH` (default: None).
 
                 sort_key (str): Item attribute on which to sort by (default:
                     'content').
@@ -193,7 +193,7 @@ def pipe(*args, **kwargs):
                     or 'cast'.
 
                 type (str): Expected value type. Must be one of
-                    `utils.CAST_SWITCH` (default: None).
+                    `CAST_SWITCH` (default: None).
                 sort_key (str): Item attribute on which to sort by.
                 sort_dir (str): The sort direction. Must be either 'asc' or
                     'desc'.

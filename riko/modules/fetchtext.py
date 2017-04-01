@@ -34,7 +34,7 @@ from builtins import *
 from six.moves.urllib.request import urlopen
 
 from . import processor
-from riko.lib import utils
+from riko.parsers import get_abspath
 from riko.bado import coroutine, return_value, io
 
 OPTS = {'ftype': 'none', 'assign': 'content'}
@@ -62,7 +62,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0]['content'])
@@ -81,7 +81,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         f = yield io.async_url_open(url)
         assign = kwargs['assign']
         stream = [{assign: line.strip().decode(objconf.encoding)} for line in f]
@@ -107,7 +107,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('lorem.txt')
         >>> objconf = Objectify({'url': url, 'encoding': 'utf-8'})
@@ -118,7 +118,7 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
 
         with closing(urlopen(url)) as f:
             assign, encoding = kwargs['assign'], objconf.encoding

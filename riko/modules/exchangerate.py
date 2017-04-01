@@ -34,10 +34,13 @@ from builtins import *
 from six.moves.urllib.request import urlopen
 from ijson import items
 from meza._compat import decode
+from meza.fntools import SleepyDict
 
 from . import processor
-from riko.lib import utils
 from riko.bado import coroutine, return_value, requests as treq, io
+from riko.parsers import get_abspath
+from riko.dates import HALF_DAY
+from riko.utils import memoize
 
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
@@ -104,7 +107,7 @@ def async_parser(base, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     url = get_path('quote.json')
@@ -133,7 +136,7 @@ def async_parser(base, objconf, skip=False, **kwargs):
         r = yield treq.get(objconf.url, params=objconf.params)
         json = yield treq.json(r)
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         content = yield io.async_url_read(url, delay=objconf.sleep)
         json = loads(decode(content))
 
@@ -163,7 +166,7 @@ def parser(base, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('quote.json')
         >>> conf = {'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
@@ -181,13 +184,13 @@ def parser(base, objconf, skip=False, **kwargs):
         rate = Decimal(1)
     elif objconf.url.startswith('http'):
         get = partial(requests.get, stream=True)
-        sget = utils.memoize(utils.HALF_DAY)(get) if objconf.memoize else get
+        sget = memoize(HALF_DAY)(get) if objconf.memoize else get
         r = sget(objconf.url, params=objconf.params)
         r.raw.decode_content = True
         json = next(items(r.raw, ''))
     else:
-        context = utils.SleepyDict(delay=objconf.sleep)
-        url = utils.get_abspath(objconf.url)
+        context = SleepyDict(delay=objconf.sleep)
+        url = get_abspath(objconf.url)
 
         try:
             with closing(urlopen(url, context=context)) as f:

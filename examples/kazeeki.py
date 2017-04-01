@@ -9,7 +9,6 @@ from functools import partial
 
 from riko import get_path
 from riko.bado import coroutine
-from riko.lib.utils import combine_dicts as cdict
 from riko.collections import SyncPipe, AsyncPipe
 from riko.modules import union
 

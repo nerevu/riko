@@ -47,7 +47,7 @@ def parser(word, separator, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = {'content': 'hello world'}
         >>> kwargs = {'stream': item}

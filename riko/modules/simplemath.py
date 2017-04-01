@@ -66,7 +66,7 @@ def parser(num, objconf, skip=False, **kwargs):
         dict: The formatted item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> conf = {'op': 'divide', 'other': 4}
         >>> objconf = Objectify(conf)
         >>> parser(10, objconf, conf=conf)

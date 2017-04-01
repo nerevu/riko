@@ -33,7 +33,7 @@ from builtins import *
 
 from . import processor
 import pygogo as gogo
-from riko.lib.dotdict import DotDict
+from riko.dotdict import DotDict
 
 OPTS = {'listize': True, 'extract': 'attrs', 'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -55,7 +55,7 @@ def parser(_, attrs, skip=False, **kwargs):
         Iter(dict): The stream of items
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> attrs = [
         ...     {'key': 'title', 'value': 'the title'},
         ...     {'key': 'desc', 'value': 'the desc'}]

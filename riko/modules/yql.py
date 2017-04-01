@@ -29,7 +29,7 @@ Examples:
         >>> from contextlib import closing
         >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
-        >>> from riko.lib.utils import get_abspath
+        >>> from riko.parsers import get_abspath
         >>> from riko.modules.yql import pipe
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
@@ -53,7 +53,7 @@ import pygogo as gogo
 from builtins import *
 
 from . import processor
-from riko.lib import utils
+from riko.parsers import xml2etree, etree2dict
 from riko.bado import coroutine, return_value, util, requests as treq
 
 OPTS = {'ftype': 'none'}
@@ -85,7 +85,8 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify, get_abspath
+        >>> from riko.parsers import get_abspath
+        >>> from meza.fntools import Objectify
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
@@ -146,7 +147,8 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> from contextlib import closing
         >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify, get_abspath
+        >>> from riko.parsers import get_abspath
+        >>> from meza.fntools import Objectify
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
@@ -173,9 +175,9 @@ def parser(_, objconf, skip=False, **kwargs):
             f = r.raw
 
         # todo: consider paging for large result sets
-        root = utils.xml2etree(f).getroot()
+        root = xml2etree(f).getroot()
         results = root.find('results')
-        stream = map(utils.etree2dict, results)
+        stream = map(etree2dict, results)
 
     return stream
 
@@ -209,7 +211,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import get_abspath
+        >>> from riko.parsers import get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> query = "select * from feed where url='%s'" % feed
@@ -259,7 +261,7 @@ def pipe(*args, **kwargs):
         >>> from contextlib import closing
         >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
-        >>> from riko.lib.utils import get_abspath
+        >>> from riko.parsers import get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> conf = {'query': "select * from feed where url='%s'" % feed}

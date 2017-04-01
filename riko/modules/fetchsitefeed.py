@@ -41,8 +41,11 @@ import pygogo as gogo
 from builtins import *
 
 from . import processor
+
+from riko import autorss
+from riko.utils import gen_entries
+from riko.parsers import get_abspath, parse_rss
 from riko.bado import coroutine, return_value, io
-from riko.lib import utils, autorss
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -68,7 +71,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
@@ -86,12 +89,12 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         rss = yield autorss.async_get_rss(url)
-        link = utils.get_abspath(next(rss)['link'])
+        link = get_abspath(next(rss)['link'])
         content = yield io.async_url_read(link)
-        parsed = utils.parse_rss(content)
-        stream = utils.gen_entries(parsed)
+        parsed = parse_rss(content)
+        stream = gen_entries(parsed)
 
     return_value(stream)
 
@@ -113,7 +116,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> result = parser(None, objconf, stream={})
@@ -123,11 +126,11 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         rss = autorss.get_rss(url)
-        link = utils.get_abspath(next(rss)['link'])
-        parsed = utils.parse_rss(link)
-        stream = utils.gen_entries(parsed)
+        link = get_abspath(next(rss)['link'])
+        parsed = parse_rss(link)
+        stream = gen_entries(parsed)
 
     return stream
 

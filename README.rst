@@ -656,12 +656,12 @@ Project Structure
     │   │   ├── dotdict.py
     │   │   ├── log.py
     │   │   ├── tags.py
-    │   │   └── utils.py
+    │   │   └── py
     │   ├── modules/*
     │   └── twisted
     │       ├── __init__.py
     │       ├── collections.py
-    │       └── utils.py
+    │       └── py
     ├── tests
     │   ├── __init__.py
     │   ├── standard.rc

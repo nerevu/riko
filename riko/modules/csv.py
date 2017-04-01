@@ -27,10 +27,11 @@ import pygogo as gogo
 from builtins import *
 from six.moves.urllib.request import urlopen
 from meza.io import read_csv
+from meza.process import merge
 
 from . import processor
-from riko.lib import utils
 from riko.bado import coroutine, return_value, io
+from riko.parsers import get_abspath, get_response_encoding
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {
@@ -69,7 +70,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['mileage'])
@@ -89,11 +90,11 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         response = yield io.async_url_open(url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
-        rkwargs = utils.combine_dicts(objconf, renamed)
+        rkwargs = merge([objconf, renamed])
         _stream = read_csv(response, **rkwargs)
         stream = auto_close(_stream, response)
 
@@ -113,7 +114,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('spreadsheet.csv')
         >>> conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
@@ -125,12 +126,12 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
         response = urlopen(url)
-        encoding = utils.get_response_encoding(response, objconf.encoding)
-        rkwargs = utils.combine_dicts(objconf, renamed)
+        encoding = get_response_encoding(response, objconf.encoding)
+        rkwargs = merge([objconf, renamed])
         rkwargs['encoding'] = encoding
         _stream = read_csv(response, **rkwargs)
         stream = auto_close(_stream, response)

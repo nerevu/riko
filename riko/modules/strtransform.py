@@ -72,7 +72,7 @@ def async_parser(word, rules, skip=False, **kwargs):
     Examples:
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     item = {'content': 'hello world'}
@@ -114,7 +114,7 @@ def parser(word, rules, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = {'content': 'hello world'}
         >>> conf = {'rule': {'transform': 'title'}}
