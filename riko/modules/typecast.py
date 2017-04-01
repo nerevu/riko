@@ -27,8 +27,8 @@ from builtins import *
 from . import processor
 from riko.utils import cast
 
-OPTS = {'ftype': 'text', 'field': 'content'}
-DEFAULTS = {}
+OPTS = {'field': 'content'}
+DEFAULTS = {'type': 'text'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -69,6 +69,9 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
+        conf (dict): The pipe configuration. May contain the key 'type'.
+            type (str): The object type to cast to (default: text)
+
         assign (str): Attribute to assign parsed content (default: typecast)
         field (str): Item attribute to operate on (default: 'content')
 
@@ -103,10 +106,8 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'parse_key'.
-
-            parse_key (str): Attribute to assign individual tokens (default:
-                content)
+        conf (dict): The pipe configuration. May contain the key 'type'.
+            type (str): The object type to cast to (default: text)
 
         assign (str): Attribute to assign parsed content (default: typecast)
         field (str): Item attribute to operate on (default: 'content')
@@ -115,10 +116,20 @@ def pipe(*args, **kwargs):
         dict: an item with concatenated content
 
     Examples:
+        >>> from datetime import datetime as dt
         >>> next(pipe({'content': '1.0'}, conf={'type': 'int'}))['typecast']
         1
         >>> item = {'content': '5/4/82'}
-        >>> date = next(pipe(item, conf={'type': 'date'}, emit=True))['date']
+        >>> conf = {'type': 'date'}
+        >>> date = next(pipe(item, conf=conf, emit=True))['date']
+        >>> date.isoformat() == '1982-05-04T00:00:00+00:00'
+        True
+        >>> item = {'content': dt(1982, 5, 4)}
+        >>> date = next(pipe(item, conf=conf, emit=True))['date']
+        >>> date.isoformat() == '1982-05-04T00:00:00+00:00'
+        True
+        >>> item = {'content': dt(1982, 5, 4).timetuple()}
+        >>> date = next(pipe(item, conf=conf, emit=True))['date']
         >>> date.isoformat() == '1982-05-04T00:00:00+00:00'
         True
     """
