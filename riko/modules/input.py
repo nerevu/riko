@@ -103,13 +103,14 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'prompt',
-            'default', 'type', 'assign'.
+            'default', or 'type'.
 
             prompt (str): User command line prompt
             default (scalar): Default value
             type (str): Expected value type. Must be one of 'text', 'int',
                 'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
-            assign (str): Attribute to assign parsed content (default: content)
+
+        assign (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values to be used in place of prompting the user e.g.
             {'name': 'value1'}
