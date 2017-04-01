@@ -76,19 +76,23 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'delimiter',
-            'dedupe', 'sort', 'assign', or 'token_key'.
+            'dedupe', 'sort', or 'token_key'.
 
             delimiter (str): the delimiter string (default: ',')
             dedupe (bool): Remove duplicates (default: False).
             sort (bool): Sort tokens (default: False)
-            assign (str): Attribute to assign parsed content (default:
-                tokenizer)
 
             token_key (str): Attribute to assign individual tokens (default:
                 content)
 
+        assign (str): Attribute to assign parsed content (default:
+            tokenizer)
+
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: 'content')
+
+        emit (bool): Return the stream as is and don't assign it to an item
+            attribute (default: False)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred item with tokenized content
@@ -125,20 +129,22 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'delimiter',
-            'dedupe', 'sort', 'assign', or 'token_key'.
+            'dedupe', 'sort', or 'token_key'.
 
             delimiter (str): the delimiter string (default: ',')
             dedupe (bool): Remove duplicates (default: False).
             sort (bool): Sort tokens (default: False)
-            assign (str): Attribute to assign parsed content (default:
-                tokenizer)
             token_key (str): Attribute to assign individual tokens (default:
                 content)
+
+        assign (str): Attribute to assign parsed content (default:
+            tokenizer)
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
 
-        emit (bool):
+        emit (bool): Return the stream as is and don't assign it to an item
+            attribute (default: False)
 
     Returns:
         dict: an item with tokenized content

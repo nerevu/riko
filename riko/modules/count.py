@@ -92,17 +92,15 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'assign' or
-            'count_key'.
-
-            assign (str): Attribute to assign parsed content. If `count_key` is
-                set, this is ignored and the group keys are used instead.
-                (default: content)
+        conf (dict): The pipe configuration. May contain the key 'count_key'.
 
             count_key (str): Item attribute to count by. This will group items
                 in the stream by the given key and report a count for each
                 group (default: None).
 
+        assign (str): Attribute to assign parsed content. If `count_key` is set,
+            this is ignored and the group keys are used instead. (default:
+            content)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the number of
@@ -138,16 +136,15 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the  keys 'assign' or
-            'count_key'.
-
-            assign (str): Attribute to assign parsed content. If `count_key` is
-                set, this is ignored and the group keys are used instead.
-                (default: content)
+        conf (dict): The pipe configuration. May contain the key 'count_key'.
 
             count_key (str): Item attribute to count by. This will group items
                 in the stream by the given key and report a count for each
                 group (default: None).
+
+        assign (str): Attribute to assign parsed content. If `count_key` is set,
+            this is ignored and the group keys are used instead. (default:
+            content)
 
     Yields:
         dict: the number of counted items

@@ -318,7 +318,7 @@ def cast_location(address, loc_type='street_address'):
 CAST_SWITCH = {
     'float': {'default': float('nan'), 'func': float},
     'decimal': {'default': Decimal('NaN'), 'func': Decimal},
-    'int': {'default': 0, 'func': int},
+    'int': {'default': 0, 'func': lambda i: int(float(i))},
     'text': {'default': '', 'func': str},
     'date': {'default': {'date': TODAY}, 'func': cast_date},
     'url': {'default': {}, 'func': cast_url},

@@ -101,18 +101,18 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'assign' or
-            'sum_key'.
-
-            assign (str): Attribute to assign parsed content. If `sum_key` is
-                set, this is ignored and the group keys are used instead.
-                (default: content)
+        conf (dict): The pipe configuration. May contain the keys 'sum_key' or
+            'group_key'.
 
             sum_key (str): Item attribute to sum. (default: 'content').
 
             group_key (str): Item attribute to sum by. This will group items
                 in the stream by the given key and report a sum for each
                 group (default: None).
+
+        assign (str): Attribute to assign parsed content. If `sum_key` is set,
+            this is ignored and the group keys are used instead. (default:
+            content)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the summed items
@@ -147,18 +147,18 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'assign',
-            'sum_key', or 'group_key'.
-
-            assign (str): Attribute to assign parsed content. If `sum_key` is
-                set, this is ignored and the group keys are used instead.
-                (default: content)
+        conf (dict): The pipe configuration. May contain the keys 'sum_key' or
+            'group_key'.
 
             sum_key (str): Item attribute to sum. (default: 'content').
 
             group_key (str): Item attribute to sum by. This will group items
                 in the stream by the given key and report a sum for each
                 group (default: None).
+
+        assign (str): Attribute to assign parsed content. If `sum_key` is set,
+            this is ignored and the group keys are used instead. (default:
+            content)
 
     Yields:
         dict: the summed items

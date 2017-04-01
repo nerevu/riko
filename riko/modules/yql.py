@@ -192,16 +192,17 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'xpath', 'html5', 'stringify', or 'assign'.
+        conf (dict): The pipe configuration. Must contain the key 'query'. May
+            contain the keys 'url' or 'debug'.
 
-            url (str): The web site to fetch
-            xpath (str): The XPATH to extract (default: None, i.e., return
-                entire page)
+            url (str): The API to query (default:
+                'http://query.yahooapis.com/v1/public/yql')
 
-            html5 (bool): Use the HTML5 parser (default: False)
-            stringify (bool): Return the web site as a string (default: False)
-            assign (str): Attribute to assign parsed content (default: content)
+            query (str): The API query
+            debug (bool): Enable diagnostics mode (default: False)
+
+        assign (str): Attribute to assign parsed content (default: content)
+        response (str): The API query response (used for offline testing)
 
     Returns:
         dict: twisted.internet.defer.Deferred stream of items
@@ -252,6 +253,7 @@ def pipe(*args, **kwargs):
             query (str): The API query
             debug (bool): Enable diagnostics mode (default: False)
 
+        assign (str): Attribute to assign parsed content (default: content)
         response (str): The API query response (used for offline testing)
 
     Yields:

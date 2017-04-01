@@ -218,7 +218,7 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'sleep', 'memoize', 'field', or 'assign'.
+            'params', 'currency', 'sleep', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
@@ -231,11 +231,12 @@ def async_pipe(*args, **kwargs):
                 url. Useful for simulating network latency. Default: 0.
 
             memoize: Cache the exchange rate API response (default: False).
-            field (str): Item attribute from which to obtain the string to be
-                formatted (default: 'content')
 
-            assign (str): Attribute to assign parsed content (default:
-                exchangerate)
+        field (str): Item attribute from which to obtain the string to be
+            formatted (default: 'content')
+
+        assign (str): Attribute to assign parsed content (default:
+            exchangerate)
 
     Returns:
         dict: twisted.internet.defer.Deferred stream of items
@@ -272,7 +273,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'sleep', 'memoize', 'field', or 'assign'.
+            'params', 'currency', 'sleep', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
