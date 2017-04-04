@@ -10,7 +10,10 @@ Attributes:
     CURRENCY_SYMBOLS (dict): Currency symbol to code mapping
     CURRENCY_CODES (dict): Currency symbol to info mapping
 """
-CURRENCY_SYMBOLS = {'$': 'USD', '£': 'GBP', '€': 'EUR', '₹': 'INR'}
+CURRENCY_SYMBOLS = {
+    '$': 'USD', '£': 'GBP', '€': 'EUR', '₹': 'INR',
+    '\xa3': 'GBP', '\u20ac': 'EUR', '\u20b9': 'INR',
+}
 
 CURRENCY_CODES = {
     'AED': {
