@@ -84,7 +84,7 @@ NAMESPACES = {
 ESCAPE = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'}
 
 SKIP_SWITCH = {
-    'contains': lambda text, value: text in value,
+    'contains': lambda text, value: text.lower() in value.lower(),
     'intersection': lambda text, value: set(text).intersection(value),
     're.search': lambda text, value: re.search(text, value),
 }
