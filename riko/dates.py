@@ -9,6 +9,7 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from datetime import timedelta, time, datetime as dt
+from time import gmtime
 from calendar import timegm
 from operator import add, sub
 from time import strptime
@@ -135,7 +136,7 @@ def cast_date(date_str):
     elif date_str in DATES:
         date = DATES.get(date_str)
     elif hasattr(date_str, 'real'):
-        date = time.gmtime(date_str)
+        date = gmtime(date_str)
     else:
         date = parser.parse(date_str, tzinfos=TZINFOS)
 
