@@ -39,7 +39,7 @@ def parser(_, parts, skip=False, **kwargs):
 
     Args:
         _ (dict): The item (ignored)
-        parts (List[dict]): The content to concatenate
+        parts (List[str]): The content to concatenate
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
