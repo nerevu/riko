@@ -56,7 +56,7 @@ def parser(_, parts, skip=False, **kwargs):
     if skip:
         parsed = kwargs['stream']
     else:
-        parsed = ''.join(p for p in parts if p)
+        parsed = ''.join(str(p) for p in parts if p)
 
     return parsed
 
