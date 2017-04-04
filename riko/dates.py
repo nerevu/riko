@@ -119,26 +119,21 @@ def cast_date(date_str):
     try:
         words = date_str.split(' ')
     except AttributeError:
-        date = date_str
+        date = gmtime(date_str) if hasattr(date_str, 'real') else date_str
     else:
-        date = None
         mathish = set(words).intersection(MATH_WORDS)
         textish = set(words).intersection(TEXT_WORDS)
 
-    if date:
-        pass
-    elif date_str[0] in {'+', '-'} and len(mathish) == 1:
-        op = sub if date_str.startswith('-') else add
-        date = get_date(mathish, words[0][1:], op)
-    elif len(textish) == 2:
-        op = add if date_str.startswith('last') else add
-        date = get_date('%ss' % words[1], 1, op)
-    elif date_str in DATES:
-        date = DATES.get(date_str)
-    elif hasattr(date_str, 'real'):
-        date = gmtime(date_str)
-    else:
-        date = parser.parse(date_str, tzinfos=TZINFOS)
+        if date_str[0] in {'+', '-'} and len(mathish) == 1:
+            op = sub if date_str.startswith('-') else add
+            date = get_date(mathish, words[0][1:], op)
+        elif len(textish) == 2:
+            op = add if date_str.startswith('last') else add
+            date = get_date('%ss' % words[1], 1, op)
+        elif date_str in DATES:
+            date = DATES.get(date_str)
+        else:
+            date = parser.parse(date_str, tzinfos=TZINFOS)
 
     date = normalize_date(date)
     tt = get_tt(date)
