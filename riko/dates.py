@@ -135,13 +135,17 @@ def cast_date(date_str):
         else:
             date = parser.parse(date_str, tzinfos=TZINFOS)
 
-    date = normalize_date(date)
-    tt = get_tt(date)
+    if date:
+        normal = normalize_date(date)
+        tt = get_tt(normal)
 
-    # Make Sunday the first day of the week
-    day_of_w = 0 if tt[6] == 6 else tt[6] + 1
-    isdst = None if tt[8] == -1 else bool(tt[8])
-    result = {'utime': timegm(tt), 'timezone': 'UTC', 'date': date}
-    result.update(zip(TT_KEYS, tt))  # pylint: disable=W1637
-    result.update({'day_of_week': day_of_w, 'daylight_savings': isdst})
+        # Make Sunday the first day of the week
+        day_of_w = 0 if tt[6] == 6 else tt[6] + 1
+        isdst = None if tt[8] == -1 else bool(tt[8])
+        result = {'utime': timegm(tt), 'timezone': 'UTC', 'date': normal}
+        result.update(zip(TT_KEYS, tt))  # pylint: disable=W1637
+        result.update({'day_of_week': day_of_w, 'daylight_savings': isdst})
+    else:
+        result = {}
+
     return result
