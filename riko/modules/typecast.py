@@ -83,7 +83,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['typecast']
+        ...     callback = lambda x: print(next(x)['typecast'])
         ...     d = async_pipe({'content': '1.0'}, conf={'type': 'int'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
