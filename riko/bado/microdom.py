@@ -28,7 +28,7 @@ from io import open, BytesIO, StringIO
 from functools import partial
 from builtins import *
 
-from meza._compat import encode, decode
+from meza.compat import encode, decode
 
 try:
     from twisted.python.util import InsensitiveDict

@@ -18,8 +18,6 @@ from math import isnan
 from functools import partial
 from io import StringIO
 from os import path as p, environ, O_NONBLOCK
-from decimal import Decimal
-from json import loads
 from html.entities import name2codepoint
 from html.parser import HTMLParser
 
@@ -31,16 +29,11 @@ except ImportError:
 import pygogo as gogo
 
 from builtins import *
-from six.moves.urllib.parse import quote, urlparse
-from six.moves.urllib.request import urlopen
-
-from riko.dates import TODAY, cast_date
-from riko.currencies import CURRENCY_CODES
-from riko.locations import LOCATIONS
+from riko.utils import fetch
 from mezmorize import Cache
 from meza.fntools import Objectify, SleepyDict, remove_keys, listize
 from meza.process import merge
-from meza._compat import decode
+from meza.compat import decode
 from ijson import items
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
@@ -75,7 +68,6 @@ else:
 
 rssparser = speedparser or feedparser
 
-URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 
 NAMESPACES = {
     'owl': 'http://www.w3.org/2002/07/owl#',
@@ -88,8 +80,6 @@ SKIP_SWITCH = {
     'intersection': lambda text, value: set(text).intersection(value),
     're.search': lambda text, value: re.search(text, value),
 }
-
-url_quote = lambda url: quote(url, safe=URL_SAFE)
 
 
 class LinkParser(HTMLParser):
@@ -115,50 +105,20 @@ def get_text(html, convert_charrefs=False):
     return parser.data.getvalue()
 
 
-def get_response_encoding(response, def_encoding='utf-8'):
-    info = response.info()
-
-    try:
-        encoding = info.getencoding()
-    except AttributeError:
-        encoding = info.get_charset()
-
-    encoding = None if encoding == '7bit' else encoding
-
-    if not encoding and hasattr(info, 'get_content_charset'):
-        encoding = info.get_content_charset()
-
-    if not encoding and hasattr(response, 'getheader'):
-        content_type = response.getheader('Content-Type', '')
-
-        if 'charset' in content_type:
-            ctype = content_type.split('=')[1]
-            encoding = ctype.strip().strip('"').strip("'")
-
-    return encoding or def_encoding
-
-
 def parse_rss(url, delay=0):
     context = SleepyDict(delay=delay)
-    response = None
 
     try:
-        response = urlopen(decode(url), context=context)
-    except TypeError:
-        try:
-            response = urlopen(decode(url))
-        except (ValueError, URLError):
-            parsed = rssparser.parse(url)
+        f = fetch(decode(url), context=context)
     except (ValueError, URLError):
         parsed = rssparser.parse(url)
-
-    if response:
-        content = response.read() if speedparser else response
+    else:
+        content = f.read() if speedparser else f
 
         try:
             parsed = rssparser.parse(content)
         finally:
-            response.close()
+            f.close()
 
     return parsed
 
@@ -261,72 +221,6 @@ def any2dict(f, ext='xml', html5=False, path=None):
         raise TypeError('Invalid file type %s' % ext)
 
     return content
-
-
-def cast_url(url_str):
-    url = 'http://%s' % url_str if '://' not in url_str else url_str
-    quoted = url_quote(url)
-    parsed = urlparse(quoted)
-    response = parsed._asdict()
-    response['url'] = parsed.geturl()
-    return response
-
-
-def lookup_street_address(address):
-    location = {
-        'lat': 0, 'lon': 0, 'country': 'United States', 'admin1': 'state',
-        'admin2': 'county', 'admin3': 'city', 'city': 'city',
-        'street': 'street', 'postal': '61605'}
-
-    return location
-
-
-def lookup_ip_address(address):
-    location = {
-        'country': 'United States', 'admin1': 'state', 'admin2': 'county',
-        'admin3': 'city', 'city': 'city'}
-
-    return location
-
-
-def lookup_coordinates(lat, lon):
-    location = {
-        'lat': lat, 'lon': lon, 'country': 'United States', 'admin1': 'state',
-        'admin2': 'county', 'admin3': 'city', 'city': 'city',
-        'street': 'street', 'postal': '61605'}
-
-    return location
-
-
-def cast_location(address, loc_type='street_address'):
-    GEOLOCATERS = {
-        'coordinates': lambda x: lookup_coordinates(*x),
-        'street_address': lambda x: lookup_street_address(x),
-        'ip_address': lambda x: lookup_ip_address(x),
-        'currency': lambda x: CURRENCY_CODES.get(x, {}),
-    }
-
-    result = GEOLOCATERS[loc_type](address)
-
-    if result.get('location'):
-        extra = LOCATIONS.get(result['location'], {})
-        result.update(extra)
-
-    return result
-
-
-CAST_SWITCH = {
-    'float': {'default': float('nan'), 'func': float},
-    'decimal': {'default': Decimal('NaN'), 'func': Decimal},
-    'int': {'default': 0, 'func': lambda i: int(float(i))},
-    'text': {'default': '', 'func': str},
-    'date': {'default': {'date': TODAY}, 'func': cast_date},
-    'url': {'default': {}, 'func': cast_url},
-    'location': {'default': {}, 'func': cast_location},
-    'bool': {'default': False, 'func': lambda i: bool(loads(i))},
-    'pass': {'default': None, 'func': lambda i: i},
-    'none': {'default': None, 'func': lambda _: None},
-}
 
 
 def get_value(item, conf=None, force=False, default=None, **kwargs):

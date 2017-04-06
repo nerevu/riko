@@ -26,9 +26,8 @@ A more complex query that finds Flickr photos tagged "fog" in San Francisco:
 Examples:
     basic usage::
 
-        >>> from contextlib import closing
-        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
+        >>> from riko.utils import fetch
         >>> from riko.parsers import get_abspath
         >>> from riko.modules.yql import pipe
         >>>
@@ -36,7 +35,7 @@ Examples:
         >>> conf = {'query': "select * from feed where url='%s'" % feed}
         >>> url = get_abspath(get_path('yql.xml'))
         >>>
-        >>> with closing(urlopen(url)) as f:
+        >>> with fetch(url) as f:
         ...     next(pipe(conf=conf, response=f))['title']
         'Bring pizza home'
 
@@ -54,6 +53,7 @@ from builtins import *
 
 from . import processor
 from riko.parsers import xml2etree, etree2dict
+from riko.utils import fetch
 from riko.bado import coroutine, return_value, util, requests as treq
 
 OPTS = {'ftype': 'none'}
@@ -107,7 +107,8 @@ def async_parser(_, objconf, skip=False, **kwargs):
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
-        ...
+        ... finally:
+        ...     f.close()
         Bring pizza home
     """
     if skip:
@@ -144,8 +145,6 @@ def parser(_, objconf, skip=False, **kwargs):
         Iter[dict]: The stream of items
 
     Examples:
-        >>> from contextlib import closing
-        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.parsers import get_abspath
         >>> from meza.fntools import Objectify
@@ -157,7 +156,7 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> objconf = Objectify(conf)
         >>> url = get_abspath(get_path('yql.xml'))
         >>>
-        >>> with closing(urlopen(url)) as f:
+        >>> with fetch(url) as f:
         ...     kwargs = {'stream': {}, 'response': f}
         ...     result = parser(None, objconf, **kwargs)
         >>>
@@ -171,10 +170,9 @@ def parser(_, objconf, skip=False, **kwargs):
 
         if not f:
             params = {'q': objconf.query, 'diagnostics': objconf.debug}
-            r = requests.get(objconf.url, params=params, stream=True)
-            f = r.raw
+            f = fetch(objconf.url, params=params)
 
-        # todo: consider paging for large result sets
+        # TODO: consider paging for large result sets
         root = xml2etree(f).getroot()
         results = root.find('results')
         stream = map(etree2dict, results)
@@ -229,7 +227,8 @@ def async_pipe(*args, **kwargs):
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
-        ...
+        ... finally:
+        ...     f.close()
         Bring pizza home
     """
     return async_parser(*args, **kwargs)
@@ -260,8 +259,6 @@ def pipe(*args, **kwargs):
         dict: an item of the result
 
     Examples:
-        >>> from contextlib import closing
-        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.parsers import get_abspath
         >>>
@@ -269,7 +266,7 @@ def pipe(*args, **kwargs):
         >>> conf = {'query': "select * from feed where url='%s'" % feed}
         >>> url = get_abspath(get_path('yql.xml'))
         >>>
-        >>> with closing(urlopen(url)) as f:
+        >>> with fetch(url) as f:
         ...     result = next(pipe(conf=conf, response=f))
         ...     sorted(result.keys())
         ['alarmTime', 'begin', 'duration', 'place', 'title', 'uid']

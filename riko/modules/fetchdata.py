@@ -25,17 +25,16 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+from os import path as p
+
 import pygogo as gogo
 
-from os.path import splitext
-from contextlib import closing
-
 from builtins import *
-from six.moves.urllib.request import urlopen
 
 from . import processor
 from riko.bado import coroutine, return_value, io
 from riko.parsers import get_abspath, any2dict
+from riko.utils import fetch
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -81,7 +80,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         stream = kwargs['stream']
     else:
         url = get_abspath(objconf.url)
-        ext = splitext(url)[1].lstrip('.')
+        ext = p.splitext(url)[1].lstrip('.')
         f = yield io.async_url_open(url)
         stream = any2dict(f, ext, objconf.html5, path=objconf.path)
         f.close()
@@ -118,9 +117,9 @@ def parser(_, objconf, skip=False, **kwargs):
         stream = kwargs['stream']
     else:
         url = get_abspath(objconf.url)
-        ext = splitext(url)[1].lstrip('.')
+        ext = p.splitext(url)[1].lstrip('.')
 
-        with closing(urlopen(url)) as f:
+        with fetch(url) as f:
             stream = any2dict(f, ext, objconf.html5, path=objconf.path)
 
     return stream

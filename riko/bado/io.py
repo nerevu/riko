@@ -21,7 +21,7 @@ from tempfile import NamedTemporaryFile
 from os import remove
 
 from builtins import *
-from meza._compat import encode
+from meza.compat import encode
 
 from . import coroutine, return_value
 

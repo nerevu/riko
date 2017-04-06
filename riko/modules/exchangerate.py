@@ -22,25 +22,21 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import requests
 import pygogo as gogo
 
 from json import loads
 from decimal import Decimal
-from contextlib import closing
 from functools import partial
 
 from builtins import *
-from six.moves.urllib.request import urlopen
 from ijson import items
-from meza._compat import decode
+from meza.compat import decode
 from meza.fntools import SleepyDict
 
 from . import processor
 from riko.bado import coroutine, return_value, requests as treq, io
 from riko.parsers import get_abspath
-from riko.dates import HALF_DAY
-from riko.utils import memoize
+from riko.utils import fetch
 
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
@@ -182,22 +178,17 @@ def parser(base, objconf, skip=False, **kwargs):
         rate = kwargs['stream']
     elif same_currency:
         rate = Decimal(1)
-    elif objconf.url.startswith('http'):
-        get = partial(requests.get, stream=True)
-        sget = memoize(HALF_DAY)(get) if objconf.memoize else get
-        r = sget(objconf.url, params=objconf.params)
-        r.raw.decode_content = True
-        json = next(items(r.raw, ''))
     else:
-        context = SleepyDict(delay=objconf.sleep)
         url = get_abspath(objconf.url)
 
-        try:
-            with closing(urlopen(url, context=context)) as f:
-                json = next(items(f, ''))
-        except TypeError:
-            with closing(urlopen(url)) as f:
-                json = next(items(f, ''))
+        fkwargs = {
+            'params': objconf.params,
+            'context': SleepyDict(delay=objconf.sleep),
+            'cache_type': 'simple' if objconf.memoize else None,
+        }
+
+        with fetch(url, **fkwargs) as f:
+            json = next(items(f, ''))
 
     if not (skip or same_currency):
         places = Decimal(10) ** -objconf.precision
@@ -230,7 +221,8 @@ def async_pipe(*args, **kwargs):
             sleep (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
-            memoize: Cache the exchange rate API response (default: False).
+            memoize (bool): Cache the exchange rate API response (default:
+                False).
 
         field (str): Item attribute from which to obtain the string to be
             formatted (default: 'content')
@@ -285,7 +277,8 @@ def pipe(*args, **kwargs):
             sleep (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
-            memoize: Cache the exchange rate API response (default: False).
+            memoize (bool): Cache the exchange rate API response (default:
+                False).
 
         field (str): Item attribute from which to obtain the string to be
             formatted (default: 'content')

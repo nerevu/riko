@@ -39,7 +39,8 @@ import pygogo as gogo
 
 from builtins import *
 from . import operator
-from riko.parsers import parse_conf, cast_date
+from riko.parsers import parse_conf
+from riko.cast import cast_date
 
 OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'combine': 'and', 'mode': 'permit'}

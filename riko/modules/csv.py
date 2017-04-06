@@ -25,29 +25,21 @@ from __future__ import (
 import pygogo as gogo
 
 from builtins import *
-from six.moves.urllib.request import urlopen
 from meza.io import read_csv
 from meza.process import merge
 
 from . import processor
+from riko import ENCODING
 from riko.bado import coroutine, return_value, io
-from riko.parsers import get_abspath, get_response_encoding
+from riko.parsers import get_abspath
+from riko.utils import get_response_encoding, fetch, auto_close
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {
-    'delimiter': ',', 'quotechar': '"', 'encoding': 'utf-8', 'skip_rows': 0,
+    'delimiter': ',', 'quotechar': '"', 'encoding': ENCODING, 'skip_rows': 0,
     'sanitize': True, 'dedupe': True, 'col_names': None, 'has_header': True}
 
 logger = gogo.Gogo(__name__, monolog=True).logger
-
-
-# https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close(stream, f):
-    try:
-        for record in stream:
-            yield record
-    finally:
-        f.close()
 
 
 @coroutine
@@ -75,7 +67,9 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['mileage'])
         ...     url = get_path('spreadsheet.csv')
-        ...     conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
+        ...     conf = {
+        ...         'url': url, 'sanitize': True, 'skip_rows': 0,
+        ...         'encoding': ENCODING}
         ...     objconf = Objectify(conf)
         ...     d = async_parser(None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
@@ -91,12 +85,11 @@ def async_parser(_, objconf, skip=False, **kwargs):
         stream = kwargs['stream']
     else:
         url = get_abspath(objconf.url)
-        response = yield io.async_url_open(url)
+        r = yield io.async_url_open(url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
         rkwargs = merge([objconf, renamed])
-        _stream = read_csv(response, **rkwargs)
-        stream = auto_close(_stream, response)
+        stream = auto_close(read_csv(r, **rkwargs), r)
 
     return_value(stream)
 
@@ -117,7 +110,9 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('spreadsheet.csv')
-        >>> conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
+        >>> conf = {
+        ...     'url': url, 'sanitize': True, 'skip_rows': 0,
+        ...     'encoding': ENCODING}
         >>> objconf = Objectify(conf)
         >>> result = parser(None, objconf, stream={})
         >>> next(result)['mileage'] == '7213'
@@ -129,12 +124,9 @@ def parser(_, objconf, skip=False, **kwargs):
         url = get_abspath(objconf.url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
-        response = urlopen(url)
-        encoding = get_response_encoding(response, objconf.encoding)
+        f = fetch(url, decode=True, encoding=objconf.encoding)
         rkwargs = merge([objconf, renamed])
-        rkwargs['encoding'] = encoding
-        _stream = read_csv(response, **rkwargs)
-        stream = auto_close(_stream, response)
+        stream = auto_close(read_csv(f, **rkwargs), f)
 
     return stream
 

@@ -9,15 +9,11 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from datetime import timedelta, time, datetime as dt
-from time import gmtime
-from calendar import timegm
-from operator import add, sub
 from time import strptime
 
 import pytz
 
 from pytz import utc
-from dateutil import parser
 from dateutil.tz import gettz, tzoffset
 
 DATE_FORMAT = '%m/%d/%Y'
@@ -25,18 +21,6 @@ DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
 TODAY = dt.utcnow()
-
-DATES = {
-    'today': TODAY,
-    'now': TODAY,
-    'tomorrow': TODAY + timedelta(days=1),
-    'yesterday': TODAY - timedelta(days=1)}
-
-MATH_WORDS = {'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years'}
-TEXT_WORDS = {'last', 'next', 'week', 'month', 'year'}
-TT_KEYS = (
-    'year', 'month', 'day', 'hour', 'minute', 'second', 'day_of_week',
-    'day_of_year', 'daylight_savings')
 
 
 def gen_tzinfos():
@@ -50,9 +34,6 @@ def gen_tzinfos():
 
             if tzinfo:
                 yield tzdate.tzname(), tzinfo
-
-
-TZINFOS = dict(gen_tzinfos())
 
 
 def get_date(unit, count, op):
@@ -113,39 +94,3 @@ def get_tt(date):
         tt = strptime(formatted[:19], '%Y-%m-%dT%H:%M:%S')
 
     return tt
-
-
-def cast_date(date_str):
-    try:
-        words = date_str.split(' ')
-    except AttributeError:
-        date = gmtime(date_str) if hasattr(date_str, 'real') else date_str
-    else:
-        mathish = set(words).intersection(MATH_WORDS)
-        textish = set(words).intersection(TEXT_WORDS)
-
-        if date_str[0] in {'+', '-'} and len(mathish) == 1:
-            op = sub if date_str.startswith('-') else add
-            date = get_date(mathish, words[0][1:], op)
-        elif len(textish) == 2:
-            op = add if date_str.startswith('last') else add
-            date = get_date('%ss' % words[1], 1, op)
-        elif date_str in DATES:
-            date = DATES.get(date_str)
-        else:
-            date = parser.parse(date_str, tzinfos=TZINFOS)
-
-    if date:
-        normal = normalize_date(date)
-        tt = get_tt(normal)
-
-        # Make Sunday the first day of the week
-        day_of_w = 0 if tt[6] == 6 else tt[6] + 1
-        isdst = None if tt[8] == -1 else bool(tt[8])
-        result = {'utime': timegm(tt), 'timezone': 'UTC', 'date': normal}
-        result.update(zip(TT_KEYS, tt))  # pylint: disable=W1637
-        result.update({'day_of_week': day_of_w, 'daylight_savings': isdst})
-    else:
-        result = {}
-
-    return result

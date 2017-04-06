@@ -28,17 +28,17 @@ from __future__ import (
 import pygogo as gogo
 
 from os.path import splitext
-from contextlib import closing
 
 from builtins import *
-from six.moves.urllib.request import urlopen
 
 from . import processor
+from riko import ENCODING
+from riko.utils import fetch, auto_close
 from riko.parsers import get_abspath
 from riko.bado import coroutine, return_value, io
 
 OPTS = {'ftype': 'none', 'assign': 'content'}
-DEFAULTS = {'encoding': 'utf-8'}
+DEFAULTS = {'encoding': ENCODING}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -65,9 +65,9 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0]['content'])
+        ...     callback = lambda x: print(next(x)['content'])
         ...     url = get_path('lorem.txt')
-        ...     objconf = Objectify({'url': url, 'encoding': 'utf-8'})
+        ...     objconf = Objectify({'url': url, 'encoding': ENCODING})
         ...     d = async_parser(None, objconf, assign='content')
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -84,8 +84,9 @@ def async_parser(_, objconf, skip=False, **kwargs):
         url = get_abspath(objconf.url)
         f = yield io.async_url_open(url)
         assign = kwargs['assign']
-        stream = [{assign: line.strip().decode(objconf.encoding)} for line in f]
-        f.close()
+        encoding = objconf.encoding
+        _stream = ({assign: line.strip().decode(encoding)} for line in f)
+        stream = auto_close(_stream, f)
 
     return_value(stream)
 
@@ -110,19 +111,18 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('lorem.txt')
-        >>> objconf = Objectify({'url': url, 'encoding': 'utf-8'})
+        >>> objconf = Objectify({'url': url, 'encoding': ENCODING})
         >>> result = parser(None, objconf, assign='content')
-        >>> result[0]['content'] == 'What is Lorem Ipsum?'
+        >>> next(result)['content'] == 'What is Lorem Ipsum?'
         True
     """
     if skip:
         stream = kwargs['stream']
     else:
         url = get_abspath(objconf.url)
-
-        with closing(urlopen(url)) as f:
-            assign, encoding = kwargs['assign'], objconf.encoding
-            stream = [{assign: line.strip().decode(encoding)} for line in f]
+        f = fetch(url, decode=True, encoding=objconf.encoding)
+        _stream = ({kwargs['assign']: line.strip()} for line in f)
+        stream = auto_close(_stream, f)
 
     return stream
 
