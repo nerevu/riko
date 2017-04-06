@@ -63,7 +63,8 @@ from six.moves.urllib.parse import urljoin, urlencode
 from . import processor
 import pygogo as gogo
 from riko.dotdict import DotDict
-from riko.parsers import get_value, cast_url
+from riko.parsers import get_value
+from riko.cast import cast_url
 
 OPTS = {'extract': 'params', 'listize': True, 'emit': True}
 DEFAULTS = {}

@@ -40,7 +40,7 @@ from builtins import *
 
 from . import processor
 from riko import autorss
-from riko.parsers import get_abspath
+from riko.utils import get_abspath
 from riko.bado import coroutine, return_value
 
 

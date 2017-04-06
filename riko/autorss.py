@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.autorss
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
 Provides functions for finding RSS feeds from a site's LINK tags
 """
 from __future__ import (
@@ -14,8 +14,8 @@ from itertools import chain
 from html.parser import HTMLParser
 
 from builtins import *
-from six.moves.urllib.request import urlopen
-from meza._compat import decode
+from meza.compat import decode
+from riko.utils import fetch
 from riko.bado import coroutine, return_value, microdom
 from riko.bado.io import async_url_open
 
@@ -84,7 +84,7 @@ def get_rss(url, convert_charrefs=False):
         parser = LinkParser()
 
     try:
-        f = urlopen(url, timeout=TIMEOUT)
+        f = fetch(url, timeout=TIMEOUT)
     except ValueError:
         f = filter(None, url.splitlines())
 

@@ -36,7 +36,7 @@ from __future__ import (
 from os import path as p
 from builtins import *
 
-__version__ = '0.47.0'
+__version__ = '0.48.0'
 
 __title__ = 'riko'
 __package_name__ = 'riko'
@@ -47,6 +47,7 @@ __license__ = 'MIT'
 __copyright__ = 'Copyright 2015 Reuben Cummings'
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
+ENCODING = 'utf-8'
 
 
 def get_path(name):

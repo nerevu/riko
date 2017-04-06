@@ -28,7 +28,7 @@ import pygogo as gogo
 from builtins import *
 
 from chardet import detect
-from meza._compat import decode
+from meza.compat import decode
 
 try:
     from twisted.internet.protocol import Protocol

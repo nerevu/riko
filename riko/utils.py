@@ -16,10 +16,17 @@ import fcntl
 from math import isnan
 from functools import partial
 from operator import itemgetter
-from os import environ, O_NONBLOCK
+from os import getenv, O_NONBLOCK, path as p
+from io import BytesIO, StringIO, TextIOBase
 from decimal import Decimal
 from json import loads
+from codecs import iterdecode
+from contextlib import contextmanager
+from subprocess import call
 
+from six.moves.urllib.request import urlopen
+
+import requests
 import pygogo as gogo
 
 try:
@@ -28,25 +35,69 @@ except ImportError:
     import builtins as _builtins
 
 from builtins import *
-from riko.parsers import CAST_SWITCH
 from mezmorize import Cache
+from meza.io import reencode
+from meza.process import merge
+from meza.compat import decode
+from meza.fntools import SleepyDict
+from riko import ENCODING
+from riko.cast import cast
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+
+MEMOIZE_DEFAULTS = {'CACHE_THRESHOLD': 2048, 'CACHE_DEFAULT_TIMEOUT': 3600}
 
 CACHE_CONFIGS = {
     'sasl': {
         'CACHE_TYPE': 'saslmemcached',
-        'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
-        'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
-        'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')},
-    'simple': {
-        'DEBUG': True,
-        'CACHE_TYPE': 'simple',
-        'CACHE_THRESHOLD': 25},
+        'CACHE_MEMCACHED_SERVERS': [getenv('MEMCACHIER_SERVERS')],
+        'CACHE_MEMCACHED_USERNAME': getenv('MEMCACHIER_USERNAME'),
+        'CACHE_MEMCACHED_PASSWORD': getenv('MEMCACHIER_PASSWORD')
+    },
     'memcached': {
-        'DEBUG': True,
         'CACHE_TYPE': 'memcached',
-        'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]}}
+        'CACHE_MEMCACHED_SERVERS': [getenv('MEMCACHE_SERVERS')]
+    },
+    'filesystem': {
+        'CACHE_TYPE': 'filesystem',
+        'CACHE_DIR': getenv('CACHE_DIR'),
+    },
+    'simple': {
+        'CACHE_TYPE': 'simple',
+    },
+}
+
+pgrep = lambda process: call(['pgrep', process]) == 0
+
+
+def get_cache_type():
+    memcached = pgrep('memcache')
+
+    if memcached and getenv('MEMCACHIER_SERVERS'):
+        cache_type = 'sasl'
+    elif memcached and getenv('MEMCACHE_SERVERS'):
+        cache_type = 'memcached'
+    elif getenv('CACHE_DIR'):
+        cache_type = 'filesystem'
+    else:
+        cache_type = 'simple'
+
+    return cache_type
+
+
+def get_abspath(url):
+    url = 'http://%s' % url if url and '://' not in url else url
+
+    if url and url.startswith('file:///'):
+        # already have an abspath
+        pass
+    elif url and url.startswith('file://'):
+        parent = p.dirname(p.dirname(__file__))
+        rel_path = url[7:]
+        abspath = p.abspath(p.join(parent, rel_path))
+        url = 'file://%s' % abspath
+
+    return decode(url)
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1
@@ -102,14 +153,115 @@ def multi_try(source, zipped, default=None):
         return default
 
 
-# http://api.stackexchange.com/2.2/tags?
-# page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
-# http://api.stackexchange.com/2.2/tags?
-# page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
 def memoize(*args, **kwargs):
     cache_type = kwargs.pop('cache_type', 'simple')
-    cache = Cache(**CACHE_CONFIGS[cache_type])
+
+    if cache_type == 'auto':
+        cache_type = get_cache_type()
+
+    config = merge([MEMOIZE_DEFAULTS, CACHE_CONFIGS[cache_type], kwargs])
+    cache = Cache(**config)
     return cache.memoize(*args, **kwargs)
+
+
+def get_response_encoding(response, def_encoding=ENCODING):
+    info = response.info()
+
+    try:
+        encoding = info.getencoding()
+    except AttributeError:
+        encoding = info.get_charset()
+
+    encoding = None if encoding == '7bit' else encoding
+
+    if not encoding and hasattr(info, 'get_content_charset'):
+        encoding = info.get_content_charset()
+
+    if not encoding and hasattr(response, 'getheader'):
+        content_type = response.getheader('Content-Type', '')
+
+        if 'charset' in content_type:
+            ctype = content_type.split('=')[1]
+            encoding = ctype.strip().strip('"').strip("'")
+
+    extracted = encoding or def_encoding
+    assert extracted
+    return extracted
+
+
+# https://docs.python.org/3.3/reference/expressions.html#examples
+def auto_close(stream, f):
+    try:
+        for record in stream:
+            yield record
+    finally:
+        f.close()
+
+
+class fetch(TextIOBase):
+    # http://stackoverflow.com/a/22836333/408556
+    def __init__(self, url=None, params=None, decode=False, **kwargs):
+        delay = kwargs.get('delay')
+        self.context = SleepyDict(delay=delay) if delay else None
+        self.params = params or {}
+        self.decode = decode
+        self.def_encoding = kwargs.get('encoding', ENCODING)
+        self.cache_type = kwargs.get('cache_type')
+        self.timeout = kwargs.get('timeout')
+
+        self.kwargs = {'CACHE_TIMEOUT': kwargs.get('cache_timeout')}
+
+        if kwargs.get('cache_threshold'):
+            self.kwargs['CACHE_THRESHOLD'] = kwargs['cache_threshold']
+
+        f = self.open(get_abspath(url))
+        self.close = f.close
+        self.read = f.read
+        self.readline = f.readline
+        self.seek = f.seek
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.r.close()
+        self.close()
+
+    def open(self, name, flags=None):
+        def _open(url, **params):
+            if url.startswith('http') and params:
+                r = requests.get(url, params=params, stream=True)
+                r.raw.decode_content = self.decode
+                response = r.text if self.cache_type else r.raw
+            else:
+                try:
+                    r = urlopen(url, context=self.context, timeout=self.timeout)
+                except TypeError:
+                    r = urlopen(url, timeout=self.timeout)
+
+                text = r.read() if self.cache_type else None
+
+                if self.decode:
+                    encoding = get_response_encoding(r, self.def_encoding)
+
+                    if self.cache_type:
+                        response = text.decode(encoding)
+                    else:
+                        response = reencode(r.fp, encoding, decode=True)
+                else:
+                    response = text if self.cache_type else r
+
+            self.r = r
+            return response
+
+        if self.cache_type:
+            opener = memoize(cache_type=self.cache_type, **self.kwargs)(_open)
+        else:
+            opener = _open
+
+        response = opener(name, **self.params)
+        wrapper = StringIO if self.decode else BytesIO
+        return wrapper(response) if self.cache_type else response
 
 
 def def_itemgetter(attr, default=0, _type=None):
@@ -202,17 +354,6 @@ def betwix(iterable, start=None, stop=None, inc=False):
         last = first
 
     return last
-
-
-def cast(content, _type='text', **kwargs):
-    if content is None:
-        value = CAST_SWITCH[_type]['default']
-    elif kwargs:
-        value = CAST_SWITCH[_type]['func'](content, **kwargs)
-    else:
-        value = CAST_SWITCH[_type]['func'](content)
-
-    return value
 
 
 def dispatch(split, *funcs):

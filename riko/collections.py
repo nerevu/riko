@@ -185,11 +185,10 @@ class SyncPipe(PyPipe):
 class PyCollection(object):
     """A riko bulk url fetching object"""
     def __init__(self, sources, parallel=False, workers=None, **kwargs):
-        self.sources = sources
         self.parallel = parallel
-        self.sleep = kwargs.get('sleep', 0)
-        self.zargs = zip(self.sources, repeat(self.sleep))
-        self.length = lenish(self.sources)
+        conf = kwargs.get('conf', {})
+        self.zargs = zip(sources, repeat(conf))
+        self.length = lenish(sources)
         self.workers = workers or get_worker_cnt(self.length)
 
 
@@ -229,6 +228,7 @@ class AsyncPipe(PyPipe):
         if self.name:
             self.module = import_module('riko.modules.%s' % self.name)
             self.async_pipe = self.module.async_pipe
+
             pipe_type = self.async_pipe.__dict__.get('type')
             self.is_processor = pipe_type == 'processor'
             self.mapify = self.is_processor and self.source
@@ -307,10 +307,9 @@ def listpipe(args):
 
 
 def getpipe(args, pipe=SyncPipe):
-    source, sleep = args
+    source, conf = args
     ptype = source.get('type', 'fetch')
-    conf = merge([{'sleep': sleep}, source])
-    return pipe(ptype, conf=conf).list
+    return pipe(ptype, conf=merge([conf, source])).list
 
 
 @coroutine
@@ -319,7 +318,4 @@ def async_list_pipe(args):
     output = yield async_pipeline(source)
     return_value(list(output))
 
-
-def async_get_pipe(args):
-    source, sleep = args
-    return getpipe((source, sleep), pipe=AsyncPipe)
+async_get_pipe = partial(getpipe, pipe=AsyncPipe)

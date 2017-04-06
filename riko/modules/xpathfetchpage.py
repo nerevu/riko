@@ -46,17 +46,15 @@ from __future__ import (
 import traceback
 import pygogo as gogo
 
-from contextlib import closing
 from os.path import splitext
 
 from builtins import *
-from six.moves.urllib.request import urlopen
-
 
 from . import processor
-from riko.parsers import xml2etree, etree2dict, xpath, get_abspath
+from riko.utils import fetch, get_abspath
+from riko.parsers import xml2etree, etree2dict, xpath
 from riko.bado import coroutine, return_value, util, io
-from meza._compat import encode
+from meza.compat import encode
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -171,8 +169,9 @@ def parser(_, objconf, skip=False, **kwargs):
         url = get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         xml = (ext == 'xml') or objconf.strict
+        cache_type = 'auto' if objconf.memoize else None
 
-        with closing(urlopen(url)) as f:
+        with fetch(cache_type=cache_type, **objconf) as f:
             root = xml2etree(f, xml=xml, html5=objconf.html5).getroot()
             elements = xpath(root, objconf.xpath)
 
