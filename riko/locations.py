@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.locations
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 Provides location lookup dictionaries
 
 Attributes:

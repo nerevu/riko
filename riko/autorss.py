@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.autorss
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
 Provides functions for finding RSS feeds from a site's LINK tags
 """
 from __future__ import (

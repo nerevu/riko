@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.utils
-~~~~~~~~~~~~~~
+riko.parsers
+~~~~~~~~~~~~
 Provides utility classes and functions
 """
 from __future__ import (

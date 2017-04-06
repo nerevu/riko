@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.dotdict
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
 Provides a class for creating dicts with dot notation access
 """
 from __future__ import (

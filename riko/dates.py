@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.dates
-~~~~~~~~~~~~~~
+~~~~~~~~~~
 Provides date and time helpers
 """
 from __future__ import (
