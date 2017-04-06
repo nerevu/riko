@@ -31,11 +31,11 @@ from builtins import *
 
 from . import processor
 from riko.bado import coroutine, return_value, io
-from riko.parsers import get_abspath, parse_rss
-from riko.utils import gen_entries
+from riko.parsers import parse_rss
+from riko.utils import gen_entries, get_abspath
 
 OPTS = {'ftype': 'none'}
-DEFAULTS = {'sleep': 0}
+DEFAULTS = {'delay': 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 intersection = [
     'author', 'author.name', 'author.uri', 'dc:creator', 'id', 'link',
@@ -67,7 +67,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
-        ...     objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
+        ...     objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
         ...     d = async_parser(None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -82,7 +82,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         stream = kwargs['stream']
     else:
         url = get_abspath(objconf.url)
-        content = yield io.async_url_read(url, delay=objconf.sleep)
+        content = yield io.async_url_read(url, delay=objconf.delay)
         parsed = parse_rss(content)
         stream = gen_entries(parsed)
 
@@ -109,7 +109,7 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'url': get_path('feed.xml'), 'sleep': 0})
+        >>> objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
         >>> result = parser(None, objconf, stream={})
         >>> next(result)['title'] == 'Donations'
         True
@@ -118,7 +118,7 @@ def parser(_, objconf, skip=False, **kwargs):
         stream = kwargs['stream']
     else:
         url = get_abspath(objconf.url)
-        parsed = parse_rss(url, objconf.sleep)
+        parsed = parse_rss(url, objconf.delay)
         stream = gen_entries(parsed)
 
     return stream
@@ -135,10 +135,10 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'sleep'.
+            contain the key 'delay'.
 
             url (str): The web site to fetch.
-            sleep (flt): Amount of time to sleep (in secs) before fetching the
+            delay (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
 
@@ -177,10 +177,10 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'sleep'.
+            contain the key 'delay'.
 
             url (str): The web site to fetch.
-            sleep (flt): Amount of time to sleep (in secs) before fetching the
+            delay (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
     Returns:

@@ -43,8 +43,8 @@ from builtins import *
 from . import processor
 
 from riko import autorss
-from riko.utils import gen_entries
-from riko.parsers import get_abspath, parse_rss
+from riko.utils import gen_entries, get_abspath
+from riko.parsers import parse_rss
 from riko.bado import coroutine, return_value, io
 
 OPTS = {'ftype': 'none'}

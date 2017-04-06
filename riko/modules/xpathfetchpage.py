@@ -51,8 +51,8 @@ from os.path import splitext
 from builtins import *
 
 from . import processor
-from riko.utils import fetch
-from riko.parsers import xml2etree, etree2dict, xpath, get_abspath
+from riko.utils import fetch, get_abspath
+from riko.parsers import xml2etree, etree2dict, xpath
 from riko.bado import coroutine, return_value, util, io
 from meza.compat import encode
 
@@ -169,8 +169,9 @@ def parser(_, objconf, skip=False, **kwargs):
         url = get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         xml = (ext == 'xml') or objconf.strict
+        cache_type = 'auto' if objconf.memoize else None
 
-        with fetch(url) as f:
+        with fetch(cache_type=cache_type, **objconf) as f:
             root = xml2etree(f, xml=xml, html5=objconf.html5).getroot()
             elements = xpath(root, objconf.xpath)
 

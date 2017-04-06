@@ -36,8 +36,8 @@ from meza.compat import encode
 
 from . import processor
 from riko.bado import coroutine, return_value, io
-from riko.parsers import get_text, get_abspath
-from riko.utils import betwix, get_response_encoding, fetch
+from riko.parsers import get_text
+from riko.utils import betwix, get_response_encoding, fetch, get_abspath
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -135,9 +135,9 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = get_abspath(objconf.url)
+        cache_type = 'auto' if objconf.memoize else None
 
-        with fetch(url, decode=True) as f:
+        with fetch(decode=True, cache_type=cache_type, **objconf) as f:
             sliced = betwix(f, objconf.start, objconf.end, True)
             content = '\n'.join(sliced)
 

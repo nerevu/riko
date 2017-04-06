@@ -16,12 +16,14 @@ import fcntl
 from math import isnan
 from functools import partial
 from operator import itemgetter
-from os import environ, O_NONBLOCK, path as p
+from os import getenv, O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
 from decimal import Decimal
 from json import loads
 from codecs import iterdecode
 from contextlib import contextmanager
+from subprocess import call
+
 from six.moves.urllib.request import urlopen
 
 import requests
@@ -35,30 +37,67 @@ except ImportError:
 from builtins import *
 from mezmorize import Cache
 from meza.io import reencode
+from meza.process import merge
+from meza.compat import decode
+from meza.fntools import SleepyDict
 from riko import ENCODING
 from riko.cast import cast
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
+MEMOIZE_DEFAULTS = {'CACHE_THRESHOLD': 2048, 'CACHE_DEFAULT_TIMEOUT': 3600}
+
 CACHE_CONFIGS = {
     'sasl': {
         'CACHE_TYPE': 'saslmemcached',
-        'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
-        'CACHE_MEMCACHED_USERNAME': environ.get('MEMCACHIER_USERNAME'),
-        'CACHE_MEMCACHED_PASSWORD': environ.get('MEMCACHIER_PASSWORD')
+        'CACHE_MEMCACHED_SERVERS': [getenv('MEMCACHIER_SERVERS')],
+        'CACHE_MEMCACHED_USERNAME': getenv('MEMCACHIER_USERNAME'),
+        'CACHE_MEMCACHED_PASSWORD': getenv('MEMCACHIER_PASSWORD')
+    },
+    'memcached': {
+        'CACHE_TYPE': 'memcached',
+        'CACHE_MEMCACHED_SERVERS': [getenv('MEMCACHE_SERVERS')]
+    },
+    'filesystem': {
+        'CACHE_TYPE': 'filesystem',
+        'CACHE_DIR': getenv('CACHE_DIR'),
     },
     'simple': {
         'CACHE_TYPE': 'simple',
     },
-    'memcached': {
-        'CACHE_TYPE': 'memcached',
-        'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHE_SERVERS')]
-    },
-    'filesystem': {
-        'CACHE_TYPE': 'filesystem',
-        'CACHE_DIR': environ.get('CACHE_DIR', p.join('.cache', 'memoize')),
-    },
 }
+
+pgrep = lambda process: call(['pgrep', process]) == 0
+
+
+def get_cache_type():
+    memcached = pgrep('memcache')
+
+    if memcached and getenv('MEMCACHIER_SERVERS'):
+        cache_type = 'sasl'
+    elif memcached and getenv('MEMCACHE_SERVERS'):
+        cache_type = 'memcached'
+    elif getenv('CACHE_DIR'):
+        cache_type = 'filesystem'
+    else:
+        cache_type = 'simple'
+
+    return cache_type
+
+
+def get_abspath(url):
+    url = 'http://%s' % url if url and '://' not in url else url
+
+    if url and url.startswith('file:///'):
+        # already have an abspath
+        pass
+    elif url and url.startswith('file://'):
+        parent = p.dirname(p.dirname(__file__))
+        rel_path = url[7:]
+        abspath = p.abspath(p.join(parent, rel_path))
+        url = 'file://%s' % abspath
+
+    return decode(url)
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1
@@ -114,17 +153,13 @@ def multi_try(source, zipped, default=None):
         return default
 
 
-# http://api.stackexchange.com/2.2/tags?
-# page=1&pagesize=100&order=desc&sort=popular&site=stackoverflow
-# http://api.stackexchange.com/2.2/tags?
-# page=1&pagesize=100&order=desc&sort=popular&site=graphicdesign
 def memoize(*args, **kwargs):
     cache_type = kwargs.pop('cache_type', 'simple')
-    threshold = kwargs.pop('threshold', 2048)
-    timeout = kwargs.pop('timeout', 3600)
 
-    config = {'CACHE_THRESHOLD': threshold, 'CACHE_DEFAULT_TIMEOUT': timeout}
-    config.update(CACHE_CONFIGS[cache_type])
+    if cache_type == 'auto':
+        cache_type = get_cache_type()
+
+    config = merge([MEMOIZE_DEFAULTS, CACHE_CONFIGS[cache_type], kwargs])
     cache = Cache(**config)
     return cache.memoize(*args, **kwargs)
 
@@ -165,16 +200,21 @@ def auto_close(stream, f):
 
 class fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
-    def __init__(self, url, params=None, decode=False, **kwargs):
+    def __init__(self, url=None, params=None, decode=False, **kwargs):
+        delay = kwargs.get('delay')
+        self.context = SleepyDict(delay=delay) if delay else None
         self.params = params or {}
         self.decode = decode
-        self.def_encoding = kwargs.pop('encoding', ENCODING)
-        self.cache_type = kwargs.pop('cache_type', None)
-        self.context = kwargs.pop('context', None)
-        self.timeout = kwargs.pop('timeout', None)
-        self.cache_type = None
+        self.def_encoding = kwargs.get('encoding', ENCODING)
+        self.cache_type = kwargs.get('cache_type')
+        self.timeout = kwargs.get('timeout')
 
-        f = self.open(url)
+        self.kwargs = {'CACHE_TIMEOUT': kwargs.get('cache_timeout')}
+
+        if kwargs.get('cache_threshold'):
+            self.kwargs['CACHE_THRESHOLD'] = kwargs['cache_threshold']
+
+        f = self.open(get_abspath(url))
         self.close = f.close
         self.read = f.read
         self.readline = f.readline
@@ -215,7 +255,7 @@ class fetch(TextIOBase):
             return response
 
         if self.cache_type:
-            opener = memoize(cache_type=self.cache_type)(_open)
+            opener = memoize(cache_type=self.cache_type, **self.kwargs)(_open)
         else:
             opener = _open
 

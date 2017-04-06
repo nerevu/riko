@@ -33,8 +33,8 @@ from builtins import *
 
 from . import processor
 from riko.bado import coroutine, return_value, io
-from riko.parsers import get_abspath, any2dict
-from riko.utils import fetch
+from riko.parsers import any2dict
+from riko.utils import fetch, get_abspath
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -118,8 +118,9 @@ def parser(_, objconf, skip=False, **kwargs):
     else:
         url = get_abspath(objconf.url)
         ext = p.splitext(url)[1].lstrip('.')
+        cache_type = 'auto' if objconf.memoize else None
 
-        with fetch(url) as f:
+        with fetch(cache_type=cache_type, **objconf) as f:
             stream = any2dict(f, ext, objconf.html5, path=objconf.path)
 
     return stream

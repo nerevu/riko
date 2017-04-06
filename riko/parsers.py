@@ -17,7 +17,7 @@ import fcntl
 from math import isnan
 from functools import partial
 from io import StringIO
-from os import path as p, environ, O_NONBLOCK
+from os import environ, O_NONBLOCK
 from html.entities import name2codepoint
 from html.parser import HTMLParser
 
@@ -31,7 +31,7 @@ import pygogo as gogo
 from builtins import *
 from riko.utils import fetch
 from mezmorize import Cache
-from meza.fntools import Objectify, SleepyDict, remove_keys, listize
+from meza.fntools import Objectify, remove_keys, listize
 from meza.process import merge
 from meza.compat import decode
 from ijson import items
@@ -106,10 +106,8 @@ def get_text(html, convert_charrefs=False):
 
 
 def parse_rss(url, delay=0):
-    context = SleepyDict(delay=delay)
-
     try:
-        f = fetch(decode(url), context=context)
+        f = fetch(decode(url), delay=delay)
     except (ValueError, URLError):
         parsed = rssparser.parse(url)
     else:
@@ -292,21 +290,6 @@ def get_skip(item, skip_if=None, **kwargs):
 
 def get_field(item, field=None, **kwargs):
     return item.get(field, **kwargs) if field else item
-
-
-def get_abspath(url):
-    url = 'http://%s' % url if url and '://' not in url else url
-
-    if url and url.startswith('file:///'):
-        # already have an abspath
-        pass
-    elif url and url.startswith('file://'):
-        parent = p.dirname(p.dirname(__file__))
-        rel_path = url[7:]
-        abspath = p.abspath(p.join(parent, rel_path))
-        url = 'file://%s' % abspath
-
-    return decode(url)
 
 
 def text2entity(text):

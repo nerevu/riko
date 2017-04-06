@@ -33,8 +33,7 @@ from builtins import *
 
 from . import processor
 from riko import ENCODING
-from riko.utils import fetch, auto_close
-from riko.parsers import get_abspath
+from riko.utils import fetch, auto_close, get_abspath
 from riko.bado import coroutine, return_value, io
 
 OPTS = {'ftype': 'none', 'assign': 'content'}
@@ -119,8 +118,8 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = get_abspath(objconf.url)
-        f = fetch(url, decode=True, encoding=objconf.encoding)
+        cache_type = 'auto' if objconf.memoize else None
+        f = fetch(cache_type=cache_type, decode=True, **objconf)
         _stream = ({kwargs['assign']: line.strip()} for line in f)
         stream = auto_close(_stream, f)
 

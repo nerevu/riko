@@ -35,8 +35,7 @@ from meza.fntools import SleepyDict
 
 from . import processor
 from riko.bado import coroutine, return_value, requests as treq, io
-from riko.parsers import get_abspath
-from riko.utils import fetch
+from riko.utils import fetch, get_abspath
 
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
@@ -46,7 +45,7 @@ EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
 OPTS = {'field': 'content', 'ftype': 'text'}
 DEFAULTS = {
     'currency': 'USD',
-    'sleep': 0,
+    'delay': 0,
     'memoize': False,
     'precision': 6,
     'url': EXCHANGE_API,
@@ -108,7 +107,7 @@ def async_parser(base, objconf, skip=False, **kwargs):
         >>> def run(reactor):
         ...     url = get_path('quote.json')
         ...     conf = {
-        ...         'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
+        ...         'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': item, 'assign': 'content'}
@@ -133,7 +132,7 @@ def async_parser(base, objconf, skip=False, **kwargs):
         json = yield treq.json(r)
     else:
         url = get_abspath(objconf.url)
-        content = yield io.async_url_read(url, delay=objconf.sleep)
+        content = yield io.async_url_read(url, delay=objconf.delay)
         json = loads(decode(content))
 
     if not (skip or same_currency):
@@ -165,7 +164,7 @@ def parser(base, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('quote.json')
-        >>> conf = {'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
+        >>> conf = {'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item, 'assign': 'content'}
@@ -179,15 +178,9 @@ def parser(base, objconf, skip=False, **kwargs):
     elif same_currency:
         rate = Decimal(1)
     else:
-        url = get_abspath(objconf.url)
+        cache_type = 'simple' if objconf.memoize else None
 
-        fkwargs = {
-            'params': objconf.params,
-            'context': SleepyDict(delay=objconf.sleep),
-            'cache_type': 'simple' if objconf.memoize else None,
-        }
-
-        with fetch(url, **fkwargs) as f:
+        with fetch(cache_type=cache_type, **objconf) as f:
             json = next(items(f, ''))
 
     if not (skip or same_currency):
@@ -209,7 +202,7 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'sleep', 'memoize', or 'field'.
+            'params', 'currency', 'delay', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
@@ -218,7 +211,7 @@ def async_pipe(*args, **kwargs):
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
 
-            sleep (flt): Amount of time to sleep (in secs) before fetching the
+            delay (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
             memoize (bool): Cache the exchange rate API response (default:
@@ -265,7 +258,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'sleep', 'memoize', or 'field'.
+            'params', 'currency', 'delay', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
@@ -274,7 +267,7 @@ def pipe(*args, **kwargs):
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
 
-            sleep (flt): Amount of time to sleep (in secs) before fetching the
+            delay (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
             memoize (bool): Cache the exchange rate API response (default:

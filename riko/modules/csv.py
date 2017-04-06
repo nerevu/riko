@@ -31,8 +31,7 @@ from meza.process import merge
 from . import processor
 from riko import ENCODING
 from riko.bado import coroutine, return_value, io
-from riko.parsers import get_abspath
-from riko.utils import get_response_encoding, fetch, auto_close
+from riko.utils import get_response_encoding, fetch, auto_close, get_abspath
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {
@@ -121,10 +120,10 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = get_abspath(objconf.url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
-        f = fetch(url, decode=True, encoding=objconf.encoding)
+        cache_type = 'auto' if objconf.memoize else None
+        f = fetch(cache_type=cache_type, decode=True, **objconf)
         rkwargs = merge([objconf, renamed])
         stream = auto_close(read_csv(f, **rkwargs), f)
 

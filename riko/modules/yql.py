@@ -27,8 +27,7 @@ Examples:
     basic usage::
 
         >>> from riko import get_path
-        >>> from riko.utils import fetch
-        >>> from riko.parsers import get_abspath
+        >>> from riko.utils import fetch, get_abspath
         >>> from riko.modules.yql import pipe
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
@@ -85,7 +84,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.parsers import get_abspath
+        >>> from riko.utils import get_abspath
         >>> from meza.fntools import Objectify
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
@@ -146,7 +145,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.parsers import get_abspath
+        >>> from riko.utils import get_abspath
         >>> from meza.fntools import Objectify
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
@@ -170,7 +169,8 @@ def parser(_, objconf, skip=False, **kwargs):
 
         if not f:
             params = {'q': objconf.query, 'diagnostics': objconf.debug}
-            f = fetch(objconf.url, params=params)
+            cache_type = 'auto' if objconf.memoize else None
+            f = fetch(params=params, cache_type=cache_type, **objconf)
 
         # TODO: consider paging for large result sets
         root = xml2etree(f).getroot()
@@ -210,7 +210,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.parsers import get_abspath
+        >>> from riko.utils import get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> query = "select * from feed where url='%s'" % feed
@@ -260,7 +260,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.parsers import get_abspath
+        >>> from riko.utils import get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> conf = {'query': "select * from feed where url='%s'" % feed}
