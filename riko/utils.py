@@ -159,7 +159,14 @@ def memoize(*args, **kwargs):
     if cache_type == 'auto':
         cache_type = get_cache_type()
 
-    config = merge([MEMOIZE_DEFAULTS, CACHE_CONFIGS[cache_type], kwargs])
+    config = merge([MEMOIZE_DEFAULTS, CACHE_CONFIGS[cache_type]])
+
+    if 'CACHE_TIMEOUT' in kwargs:
+        config['CACHE_TIMEOUT'] = kwargs.pop('CACHE_TIMEOUT')
+
+    if 'CACHE_THRESHOLD' in kwargs:
+        config['CACHE_THRESHOLD'] = kwargs.pop('CACHE_THRESHOLD')
+
     cache = Cache(**config)
     return cache.memoize(*args, **kwargs)
 
@@ -227,7 +234,7 @@ class fetch(TextIOBase):
         self.r.close()
         self.close()
 
-    def open(self, name, flags=None):
+    def open(self, url, flags=None):
         def _open(url, **params):
             if url.startswith('http') and params:
                 r = requests.get(url, params=params, stream=True)
@@ -259,7 +266,7 @@ class fetch(TextIOBase):
         else:
             opener = _open
 
-        response = opener(name, **self.params)
+        response = opener(url, **self.params)
         wrapper = StringIO if self.decode else BytesIO
         return wrapper(response) if self.cache_type else response
 
