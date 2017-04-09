@@ -117,8 +117,8 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = get_abspath(objconf.url)
-        parsed = parse_rss(url, objconf.delay)
+        cache_type = 'auto' if objconf.memoize else None
+        parsed = parse_rss(cache_type=cache_type, **objconf)
         stream = gen_entries(parsed)
 
     return stream

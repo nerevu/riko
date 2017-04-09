@@ -559,6 +559,9 @@ def multiplex(sources):
 
 
 def gen_entries(parsed):
+    if parsed.get('bozo_exception'):
+        raise Exception(parsed['bozo_exception'])
+
     for entry in parsed['entries']:
         # prevent feedparser deprecation warnings
         if 'published_parsed' in entry:
