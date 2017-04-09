@@ -105,9 +105,9 @@ def get_text(html, convert_charrefs=False):
     return parser.data.getvalue()
 
 
-def parse_rss(url, delay=0):
+def parse_rss(url=None, **kwargs):
     try:
-        f = fetch(decode(url), delay=delay)
+        f = fetch(decode(url), **kwargs)
     except (ValueError, URLError):
         parsed = rssparser.parse(url)
     else:
