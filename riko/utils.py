@@ -252,7 +252,7 @@ class fetch(TextIOBase):
                     encoding = get_response_encoding(r, self.def_encoding)
 
                     if self.cache_type:
-                        response = text.decode(encoding)
+                        response = decode(text, encoding)
                     else:
                         response = reencode(r.fp, encoding, decode=True)
                 else:
