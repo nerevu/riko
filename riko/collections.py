@@ -309,7 +309,7 @@ def listpipe(args):
 def getpipe(args, pipe=SyncPipe):
     source, conf = args
     ptype = source.get('type', 'fetch')
-    return pipe(ptype, conf=merge([conf, source])).list
+    return pipe(ptype, conf=merge([conf, source])).output
 
 
 @coroutine
