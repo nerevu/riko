@@ -167,7 +167,7 @@ def memoize(*args, **kwargs):
     if 'CACHE_THRESHOLD' in kwargs:
         config['CACHE_THRESHOLD'] = kwargs.pop('CACHE_THRESHOLD')
 
-    cache = Cache(**config)
+    cache = Cache(namespace='https://github.com/nerevu/riko', **config)
     return cache.memoize(*args, **kwargs)
 
 
