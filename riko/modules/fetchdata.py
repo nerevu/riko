@@ -118,9 +118,11 @@ def parser(_, objconf, skip=False, **kwargs):
     else:
         url = get_abspath(objconf.url)
         ext = p.splitext(url)[1].lstrip('.')
-        cache_type = 'auto' if objconf.memoize else None
 
-        with fetch(cache_type=cache_type, **objconf) as f:
+        if objconf.memoize and not objconf.cache_type:
+            objconf.cache_type = 'auto'
+
+        with fetch(**objconf) as f:
             stream = any2dict(f, ext, objconf.html5, path=objconf.path)
 
     return stream

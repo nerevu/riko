@@ -84,6 +84,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `tail`_              | operator  | composer      | truncates a feed to the last N items                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `timeout`_           | operator  | composer      | returns items from a stream until a certain amount of time has passed                        |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `tokenizer`_         | processor | transformer   | splits a string by a delimiter                                                               |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `truncate`_          | operator  | composer      | returns a specified number of items from a feed                                              |
@@ -224,6 +226,7 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _substr: https://github.com/nerevu/riko/blob/master/riko/modules/substr.py
 .. _sum: https://github.com/nerevu/riko/blob/master/riko/modules/sum.py
 .. _tail: https://github.com/nerevu/riko/blob/master/riko/modules/tail.py
+.. _timeout: https://github.com/nerevu/riko/blob/master/riko/modules/timeout.py
 .. _tokenizer: https://github.com/nerevu/riko/blob/master/riko/modules/tokenizer.py
 .. _truncate: https://github.com/nerevu/riko/blob/master/riko/modules/truncate.py
 .. _union: https://github.com/nerevu/riko/blob/master/riko/modules/union.py

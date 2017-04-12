@@ -15,7 +15,8 @@ from itertools import chain
 from builtins import iter, len, list, map, next, sum as _sum
 
 from riko.bado import coroutine, return_value
-from riko.utils import cast, multiplex, broadcast, dispatch
+from riko.cast import cast
+from riko.utils import multiplex, broadcast, dispatch
 from riko.parsers import parse_conf, get_skip, get_field
 from riko.dotdict import DotDict
 from meza.fntools import remove_keys, listize, Objectify
@@ -115,9 +116,11 @@ def get_assignment(result, skip=False, **kwargs):
     return one, iter([first_result]) if one else result
 
 
-def assign(item, assignment, key, one=False):
-    value = next(assignment) if one else list(assignment)
-    yield DotDict(merge([item, {key: value}]))
+def assign(item, assignment, **kwargs):
+    key = kwargs.get('assign')
+    value = next(assignment) if kwargs.get('one') else list(assignment)
+    merged = merge([item, {key: value}])
+    yield DotDict(merged) if kwargs.get('dictize') else merged
 
 
 class processor(object):
@@ -271,7 +274,7 @@ class processor(object):
             ...
             ...     return stream
             ...
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> @processor(isasync=True, **kwargs)
             ... def async_pipe(content, times, skip=False, **kwargs):
@@ -323,9 +326,9 @@ class processor(object):
             conf = {k: combined[k] for k in self.defaults}
             conf.update(kwargs.get('conf', {}))
             combined.update({'conf': conf})
-            # replace conf with dictized version so we can access its
-            # attributes even if we already extracted a value
-            updates = {'conf': DotDict(conf), 'assign': combined.get('assign')}
+
+            uconf = DotDict(conf) if combined.get('dictize') else conf
+            updates = {'conf': uconf, 'assign': combined.get('assign')}
             kwargs.update(updates)
 
             item = item or {}
@@ -352,8 +355,7 @@ class processor(object):
             if skip or combined.get('emit'):
                 stream = assignment
             elif not skip:
-                key = combined.get('assign')
-                stream = assign(_input, assignment, key, one=one)
+                stream = assign(_input, assignment, one=one, **combined)
 
             if self.async:
                 return_value(stream)
@@ -454,7 +456,7 @@ class operator(object):
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
             ...         return_value(value)
             ...
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> @operator(isasync=True, emit=False)
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
@@ -534,7 +536,7 @@ class operator(object):
             True
             >>> async_wrapper = operator(isasync=True, **opts)
             >>>
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for content, times in tuples:
@@ -588,9 +590,8 @@ class operator(object):
             conf.update(kwargs.get('conf', {}))
             combined.update({'conf': conf})
 
-            # replace conf with dictized version so we can access its
-            # attributes even if we already extracted a value
-            updates = {'conf': DotDict(conf), 'assign': combined.get('assign')}
+            uconf = DotDict(conf) if combined.get('dictize') else conf
+            updates = {'conf': uconf, 'assign': combined.get('assign')}
             kwargs.update(updates)
 
             items = items or iter([])
@@ -630,8 +631,9 @@ class operator(object):
                 stream = assignment
             else:
                 singles = (iter([v]) for v in assignment)
-                key = combined.get('assign')
-                assigned = (assign({}, s, key, one=True) for s in singles)
+                assigned = (
+                    assign({}, s, one=True, **combined) for s in singles)
+
                 stream = multiplex(assigned)
 
             if self.async:

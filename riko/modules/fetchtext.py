@@ -118,8 +118,10 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        cache_type = 'auto' if objconf.memoize else None
-        f = fetch(cache_type=cache_type, decode=True, **objconf)
+        if objconf.memoize and not objconf.cache_type:
+            objconf.cache_type = 'auto'
+
+        f = fetch(decode=True, **objconf)
         _stream = ({kwargs['assign']: line.strip()} for line in f)
         stream = auto_close(_stream, f)
 

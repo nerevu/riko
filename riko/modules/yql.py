@@ -169,8 +169,11 @@ def parser(_, objconf, skip=False, **kwargs):
 
         if not f:
             params = {'q': objconf.query, 'diagnostics': objconf.debug}
-            cache_type = 'auto' if objconf.memoize else None
-            f = fetch(params=params, cache_type=cache_type, **objconf)
+
+            if objconf.memoize and not objconf.cache_type:
+                objconf.cache_type = 'auto'
+
+            f = fetch(params=params, **objconf)
 
         # TODO: consider paging for large result sets
         root = xml2etree(f).getroot()
