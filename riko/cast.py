@@ -17,6 +17,7 @@ from calendar import timegm
 from six.moves.urllib.parse import quote, urlparse
 
 from dateutil import parser
+from meza.compat import decode
 from riko.dates import TODAY, gen_tzinfos, get_date, normalize_date, get_tt
 from riko.currencies import CURRENCY_CODES
 from riko.locations import LOCATIONS
@@ -131,7 +132,7 @@ CAST_SWITCH = {
     'float': {'default': float('nan'), 'func': float},
     'decimal': {'default': Decimal('NaN'), 'func': Decimal},
     'int': {'default': 0, 'func': lambda i: int(float(i))},
-    'text': {'default': '', 'func': str},
+    'text': {'default': '', 'func': decode},
     'date': {'default': {'date': TODAY}, 'func': cast_date},
     'url': {'default': {}, 'func': cast_url},
     'location': {'default': {}, 'func': cast_location},
