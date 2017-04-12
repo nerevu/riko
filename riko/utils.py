@@ -51,6 +51,7 @@ except ImportError:
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
 MEMOIZE_DEFAULTS = {'CACHE_THRESHOLD': 2048, 'CACHE_DEFAULT_TIMEOUT': 3600}
+DEF_NS = 'https://github.com/nerevu/riko'
 
 servers = getenv('MEMCACHE_SERVERS') or getenv('MEMCACHIER_SERVERS')
 
@@ -154,6 +155,7 @@ def multi_try(source, zipped, default=None):
 
 def memoize(*args, **kwargs):
     cache_type = kwargs.pop('cache_type', 'simple')
+    namespace = kwargs.pop('namespace', DEF_NS)
 
     if cache_type == 'auto':
         cache_type = get_cache_type()
@@ -166,7 +168,7 @@ def memoize(*args, **kwargs):
     if 'CACHE_THRESHOLD' in kwargs:
         config['CACHE_THRESHOLD'] = kwargs.pop('CACHE_THRESHOLD')
 
-    cache = Cache(namespace='https://github.com/nerevu/riko', **config)
+    cache = Cache(namespace=namespace, **config)
     return cache.memoize(*args, **kwargs)
 
 

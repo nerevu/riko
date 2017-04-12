@@ -178,10 +178,12 @@ def parser(base, objconf, skip=False, **kwargs):
     elif same_currency:
         rate = Decimal(1)
     else:
-        cache_type = 'auto' if objconf.memoize else objconf.cache_type
         decode = objconf.url.startswith('http')
 
-        with fetch(cache_type=cache_type, decode=decode, **objconf) as f:
+        if objconf.memoize and not objconf.cache_type:
+            objconf.cache_type = 'auto'
+
+        with fetch(decode=decode, **objconf) as f:
             json = next(items(f, ''))
 
     if not (skip or same_currency):
