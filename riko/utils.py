@@ -52,23 +52,19 @@ logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
 MEMOIZE_DEFAULTS = {'CACHE_THRESHOLD': 2048, 'CACHE_DEFAULT_TIMEOUT': 3600}
 
+servers = getenv('MEMCACHE_SERVERS') or getenv('MEMCACHIER_SERVERS')
+
 CACHE_CONFIGS = {
-    'sasl': {
-        'CACHE_TYPE': 'saslmemcached',
-        'CACHE_MEMCACHED_SERVERS': [getenv('MEMCACHIER_SERVERS')],
-        'CACHE_MEMCACHED_USERNAME': getenv('MEMCACHIER_USERNAME'),
-        'CACHE_MEMCACHED_PASSWORD': getenv('MEMCACHIER_PASSWORD')
-    },
-    'memcached': {
-        'CACHE_TYPE': 'memcached',
-        'CACHE_MEMCACHED_SERVERS': [getenv('MEMCACHE_SERVERS')]
-    },
+    'simple': {'CACHE_TYPE': 'simple'},
     'filesystem': {
         'CACHE_TYPE': 'filesystem',
         'CACHE_DIR': getenv('CACHE_DIR'),
     },
-    'simple': {
-        'CACHE_TYPE': 'simple',
+    'memcached': {
+        'CACHE_TYPE': 'spreadsaslmemcachedcache',
+        'CACHE_MEMCACHED_SERVERS': [servers],
+        'CACHE_MEMCACHED_USERNAME': getenv('MEMCACHIER_USERNAME'),
+        'CACHE_MEMCACHED_PASSWORD': getenv('MEMCACHIER_PASSWORD')
     },
 }
 
@@ -78,9 +74,7 @@ pgrep = lambda process: call(['pgrep', process]) == 0
 def get_cache_type():
     memcached = pylibmc and pgrep('memcache')
 
-    if memcached and getenv('MEMCACHIER_SERVERS'):
-        cache_type = 'sasl'
-    elif memcached and getenv('MEMCACHE_SERVERS'):
+    if memcached and servers:
         cache_type = 'memcached'
     elif getenv('CACHE_DIR'):
         cache_type = 'filesystem'
