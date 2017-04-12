@@ -15,7 +15,8 @@ from itertools import chain
 from builtins import iter, len, list, map, next, sum as _sum
 
 from riko.bado import coroutine, return_value
-from riko.utils import cast, multiplex, broadcast, dispatch
+from riko.cast import cast
+from riko.utils import multiplex, broadcast, dispatch
 from riko.parsers import parse_conf, get_skip, get_field
 from riko.dotdict import DotDict
 from meza.fntools import remove_keys, listize, Objectify
