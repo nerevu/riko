@@ -5,7 +5,7 @@ riko.modules.truncate
 ~~~~~~~~~~~~~~~~~~~~~
 Provides functions for returning a specified number of items from a stream.
 
-Contrast this with the Tail module, which also limits the number of items,
+Contrast this with the tail module, which also limits the number of items,
 but returns items from the bottom of the stream.
 
 Examples:

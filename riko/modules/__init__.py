@@ -271,7 +271,7 @@ class processor(object):
             ...
             ...     return stream
             ...
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> @processor(isasync=True, **kwargs)
             ... def async_pipe(content, times, skip=False, **kwargs):
@@ -454,7 +454,7 @@ class operator(object):
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
             ...         return_value(value)
             ...
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> @operator(isasync=True, emit=False)
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
@@ -534,7 +534,7 @@ class operator(object):
             True
             >>> async_wrapper = operator(isasync=True, **opts)
             >>>
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for content, times in tuples:
