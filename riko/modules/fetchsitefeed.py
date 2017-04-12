@@ -126,7 +126,7 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        cache_type = 'auto' if objconf.memoize else None
+        cache_type = 'auto' if objconf.memoize else objconf.cache_type
         url = get_abspath(objconf.url)
         rss = autorss.get_rss(url)
         objconf.url = get_abspath(next(rss)['link'])

@@ -169,7 +169,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
         if not f:
             params = {'q': objconf.query, 'diagnostics': objconf.debug}
-            cache_type = 'auto' if objconf.memoize else None
+            cache_type = 'auto' if objconf.memoize else objconf.cache_type
             f = fetch(params=params, cache_type=cache_type, **objconf)
 
         # TODO: consider paging for large result sets

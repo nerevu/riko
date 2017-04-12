@@ -178,7 +178,7 @@ def parser(base, objconf, skip=False, **kwargs):
     elif same_currency:
         rate = Decimal(1)
     else:
-        cache_type = 'auto' if objconf.memoize else None
+        cache_type = 'auto' if objconf.memoize else objconf.cache_type
         decode = objconf.url.startswith('http')
 
         with fetch(cache_type=cache_type, decode=decode, **objconf) as f:
