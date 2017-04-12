@@ -75,7 +75,12 @@ Fetching feeds
     >>> #
     >>> # Note: `get_path` just looks up files in the `data` directory
     >>> # to simplify testing
-    >>> stream = fetchdata.pipe(conf={'url': get_path('quote.json')})
+    >>> conf = {'url': get_path('quote.json')}
+    >>> stream = fetchdata.pipe(conf=conf)
+    >>>
+    >>> # Same thing, but now memoize the url response
+    >>> conf['memoize'] = True
+    >>> stream = fetchdata.pipe(conf=conf)
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)

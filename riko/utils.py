@@ -43,6 +43,11 @@ from meza.fntools import SleepyDict
 from riko import ENCODING
 from riko.cast import cast
 
+try:
+    import pylibmc
+except ImportError:
+    pylibmc = None
+
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
 MEMOIZE_DEFAULTS = {'CACHE_THRESHOLD': 2048, 'CACHE_DEFAULT_TIMEOUT': 3600}
@@ -71,7 +76,7 @@ pgrep = lambda process: call(['pgrep', process]) == 0
 
 
 def get_cache_type():
-    memcached = pgrep('memcache')
+    memcached = pylibmc and pgrep('memcache')
 
     if memcached and getenv('MEMCACHIER_SERVERS'):
         cache_type = 'sasl'
@@ -209,66 +214,69 @@ class fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
     def __init__(self, url=None, params=None, decode=False, **kwargs):
         delay = kwargs.get('delay')
+        mkwargs = {'CACHE_TIMEOUT': kwargs.get('cache_timeout')}
+        params = params or {}
+
+        self.r = None
         self.context = SleepyDict(delay=delay) if delay else None
-        self.params = params or {}
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
         self.cache_type = kwargs.get('cache_type')
         self.timeout = kwargs.get('timeout')
 
-        self.kwargs = {'CACHE_TIMEOUT': kwargs.get('cache_timeout')}
-
         if kwargs.get('cache_threshold'):
-            self.kwargs['CACHE_THRESHOLD'] = kwargs['cache_threshold']
+            mkwargs['CACHE_THRESHOLD'] = kwargs['cache_threshold']
 
-        f = self.open(get_abspath(url))
+        if self.cache_type:
+            mkwargs['cache_type'] = self.cache_type
+            opener = memoize(**mkwargs)(self.open)
+        else:
+            opener = self.open
+
+        response = opener(get_abspath(url), **params)
+        wrapper = StringIO if self.decode else BytesIO
+        f = wrapper(response) if self.cache_type else response
         self.close = f.close
         self.read = f.read
         self.readline = f.readline
-        self.seek = f.seek
+
+        try:
+            self.seek = f.seek
+        except AttributeError:
+            pass
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.r.close()
+        self.r.close() if self.r else None
         self.close()
 
-    def open(self, url, flags=None):
-        def _open(url, **params):
-            if url.startswith('http') and params:
-                r = requests.get(url, params=params, stream=True)
-                r.raw.decode_content = self.decode
-                response = r.text if self.cache_type else r.raw
-            else:
-                try:
-                    r = urlopen(url, context=self.context, timeout=self.timeout)
-                except TypeError:
-                    r = urlopen(url, timeout=self.timeout)
-
-                text = r.read() if self.cache_type else None
-
-                if self.decode:
-                    encoding = get_response_encoding(r, self.def_encoding)
-
-                    if self.cache_type:
-                        response = decode(text, encoding)
-                    else:
-                        response = reencode(r.fp, encoding, decode=True)
-                else:
-                    response = text if self.cache_type else r
-
-            self.r = r
-            return response
-
-        if self.cache_type:
-            opener = memoize(cache_type=self.cache_type, **self.kwargs)(_open)
+    def open(self, url, **params):
+        if url.startswith('http') and params:
+            r = requests.get(url, params=params, stream=True)
+            r.raw.decode_content = self.decode
+            response = r.text if self.cache_type else r.raw
         else:
-            opener = _open
+            try:
+                r = urlopen(url, context=self.context, timeout=self.timeout)
+            except TypeError:
+                r = urlopen(url, timeout=self.timeout)
 
-        response = opener(url, **self.params)
-        wrapper = StringIO if self.decode else BytesIO
-        return wrapper(response) if self.cache_type else response
+            text = r.read() if self.cache_type else None
+
+            if self.decode:
+                encoding = get_response_encoding(r, self.def_encoding)
+
+                if self.cache_type:
+                    response = decode(text, encoding)
+                else:
+                    response = reencode(r.fp, encoding, decode=True)
+            else:
+                response = text if self.cache_type else r
+
+        self.r = r
+        return response
 
 
 def def_itemgetter(attr, default=0, _type=None):
