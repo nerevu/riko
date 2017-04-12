@@ -12,12 +12,11 @@ import pygogo as gogo
 
 from functools import reduce
 from builtins import *
-from feedparser import FeedParserDict
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-class DotDict(FeedParserDict):
+class DotDict(dict):
     """A dictionary whose keys can be accessed using dot notation
     >>> r = DotDict({'a': {'content': 'value'}})
     >>> r.get('a.content') == 'value'
@@ -26,7 +25,6 @@ class DotDict(FeedParserDict):
     True
     """
     def __init__(self, data=None, **kwargs):
-        super(DotDict, self).__init__(self, **kwargs)
         self.update(data)
 
     def _parse_key(self, key=None):
