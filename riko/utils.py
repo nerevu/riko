@@ -154,12 +154,9 @@ def multi_try(source, zipped, default=None):
 
 
 def memoize(*args, **kwargs):
-    cache_type = kwargs.pop('cache_type', 'simple')
+    _cache_type = kwargs.pop('cache_type', 'simple')
     namespace = kwargs.pop('namespace', DEF_NS)
-
-    if cache_type == 'auto':
-        cache_type = get_cache_type()
-
+    cache_type = get_cache_type() if _cache_type == 'auto' else _cache_type
     config = merge([MEMOIZE_DEFAULTS, CACHE_CONFIGS[cache_type]])
 
     if 'CACHE_TIMEOUT' in kwargs:
