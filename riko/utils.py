@@ -52,8 +52,9 @@ logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
 MEMOIZE_DEFAULTS = {'CACHE_THRESHOLD': 2048, 'CACHE_DEFAULT_TIMEOUT': 3600}
 DEF_NS = 'https://github.com/nerevu/riko'
+DEF_MCS = 'localhost:11211'
 
-servers = getenv('MEMCACHE_SERVERS') or getenv('MEMCACHIER_SERVERS')
+servers = getenv('MEMCACHIER_SERVERS') or getenv('MEMCACHE_SERVERS', DEF_MCS)
 
 CACHE_CONFIGS = {
     'simple': {'CACHE_TYPE': 'simple'},
@@ -75,7 +76,7 @@ pgrep = lambda process: call(['pgrep', process]) == 0
 def get_cache_type():
     memcached = pylibmc and pgrep('memcache')
 
-    if memcached and servers:
+    if memcached:
         cache_type = 'memcached'
     elif getenv('CACHE_DIR'):
         cache_type = 'filesystem'
@@ -154,12 +155,9 @@ def multi_try(source, zipped, default=None):
 
 
 def memoize(*args, **kwargs):
-    cache_type = kwargs.pop('cache_type', 'simple')
+    _cache_type = kwargs.pop('cache_type', 'simple')
     namespace = kwargs.pop('namespace', DEF_NS)
-
-    if cache_type == 'auto':
-        cache_type = get_cache_type()
-
+    cache_type = get_cache_type() if _cache_type == 'auto' else _cache_type
     config = merge([MEMOIZE_DEFAULTS, CACHE_CONFIGS[cache_type]])
 
     if 'CACHE_TIMEOUT' in kwargs:

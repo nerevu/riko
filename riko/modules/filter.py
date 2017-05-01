@@ -44,9 +44,9 @@ from riko.cast import cast_date
 
 OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'combine': 'and', 'mode': 'permit'}
-logger = gogo.Gogo(__name__, monolog=True).logger
-
+ITER_ATTRS = {'__next__', 'next', '__iter__'}
 COMBINE_BOOLEAN = {'and': all, 'or': any}
+
 SWITCH = {
     'contains': lambda x, y: x and y.lower() in x.lower(),
     'doesnotcontain': lambda x, y: x and y.lower() not in x.lower(),
@@ -63,6 +63,9 @@ SWITCH = {
     'before': op.lt,
     'atmost': op.le,
 }
+
+logger = gogo.Gogo(__name__, monolog=True).logger
+is_iterable = lambda item: ITER_ATTRS.intersection(dir(item))
 
 
 def _parse_x_y(_x, _y):
@@ -140,8 +143,9 @@ def parser(stream, rules, tuples, **kwargs):
         True
     """
     conf = kwargs['conf']
+
     # TODO: add terminal check
-    dynamic = any('subkey' in v for v in conf.values())
+    dynamic = any('subkey' in v for v in conf.values() if is_iterable(v))
     objconf = None if dynamic else parse_conf({}, conf=conf, objectify=True)
 
     for item in stream:
@@ -159,6 +163,8 @@ def parser(stream, rules, tuples, **kwargs):
 
         if (result and permit) or not (result or permit):
             yield item
+        elif objconf.stop:
+            break
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
@@ -172,7 +178,7 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'mode', or 'combine'.
+            contain the keys 'mode', 'combine', or 'stop'.
 
             mode (str): returns the matches if set to 'permit', otherwise
                 returns the non-matches (default: 'permit').
@@ -191,6 +197,8 @@ def async_pipe(*args, **kwargs):
             combine (str): determines how to interpret multiple rules and must
                 be either 'and' or 'or'. 'and' means all rules must pass, and
                 'or' means any rule must pass (default: 'and')
+
+            stop (bool): stop after first failure (default: False)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the filtered items
@@ -227,7 +235,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'mode', or 'combine'.
+            contain the keys 'mode', 'combine', or 'stop'.
 
             mode (str): returns the matches if set to 'permit', otherwise
                 returns the non-matches (default: 'permit').
@@ -247,6 +255,8 @@ def pipe(*args, **kwargs):
                 be either 'and' or 'or'. 'and' means all rules must pass, and
                 'or' means any rule must pass (default: 'and')
 
+            stop (bool): stop after first failure (default: False)
+
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
 
@@ -262,5 +272,10 @@ def pipe(*args, **kwargs):
         >>> rule['value'] = 'kjhlked'
         >>> any(pipe(items, conf={'rule': [rule]}))
         False
+        >>> items = ({'x': x} for x in range(5))
+        >>> rule = {'field': 'x', 'op': 'less', 'value': 2}
+        >>> result = pipe(items, conf={'rule': rule, 'stop': True})
+        >>> len(list(result)) == 2
+        True
     """
     return parser(*args, **kwargs)
