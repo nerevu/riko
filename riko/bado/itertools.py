@@ -14,6 +14,8 @@ Examples:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+from functools import partial
+
 import itertools as it
 
 from builtins import *
@@ -31,17 +33,12 @@ else:
 
 def get_task():
     if reactor.fake:
-        task = Cooperator(scheduler=FakeReactor().callLater)
+        task = Cooperator(scheduler=partial(FakeReactor().callLater,
+                                            FakeReactor._DELAY))
     else:
-        task = real_task
+        task = real_task.Cooperator()
 
     return task
-
-
-def cleanup(task):
-    if task._delayedCall:
-        task._delayedCall.cancel()
-        task._delayedCall = None
 
 
 @coroutine
@@ -58,7 +55,6 @@ def coop_reduce(func, iterable, initializer=None):
 
     _task = task.cooperate(work(func, iterable, x))
     yield _task.whenDone()
-    cleanup(task) if reactor.fake else None
     return_value(result['value'])
 
 
