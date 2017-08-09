@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.union import pipe
+        >>>
         >>> items = ({'x': x} for x in range(5))
         >>> other1 = ({'x': x + 5} for x in range(5))
         >>> other2 = ({'x': x + 10} for x in range(5))

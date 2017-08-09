@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.sort import pipe
+        >>>
         >>> items = [{'content': 'b'}, {'content': 'a'}, {'content': 'c'}]
         >>> next(pipe(items)) == {'content': 'a'}
         True

@@ -14,6 +14,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strreplace import pipe
+        >>>
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['strreplace'] == 'bye world'

@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.tail import pipe
+        >>>
         >>> items = ({'x': x} for x in range(5))
         >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
         True

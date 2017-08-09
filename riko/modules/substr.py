@@ -17,6 +17,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.substr import pipe
+        >>>
         >>> conf = {'start': '3', 'length': '4'}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['substr'] == 'lo w'

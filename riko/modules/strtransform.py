@@ -10,6 +10,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strtransform import pipe
+        >>>
         >>> conf = {'rule': {'transform': 'title'}}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['strtransform'] == 'Hello World'

@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.currencyformat import pipe
+        >>>
         >>> next(pipe({'content': '100'}))['currencyformat'] == '$100.00'
         True
 

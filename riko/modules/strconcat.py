@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strconcat import pipe
+        >>>
         >>> item = {'word': 'hello'}
         >>> part = [{'subkey': 'word'}, {'value': ' world'}]
         >>> next(pipe(item, conf={'part': part}))['strconcat'] == 'hello world'
