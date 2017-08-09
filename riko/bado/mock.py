@@ -14,7 +14,6 @@ Examples:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import itertools as it
 import pygogo as gogo
 
 from builtins import *  # noqa # pylint: disable=unused-import
