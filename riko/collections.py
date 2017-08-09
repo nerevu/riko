@@ -89,7 +89,7 @@ from multiprocessing import Pool, cpu_count
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from riko.utils import multiplex, multi_try
 from riko.bado import coroutine, return_value

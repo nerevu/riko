@@ -24,7 +24,7 @@ import itertools as it
 import pygogo as gogo
 
 from operator import itemgetter
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import operator
 

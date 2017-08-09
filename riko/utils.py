@@ -18,10 +18,6 @@ from functools import partial
 from operator import itemgetter
 from os import getenv, O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
-from decimal import Decimal
-from json import loads
-from codecs import iterdecode
-from contextlib import contextmanager
 from subprocess import call
 
 from six.moves.urllib.request import urlopen
@@ -34,7 +30,7 @@ try:
 except ImportError:
     import builtins as _builtins
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from mezmorize import Cache
 from meza.io import reencode
 from meza.process import merge
