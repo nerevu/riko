@@ -14,7 +14,7 @@ Examples:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 try:
     from twisted.internet.task import react

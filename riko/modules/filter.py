@@ -38,7 +38,7 @@ from decimal import Decimal, InvalidOperation
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from . import operator
 from riko.parsers import parse_conf
 from riko.cast import cast_date

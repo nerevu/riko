@@ -29,7 +29,7 @@ from __future__ import (
 import pygogo as gogo
 
 from collections import deque
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from . import operator
 
 OPTS = {}

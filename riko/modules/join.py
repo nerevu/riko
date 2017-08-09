@@ -30,11 +30,10 @@ import pygogo as gogo
 
 from itertools import product
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from meza.process import merge, join
 
 from . import operator
-from riko.utils import multiplex
 
 # disable `dictize` since we do not need to access the configuration
 OPTS = {'dictize': False}

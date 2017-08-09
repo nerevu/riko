@@ -45,10 +45,9 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import requests
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 from riko.parsers import xml2etree, etree2dict

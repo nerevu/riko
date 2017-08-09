@@ -26,7 +26,7 @@ from __future__ import (
 
 from datetime import datetime as dt
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo

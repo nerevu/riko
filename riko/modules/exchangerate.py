@@ -26,12 +26,10 @@ import pygogo as gogo
 
 from json import loads
 from decimal import Decimal
-from functools import partial
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from ijson import items
 from meza.compat import decode
-from meza.fntools import SleepyDict
 
 from . import processor
 from riko.bado import coroutine, return_value, requests as treq, io

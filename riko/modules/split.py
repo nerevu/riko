@@ -28,7 +28,7 @@ from __future__ import (
 
 from copy import deepcopy
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import operator
 import pygogo as gogo

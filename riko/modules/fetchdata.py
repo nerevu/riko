@@ -29,7 +29,7 @@ from os import path as p
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 from riko.bado import coroutine, return_value, io
