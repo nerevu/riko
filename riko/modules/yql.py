@@ -56,7 +56,7 @@ from riko.bado import coroutine, return_value, util, requests as treq
 
 OPTS = {'ftype': 'none'}
 
-# we use the default format of xml since json loses some structure
+# we use the default format of xml since json looses some structure
 DEFAULTS = {'url': 'http://query.yahooapis.com/v1/public/yql', 'debug': False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
