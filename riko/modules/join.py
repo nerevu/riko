@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.join import pipe
+        >>>
         >>> items = ({'x': 'foo', 'sum': x} for x in range(5))
         >>> other = ({'x': 'foo', 'count': x + 5} for x in range(5))
         >>> joined = pipe(items, other=other)

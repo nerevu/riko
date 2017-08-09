@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.sum import pipe
+        >>>
         >>> stream = pipe({'content': x} for x in range(5))
         >>> next(stream) == {'sum': Decimal('10')}
         True

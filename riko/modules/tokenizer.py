@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.tokenizer import pipe
+        >>>
         >>> item = {'content': 'Once,twice,thrice'}
         >>> next(pipe(item))['tokenizer'][0] == {'content': 'Once'}
         True

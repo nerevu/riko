@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.slugify import pipe
+        >>>
         >>> next(pipe({'content': 'hello world'}))['slugify'] == 'hello-world'
         True
 

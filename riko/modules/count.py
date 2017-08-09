@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.count import pipe
+        >>>
         >>> next(pipe({'x': x} for x in range(5))) == {'count': 5}
         True
 

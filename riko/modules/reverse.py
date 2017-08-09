@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.reverse import pipe
+        >>>
         >>> next(pipe({'x': x} for x in range(5))) == {'x': 4}
         True
 

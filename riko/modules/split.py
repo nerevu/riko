@@ -13,6 +13,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.split import pipe
+        >>>
         >>> stream1, stream2 = pipe({'x': x} for x in range(5))
         >>> next(stream1) == {'x': 0}
         True

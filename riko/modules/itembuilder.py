@@ -18,6 +18,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.itembuilder import pipe
+        >>>
         >>> attrs = {'key': 'title', 'value': 'the title'}
         >>> next(pipe(conf={'attrs': attrs}))['title'] == 'the title'
         True

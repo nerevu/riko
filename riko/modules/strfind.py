@@ -10,6 +10,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strfind import pipe
+        >>>
         >>> conf = {'rule': {'find': 'o'}}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['strfind'] == 'hell'

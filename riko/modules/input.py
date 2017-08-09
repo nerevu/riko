@@ -36,6 +36,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.input import pipe
+        >>>
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> next(pipe(conf=conf, inputs={'content': '30'})) == {'content': 30}
         True

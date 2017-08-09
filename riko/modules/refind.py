@@ -10,6 +10,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.refind import pipe
+        >>>
         >>> conf = {'rule': {'find': '[aiou]'}}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['refind'] == 'hell'
