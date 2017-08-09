@@ -24,6 +24,7 @@ Examples:
 
         >>> from riko.modules.dateformat import pipe
         >>> from datetime import date
+        >>>
         >>> next(pipe({'date': date(2015, 5, 4)}))['dateformat']
         '05/04/2015 00:00:00'
 
@@ -36,7 +37,7 @@ from __future__ import (
 
 from time import strftime
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo

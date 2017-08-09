@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strconcat import pipe
+        >>>
         >>> item = {'word': 'hello'}
         >>> part = [{'subkey': 'word'}, {'value': ' world'}]
         >>> next(pipe(item, conf={'part': part}))['strconcat'] == 'hello world'
@@ -26,8 +27,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
-from meza.compat import decode
+from builtins import *  # noqa # pylint: disable=unused-import
 from . import processor
 
 OPTS = {'listize': True, 'extract': 'part'}

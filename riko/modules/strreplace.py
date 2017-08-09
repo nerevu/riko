@@ -14,6 +14,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strreplace import pipe
+        >>>
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['strreplace'] == 'bye world'
@@ -29,7 +30,7 @@ from __future__ import (
 import pygogo as gogo
 
 from functools import reduce
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait

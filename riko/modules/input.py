@@ -36,6 +36,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.input import pipe
+        >>>
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> next(pipe(conf=conf, inputs={'content': '30'})) == {'content': 30}
         True
@@ -49,7 +50,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from . import processor
 from riko.utils import cast
 

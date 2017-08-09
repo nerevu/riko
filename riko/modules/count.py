@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.count import pipe
+        >>>
         >>> next(pipe({'x': x} for x in range(5))) == {'count': 5}
         True
 
@@ -23,7 +24,7 @@ import itertools as it
 import pygogo as gogo
 
 from operator import itemgetter
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import operator
 

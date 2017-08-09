@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.truncate import pipe
+        >>>
         >>> items = ({'x': x} for x in range(5))
         >>> len(list(pipe(items, conf={'count': '4'})))
         4
@@ -25,7 +26,7 @@ from __future__ import (
 
 from itertools import islice
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import operator
 import pygogo as gogo

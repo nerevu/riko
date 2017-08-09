@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.tokenizer import pipe
+        >>>
         >>> item = {'content': 'Once,twice,thrice'}
         >>> next(pipe(item))['tokenizer'][0] == {'content': 'Once'}
         True
@@ -25,7 +26,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from . import processor
 
 OPTS = {'ftype': 'text', 'field': 'content'}

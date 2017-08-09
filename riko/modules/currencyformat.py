@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.currencyformat import pipe
+        >>>
         >>> next(pipe({'content': '100'}))['currencyformat'] == '$100.00'
         True
 
@@ -20,7 +21,7 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from decimal import Decimal
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import  #
 from babel.numbers import format_currency
 
 from . import processor

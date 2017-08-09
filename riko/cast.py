@@ -105,8 +105,7 @@ def cast_date(date_str):
             op = sub if date_str.startswith('-') else add
             date = get_date(mathish, words[0][1:], op)
         elif len(textish) == 2:
-            op = add if date_str.startswith('last') else add
-            date = get_date('%ss' % words[1], 1, op)
+            date = get_date('%ss' % words[1], 1, add)
         elif date_str in DATES:
             date = DATES.get(date_str)
         else:

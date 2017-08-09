@@ -18,7 +18,7 @@ from functools import partial
 
 import itertools as it
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from . import coroutine, return_value, reactor
 from .mock import FakeReactor
 

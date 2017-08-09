@@ -17,6 +17,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.substr import pipe
+        >>>
         >>> conf = {'start': '3', 'length': '4'}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['substr'] == 'lo w'
@@ -29,7 +30,7 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo
