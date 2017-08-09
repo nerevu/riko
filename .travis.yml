@@ -96,7 +96,6 @@ script:
 after_success:
   - if [[ "$TRAVIS_PULL_REQUEST" == "true" ]]; then exit 0; fi
   - if [[ "$TRAVIS_BRANCH" != "master" ]]; then exit 0; fi
-  - if [[ "$TRAVIS_PYTHON_VERSION" != "2.7" ]]; then exit 0; fi
 
 deploy:
   provider: pypi
@@ -106,4 +105,5 @@ deploy:
 
   distributions: sdist bdist_wheel
   on:
+    python: '2.7'
     tags: true
