@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.rssitembuilder import pipe
+        >>>
         >>> conf = {'title': 'the title', 'description': 'description'}
         >>> next(pipe(conf=conf))['y:title'] == 'the title'
         True
@@ -25,7 +26,7 @@ from __future__ import (
 
 from datetime import datetime as dt
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo

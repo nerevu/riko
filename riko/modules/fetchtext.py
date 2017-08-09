@@ -27,9 +27,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from os.path import splitext
-
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 from riko import ENCODING

@@ -8,7 +8,7 @@ Provides date and time helpers
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from datetime import timedelta, time, datetime as dt
+from datetime import timedelta, datetime as dt
 from time import strptime
 
 import pytz
@@ -37,14 +37,15 @@ def gen_tzinfos():
 
 
 def get_date(unit, count, op):
+    new_month = op(TODAY.month, count) % 12 or 12
+
     DATES = {
         'seconds': op(TODAY, timedelta(seconds=count)),
         'minutes': op(TODAY, timedelta(minutes=count)),
         'hours': op(TODAY, timedelta(hours=count)),
         'days': op(TODAY, timedelta(days=count)),
         'weeks': op(TODAY, timedelta(weeks=count)),
-        # TODO: fix for when new month is not in 1..12
-        'months': TODAY.replace(month=op(TODAY.month, count)),
+        'months': TODAY.replace(month=new_month),
         'years': TODAY.replace(year=op(TODAY.year, count)),
     }
 

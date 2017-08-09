@@ -9,15 +9,8 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 import re
-import sys
-import itertools as it
-import time
-import fcntl
 
-from math import isnan
-from functools import partial
 from io import StringIO
-from os import environ, O_NONBLOCK
 from html.entities import name2codepoint
 from html.parser import HTMLParser
 
@@ -28,9 +21,8 @@ except ImportError:
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from riko.utils import fetch
-from mezmorize import Cache
 from meza.fntools import Objectify, remove_keys, listize
 from meza.process import merge
 from meza.compat import decode

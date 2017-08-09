@@ -15,22 +15,22 @@ manager = Manager()
 BASEDIR = p.dirname(__file__)
 
 
-def upload_():
+def _upload():
     """Upload distribution files"""
     check_call(['twine', 'upload', p.join(BASEDIR, 'dist', '*')])
 
 
-def sdist_():
+def _sdist():
     """Create a source distribution package"""
     check_call(p.join(BASEDIR, 'helpers', 'srcdist'))
 
 
-def wheel_():
+def _wheel():
     """Create a wheel package"""
     check_call(p.join(BASEDIR, 'helpers', 'wheel'))
 
 
-def clean_():
+def _clean():
     """Remove Python file and build artifacts"""
     check_call(p.join(BASEDIR, 'helpers', 'clean'))
 
@@ -115,10 +115,10 @@ def test(where=None, stop=None, **kwargs):
 def release():
     """Package and upload a release"""
     try:
-        clean_()
-        sdist_()
-        wheel_()
-        upload_()
+        _clean()
+        _sdist()
+        _wheel()
+        _upload()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -127,9 +127,9 @@ def release():
 def build():
     """Create a source distribution and wheel package"""
     try:
-        clean_()
-        sdist_()
-        wheel_()
+        _clean()
+        _sdist()
+        _wheel()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -138,7 +138,7 @@ def build():
 def upload():
     """Upload distribution files"""
     try:
-        upload_()
+        _upload()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -147,7 +147,7 @@ def upload():
 def sdist():
     """Create a source distribution package"""
     try:
-        sdist_()
+        _sdist()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -156,7 +156,7 @@ def sdist():
 def wheel():
     """Create a wheel package"""
     try:
-        wheel_()
+        _wheel()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -165,7 +165,7 @@ def wheel():
 def clean():
     """Remove Python file and build artifacts"""
     try:
-        clean_()
+        _clean()
     except CalledProcessError as e:
         exit(e.returncode)
 

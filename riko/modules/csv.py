@@ -24,14 +24,14 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from meza.io import read_csv
 from meza.process import merge
 
 from . import processor
 from riko import ENCODING
 from riko.bado import coroutine, return_value, io
-from riko.utils import get_response_encoding, fetch, auto_close, get_abspath
+from riko.utils import fetch, auto_close, get_abspath
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {

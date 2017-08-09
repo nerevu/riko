@@ -13,6 +13,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.uniq import pipe
+        >>>
         >>> items = ({'x': x, 'mod': x % 2} for x in range(5))
         >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
         ...     {'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
@@ -28,7 +29,7 @@ from __future__ import (
 import pygogo as gogo
 
 from collections import deque
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from . import operator
 
 OPTS = {}

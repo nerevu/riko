@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.sort import pipe
+        >>>
         >>> items = [{'content': 'b'}, {'content': 'a'}, {'content': 'c'}]
         >>> next(pipe(items)) == {'content': 'a'}
         True
@@ -24,7 +25,7 @@ import pygogo as gogo
 
 from functools import reduce
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import operator
 from riko.bado import itertools as ait

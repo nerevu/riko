@@ -12,7 +12,7 @@ User input
 Some workflows require user input (via the ``pipeinput`` pipe). By default,
 ``pipeinput`` prompts the user via the console, but in some situations this may
 not be appropriate, e.g., testing or integrating with a website. In such cases,
-the input values can instead be read from the workflow's ``inputs`` kwarg (a
+the input values can instead be read from the workflow's ``inputs`` kwargs (a
 set of values passed into every pipe).
 
 .. code-block:: python

@@ -18,6 +18,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.filter import pipe
+        >>>
         >>> items = ({'x': x} for x in range(5))
         >>> rule = {'field': 'x', 'op': 'is', 'value': 3}
         >>> next(pipe(items, conf={'rule': rule})) == {'x': 3}
@@ -37,7 +38,7 @@ from decimal import Decimal, InvalidOperation
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from . import operator
 from riko.parsers import parse_conf
 from riko.cast import cast_date

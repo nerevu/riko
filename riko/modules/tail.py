@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.tail import pipe
+        >>>
         >>> items = ({'x': x} for x in range(5))
         >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
         True
@@ -25,7 +26,7 @@ from __future__ import (
 
 from collections import deque
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import operator
 import pygogo as gogo

@@ -10,6 +10,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strfind import pipe
+        >>>
         >>> conf = {'rule': {'find': 'o'}}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['strfind'] == 'hell'
@@ -25,7 +26,7 @@ from __future__ import (
 import pygogo as gogo
 
 from functools import reduce
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait

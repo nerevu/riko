@@ -10,7 +10,6 @@ from functools import partial
 from riko import get_path
 from riko.bado import coroutine
 from riko.collections import SyncPipe, AsyncPipe
-from riko.modules import union
 
 BR = {'find': '<br>'}
 DEF_CUR_CODE = 'USD'

@@ -9,12 +9,11 @@ Provides example pipeline tests.
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import ctypes
 import nose.tools as nt
 
 from importlib import import_module
 from decimal import Decimal
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 
 def setup_module():

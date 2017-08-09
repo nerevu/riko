@@ -18,10 +18,6 @@ from functools import partial
 from operator import itemgetter
 from os import getenv, O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
-from decimal import Decimal
-from json import loads
-from codecs import iterdecode
-from contextlib import contextmanager
 from subprocess import call
 
 from six.moves.urllib.request import urlopen
@@ -34,7 +30,7 @@ try:
 except ImportError:
     import builtins as _builtins
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from mezmorize import Cache
 from meza.io import reencode
 from meza.process import merge
@@ -60,14 +56,24 @@ CACHE_CONFIGS = {
     'simple': {'CACHE_TYPE': 'simple'},
     'filesystem': {
         'CACHE_TYPE': 'filesystem',
-        'CACHE_DIR': getenv('CACHE_DIR'),
+        'CACHE_DIR': getenv('CACHE_DIR')
     },
     'memcached': {
-        'CACHE_TYPE': 'spreadsaslmemcachedcache',
+        'CACHE_TYPE': 'memcached',
+        'CACHE_MEMCACHED_SERVERS': [servers]
+    },
+    'saslmemcached': {
+        'CACHE_TYPE': 'saslmemcached',
         'CACHE_MEMCACHED_SERVERS': [servers],
         'CACHE_MEMCACHED_USERNAME': getenv('MEMCACHIER_USERNAME'),
         'CACHE_MEMCACHED_PASSWORD': getenv('MEMCACHIER_PASSWORD')
     },
+    'spreadsaslmemcachedcache': {
+        'CACHE_TYPE': 'spreadsaslmemcachedcache',
+        'CACHE_MEMCACHED_SERVERS': [servers],
+        'CACHE_MEMCACHED_USERNAME': getenv('MEMCACHIER_USERNAME'),
+        'CACHE_MEMCACHED_PASSWORD': getenv('MEMCACHIER_PASSWORD')
+    }
 }
 
 pgrep = lambda process: call(['pgrep', process]) == 0
@@ -76,7 +82,9 @@ pgrep = lambda process: call(['pgrep', process]) == 0
 def get_cache_type():
     memcached = pylibmc and pgrep('memcache')
 
-    if memcached:
+    if memcached and getenv('MEMCACHIER_USERNAME'):
+        cache_type = 'saslmemcached'
+    elif memcached:
         cache_type = 'memcached'
     elif getenv('CACHE_DIR'):
         cache_type = 'filesystem'

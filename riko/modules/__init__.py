@@ -12,7 +12,7 @@ import pygogo as gogo
 from functools import partial, wraps
 from itertools import chain
 
-from builtins import iter, len, list, map, next, sum as _sum
+from builtins import iter, list, map, next
 
 from riko.bado import coroutine, return_value
 from riko.cast import cast
@@ -430,6 +430,7 @@ class operator(object):
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
+            >>> from builtins import sum as _sum, len
             >>> from riko.bado import react, util, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
@@ -504,6 +505,7 @@ class operator(object):
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
+            >>> from builtins import sum as _sum, len
             >>> from riko.bado import react, _issync
             >>> from riko.bado.mock import FakeReactor
             >>> from riko.bado.util import maybeDeferred

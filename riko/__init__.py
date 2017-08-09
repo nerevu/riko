@@ -34,9 +34,9 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from os import path as p
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
-__version__ = '0.51.0'
+__version__ = '0.52.0'
 
 __title__ = 'riko'
 __package_name__ = 'riko'

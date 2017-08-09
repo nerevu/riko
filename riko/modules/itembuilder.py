@@ -18,6 +18,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.itembuilder import pipe
+        >>>
         >>> attrs = {'key': 'title', 'value': 'the title'}
         >>> next(pipe(conf={'attrs': attrs}))['title'] == 'the title'
         True
@@ -29,7 +30,7 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo

@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.slugify import pipe
+        >>>
         >>> next(pipe({'content': 'hello world'}))['slugify'] == 'hello-world'
         True
 
@@ -21,7 +22,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from slugify import slugify
 from . import processor
 

@@ -31,13 +31,13 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 from meza.compat import encode
 
 from . import processor
 from riko.bado import coroutine, return_value, io
 from riko.parsers import get_text
-from riko.utils import betwix, get_response_encoding, fetch, get_abspath
+from riko.utils import betwix, fetch, get_abspath
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger

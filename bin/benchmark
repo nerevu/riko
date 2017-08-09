@@ -14,7 +14,7 @@ from multiprocessing import Pool
 from time import time, sleep
 from itertools import chain
 
-from builtins import *
+from builtins import *  # noqa # pylint: disable=unused-import
 
 sys.path.append('../riko')
 
