@@ -50,7 +50,9 @@ MEMOIZE_DEFAULTS = {'CACHE_THRESHOLD': 2048, 'CACHE_DEFAULT_TIMEOUT': 3600}
 DEF_NS = 'https://github.com/nerevu/riko'
 DEF_MCS = 'localhost:11211'
 
-servers = getenv('MEMCACHIER_SERVERS') or getenv('MEMCACHE_SERVERS', DEF_MCS)
+MC_SERVERS = getenv('MEMCACHIER_SERVERS') or getenv('MEMCACHE_SERVERS', DEF_MCS)
+MC_USERNAME = getenv('MEMCACHIER_USERNAME')
+MC_PASSWORD = getenv('MEMCACHIER_PASSWORD')
 
 CACHE_CONFIGS = {
     'simple': {'CACHE_TYPE': 'simple'},
@@ -60,29 +62,39 @@ CACHE_CONFIGS = {
     },
     'memcached': {
         'CACHE_TYPE': 'memcached',
-        'CACHE_MEMCACHED_SERVERS': [servers]
+        'CACHE_MEMCACHED_SERVERS': [MC_SERVERS]
     },
     'saslmemcached': {
         'CACHE_TYPE': 'saslmemcached',
-        'CACHE_MEMCACHED_SERVERS': [servers],
-        'CACHE_MEMCACHED_USERNAME': getenv('MEMCACHIER_USERNAME'),
-        'CACHE_MEMCACHED_PASSWORD': getenv('MEMCACHIER_PASSWORD')
+        'CACHE_MEMCACHED_SERVERS': [MC_SERVERS],
+        'CACHE_MEMCACHED_USERNAME': MC_USERNAME,
+        'CACHE_MEMCACHED_PASSWORD': MC_PASSWORD
     },
     'spreadsaslmemcachedcache': {
         'CACHE_TYPE': 'spreadsaslmemcachedcache',
-        'CACHE_MEMCACHED_SERVERS': [servers],
-        'CACHE_MEMCACHED_USERNAME': getenv('MEMCACHIER_USERNAME'),
-        'CACHE_MEMCACHED_PASSWORD': getenv('MEMCACHIER_PASSWORD')
+        'CACHE_MEMCACHED_SERVERS': [MC_SERVERS],
+        'CACHE_MEMCACHED_USERNAME': MC_USERNAME,
+        'CACHE_MEMCACHED_PASSWORD': MC_PASSWORD
     }
 }
 
-pgrep = lambda process: call(['pgrep', process]) == 0
+HEROKU_PROCESSES = {
+    'postgres': ['DATABASE_URL'],
+    'redis': ['REDIS_URL', 'REDISTOGO_URL'],
+    'memcache': ['MEMCACHIER_SERVERS', 'MEMCACHE_SERVERS'],
+}
+
+
+def pgrep(process):
+    envs = HEROKU_PROCESSES.get(process, [])
+    any_env = any(map(getenv, envs))
+    return any_env or call(['pgrep', process]) == 0
 
 
 def get_cache_type():
     memcached = pylibmc and pgrep('memcache')
 
-    if memcached and getenv('MEMCACHIER_USERNAME'):
+    if memcached and MC_USERNAME:
         cache_type = 'saslmemcached'
     elif memcached:
         cache_type = 'memcached'
