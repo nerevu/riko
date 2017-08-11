@@ -78,7 +78,17 @@ CACHE_CONFIGS = {
     }
 }
 
-pgrep = lambda process: call(['pgrep', process]) == 0
+HEROKU_PROCESSES = {
+    'postgres': ['DATABASE_URL'],
+    'redis': ['REDIS_URL', 'REDISTOGO_URL'],
+    'memcache': ['MEMCACHIER_SERVERS', 'MEMCACHE_SERVERS'],
+}
+
+
+def pgrep(process):
+    envs = HEROKU_PROCESSES.get(process, [])
+    any_env = any(map(getenv, envs))
+    return any_env or call(['pgrep', process]) == 0
 
 
 def get_cache_type():
