@@ -4,9 +4,10 @@
 from __future__ import absolute_import, division, print_function
 
 import sys
-import pkutils
 
 from os import path as p
+
+import pkutils
 
 try:
     from setuptools import setup, find_packages
