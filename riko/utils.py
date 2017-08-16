@@ -114,18 +114,26 @@ def multi_try(source, zipped, default=None):
 def memoize(*args, **kwargs):
     _cache_type = kwargs.get('cache_type', 'simple')
     namespace = kwargs.get('namespace', DEF_NS)
+    client_name = kwargs.get('preferred_memcache')
 
-    ckwargs = {
-        'CACHE_DEFAULT_TIMEOUT': kwargs.get('cache_default_timeout'),
-        'CACHE_THRESHOLD': kwargs.get('cache_threshold'),
-        'CACHE_TIMEOUT': kwargs.get('cache_timeout')}
+    cwhitelist = (
+        'cache_default_timeout', 'cache_threshold', 'cache_timeout',
+        'cache_options')
 
+    citems = dfilter(kwargs, blacklist=cwhitelist, inverse=True).items()
+
+    if client_name:
+        CACHE_OPTIONS = citems.get('CACHE_OPTIONS', {})
+        CACHE_OPTIONS['preferred_memcache'] = client_name
+        citems['CACHE_OPTIONS'] = CACHE_OPTIONS
+
+    ckwargs = {k.upper(): v for k, v in citems}
     cache_type = get_cache_type() if _cache_type == 'auto' else _cache_type
     config = get_cache_config(cache_type, **ckwargs)
     cache = Cache(namespace=namespace, **config)
 
-    whitelist = ('timeout', 'make_name', 'unless')
-    mkwargs = dfilter(kwargs, blacklist=whitelist, inverse=True)
+    mwhitelist = ('timeout', 'make_name', 'unless')
+    mkwargs = dfilter(kwargs, blacklist=mwhitelist, inverse=True)
     return cache.memoize(*args, **mkwargs)
 
 
