@@ -4,9 +4,10 @@
 from __future__ import absolute_import, division, print_function
 
 import sys
-import pkutils
 
 from os import path as p
+
+import pkutils
 
 try:
     from setuptools import setup, find_packages
@@ -83,7 +84,6 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: Implementation :: CPython',
