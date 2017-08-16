@@ -2,7 +2,6 @@ sudo: false
 language: python
 python:
   - 2.7
-  - 3.4
   - 3.5
   - 3.6
   - pypy
@@ -46,12 +45,12 @@ branches:
 before_install:
   - |
       if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then
-        export PYPY_BUILD="pypy-5.1.1"
-        export PYPY_EXEC="pypy-5.1.1"
+        export PYPY_BUILD="pypy2.7-5.8.0"
+        export PYPY_EXEC="pypy2-v5.8.0"
       elif [ "$TRAVIS_PYTHON_VERSION" == "pypy3" ]; then
         # https://github.com/pyenv/pyenv/tree/master/plugins/python-build/share/python-build
-        export PYPY_BUILD="pypy3.3-5.5-alpha"
-        export PYPY_EXEC="pypy3-v5.5.0"
+        export PYPY_BUILD="pypy3.5-5.8.0"
+        export PYPY_EXEC="pypy3-v5.8.0"
       fi
   - |
       if [[ "$TRAVIS_PYTHON_VERSION" == "pypy"* ]]; then
