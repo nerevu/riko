@@ -16,9 +16,8 @@ import fcntl
 from math import isnan
 from functools import partial
 from operator import itemgetter
-from os import getenv, O_NONBLOCK, path as p
+from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
-from subprocess import call
 
 from six.moves.urllib.request import urlopen
 
@@ -32,78 +31,16 @@ except ImportError:
 
 from builtins import *  # noqa # pylint: disable=unused-import
 from mezmorize import Cache
+from mezmorize.utils import get_cache_config, get_cache_type
 from meza.io import reencode
-from meza.process import merge
 from meza.compat import decode
-from meza.fntools import SleepyDict
+from meza.fntools import SleepyDict, dfilter
 from riko import ENCODING
 from riko.cast import cast
 
-try:
-    import pylibmc
-except ImportError:
-    pylibmc = None
-
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
-MEMOIZE_DEFAULTS = {'CACHE_THRESHOLD': 2048, 'CACHE_DEFAULT_TIMEOUT': 3600}
 DEF_NS = 'https://github.com/nerevu/riko'
-DEF_MCS = 'localhost:11211'
-
-MC_SERVERS = getenv('MEMCACHIER_SERVERS') or getenv('MEMCACHE_SERVERS', DEF_MCS)
-MC_USERNAME = getenv('MEMCACHIER_USERNAME')
-MC_PASSWORD = getenv('MEMCACHIER_PASSWORD')
-
-CACHE_CONFIGS = {
-    'simple': {'CACHE_TYPE': 'simple'},
-    'filesystem': {
-        'CACHE_TYPE': 'filesystem',
-        'CACHE_DIR': getenv('CACHE_DIR')
-    },
-    'memcached': {
-        'CACHE_TYPE': 'memcached',
-        'CACHE_MEMCACHED_SERVERS': [MC_SERVERS]
-    },
-    'saslmemcached': {
-        'CACHE_TYPE': 'saslmemcached',
-        'CACHE_MEMCACHED_SERVERS': [MC_SERVERS],
-        'CACHE_MEMCACHED_USERNAME': MC_USERNAME,
-        'CACHE_MEMCACHED_PASSWORD': MC_PASSWORD
-    },
-    'spreadsaslmemcachedcache': {
-        'CACHE_TYPE': 'spreadsaslmemcachedcache',
-        'CACHE_MEMCACHED_SERVERS': [MC_SERVERS],
-        'CACHE_MEMCACHED_USERNAME': MC_USERNAME,
-        'CACHE_MEMCACHED_PASSWORD': MC_PASSWORD
-    }
-}
-
-HEROKU_PROCESSES = {
-    'postgres': ['DATABASE_URL'],
-    'redis': ['REDIS_URL', 'REDISTOGO_URL'],
-    'memcache': ['MEMCACHIER_SERVERS', 'MEMCACHE_SERVERS'],
-}
-
-
-def pgrep(process):
-    envs = HEROKU_PROCESSES.get(process, [])
-    any_env = any(map(getenv, envs))
-    return any_env or call(['pgrep', process]) == 0
-
-
-def get_cache_type():
-    memcached = pylibmc and pgrep('memcache')
-
-    if memcached and MC_USERNAME:
-        cache_type = 'saslmemcached'
-    elif memcached:
-        cache_type = 'memcached'
-    elif getenv('CACHE_DIR'):
-        cache_type = 'filesystem'
-    else:
-        cache_type = 'simple'
-
-    return cache_type
 
 
 def get_abspath(url):
@@ -175,19 +112,21 @@ def multi_try(source, zipped, default=None):
 
 
 def memoize(*args, **kwargs):
-    _cache_type = kwargs.pop('cache_type', 'simple')
-    namespace = kwargs.pop('namespace', DEF_NS)
+    _cache_type = kwargs.get('cache_type', 'simple')
+    namespace = kwargs.get('namespace', DEF_NS)
+
+    ckwargs = {
+        'CACHE_DEFAULT_TIMEOUT': kwargs.get('cache_default_timeout'),
+        'CACHE_THRESHOLD': kwargs.get('cache_threshold'),
+        'CACHE_TIMEOUT': kwargs.get('cache_timeout')}
+
     cache_type = get_cache_type() if _cache_type == 'auto' else _cache_type
-    config = merge([MEMOIZE_DEFAULTS, CACHE_CONFIGS[cache_type]])
-
-    if 'CACHE_TIMEOUT' in kwargs:
-        config['CACHE_TIMEOUT'] = kwargs.pop('CACHE_TIMEOUT')
-
-    if 'CACHE_THRESHOLD' in kwargs:
-        config['CACHE_THRESHOLD'] = kwargs.pop('CACHE_THRESHOLD')
-
+    config = get_cache_config(cache_type, **ckwargs)
     cache = Cache(namespace=namespace, **config)
-    return cache.memoize(*args, **kwargs)
+
+    whitelist = ('timeout', 'make_name', 'unless')
+    mkwargs = dfilter(kwargs, blacklist=whitelist, inverse=True)
+    return cache.memoize(*args, **mkwargs)
 
 
 def get_response_encoding(response, def_encoding=ENCODING):
@@ -228,22 +167,17 @@ class fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
     def __init__(self, url=None, params=None, decode=False, **kwargs):
         delay = kwargs.get('delay')
-        mkwargs = {'CACHE_TIMEOUT': kwargs.get('cache_timeout')}
         params = params or {}
 
         self.r = None
         self.context = SleepyDict(delay=delay) if delay else None
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
-        self.cache_type = kwargs.get('cache_type')
+        self.cache_type = kwargs.pop('cache_type', None)
         self.timeout = kwargs.get('timeout')
 
-        if kwargs.get('cache_threshold'):
-            mkwargs['CACHE_THRESHOLD'] = kwargs['cache_threshold']
-
         if self.cache_type:
-            mkwargs['cache_type'] = self.cache_type
-            opener = memoize(**mkwargs)(self.open)
+            opener = memoize(cache_type=self.cache_type, **kwargs)(self.open)
         else:
             opener = self.open
 
