@@ -135,7 +135,15 @@ def memoize(*args, **kwargs):
 
     mwhitelist = ('timeout', 'make_name', 'unless')
     mkwargs = dfilter(kwargs, blacklist=mwhitelist, inverse=True)
-    return cache.memoize(*args, **mkwargs)
+    memoizer = cache.memoize(*args, **mkwargs)
+    memoizer.cache_type = cache.cache_type
+
+    if cache.is_memcached:
+        memoizer.client_name = cache.cache.client_name
+    else:
+        memoizer.client_name = None
+
+    return memoizer
 
 
 def get_response_encoding(response, def_encoding=ENCODING):
@@ -185,7 +193,15 @@ class fetch(TextIOBase):
         self.cache_type = kwargs.get('cache_type')
         self.timeout = kwargs.get('timeout')
 
-        opener = memoize(**kwargs)(self.open) if self.cache_type else self.open
+        if self.cache_type:
+            memoizer = memoize(**kwargs)
+            opener = memoizer(self.open)
+            self.cache_type = memoizer.cache_type
+            self.client_name = memoizer.client_name
+        else:
+            opener = self.open
+            self.cache_type = self.client_name = None
+
         response = opener(get_abspath(url), **params)
         wrapper = StringIO if self.decode else BytesIO
         f = wrapper(response) if self.cache_type else response
