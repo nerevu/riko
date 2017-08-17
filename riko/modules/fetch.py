@@ -188,7 +188,12 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from riko import get_path
         >>>
-        >>> keys = next(pipe(conf={'url': get_path('feed.xml')})).keys()
+        >>> url = get_path('feed.xml')
+        >>> keys = next(pipe(conf={'url': url})).keys()
+        >>> set(keys).issuperset(intersection)
+        True
+        >>>
+        >>> keys = next(pipe(conf={'url': url, 'memoize': True})).keys()
         >>> set(keys).issuperset(intersection)
         True
     """
