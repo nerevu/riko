@@ -121,13 +121,13 @@ def memoize(*args, **kwargs):
         'cache_options')
 
     citems = dfilter(kwargs, blacklist=cwhitelist, inverse=True).items()
+    ckwargs = {k.upper(): v for k, v in citems}
 
     if client_name:
-        CACHE_OPTIONS = citems.get('CACHE_OPTIONS', {})
+        CACHE_OPTIONS = ckwargs.get('CACHE_OPTIONS', {})
         CACHE_OPTIONS['preferred_memcache'] = client_name
-        citems['CACHE_OPTIONS'] = CACHE_OPTIONS
+        ckwargs['CACHE_OPTIONS'] = CACHE_OPTIONS
 
-    ckwargs = {k.upper(): v for k, v in citems}
     cache_type = get_cache_type() if _cache_type == 'auto' else _cache_type
     config = get_cache_config(cache_type, **ckwargs)
     cache = Cache(namespace=namespace, **config)
@@ -181,14 +181,10 @@ class fetch(TextIOBase):
         self.context = SleepyDict(delay=delay) if delay else None
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
-        self.cache_type = kwargs.pop('cache_type', None)
+        self.cache_type = kwargs.get('cache_type')
         self.timeout = kwargs.get('timeout')
 
-        if self.cache_type:
-            opener = memoize(cache_type=self.cache_type, **kwargs)(self.open)
-        else:
-            opener = self.open
-
+        opener = memoize(**kwargs)(self.open) if self.cache_type else self.open
         response = opener(get_abspath(url), **params)
         wrapper = StringIO if self.decode else BytesIO
         f = wrapper(response) if self.cache_type else response
@@ -224,12 +220,12 @@ class fetch(TextIOBase):
             if self.decode:
                 encoding = get_response_encoding(r, self.def_encoding)
 
-                if self.cache_type:
+                if text:
                     response = decode(text, encoding)
                 else:
                     response = reencode(r.fp, encoding, decode=True)
             else:
-                response = text if self.cache_type else r
+                response = text or r
 
         self.r = r
         return response
