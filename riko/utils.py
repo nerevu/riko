@@ -195,6 +195,15 @@ def memoize(*args, **kwargs):
     return memoizer
 
 
+def get_response_content_type(response):
+    try:
+        content_type = response.getheader('Content-Type', '')
+    except AttributeError:
+        content_type = response.headers.get('Content-Type', '')
+
+    return content_type.lower()
+
+
 def get_response_encoding(response, def_encoding=ENCODING):
     info = response.info()
 
@@ -208,8 +217,8 @@ def get_response_encoding(response, def_encoding=ENCODING):
     if not encoding and hasattr(info, 'get_content_charset'):
         encoding = info.get_content_charset()
 
-    if not encoding and hasattr(response, 'getheader'):
-        content_type = response.getheader('Content-Type', '')
+    if not encoding:
+        content_type = get_response_content_type(response)
 
         if 'charset' in content_type:
             ctype = content_type.split('=')[1]
@@ -292,6 +301,15 @@ class fetch(TextIOBase):
                     response = reencode(r.fp, encoding, decode=True)
             else:
                 response = text or r
+
+        content_type = get_response_content_type(r)
+
+        if 'xml' in content_type:
+            self.ext = 'xml'
+        elif 'json' in content_type:
+            self.ext = 'json'
+        else:
+            self.ext = content_type.split('/')[1].split(';')[0]
 
         self.r = r
         return response

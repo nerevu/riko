@@ -120,6 +120,7 @@ def parser(_, objconf, skip=False, **kwargs):
         ext = p.splitext(url)[1].lstrip('.')
 
         with fetch(**objconf) as f:
+            ext = ext or f.ext
             stream = any2dict(f, ext, objconf.html5, path=objconf.path)
 
     return stream
