@@ -117,9 +117,6 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        if objconf.memoize and not objconf.cache_type:
-            objconf.cache_type = 'auto'
-
         parsed = parse_rss(**objconf)
         stream = gen_entries(parsed)
 

@@ -178,9 +178,6 @@ def parser(base, objconf, skip=False, **kwargs):
     else:
         decode = objconf.url.startswith('http')
 
-        if objconf.memoize and not objconf.cache_type:
-            objconf.cache_type = 'auto'
-
         with fetch(decode=decode, **objconf) as f:
             json = next(items(f, ''))
 

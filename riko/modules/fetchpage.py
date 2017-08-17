@@ -135,9 +135,6 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        if objconf.memoize and not objconf.cache_type:
-            objconf.cache_type = 'auto'
-
         with fetch(decode=True, **objconf) as f:
             sliced = betwix(f, objconf.start, objconf.end, True)
             content = '\n'.join(sliced)

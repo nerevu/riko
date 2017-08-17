@@ -112,7 +112,8 @@ def multi_try(source, zipped, default=None):
 
 
 def memoize(*args, **kwargs):
-    _cache_type = kwargs.get('cache_type', 'simple')
+    _cache_type = kwargs.get('cache_type')
+    spread = kwargs.get('spread')
     namespace = kwargs.get('namespace', DEF_NS)
     client_name = kwargs.get('preferred_memcache')
 
@@ -128,7 +129,7 @@ def memoize(*args, **kwargs):
         CACHE_OPTIONS['preferred_memcache'] = client_name
         ckwargs['CACHE_OPTIONS'] = CACHE_OPTIONS
 
-    cache_type = get_cache_type() if _cache_type == 'auto' else _cache_type
+    cache_type = get_cache_type(cache=_cache_type, spread=spread)
     config = get_cache_config(cache_type, **ckwargs)
     cache = Cache(namespace=namespace, **config)
 

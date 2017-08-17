@@ -170,9 +170,6 @@ def parser(_, objconf, skip=False, **kwargs):
         ext = splitext(url)[1].lstrip('.')
         xml = (ext == 'xml') or objconf.strict
 
-        if objconf.memoize and not objconf.cache_type:
-            objconf.cache_type = 'auto'
-
         with fetch(**objconf) as f:
             root = xml2etree(f, xml=xml, html5=objconf.html5).getroot()
             elements = xpath(root, objconf.xpath)
