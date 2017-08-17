@@ -121,13 +121,13 @@ def memoize(*args, **kwargs):
         'cache_options')
 
     citems = dfilter(kwargs, blacklist=cwhitelist, inverse=True).items()
+    ckwargs = {k.upper(): v for k, v in citems}
 
     if client_name:
-        CACHE_OPTIONS = citems.get('CACHE_OPTIONS', {})
+        CACHE_OPTIONS = ckwargs.get('CACHE_OPTIONS', {})
         CACHE_OPTIONS['preferred_memcache'] = client_name
-        citems['CACHE_OPTIONS'] = CACHE_OPTIONS
+        ckwargs['CACHE_OPTIONS'] = CACHE_OPTIONS
 
-    ckwargs = {k.upper(): v for k, v in citems}
     cache_type = get_cache_type() if _cache_type == 'auto' else _cache_type
     config = get_cache_config(cache_type, **ckwargs)
     cache = Cache(namespace=namespace, **config)
