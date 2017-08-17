@@ -127,7 +127,7 @@ def memoize(*args, **kwargs):
 
         cache_threshold (int): The max number of keys to store.
         cache_options (dict): Passed as kwargs to the cache backend client.
-        cache_timeout (int): Max number of seconds to wait for response.
+        connect_timeout (int): Max number of seconds to wait for response.
             Default None, e.g., forever.
 
         timeout (int): Number of seconds to store cache result. Default None,
@@ -149,7 +149,7 @@ def memoize(*args, **kwargs):
         >>> rand = get_rand()
         >>> rand == get_rand()
         False
-        >>> memoizer = memoize()
+        >>> memoizer = memoize(timeout=30)
         >>> memoized_get_rand = memoizer(get_rand)
         >>> memoized_rand = memoized_get_rand()
         >>> memoized_rand == memoized_get_rand()
@@ -168,26 +168,22 @@ def memoize(*args, **kwargs):
     """
     _cache_type = kwargs.get('cache_type')
     spread = kwargs.get('spread')
-    client_name = kwargs.get('preferred_memcache')
+    whitelist = {'cache_default_timeout', 'cache_threshold', 'cache_options'}
+    ckwargs = {k.upper(): v for k, v in kwargs.items() if k in whitelist}
 
-    cwhitelist = (
-        'cache_default_timeout', 'cache_threshold', 'cache_timeout',
-        'cache_options')
+    keys = ('preferred_memcache', 'connect_timeout')
+    extra_options = dfilter(kwargs, keys, inverse=True)
 
-    citems = dfilter(kwargs, blacklist=cwhitelist, inverse=True).items()
-    ckwargs = {k.upper(): v for k, v in citems}
-
-    if client_name:
+    if extra_options:
         CACHE_OPTIONS = ckwargs.get('CACHE_OPTIONS', {})
-        CACHE_OPTIONS['preferred_memcache'] = client_name
+        CACHE_OPTIONS.update(extra_options)
         ckwargs['CACHE_OPTIONS'] = CACHE_OPTIONS
 
     cache_type = get_cache_type(cache=_cache_type, spread=spread)
     config = get_cache_config(cache_type, **ckwargs)
     cache = Cache(namespace=DEF_NS, **config)
 
-    mwhitelist = ('timeout', 'unless')
-    mkwargs = dfilter(kwargs, blacklist=mwhitelist, inverse=True)
+    mkwargs = dfilter(kwargs, ('unless', 'timeout'), inverse=True)
     memoizer = cache.memoize(*args, **mkwargs)
     memoizer.cache_type = cache.cache_type
 
