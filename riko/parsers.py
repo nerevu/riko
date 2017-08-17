@@ -208,7 +208,7 @@ def any2dict(f, ext='xml', html5=False, path=None):
     elif ext == 'json':
         content = next(items(f, path))
     else:
-        raise TypeError('Invalid file type %s' % ext)
+        raise TypeError("Invalid file type: '%s'" % ext)
 
     return content
 

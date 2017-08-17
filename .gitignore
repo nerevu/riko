@@ -18,6 +18,7 @@ var
 sdist
 develop-eggs
 lib64
+riko-0.*/*
 
 # Installer logs
 pip-log.txt
