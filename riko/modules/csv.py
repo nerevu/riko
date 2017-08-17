@@ -123,9 +123,6 @@ def parser(_, objconf, skip=False, **kwargs):
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
 
-        if objconf.memoize and not objconf.cache_type:
-            objconf.cache_type = 'auto'
-
         f = fetch(decode=True, **objconf)
         rkwargs = merge([objconf, renamed])
         stream = auto_close(read_csv(f, **rkwargs), f)

@@ -112,8 +112,62 @@ def multi_try(source, zipped, default=None):
 
 
 def memoize(*args, **kwargs):
-    _cache_type = kwargs.get('cache_type', 'simple')
-    namespace = kwargs.get('namespace', DEF_NS)
+    """Use this to cache the result of a function, taking its arguments into
+    account in the cache key.
+
+    `Memoization <http://en.wikipedia.org/wiki/Memoization>`_.
+
+    Kwargs:
+        cache_type (str): The type of cache backend to use. Default depends on
+            installed libraries and running servers.
+
+        spread (bool): Use spreadsaslmemcached if available. Default False.
+        preferred_memcache (str): Use this memcached client if available.
+            Default None.
+
+        cache_threshold (int): The max number of keys to store.
+        cache_options (dict): Passed as kwargs to the cache backend client.
+        cache_timeout (int): Max number of seconds to wait for response.
+            Default None, e.g., forever.
+
+        timeout (int): Number of seconds to store cache result. Default None,
+            e.g., forever. Note: If this is not set, it is overridden by
+            `cache_default_timeout`.
+
+        cache_default_timeout (int): Number of seconds to store cache result if
+            `timeout` is not set.
+
+        unless (func): Don't use cache if this callable is true. Default None.
+
+    Returns:
+        decorator: an iterator of items
+
+    Example:
+        >>> import random
+        >>>
+        >>> get_rand = lambda: random.random()
+        >>> rand = get_rand()
+        >>> rand == get_rand()
+        False
+        >>> memoizer = memoize()
+        >>> memoized_get_rand = memoizer(get_rand)
+        >>> memoized_rand = memoized_get_rand()
+        >>> memoized_rand == memoized_get_rand()
+        True
+        >>> cache_type = memoizer.cache_type
+        >>> client_name = memoizer.client_name
+        >>> client_name == ('pylibmc' if client_name else None)
+        True
+        >>> cache_type == ('memcached' if client_name else 'simple')
+        True
+        >>>
+        >>> memoizer = memoize(preferred_memcache='bmemcached')
+        >>> memoized_get_rand = memoizer(get_rand)
+        >>> memoizer.client_name == ('bmemcached' if client_name else None)
+        True
+    """
+    _cache_type = kwargs.get('cache_type')
+    spread = kwargs.get('spread')
     client_name = kwargs.get('preferred_memcache')
 
     cwhitelist = (
@@ -128,13 +182,21 @@ def memoize(*args, **kwargs):
         CACHE_OPTIONS['preferred_memcache'] = client_name
         ckwargs['CACHE_OPTIONS'] = CACHE_OPTIONS
 
-    cache_type = get_cache_type() if _cache_type == 'auto' else _cache_type
+    cache_type = get_cache_type(cache=_cache_type, spread=spread)
     config = get_cache_config(cache_type, **ckwargs)
-    cache = Cache(namespace=namespace, **config)
+    cache = Cache(namespace=DEF_NS, **config)
 
-    mwhitelist = ('timeout', 'make_name', 'unless')
+    mwhitelist = ('timeout', 'unless')
     mkwargs = dfilter(kwargs, blacklist=mwhitelist, inverse=True)
-    return cache.memoize(*args, **mkwargs)
+    memoizer = cache.memoize(*args, **mkwargs)
+    memoizer.cache_type = cache.cache_type
+
+    if cache.is_memcached:
+        memoizer.client_name = cache.cache.client_name
+    else:
+        memoizer.client_name = None
+
+    return memoizer
 
 
 def get_response_encoding(response, def_encoding=ENCODING):
@@ -184,7 +246,15 @@ class fetch(TextIOBase):
         self.cache_type = kwargs.get('cache_type')
         self.timeout = kwargs.get('timeout')
 
-        opener = memoize(**kwargs)(self.open) if self.cache_type else self.open
+        if self.cache_type:
+            memoizer = memoize(**kwargs)
+            opener = memoizer(self.open)
+            self.cache_type = memoizer.cache_type
+            self.client_name = memoizer.client_name
+        else:
+            opener = self.open
+            self.cache_type = self.client_name = None
+
         response = opener(get_abspath(url), **params)
         wrapper = StringIO if self.decode else BytesIO
         f = wrapper(response) if self.cache_type else response

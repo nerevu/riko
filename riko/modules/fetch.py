@@ -117,9 +117,6 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        if objconf.memoize and not objconf.cache_type:
-            objconf.cache_type = 'auto'
-
         parsed = parse_rss(**objconf)
         stream = gen_entries(parsed)
 
@@ -191,7 +188,12 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from riko import get_path
         >>>
-        >>> keys = next(pipe(conf={'url': get_path('feed.xml')})).keys()
+        >>> url = get_path('feed.xml')
+        >>> keys = next(pipe(conf={'url': url})).keys()
+        >>> set(keys).issuperset(intersection)
+        True
+        >>>
+        >>> keys = next(pipe(conf={'url': url, 'memoize': True})).keys()
         >>> set(keys).issuperset(intersection)
         True
     """

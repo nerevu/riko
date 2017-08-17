@@ -130,9 +130,6 @@ def parser(_, objconf, skip=False, **kwargs):
         rss = autorss.get_rss(url)
         objconf.url = get_abspath(next(rss)['link'])
 
-        if objconf.memoize and not objconf.cache_type:
-            objconf.cache_type = 'auto'
-
         parsed = parse_rss(**objconf)
         stream = gen_entries(parsed)
 
