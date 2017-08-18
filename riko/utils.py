@@ -245,6 +245,7 @@ class fetch(TextIOBase):
         params = params or {}
 
         self.r = None
+        self.ext = None
         self.context = SleepyDict(delay=delay) if delay else None
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
