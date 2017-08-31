@@ -90,7 +90,7 @@ def require(where=None):
 @manager.arg(
     'debug', 'D', help='Use nose.loader debugger', type=bool, default=False)
 @manager.command
-def test(source=None, where=None, stop=None, **kwargs):
+def test(source=None, where=None, stop=False, **kwargs):
     """Run nose, tox, and script tests"""
     opts = '-xv' if stop else '-v'
     opts += ' --with-coverage' if kwargs.get('cover') else ''
@@ -98,7 +98,7 @@ def test(source=None, where=None, stop=None, **kwargs):
     opts += ' --processes=-1' if kwargs.get('parallel') else ''
     opts += ' --detailed-errors' if kwargs.get('verbose') else ''
     opts += ' --debug=nose.loader' if kwargs.get('debug') else ''
-    opts += ' -w {}'.format(where or '')
+    opts += ' -w {}'.format(where) if where else ''
     opts += ' {}'.format(source) if source else ''
 
     try:
