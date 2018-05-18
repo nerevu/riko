@@ -105,12 +105,12 @@ class DotDict(dict):
             return
 
         _dict = dict(data)
-        dot_keys = [k for k in _dict if '.' in k]
+        dot_keys = [d for d in _dict if '.' in d]
 
         if dot_keys:
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
-            keys = ['.'.join(self._parse_key(k)[:-1]) for k in dot_keys]
+            keys = ['.'.join(self._parse_key(dk)[:-1]) for dk in dot_keys]
             items = ((k, v) for k, v in _dict.items() if k not in keys)
         else:
             items = _dict.items()
