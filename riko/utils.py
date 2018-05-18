@@ -29,7 +29,7 @@ try:
 except ImportError:
     import builtins as _builtins
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from mezmorize import memoize
 from meza.io import reencode
 from meza.compat import decode

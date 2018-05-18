@@ -26,7 +26,7 @@ import pygogo as gogo
 
 from operator import itemgetter
 from decimal import Decimal
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
 

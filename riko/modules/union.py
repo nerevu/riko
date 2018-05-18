@@ -26,7 +26,7 @@ from __future__ import (
 import pygogo as gogo
 from itertools import chain
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
 from riko.utils import multiplex

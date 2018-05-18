@@ -37,7 +37,7 @@ from __future__ import (
 
 from time import strftime
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo

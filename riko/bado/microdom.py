@@ -26,7 +26,7 @@ import itertools as it
 
 from io import open, BytesIO, StringIO
 from functools import partial
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from meza.compat import encode, decode
 

@@ -27,7 +27,7 @@ import pygogo as gogo
 from json import loads
 from decimal import Decimal
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from ijson import items
 from meza.compat import decode
 

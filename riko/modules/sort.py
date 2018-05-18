@@ -25,7 +25,7 @@ import pygogo as gogo
 
 from functools import reduce
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
 from riko.bado import itertools as ait

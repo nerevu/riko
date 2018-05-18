@@ -57,7 +57,7 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from six.moves.urllib.parse import urljoin, urlencode
 
 from . import processor

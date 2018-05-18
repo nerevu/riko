@@ -24,7 +24,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from six.moves.urllib.parse import urlparse
 from . import processor
 

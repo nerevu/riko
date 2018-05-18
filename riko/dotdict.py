@@ -11,7 +11,7 @@ from __future__ import (
 import pygogo as gogo
 
 from functools import reduce
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 

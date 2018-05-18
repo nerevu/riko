@@ -33,7 +33,7 @@ from __future__ import (
 import signal
 
 from datetime import timedelta
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
 import pygogo as gogo

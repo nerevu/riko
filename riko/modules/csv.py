@@ -24,7 +24,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from meza.io import read_csv
 from meza.process import merge
 
