@@ -15,6 +15,7 @@ from time import gmtime
 from datetime import timedelta
 from calendar import timegm
 from six.moves.urllib.parse import quote, urlparse
+from ast import literal_eval
 
 from dateutil import parser
 from meza.compat import decode
@@ -38,6 +39,18 @@ DATES = {
 TZINFOS = dict(gen_tzinfos())
 
 url_quote = lambda url: quote(url, safe=URL_SAFE)
+
+
+def literal_parse(string):
+    if string.lower() in {'true', 'false'}:
+        parsed = loads(string.lower())
+    else:
+        try:
+            parsed = literal_eval(string)
+        except (ValueError, SyntaxError):
+            parsed = string
+
+    return parsed
 
 
 def cast_url(url_str):
@@ -135,7 +148,7 @@ CAST_SWITCH = {
     'date': {'default': {'date': TODAY}, 'func': cast_date},
     'url': {'default': {}, 'func': cast_url},
     'location': {'default': {}, 'func': cast_location},
-    'bool': {'default': False, 'func': lambda i: bool(loads(i))},
+    'bool': {'default': False, 'func': lambda i: bool(literal_parse(i))},
     'pass': {'default': None, 'func': lambda i: i},
     'none': {'default': None, 'func': lambda _: None},
 }
