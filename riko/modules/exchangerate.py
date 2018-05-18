@@ -27,7 +27,7 @@ import pygogo as gogo
 from json import loads
 from decimal import Decimal
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from ijson import items
 from meza.compat import decode
 
@@ -55,7 +55,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 def parse_response(json):
     resources = json['list']['resources']
     fields = (r['resource']['fields'] for r in resources)
-    return {i['symbol']: Decimal(i['price']) for i in fields}
+    return {i['symbol']: Decimal(i['price']) for i in fields if 'price' in i}
 
 
 def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):

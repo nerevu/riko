@@ -24,7 +24,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from six.moves.urllib.parse import urlparse
 from . import processor
 
@@ -61,6 +61,8 @@ def parser(url, objconf, skip=False, **kwargs):
         stream = kwargs['stream']
     else:
         parsed = urlparse(url)
+
+        # noqa pylint: disable=dict-items-not-iterating
         items = parsed._asdict().items()
         stream = ({'component': k, objconf.parse_key: v} for k, v in items)
 

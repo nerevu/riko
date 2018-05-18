@@ -19,7 +19,7 @@ PARENT_DIR = p.abspath(p.dirname(__file__))
 sys.dont_write_bytecode = True
 py2_requirements = set(pkutils.parse_requirements('py2-requirements.txt'))
 py3_requirements = set(pkutils.parse_requirements('requirements.txt'))
-dev_requirements = set(pkutils.parse_requirements('dev-requirements.txt'))
+dev_requirements = list(pkutils.parse_requirements('dev-requirements.txt'))
 optional = 'optional-requirements.txt'
 opt_requirements = set(pkutils.parse_requirements(optional))
 readme = pkutils.read('README.rst')
@@ -33,17 +33,17 @@ user = 'nerevu'
 
 # Conditional sdist dependencies:
 py2 = sys.version_info.major == 2
-requirements = py2_requirements if py2 else py3_requirements
+requirements = list(py2_requirements if py2 else py3_requirements)
 
 # Conditional bdist_wheel dependencies:
-py2_require = py2_requirements.difference(py3_requirements)
+py2_require = list(py2_requirements.difference(py3_requirements))
 
 # Setup requirements
 setup_require = [r for r in dev_requirements if 'pkutils' in r]
 
 # Optional requirements
-xml_require = {r for r in opt_requirements if not r.lower().startswith('t')}
-async_require = opt_requirements.difference(xml_require)
+xml_require = [r for r in opt_requirements if not r.lower().startswith('t')]
+async_require = list(opt_requirements.difference(xml_require))
 
 setup(
     name=project,

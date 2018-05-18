@@ -21,7 +21,7 @@ except ImportError:
 
 import pygogo as gogo
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from riko.utils import fetch
 from meza.fntools import Objectify, remove_keys, listize
 from meza.process import merge

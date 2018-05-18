@@ -21,7 +21,7 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from decimal import Decimal
-from builtins import *  # noqa # pylint: disable=unused-import  #
+from builtins import *  # noqa pylint: disable=unused-import
 from babel.numbers import format_currency
 
 from . import processor

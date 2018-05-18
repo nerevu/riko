@@ -13,7 +13,7 @@ import nose.tools as nt
 
 from importlib import import_module
 from decimal import Decimal
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 
 def setup_module():

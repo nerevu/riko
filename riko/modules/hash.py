@@ -32,7 +32,7 @@ from __future__ import (
 
 import ctypes
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo

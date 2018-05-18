@@ -25,7 +25,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from chardet import detect
 from meza.compat import decode

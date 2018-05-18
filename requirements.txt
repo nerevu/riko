@@ -5,7 +5,7 @@ meza>=0.37.0,<0.38.0
 Mezmorize>=0.25.0,<0.26.0
 python-dateutil>=2.4.2,<3.0.0
 pygogo>=0.9.0,<0.11.0
-requests>=2.10.0,<3.0.0
+requests>=2.18.4,<3.0.0
 six>=1.10.0,<2.0.0
 html5lib==0.999999999
 pytz>=2016.10

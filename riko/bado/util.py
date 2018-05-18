@@ -18,7 +18,7 @@ from os import environ
 from sys import executable
 from functools import partial
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from riko.parsers import _make_content, entity2text
 

@@ -32,7 +32,7 @@ from __future__ import (
 import pygogo as gogo
 
 from functools import reduce
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 from riko.utils import get_new_rule, substitute, multi_substitute, group_by

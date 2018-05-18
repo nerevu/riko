@@ -30,7 +30,7 @@ import pygogo as gogo
 
 from itertools import product
 
-from builtins import *  # noqa # pylint: disable=unused-import
+from builtins import *  # noqa pylint: disable=unused-import
 from meza.process import merge, join
 
 from . import operator
