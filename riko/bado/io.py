@@ -113,6 +113,9 @@ def async_url_open(url, timeout=0, **kwargs):
 
     f = yield async_get_file(new_url, StringTransport(), **kwargs)
 
+    if not hasattr(f, 'name') and url.startswith('file'):
+        f.name = url.split('://')[1]
+
     if page:
         page.close()
         remove(page.name)
