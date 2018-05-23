@@ -267,10 +267,8 @@ def get_skip(item, skip_if=None, **kwargs):
             value = item.get(_skip['field'], '')
             text = _skip.get('text')
             op = _skip.get('op', 'contains')
-            skip = SKIP_SWITCH[op](text, value) if text else value
-
-            if not _skip.get('include'):
-                skip = not skip
+            match = SKIP_SWITCH[op](text, value) if text else value
+            skip = match if _skip.get('include') else not match
 
             if skip:
                 break
