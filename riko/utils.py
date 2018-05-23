@@ -18,8 +18,8 @@ from functools import partial
 from operator import itemgetter
 from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
-from urllib.error import HTTPError, URLError
 
+from six.moves.urllib.error import HTTPError, URLError
 from six.moves.urllib.request import urlopen
 
 import requests
