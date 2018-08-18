@@ -4,10 +4,10 @@ python:
   - 2.7
   - 3.5
   - 3.6
-  - 3.7
+  - 3.7-dev
   - pypy
   - pypy3
-  
+
 cache:
   directories:
     - ~/.cache/pip
@@ -34,6 +34,12 @@ matrix:
     env: OPTIONAL=true
   - python: pypy3
     env: OPTIONAL=true
+  fast_finish: true
+  allow_failures:
+  - python: 3.7-dev
+    env: OPTIONAL=true
+  - python: 3.7-dev
+    env: OPTIONAL=false
 
 notifications:
   email:
