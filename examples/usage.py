@@ -84,7 +84,7 @@ Fetching feeds
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
-    >>> item['list']['resources'][0]['resource']['fields']['symbol'] == 'KRW=X'
+    >>> 0.7841 < item['rates']['GBP'] < 0.7842
     True
 
     >>> ### Fetch an rss feed ###
