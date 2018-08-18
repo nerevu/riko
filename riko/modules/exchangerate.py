@@ -13,7 +13,7 @@ Examples:
         >>>
         >>> url = get_path('quote.json')
         >>> next(pipe({'content': 'GBP'}, conf={'url': url}))['exchangerate']
-        Decimal('1.545801')
+        Decimal('1.275201')
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -28,6 +28,7 @@ import pygogo as gogo
 
 from json import loads
 from decimal import Decimal
+from os import getenv
 
 from builtins import *  # noqa pylint: disable=unused-import
 from ijson import items
@@ -37,10 +38,8 @@ from . import processor
 from riko.bado import coroutine, return_value, requests as treq, io
 from riko.utils import fetch, get_abspath
 
-EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
-EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
-# EXCHANGE_API = 'https://openexchangerates.org/api/latest.json'
-# PARAMS = {'app_id': OPEN_EXCHANGE_RATES_APP_ID}
+EXCHANGE_API = 'https://openexchangerates.org/api/latest.json'
+PARAMS = {'app_id': getenv('OPEN_EXCHANGE_RATES_APP_ID')}
 
 OPTS = {'field': 'content', 'ftype': 'text'}
 DEFAULTS = {
@@ -55,14 +54,12 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parse_response(json):
-    resources = json['list']['resources']
-    fields = (r['resource']['fields'] for r in resources)
-    return {i['symbol']: Decimal(i['price']) for i in fields if 'price' in i}
+    return {k: Decimal(v) for k, v in json['rates'].items() if v}
 
 
 def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
     def get_rate(currency):
-        rate = rates.get('%s=X' % currency, Decimal('nan'))
+        rate = rates.get(currency, Decimal('nan'))
 
         if not rate:
             logger.warning('rate USD/%s not found in rates' % currency)
@@ -119,7 +116,7 @@ def async_parser(base, objconf, skip=False, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        1.545801
+        1.275201
     """
     same_currency = base == objconf.currency
 
@@ -169,7 +166,7 @@ def parser(base, objconf, skip=False, **kwargs):
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item, 'assign': 'content'}
         >>> parser(item['content'], objconf, **kwargs)
-        Decimal('1.545801')
+        Decimal('1.275201')
     """
     same_currency = base == objconf.currency
 
@@ -184,6 +181,7 @@ def parser(base, objconf, skip=False, **kwargs):
             try:
                 json = next(items(f, ''))
             except Exception as e:
+                f.seek(0)
                 logger.error('Error parsing {url}'.format(**objconf))
                 logger.debug(f.read())
                 logger.error(e)
@@ -250,7 +248,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        1.545801
+        1.275201
     """
     return async_parser(*args, **kwargs)
 
@@ -296,13 +294,13 @@ def pipe(*args, **kwargs):
         >>> conf = {'url': url}
         >>> rate = next(pipe({'content': 'GBP'}, conf=conf))['exchangerate']
         >>> rate
-        Decimal('1.545801')
-        >>> msg = 'There are 1.55 GBPs per USD'
+        Decimal('1.275201')
+        >>> msg = 'There are 1.28 GBPs per USD'
         >>> 'There are %#.2f GBPs per USD' % rate == msg
         True
         >>> conf = {'url': url, 'currency': 'TZS', 'precision': 3}
         >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
-        Decimal('1825.850')
+        Decimal('2282.466')
         >>> conf = {'url': url, 'currency': 'XYZ'}
         >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
         Decimal('NaN')
