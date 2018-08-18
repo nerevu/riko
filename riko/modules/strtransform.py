@@ -10,6 +10,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strtransform import pipe
+        >>>
         >>> conf = {'rule': {'transform': 'title'}}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['strtransform'] == 'Hello World'
@@ -25,7 +26,7 @@ from __future__ import (
 import pygogo as gogo
 
 from functools import reduce
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
@@ -53,7 +54,7 @@ def reducer(word, rule):
 
 
 @coroutine
-def async_parser(word, rules, skip, **kwargs):
+def async_parser(word, rules, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -67,21 +68,20 @@ def async_parser(word, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
+        Deferred: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0])
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'transform': 'title'}}
         ...     rule = Objectify(conf['rule'])
         ...     kwargs = {'stream': item, 'conf': conf}
-        ...     d = async_parser(item['content'], [rule], False, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d = async_parser(item['content'], [rule], **kwargs)
+        ...     return d.addCallbacks(print, logger.error)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -95,11 +95,10 @@ def async_parser(word, rules, skip, **kwargs):
     else:
         value = yield ait.coop_reduce(reducer, rules, word)
 
-    result = (value, skip)
-    return_value(result)
+    return_value(value)
 
 
-def parser(word, rules, skip, **kwargs):
+def parser(word, rules, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -113,21 +112,20 @@ def parser(word, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = {'content': 'hello world'}
         >>> conf = {'rule': {'transform': 'title'}}
         >>> rule = Objectify(conf['rule'])
         >>> args = item['content'], [rule], False
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(*args, **kwargs)[0] == 'Hello World'
+        >>> parser(*args, **kwargs) == 'Hello World'
         True
     """
-    value = kwargs['stream'] if skip else reduce(reducer, rules, word)
-    return value, skip
+    return kwargs['stream'] if skip else reduce(reducer, rules, word)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -154,8 +152,7 @@ def async_pipe(*args, **kwargs):
                     transformer.
 
         assign (str): Attribute to assign parsed content (default: strtransform)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with transformed content
@@ -203,8 +200,7 @@ def pipe(*args, **kwargs):
                     transformer.
 
         assign (str): Attribute to assign parsed content (default: strtransform)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Yields:
         dict: an item with transformed content

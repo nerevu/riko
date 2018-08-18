@@ -38,18 +38,21 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
+
+from riko import autorss
+from riko.utils import gen_entries, get_abspath
+from riko.parsers import parse_rss
 from riko.bado import coroutine, return_value, io
-from riko.lib import utils, autorss
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -62,18 +65,18 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     objconf = Objectify({'url': get_path('bbc.html')})
-        ...     d = async_parser(None, objconf, False, stream={})
+        ...     d = async_parser(None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -86,18 +89,17 @@ def async_parser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
-        rss = yield autorss.asyncGetRSS(url)
-        link = utils.get_abspath(next(rss)['link'])
+        url = get_abspath(objconf.url)
+        rss = yield autorss.async_get_rss(url)
+        link = get_abspath(next(rss)['link'])
         content = yield io.async_url_read(link)
-        parsed = utils.parse_rss(content)
-        stream = utils.gen_entries(parsed)
+        parsed = parse_rss(content)
+        stream = gen_entries(parsed)
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -110,27 +112,28 @@ def parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
-        >>> result, skip = parser(None, objconf, False, stream={})
+        >>> result = parser(None, objconf, stream={})
         >>> next(result)['title'] == 'Using NFC tags in the car'
         True
     """
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         rss = autorss.get_rss(url)
-        link = utils.get_abspath(next(rss)['link'])
-        parsed = utils.parse_rss(link)
-        stream = utils.gen_entries(parsed)
+        objconf.url = get_abspath(next(rss)['link'])
 
-    return stream, skip
+        parsed = parse_rss(**objconf)
+        stream = gen_entries(parsed)
+
+    return stream
 
 
 @processor(isasync=True, **OPTS)

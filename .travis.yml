@@ -1,29 +1,39 @@
 sudo: false
 language: python
 python:
-  - "2.7"
-  - "3.4"
-  - "3.5"
-  - "3.6"
-  - "3.6-dev"
-  - "3.7-dev"
-  - "nightly"
-  - "pypy"
-
+  - 2.7
+  - 3.5
+  - 3.6
+  - 3.7
+  - pypy
+  - pypy3
+  
 cache:
   directories:
     - ~/.cache/pip
 
 env:
+  matrix:
+    - OPTIONAL=true
+    - OPTIONAL=false
   global:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
     - PYTHONHASHSEED=94967295
     - PYPY_GIT=https://github.com/yyuu/pyenv.git
+    - PYENV_VENV_GIT=https://github.com/pyenv/pyenv-virtualenv.git
     - PYENV_ROOT=$HOME/.pyenv
-    - PYPY_VENV=$HOME/virtualenvs/pypy
-    - PYPY_PATH=$PYENV_ROOT/versions/pypy
-    - PYPY_VERSION=5.1.1
+    - PYPY_VENV=$HOME/virtualenvs
+    - PYPY_PATH=$PYENV_ROOT/versions
+    - PATH="$PYENV_ROOT/shims:${PATH}"
+    - PATH="$PYENV_ROOT/bin:${PATH}"
+
+matrix:
+  exclude:
+  - python: pypy
+    env: OPTIONAL=true
+  - python: pypy3
+    env: OPTIONAL=true
 
 notifications:
   email:
@@ -34,58 +44,58 @@ branches:
     - /^v[0-9]/
 
 before_install:
-  - pip install -U pip
-  - pip install wheel
   - |
-      if [[ "$TRAVIS_PYTHON_VERSION" == "pypy" ]]; then
-        if [ -f "$PYENV_ROOT/bin/pyenv" ]; then
-          pushd "$PYENV_ROOT" && git pull && popd
-        else
-          rm -rf "$PYENV_ROOT" && git clone --depth 1 "$PYPY_GIT" "$PYENV_ROOT"
-        fi
-
-        "$PYENV_ROOT/bin/pyenv" install --skip-existing "pypy-$PYPY_VERSION"
-        PYTHON="$PYPY_PATH-$PYPY_VERSION/bin/python"
-        virtualenv --python="$PYTHON" "$PYPY_VENV-$PYPY_VERSION"
-        source "$PYPY_VENV-$PYPY_VERSION/bin/activate"
+      if [ "$TRAVIS_PYTHON_VERSION" == "pypy" ]; then
+        export PYPY_BUILD="pypy2.7-5.8.0"
+        export PYPY_EXEC="pypy2-v5.8.0"
+      elif [ "$TRAVIS_PYTHON_VERSION" == "pypy3" ]; then
+        # https://github.com/pyenv/pyenv/tree/master/plugins/python-build/share/python-build
+        export PYPY_BUILD="pypy3.5-5.8.0"
+        export PYPY_EXEC="pypy3-v5.8.0"
       fi
   - |
-      if [ "$TRAVIS_PYTHON_VERSION" = "pypy3" ]; then
-        export PYPY_VERSION="2.4.0"
-
+      if [[ "$TRAVIS_PYTHON_VERSION" == "pypy"* ]]; then
         if [ -f "$PYENV_ROOT/bin/pyenv" ]; then
           pushd "$PYENV_ROOT" && git pull && popd
         else
           rm -rf "$PYENV_ROOT" && git clone --depth 1 "$PYPY_GIT" "$PYENV_ROOT"
         fi
 
-        "$PYENV_ROOT/bin/pyenv" install --skip-existing "pypy3-$PYPY_VERSION"
-        virtualenv --python="${PYPY_PATH}3-$PYPY_VERSION/bin/python" "${PYPY_VENV}3-$PYPY_VERSION"
-        source "${PYPY_VENV}3-$PYPY_VERSION/bin/activate"
+        export PYENV_VERSION="$PYPY_BUILD"
+        git clone "$PYENV_VENV_GIT" "$PYENV_ROOT"/plugins/pyenv-virtualenv
+        eval "$(pyenv init -)"
+        pyenv deactivate
+        pyenv install --skip-existing "$PYENV_VERSION"
+        pyenv global "$PYENV_VERSION"
+        pyenv virtualenv "$PYENV_VERSION" "$PYPY_EXEC"
+        pyenv activate "$PYPY_EXEC"
+        python --version
+        curl https://bootstrap.pypa.io/get-pip.py | python
+        pip --version
       fi
 
 install:
+  - pip install -U pip
+  - pip install wheel
   - pip install -r dev-requirements.txt
   - |
-      if [[ $TRAVIS_PYTHON_VERSION == *"3"* ]]; then
+      if [[ "$TRAVIS_PYTHON_VERSION" == *"3"* ]]; then
         pip install -r requirements.txt
       else
         pip install -r py2-requirements.txt
       fi
   - |
-      if [[ "$TRAVIS_PYTHON_VERSION" != "pypy"* ]]; then
+      if [[ "$OPTIONAL" == "true" ]]; then
         pip wheel -r optional-requirements.txt
         pip install -r optional-requirements.txt
       fi
 
 script:
-  - manage lint
-  - manage test
+  - manage lint && manage test
 
 after_success:
   - if [[ "$TRAVIS_PULL_REQUEST" == "true" ]]; then exit 0; fi
   - if [[ "$TRAVIS_BRANCH" != "master" ]]; then exit 0; fi
-  - if [[ "$TRAVIS_PYTHON_VERSION" != "2.7" ]]; then exit 0; fi
 
 deploy:
   provider: pypi
@@ -95,4 +105,5 @@ deploy:
 
   distributions: sdist bdist_wheel
   on:
+    python: '2.7'
     tags: true

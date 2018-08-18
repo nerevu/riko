@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.union import pipe
+        >>>
         >>> items = ({'x': x} for x in range(5))
         >>> other1 = ({'x': x + 5} for x in range(5))
         >>> other2 = ({'x': x + 10} for x in range(5))
@@ -25,10 +26,10 @@ from __future__ import (
 import pygogo as gogo
 from itertools import chain
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
-from riko.lib.utils import multiplex
+from riko.utils import multiplex
 
 # disable `dictize` since we do not need to access the configuration
 OPTS = {'dictize': False}

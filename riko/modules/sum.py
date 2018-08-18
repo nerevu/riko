@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.sum import pipe
+        >>>
         >>> stream = pipe({'content': x} for x in range(5))
         >>> next(stream) == {'sum': Decimal('10')}
         True
@@ -25,7 +26,7 @@ import pygogo as gogo
 
 from operator import itemgetter
 from decimal import Decimal
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
 
@@ -58,7 +59,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> stream = ({'content': x} for x in range(5))
         >>> objconf = Objectify({'sum_key': 'content'})
@@ -101,18 +102,18 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'assign' or
-            'sum_key'.
-
-            assign (str): Attribute to assign parsed content. If `sum_key` is
-                set, this is ignored and the group keys are used instead.
-                (default: content)
+        conf (dict): The pipe configuration. May contain the keys 'sum_key' or
+            'group_key'.
 
             sum_key (str): Item attribute to sum. (default: 'content').
 
             group_key (str): Item attribute to sum by. This will group items
                 in the stream by the given key and report a sum for each
                 group (default: None).
+
+        assign (str): Attribute to assign parsed content. If `sum_key` is set,
+            this is ignored and the group keys are used instead. (default:
+            content)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the summed items
@@ -147,18 +148,18 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'assign',
-            'sum_key', or 'group_key'.
-
-            assign (str): Attribute to assign parsed content. If `sum_key` is
-                set, this is ignored and the group keys are used instead.
-                (default: content)
+        conf (dict): The pipe configuration. May contain the keys 'sum_key' or
+            'group_key'.
 
             sum_key (str): Item attribute to sum. (default: 'content').
 
             group_key (str): Item attribute to sum by. This will group items
                 in the stream by the given key and report a sum for each
                 group (default: None).
+
+        assign (str): Attribute to assign parsed content. If `sum_key` is set,
+            this is ignored and the group keys are used instead. (default:
+            content)
 
     Yields:
         dict: the summed items

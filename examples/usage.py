@@ -9,7 +9,7 @@ Word Count
 
     >>> import itertools as it
     >>> from riko import get_path
-    >>> from riko.modules import fetchpage, strreplace, stringtokenizer, count
+    >>> from riko.modules import fetchpage, strreplace, tokenizer, count
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -36,7 +36,7 @@ Word Count
     >>> # just one item, we can safely call `next` without fear of loosing data
     >>> page = next(fetchpage.pipe(conf=fetch_conf))
     >>> replaced = next(strreplace.pipe(page, **replace_kwargs))
-    >>> words = stringtokenizer.pipe(replaced, **token_kwargs)
+    >>> words = tokenizer.pipe(replaced, **token_kwargs)
     >>> counts = count.pipe(words, conf={'count_key': 'content'})
     >>> next(counts) == {'$': 2}
     True
@@ -49,11 +49,11 @@ Word Count
     >>> #
     >>> # `SyncPipe` is a workflow convenience class that enables method
     >>> # chaining and parallel processing
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> stream = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
-    ...     .stringtokenizer(conf={'delimiter': ' '}, emit=True)
+    ...     .tokenizer(conf={'delimiter': ' '}, emit=True)
     ...     .count(conf={'count_key': 'content'})
     ...     .output)
     >>>
@@ -75,7 +75,12 @@ Fetching feeds
     >>> #
     >>> # Note: `get_path` just looks up files in the `data` directory
     >>> # to simplify testing
-    >>> stream = fetchdata.pipe(conf={'url': get_path('quote.json')})
+    >>> conf = {'url': get_path('quote.json')}
+    >>> stream = fetchdata.pipe(conf=conf)
+    >>>
+    >>> # Same thing, but now memoize the url response
+    >>> conf['memoize'] = True
+    >>> stream = fetchdata.pipe(conf=conf)
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
@@ -91,14 +96,16 @@ Fetching feeds
     >>> ### Find all rss links and fetch the feeds ###
     >>> url = get_path('bbc.html')
     >>> entries = feedautodiscovery.pipe(conf={'url': url})
-    >>> urls = (e['link'] for e in entries)
-    >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
+    >>> urls = [e['link'] for e in entries]
+    >>>
+    >>> stream = chain.from_iterable(
+    ...     fetch.pipe(conf={'url': url}) for url in urls)
     >>>
     >>> ### Alternatively, create a SyncCollection ###
     >>> #
     >>> # `SyncCollection` is a url fetching convenience class with support for
     >>> # parallel processing
-    >>> from riko.collections.sync import SyncCollection
+    >>> from riko.collections import SyncCollection
     >>>
     >>> sources = [{'url': url} for url in urls]
     >>> stream = SyncCollection(sources).fetch()
@@ -167,7 +174,7 @@ Synchronous processing
     >>> # `SyncPipe` is a workflow convenience class that enables method
     >>> # chaining, parallel processing, and eliminates the manual `map` and
     >>> # `chain` steps
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> stream = (SyncPipe('fetch', conf=fetch_conf)
     ...     .filter(conf={'rule': filter_rule})
@@ -183,7 +190,7 @@ Synchronous processing
 Parallel processing
 
     >>> from riko import get_path
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -227,7 +234,7 @@ Asynchronous processing
     >>> from riko import get_path
     >>> from riko.bado import coroutine, react, _issync, _isasync
     >>> from riko.bado.mock import FakeReactor
-    >>> from riko.collections.async import AsyncPipe
+    >>> from riko.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -288,14 +295,14 @@ Design Principles
     >>> stream = pipe(item, field='title')
     >>> next(stream) == {'title': 'riko pt. 1', 'hash': _hash}
     True
-    >>> from riko.modules.stringtokenizer import pipe
+    >>> from riko.modules.tokenizer import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> tokenizer_conf = {'delimiter': ' '}
     >>> stream = pipe(item, conf=tokenizer_conf, field='title')
     >>> next(stream) == {
     ...     'title': 'riko pt. 1',
-    ...     'stringtokenizer': [
+    ...     'tokenizer': [
     ...         {'content': 'riko'},
     ...         {'content': 'pt.'},
     ...         {'content': '1'}]}
@@ -339,7 +346,7 @@ Design Principles
     True
 
     # SyncPipe usage
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> _hash = ctypes.c_uint(hash("Let's talk about riko!")).value
     >>> attrs = [
@@ -367,10 +374,10 @@ Design Principles
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from pprint import pprint
-from riko.collections.sync import SyncPipe
+from riko.collections import SyncPipe
 
 attrs = [
     {'key': 'title', 'value': 'riko pt. 1'},

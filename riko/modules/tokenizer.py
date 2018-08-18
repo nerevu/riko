@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.stringtokenizer
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+riko.modules.tokenizer
+~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for splitting a string into an array of strings.
 
 A delimiter string (often just a single character) tells the module where to
@@ -11,9 +11,10 @@ split the input string. The delimiter string doesn't appear in the output.
 Examples:
     basic usage::
 
-        >>> from riko.modules.stringtokenizer import pipe
+        >>> from riko.modules.tokenizer import pipe
+        >>>
         >>> item = {'content': 'Once,twice,thrice'}
-        >>> next(pipe(item))['stringtokenizer'][0] == {'content': 'Once'}
+        >>> next(pipe(item))['tokenizer'][0] == {'content': 'Once'}
         True
 
 Attributes:
@@ -25,7 +26,7 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 from . import processor
 
 OPTS = {'ftype': 'text', 'field': 'content'}
@@ -35,7 +36,7 @@ DEFAULTS = {
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content, objconf, skip, **kwargs):
+def parser(content, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -44,25 +45,26 @@ def parser(content, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> objconf = Objectify({'delimiter': '//', 'token_key': 'token'})
         >>> content = 'Once//twice//thrice//no more'
-        >>> result, skip = parser(content, objconf, False)
+        >>> result = parser(content, objconf)
         >>> next(result) == {'token': 'Once'}
         True
     """
     if skip:
         stream = kwargs['stream']
     else:
-        splits = filter(None, content.split(objconf.delimiter))
+        splits = [s.strip() for s in content.split(objconf.delimiter) if s]
         deduped = set(splits) if objconf.dedupe else splits
-        chunks = sorted(deduped, key=str.lower) if objconf.sort else deduped
+        keyfunc = lambda s: s.lower()
+        chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
         stream = ({objconf.token_key: chunk} for chunk in chunks)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -75,19 +77,23 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'delimiter',
-            'dedupe', 'sort', 'assign', or 'token_key'.
+            'dedupe', 'sort', or 'token_key'.
 
             delimiter (str): the delimiter string (default: ',')
             dedupe (bool): Remove duplicates (default: False).
             sort (bool): Sort tokens (default: False)
-            assign (str): Attribute to assign parsed content (default:
-                stringtokenizer)
 
             token_key (str): Attribute to assign individual tokens (default:
                 content)
 
+        assign (str): Attribute to assign parsed content (default:
+            tokenizer)
+
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: 'content')
+
+        emit (bool): Return the stream as is and don't assign it to an item
+            attribute (default: False)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred item with tokenized content
@@ -98,7 +104,7 @@ def async_pipe(*args, **kwargs):
         >>>
         >>> def run(reactor):
         ...     resp = {'content': 'Once'}
-        ...     attr = 'stringtokenizer'
+        ...     attr = 'tokenizer'
         ...     callback = lambda x: print(next(x)[attr][0] == resp)
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     d = async_pipe(item)
@@ -124,20 +130,22 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'delimiter',
-            'dedupe', 'sort', 'assign', or 'token_key'.
+            'dedupe', 'sort', or 'token_key'.
 
             delimiter (str): the delimiter string (default: ',')
             dedupe (bool): Remove duplicates (default: False).
             sort (bool): Sort tokens (default: False)
-            assign (str): Attribute to assign parsed content (default:
-                stringtokenizer)
             token_key (str): Attribute to assign individual tokens (default:
                 content)
+
+        assign (str): Attribute to assign parsed content (default:
+            tokenizer)
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
 
-        emit (bool):
+        emit (bool): Return the stream as is and don't assign it to an item
+            attribute (default: False)
 
     Returns:
         dict: an item with tokenized content

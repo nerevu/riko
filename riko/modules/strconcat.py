@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strconcat import pipe
+        >>>
         >>> item = {'word': 'hello'}
         >>> part = [{'subkey': 'word'}, {'value': ' world'}]
         >>> next(pipe(item, conf={'part': part}))['strconcat'] == 'hello world'
@@ -26,20 +27,19 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
-from meza._compat import decode
+from builtins import *  # noqa pylint: disable=unused-import
 from . import processor
 
 OPTS = {'listize': True, 'extract': 'part'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, parts, skip, **kwargs):
+def parser(_, parts, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
         _ (dict): The item (ignored)
-        parts (List[dict]): The content to concatenate
+        parts (List[str]): The content to concatenate
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
@@ -47,14 +47,18 @@ def parser(_, parts, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(str, bool): Tuple of (the concatenated string, skip)
+        str: The concatenated string
 
     Examples:
-        >>> parser(None, ['one', 'two'], False)[0] == 'onetwo'
+        >>> parser(None, ['one', 'two']) == 'onetwo'
         True
     """
-    parsed = kwargs['stream'] if skip else ''.join(map(decode, parts))
-    return parsed, skip
+    if skip:
+        parsed = kwargs['stream']
+    else:
+        parsed = ''.join(str(p) for p in parts if p)
+
+    return parsed
 
 
 @processor(isasync=True, **OPTS)

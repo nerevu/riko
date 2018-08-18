@@ -25,7 +25,7 @@ from __future__ import (
 
 import operator
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo
@@ -39,7 +39,8 @@ def mean(*nums):
     try:
         return sum(nums) / len(nums)
     except ZeroDivisionError:
-        return 0.0
+        return float('inf')
+
 
 OPS = {
     'add': operator.add,
@@ -53,7 +54,7 @@ OPS = {
 }
 
 
-def parser(num, objconf, skip, **kwargs):
+def parser(num, objconf, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -62,18 +63,17 @@ def parser(num, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(dict, bool): Tuple of (the formatted , skip)
+        dict: The formatted item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> conf = {'op': 'divide', 'other': 4}
         >>> objconf = Objectify(conf)
-        >>> parser(10, objconf, False, conf=conf)[0]
+        >>> parser(10, objconf, conf=conf)
         2.5
     """
     operation = OPS[kwargs['conf']['op']]
-    parsed = kwargs['stream'] if skip else operation(num, objconf.other)
-    return parsed, skip
+    return kwargs['stream'] if skip else operation(num, objconf.other)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -91,7 +91,7 @@ def async_pipe(*args, **kwargs):
 
             other (number): The second number to operate on.
             op (str): The math operation. Must be one of 'addition',
-                'substraction', 'multiplication', 'division', 'modulo',
+                'subtraction', 'multiplication', 'division', 'modulo',
                 'floor', 'power', or 'mean'.
 
         assign (str): Attribute to assign parsed content (default: simplemath)
@@ -136,7 +136,7 @@ def pipe(*args, **kwargs):
 
             other (number): The second number to operate on.
             op (str): The math operation. Must be one of 'addition',
-                'substraction', 'multiplication', 'division', 'modulo',
+                'subtraction', 'multiplication', 'division', 'modulo',
                 'floor', 'power', or 'mean'.
 
         assign (str): Attribute to assign parsed content (default: simplemath)

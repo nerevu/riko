@@ -24,6 +24,7 @@ Examples:
 
         >>> from riko.modules.dateformat import pipe
         >>> from datetime import date
+        >>>
         >>> next(pipe({'date': date(2015, 5, 4)}))['dateformat']
         '05/04/2015 00:00:00'
 
@@ -36,7 +37,7 @@ from __future__ import (
 
 from time import strftime
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo
@@ -46,7 +47,7 @@ DEFAULTS = {'format': '%m/%d/%Y %H:%M:%S'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(date, objconf, skip, **kwargs):
+def parser(date, objconf, skip=False, **kwargs):
     """ Obtains the user input
 
     Args:
@@ -55,19 +56,18 @@ def parser(date, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(dict, bool): Tuple of (the formatted date, skip)
+        dict: The formatted date
 
     Examples:
         >>> from datetime import date
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'format': '%m/%d/%Y'})
-        >>> parser({'date': date(2015, 5, 4)}, objconf, False)[0]
+        >>> parser({'date': date(2015, 5, 4)}, objconf)
         '05/04/2015'
     """
     timetuple = date['date'].timetuple()
-    parsed = kwargs['stream'] if skip else strftime(objconf.format, timetuple)
-    return parsed, skip
+    return kwargs['stream'] if skip else strftime(objconf.format, timetuple)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -79,8 +79,8 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'format',
-            'assign', or 'field'.
+        conf (dict): The pipe configuration. May contain the keys 'format' or
+            'field'.
 
             format (str): Format string passed to time.strftime (default:
                 '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')
@@ -123,8 +123,8 @@ def pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'format',
-            'assign', or 'field'.
+        conf (dict): The pipe configuration. May contain the keys 'format' or
+            'field'.
 
             format (str): Format string passed to time.strftime (default:
                 '%m/%d/%Y %H:%M:%S', i.e., '02/12/2008 20:45:00')

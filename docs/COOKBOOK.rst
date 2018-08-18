@@ -12,7 +12,7 @@ User input
 Some workflows require user input (via the ``pipeinput`` pipe). By default,
 ``pipeinput`` prompts the user via the console, but in some situations this may
 not be appropriate, e.g., testing or integrating with a website. In such cases,
-the input values can instead be read from the workflow's ``inputs`` kwarg (a
+the input values can instead be read from the workflow's ``inputs`` kwargs (a
 set of values passed into every pipe).
 
 .. code-block:: python
@@ -65,7 +65,7 @@ aka ``items``.
     >>> #
     >>> # `SyncCollection` is a url fetching convenience class with support for
     >>> # parallel processing
-    >>> from riko.lib.collections import SyncCollection
+    >>> from riko.collections import SyncCollection
     >>>
     >>> sources = [{'url': url} for url in urls]
     >>> stream = SyncCollection(sources).fetch()
@@ -114,7 +114,7 @@ style [#]_.
 
     >>> import itertools as it
     >>> from riko import get_path
-    >>> from riko.modules import fetchpage, strreplace, stringtokenizer, count
+    >>> from riko.modules import fetchpage, strreplace, tokenizer, count
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -138,7 +138,7 @@ style [#]_.
     >>> # just one item, we can safely call `next` without fear of loosing data
     >>> page = next(fetchpage.pipe(conf=fetch_conf))
     >>> replaced = next(strreplace.pipe(page, conf=replace_conf, assign='content'))
-    >>> words = stringtokenizer.pipe(replaced, conf={'delimiter': ' '}, emit=True)
+    >>> words = tokenizer.pipe(replaced, conf={'delimiter': ' '}, emit=True)
     >>> counts = count.pipe(words)
     >>> next(counts)
     {'count': 70}

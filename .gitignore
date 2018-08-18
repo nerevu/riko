@@ -1,36 +1,40 @@
+# Python
 *.py[cod]
-*/.ipynb*
+.cookiecutter
+.ipynb_checkpoints/*
+*checkpoint.ipynb
 
 # C extensions
 *.so
 
 # Packages
-*.egg
-*.egg-info
+*.egg*
+.installed.cfg
 dist
 build
 eggs
-.eggs/*
 parts
 var
 sdist
 develop-eggs
-.installed.cfg
 lib64
+riko-0.*/*
 
 # Installer logs
 pip-log.txt
 
 # Unit test / coverage reports
+*.wpu
+*.rope
+*.noseids
+*.ropeproject
 .coverage
 .tox
 .noseids
-.scripttest
+.scripttest/*
 .cache/*
-nosetests.xml
-*.ropeproject
-cover/*
 coverage.xml
+cover/*
 
 # Translations
 *.mo
@@ -46,3 +50,9 @@ output/*/index.html
 
 # Sphinx
 docs/_build
+build/*
+
+# Misc
+*.pstats
+callgraph.svg
+ttyrecord

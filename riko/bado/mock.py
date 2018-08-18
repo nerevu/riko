@@ -14,38 +14,24 @@ Examples:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import itertools as it
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 from . import reactor
 
 try:
     from twisted.internet.interfaces import IReactorCore
+    from twisted.internet.task import Clock
 except ImportError:
     implementer = lambda _: lambda _: lambda: None
     IReactorCore, MemoryReactor = object, object
     FakeReactor = lambda _: lambda: None
+    Clock = lambda *args, **kwargs: object
 else:
     from zope.interface import implementer
     from twisted.test.proto_helpers import MemoryReactor
 
 logger = gogo.Gogo(__name__, monolog=True).logger
-
-
-class FakeDelayedCall(object):
-    """Fake delayed call which lets us simulate the scheduler.
-    """
-    def __init__(self, func):
-        """A function to run later.
-        """
-        self.func = func
-        self.cancelled = False
-
-    def cancel(self):
-        """Don't run my function later.
-        """
-        self.cancelled = True
 
 
 @implementer(IReactorCore)
@@ -67,12 +53,14 @@ class FakeReactor(MemoryReactor):
         >>> setNonBlocking(fd)
         >>> readFromFD(fd, print)
     """
+    _DELAY = 1
+
     def __init__(self):
         super(FakeReactor, self).__init__()
+        self._clock = Clock()
         reactor.fake = True
         msg = 'Attention! Running fake reactor'
-        logger.debug('%s. Some deffereds may not work as intended.' % msg)
-        self.work = []
+        logger.debug('%s. Some deferreds may not work as intended.' % msg)
         self.running = False
 
     def resolve(self, *args, **kwargs):
@@ -123,23 +111,16 @@ class FakeReactor(MemoryReactor):
     def getDelayedCalls(self):
         """Return all the outstanding delayed calls in the system.
         """
-        return (x for x in self.work if not x.cancelled)
+        return self._clock.getDelayedCalls()
 
-    def callLater(self, func):
+    def callLater(self, when, what, *args, **kwargs):
         """Schedule a unit of work to be done later.
         """
-        unit = FakeDelayedCall(func)
-        self.work = it.chain(self.work, [unit])
+        delayed = self._clock.callLater(when, what, *args, **kwargs)
         self.pump()
-        return unit
+        return delayed
 
     def pump(self):
         """Perform scheduled work
         """
-        for unit in self.getDelayedCalls():
-            try:
-                unit.func()
-            except Exception as e:
-                logger.error(e)
-
-        return
+        self._clock.advance(self._DELAY)

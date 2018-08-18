@@ -15,22 +15,22 @@ manager = Manager()
 BASEDIR = p.dirname(__file__)
 
 
-def upload_():
+def _upload():
     """Upload distribution files"""
     check_call(['twine', 'upload', p.join(BASEDIR, 'dist', '*')])
 
 
-def sdist_():
+def _sdist():
     """Create a source distribution package"""
     check_call(p.join(BASEDIR, 'helpers', 'srcdist'))
 
 
-def wheel_():
+def _wheel():
     """Create a wheel package"""
     check_call(p.join(BASEDIR, 'helpers', 'wheel'))
 
 
-def clean_():
+def _clean():
     """Remove Python file and build artifacts"""
     check_call(p.join(BASEDIR, 'helpers', 'clean'))
 
@@ -46,13 +46,13 @@ def check():
 @manager.command
 def lint(where=None, strict=False):
     """Check style with linters"""
-    args = [
-        'pylint', '--rcfile=tests/standard.rc', '-rn', '-fparseable', 'riko']
+    args = 'pylint --rcfile=tests/standard.rc -rn -fparseable'.split(' ')
+    extra = where.split(' ') if where else ['riko', 'tests', 'examples']
 
     try:
-        check_call(['flake8', where] if where else 'flake8')
-        check_call(args + ['--py3k'])
-        check_call(args) if strict else None
+        check_call(['flake8'] + extra)
+        check_call(args + extra + ['--py3k'])
+        check_call(args + extra) if strict else None
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -63,13 +63,16 @@ def pipme():
     exit(call('pip', 'install', '-r', 'requirements.txt'))
 
 
+@manager.arg('where', 'w', help='requirements file', default=None)
 @manager.command
-def require():
+def require(where=None):
     """Create requirements.txt"""
-    cmd = 'pip freeze -l | grep -vxFf dev-requirements.txt > requirements.txt'
-    exit(call(cmd, shell=True))
+    prefix = '%s-' % where if where else ''
+    cmd = 'pip freeze -l | grep -xFf %srequirements.txt' % prefix
+    exit(check_call(cmd, shell=True))
 
 
+@manager.arg('source', 's', help='the tests to run', default=None)
 @manager.arg('where', 'w', help='test path', default=None)
 @manager.arg(
     'stop', 'x', help='Stop after first error', type=bool, default=False)
@@ -87,7 +90,7 @@ def require():
 @manager.arg(
     'debug', 'D', help='Use nose.loader debugger', type=bool, default=False)
 @manager.command
-def test(where=None, stop=None, **kwargs):
+def test(source=None, where=None, stop=False, **kwargs):
     """Run nose, tox, and script tests"""
     opts = '-xv' if stop else '-v'
     opts += ' --with-coverage' if kwargs.get('cover') else ''
@@ -95,7 +98,8 @@ def test(where=None, stop=None, **kwargs):
     opts += ' --processes=-1' if kwargs.get('parallel') else ''
     opts += ' --detailed-errors' if kwargs.get('verbose') else ''
     opts += ' --debug=nose.loader' if kwargs.get('debug') else ''
-    opts += ' -w %s' % where if where else ''
+    opts += ' -w {}'.format(where) if where else ''
+    opts += ' {}'.format(source) if source else ''
 
     try:
         if kwargs.get('tox'):
@@ -103,26 +107,22 @@ def test(where=None, stop=None, **kwargs):
         elif kwargs.get('detox'):
             check_call('detox')
         else:
-            check_call(('nosetests %s' % opts).split(' '))
+            check_call(('nosetests {}'.format(opts)).split(' '))
+
+        if not source:
             check_call(['python', p.join(BASEDIR, 'tests', 'test.py')])
     except CalledProcessError as e:
         exit(e.returncode)
 
 
 @manager.command
-def register():
-    """Register package with PyPI"""
-    exit(call('python', p.join(BASEDIR, 'setup.py'), 'register'))
-
-
-@manager.command
 def release():
     """Package and upload a release"""
     try:
-        clean_()
-        sdist_()
-        wheel_()
-        upload_()
+        _clean()
+        _sdist()
+        _wheel()
+        _upload()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -131,9 +131,9 @@ def release():
 def build():
     """Create a source distribution and wheel package"""
     try:
-        clean_()
-        sdist_()
-        wheel_()
+        _clean()
+        _sdist()
+        _wheel()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -142,7 +142,7 @@ def build():
 def upload():
     """Upload distribution files"""
     try:
-        upload_()
+        _upload()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -151,7 +151,7 @@ def upload():
 def sdist():
     """Create a source distribution package"""
     try:
-        sdist_()
+        _sdist()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -160,7 +160,7 @@ def sdist():
 def wheel():
     """Create a wheel package"""
     try:
-        wheel_()
+        _wheel()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -169,7 +169,7 @@ def wheel():
 def clean():
     """Remove Python file and build artifacts"""
     try:
-        clean_()
+        _clean()
     except CalledProcessError as e:
         exit(e.returncode)
 

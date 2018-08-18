@@ -57,20 +57,21 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 from six.moves.urllib.parse import urljoin, urlencode
 
 from . import processor
 import pygogo as gogo
-from riko.lib.dotdict import DotDict
-from riko.lib.utils import get_value, cast_url
+from riko.dotdict import DotDict
+from riko.parsers import get_value
+from riko.cast import cast_url
 
 OPTS = {'extract': 'params', 'listize': True, 'emit': True}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(item, params, skip, **kwargs):
+def parser(item, params, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -83,10 +84,10 @@ def parser(item, params, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple (dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict()
         >>> params = {'key': 's', 'value': 'gm'}
@@ -94,7 +95,7 @@ def parser(item, params, skip, **kwargs):
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'params': params}
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> result = parser(item, [Objectify(params)], False, **kwargs)[0]
+        >>> result = parser(item, [Objectify(params)], **kwargs)
         >>> sorted(result.keys()) == [
         ...     'fragment', 'netloc', 'params', 'path', 'query', 'scheme',
         ...     'url']
@@ -112,7 +113,7 @@ def parser(item, params, skip, **kwargs):
         url = '%s?%s' % (urljoin(conf['base'], '/'.join(paths)), params)
         stream = cast_url(url)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -17,6 +17,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.substr import pipe
+        >>>
         >>> conf = {'start': '3', 'length': '4'}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['substr'] == 'lo w'
@@ -29,7 +30,7 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo
@@ -39,7 +40,7 @@ DEFAULTS = {'start': 0, 'length': 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word, objconf, skip, **kwargs):
+def parser(word, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -49,25 +50,24 @@ def parser(word, objconf, skip, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: strtransform)
+        assign (str): Attribute to assign parsed content (default: substr)
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = {'content': 'hello world'}
         >>> conf = {'start': 3, 'length': 4}
-        >>> args = item['content'], Objectify(conf), False
+        >>> args = item['content'], Objectify(conf)
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(*args, **kwargs)[0] == 'lo w'
+        >>> parser(*args, **kwargs) == 'lo w'
         True
     """
     end = objconf.start + objconf.length if objconf.length else None
-    value = kwargs['stream'] if skip else word[objconf.start:end]
-    return value, skip
+    return kwargs['stream'] if skip else word[objconf.start:end]
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -87,8 +87,7 @@ def async_pipe(*args, **kwargs):
             length (int): count of characters to return (default: 0, i.e., all)
 
         assign (str): Attribute to assign parsed content (default: substr)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with transformed content
@@ -129,8 +128,7 @@ def pipe(*args, **kwargs):
             length (int): count of characters to return (default: 0, i.e., all)
 
         assign (str): Attribute to assign parsed content (default: substr)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Yields:
         dict: an item with the substring

@@ -46,17 +46,15 @@ from __future__ import (
 import traceback
 import pygogo as gogo
 
-from contextlib import closing
 from os.path import splitext
 
-from builtins import *
-from six.moves.urllib.request import urlopen
-
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
-from riko.lib import utils
+from riko.utils import fetch, get_abspath
+from riko.parsers import xml2etree, etree2dict, xpath
 from riko.bado import coroutine, return_value, util, io
-from meza._compat import encode
+from meza.compat import encode
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -68,7 +66,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -82,29 +80,29 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> @coroutine
         ... def run(reactor):
         ...     xml_url = get_path('ouseful.xml')
         ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
         ...     xml_objconf = Objectify(xml_conf)
-        ...     xml_args = (None, xml_objconf, False)
+        ...     xml_args = (None, xml_objconf)
         ...     html_url = get_path('sciencedaily.html')
         ...     html_conf = {'url': html_url, 'xpath': '/html/head/title'}
         ...     html_objconf = Objectify(html_conf)
-        ...     html_args = (None, html_objconf, False)
+        ...     html_args = (None, html_objconf)
         ...     kwargs = {'stream': {}}
         ...
         ...     try:
-        ...         xml_stream, _ = yield async_parser(*xml_args, **kwargs)
-        ...         html_stream, _ = yield async_parser(*html_args, **kwargs)
+        ...         xml_stream = yield async_parser(*xml_args, **kwargs)
+        ...         html_stream = yield async_parser(*html_args, **kwargs)
         ...         print(next(xml_stream)['title'][:44])
         ...         print(next(html_stream))
         ...     except Exception as e:
@@ -123,7 +121,7 @@ def async_parser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         xml = (ext == 'xml') or objconf.strict
 
@@ -134,17 +132,16 @@ def async_parser(_, objconf, skip, **kwargs):
             logger.error(e)
             logger.error(traceback.format_exc())
 
-        elements = utils.xpath(tree, objconf.xpath)
+        elements = xpath(tree, objconf.xpath)
         f.close()
         items = map(util.etree2dict, elements)
         stringified = ({kwargs['assign']: encode(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -153,15 +150,15 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> from riko import get_path
         >>>
         >>> url = get_path('ouseful.xml')
         >>> objconf = Objectify({'url': url, 'xpath': '/rss/channel/item'})
-        >>> result, skip = parser(None, objconf, False, stream={})
+        >>> result = parser(None, objconf, stream={})
         >>> title = 'Running “Native” Data Wrangling Applications'
         >>> next(result)['title'][:44] == title
         True
@@ -169,19 +166,19 @@ def parser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         ext = splitext(url)[1].lstrip('.')
         xml = (ext == 'xml') or objconf.strict
 
-        with closing(urlopen(url)) as f:
-            root = utils.xml2etree(f, xml=xml, html5=objconf.html5).getroot()
-            elements = utils.xpath(root, objconf.xpath)
+        with fetch(**objconf) as f:
+            root = xml2etree(f, xml=xml, html5=objconf.html5).getroot()
+            elements = xpath(root, objconf.xpath)
 
-        items = map(utils.etree2dict, elements)
+        items = map(etree2dict, elements)
         stringified = ({kwargs['assign']: str(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
-    return stream, skip
+    return stream
 
 
 @processor(isasync=True, **OPTS)
@@ -195,7 +192,7 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'xpath', 'html5', 'stringify', or 'assign'.
+            contain the keys 'xpath', 'html5', or 'stringify'.
 
             url (str): The web site to fetch
             xpath (str): The XPATH to extract (default: None, i.e., return
@@ -204,7 +201,8 @@ def async_pipe(*args, **kwargs):
             strict (bool): Use the strict XML parser (default: False)
             html5 (bool): Use the HTML5 parser (default: False)
             stringify (bool): Return the web site as a string (default: False)
-            assign (str): Attribute to assign parsed content (default: content)
+
+        assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
         dict: twisted.internet.defer.Deferred item
@@ -253,7 +251,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'xpath', 'html5', 'stringify', or 'assign'.
+            contain the keys 'xpath', 'html5', or 'stringify'.
 
             url (str): The web site to fetch
             xpath (str): The XPATH to extract (default: None, i.e., return
@@ -262,7 +260,8 @@ def pipe(*args, **kwargs):
             strict (bool): Use the strict XML parser (default: False)
             html5 (bool): Use the HTML5 parser (default: False)
             stringify (bool): Return the web site as a string (default: False)
-            assign (str): Attribute to assign parsed content (default: content)
+
+        assign (str): Attribute to assign parsed content (default: content)
 
     Yields:
         dict: item

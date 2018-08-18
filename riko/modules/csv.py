@@ -24,24 +24,25 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
-from six.moves.urllib.request import urlopen
+from builtins import *  # noqa pylint: disable=unused-import
 from meza.io import read_csv
+from meza.process import merge
 
 from . import processor
-from riko.lib import utils
+from riko import ENCODING
 from riko.bado import coroutine, return_value, io
+from riko.utils import fetch, auto_close, get_abspath
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {
-    'delimiter': ',', 'quotechar': '"', 'encoding': 'utf-8', 'skip_rows': 0,
+    'delimiter': ',', 'quotechar': '"', 'encoding': ENCODING, 'skip_rows': 0,
     'sanitize': True, 'dedupe': True, 'col_names': None, 'has_header': True}
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -54,20 +55,22 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['mileage'])
+        ...     callback = lambda x: print(next(x)['mileage'])
         ...     url = get_path('spreadsheet.csv')
-        ...     conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
+        ...     conf = {
+        ...         'url': url, 'sanitize': True, 'skip_rows': 0,
+        ...         'encoding': ENCODING}
         ...     objconf = Objectify(conf)
-        ...     d = async_parser(None, objconf, False, stream={})
+        ...     d = async_parser(None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -80,20 +83,17 @@ def async_parser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        # TODO: write function to extract encoding from response
-        url = utils.get_abspath(objconf.url)
-        response = yield io.async_url_open(url)
+        url = get_abspath(objconf.url)
+        r = yield io.async_url_open(url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
-        rkwargs = utils.combine_dicts(objconf, renamed)
-        rkwargs['encoding'] = objconf.encoding
-        stream = read_csv(response, **rkwargs)
+        rkwargs = merge([objconf, renamed])
+        stream = auto_close(read_csv(r, **rkwargs), r)
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -102,32 +102,32 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't parse the content
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('spreadsheet.csv')
-        >>> conf = {'url': url, 'sanitize': True, 'skip_rows': 0}
+        >>> conf = {
+        ...     'url': url, 'sanitize': True, 'skip_rows': 0,
+        ...     'encoding': ENCODING}
         >>> objconf = Objectify(conf)
-        >>> result, skip = parser(None, objconf, False, stream={})
+        >>> result = parser(None, objconf, stream={})
         >>> next(result)['mileage'] == '7213'
         True
     """
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {'first_row': first_row, 'custom_header': custom_header}
-        response = urlopen(url)
-        encoding = utils.get_response_encoding(response, objconf.encoding)
-        rkwargs = utils.combine_dicts(objconf, renamed)
-        rkwargs['encoding'] = encoding
-        stream = read_csv(response, **rkwargs)
 
-    return stream, skip
+        f = fetch(decode=True, **objconf)
+        rkwargs = merge([objconf, renamed])
+        stream = auto_close(read_csv(f, **rkwargs), f)
+
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -169,7 +169,8 @@ def async_pipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['mileage'])
         ...     d = async_pipe(conf={'url': get_path('spreadsheet.csv')})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d.addCallbacks(callback, logger.error)
+        ...     return d.addCallback(lambda _: d.close())
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())

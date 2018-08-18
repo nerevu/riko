@@ -25,24 +25,23 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+from os import path as p
+
 import pygogo as gogo
 
-from os.path import splitext
-from contextlib import closing
-
-from builtins import *
-from six.moves.urllib.request import urlopen
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
-from riko.lib import utils
 from riko.bado import coroutine, return_value, io
+from riko.parsers import any2dict
+from riko.utils import fetch, get_abspath
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -55,19 +54,19 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0][0]['title'])
+        ...     callback = lambda x: print(x[0]['title'])
         ...     url = get_path('gigs.json')
         ...     objconf = Objectify({'url': url, 'path': 'value.items'})
-        ...     d = async_parser(None, objconf, False, stream={})
+        ...     d = async_parser(None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -80,17 +79,16 @@ def async_parser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
-        ext = splitext(url)[1].lstrip('.')
+        url = get_abspath(objconf.url)
+        ext = p.splitext(url)[1].lstrip('.')
         f = yield io.async_url_open(url)
-        stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
+        stream = any2dict(f, ext, objconf.html5, path=objconf.path)
         f.close()
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -103,28 +101,29 @@ def parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('gigs.json')
         >>> objconf = Objectify({'url': url, 'path': 'value.items'})
-        >>> result, skip = parser(None, objconf, False, stream={})
+        >>> result = parser(None, objconf, stream={})
         >>> result[0]['title'] == 'Business System Analyst'
         True
     """
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
-        ext = splitext(url)[1].lstrip('.')
+        url = get_abspath(objconf.url)
+        ext = p.splitext(url)[1].lstrip('.')
 
-        with closing(urlopen(url)) as f:
-            stream = utils.any2dict(f, ext, objconf.html5, path=objconf.path)
+        with fetch(**objconf) as f:
+            ext = ext or f.ext
+            stream = any2dict(f, ext, objconf.html5, path=objconf.path)
 
-    return stream, skip
+    return stream
 
 
 @processor(isasync=True, **OPTS)
@@ -206,5 +205,9 @@ def pipe(*args, **kwargs):
         >>> conf = {'url': get_path('places.xml'), 'path': ''}
         >>> next(pipe(conf=conf))['reminder']
         '15'
+        >>> conf = {'url': get_path('schools.xml'), 'path': 'data.row'}
+        >>> next(pipe(conf=conf))['district_name'] == 'Turkana'
+        True
+
     """
     return parser(*args, **kwargs)

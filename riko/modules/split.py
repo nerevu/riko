@@ -13,6 +13,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.split import pipe
+        >>>
         >>> stream1, stream2 = pipe({'x': x} for x in range(5))
         >>> next(stream1) == {'x': 0}
         True
@@ -27,7 +28,7 @@ from __future__ import (
 
 from copy import deepcopy
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
 import pygogo as gogo

@@ -14,6 +14,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.strreplace import pipe
+        >>>
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         >>> item = {'content': 'hello world'}
         >>> next(pipe(item, conf=conf))['strreplace'] == 'bye world'
@@ -29,7 +30,7 @@ from __future__ import (
 import pygogo as gogo
 
 from functools import reduce
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
@@ -40,7 +41,7 @@ OPTS = {
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
-PARAMS = {
+OPS = {
     'first': lambda word, rule: word.replace(rule.find, rule.replace, 1),
     'last': lambda word, rule: rule.replace.join(word.rsplit(rule.find, 1)),
     'every': lambda word, rule: word.replace(rule.find, rule.replace),
@@ -48,11 +49,11 @@ PARAMS = {
 
 
 def reducer(word, rule):
-    return PARAMS.get(rule.param, PARAMS['every'])(word, rule)
+    return OPS.get(rule.param, OPS['every'])(word, rule)
 
 
 @coroutine
-def async_parser(word, rules, skip, **kwargs):
+def async_parser(word, rules, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -66,21 +67,20 @@ def async_parser(word, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
+        Deferred: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0])
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         ...     rule = Objectify(conf['rule'])
         ...     kwargs = {'stream': item, 'conf': conf}
-        ...     d = async_parser(item['content'], [rule], False, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d = async_parser(item['content'], [rule], **kwargs)
+        ...     return d.addCallbacks(print, logger.error)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -94,11 +94,10 @@ def async_parser(word, rules, skip, **kwargs):
     else:
         value = yield ait.coop_reduce(reducer, rules, word)
 
-    result = (value, skip)
-    return_value(result)
+    return_value(value)
 
 
-def parser(word, rules, skip, **kwargs):
+def parser(word, rules, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -112,20 +111,19 @@ def parser(word, rules, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = {'content': 'hello world'}
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         >>> rule = Objectify(conf['rule'])
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(item['content'], [rule], False, **kwargs)[0] == 'bye world'
+        >>> parser(item['content'], [rule], **kwargs) == 'bye world'
         True
     """
-    value = kwargs['stream'] if skip else reduce(reducer, rules, word)
-    return value, skip
+    return kwargs['stream'] if skip else reduce(reducer, rules, word)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -149,8 +147,7 @@ def async_pipe(*args, **kwargs):
                     'last', or 'every' (default: 'every').
 
         assign (str): Attribute to assign parsed content (default: strreplace)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with replaced content
@@ -195,8 +192,7 @@ def pipe(*args, **kwargs):
                     'last', or 'every' (default: 'every').
 
         assign (str): Attribute to assign parsed content (default: strreplace)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Yields:
         dict: an item with replaced content

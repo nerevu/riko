@@ -32,7 +32,7 @@ from __future__ import (
 
 import ctypes
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo
@@ -42,7 +42,7 @@ DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word, _, skip, **kwargs):
+def parser(word, _, skip=False, **kwargs):
     """ Parsers the pipe content
 
     Args:
@@ -56,19 +56,18 @@ def parser(word, _, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> _hash = ctypes.c_uint(hash('hello world')).value
         >>> item = {'content': 'hello world'}
         >>> kwargs = {'stream': item}
-        >>> parser(item['content'], None, False, **kwargs)[0] == _hash
+        >>> parser(item['content'], None, **kwargs) == _hash
         True
     """
-    parsed = kwargs['stream'] if skip else ctypes.c_uint(hash(word)).value
-    return parsed, skip
+    return kwargs['stream'] if skip else ctypes.c_uint(hash(word)).value
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -80,9 +79,8 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: simplemath)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        assign (str): Attribute to assign parsed content (default: hash)
+        field (str): Item attribute to operate on (default: 'content')
 
     Returns:
        Deferred: twisted.internet.defer.Deferred item with concatenated content
@@ -118,8 +116,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: hash)
-        field (str): Item attribute from which to obtain the first number to
-            operate on (default: 'content')
+        field (str): Item attribute to operate on (default: 'content')
 
     Yields:
         dict: an item with concatenated content

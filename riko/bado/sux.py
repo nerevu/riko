@@ -25,10 +25,10 @@ from __future__ import (
 
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from chardet import detect
-from meza._compat import decode
+from meza.compat import decode
 
 try:
     from twisted.internet.protocol import Protocol
@@ -53,11 +53,6 @@ def zipfndict(*args):
     for fndict in args:
         for key in fndict:
             yield (key, tuple(x.get(key, nop) for x in args))
-
-
-def get_method_class_dict(clazz, prefix):
-    names = find_method_names(clazz, prefix)
-    return {name: getattr(clazz, prefix + name) for name in names}
 
 
 def get_method_obj_dict(obj, prefix):

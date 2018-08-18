@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.lib.autorss
-~~~~~~~~~~~~~~~~
+riko.autorss
+~~~~~~~~~~~~
 Provides functions for finding RSS feeds from a site's LINK tags
 """
 from __future__ import (
@@ -13,10 +13,10 @@ import pygogo as gogo
 from itertools import chain
 from html.parser import HTMLParser
 
-from builtins import *
-from six.moves.urllib.request import urlopen
-from meza._compat import decode
-from riko.bado import coroutine, return_value
+from builtins import *  # noqa pylint: disable=unused-import
+from meza.compat import decode
+from riko.utils import fetch
+from riko.bado import coroutine, return_value, microdom
 from riko.bado.io import async_url_open
 
 TIMEOUT = 10
@@ -26,7 +26,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 class LinkParser(HTMLParser):
     def reset(self):
         HTMLParser.reset(self)
-        self.entry = []
+        self.entry = iter([])
 
     def handle_starttag(self, tag, attrs):
         entry = dict(attrs)
@@ -39,7 +39,7 @@ class LinkParser(HTMLParser):
             self.entry = chain(self.entry, [entry])
 
 
-def gen_entries(f, parser):
+def file2entries(f, parser):
     for line in f:
         parser.feed(decode(line))
 
@@ -47,21 +47,34 @@ def gen_entries(f, parser):
             yield entry
 
 
-@coroutine
-def asyncGetRSS(url, convert_charrefs=False):
-    # TODO: implement via an async parser
-    # maybe get twisted.web.microdom.parse working for HTML
-    try:
-        parser = LinkParser(convert_charrefs=convert_charrefs)
-    except TypeError:
-        parser = LinkParser()
+def doc2entries(document):
+    for node in document.childNodes:
+        if hasattr(node, 'attributes') and node.attributes:
+            entry = node.attributes
+            alternate = entry.get('rel') == 'alternate'
+            rss = 'rss' in entry.get('type', '')
+        else:
+            alternate = rss = None
 
+        if (alternate or rss) and 'href' in entry:
+            entry['link'] = entry['href']
+            entry['tag'] = node.nodeName
+            yield entry
+
+    for node in document.childNodes:
+        for entry in doc2entries(node):
+            yield entry
+
+
+@coroutine
+def async_get_rss(url, convert_charrefs=False):
     try:
         f = yield async_url_open(url, timeout=TIMEOUT)
     except ValueError:
         f = filter(None, url.splitlines())
 
-    return_value(gen_entries(f, parser))
+    document = microdom.parse(f, lenient=True)
+    return_value(doc2entries(document))
 
 
 def get_rss(url, convert_charrefs=False):
@@ -71,8 +84,8 @@ def get_rss(url, convert_charrefs=False):
         parser = LinkParser()
 
     try:
-        f = urlopen(url, timeout=TIMEOUT)
+        f = fetch(url, timeout=TIMEOUT)
     except ValueError:
         f = filter(None, url.splitlines())
 
-    return gen_entries(f, parser)
+    return file2entries(f, parser)

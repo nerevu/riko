@@ -17,11 +17,10 @@ from __future__ import (
 from os import environ
 from sys import executable
 from functools import partial
-from html.entities import name2codepoint
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
-from riko.lib.utils import _make_content
+from riko.parsers import _make_content, entity2text
 
 try:
     from twisted.internet.defer import maybeDeferred, Deferred
@@ -50,20 +49,6 @@ def defer_to_process(command):
     return getProcessOutput(executable, ['-c', command], environ)
 
 
-def def2unicode(entitydef):
-    """Convert an HTML entity reference into unicode.
-    http://stackoverflow.com/a/58125/408556
-    """
-    if entitydef.startswith('&#x'):
-        cp = int(entitydef[3:-1], 16)
-    elif entitydef.startswith('&#'):
-        cp = int(entitydef[2:-1])
-    elif entitydef.startswith('&'):
-        cp = name2codepoint[entitydef[1:-1]]
-
-    return chr(cp)
-
-
 def xml2etree(f, xml=True):
     readable = hasattr(f, 'read')
 
@@ -89,7 +74,7 @@ def etree2dict(element, tag='content'):
     value = element.nodeValue if hasattr(element, 'nodeValue') else None
 
     if isinstance(element, EntityReference):
-        value = def2unicode(value)
+        value = entity2text(value)
 
     i.update(_make_content(i, value, tag))
 

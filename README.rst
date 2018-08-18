@@ -36,8 +36,8 @@ Notes
 Requirements
 ------------
 
-``riko`` has been tested and is known to work on Python 2.7, 3.4, and 3.5;
-and PyPy2 5.1.1.
+``riko`` has been tested and is known to work on Python 2.7, 3.5, and 3.6;
+PyPy2 5.8.0, and PyPy3 5.8.0.
 
 Optional Dependencies
 ^^^^^^^^^^^^^^^^^^^^^
@@ -67,7 +67,7 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> #
     >>> # `SyncPipe` is a convenience class that creates chainable flows
     >>> # and allows for parallel processing.
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -94,7 +94,7 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> flow = (
     ...     SyncPipe('fetchpage', conf=fetch_conf)                           # 2
     ...         .strreplace(conf=replace_conf, assign='content')             # 3
-    ...         .stringtokenizer(conf={'delimiter': ' '}, emit=True)         # 4
+    ...         .tokenizer(conf={'delimiter': ' '}, emit=True)               # 4
     ...         .count(conf={'count_key': 'content'}))                       # 5
     >>>
     >>> stream = flow.output                                                 # 6
@@ -227,7 +227,7 @@ Synchronous processing
 
 .. code-block:: python
 
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
@@ -270,7 +270,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
 
 .. code-block:: python
 
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
@@ -312,7 +312,7 @@ An example using ``riko``'s asynchronous API.
 .. code-block:: python
 
     >>> from riko.bado import coroutine, react
-    >>> from riko.collections.async import AsyncPipe
+    >>> from riko.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
     >>> fetch_conf = {'url': 'https://news.ycombinator.com/rss'}
@@ -413,17 +413,17 @@ threads or processes. Example ``processors`` include ``fetchsitefeed``,
     >>> next(stream)
     {'title': 'riko pt. 1', 'hash': 2853617420}
 
-Some ``processors``, e.g., ``pipestringtokenizer``, return multiple results.
+Some ``processors``, e.g., ``pipetokenizer``, return multiple results.
 
 .. code-block:: python
 
-    >>> from riko.modules.stringtokenizer import pipe
+    >>> from riko.modules.tokenizer import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> tokenizer_conf = {'delimiter': ' '}
     >>> stream = pipe(item, conf=tokenizer_conf, field='title')
     >>> next(stream)
-    {'stringtokenizer': [{'content': 'riko'},
+    {'tokenizer': [{'content': 'riko'},
        {'content': 'pt.'},
        {'content': '1'}],
      'title': 'riko pt. 1'}
@@ -501,7 +501,7 @@ parallelization.
 
 .. code-block:: python
 
-    >>> from riko.collections.sync import SyncPipe
+    >>> from riko.collections import SyncPipe
     >>>
     >>> attrs = [
     ...     {'key': 'title', 'value': 'riko pt. 1'},
@@ -551,7 +551,7 @@ CLI Setup
 .. code-block:: python
 
     from __future__ import print_function
-    from riko.collections.sync import SyncPipe
+    from riko.collections import SyncPipe
 
     conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
     conf2 = {'rule': [{'find': 'com', 'replace': 'co.uk'}]}
@@ -656,12 +656,12 @@ Project Structure
     │   │   ├── dotdict.py
     │   │   ├── log.py
     │   │   ├── tags.py
-    │   │   └── utils.py
+    │   │   └── py
     │   ├── modules/*
     │   └── twisted
     │       ├── __init__.py
     │       ├── collections.py
-    │       └── utils.py
+    │       └── py
     ├── tests
     │   ├── __init__.py
     │   ├── standard.rc

@@ -34,19 +34,22 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
-from riko.bado import coroutine, return_value
+import pygogo as gogo
+
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
-from riko.lib import utils, autorss
-import pygogo as gogo
+from riko import autorss
+from riko.utils import get_abspath
+from riko.bado import coroutine, return_value
+
 
 OPTS = {'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -59,18 +62,18 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Deferred Tuple of (stream, skip)
+        Iter[dict]: Deferred stream
 
     Examples:
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['link'])
+        ...     callback = lambda x: print(next(x)['link'])
         ...     objconf = Objectify({'url': get_path('bbc.html')})
-        ...     d = async_parser(None, objconf, False, stream={})
+        ...     d = async_parser(None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -83,14 +86,13 @@ def async_parser(_, objconf, skip, **kwargs):
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
-        stream = yield autorss.asyncGetRSS(url)
+        url = get_abspath(objconf.url)
+        stream = yield autorss.async_get_rss(url)
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -103,24 +105,24 @@ def parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
-        >>> result, skip = parser(None, objconf, False, stream={})
+        >>> result = parser(None, objconf, stream={})
         >>> next(result)['link'] == 'file://riko/data/greenhughes.xml'
         True
     """
     if skip:
         stream = kwargs['stream']
     else:
-        url = utils.get_abspath(objconf.url)
+        url = get_abspath(objconf.url)
         stream = autorss.get_rss(url)
 
-    return stream, skip
+    return stream
 
 
 @processor(isasync=True, **OPTS)

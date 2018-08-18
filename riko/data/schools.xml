@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<response>
+  <data>
+    <row>
+      <district_name>Turkana</district_name>
+      <poverty_rate_2005_06_>94.3</poverty_rate_2005_06_>
+      <number_of_poor_2005_06_>481442</number_of_poor_2005_06_>
+    </row>
+    <row>
+      <district_name>Marsabit</district_name>
+      <poverty_rate_2005_06_>91.7</poverty_rate_2005_06_>
+      <number_of_poor_2005_06_>118786</number_of_poor_2005_06_>
+    </row>
+    <row>
+      <district_name>Mandera</district_name>
+      <poverty_rate_2005_06_>87.8</poverty_rate_2005_06_>
+      <number_of_poor_2005_06_>225812</number_of_poor_2005_06_>
+    </row>
+  </data>
+</response>

@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.sort import pipe
+        >>>
         >>> items = [{'content': 'b'}, {'content': 'a'}, {'content': 'c'}]
         >>> next(pipe(items)) == {'content': 'a'}
         True
@@ -23,12 +24,12 @@ from __future__ import (
 import pygogo as gogo
 
 from functools import reduce
-from operator import itemgetter
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
 from riko.bado import itertools as ait
+from riko.utils import def_itemgetter as itemgetter
 
 OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'content'}}
@@ -37,7 +38,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 def reducer(stream, rule):
     reverse = rule.sort_dir == 'desc'
-    return sorted(stream, key=itemgetter(rule.sort_key), reverse=reverse)
+    keyfunc = itemgetter(rule.sort_key, _type=rule.type)
+    return sorted(stream, key=keyfunc, reverse=reverse)
 
 
 def async_parser(stream, rules, tuples, **kwargs):
@@ -66,7 +68,7 @@ def async_parser(stream, rules, tuples, **kwargs):
         >>> from itertools import repeat
         >>> from riko.bado import react, _issync
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
         ...     callback = lambda x: print(x[0] == {'content': 4})
@@ -112,7 +114,7 @@ def parser(stream, rules, tuples, **kwargs):
         List(dict): The output stream
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
         >>> kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
@@ -138,7 +140,12 @@ def async_pipe(*args, **kwargs):
         conf (dict): The pipe configuration. May contain the key 'rule'
 
             rule (dict): The sort configuration, can be either a dict or list
-            of dicts. May contain the keys 'sort_key' or 'dir'.
+                of dicts (default: {'sort_dir': 'asc', 'sort_key': 'content'}).
+                Must contain the key 'sort_key'. May contain the key 'sort_dir',
+                    or 'cast'.
+
+                type (str): Expected value type. Must be one of
+                    `CAST_SWITCH` (default: None).
 
                 sort_key (str): Item attribute on which to sort by (default:
                     'content').
@@ -183,8 +190,11 @@ def pipe(*args, **kwargs):
 
             rule (dict): The sort configuration, can be either a dict or list
                 of dicts (default: {'sort_dir': 'asc', 'sort_key': 'content'}).
-                Must contain the key 'sort_key'. May contain the key 'sort_dir'.
+                Must contain the key 'sort_key'. May contain the key 'sort_dir',
+                    or 'cast'.
 
+                type (str): Expected value type. Must be one of
+                    `CAST_SWITCH` (default: None).
                 sort_key (str): Item attribute on which to sort by.
                 sort_dir (str): The sort direction. Must be either 'asc' or
                     'desc'.

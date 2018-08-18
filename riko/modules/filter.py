@@ -18,6 +18,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.filter import pipe
+        >>>
         >>> items = ({'x': x} for x in range(5))
         >>> rule = {'field': 'x', 'op': 'is', 'value': 3}
         >>> next(pipe(items, conf={'rule': rule})) == {'x': 3}
@@ -35,58 +36,67 @@ import operator as op
 
 from decimal import Decimal, InvalidOperation
 
-from builtins import *
-
-from . import operator
-from riko.lib import utils
-from riko.lib.utils import parse_conf
 import pygogo as gogo
+
+from builtins import *  # noqa pylint: disable=unused-import
+from . import operator
+from riko.parsers import parse_conf
+from riko.cast import cast_date
 
 OPTS = {'listize': True, 'extract': 'rule'}
 DEFAULTS = {'combine': 'and', 'mode': 'permit'}
-logger = gogo.Gogo(__name__, monolog=True).logger
-
+ITER_ATTRS = {'__next__', 'next', '__iter__'}
 COMBINE_BOOLEAN = {'and': all, 'or': any}
+
 SWITCH = {
     'contains': lambda x, y: x and y.lower() in x.lower(),
     'doesnotcontain': lambda x, y: x and y.lower() not in x.lower(),
     'matches': lambda x, y: re.search(y, x),
+    'eq': op.eq,
     'is': op.eq,
     'isnot': op.ne,
     'truthy': bool,
     'falsy': op.not_,
     'greater': op.gt,
     'after': op.gt,
+    'atleast': op.ge,
     'less': op.lt,
     'before': op.lt,
+    'atmost': op.le,
 }
+
+logger = gogo.Gogo(__name__, monolog=True).logger
+is_iterable = lambda item: ITER_ATTRS.intersection(dir(item))
+
+
+def _parse_x_y(_x, _y):
+    try:
+        x = Decimal(_x)
+        y = Decimal(_y)
+    except (InvalidOperation, TypeError, ValueError):
+        try:
+            x = cast_date(_x)['date']
+            y = cast_date(_y)['date']
+        except (ValueError, KeyError, IndexError, TypeError):
+            x, y = _x, _y
+
+    return x, y
 
 
 def parse_rule(rule, item, **kwargs):
-    truthieness = rule.op in {'truthy', 'falsy'}
-    x = item.get(rule.field, **kwargs)
-    y = rule.value
-    has_value = y is not None
+    truthy_like = rule.op in {'truthy', 'falsy'}
+    _x, _y = item.get(rule.field, **kwargs), rule.value
+    has_value = _y is not None
 
-    if has_value and not truthieness:
-        try:
-            _x = Decimal(x)
-            _y = Decimal(y)
-        except (InvalidOperation, TypeError, ValueError):
-            try:
-                _x = utils.cast_date(x)
-                _y = utils.cast_date(y)
-            except ValueError:
-                pass
-            else:
-                x, y = _x['date'], _y['date']
-        else:
-            x, y = _x, _y
+    if has_value and not truthy_like:
+        x, y = _parse_x_y(_x, _y)
+    else:
+        x, y = _x, _y
 
-    if has_value or truthieness:
+    if has_value or truthy_like:
         operation = SWITCH.get(rule.op)
 
-    if truthieness:
+    if truthy_like:
         result = operation(x)
     elif has_value:
         try:
@@ -120,8 +130,8 @@ def parser(stream, rules, tuples, **kwargs):
         dict: The output
 
     Examples:
-        >>> from riko.lib.utils import Objectify
-        >>> from riko.lib.dotdict import DotDict
+        >>> from meza.fntools import Objectify
+        >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
         >>>
         >>> conf = DotDict({'mode': 'permit', 'combine': 'and'})
@@ -134,8 +144,9 @@ def parser(stream, rules, tuples, **kwargs):
         True
     """
     conf = kwargs['conf']
+
     # TODO: add terminal check
-    dynamic = any('subkey' in v for v in conf.values())
+    dynamic = any('subkey' in v for v in conf.values() if is_iterable(v))
     objconf = None if dynamic else parse_conf({}, conf=conf, objectify=True)
 
     for item in stream:
@@ -153,6 +164,8 @@ def parser(stream, rules, tuples, **kwargs):
 
         if (result and permit) or not (result or permit):
             yield item
+        elif objconf.stop:
+            break
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
@@ -166,7 +179,7 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'mode', or 'combine'.
+            contain the keys 'mode', 'combine', or 'stop'.
 
             mode (str): returns the matches if set to 'permit', otherwise
                 returns the non-matches (default: 'permit').
@@ -177,13 +190,16 @@ def async_pipe(*args, **kwargs):
                 field (str): the item field to search.
                 op (str): the operation, must be one of 'contains',
                     'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
-                    'falsy', 'greater', 'less', 'after', or 'before'.
+                    'falsy', 'greater', 'less', 'after', or 'before',
+                    'atleast', 'atmost'.
 
                 value (scalar): the value to compare the item's field to.
 
             combine (str): determines how to interpret multiple rules and must
                 be either 'and' or 'or'. 'and' means all rules must pass, and
                 'or' means any rule must pass (default: 'and')
+
+            stop (bool): stop after first failure (default: False)
 
     Returns:
         Deferred: twisted.internet.defer.Deferred iterator of the filtered items
@@ -220,7 +236,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'mode', or 'combine'.
+            contain the keys 'mode', 'combine', or 'stop'.
 
             mode (str): returns the matches if set to 'permit', otherwise
                 returns the non-matches (default: 'permit').
@@ -231,13 +247,16 @@ def pipe(*args, **kwargs):
                 field (str): the item field to search.
                 op (str): the operation, must be one of 'contains',
                     'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
-                    'falsy', 'greater', 'less', 'after', or 'before'.
+                    'falsy', 'greater', 'less', 'after', or 'before',
+                    'atleast', 'atmost'.
 
                 value (scalar): the value to compare the item's field to.
 
             combine (str): determines how to interpret multiple rules and must
                 be either 'and' or 'or'. 'and' means all rules must pass, and
                 'or' means any rule must pass (default: 'and')
+
+            stop (bool): stop after first failure (default: False)
 
         field (str): Item attribute from which to obtain the string to be
             tokenized (default: content)
@@ -254,5 +273,10 @@ def pipe(*args, **kwargs):
         >>> rule['value'] = 'kjhlked'
         >>> any(pipe(items, conf={'rule': [rule]}))
         False
+        >>> items = ({'x': x} for x in range(5))
+        >>> rule = {'field': 'x', 'op': 'less', 'value': 2}
+        >>> result = pipe(items, conf={'rule': rule, 'stop': True})
+        >>> len(list(result)) == 2
+        True
     """
     return parser(*args, **kwargs)

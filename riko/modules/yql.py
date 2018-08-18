@@ -26,17 +26,15 @@ A more complex query that finds Flickr photos tagged "fog" in San Francisco:
 Examples:
     basic usage::
 
-        >>> from contextlib import closing
-        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
-        >>> from riko.lib.utils import get_abspath
+        >>> from riko.utils import fetch, get_abspath
         >>> from riko.modules.yql import pipe
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> conf = {'query': "select * from feed where url='%s'" % feed}
         >>> url = get_abspath(get_path('yql.xml'))
         >>>
-        >>> with closing(urlopen(url)) as f:
+        >>> with fetch(url) as f:
         ...     next(pipe(conf=conf, response=f))['title']
         'Bring pizza home'
 
@@ -47,24 +45,24 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import requests
 import pygogo as gogo
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
-from riko.lib import utils
+from riko.parsers import xml2etree, etree2dict
+from riko.utils import fetch
 from riko.bado import coroutine, return_value, util, requests as treq
 
 OPTS = {'ftype': 'none'}
 
-# we use the default format of xml since json loses some structure
+# we use the default format of xml since json looses some structure
 DEFAULTS = {'url': 'http://query.yahooapis.com/v1/public/yql', 'debug': False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
-def async_parser(_, objconf, skip, **kwargs):
+def async_parser(_, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -78,14 +76,15 @@ def async_parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (stream, skip)
+        Deferred: twisted.internet.defer.Deferred stream
 
     Examples:
         >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify, get_abspath
+        >>> from riko.utils import get_abspath
+        >>> from meza.fntools import Objectify
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
@@ -93,11 +92,11 @@ def async_parser(_, objconf, skip, **kwargs):
         >>> f = urlopen(get_abspath(get_path('yql.xml')))
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x[0])['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     conf = {'query': query, 'url': url, 'debug': False}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}, 'response': f}
-        ...     d = async_parser(None, objconf, False, **kwargs)
+        ...     d = async_parser(None, objconf, **kwargs)
         ...     d.addCallbacks(callback, logger.error)
         ...     d.addCallback(lambda _: f.close())
         ...     return d
@@ -106,7 +105,8 @@ def async_parser(_, objconf, skip, **kwargs):
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
-        ...
+        ... finally:
+        ...     f.close()
         Bring pizza home
     """
     if skip:
@@ -123,11 +123,10 @@ def async_parser(_, objconf, skip, **kwargs):
         results = next(tree.getElementsByTagName('results'))
         stream = map(util.etree2dict, results.childNodes)
 
-    result = (stream, skip)
-    return_value(result)
+    return_value(stream)
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -141,13 +140,12 @@ def parser(_, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
-        >>> from contextlib import closing
-        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify, get_abspath
+        >>> from riko.utils import get_abspath
+        >>> from meza.fntools import Objectify
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> url = 'http://query.yahooapis.com/v1/public/yql'
@@ -156,9 +154,9 @@ def parser(_, objconf, skip, **kwargs):
         >>> objconf = Objectify(conf)
         >>> url = get_abspath(get_path('yql.xml'))
         >>>
-        >>> with closing(urlopen(url)) as f:
+        >>> with fetch(url) as f:
         ...     kwargs = {'stream': {}, 'response': f}
-        ...     result, skip = parser(None, objconf, False, **kwargs)
+        ...     result = parser(None, objconf, **kwargs)
         >>>
         >>> next(result)['title']
         'Bring pizza home'
@@ -170,15 +168,18 @@ def parser(_, objconf, skip, **kwargs):
 
         if not f:
             params = {'q': objconf.query, 'diagnostics': objconf.debug}
-            r = requests.get(objconf.url, params=params, stream=True)
-            f = r.raw
 
-        # todo: consider paging for large result sets
-        root = utils.xml2etree(f).getroot()
+            if objconf.memoize and not objconf.cache_type:
+                objconf.cache_type = 'auto'
+
+            f = fetch(params=params, **objconf)
+
+        # TODO: consider paging for large result sets
+        root = xml2etree(f).getroot()
         results = root.find('results')
-        stream = map(utils.etree2dict, results)
+        stream = map(etree2dict, results)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -191,16 +192,17 @@ def async_pipe(*args, **kwargs):
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'xpath', 'html5', 'stringify', or 'assign'.
+        conf (dict): The pipe configuration. Must contain the key 'query'. May
+            contain the keys 'url' or 'debug'.
 
-            url (str): The web site to fetch
-            xpath (str): The XPATH to extract (default: None, i.e., return
-                entire page)
+            url (str): The API to query (default:
+                'http://query.yahooapis.com/v1/public/yql')
 
-            html5 (bool): Use the HTML5 parser (default: False)
-            stringify (bool): Return the web site as a string (default: False)
-            assign (str): Attribute to assign parsed content (default: content)
+            query (str): The API query
+            debug (bool): Enable diagnostics mode (default: False)
+
+        assign (str): Attribute to assign parsed content (default: content)
+        response (str): The API query response (used for offline testing)
 
     Returns:
         dict: twisted.internet.defer.Deferred stream of items
@@ -210,7 +212,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import get_abspath
+        >>> from riko.utils import get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> query = "select * from feed where url='%s'" % feed
@@ -227,7 +229,8 @@ def async_pipe(*args, **kwargs):
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
-        ...
+        ... finally:
+        ...     f.close()
         Bring pizza home
     """
     return async_parser(*args, **kwargs)
@@ -251,22 +254,21 @@ def pipe(*args, **kwargs):
             query (str): The API query
             debug (bool): Enable diagnostics mode (default: False)
 
+        assign (str): Attribute to assign parsed content (default: content)
         response (str): The API query response (used for offline testing)
 
     Yields:
         dict: an item of the result
 
     Examples:
-        >>> from contextlib import closing
-        >>> from six.moves.urllib.request import urlopen
         >>> from riko import get_path
-        >>> from riko.lib.utils import get_abspath
+        >>> from riko.utils import get_abspath
         >>>
         >>> feed = 'http://feeds.feedburner.com/TechCrunch/'
         >>> conf = {'query': "select * from feed where url='%s'" % feed}
         >>> url = get_abspath(get_path('yql.xml'))
         >>>
-        >>> with closing(urlopen(url)) as f:
+        >>> with fetch(url) as f:
         ...     result = next(pipe(conf=conf, response=f))
         ...     sorted(result.keys())
         ['alarmTime', 'begin', 'duration', 'place', 'title', 'uid']

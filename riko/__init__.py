@@ -11,7 +11,7 @@ Examples:
         >>> from itertools import chain
         >>> from functools import partial
         >>> from riko.modules import itembuilder, strreplace
-        >>> from riko.collections.sync import SyncPipe
+        >>> from riko.collections import SyncPipe
         >>>
         >>> ib_conf = {
         ...     'attrs': [
@@ -34,9 +34,9 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
 from os import path as p
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
-__version__ = '0.37.0'
+__version__ = '0.60.0'
 
 __title__ = 'riko'
 __package_name__ = 'riko'
@@ -47,6 +47,7 @@ __license__ = 'MIT'
 __copyright__ = 'Copyright 2015 Reuben Cummings'
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
+ENCODING = 'utf-8'
 
 
 def get_path(name):

@@ -9,6 +9,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.reverse import pipe
+        >>>
         >>> next(pipe({'x': x} for x in range(5))) == {'x': 4}
         True
 
@@ -19,7 +20,7 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import operator
 import pygogo as gogo

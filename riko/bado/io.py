@@ -20,8 +20,8 @@ from io import open
 from tempfile import NamedTemporaryFile
 from os import remove
 
-from builtins import *
-from meza._compat import encode
+from builtins import *  # noqa pylint: disable=unused-import
+from meza.compat import encode
 
 from . import coroutine, return_value
 
@@ -112,6 +112,9 @@ def async_url_open(url, timeout=0, **kwargs):
         page, new_url = None, url
 
     f = yield async_get_file(new_url, StringTransport(), **kwargs)
+
+    if not hasattr(f, 'name') and url.startswith('file'):
+        f.name = url.split('://')[1]
 
     if page:
         page.close()

@@ -36,6 +36,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.input import pipe
+        >>>
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> next(pipe(conf=conf, inputs={'content': '30'})) == {'content': 30}
         True
@@ -47,18 +48,19 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
-
-from . import processor
-from riko.lib import utils
 import pygogo as gogo
+
+from builtins import *  # noqa pylint: disable=unused-import
+from . import processor
+from riko.utils import cast
+
 
 OPTS = {'ftype': 'none'}
 DEFAULTS = {'type': 'text', 'default': ''}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, objconf, skip, **kwargs):
+def parser(_, objconf, skip=False, **kwargs):
     """ Obtains the user input
 
     Args:
@@ -67,16 +69,16 @@ def parser(_, objconf, skip, **kwargs):
         skip (bool): Don't prompt for input
 
     Returns:
-        Tuple(dict, bool): Tuple of (the casted user input, skip)
+        dict: The casted user input
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> inputs = {'age': '30'}
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'inputs': inputs, 'assign': 'age'}
-        >>> parser(None, objconf, False, **kwargs)[0] == {'age': 30}
+        >>> parser(None, objconf, **kwargs) == {'age': 30}
         True
     """
     if kwargs.get('inputs'):
@@ -87,9 +89,8 @@ def parser(_, objconf, skip, **kwargs):
         raw = input("%s (default=%s) " % (objconf.prompt, objconf.default))
         value = raw or objconf.default
 
-    casted = utils.cast(value, objconf.type)
-    result = casted if hasattr(casted, 'keys') else {kwargs['assign']: casted}
-    return result, skip
+    casted = cast(value, objconf.type)
+    return casted if hasattr(casted, 'keys') else {kwargs['assign']: casted}
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -103,13 +104,14 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'prompt',
-            'default', 'type', 'assign'.
+            'default', or 'type'.
 
             prompt (str): User command line prompt
             default (scalar): Default value
             type (str): Expected value type. Must be one of 'text', 'int',
                 'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
-            assign (str): Attribute to assign parsed content (default: content)
+
+        assign (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values to be used in place of prompting the user e.g.
             {'name': 'value1'}
@@ -177,6 +179,7 @@ def pipe(*args, **kwargs):
         >>>
         >>> # date
         >>> import datetime
+        >>> from pytz import utc
         >>>
         >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
         >>> result = next(pipe(conf=conf, inputs={'content': '5/4/82'}))
@@ -185,8 +188,8 @@ def pipe(*args, **kwargs):
         ...     'daylight_savings', 'hour', 'minute', 'month',
         ...     'second', 'timezone', 'utime', 'year']
         True
-        >>> result['date']
-        datetime.datetime(1982, 5, 4, 0, 0)
+        >>> result['date'].isoformat() == '1982-05-04T00:00:00+00:00'
+        True
         >>>
         >>> stream = pipe(conf={'type': 'date'}, inputs={'content': 'tomorrow'})
         >>> d = next(stream)
@@ -195,7 +198,8 @@ def pipe(*args, **kwargs):
         ...     'daylight_savings', 'hour', 'minute', 'month', 'second',
         ...     'timezone', 'utime', 'year']
         True
-        >>> td = d['date'] - datetime.datetime.utcnow()
+        >>> now = utc.localize(datetime.datetime.utcnow())
+        >>> td = d['date'] - now
         >>> hours = td.total_seconds() / 3600
         >>> 24 > hours > 23
         True
@@ -223,9 +227,8 @@ def pipe(*args, **kwargs):
         >>> # location
         >>> inputs = {'content': 'palo alto, ca'}
         >>> result = next(pipe(conf={'type': 'location'}, inputs=inputs))
-        >>> sorted(result.keys()) == [
-        ...     'admin1', 'admin2', 'admin3', 'city', 'country', 'lat',
-        ...     'lon', 'postal', 'quality', 'street']
+        >>> keys = ['admin1', 'admin2', 'admin3', 'city', 'country']
+        >>> sorted(result.keys())[:5] == keys
         True
         >>> result['city'] == 'city'
         True

@@ -6,7 +6,7 @@
 tests.test
 ~~~~~~~~~~
 
-Provides scripttests riko runpipe CLI functionality.
+Provides scripttests to test riko runpipe CLI functionality.
 """
 
 from __future__ import (
@@ -20,7 +20,7 @@ from os import path as p
 from io import StringIO, open
 from timeit import default_timer as timer
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 from scripttest import TestFileEnvironment
 
 sys.path.append('../riko')
@@ -71,9 +71,8 @@ def main(script, tests, verbose=False, stop=True):
         args = [checklines, outlines]
         kwargs = {'fromfile': 'expected', 'tofile': 'got'}
         diffs = ''.join(unified_diff(*args, **kwargs))
-        passed = not diffs
 
-        if not passed:
+        if diffs:
             failures += 1
             msg = "ERROR! Output from test #%i:\n  %s\n" % (num, short_command)
             msg += "doesn't match:\n  %s\n" % expected
@@ -92,6 +91,7 @@ def main(script, tests, verbose=False, stop=True):
     end = 'FAILED (failures=%i)' % failures if failures else 'OK'
     logger.info('Ran %i scripttests in %0.3fs\n\n%s' % (num, time, end))
     sys.exit(failures)
+
 
 if __name__ == '__main__':
     demo = p.join(PARENT_DIR, 'bin', 'runpipe')

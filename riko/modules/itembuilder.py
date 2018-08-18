@@ -18,6 +18,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.itembuilder import pipe
+        >>>
         >>> attrs = {'key': 'title', 'value': 'the title'}
         >>> next(pipe(conf={'attrs': attrs}))['title'] == 'the title'
         True
@@ -29,17 +30,17 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo
-from riko.lib.dotdict import DotDict
+from riko.dotdict import DotDict
 
 OPTS = {'listize': True, 'extract': 'attrs', 'ftype': 'none'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, attrs, skip, **kwargs):
+def parser(_, attrs, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -52,20 +53,19 @@ def parser(_, attrs, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple[Iter(dict), bool]: Tuple of (stream, skip)
+        Iter(dict): The stream of items
 
     Examples:
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>> attrs = [
         ...     {'key': 'title', 'value': 'the title'},
         ...     {'key': 'desc', 'value': 'the desc'}]
-        >>> result, skip = parser(None, map(Objectify, attrs), False)
+        >>> result = parser(None, map(Objectify, attrs))
         >>> result == {'title': 'the title', 'desc': 'the desc'}
         True
     """
     items = ((a.key, a.value) for a in attrs)
-    stream = kwargs['stream'] if skip else DotDict(items)
-    return stream, skip
+    return kwargs['stream'] if skip else DotDict(items)
 
 
 @processor(isasync=True, **OPTS)

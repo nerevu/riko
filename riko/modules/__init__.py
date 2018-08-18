@@ -12,12 +12,15 @@ import pygogo as gogo
 from functools import partial, wraps
 from itertools import chain
 
-from builtins import iter, len, list, map, next, sum as _sum
+from builtins import iter, list, map, next
 
 from riko.bado import coroutine, return_value
-from riko.lib import utils
-from riko.lib.dotdict import DotDict
-from riko.lib.utils import combine_dicts as cdicts, remove_keys
+from riko.cast import cast
+from riko.utils import multiplex, broadcast, dispatch
+from riko.parsers import parse_conf, get_skip, get_field
+from riko.dotdict import DotDict
+from meza.fntools import remove_keys, listize, Objectify
+from meza.process import merge
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -56,35 +59,40 @@ __composers__ = [
 ]
 
 __transformers__ = [
-    'regex',
-    'rename',
-    'subelement',
-    # 'locationextractor',
-    'urlbuilder',
+    'currencyformat',
+    'dateformat',
     'exchangerate',
     'hash',
+    # 'locationextractor',
+    # 'outputcsv',
+    # 'outputical',
+    # 'outputjson',
+    # 'outputkml',
+    'regex',
+    'rename',
+    'refind',
+    'simplemath',
+    'slugify',
     'strconcat',
+    'strfind',
     'strreplace',
-    'stringtokenizer',
     'strtransform',
+    'subelement',
     'substr',
     # 'termextractor',
+    'tokenizer',
     # 'translate',
+    'urlbuilder',
+    'urlparse',
     # 'yahooshortcuts',
-    'dateformat',
-    'simplemath',
-    'currencyformat',
-    # 'outputjson',
-    # 'outputical',
-    # 'outputkml',
-    # 'outputcsv',
 ]
 
 __all__ = __sources__ + __composers__ + __transformers__ + __aggregators__
 
 
-def get_assignment(result, skip, **kwargs):
-    result = iter(utils.listize(result))
+def get_assignment(result, skip=False, **kwargs):
+    # print(result)
+    result = iter(listize(result))
 
     if skip:
         return None, result
@@ -103,17 +111,20 @@ def get_assignment(result, skip, **kwargs):
         multiple = True
 
     first = kwargs.get('count') == 'first'
-    one = first or not multiple
+    _all = kwargs.get('count') == 'all'
+    one = first or not (multiple or _all)
     return one, iter([first_result]) if one else result
 
 
-def assign(item, assignment, key, one=False):
-    value = next(assignment) if one else list(assignment)
-    yield DotDict(cdicts(item, {key: value}))
+def assign(item, assignment, **kwargs):
+    key = kwargs.get('assign')
+    value = next(assignment) if kwargs.get('one') else list(assignment)
+    merged = merge([item, {key: value}])
+    yield DotDict(merged) if kwargs.get('dictize') else merged
 
 
 class processor(object):
-    def __init__(self, defaults=None, isasync=False, **opts):
+    def __init__(self, defaults=None, isasync=False, debug=False, **opts):
         """Creates a sync/async pipe that processes individual items. These
         pipes are classified as `type: processor` and as either
         `sub_type: transformer` or `subtype: source`. To be recognized as
@@ -122,6 +133,7 @@ class processor(object):
         Args:
             defaults (dict): Default `conf` values.
             async (bool): Wrap an async pipe (default: False)
+            debug (bool): Print pipe content to stdout (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
@@ -134,10 +146,10 @@ class processor(object):
                 list-like (default: False)
 
             pdictize (bool): Convert `conf` or an `extract` to a
-                riko.lib.dotdict.DotDict instance (default: True unless
+                riko.dotdict.DotDict instance (default: True unless
                 `listize` is False and `extract` is True)
 
-            objectify (bool): Convert `conf` to a riko.lib.utils.Objectify
+            objectify (bool): Convert `conf` to a meza.fntools.Objectify
                 instance (default: True unless  `ptype` is 'none').
 
             ptype (str): Used to convert `conf` items to a specific type.
@@ -162,8 +174,10 @@ class processor(object):
                 or 'decimal'. Default: 'pass', i.e., return the item as is.
                 Note: setting to 'none' automatically enables `emit`.
 
-            count (str): Stream count. Must be either 'first' or 'all'
-                (default: 'all', i.e., output all results).
+            count (str): Stream count. Must be either 'first' (yields only the
+                first result) or 'all' (yields all results in a list). Default:
+                None (yield all results, but only return a list if there is
+                more than one result).
 
             assign (str): Attribute to assign stream (default: 'content' if
                 `ftype` is 'none', pipe name otherwise)
@@ -182,28 +196,27 @@ class processor(object):
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> @processor()
-            ... def pipe(item, objconf, skip, **kwargs):
+            ... def pipe(item, objconf, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
             ...         content = item['content']
             ...         stream = 'say "%s" %s times!' % (content, objconf.times)
             ...
-            ...     return stream, skip
+            ...     return stream
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
             >>> @processor(isasync=True)
             ... @coroutine
-            ... def async_pipe(item, objconf, skip, **kwargs):
+            ... def async_pipe(item, objconf, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
             ...         content = yield util.async_return(item['content'])
             ...         stream = 'say "%s" %s times!' % (content, objconf.times)
             ...
-            ...     result = stream, skip
-            ...     return_value(result)
+            ...     return_value(stream)
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -228,6 +241,7 @@ class processor(object):
         self.defaults = defaults or {}
         self.opts = opts or {}
         self.async = isasync
+        self.debug = debug
 
     def __call__(self, pipe):
         """Creates a sync/async pipe that processes individual items
@@ -251,26 +265,26 @@ class processor(object):
             ...     'objectify': False}
             ...
             >>> @processor(**kwargs)
-            ... def pipe(content, times, skip, **kwargs):
+            ... def pipe(content, times, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         stream = {kwargs['assign']: value}
             ...
-            ...     return stream, skip
+            ...     return stream
             ...
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> @processor(isasync=True, **kwargs)
-            ... def async_pipe(content, times, skip, **kwargs):
+            ... def async_pipe(content, times, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
             ...         value = 'say "%s" %s times!' % (content, times[0])
             ...         stream = {kwargs['assign']: value}
             ...
-            ...     return stream, skip
+            ...     return stream
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
@@ -300,7 +314,7 @@ class processor(object):
                 'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
                 'objectify': True}
 
-            combined = cdicts(self.defaults, defaults, self.opts, kwargs)
+            combined = merge([self.defaults, defaults, self.opts, kwargs])
             is_source = combined['ftype'] == 'none'
             def_assign = 'content' if is_source else module_name
             extracted = 'extract' in combined
@@ -312,35 +326,36 @@ class processor(object):
             conf = {k: combined[k] for k in self.defaults}
             conf.update(kwargs.get('conf', {}))
             combined.update({'conf': conf})
-            # replace conf with dictized version so we can access its
-            # attributes even if we already extracted a value
-            updates = {'conf': DotDict(conf), 'assign': combined.get('assign')}
+
+            uconf = DotDict(conf) if combined.get('dictize') else conf
+            updates = {'conf': uconf, 'assign': combined.get('assign')}
             kwargs.update(updates)
 
             item = item or {}
             _input = DotDict(item) if combined.get('dictize') else item
             bfuncs = get_broadcast_funcs(**combined)
-            types = {combined['ftype'], combined['ptype']}
+            skip = get_skip(_input, **combined)
+            types = set([]) if skip else {combined['ftype'], combined['ptype']}
 
             if types.difference({'pass', 'none'}):
                 dfuncs = get_dispatch_funcs(**combined)
             else:
                 dfuncs = None
 
-            parsed, orig_item = dispatch(_input, bfuncs, dfuncs=dfuncs)
+            parsed, orig_item = _dispatch(_input, bfuncs, dfuncs=dfuncs)
+            kwargs.update({'skip': skip, 'stream': orig_item})
 
             if self.async:
-                stream, skip = yield pipe(*parsed, stream=orig_item, **kwargs)
+                stream = yield pipe(*parsed, **kwargs)
             else:
-                stream, skip = pipe(*parsed, stream=orig_item, **kwargs)
+                stream = pipe(*parsed, **kwargs)
 
-            one, assignment = get_assignment(stream, skip, **combined)
+            one, assignment = get_assignment(stream, skip=skip, **combined)
 
             if skip or combined.get('emit'):
                 stream = assignment
             elif not skip:
-                key = combined.get('assign')
-                stream = assign(_input, assignment, key, one=one)
+                stream = assign(_input, assignment, one=one, **combined)
 
             if self.async:
                 return_value(stream)
@@ -374,10 +389,10 @@ class operator(object):
                 list-like (default: False)
 
             pdictize (bool): Convert `conf` or an `extract` to a
-                riko.lib.dotdict.DotDict instance (default: True if either
+                riko.dotdict.DotDict instance (default: True if either
                 `extract` is False or both `listize` and `extract` are True)
 
-            objectify (bool): Convert `conf` to a riko.lib.utils.Objectify
+            objectify (bool): Convert `conf` to a meza.fntools.Objectify
                 instance (default: True unless  `ptype` is 'none').
 
             ptype (str): Used to convert `conf` items to a specific type.
@@ -401,8 +416,10 @@ class operator(object):
                 `items`. Must be one of 'pass', 'none', 'text', or 'num' (
                 default: 'pass', i.e., return the item as is)
 
-            count (str): Stream count. Must be either 'first' or 'all'
-                (default: 'all').
+            count (str): Stream count. Must be either 'first' (yields only the
+                first result) or 'all' (yields all results in a list). Default:
+                None (yield all results, but only return a list if there is
+                more than one result).
 
             assign (str): Attribute to assign stream (default: the pipe name)
 
@@ -413,6 +430,7 @@ class operator(object):
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
+            >>> from builtins import sum as _sum, len
             >>> from riko.bado import react, util, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
@@ -439,7 +457,7 @@ class operator(object):
             ...         value = 'say "%s" %s times!' % (content, objconf.times)
             ...         return_value(value)
             ...
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> @operator(isasync=True, emit=False)
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
@@ -487,6 +505,7 @@ class operator(object):
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
+            >>> from builtins import sum as _sum, len
             >>> from riko.bado import react, _issync
             >>> from riko.bado.mock import FakeReactor
             >>> from riko.bado.util import maybeDeferred
@@ -519,7 +538,7 @@ class operator(object):
             True
             >>> async_wrapper = operator(isasync=True, **opts)
             >>>
-            >>> # async pipes don't have to return a deffered,
+            >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for content, times in tuples:
@@ -564,7 +583,7 @@ class operator(object):
                 'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
                 'objectify': True, 'emit': True, 'assign': module_name}
 
-            combined = cdicts(self.defaults, defaults, self.opts, kwargs)
+            combined = merge([self.defaults, defaults, self.opts, kwargs])
             extracted = 'extract' in combined
             pdictize = combined.get('listize') if extracted else True
 
@@ -573,9 +592,8 @@ class operator(object):
             conf.update(kwargs.get('conf', {}))
             combined.update({'conf': conf})
 
-            # replace conf with dictized version so we can access its
-            # attributes even if we already extracted a value
-            updates = {'conf': DotDict(conf), 'assign': combined.get('assign')}
+            uconf = DotDict(conf) if combined.get('dictize') else conf
+            updates = {'conf': uconf, 'assign': combined.get('assign')}
             kwargs.update(updates)
 
             items = items or iter([])
@@ -588,8 +606,8 @@ class operator(object):
             else:
                 dfuncs = None
 
-            pairs = (dispatch(item, bfuncs, dfuncs=dfuncs) for item in _INPUT)
-            parsed, _ = dispatch(DotDict(), bfuncs, dfuncs=dfuncs)
+            pairs = (_dispatch(item, bfuncs, dfuncs=dfuncs) for item in _INPUT)
+            parsed, _ = _dispatch(DotDict(), bfuncs, dfuncs=dfuncs)
 
             # - operators can't skip items
             # - purposely setting both variables to maps of the same iterable
@@ -609,15 +627,16 @@ class operator(object):
             wrapper.__dict__['sub_type'] = sub_type
 
             # operators can only assign one value per item and can't skip items
-            _, assignment = get_assignment(stream, False, **combined)
+            _, assignment = get_assignment(stream, **combined)
 
             if combined.get('emit'):
                 stream = assignment
             else:
                 singles = (iter([v]) for v in assignment)
-                key = combined.get('assign')
-                assigned = (assign({}, s, key, one=True) for s in singles)
-                stream = utils.multiplex(assigned)
+                assigned = (
+                    assign({}, s, one=True, **combined) for s in singles)
+
+                stream = multiplex(assigned)
 
             if self.async:
                 return_value(stream)
@@ -629,42 +648,41 @@ class operator(object):
         return coroutine(wrapper) if self.async else wrapper
 
 
-def dispatch(item, bfuncs, dfuncs=None):
-    split = utils.broadcast(item, *bfuncs)
-    parsed = utils.dispatch(split, *dfuncs) if dfuncs else split
+def _dispatch(item, bfuncs, dfuncs=None):
+    split = broadcast(item, *bfuncs)
+    parsed = dispatch(split, *dfuncs) if dfuncs else split
     return parsed, item
 
 
 def get_broadcast_funcs(**kwargs):
-    kw = utils.Objectify(kwargs, conf={})
+    kw = Objectify(kwargs, conf={})
     pieces = kw.conf[kw.extract] if kw.extract else kw.conf
     no_conf = remove_keys(kwargs, 'conf')
-    noop = partial(utils.cast, _type='none')
+    noop = partial(cast, _type='none')
 
     if kw.listize:
-        listed = utils.listize(pieces)
+        listed = listize(pieces)
         piece_defs = map(DotDict, listed) if kw.pdictize else listed
-        parser = partial(utils.parse_conf, **no_conf)
+        parser = partial(parse_conf, **no_conf)
         pfuncs = [partial(parser, conf=conf) for conf in piece_defs]
-        get_pieces = lambda item: utils.broadcast(item, *pfuncs)
+        get_pieces = lambda item: broadcast(item, *pfuncs)
     elif kw.ptype != 'none':
         conf = DotDict(pieces) if kw.pdictize and pieces else pieces
-        get_pieces = partial(utils.parse_conf, conf=conf, **no_conf)
+        get_pieces = partial(parse_conf, conf=conf, **no_conf)
     else:
         get_pieces = noop
 
-    ffunc = partial(utils.get_field, **kwargs)
-    get_field = noop if kw.ftype == 'none' else ffunc
-    return (get_field, get_pieces, partial(utils.get_skip, **kwargs))
+    ffunc = noop if kw.ftype == 'none' else partial(get_field, **kwargs)
+    return (ffunc, get_pieces)
 
 
 def get_dispatch_funcs(**kwargs):
-    pfunc = partial(utils.cast, _type=kwargs['ptype'])
-    field_dispatch = partial(utils.cast, _type=kwargs['ftype'])
+    pfunc = partial(cast, _type=kwargs['ptype'])
+    field_dispatch = partial(cast, _type=kwargs['ftype'])
 
     if kwargs['objectify'] and kwargs['ptype'] not in {'none', 'pass'}:
-        piece_dispatch = lambda p: utils.Objectify(p.items(), func=pfunc)
+        piece_dispatch = lambda p: Objectify(p.items(), func=pfunc)
     else:
         piece_dispatch = pfunc
 
-    return [field_dispatch, piece_dispatch, partial(utils.cast, _type='pass')]
+    return [field_dispatch, piece_dispatch]

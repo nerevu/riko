@@ -4,9 +4,10 @@
 from __future__ import absolute_import, division, print_function
 
 import sys
-import pkutils
 
 from os import path as p
+
+import pkutils
 
 try:
     from setuptools import setup, find_packages
@@ -18,11 +19,11 @@ PARENT_DIR = p.abspath(p.dirname(__file__))
 sys.dont_write_bytecode = True
 py2_requirements = set(pkutils.parse_requirements('py2-requirements.txt'))
 py3_requirements = set(pkutils.parse_requirements('requirements.txt'))
-dev_requirements = set(pkutils.parse_requirements('dev-requirements.txt'))
+dev_requirements = list(pkutils.parse_requirements('dev-requirements.txt'))
 optional = 'optional-requirements.txt'
 opt_requirements = set(pkutils.parse_requirements(optional))
 readme = pkutils.read('README.rst')
-# changes = pkutils.read('CHANGES.rst').replace('.. :changelog:', '')
+changes = pkutils.read(p.join(PARENT_DIR, 'docs', 'CHANGES.rst'))
 module = pkutils.parse_module(p.join(PARENT_DIR, 'riko', '__init__.py'))
 license = module.__license__
 version = module.__version__
@@ -32,23 +33,23 @@ user = 'nerevu'
 
 # Conditional sdist dependencies:
 py2 = sys.version_info.major == 2
-requirements = py2_requirements if py2 else py3_requirements
+requirements = list(py2_requirements if py2 else py3_requirements)
 
 # Conditional bdist_wheel dependencies:
-py2_require = py2_requirements.difference(py3_requirements)
+py2_require = list(py2_requirements.difference(py3_requirements))
 
 # Setup requirements
 setup_require = [r for r in dev_requirements if 'pkutils' in r]
 
 # Optional requirements
-xml_require = {r for r in opt_requirements if not r.lower().startswith('t')}
-async_require = opt_requirements.difference(xml_require)
+xml_require = [r for r in opt_requirements if not r.lower().startswith('t')]
+async_require = list(opt_requirements.difference(xml_require))
 
 setup(
     name=project,
     version=version,
     description=description,
-    long_description=readme,
+    long_description='%s\n\n%s' % (readme, changes),
     author=module.__author__,
     author_email=module.__email__,
     url=pkutils.get_url(project, user),
@@ -79,11 +80,13 @@ setup(
         pkutils.LICENSES[license],
         pkutils.get_status(version),
         'Natural Language :: English',
+        'Programming Language :: Python',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
         'Environment :: Console',
         'Topic :: Software Development :: Libraries :: Python Modules',

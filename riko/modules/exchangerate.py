@@ -22,32 +22,28 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
-import requests
 import pygogo as gogo
 
 from json import loads
 from decimal import Decimal
-from contextlib import closing
-from functools import partial
 
-from builtins import *
-from six.moves.urllib.request import urlopen
+from builtins import *  # noqa pylint: disable=unused-import
 from ijson import items
-from meza._compat import decode
+from meza.compat import decode
 
 from . import processor
-from riko.lib import utils
 from riko.bado import coroutine, return_value, requests as treq, io
+from riko.utils import fetch, get_abspath
 
 EXCHANGE_API_BASE = 'http://finance.yahoo.com/webservice'
 EXCHANGE_API = '%s/v1/symbols/allcurrencies/quote' % EXCHANGE_API_BASE
 # EXCHANGE_API = 'https://openexchangerates.org/api/latest.json'
-# PARAMS = {'app_id': 'API_KEY'}
+# PARAMS = {'app_id': OPEN_EXCHANGE_RATES_APP_ID}
 
 OPTS = {'field': 'content', 'ftype': 'text'}
 DEFAULTS = {
     'currency': 'USD',
-    'sleep': 0,
+    'delay': 0,
     'memoize': False,
     'precision': 6,
     'url': EXCHANGE_API,
@@ -59,12 +55,13 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 def parse_response(json):
     resources = json['list']['resources']
     fields = (r['resource']['fields'] for r in resources)
-    return {i['name']: Decimal(i['price']) for i in fields}
+    return {i['symbol']: Decimal(i['price']) for i in fields if 'price' in i}
 
 
 def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
     def get_rate(currency):
-        rate = rates.get('USD/%s' % currency, Decimal('nan'))
+        rate = rates.get('%s=X' % currency, Decimal('nan'))
+
         if not rate:
             logger.warning('rate USD/%s not found in rates' % currency)
 
@@ -83,7 +80,7 @@ def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
 
 
 @coroutine
-def async_parser(base, objconf, skip, **kwargs):
+def async_parser(base, objconf, skip=False, **kwargs):
     """ Asynchronously parses the pipe content
 
     Args:
@@ -97,24 +94,23 @@ def async_parser(base, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Tuple of (item, skip)
+        Deferred: twisted.internet.defer.Deferred item
 
     Examples:
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0])
         ...     url = get_path('quote.json')
         ...     conf = {
-        ...         'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
+        ...         'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': item, 'assign': 'content'}
-        ...     d = async_parser(item['content'], objconf, False, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     d = async_parser(item['content'], objconf, **kwargs)
+        ...     return d.addCallbacks(print, logger.error)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -123,26 +119,29 @@ def async_parser(base, objconf, skip, **kwargs):
         ...
         1.545801
     """
+    same_currency = base == objconf.currency
+
     if skip:
         rate = kwargs['stream']
+    elif same_currency:
+        rate = Decimal(1)
     elif objconf.url.startswith('http'):
         r = yield treq.get(objconf.url, params=objconf.params)
         json = yield treq.json(r)
     else:
-        url = utils.get_abspath(objconf.url)
-        content = yield io.async_url_read(url, delay=objconf.sleep)
+        url = get_abspath(objconf.url)
+        content = yield io.async_url_read(url, delay=objconf.delay)
         json = loads(decode(content))
 
-    if not skip:
+    if not (skip or same_currency):
         places = Decimal(10) ** -objconf.precision
         rates = parse_response(json)
         rate = calc_rate(base, objconf.currency, rates, places=places)
 
-    result = (rate, skip)
-    return_value(result)
+    return_value(rate)
 
 
-def parser(base, objconf, skip, **kwargs):
+def parser(base, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -156,45 +155,38 @@ def parser(base, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
+        dict: The item
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.lib.utils import Objectify
+        >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('quote.json')
-        >>> conf = {'url': url, 'currency': 'USD', 'sleep': 0, 'precision': 6}
+        >>> conf = {'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> result, skip = parser(item['content'], objconf, False, **kwargs)
-        >>> result
+        >>> parser(item['content'], objconf, **kwargs)
         Decimal('1.545801')
     """
+    same_currency = base == objconf.currency
+
     if skip:
         rate = kwargs['stream']
-    elif objconf.url.startswith('http'):
-        get = partial(requests.get, stream=True)
-        sget = utils.memoize(utils.HALF_DAY)(get) if objconf.memoize else get
-        r = sget(objconf.url, params=objconf.params)
-        json = next(items(r.raw, ''))
+    elif same_currency:
+        rate = Decimal(1)
     else:
-        context = utils.SleepyDict(delay=objconf.sleep)
-        url = utils.get_abspath(objconf.url)
+        decode = objconf.url.startswith('http')
 
-    try:
-        with closing(urlopen(url, context=context)) as f:
-            json = next(items(f, ''))
-    except TypeError:
-        with closing(urlopen(url)) as f:
+        with fetch(decode=decode, **objconf) as f:
             json = next(items(f, ''))
 
-    if not skip:
+    if not (skip or same_currency):
         places = Decimal(10) ** -objconf.precision
         rates = parse_response(json)
         rate = calc_rate(base, objconf.currency, rates, places=places)
 
-    return rate, skip
+    return rate
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -208,7 +200,7 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'sleep', 'memoize', 'field', or 'assign'.
+            'params', 'currency', 'delay', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
@@ -217,15 +209,17 @@ def async_pipe(*args, **kwargs):
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
 
-            sleep (flt): Amount of time to sleep (in secs) before fetching the
+            delay (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
-            memoize: Cache the exchange rate API response (default: False).
-            field (str): Item attribute from which to obtain the string to be
-                formatted (default: 'content')
+            memoize (bool): Cache the exchange rate API response (default:
+                False).
 
-            assign (str): Attribute to assign parsed content (default:
-                exchangerate)
+        field (str): Item attribute from which to obtain the string to be
+            formatted (default: 'content')
+
+        assign (str): Attribute to assign parsed content (default:
+            exchangerate)
 
     Returns:
         dict: twisted.internet.defer.Deferred stream of items
@@ -262,7 +256,7 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'sleep', 'memoize', 'field', or 'assign'.
+            'params', 'currency', 'delay', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
@@ -271,10 +265,11 @@ def pipe(*args, **kwargs):
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
 
-            sleep (flt): Amount of time to sleep (in secs) before fetching the
+            delay (flt): Amount of time to sleep (in secs) before fetching the
                 url. Useful for simulating network latency. Default: 0.
 
-            memoize: Cache the exchange rate API response (default: False).
+            memoize (bool): Cache the exchange rate API response (default:
+                False).
 
         field (str): Item attribute from which to obtain the string to be
             formatted (default: 'content')

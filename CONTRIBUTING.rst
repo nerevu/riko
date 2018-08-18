@@ -14,10 +14,11 @@ Ready to contribute? Here's how.
 Types of Contributions
 ----------------------
 
-Report Bugs
-~~~~~~~~~~~
+Feedback & Bug Reports
+~~~~~~~~~~~~~~~~~~~~~~
 
-Report bugs at https://github.com/nerevu/riko/issues.
+The best way to send feedback or report a bug is to file an issue at
+https://github.com/nerevu/riko/issues.
 
 If you are reporting a bug, please include:
 
@@ -25,34 +26,29 @@ If you are reporting a bug, please include:
 * Any details about your local setup that might be helpful in troubleshooting.
 * Detailed steps to reproduce the bug.
 
-Fix Bugs
-~~~~~~~~
+Bug Fixes
+~~~~~~~~~
 
 Look through the GitHub `issues`_ for anything tagged with ``bug`` and hack away.
 
-Implement Features
-~~~~~~~~~~~~~~~~~~
+Feature Implementation
+~~~~~~~~~~~~~~~~~~~~~~
 
 Look through the GitHub `issues`_ for anything tagged with ``feature`` and hack away.
 
-Write Documentation
-~~~~~~~~~~~~~~~~~~~
-
-riko could always use more documentation, whether as part of the
-official docs, in docstrings, or even on the web in blog posts, articles, and such.
-Feel free to contribute any type of documentation.
-
-Submit Feedback
-~~~~~~~~~~~~~~~
-
-The best way to send feedback is to file an issue at https://github.com/nerevu/riko/issues.
-
-If you are proposing a feature:
+If you are *proposing* a feature:
 
 * Explain in detail how it would work.
 * To make it easier to implement, Keep the scope as narrow as possible.
 * Remember that this is a volunteer-driven project, and that contributions
   are welcome :)
+
+Documentation
+~~~~~~~~~~~~~
+
+riko could always use more documentation, whether as part of the
+official docs, in docstrings, or even on the web in blog posts, articles, and such.
+Feel free to contribute any type of documentation.
 
 Get Started!
 ------------

@@ -12,6 +12,7 @@ Examples:
     basic usage::
 
         >>> from riko.modules.rssitembuilder import pipe
+        >>>
         >>> conf = {'title': 'the title', 'description': 'description'}
         >>> next(pipe(conf=conf))['y:title'] == 'the title'
         True
@@ -25,11 +26,11 @@ from __future__ import (
 
 from datetime import datetime as dt
 
-from builtins import *
+from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 import pygogo as gogo
-from riko.lib.dotdict import DotDict
+from riko.dotdict import DotDict
 
 OPTS = {'emit': True}
 DEFAULTS = {'pubDate': dt.now().isoformat()}
@@ -49,7 +50,7 @@ RSS = {
     'mediaContentWidth': 'media:content.width'}
 
 
-def parser(item, objconf, skip, **kwargs):
+def parser(item, objconf, skip=False, **kwargs):
     """ Parses the pipe content
 
     Args:
@@ -62,17 +63,17 @@ def parser(item, objconf, skip, **kwargs):
         stream (dict): The original item
 
     Returns:
-        Tuple(Iter[dict], bool): Tuple of (stream, skip)
+        Iter[dict]: The stream of items
 
     Examples:
-        >>> from riko.lib.dotdict import DotDict
-        >>> from riko.lib.utils import Objectify
+        >>> from riko.dotdict import DotDict
+        >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict()
         >>> conf = {'guid': 'a1', 'mediaThumbURL': 'image.png'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item}
-        >>> result, skip = parser(item, objconf, False, **kwargs)
+        >>> result = parser(item, objconf, **kwargs)
         >>> result == {'media:thumbnail': {'url': 'image.png'}, 'y:id': 'a1'}
         True
     """
@@ -83,7 +84,7 @@ def parser(item, objconf, skip, **kwargs):
         rdict = ((RSS.get(k, k), item.get(v, v, **kwargs)) for k, v in items)
         stream = DotDict(rdict)
 
-    return stream, skip
+    return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
