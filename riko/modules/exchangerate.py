@@ -22,6 +22,8 @@ Attributes:
 from __future__ import (
     absolute_import, division, print_function, unicode_literals)
 
+import traceback
+
 import pygogo as gogo
 
 from json import loads
@@ -179,7 +181,15 @@ def parser(base, objconf, skip=False, **kwargs):
         decode = objconf.url.startswith('http')
 
         with fetch(decode=decode, **objconf) as f:
-            json = next(items(f, ''))
+            try:
+                json = next(items(f, ''))
+            except Exception as e:
+                logger.error('Error parsing {url}'.format(**objconf))
+                logger.debug(f.read())
+                logger.error(e)
+                logger.error(traceback.format_exc())
+                skip = True
+                rate = 0
 
     if not (skip or same_currency):
         places = Decimal(10) ** -objconf.precision
