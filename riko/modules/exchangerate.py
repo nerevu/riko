@@ -48,13 +48,20 @@ DEFAULTS = {
     'memoize': False,
     'precision': 6,
     'url': EXCHANGE_API,
-    'params': {'format': 'json'}}
+    'params': PARAMS}
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parse_response(json):
-    return {k: Decimal(v) for k, v in json['rates'].items() if v}
+    if 'rates' in json:
+        resp = {k: Decimal(v) for k, v in json['rates'].items() if v}
+    else
+        logger.warning('invalid json response:')
+        logger.warning(json)
+        resp = {}
+
+    return resp
 
 
 def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
