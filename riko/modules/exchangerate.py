@@ -56,7 +56,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 def parse_response(json):
     if 'rates' in json:
         resp = {k: Decimal(v) for k, v in json['rates'].items() if v}
-    else
+    else:
         logger.warning('invalid json response:')
         logger.warning(json)
         resp = {}
