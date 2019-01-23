@@ -213,6 +213,7 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _regex: https://github.com/nerevu/riko/blob/master/riko/modules/regex.py
 .. _refind: https://github.com/nerevu/riko/blob/master/riko/modules/refind.py
 .. _rename: https://github.com/nerevu/riko/blob/master/riko/modules/rename.py
+.. _reverse: https://github.com/nerevu/riko/blob/master/riko/modules/reverse.py
 .. _rssitembuilder: https://github.com/nerevu/riko/blob/master/riko/modules/rssitembuilder.py
 .. _simplemath: https://github.com/nerevu/riko/blob/master/riko/modules/simplemath.py
 .. _slugify: https://github.com/nerevu/riko/blob/master/riko/modules/slugify.py
