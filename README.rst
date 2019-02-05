@@ -120,7 +120,7 @@ Yahoo! Pipe into python code. ``pipe2py`` suited my needs at the time
 but was unmaintained and lacked asynchronous or parallel processing.
 
 ``riko`` addresses the shortcomings of ``pipe2py`` but removed support for
-importing Yahoo! Pipes json workflows. ``riko`` contains ~`40 built-in`_
+importing Yahoo! Pipes json workflows. ``riko`` contains ~ `40 built-in`_
 modules, aka ``pipes``, that allow you to programatically perform most of the
 tasks Yahoo! Pipes allowed.
 
