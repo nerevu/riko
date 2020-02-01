@@ -11,16 +11,12 @@ Examples:
         >>> from riko import get_path
         >>> from riko.bado.io import async_url_open
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
 
 from io import open
 from tempfile import NamedTemporaryFile
 from os import remove
 
-from builtins import *  # noqa pylint: disable=unused-import
 from meza.compat import encode
 
 from . import coroutine, return_value

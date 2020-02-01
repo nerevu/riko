@@ -5,9 +5,6 @@ riko.utils
 ~~~~~~~~~~~~~~
 Provides utility classes and functions
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import re
 import sys
 import itertools as it
@@ -19,8 +16,8 @@ from operator import itemgetter
 from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
 
-from six.moves.urllib.error import HTTPError, URLError
-from six.moves.urllib.request import urlopen
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 import requests
 import pygogo as gogo
@@ -30,7 +27,6 @@ try:
 except ImportError:
     import builtins as _builtins
 
-from builtins import *  # noqa pylint: disable=unused-import
 from mezmorize import memoize
 from meza.io import reencode
 from meza.compat import decode
@@ -166,6 +162,8 @@ class fetch(TextIOBase):
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
         self.cache_type = kwargs.get('cache_type')
+
+        # TODO: need to use sep keys for memoize and urlopen
         self.timeout = kwargs.get('timeout')
 
         if self.cache_type:

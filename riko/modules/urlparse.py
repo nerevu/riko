@@ -19,13 +19,9 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
 
-from builtins import *  # noqa pylint: disable=unused-import
-from six.moves.urllib.parse import urlparse
+from urllib.parse import urlparse
 from . import processor
 
 OPTS = {'ftype': 'text', 'field': 'content'}

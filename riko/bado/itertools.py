@@ -11,14 +11,10 @@ Examples:
         >>> from riko import get_path
         >>> from riko.bado.itertools import coop_reduce
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 from functools import partial
 
 import itertools as it
 
-from builtins import *  # noqa pylint: disable=unused-import
 from . import coroutine, return_value, reactor
 from .mock import FakeReactor
 

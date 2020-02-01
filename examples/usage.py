@@ -371,10 +371,6 @@ Design Principles
     >>> set(next(result)).issuperset(intersection)
     True
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
-from builtins import *  # noqa pylint: disable=unused-import
 
 from pprint import pprint
 from riko.collections import SyncPipe

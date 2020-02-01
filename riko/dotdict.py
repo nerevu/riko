@@ -5,13 +5,9 @@ riko.dotdict
 ~~~~~~~~~~~~
 Provides a class for creating dicts with dot notation access
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
 
 from functools import reduce
-from builtins import *  # noqa pylint: disable=unused-import
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 

@@ -20,12 +20,7 @@ does not:
     option, they're not on by default).
 """
 
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
-
-from builtins import *  # noqa pylint: disable=unused-import
 
 from chardet import detect
 from meza.compat import decode

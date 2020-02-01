@@ -9,9 +9,6 @@ tests.test
 Provides scripttests to test riko runpipe CLI functionality.
 """
 
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import sys
 import pygogo as gogo
 
@@ -20,7 +17,6 @@ from os import path as p
 from io import StringIO, open
 from timeit import default_timer as timer
 
-from builtins import *  # noqa pylint: disable=unused-import
 from scripttest import TestFileEnvironment
 
 sys.path.append('../riko')

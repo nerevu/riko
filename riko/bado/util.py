@@ -11,14 +11,9 @@ Examples:
         >>> from riko import get_path
         >>> from riko.bado.util import xml2etree
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 from os import environ
 from sys import executable
 from functools import partial
-
-from builtins import *  # noqa pylint: disable=unused-import
 
 from riko.parsers import _make_content, entity2text
 

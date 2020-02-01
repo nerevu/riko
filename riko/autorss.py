@@ -5,15 +5,11 @@ riko.autorss
 ~~~~~~~~~~~~
 Provides functions for finding RSS feeds from a site's LINK tags
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
 
 from itertools import chain
 from html.parser import HTMLParser
 
-from builtins import *  # noqa pylint: disable=unused-import
 from meza.compat import decode
 from riko.utils import fetch
 from riko.bado import coroutine, return_value, microdom

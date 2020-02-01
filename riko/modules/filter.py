@@ -28,9 +28,6 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import re
 import operator as op
 
@@ -38,7 +35,6 @@ from decimal import Decimal, InvalidOperation
 
 import pygogo as gogo
 
-from builtins import *  # noqa pylint: disable=unused-import
 from . import operator
 from riko.parsers import parse_conf
 from riko.cast import cast_date

@@ -20,13 +20,9 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
-from itertools import chain
 
-from builtins import *  # noqa pylint: disable=unused-import
+from itertools import chain
 
 from . import operator
 from riko.utils import multiplex

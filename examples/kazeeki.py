@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 from pprint import pprint
 from functools import partial
 

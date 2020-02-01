@@ -41,9 +41,6 @@ Fetching feeds
     >>> item['link'][:23] == 'http://feeds.gawker.com'
     True
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 from riko import get_path
 from riko.bado import coroutine
 from riko.collections import SyncPipe, AsyncPipe

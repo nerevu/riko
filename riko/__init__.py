@@ -30,11 +30,7 @@ Examples:
         ...     'strreplace': 'Timmy', 'author': 'Tommy'}
         True
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 from os import path as p
-from builtins import *  # noqa pylint: disable=unused-import
 
 __version__ = '0.60.4'
 

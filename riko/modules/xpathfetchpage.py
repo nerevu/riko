@@ -40,15 +40,10 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import traceback
 import pygogo as gogo
 
 from os.path import splitext
-
-from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 from riko.utils import fetch, get_abspath

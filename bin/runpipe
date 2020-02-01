@@ -47,7 +47,7 @@ parser.add_argument(
     help='The pipe to run (default: reads from stdin).')
 
 parser.add_argument(
-    '-a', '--async', action='store_true', default=False,
+    '-a', '--async', dest='isasync', action='store_true', default=False,
     help="Load async pipe.\n\n")
 
 parser.add_argument(
@@ -77,7 +77,7 @@ def run():
         except ImportError:
             exit('Pipe examples.%s not found!' % pipeid)
 
-    if args.async:
+    if args.isasync:
         pipeline = getattr(module, 'async_pipe')
         react(pipeline, [args.test])
     else:

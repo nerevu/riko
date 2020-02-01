@@ -18,15 +18,11 @@ sample of XML.
 Microdom mainly focuses on working with HTML and XHTML.
 """
 
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import re
 import itertools as it
 
 from io import open, BytesIO, StringIO
 from functools import partial
-from builtins import *  # noqa pylint: disable=unused-import
 
 from meza.compat import encode, decode
 
