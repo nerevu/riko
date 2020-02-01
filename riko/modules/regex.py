@@ -15,7 +15,7 @@ Examples:
 
         >>> from riko.modules.regex import pipe
         >>>
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule}
         >>> item = {'content': 'hello world'}
@@ -63,7 +63,7 @@ def async_parser(item, rules, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> replace = '$2wide'
         >>>
         >>> def run(reactor):
@@ -126,7 +126,7 @@ def parser(item, rules, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> rules = [Objectify(rule)]
@@ -201,7 +201,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> item = {'content': 'hello world', 'title': 'greeting'}
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> replace = '$2wide'
         >>>
         >>> def run(reactor):
@@ -258,7 +258,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> # default matching
         >>> item = {'content': 'hello world', 'title': 'greeting'}
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> result = next(pipe(item, conf=conf))

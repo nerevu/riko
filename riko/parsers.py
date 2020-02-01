@@ -42,7 +42,7 @@ else:
     from lxml.html import html5parser
 
 try:
-    import speedparser
+    import speedparser3 as speedparser
 except ImportError:
     import feedparser
     logger.debug('rss parser: feedparser')

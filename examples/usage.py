@@ -143,7 +143,7 @@ Synchronous processing
     ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
     >>> sub_conf = {'path': 'content.value'}
     >>> sub_kwargs = {'conf': sub_conf, 'emit': True}
-    >>> match = r'(.*href=")([\w:/.@]+)(".*)'
+    >>> match = r'(.*href=")([\\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> regex_conf = {'rule': regex_rule}
     >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
@@ -198,7 +198,7 @@ Parallel processing
     >>> # simplify testing
     >>> url = get_path('feed.xml')
     >>> sub_conf = {'path': 'content.value'}
-    >>> match = r'(.*href=")([\w:/.@]+)(".*)'
+    >>> match = r'(.*href=")([\\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> filter_rule = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
@@ -212,7 +212,7 @@ Parallel processing
     >>> #      within it
     >>> #   5. filter for items with local file urls (which happen to be rss
     >>> #      feeds)
-    >>> #   6. strip any trailing `\` from the url
+    >>> #   6. strip any trailing `\\` from the url
     >>> #   7. remove duplicate urls
     >>> #   8. fetch each rss feed
     >>> #   9. Merge the rss feeds into a list
@@ -244,7 +244,7 @@ Asynchronous processing
     >>> #   - the `dotall` option is used to match `.*` across newlines
     >>> url = get_path('feed.xml')
     >>> sub_conf = {'path': 'content.value'}
-    >>> match = r'(.*href=")([\w:/.@]+)(".*)'
+    >>> match = r'(.*href=")([\\w:/.@]+)(".*)'
     >>> regex_rule = {
     ...     'field': 'content', 'match': match, 'replace': '$2',
     ...     'dotall': True}
