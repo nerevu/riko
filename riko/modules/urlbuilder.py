@@ -54,14 +54,12 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
-from builtins import *  # noqa pylint: disable=unused-import
-from six.moves.urllib.parse import urljoin, urlencode
+from urllib.parse import urljoin, urlencode
 
 from . import processor
+
 import pygogo as gogo
+
 from riko.dotdict import DotDict
 from riko.parsers import get_value
 from riko.cast import cast_url

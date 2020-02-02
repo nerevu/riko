@@ -11,12 +11,8 @@ Examples:
         >>> from riko import get_path
         >>> from riko.bado.mock import FakeReactor
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
 
-from builtins import *  # noqa pylint: disable=unused-import
 from . import reactor
 
 try:

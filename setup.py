@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import, division, print_function
-
 import sys
 
 from os import path as p
@@ -17,8 +15,7 @@ except ImportError:
 PARENT_DIR = p.abspath(p.dirname(__file__))
 
 sys.dont_write_bytecode = True
-py2_requirements = set(pkutils.parse_requirements('py2-requirements.txt'))
-py3_requirements = set(pkutils.parse_requirements('requirements.txt'))
+requirements = list(pkutils.parse_requirements('requirements.txt'))
 dev_requirements = list(pkutils.parse_requirements('dev-requirements.txt'))
 optional = 'optional-requirements.txt'
 opt_requirements = set(pkutils.parse_requirements(optional))
@@ -30,13 +27,6 @@ version = module.__version__
 project = module.__title__
 description = module.__description__
 user = 'nerevu'
-
-# Conditional sdist dependencies:
-py2 = sys.version_info.major == 2
-requirements = list(py2_requirements if py2 else py3_requirements)
-
-# Conditional bdist_wheel dependencies:
-py2_require = list(py2_requirements.difference(py3_requirements))
 
 # Setup requirements
 setup_require = [r for r in dev_requirements if 'pkutils' in r]
@@ -65,7 +55,6 @@ setup(
     },
     install_requires=requirements,
     extras_require={
-        'python_version<3.0': py2_require,
         'xml': xml_require,
         'async': async_require,
         'develop': dev_requirements,
@@ -81,11 +70,11 @@ setup(
         pkutils.get_status(version),
         'Natural Language :: English',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy',
         'Environment :: Console',

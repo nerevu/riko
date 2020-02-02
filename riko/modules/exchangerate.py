@@ -19,9 +19,6 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import traceback
 
 import pygogo as gogo
@@ -30,7 +27,6 @@ from json import loads
 from decimal import Decimal
 from os import getenv
 
-from builtins import *  # noqa pylint: disable=unused-import
 from ijson import items
 from meza.compat import decode
 

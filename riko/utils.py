@@ -5,9 +5,6 @@ riko.utils
 ~~~~~~~~~~~~~~
 Provides utility classes and functions
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import re
 import sys
 import itertools as it
@@ -19,8 +16,8 @@ from operator import itemgetter
 from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
 
-from six.moves.urllib.error import HTTPError, URLError
-from six.moves.urllib.request import urlopen
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 import requests
 import pygogo as gogo
@@ -30,7 +27,6 @@ try:
 except ImportError:
     import builtins as _builtins
 
-from builtins import *  # noqa pylint: disable=unused-import
 from mezmorize import memoize
 from meza.io import reencode
 from meza.compat import decode
@@ -166,6 +162,8 @@ class fetch(TextIOBase):
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
         self.cache_type = kwargs.get('cache_type')
+
+        # TODO: need to use sep keys for memoize and urlopen
         self.timeout = kwargs.get('timeout')
 
         if self.cache_type:
@@ -335,8 +333,8 @@ def dispatch(split, *funcs):
            /--> item1 --> double(item1) -----> \
           /                                     \
     split ----> item2 --> triple(item2) -----> _OUTPUT
-          \                                     /
-           \--> item3 --> quadruple(item3) --> /
+          \\                                     /
+           \\--> item3 --> quadruple(item3) --> /
 
     One way to construct such a flow in code would be::
 
@@ -356,8 +354,8 @@ def broadcast(item, *funcs):
            /--> item --> double(item) -----> \
           /                                   \
     item -----> item --> triple(item) -----> _OUTPUT
-          \                                   /
-           \--> item --> quadruple(item) --> /
+          \\                                   /
+           \\--> item --> quadruple(item) --> /
 
     One way to construct such a flow in code would be::
 
@@ -396,7 +394,7 @@ def multi_substitute(word, rules):
     regexes = ('(?P<match_%i>%s)' % (p, r) for p, r in tuples)
     pattern = '|'.join(regexes)
     regex = re.compile(pattern, flags)
-    resplit = re.compile('\$(\d+)')
+    resplit = re.compile('\\$(\\d+)')
 
     # For each match, look-up corresponding replace value in dictionary
     rules_in_series = filter(itemgetter('series'), rules)
@@ -439,8 +437,8 @@ def multi_substitute(word, rules):
             rule = rules[int(name[6:])]
             series = rule.get('series')
             kwargs = {'count': rule['count'], 'series': series}
-            is_previous = name is prev_name
-            singlematch = kwargs['count'] is 1
+            is_previous = name == prev_name
+            singlematch = kwargs['count'] == 1
             is_series = prev_is_series or kwargs['series']
             isnt_previous = bool(prev_name) and not is_previous
 
@@ -499,7 +497,7 @@ def get_new_rule(rule, recompile=False):
     count = 1 if rule.get('singlematch') else 0
 
     if recompile and '$' in rule['replace']:
-        replace = re.sub('\$(\d+)', r'\\\1', rule['replace'], 0)
+        replace = re.sub(r'\$(\d+)', r'\\\1', rule['replace'], 0)
     else:
         replace = rule['replace']
 

@@ -78,9 +78,6 @@ Examples:
         True
         56
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 from functools import partial
 from itertools import repeat
 from importlib import import_module
@@ -88,8 +85,6 @@ from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool, cpu_count
 
 import pygogo as gogo
-
-from builtins import *  # noqa pylint: disable=unused-import
 
 from riko.utils import multiplex, multi_try
 from riko.bado import coroutine, return_value

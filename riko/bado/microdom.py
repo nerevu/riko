@@ -18,15 +18,11 @@ sample of XML.
 Microdom mainly focuses on working with HTML and XHTML.
 """
 
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import re
 import itertools as it
 
 from io import open, BytesIO, StringIO
 from functools import partial
-from builtins import *  # noqa pylint: disable=unused-import
 
 from meza.compat import encode, decode
 
@@ -375,9 +371,8 @@ class Text(CharacterData):
         Compare this text to C{text}.  If the underlying values and the C{raw}
         flag are the same, return C{True}, otherwise return C{False}.
         """
-        return (
-            CharacterData.isEqualToNode(self, other) and
-            self.raw == other.raw)
+        is_equal = CharacterData.isEqualToNode(self, other)
+        return (is_equal and self.raw == other.raw)
 
     def cloneNode(self, deep=0, parent=None):
         return Text(self.nodeValue, parent, self.raw)
@@ -480,11 +475,11 @@ class Element(Node):
         C{attributes}, and C{childNodes} are all the same, return C{True},
         otherwise return C{False}.
         """
-        return (
-            self.nodeName.lower() == other.nodeName.lower() and
-            self.namespace == other.namespace and
-            self.attributes == other.attributes and
-            Node.isEqualToNode(self, other))
+        is_lower = self.nodeName.lower() == other.nodeName.lower()
+        same_name = self.namespace == other.namespace
+        same_attrs = self.attributes == other.attributes
+        is_equal = Node.isEqualToNode(self, other)
+        return all([is_lower, same_name, same_attrs, is_equal])
 
     def cloneNode(self, deep=0, parent=None):
         clone = Element(

@@ -11,10 +11,6 @@ Examples:
         >>> from riko import get_path
         >>> from riko.bado import react
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
-from builtins import *  # noqa pylint: disable=unused-import
 
 try:
     from twisted.internet.task import react

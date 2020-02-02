@@ -1,2 +1,0 @@
--r requirements.txt
-future>=0.16.0,<1.0.0

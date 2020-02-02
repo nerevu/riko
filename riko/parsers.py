@@ -5,23 +5,15 @@ riko.parsers
 ~~~~~~~~~~~~
 Provides utility classes and functions
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import re
 
 from io import StringIO
 from html.entities import name2codepoint
 from html.parser import HTMLParser
-
-try:
-    from urllib.error import URLError
-except ImportError:
-    from six.moves.urllib_error import URLError
+from urllib.error import URLError
 
 import pygogo as gogo
 
-from builtins import *  # noqa pylint: disable=unused-import
 from riko.utils import fetch
 from meza.fntools import Objectify, remove_keys, listize
 from meza.process import merge
@@ -50,7 +42,7 @@ else:
     from lxml.html import html5parser
 
 try:
-    import speedparser
+    import speedparser3 as speedparser
 except ImportError:
     import feedparser
     logger.debug('rss parser: feedparser')

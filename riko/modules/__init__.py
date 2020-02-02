@@ -4,9 +4,6 @@
 riko.modules
 ~~~~~~~~~~~~
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
 
 from functools import partial, wraps
@@ -97,7 +94,10 @@ def get_assignment(result, skip=False, **kwargs):
     if skip:
         return None, result
 
-    first_result = next(result)
+    try:
+        first_result = next(result)
+    except StopIteration:
+        first_result = None
 
     try:
         second_result = next(result)
@@ -240,7 +240,7 @@ class processor(object):
         """
         self.defaults = defaults or {}
         self.opts = opts or {}
-        self.async = isasync
+        self.isasync = isasync
         self.debug = debug
 
     def __call__(self, pipe):
@@ -345,7 +345,7 @@ class processor(object):
             parsed, orig_item = _dispatch(_input, bfuncs, dfuncs=dfuncs)
             kwargs.update({'skip': skip, 'stream': orig_item})
 
-            if self.async:
+            if self.isasync:
                 stream = yield pipe(*parsed, **kwargs)
             else:
                 stream = pipe(*parsed, **kwargs)
@@ -357,7 +357,7 @@ class processor(object):
             elif not skip:
                 stream = assign(_input, assignment, one=one, **combined)
 
-            if self.async:
+            if self.isasync:
                 return_value(stream)
             else:
                 for s in stream:
@@ -367,7 +367,7 @@ class processor(object):
         wrapper.__dict__['name'] = wrapper.__module__.split('.')[-1]
         wrapper.__dict__['type'] = 'processor'
         wrapper.__dict__['sub_type'] = 'source' if is_source else 'transformer'
-        return coroutine(wrapper) if self.async else wrapper
+        return coroutine(wrapper) if self.isasync else wrapper
 
 
 class operator(object):
@@ -491,7 +491,7 @@ class operator(object):
         """
         self.defaults = defaults or {}
         self.opts = opts or {}
-        self.async = isasync
+        self.isasync = isasync
 
     def __call__(self, pipe):
         """Creates a wrapper that allows a sync/async pipe to processes a
@@ -618,7 +618,7 @@ class operator(object):
             orig_stream = (p[0][0] for p in pairs)
             objconf = parsed[1]
 
-            if self.async:
+            if self.isasync:
                 stream = yield pipe(orig_stream, objconf, tuples, **kwargs)
             else:
                 stream = pipe(orig_stream, objconf, tuples, **kwargs)
@@ -638,14 +638,14 @@ class operator(object):
 
                 stream = multiplex(assigned)
 
-            if self.async:
+            if self.isasync:
                 return_value(stream)
             else:
                 for s in stream:
                     yield s
 
         wrapper.__dict__['type'] = 'operator'
-        return coroutine(wrapper) if self.async else wrapper
+        return coroutine(wrapper) if self.isasync else wrapper
 
 
 def _dispatch(item, bfuncs, dfuncs=None):

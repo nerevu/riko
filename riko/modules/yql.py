@@ -42,12 +42,7 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
-
-from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 from riko.parsers import xml2etree, etree2dict
@@ -79,7 +74,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         Deferred: twisted.internet.defer.Deferred stream
 
     Examples:
-        >>> from six.moves.urllib.request import urlopen
+        >>> from urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
@@ -208,7 +203,7 @@ def async_pipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred stream of items
 
     Examples:
-        >>> from six.moves.urllib.request import urlopen
+        >>> from urllib.request import urlopen
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor

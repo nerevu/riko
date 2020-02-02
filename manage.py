@@ -3,10 +3,6 @@
 # vim: sw=4:ts=4:expandtab
 
 """ A script to manage development tasks """
-from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
-
 from os import path as p
 from subprocess import call, check_call, CalledProcessError
 from manager import Manager
@@ -51,7 +47,6 @@ def lint(where=None, strict=False):
 
     try:
         check_call(['flake8'] + extra)
-        check_call(args + extra + ['--py3k'])
         check_call(args + extra) if strict else None
     except CalledProcessError as e:
         exit(e.returncode)

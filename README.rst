@@ -36,8 +36,8 @@ Notes
 Requirements
 ------------
 
-``riko`` has been tested and is known to work on Python 2.7, 3.5, and 3.6;
-PyPy2 5.8.0, and PyPy3 5.8.0.
+``riko`` has been tested and is known to work on Python 3.6, 3.7, and 3.8;
+and PyPy3.6 7.3.0.
 
 Optional Dependencies
 ^^^^^^^^^^^^^^^^^^^^^
@@ -120,7 +120,7 @@ Yahoo! Pipe into python code. ``pipe2py`` suited my needs at the time
 but was unmaintained and lacked asynchronous or parallel processing.
 
 ``riko`` addresses the shortcomings of ``pipe2py`` but removed support for
-importing Yahoo! Pipes json workflows. ``riko`` contains ~`40 built-in`_
+importing Yahoo! Pipes json workflows. ``riko`` contains ~ `40 built-in`_
 modules, aka ``pipes``, that allow you to programatically perform most of the
 tasks Yahoo! Pipes allowed.
 

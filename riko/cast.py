@@ -5,16 +5,13 @@ riko.cast
 ~~~~~~~~~
 Provides type casting capabilities
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 from decimal import Decimal
 from json import loads
 from operator import add, sub
 from time import gmtime
 from datetime import timedelta
 from calendar import timegm
-from six.moves.urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse
 from ast import literal_eval
 
 from dateutil import parser

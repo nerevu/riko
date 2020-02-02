@@ -15,7 +15,7 @@ Examples:
 
         >>> from riko.modules.regex import pipe
         >>>
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule}
         >>> item = {'content': 'hello world'}
@@ -26,13 +26,9 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals)
-
 import pygogo as gogo
 
 from functools import reduce
-from builtins import *  # noqa pylint: disable=unused-import
 
 from . import processor
 from riko.utils import get_new_rule, substitute, multi_substitute, group_by
@@ -67,7 +63,7 @@ def async_parser(item, rules, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> replace = '$2wide'
         >>>
         >>> def run(reactor):
@@ -130,7 +126,7 @@ def parser(item, rules, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> rules = [Objectify(rule)]
@@ -205,7 +201,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> item = {'content': 'hello world', 'title': 'greeting'}
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> replace = '$2wide'
         >>>
         >>> def run(reactor):
@@ -262,7 +258,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> # default matching
         >>> item = {'content': 'hello world', 'title': 'greeting'}
-        >>> match = r'(\w+)\s(\w+)'
+        >>> match = r'(\\w+)\\s(\\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> result = next(pipe(item, conf=conf))
