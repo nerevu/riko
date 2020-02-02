@@ -27,15 +27,9 @@ env:
     - PATH="$PYENV_ROOT/bin:${PATH}"
 
 matrix:
-  exclude:
-  - python: pypy3
-    env: OPTIONAL=true
   fast_finish: true
   allow_failures:
-  - python: 3.7
-    env: OPTIONAL=true
-  - python: 3.7
-    env: OPTIONAL=false
+  - python: pypy3
 
 notifications:
   email:
