@@ -94,7 +94,10 @@ def get_assignment(result, skip=False, **kwargs):
     if skip:
         return None, result
 
-    first_result = next(result)
+    try:
+        first_result = next(result)
+    except StopIteration:
+        first_result = None
 
     try:
         second_result = next(result)
