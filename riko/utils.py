@@ -9,6 +9,7 @@ import re
 import sys
 import itertools as it
 import fcntl
+from riko import __version__
 
 from math import isnan
 from functools import partial
@@ -17,7 +18,7 @@ from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
 
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 
 import requests
 import pygogo as gogo
@@ -68,6 +69,14 @@ def make_blocking(f):
 if 'nose' in sys.modules:
     logger.debug('Running in nose environment...')
     make_blocking(sys.stderr)
+
+
+def default_user_agent(name="riko"):
+    """
+    Return a string representing the default user agent.
+    :rtype: str
+    """
+    return '%s/%s' % (name, __version__)
 
 
 class Chainable(object):
@@ -200,10 +209,11 @@ class fetch(TextIOBase):
             r.raw.decode_content = self.decode
             response = r.text if self.cache_type else r.raw
         else:
+            req = Request(url, headers={'User-Agent': default_user_agent()})
             try:
-                r = urlopen(url, context=self.context, timeout=self.timeout)
+                r = urlopen(req, context=self.context, timeout=self.timeout)
             except TypeError:
-                r = urlopen(url, timeout=self.timeout)
+                r = urlopen(req, timeout=self.timeout)
             except HTTPError as e:
                 msg = '{} returned {}: {}'
                 raise URLError(msg.format(url, e.code, e.reason))
