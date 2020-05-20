@@ -3,6 +3,13 @@
 """
 riko.modules.xpathfetchpage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+##################################################################################
+# WARNING! this module may return an xml namespace in the keys, e.g.,
+# `{http://www.w3.org/1999/xhtml}` without the `lxml` parser (`pip install riko[xml]`)
+# See https://github.com/nerevu/riko/issues/20 for more info
+##################################################################################
+
 Provides functions for fetching the source of a given web site as DOM nodes or a
 string.
 
