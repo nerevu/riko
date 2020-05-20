@@ -52,7 +52,14 @@ output/*/index.html
 docs/_build
 build/*
 
+# Virtualenv
+venv
+
+# VSCode
+.vscode
+
 # Misc
 *.pstats
 callgraph.svg
 ttyrecord
+
