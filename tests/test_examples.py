@@ -9,7 +9,6 @@ Provides example pipeline tests.
 import nose.tools as nt
 
 from importlib import import_module
-from decimal import Decimal
 
 
 def setup_module():
@@ -37,23 +36,17 @@ class TestExamples(object):
             'description': (
                 'We are looking for freelancers ( individuals and companies ) '
                 'who offer their services related to Architecture Walkthrough '
-                'and 3D animations. Please consider this job as a potential '
-                'to several more and a long term relationship.   We are a '
-                'Media'),
+                'and 3D animations. Please consider this job as a potential to '
+                'several more and a long term relationship.   We are a Media'),
             'id': 'www.elance.com-66963214',
-            'k:budget': Decimal('12.5'),
-            'k:budget_full': '$12.50 / hr',
-            'k:budget_w_sym': '$12.50',
             'k:categories': [
                 {'content': 'animation'}, {'content': 'design & multimedia'}],
-            'k:client_location': 'Cambodia',
-            'k:cur_code': 'USD',
             'k:due': 'Thu, 05 Feb 2015 11:46:40 EST',
-            'k:job_type': 'hourly',
+            'k:job_type': 'fixed',
             'k:num_jobs': '0',
             'k:per_awarded': '0%',
-            'k:source': 'www.elance.com',
             'k:posted': 'Tue, 06 Jan 2015 11:46:40 EST',
+            'k:source': 'www.elance.com',
             'k:submissions': '0',
             'k:tags': [
                 {'content': '3d animation'},
@@ -62,11 +55,16 @@ class TestExamples(object):
                 {'content': 'animation'},
                 {'content': 'computer graphics'}],
             'k:tot_purchased': '$0',
-            'link': (
-                'https://www.elance.com/j/3d-architecture-walkthrough-3d-'
-                'animation-artists/66963214/'),
-            'title': (
-                '3D Architecture Walkthrough &amp; 3D / Animation Artists')}
+            'k:work_location': (
+                '<p>We are looking for freelancers ( individuals and '
+                'companies ) who offer their services related to '
+                'Architecture Walkthrough and 3D animations. Please '
+                'consider this job as a potential to several more and a '
+                'long term relationship.   We are a Media...'),
+            'link': ('https://www.elance.com/j/3d-architecture-walkthrough-'
+                '3d-animation-artists/66963214/'),
+            'title': ('3D Architecture Walkthrough &amp; '
+                '3D / Animation Artists')}
 
         expected = 180
         length = len(pipeline)

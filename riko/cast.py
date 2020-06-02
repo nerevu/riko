@@ -5,7 +5,7 @@ riko.cast
 ~~~~~~~~~
 Provides type casting capabilities
 """
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from json import loads
 from operator import add, sub
 from time import gmtime
@@ -157,6 +157,10 @@ def cast(content, _type='text', **kwargs):
     elif kwargs:
         value = CAST_SWITCH[_type]['func'](content, **kwargs)
     else:
-        value = CAST_SWITCH[_type]['func'](content)
+        try:
+            value = CAST_SWITCH[_type]['func'](content)
+        except InvalidOperation:
+            # fix decimal conversion error
+            value = CAST_SWITCH[_type]['func']('NaN')
 
     return value
