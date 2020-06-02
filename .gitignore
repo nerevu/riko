@@ -56,3 +56,9 @@ build/*
 *.pstats
 callgraph.svg
 ttyrecord
+
+# virtualenv
+venv
+
+# vscode
+.vscode
