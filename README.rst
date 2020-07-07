@@ -144,7 +144,7 @@ The subsequent tradeoffs ``riko`` makes are:
 - can't react to specific events
 - iterator (pull) based so streams only support a single consumer [#]_
 
-The following table summaries these observations:
+The following table summarizes these observations:
 
 =======  ===========  =========  =====  ===========  =====  ========  ========  ===========
 library  Stream Type  Footprint  RSS    simple [#]_  async  parallel  CEP [#]_  distributed
