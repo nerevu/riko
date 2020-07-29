@@ -152,6 +152,36 @@ CAST_SWITCH = {
 
 
 def cast(content, _type='text', **kwargs):
+    """ Convert content from one type to another
+
+    Args:
+        content: The entry to convert
+
+    Kwargs:
+        _type (str): The type to convert to
+
+    Returns:
+        any: The converted content
+
+    Examples:
+        >>> content = '12.25'
+        >>> cast(content, 'float')
+        12.25
+        >>> cast(content, 'decimal')
+        Decimal('12.25')
+        >>> cast(content, 'int')
+        12
+        >>> cast(content, 'text')
+        '12.25'
+        >>> cast(content, 'bool')
+        True
+        >>> cast('foo', 'float')
+        nan
+        >>> cast('foo', 'decimal')
+        Decimal('NaN')
+        >>> cast('foo', 'int')
+        0
+    """
     if content is None:
         value = CAST_SWITCH[_type]['default']
     elif kwargs:
@@ -159,8 +189,7 @@ def cast(content, _type='text', **kwargs):
     else:
         try:
             value = CAST_SWITCH[_type]['func'](content)
-        except InvalidOperation:
-            # fix decimal conversion error
-            value = CAST_SWITCH[_type]['func']('NaN')
+        except (InvalidOperation, ValueError):
+            value = 0 if _type == 'int' else CAST_SWITCH[_type]['func']('NaN')
 
     return value
