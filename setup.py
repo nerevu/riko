@@ -65,7 +65,7 @@ setup(
     zip_safe=False,
     keywords=[project] + description.split(' '),
     classifiers=[
-        pkutils.LICENSES[license],
+        pkutils.get_license(license),
         pkutils.get_status(version),
         'Natural Language :: English',
         'Programming Language :: Python',
