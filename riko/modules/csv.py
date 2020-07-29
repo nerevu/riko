@@ -165,8 +165,7 @@ def async_pipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['mileage'])
         ...     d = async_pipe(conf={'url': get_path('spreadsheet.csv')})
-        ...     d.addCallbacks(callback, logger.error)
-        ...     return d.addCallback(lambda _: d.close())
+        ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())

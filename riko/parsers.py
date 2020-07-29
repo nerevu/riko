@@ -248,6 +248,34 @@ def parse_conf(item, **kwargs):
 
 
 def get_skip(item, skip_if=None, **kwargs):
+    """ Determine whether or not to skip an item
+
+    Args:
+        item (dict): The entry to process
+        skip_if (func or Iter[dict]): The skipping criteria
+
+    Returns:
+        bool: whether or not to skip
+
+    Examples:
+        >>> item = {'content': 'Some content'}
+        >>> get_skip(item, lambda x: x['content'] == 'Some content')
+        True
+        >>> get_skip(item)
+        False
+        >>> get_skip(item, {'field': 'content'})
+        False
+        >>> bool(get_skip(item, {'field': 'content', 'include': True}))
+        True
+        >>> get_skip(item, {'field': 'content', 'text': 'some'})
+        True
+        >>> get_skip(item, {'field': 'content', 'text': 'some', 'include': True})
+        False
+        >>> get_skip(item, {'field': 'content', 'text': 'other'})
+        False
+        >>> get_skip(item, {'field': 'content', 'text': 'other', 'include': True})
+        True
+    """
     item = item or {}
 
     if callable(skip_if):
@@ -259,7 +287,7 @@ def get_skip(item, skip_if=None, **kwargs):
             value = item.get(_skip['field'], '')
             text = _skip.get('text')
             op = _skip.get('op', 'contains')
-            match = SKIP_SWITCH[op](text, value) if text else value
+            match = not SKIP_SWITCH[op](text, value) if text else value
             skip = match if _skip.get('include') else not match
 
             if skip:

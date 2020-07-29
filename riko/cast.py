@@ -5,7 +5,7 @@ riko.cast
 ~~~~~~~~~
 Provides type casting capabilities
 """
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from json import loads
 from operator import add, sub
 from time import gmtime
@@ -152,11 +152,44 @@ CAST_SWITCH = {
 
 
 def cast(content, _type='text', **kwargs):
+    """ Convert content from one type to another
+
+    Args:
+        content: The entry to convert
+
+    Kwargs:
+        _type (str): The type to convert to
+
+    Returns:
+        any: The converted content
+
+    Examples:
+        >>> content = '12.25'
+        >>> cast(content, 'float')
+        12.25
+        >>> cast(content, 'decimal')
+        Decimal('12.25')
+        >>> cast(content, 'int')
+        12
+        >>> cast(content, 'text')
+        '12.25'
+        >>> cast(content, 'bool')
+        True
+        >>> cast('foo', 'float')
+        nan
+        >>> cast('foo', 'decimal')
+        Decimal('NaN')
+        >>> cast('foo', 'int')
+        0
+    """
     if content is None:
         value = CAST_SWITCH[_type]['default']
     elif kwargs:
         value = CAST_SWITCH[_type]['func'](content, **kwargs)
     else:
-        value = CAST_SWITCH[_type]['func'](content)
+        try:
+            value = CAST_SWITCH[_type]['func'](content)
+        except (InvalidOperation, ValueError):
+            value = 0 if _type == 'int' else CAST_SWITCH[_type]['func']('NaN')
 
     return value
