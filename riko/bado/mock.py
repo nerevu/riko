@@ -18,11 +18,8 @@ from . import reactor
 try:
     from twisted.test.proto_helpers import MemoryReactorClock
 except ImportError:
-    implementer = lambda _: lambda _: lambda: None
-    MemoryReactor = object
+    MemoryReactorClock = object
     FakeReactor = lambda _: lambda: None
-else:
-    from zope.interface import implementer
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -34,16 +31,21 @@ class FakeReactor(MemoryReactorClock):
 
     Examples:
         >>> import sys
-        >>> from twisted.internet.abstract import FileDescriptor
-        >>> from twisted.internet.fdesc import readFromFD, setNonBlocking
         >>>
-        >>> # reactor = proto_helpers.FakeReactor()
-        >>> reactor = FakeReactor()
-        >>> f = FileDescriptor(reactor)
-        >>> f.fileno = sys.__stdout__.fileno
-        >>> fd = f.fileno()
-        >>> setNonBlocking(fd)
-        >>> readFromFD(fd, print)
+        >>> try:
+        ...     from twisted import internet
+        ... except ImportError:
+        ...     pass
+        ... else:
+        ...     from twisted.internet.fdesc import readFromFD, setNonBlocking
+        ...     FileDescriptor = internet.abstract.FileDescriptor
+        ...
+        ...     reactor = FakeReactor()
+        ...     f = FileDescriptor(reactor)
+        ...     f.fileno = sys.__stdout__.fileno
+        ...     fd = f.fileno()
+        ...     setNonBlocking(fd)
+        ...     readFromFD(fd, print)
     """
     _DELAY = 1
 
