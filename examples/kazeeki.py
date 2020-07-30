@@ -90,11 +90,11 @@ def add_budget(source, budget_text, fixed_text='', hourly_text='', double=True):
     codes = '$£€₹'
     no_raw_budget = {'field': 'k:budget_raw'}
     has_code = {'field': 'k:cur_code', 'include': True}
-    is_def_cur = {'field': 'k:cur_code', 'text': DEF_CUR_CODE, 'include': True}
-    not_def_cur = {'field': 'k:cur_code', 'text': DEF_CUR_CODE}
-    isnt_fixed = {'field': 'summary', 'text': fixed_text}
-    isnt_hourly = {'field': 'summary', 'text': hourly_text}
-    no_symbol = {'field': 'k:budget_raw', 'text': codes, 'op': 'intersection'}
+    is_def_cur = {'field': 'k:cur_code', 'text': DEF_CUR_CODE}
+    not_def_cur = {'field': 'k:cur_code', 'text': DEF_CUR_CODE, 'include': True}
+    isnt_fixed = {'field': 'summary', 'text': fixed_text, 'include': True}
+    isnt_hourly = {'field': 'summary', 'text': hourly_text, 'include': True}
+    no_symbol = {'field': 'k:budget_raw', 'text': codes, 'op': 'intersection', 'include': True}
     code_or_no_raw_budget = [has_code, no_raw_budget]
     def_cur_or_no_raw_budget = [is_def_cur, no_raw_budget]
     not_def_cur_or_no_raw_budget = [not_def_cur, no_raw_budget]
@@ -255,7 +255,7 @@ def remove_cruft(source):
 
 def parse_odesk(source, stream=True):
     budget_text = 'Budget</b>:'
-    no_budget = {'field': 'summary', 'text': budget_text}
+    no_budget = {'field': 'summary', 'text': budget_text, 'include': True}
     raw_budget_rule = [{'find': budget_text, 'location': 'after'}, BR]
     title_rule = {'find': '- oDesk'}
     find_id_rule = [{'find': 'ID</b>:', 'location': 'after'}, BR]
@@ -293,8 +293,8 @@ def parse_guru(source, stream=True):
     fixed_text = 'Fixed Price budget:</b>'
     hourly_text = 'Hourly budget:</b>'
 
-    no_budget = {'field': 'summary', 'text': budget_text}
-    isnt_hourly = {'field': 'summary', 'text': hourly_text}
+    no_budget = {'field': 'summary', 'text': budget_text, 'include': True}
+    isnt_hourly = {'field': 'summary', 'text': hourly_text, 'include': True}
     raw_budget_rule = [{'find': budget_text, 'location': 'after'}, BR]
     after_hourly = {'rule': {'find': 'Rate:', 'location': 'after'}}
     find_id_rule = {'find': '/', 'location': 'after', 'param': 'last'}
@@ -335,11 +335,11 @@ def parse_elance(source, stream=True):
     fixed_text = 'Budget:</b> Fixed Price'
     hourly_text = 'Budget:</b> Hourly'
 
-    no_job_loc = {'field': 'summary', 'text': 'Preferred Job Location'}
-    no_client_loc = {'field': 'summary', 'text': 'Client Location'}
-    no_budget = {'field': 'summary', 'text': budget_text}
-    isnt_fixed = {'field': 'summary', 'text': fixed_text}
-    isnt_hourly = {'field': 'summary', 'text': hourly_text}
+    no_job_loc = {'field': 'summary', 'text': 'Preferred Job Location', 'include': True}
+    no_client_loc = {'field': 'summary', 'text': 'Client Location', 'include': True}
+    no_budget = {'field': 'summary', 'text': budget_text, 'include': True}
+    isnt_fixed = {'field': 'summary', 'text': fixed_text, 'include': True}
+    isnt_hourly = {'field': 'summary', 'text': hourly_text, 'include': True}
     raw_budget_rule = [{'find': budget_text, 'location': 'after'}, BR]
     after_hourly = {'rule': {'find': 'Hourly', 'location': 'after'}}
     after_fixed = {'rule': {'find': 'Fixed Price', 'location': 'after'}}
@@ -428,7 +428,7 @@ def parse_elance(source, stream=True):
 
 def parse_freelancer(source, stream=True):
     budget_text = '(Budget:'
-    no_budget = {'field': 'summary', 'text': budget_text}
+    no_budget = {'field': 'summary', 'text': budget_text, 'include': True}
     raw_budget_rule = [
         {'find': budget_text, 'location': 'after'}, {'find': ','}]
 
