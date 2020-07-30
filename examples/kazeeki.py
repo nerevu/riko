@@ -94,7 +94,10 @@ def add_budget(source, budget_text, fixed_text='', hourly_text='', double=True):
     not_def_cur = {'field': 'k:cur_code', 'text': DEF_CUR_CODE, 'include': True}
     isnt_fixed = {'field': 'summary', 'text': fixed_text, 'include': True}
     isnt_hourly = {'field': 'summary', 'text': hourly_text, 'include': True}
-    no_symbol = {'field': 'k:budget_raw', 'text': codes, 'op': 'intersection', 'include': True}
+    no_symbol = {
+        'field': 'k:budget_raw', 'text': codes, 'op': 'intersection',
+        'include': True
+    }
     code_or_no_raw_budget = [has_code, no_raw_budget]
     def_cur_or_no_raw_budget = [is_def_cur, no_raw_budget]
     not_def_cur_or_no_raw_budget = [not_def_cur, no_raw_budget]
