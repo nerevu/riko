@@ -39,7 +39,7 @@ def parser(url, objconf, skip=False, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: exchangerate)
+        assign (str): Attribute to assign parsed content (default: urlparse)
         stream (dict): The original item
 
     Returns:

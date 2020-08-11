@@ -59,7 +59,7 @@ def async_parser(word, rules, skip=False, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: exchangerate)
+        assign (str): Attribute to assign parsed content (default: strreplace)
         stream (dict): The original item
 
     Returns:

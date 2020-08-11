@@ -38,7 +38,7 @@ def parser(content, objconf, skip=False, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: exchangerate)
+        assign (str): Attribute to assign parsed content (default: typecast)
         stream (dict): The original item
 
     Returns:

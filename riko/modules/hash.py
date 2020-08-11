@@ -47,7 +47,7 @@ def parser(word, _, skip=False, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: exchangerate)
+        assign (str): Attribute to assign parsed content (default: hash)
         stream (dict): The original item
 
     Returns:
