@@ -277,23 +277,22 @@ def get_skip(item, skip_if=None, **kwargs):
         True
     """
     item = item or {}
+    skips = listize(skip_if)
 
-    if callable(skip_if):
-        skip = skip_if(item)
-    elif skip_if:
-        skips = listize(skip_if)
-
-        for _skip in skips:
+    for _skip in skips:
+        if callable(_skip):
+            skip = _skip(item)
+        elif _skip:
             value = item.get(_skip['field'], '')
             text = _skip.get('text')
             op = _skip.get('op', 'contains')
             match = not SKIP_SWITCH[op](text, value) if text else value
             skip = match if _skip.get('include') else not match
+        else:
+            skip = False
 
-            if skip:
-                break
-    else:
-        skip = False
+        if skip:
+            break
 
     return skip
 
