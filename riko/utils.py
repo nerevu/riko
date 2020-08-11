@@ -9,14 +9,12 @@ import re
 import sys
 import itertools as it
 import fcntl
-from riko import __version__
 
 from math import isnan
 from functools import partial
 from operator import itemgetter
 from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
-
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
 
@@ -32,7 +30,7 @@ from mezmorize import memoize
 from meza.io import reencode
 from meza.compat import decode
 from meza.fntools import SleepyDict
-from riko import ENCODING
+from riko import ENCODING, __version__
 from riko.cast import cast
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
