@@ -57,7 +57,7 @@ def normalize_date(date):
     except TypeError:
         pass
     else:
-        is_dst = None if tt[8] is -1 else tt[8]
+        is_dst = None if tt[8] == -1 else tt[8]
 
         try:
             tm_zone = tt.tm_zone
