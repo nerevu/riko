@@ -42,7 +42,7 @@ def parser(address, objconf, skip=False, **kwargs):
         kwargs (dict): Keyword arguments
 
     Kwargs:
-        assign (str): Attribute to assign parsed content (default: exchangerate)
+        assign (str): Attribute to assign parsed content (default: geolocate)
         stream (dict): The original item
 
     Returns:
