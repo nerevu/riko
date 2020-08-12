@@ -163,7 +163,6 @@ class fetch(TextIOBase):
         delay = kwargs.get('delay')
         params = params or {}
 
-        self.content_type = None
         self.context = SleepyDict(delay=delay) if delay else None
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
@@ -181,7 +180,7 @@ class fetch(TextIOBase):
             opener = self.open
             self.cache_type = self.client_name = None
 
-        response = opener(get_abspath(url), **params)
+        response, self.content_type = opener(get_abspath(url), **params)
         wrapper = StringIO if self.decode else BytesIO
         f = wrapper(response) if self.cache_type else response
         self.close = f.close
@@ -242,8 +241,8 @@ class fetch(TextIOBase):
             else:
                 response = text or r
 
-        self.content_type = get_response_content_type(r)
-        return response
+        content_type = get_response_content_type(r)
+        return (response, content_type)
 
 
 def def_itemgetter(attr, default=0, _type=None):
