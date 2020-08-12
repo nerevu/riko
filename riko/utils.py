@@ -163,7 +163,6 @@ class fetch(TextIOBase):
         delay = kwargs.get('delay')
         params = params or {}
 
-        self.r = None
         self.content_type = None
         self.context = SleepyDict(delay=delay) if delay else None
         self.decode = decode
@@ -198,7 +197,6 @@ class fetch(TextIOBase):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.r.close() if self.r else None
         self.close()
 
     @property
@@ -240,11 +238,11 @@ class fetch(TextIOBase):
                     response = compat.decode(text, encoding)
                 else:
                     response = reencode(r.fp, encoding, decode=True)
+                    response.r = r
             else:
                 response = text or r
 
         self.content_type = get_response_content_type(r)
-        self.r = r
         return response
 
 
