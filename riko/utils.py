@@ -20,15 +20,15 @@ from urllib.request import urlopen, Request
 
 import requests
 import pygogo as gogo
+import mezmorize
 
 try:
     import __builtin__ as _builtins
 except ImportError:
     import builtins as _builtins
 
-from mezmorize import memoize
+from meza import compat
 from meza.io import reencode
-from meza.compat import decode
 from meza.fntools import SleepyDict
 from riko import ENCODING, __version__
 from riko.cast import cast
@@ -50,7 +50,7 @@ def get_abspath(url):
         abspath = p.abspath(p.join(parent, rel_path))
         url = 'file://%s' % abspath
 
-    return decode(url)
+    return compat.decode(url)
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1
@@ -174,7 +174,7 @@ class fetch(TextIOBase):
         self.timeout = kwargs.get('timeout')
 
         if self.cache_type:
-            memoizer = memoize(**kwargs)
+            memoizer = mezmorize.memoize(**kwargs)
             opener = memoizer(self.open)
             self.cache_type = memoizer.cache_type
             self.client_name = memoizer.client_name
@@ -224,7 +224,7 @@ class fetch(TextIOBase):
                 encoding = get_response_encoding(r, self.def_encoding)
 
                 if text:
-                    response = decode(text, encoding)
+                    response = compat.decode(text, encoding)
                 else:
                     response = reencode(r.fp, encoding, decode=True)
             else:
