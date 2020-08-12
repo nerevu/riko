@@ -11,12 +11,14 @@ import itertools as it
 import fcntl
 
 from math import isnan
-from functools import partial
+from functools import partial, wraps
 from operator import itemgetter
 from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
+
+from werkzeug.local import LocalProxy
 
 import requests
 import pygogo as gogo
@@ -30,6 +32,7 @@ except ImportError:
 from meza import compat
 from meza.io import reencode
 from meza.fntools import SleepyDict
+from mezmorize.utils import get_cache_type
 from riko import ENCODING, __version__
 from riko.cast import cast
 
@@ -166,23 +169,19 @@ class fetch(TextIOBase):
         self.context = SleepyDict(delay=delay) if delay else None
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
-        self.cache_type = kwargs.get('cache_type')
+        self.memoize = kwargs.get('memoize')
 
         # TODO: need to use sep keys for memoize and urlopen
         self.timeout = kwargs.get('timeout')
 
-        if self.cache_type:
-            memoizer = mezmorize.memoize(**kwargs)
-            opener = memoizer(self.open)
-            self.cache_type = memoizer.cache_type
-            self.client_name = memoizer.client_name
+        if self.memoize:
+            self.opener = LocalProxy(lambda: self.get_opener(**params))
         else:
-            opener = self.open
-            self.cache_type = self.client_name = None
+            self.opener = self.get_opener(**params)
 
-        response, self.content_type = opener(get_abspath(url), **params)
+        response, self.content_type = self.opener(get_abspath(url))
         wrapper = StringIO if self.decode else BytesIO
-        f = wrapper(response) if self.cache_type else response
+        f = wrapper(response) if self.memoize else response
         self.close = f.close
         self.read = f.read
         self.readline = f.readline
@@ -215,7 +214,7 @@ class fetch(TextIOBase):
         if url.startswith('http') and params:
             r = requests.get(url, params=params, stream=True)
             r.raw.decode_content = self.decode
-            response = r.text if self.cache_type else r.raw
+            response = r.text if self.memoize else r.raw
         else:
             req = Request(url, headers={'User-Agent': default_user_agent()})
             try:
@@ -228,7 +227,7 @@ class fetch(TextIOBase):
             except URLError as e:
                 raise URLError('{}: {}'.format(url, e.reason))
 
-            text = r.read() if self.cache_type else None
+            text = r.read() if self.memoize else None
 
             if self.decode:
                 encoding = get_response_encoding(r, self.def_encoding)
@@ -243,6 +242,18 @@ class fetch(TextIOBase):
 
         content_type = get_response_content_type(r)
         return (response, content_type)
+
+    def get_opener(self, **params):
+        params = params or {}
+        wrapper = partial(self.open, **params)
+        current_opener = wraps(self.open)(wrapper)
+
+        if self.memoize:
+            cache_type = get_cache_type(spread=False)
+            memoizer = mezmorize.memoize(cache_type=cache_type)
+            current_opener = memoizer(current_opener)
+
+        return current_opener
 
 
 def def_itemgetter(attr, default=0, _type=None):
