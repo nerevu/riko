@@ -41,7 +41,7 @@ OPTS = {'field': 'content', 'ftype': 'text'}
 DEFAULTS = {
     'currency': 'USD',
     'delay': 0,
-    'memoize': False,
+    'memoize': True,
     'precision': 6,
     'url': EXCHANGE_API,
     'params': PARAMS}
@@ -53,6 +53,7 @@ def parse_response(json):
     if 'rates' in json:
         resp = {k: Decimal(v) for k, v in json['rates'].items() if v}
     else:
+        # TODO: make sure this log shows up in console
         logger.warning('invalid json response:')
         logger.warning(json)
         resp = {}
@@ -224,7 +225,7 @@ def async_pipe(*args, **kwargs):
                 url. Useful for simulating network latency. Default: 0.
 
             memoize (bool): Cache the exchange rate API response (default:
-                False).
+                True).
 
         field (str): Item attribute from which to obtain the string to be
             formatted (default: 'content')
@@ -280,7 +281,7 @@ def pipe(*args, **kwargs):
                 url. Useful for simulating network latency. Default: 0.
 
             memoize (bool): Cache the exchange rate API response (default:
-                False).
+                True).
 
         field (str): Item attribute from which to obtain the string to be
             formatted (default: 'content')

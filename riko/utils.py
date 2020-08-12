@@ -11,25 +11,28 @@ import itertools as it
 import fcntl
 
 from math import isnan
-from functools import partial
+from functools import partial, wraps
 from operator import itemgetter
 from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
 
+from werkzeug.local import LocalProxy
+
 import requests
 import pygogo as gogo
+import mezmorize
 
 try:
     import __builtin__ as _builtins
 except ImportError:
     import builtins as _builtins
 
-from mezmorize import memoize
+from meza import compat
 from meza.io import reencode
-from meza.compat import decode
 from meza.fntools import SleepyDict
+from mezmorize.utils import get_cache_type
 from riko import ENCODING, __version__
 from riko.cast import cast
 
@@ -50,7 +53,7 @@ def get_abspath(url):
         abspath = p.abspath(p.join(parent, rel_path))
         url = 'file://%s' % abspath
 
-    return decode(url)
+    return compat.decode(url)
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1
@@ -157,34 +160,80 @@ def auto_close(stream, f):
         f.close()
 
 
+def opener(url, memoize=False, decode=False, timeout=None, delay=0, **kwargs):
+    encoding = kwargs.pop('encoding', ENCODING)
+
+    if url.startswith('http') and kwargs:
+        r = requests.get(url, params=kwargs, stream=True)
+        r.raw.decode_content = decode
+        response = r.text if memoize else r.raw
+    else:
+        req = Request(url, headers={'User-Agent': default_user_agent()})
+        context = SleepyDict(delay=delay) if delay else None
+
+        try:
+            r = urlopen(req, context=context, timeout=timeout)
+        except TypeError:
+            r = urlopen(req, timeout=timeout)
+        except HTTPError as e:
+            msg = '{} returned {}: {}'
+            raise URLError(msg.format(url, e.code, e.reason))
+        except URLError as e:
+            raise URLError('{}: {}'.format(url, e.reason))
+
+        text = r.read() if memoize else None
+
+        if decode:
+            encoding = get_response_encoding(r, encoding)
+
+            if text:
+                response = compat.decode(text, encoding)
+            else:
+                response = reencode(r.fp, encoding, decode=True)
+                response.r = r
+        else:
+            response = text or r
+
+    content_type = get_response_content_type(r)
+    return (response, content_type)
+
+
+def get_opener(memoize=False, params=None, **kwargs):
+    params = params or {}
+    wrapper = partial(opener, memoize=memoize, **params, **kwargs)
+    current_opener = wraps(opener)(wrapper)
+
+    if memoize:
+        kwargs.setdefault('cache_type', get_cache_type(spread=False))
+        memoizer = mezmorize.memoize(**kwargs)
+        current_opener = memoizer(current_opener)
+
+    return current_opener
+
+
 class fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
-    def __init__(self, url=None, params=None, decode=False, **kwargs):
-        delay = kwargs.get('delay')
-        params = params or {}
-
-        self.r = None
-        self.ext = None
-        self.context = SleepyDict(delay=delay) if delay else None
-        self.decode = decode
-        self.def_encoding = kwargs.get('encoding', ENCODING)
-        self.cache_type = kwargs.get('cache_type')
-
-        # TODO: need to use sep keys for memoize and urlopen
-        self.timeout = kwargs.get('timeout')
-
-        if self.cache_type:
-            memoizer = memoize(**kwargs)
-            opener = memoizer(self.open)
-            self.cache_type = memoizer.cache_type
-            self.client_name = memoizer.client_name
+    def __init__(self, url=None, memoize=False, **kwargs):
+        # TODO: need to use separate timeouts for memoize and urlopen
+        if memoize:
+            self.opener = LocalProxy(lambda: get_opener(memoize=memoize, **kwargs))
         else:
-            opener = self.open
-            self.cache_type = self.client_name = None
+            self.opener = get_opener(memoize=memoize, **kwargs)
 
-        response = opener(get_abspath(url), **params)
-        wrapper = StringIO if self.decode else BytesIO
-        f = wrapper(response) if self.cache_type else response
+        responses = self.opener(get_abspath(url))
+
+        try:
+            response, self.content_type = responses
+        except ValueError:
+            # HACK: This happens for memoized responses. Not sure why though!
+            response, self.content_type = responses, 'application/json'
+
+        if memoize:
+            wrapper = StringIO if kwargs.get('decode') else BytesIO
+            f = wrapper(response)
+        else:
+            f = response
+
         self.close = f.close
         self.read = f.read
         self.readline = f.readline
@@ -198,49 +247,20 @@ class fetch(TextIOBase):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.r.close() if self.r else None
         self.close()
 
-    def open(self, url, **params):
-        if url.startswith('http') and params:
-            r = requests.get(url, params=params, stream=True)
-            r.raw.decode_content = self.decode
-            response = r.text if self.cache_type else r.raw
+    @property
+    def ext(self):
+        if not self.content_type:
+            ext = None
+        elif 'xml' in self.content_type:
+            ext = 'xml'
+        elif 'json' in self.content_type:
+            ext = 'json'
         else:
-            req = Request(url, headers={'User-Agent': default_user_agent()})
-            try:
-                r = urlopen(req, context=self.context, timeout=self.timeout)
-            except TypeError:
-                r = urlopen(req, timeout=self.timeout)
-            except HTTPError as e:
-                msg = '{} returned {}: {}'
-                raise URLError(msg.format(url, e.code, e.reason))
-            except URLError as e:
-                raise URLError('{}: {}'.format(url, e.reason))
+            ext = self.content_type.split('/')[1].split(';')[0]
 
-            text = r.read() if self.cache_type else None
-
-            if self.decode:
-                encoding = get_response_encoding(r, self.def_encoding)
-
-                if text:
-                    response = decode(text, encoding)
-                else:
-                    response = reencode(r.fp, encoding, decode=True)
-            else:
-                response = text or r
-
-        content_type = get_response_content_type(r)
-
-        if 'xml' in content_type:
-            self.ext = 'xml'
-        elif 'json' in content_type:
-            self.ext = 'json'
-        else:
-            self.ext = content_type.split('/')[1].split(';')[0]
-
-        self.r = r
-        return response
+        return ext
 
 
 def def_itemgetter(attr, default=0, _type=None):
