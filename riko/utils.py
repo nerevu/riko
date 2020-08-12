@@ -164,7 +164,7 @@ class fetch(TextIOBase):
         params = params or {}
 
         self.r = None
-        self.ext = None
+        self.content_type = None
         self.context = SleepyDict(delay=delay) if delay else None
         self.decode = decode
         self.def_encoding = kwargs.get('encoding', ENCODING)
@@ -201,6 +201,19 @@ class fetch(TextIOBase):
         self.r.close() if self.r else None
         self.close()
 
+    @property
+    def ext(self):
+        if not self.content_type:
+            ext = None
+        elif 'xml' in self.content_type:
+            ext = 'xml'
+        elif 'json' in self.content_type:
+            ext = 'json'
+        else:
+            ext = self.content_type.split('/')[1].split(';')[0]
+
+        return ext
+
     def open(self, url, **params):
         if url.startswith('http') and params:
             r = requests.get(url, params=params, stream=True)
@@ -230,15 +243,7 @@ class fetch(TextIOBase):
             else:
                 response = text or r
 
-        content_type = get_response_content_type(r)
-
-        if 'xml' in content_type:
-            self.ext = 'xml'
-        elif 'json' in content_type:
-            self.ext = 'json'
-        else:
-            self.ext = content_type.split('/')[1].split(';')[0]
-
+        self.content_type = get_response_content_type(r)
         self.r = r
         return response
 
