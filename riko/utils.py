@@ -160,28 +160,80 @@ def auto_close(stream, f):
         f.close()
 
 
+def opener(url, memoize=False, decode=False, timeout=None, delay=0, **kwargs):
+    encoding = kwargs.pop('encoding', ENCODING)
+
+    if url.startswith('http') and kwargs:
+        r = requests.get(url, params=kwargs, stream=True)
+        r.raw.decode_content = decode
+        response = r.text if memoize else r.raw
+    else:
+        req = Request(url, headers={'User-Agent': default_user_agent()})
+        context = SleepyDict(delay=delay) if delay else None
+
+        try:
+            r = urlopen(req, context=context, timeout=timeout)
+        except TypeError:
+            r = urlopen(req, timeout=timeout)
+        except HTTPError as e:
+            msg = '{} returned {}: {}'
+            raise URLError(msg.format(url, e.code, e.reason))
+        except URLError as e:
+            raise URLError('{}: {}'.format(url, e.reason))
+
+        text = r.read() if memoize else None
+
+        if decode:
+            encoding = get_response_encoding(r, encoding)
+
+            if text:
+                response = compat.decode(text, encoding)
+            else:
+                response = reencode(r.fp, encoding, decode=True)
+                response.r = r
+        else:
+            response = text or r
+
+    content_type = get_response_content_type(r)
+    return (response, content_type)
+
+
+def get_opener(memoize=False, params=None, **kwargs):
+    params = params or {}
+    wrapper = partial(opener, memoize=memoize, **params, **kwargs)
+    current_opener = wraps(opener)(wrapper)
+
+    if memoize:
+        kwargs.setdefault('cache_type', get_cache_type(spread=False))
+        memoizer = mezmorize.memoize(**kwargs)
+        current_opener = memoizer(current_opener)
+
+    return current_opener
+
+
 class fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
-    def __init__(self, url=None, params=None, decode=False, **kwargs):
-        delay = kwargs.get('delay')
-        params = params or {}
-
-        self.context = SleepyDict(delay=delay) if delay else None
-        self.decode = decode
-        self.def_encoding = kwargs.get('encoding', ENCODING)
-        self.memoize = kwargs.get('memoize')
-
-        # TODO: need to use sep keys for memoize and urlopen
-        self.timeout = kwargs.get('timeout')
-
-        if self.memoize:
-            self.opener = LocalProxy(lambda: self.get_opener(**params))
+    def __init__(self, url=None, memoize=False, **kwargs):
+        # TODO: need to use separate timeouts for memoize and urlopen
+        if memoize:
+            self.opener = LocalProxy(lambda: get_opener(memoize=memoize, **kwargs))
         else:
-            self.opener = self.get_opener(**params)
+            self.opener = get_opener(memoize=memoize, **kwargs)
 
-        response, self.content_type = self.opener(get_abspath(url))
-        wrapper = StringIO if self.decode else BytesIO
-        f = wrapper(response) if self.memoize else response
+        responses = self.opener(get_abspath(url))
+
+        try:
+            response, self.content_type = responses
+        except ValueError:
+            # HACK: This happens for memoized responses. Not sure why though!
+            response, self.content_type = responses, 'application/json'
+
+        if memoize:
+            wrapper = StringIO if kwargs.get('decode') else BytesIO
+            f = wrapper(response)
+        else:
+            f = response
+
         self.close = f.close
         self.read = f.read
         self.readline = f.readline
@@ -209,51 +261,6 @@ class fetch(TextIOBase):
             ext = self.content_type.split('/')[1].split(';')[0]
 
         return ext
-
-    def open(self, url, **params):
-        if url.startswith('http') and params:
-            r = requests.get(url, params=params, stream=True)
-            r.raw.decode_content = self.decode
-            response = r.text if self.memoize else r.raw
-        else:
-            req = Request(url, headers={'User-Agent': default_user_agent()})
-            try:
-                r = urlopen(req, context=self.context, timeout=self.timeout)
-            except TypeError:
-                r = urlopen(req, timeout=self.timeout)
-            except HTTPError as e:
-                msg = '{} returned {}: {}'
-                raise URLError(msg.format(url, e.code, e.reason))
-            except URLError as e:
-                raise URLError('{}: {}'.format(url, e.reason))
-
-            text = r.read() if self.memoize else None
-
-            if self.decode:
-                encoding = get_response_encoding(r, self.def_encoding)
-
-                if text:
-                    response = compat.decode(text, encoding)
-                else:
-                    response = reencode(r.fp, encoding, decode=True)
-                    response.r = r
-            else:
-                response = text or r
-
-        content_type = get_response_content_type(r)
-        return (response, content_type)
-
-    def get_opener(self, **params):
-        params = params or {}
-        wrapper = partial(self.open, **params)
-        current_opener = wraps(self.open)(wrapper)
-
-        if self.memoize:
-            cache_type = get_cache_type(spread=False)
-            memoizer = mezmorize.memoize(cache_type=cache_type)
-            current_opener = memoizer(current_opener)
-
-        return current_opener
 
 
 def def_itemgetter(attr, default=0, _type=None):

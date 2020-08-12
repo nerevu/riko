@@ -163,10 +163,6 @@ def parser(_, objconf, skip=False, **kwargs):
 
         if not f:
             params = {'q': objconf.query, 'diagnostics': objconf.debug}
-
-            if objconf.memoize and not objconf.cache_type:
-                objconf.cache_type = 'auto'
-
             f = fetch(params=params, **objconf)
 
         # TODO: consider paging for large result sets
@@ -188,12 +184,15 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'query'. May
-            contain the keys 'url' or 'debug'.
+            contain the keys 'url', 'memoize', or 'debug'.
 
             url (str): The API to query (default:
                 'http://query.yahooapis.com/v1/public/yql')
 
             query (str): The API query
+            memoize (bool): Cache the exchange rate API response (default:
+                False).
+
             debug (bool): Enable diagnostics mode (default: False)
 
         assign (str): Attribute to assign parsed content (default: content)
@@ -241,12 +240,15 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'query'. May
-            contain the keys 'url' or 'debug'.
+            contain the keys 'url', 'memoize', or 'debug'.
 
             url (str): The API to query (default:
                 'http://query.yahooapis.com/v1/public/yql')
 
             query (str): The API query
+            memoize (bool): Cache the exchange rate API response (default:
+                False).
+
             debug (bool): Enable diagnostics mode (default: False)
 
         assign (str): Attribute to assign parsed content (default: content)
