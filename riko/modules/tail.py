@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.tail
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
 Provides functions for truncating a stream to the last N items.
 
 Contrast this with the Truncate module, which limits the output to the first N
@@ -111,7 +111,7 @@ def pipe(*args, **kwargs):
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'count'.
 
-            count (int): desired streamstream length
+            count (int): desired stream length
 
     Yields:
         dict: an item

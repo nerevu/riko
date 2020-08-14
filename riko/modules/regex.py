@@ -194,7 +194,7 @@ def async_pipe(*args, **kwargs):
                 (default: True)
 
     Yields:
-        Deferred: twisted.internet.defer.Deferred item with concatenated content
+        Deferred: twisted.internet.defer.Deferred item with replaced content
 
     Examples:
         >>> from riko.bado import react
@@ -253,7 +253,7 @@ def pipe(*args, **kwargs):
                 (default: True)
 
     Yields:
-        dict: an item with concatenated content
+        dict: an item with replaced content
 
     Examples:
         >>> # default matching
