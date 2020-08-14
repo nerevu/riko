@@ -78,7 +78,7 @@ def async_pipe(*args, **kwargs):
         field (str): Item attribute to operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with concatenated content
+       Deferred: twisted.internet.defer.Deferred item with hashed content
 
     Examples:
         >>> from riko.bado import react
@@ -114,7 +114,7 @@ def pipe(*args, **kwargs):
         field (str): Item attribute to operate on (default: 'content')
 
     Yields:
-        dict: an item with concatenated content
+        dict: an item with hashed content
 
     Examples:
         >>> _hash = ctypes.c_uint(hash('hello world')).value

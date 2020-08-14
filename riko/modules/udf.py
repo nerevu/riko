@@ -1,32 +1,24 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.tail
-~~~~~~~~~~~~~~~~~
-Provides functions for truncating a stream to the last N items.
-
-Contrast this with the Truncate module, which limits the output to the first N
+riko.modules.udf
+~~~~~~~~~~~~~~~~
+Provides functions for performing an arbitrary (user-defined) function on stream
 items.
 
 Examples:
     basic usage::
 
-        >>> from riko.modules.tail import pipe
+        >>> from riko.modules.udf import pipe
         >>>
-        >>> items = ({'x': x} for x in range(5))
-        >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
-        True
-
-Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+        >>> items = [{'x': x} for x in range(5)]
+        >>> func = lambda item: {'y': item['x'] + 3}
+        >>> next(pipe(items, func=func))
+        {'y': 3}
 """
-from collections import deque
-
 from . import operator
 import pygogo as gogo
 
-OPTS = {'ptype': 'int'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -48,34 +40,32 @@ def parser(stream, objconf, tuples, **kwargs):
         kwargs (dict): Keyword arguments.
 
     Returns:
-        List(dict): The output stream
+        Iter(dict): The output stream
 
     Examples:
         >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
-        >>> kwargs = {'count': 2}
-        >>> objconf = Objectify(kwargs)
+        >>> func = lambda item: {'y': item['x'] + 3}
         >>> stream = ({'x': x} for x in range(5))
-        >>> tuples = zip(stream, repeat(objconf))
-        >>> parser(stream, objconf, tuples, **kwargs)[0] == {'x': 3}
-        True
+        >>> tuples = zip(stream, repeat(None))
+        >>> next(parser(stream, None, tuples, func=func))
+        {'y': 3}
     """
-    return deque(stream, objconf.count)
+    return map(kwargs['func'], stream)
 
 
-@operator(isasync=True, **OPTS)
+@operator(isasync=True)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously truncates a stream to the last N items.
+    """An aggregator that asynchronously returns a specified number of items
+    from a stream.
 
     Args:
         items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'count'.
-
-            count (int): desired stream length
+        func (callable): User defined function to apply to each stream item.
 
     Returns:
         Deferred: twisted.internet.defer.Deferred truncated stream
@@ -85,9 +75,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x) == {'x': 3})
+        ...     callback = lambda x: print(next(x))
+        ...     func = lambda item: {'y': item['x'] + 3}
         ...     items = ({'x': x} for x in range(5))
-        ...     d = async_pipe(items, conf={'count': 2})
+        ...     d = async_pipe(items, func=func)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -95,30 +86,29 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'y': 3}
     """
     return parser(*args, **kwargs)
 
 
-@operator(**OPTS)
+@operator()
 def pipe(*args, **kwargs):
-    """An operator that truncates a stream to the last N items.
+    """An operator that returns a specified number of items from a stream.
 
     Args:
         items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'count'.
-
-            count (int): desired stream length
+        func (callable): User defined function to apply to each stream item.
 
     Yields:
         dict: an item
 
     Examples:
         >>> items = [{'x': x} for x in range(5)]
-        >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
-        True
+        >>> func = lambda item: {'y': item['x'] + 3}
+        >>> next(pipe(items, func=func))
+        {'y': 3}
     """
     return parser(*args, **kwargs)

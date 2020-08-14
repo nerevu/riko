@@ -47,7 +47,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 def reducer(item, rule):
     new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
     old_dict = item if rule.copy else remove_keys(item, rule.field)
-    return DotDict(merge([old_dict, new_dict]))
+    return DotDict({**old_dict, **new_dict})
 
 
 @coroutine
@@ -140,12 +140,14 @@ def async_pipe(*args, **kwargs):
                 the key 'field'.
 
                 field (str): The item attribute to rename
-                newval (str): The new item attribute name
+                newval (str): The new item attribute name (default: None). If
+                    blank, the field will be deleted.
+
                 copy (bool): Copy the item attribute instead of renaming it
                     (default: False)
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with concatenated content
+       Deferred: twisted.internet.defer.Deferred item with renamed content
 
     Examples:
         >>> from riko.bado import react
@@ -189,7 +191,7 @@ def pipe(*args, **kwargs):
                     (default: False)
 
     Yields:
-        dict: an item with concatenated content
+        dict: an item with renamed content
 
     Examples:
         >>> rule = {'field': 'content', 'newval': 'greeting'}
