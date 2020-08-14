@@ -26,7 +26,7 @@ from collections import deque
 from . import operator
 import pygogo as gogo
 
-OPTS = {}
+OPTS = {'ptype': 'int'}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -61,7 +61,7 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> parser(stream, objconf, tuples, **kwargs)[0] == {'x': 3}
         True
     """
-    return deque(stream, int(objconf.count))
+    return deque(stream, objconf.count)
 
 
 @operator(isasync=True, **OPTS)

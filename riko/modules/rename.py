@@ -47,7 +47,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 def reducer(item, rule):
     new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
     old_dict = item if rule.copy else remove_keys(item, rule.field)
-    return DotDict(merge([old_dict, new_dict]))
+    return DotDict({**old_dict, **new_dict})
 
 
 @coroutine
