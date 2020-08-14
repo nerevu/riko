@@ -37,7 +37,6 @@ from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
 from riko.dotdict import DotDict
 from meza.fntools import remove_keys
-from meza.process import merge
 
 OPTS = {'extract': 'rule', 'listize': True, 'emit': True}
 DEFAULTS = {}
