@@ -160,8 +160,10 @@ def auto_close(stream, f):
         f.close()
 
 
-def opener(url, memoize=False, decode=False, timeout=None, delay=0, **kwargs):
-    encoding = kwargs.pop('encoding', ENCODING)
+def opener(url, memoize=False, delay=0, encoding=ENCODING, params=None, **kwargs):
+    params = params or {}
+    timeout = kwargs.pop('timeout')
+    decode = kwargs.pop('decode')
 
     if url.startswith('http') and kwargs:
         r = requests.get(url, params=kwargs, stream=True)
@@ -197,9 +199,8 @@ def opener(url, memoize=False, decode=False, timeout=None, delay=0, **kwargs):
     return (response, content_type)
 
 
-def get_opener(memoize=False, params=None, **kwargs):
-    params = params or {}
-    wrapper = partial(opener, memoize=memoize, **params, **kwargs)
+def get_opener(memoize=False, **kwargs):
+    wrapper = partial(opener, memoize=memoize, **kwargs)
     current_opener = wraps(opener)(wrapper)
 
     if memoize:
