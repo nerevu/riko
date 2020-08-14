@@ -7,4 +7,4 @@ python-dateutil>=2.8.1,<3.0.0
 pygogo>=0.12.0,<1.0.0
 requests>=2.22.0,<3.0.0
 html5lib>=1.0.1,<2.0.0
-pytz==2019.3
+pytz>=2019.3,<2020.2
