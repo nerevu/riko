@@ -176,10 +176,9 @@ def opener(url, memoize=False, decode=False, timeout=None, delay=0, **kwargs):
         except TypeError:
             r = urlopen(req, timeout=timeout)
         except HTTPError as e:
-            msg = '{} returned {}: {}'
-            raise URLError(msg.format(url, e.code, e.reason))
+            raise URLError(f'{url} returned {e.code}: {e.reason}')
         except URLError as e:
-            raise URLError('{}: {}'.format(url, e.reason))
+            raise URLError(f'{url}: {e.reason}')
 
         text = r.read() if memoize else None
 
@@ -216,9 +215,9 @@ class fetch(TextIOBase):
     def __init__(self, url=None, memoize=False, **kwargs):
         # TODO: need to use separate timeouts for memoize and urlopen
         if memoize:
-            self.opener = LocalProxy(lambda: get_opener(memoize=memoize, **kwargs))
+            self.opener = LocalProxy(lambda: get_opener(memoize=True, **kwargs))
         else:
-            self.opener = get_opener(memoize=memoize, **kwargs)
+            self.opener = get_opener(**kwargs)
 
         responses = self.opener(get_abspath(url))
 
