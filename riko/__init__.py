@@ -32,7 +32,7 @@ Examples:
 """
 from os import path as p
 
-__version__ = '0.65.0'
+__version__ = '0.66.0'
 
 __title__ = 'riko'
 __package_name__ = 'riko'
