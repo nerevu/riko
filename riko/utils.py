@@ -162,8 +162,8 @@ def auto_close(stream, f):
 
 def opener(url, memoize=False, delay=0, encoding=ENCODING, params=None, **kwargs):
     params = params or {}
-    timeout = kwargs.pop('timeout')
-    decode = kwargs.pop('decode')
+    timeout = kwargs.get('timeout')
+    decode = kwargs.get('decode')
 
     if url.startswith('http') and kwargs:
         r = requests.get(url, params=kwargs, stream=True)
