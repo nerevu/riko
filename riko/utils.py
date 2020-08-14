@@ -165,8 +165,8 @@ def opener(url, memoize=False, delay=0, encoding=ENCODING, params=None, **kwargs
     timeout = kwargs.get('timeout')
     decode = kwargs.get('decode')
 
-    if url.startswith('http') and kwargs:
-        r = requests.get(url, params=kwargs, stream=True)
+    if url.startswith('http') and params:
+        r = requests.get(url, params=params, stream=True)
         r.raw.decode_content = decode
         response = r.text if memoize else r.raw
     else:
