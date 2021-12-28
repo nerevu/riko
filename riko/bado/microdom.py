@@ -36,9 +36,9 @@ from riko.utils import invert_dict
 from riko.parsers import ESCAPE, entity2text, text2entity
 from meza.process import merge
 
-HTML_ESCAPE_CHARS = {'&amp;', '&lt;', '&gt;', '&quot;'}
-entity_prog = re.compile('&(.*?);')
-escape_prog = re.compile("['%s']" % ''.join(ESCAPE))
+HTML_ESCAPE_CHARS = {"&amp;", "&lt;", "&gt;", "&quot;"}
+entity_prog = re.compile("&(.*?);")
+escape_prog = re.compile("['%s']" % "".join(ESCAPE))
 
 
 def unescape(text):
@@ -72,8 +72,8 @@ def get_elements_by_tag_name(iNode, path, icase=False):
         the name C{name}.  This may include C{iNode}.
     """
     same = lambda x, y: x.lower() == y.lower() if icase else x == y
-    is_node = hasattr(iNode, 'nodeName')
-    has_bracket = '[' in path
+    is_node = hasattr(iNode, "nodeName")
+    has_bracket = "[" in path
 
     if is_node and not has_bracket and same(iNode.nodeName, path):
         yield iNode
@@ -83,8 +83,8 @@ def get_elements_by_tag_name(iNode, path, icase=False):
             yield c
 
     if not is_node:
-        name = path[:path.find('[')] if has_bracket else path
-        pos = int(path[path.find('[') + 1:-1]) - 1 if has_bracket else 0
+        name = path[: path.find("[")] if has_bracket else path
+        pos = int(path[path.find("[") + 1 : -1]) - 1 if has_bracket else 0
         nodes = [n for n in iNode if same(n.nodeName, name)]
 
         if pos < len(nodes):
@@ -97,7 +97,7 @@ def get_elements_by_tag_name(iNode, path, icase=False):
 
 def get_element_by_id(nodes, node_id):
     for node in nodes:
-        if node.getAttribute('id') == node_id:
+        if node.getAttribute("id") == node_id:
             return node
     else:
         for node in nodes:
@@ -107,13 +107,19 @@ def get_element_by_id(nodes, node_id):
 class MismatchedTags(Exception):
     def __init__(self, *args):
         (
-            self.filename, self.expect, self.got, self.begLine, self.begCol,
-            self.endLine, self.endCol) = args
+            self.filename,
+            self.expect,
+            self.got,
+            self.begLine,
+            self.begCol,
+            self.endLine,
+            self.endCol,
+        ) = args
 
     def __str__(self):
-        msg = 'expected </%(expect)s>, got </%(got)s> line: %(endLine)s '
-        msg += 'col: %(endCol)s, began line: %(begLine)s, col: %(begCol)s'
-        return (msg % self.__dict__)
+        msg = "expected </%(expect)s>, got </%(got)s> line: %(endLine)s "
+        msg += "col: %(endCol)s, began line: %(begLine)s, col: %(begCol)s"
+        return msg % self.__dict__
 
 
 class Node(object):
@@ -294,7 +300,7 @@ class Document(Node):
         Node.appendChild(self, child)
 
     def writexml(self, stream, *args, **kwargs):
-        newl = kwargs['newl']
+        newl = kwargs["newl"]
         stream.write('<?xml version="1.0"?>' + newl)
 
         if self.doctype:
@@ -353,6 +359,7 @@ class CharacterData(Node):
 
 class Comment(CharacterData):
     """A comment node"""
+
     def writexml(self, stream, *args, **kwargs):
         val = encode(self.data)
         stream.write("<!--%s-->" % val)
@@ -372,7 +379,7 @@ class Text(CharacterData):
         flag are the same, return C{True}, otherwise return C{False}.
         """
         is_equal = CharacterData.isEqualToNode(self, other)
-        return (is_equal and self.raw == other.raw)
+        return is_equal and self.raw == other.raw
 
     def cloneNode(self, deep=0, parent=None):
         return Text(self.nodeValue, parent, self.raw)
@@ -382,14 +389,14 @@ class Text(CharacterData):
             val = decode(self.nodeValue)
         else:
             v = decode(self.nodeValue)
-            v = ' '.join(v.split()) if kwargs.get('strip') else v
+            v = " ".join(v.split()) if kwargs.get("strip") else v
             val = escape(v)
 
         val = encode(val)
         stream.write(val)
 
     def __repr__(self):
-        return "Text(%s" % repr(self.nodeValue) + ')'
+        return "Text(%s" % repr(self.nodeValue) + ")"
 
 
 class CDATASection(CharacterData):
@@ -408,24 +415,68 @@ class _Attr(CharacterData):
 
 class Element(Node):
     nsprefixes = None
-    create_attr = lambda k, v: (' ', k, '="', escape(v), '"')
+    create_attr = lambda k, v: (" ", k, '="', escape(v), '"')
 
     SINGLETONS = (
-        'img', 'br', 'hr', 'base', 'meta', 'link', 'param',
-        'area', 'input', 'col', 'basefont', 'isindex', 'frame')
+        "img",
+        "br",
+        "hr",
+        "base",
+        "meta",
+        "link",
+        "param",
+        "area",
+        "input",
+        "col",
+        "basefont",
+        "isindex",
+        "frame",
+    )
 
     BLOCKELEMENTS = (
-        'html', 'head', 'body', 'noscript', 'ins', 'del',
-        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'script',
-        'ul', 'ol', 'dl', 'pre', 'hr', 'blockquote',
-        'address', 'p', 'div', 'fieldset', 'table', 'tr',
-        'form', 'object', 'fieldset', 'applet', 'map')
+        "html",
+        "head",
+        "body",
+        "noscript",
+        "ins",
+        "del",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "script",
+        "ul",
+        "ol",
+        "dl",
+        "pre",
+        "hr",
+        "blockquote",
+        "address",
+        "p",
+        "div",
+        "fieldset",
+        "table",
+        "tr",
+        "form",
+        "object",
+        "fieldset",
+        "applet",
+        "map",
+    )
 
-    NICEFORMATS = ('tr', 'ul', 'ol', 'head')
+    NICEFORMATS = ("tr", "ul", "ol", "head")
 
     def __init__(
-        self, tagName, attributes=None, parentNode=None, filename=None,
-        markpos=None, case_insensitive=1, namespace=None
+        self,
+        tagName,
+        attributes=None,
+        parentNode=None,
+        filename=None,
+        markpos=None,
+        case_insensitive=1,
+        namespace=None,
     ):
         Node.__init__(self, parentNode)
         preserve_case = not case_insensitive
@@ -483,14 +534,16 @@ class Element(Node):
 
     def cloneNode(self, deep=0, parent=None):
         clone = Element(
-            self.tagName, parentNode=parent, namespace=self.namespace,
-            case_insensitive=self.case_insensitive)
+            self.tagName,
+            parentNode=parent,
+            namespace=self.namespace,
+            case_insensitive=self.case_insensitive,
+        )
 
         clone.attributes.update(self.attributes)
 
         if deep:
-            clone.childNodes = [
-                child.cloneNode(1, clone) for child in self.childNodes]
+            clone.childNodes = [child.cloneNode(1, clone) for child in self.childNodes]
         else:
             clone.childNodes = []
 
@@ -537,7 +590,7 @@ class Element(Node):
 
     def _writexml(self, namespace, nsprefixes, newl, indent):
         newprefixes = dict(self.gen_prefixes(nsprefixes))
-        begin = [newl, indent, '<'] if self.tag_is_blockelement else ['<']
+        begin = [newl, indent, "<"] if self.tag_is_blockelement else ["<"]
         is_same_namespace = self.namespace and namespace == self.namespace
 
         # Make a local for tracking what end tag will be used. If namespace
@@ -549,10 +602,10 @@ class Element(Node):
             # This tag's namespace already has a prefix bound to it. Use
             # that prefix.
             prefix = nsprefixes[self.namespace]
-            begin.extend(prefix + ':' + self.tagName)
+            begin.extend(prefix + ":" + self.tagName)
 
             # Also make sure we use it for the end tag.
-            endTagName = prefix + ':' + self.endTagName
+            endTagName = prefix + ":" + self.endTagName
         elif not is_same_namespace:
             # This tag's namespace has no prefix bound to it. Change the
             # default namespace to this tag's namespace so we don't need
@@ -570,7 +623,7 @@ class Element(Node):
             # namespace.  Nothing extra to do here.
             begin.extend(self.tagName)
 
-        prefixes = ('p%s' % str(i) for i in it.count())
+        prefixes = ("p%s" % str(i) for i in it.count())
 
         for attr, val in sorted(self.attributes.items()):
             if val and isinstance(attr, tuple):
@@ -581,7 +634,7 @@ class Element(Node):
                 else:
                     newprefixes[ns] = prefix = next(prefixes)
 
-                begin.extend(self.create_attr(prefix + ':' + key, val))
+                begin.extend(self.create_attr(prefix + ":" + key, val))
             elif val:
                 begin.extend(self.create_attr(attr, val))
 
@@ -590,7 +643,7 @@ class Element(Node):
     def _write_child(self, stream, newl, newindent, **kwargs):
         for child in self.childNodes:
             if self.tag_is_blockelement and self.tag_is_nice_format:
-                stream.write(''.join((newl, newindent)))
+                stream.write("".join((newl, newindent)))
 
             child.writexml(stream, newl=newl, newindent=newindent, **kwargs)
 
@@ -612,12 +665,12 @@ class Element(Node):
             essentially an implementation detail for namespace support.
             Applications should not try to use it.
         """
-        indent = kwargs.get('indent', '')
-        addindent = kwargs.get('addindent', '')
-        newl = kwargs.get('newl', '')
-        strip = kwargs.get('strip', 0)
-        nsprefixes = kwargs.get('nsprefixes', {})
-        namespace = kwargs.get('namespace', '')
+        indent = kwargs.get("indent", "")
+        addindent = kwargs.get("addindent", "")
+        newl = kwargs.get("newl", "")
+        strip = kwargs.get("strip", 0)
+        nsprefixes = kwargs.get("nsprefixes", {})
+        namespace = kwargs.get("namespace", "")
 
         # this should never be necessary unless people start
         # changing .tagName on the fly(?)
@@ -629,32 +682,33 @@ class Element(Node):
 
         for ns, prefix in newprefixes.items():
             if prefix:
-                begin.extend(self.create_attr('xmlns:' + prefix, ns))
+                begin.extend(self.create_attr("xmlns:" + prefix, ns))
 
         newprefixes.update(nsprefixes)
         downprefixes = newprefixes
-        stream.write(''.join(begin))
+        stream.write("".join(begin))
 
         if self.childNodes:
             stream.write(">")
             newindent = indent + addindent
 
             kwargs = {
-                'newindent': newindent,
-                'addindent': addindent,
-                'newl': newl,
-                'strip': strip,
-                'downprefixes': downprefixes,
-                'namespace': namespace}
+                "newindent": newindent,
+                "addindent": addindent,
+                "newl": newl,
+                "strip": strip,
+                "downprefixes": downprefixes,
+                "namespace": namespace,
+            }
 
             self._write_child(stream, newl, newindent, **kwargs)
 
             if self.tag_is_blockelement:
-                stream.write(''.join((newl, indent)))
+                stream.write("".join((newl, indent)))
 
-            stream.write(''.join(('</', endTagName, '>')))
+            stream.write("".join(("</", endTagName, ">")))
         elif not self.tag_is_singleton:
-            stream.write(''.join(('></', endTagName, '>')))
+            stream.write("".join(("></", endTagName, ">")))
         else:
             stream.write(" />")
 
@@ -670,7 +724,7 @@ class Element(Node):
         if self._markpos:
             rep += ", markpos=%r" % (self._markpos,)
 
-        return rep + ')'
+        return rep + ")"
 
     def __str__(self):
         rep = "<" + self.nodeName
@@ -702,46 +756,46 @@ class MicroDOMParser(XMLParser):
     # <dash> glyph: a quick scan thru the DTD says BODY, AREA, LINK, IMG, HR,
     # P, DT, DD, LI, INPUT, OPTION, THEAD, TFOOT, TBODY, COLGROUP, COL, TR, TH,
     # TD, HEAD, BASE, META, HTML all have optional closing tags
-    def_soon_closers = 'area link br img hr input base meta'.split()
+    def_soon_closers = "area link br img hr input base meta".split()
     def_later_closers = {
-        'p': ['p', 'dt'],
-        'dt': ['dt', 'dd'],
-        'dd': ['dt', 'dd'],
-        'li': ['li'],
-        'tbody': ['thead', 'tfoot', 'tbody'],
-        'thead': ['thead', 'tfoot', 'tbody'],
-        'tfoot': ['thead', 'tfoot', 'tbody'],
-        'colgroup': ['colgroup'],
-        'col': ['col'],
-        'tr': ['tr'],
-        'td': ['td'],
-        'th': ['th'],
-        'head': ['body'],
-        'title': ['head', 'body'],  # this looks wrong...
-        'option': ['option'],
+        "p": ["p", "dt"],
+        "dt": ["dt", "dd"],
+        "dd": ["dt", "dd"],
+        "li": ["li"],
+        "tbody": ["thead", "tfoot", "tbody"],
+        "thead": ["thead", "tfoot", "tbody"],
+        "tfoot": ["thead", "tfoot", "tbody"],
+        "colgroup": ["colgroup"],
+        "col": ["col"],
+        "tr": ["tr"],
+        "td": ["td"],
+        "th": ["th"],
+        "head": ["body"],
+        "title": ["head", "body"],  # this looks wrong...
+        "option": ["option"],
     }
 
     def __init__(self, case_insensitive=True, **kwargs):
         # Protocol is an old style class so we can't use super
         XMLParser.__init__(self, **kwargs)
         self.elementstack = []
-        d = {'xmlns': 'xmlns', '': None}
+        d = {"xmlns": "xmlns", "": None}
         dr = invert_dict(d)
         self.nsstack = [(d, None, dr)]
         self.documents = []
         self._mddoctype = None
         self.case_insensitive = case_insensitive
         self.preserve_case = case_insensitive
-        self.soonClosers = kwargs.get('soonClosers', self.def_soon_closers)
-        self.laterClosers = kwargs.get('laterClosers', self.def_later_closers)
+        self.soonClosers = kwargs.get("soonClosers", self.def_soon_closers)
+        self.laterClosers = kwargs.get("laterClosers", self.def_later_closers)
         self.indentlevel = 0
 
     def shouldPreserveSpace(self):
         for idx, _ in enumerate(self.elementstack):
             el = self.elementstack[-idx]
-            preserve = el.getAttribute("xml:space", '') == 'preserve'
+            preserve = el.getAttribute("xml:space", "") == "preserve"
 
-            if (el.tagName == 'pre') or preserve:
+            if (el.tagName == "pre") or preserve:
                 return 1
 
         return 0
@@ -774,7 +828,7 @@ class MicroDOMParser(XMLParser):
 
             if match:
                 prefix = match.group()
-                oldvalue = oldvalue[len(prefix):]
+                oldvalue = oldvalue[len(prefix) :]
 
             # now see if contents are actual node and comment or CDATA
             try:
@@ -794,7 +848,7 @@ class MicroDOMParser(XMLParser):
         self._mddoctype = doctype
 
     def _check_parent(self, parent, name):
-        if (self.lenient and isinstance(parent, Element)):
+        if self.lenient and isinstance(parent, Element):
             parentName = parent.tagName
             myName = name
 
@@ -810,12 +864,12 @@ class MicroDOMParser(XMLParser):
 
     def _gen_attrs(self, attributes, namespaces):
         for k, v in attributes.items():
-            ksplit = k.split(':', 1)
+            ksplit = k.split(":", 1)
 
             if len(ksplit) == 2:
                 pfx, tv = ksplit
 
-                if pfx != 'xml' and pfx in namespaces:
+                if pfx != "xml" and pfx in namespaces:
                     yield ((namespaces[pfx], tv), v)
                 else:
                     yield (k, v)
@@ -824,17 +878,17 @@ class MicroDOMParser(XMLParser):
 
     def _gen_newspaces(self, unesc_attributes):
         for k, v in unesc_attributes.items():
-            if k.startswith('xmlns'):
-                spacenames = k.split(':', 1)
+            if k.startswith("xmlns"):
+                spacenames = k.split(":", 1)
 
                 if len(spacenames) == 2:
                     yield (spacenames[1], v)
                 else:
-                    yield ('', v)
+                    yield ("", v)
 
     def _gen_new_attrs(self, unesc_attributes):
         for k, v in unesc_attributes.items():
-            if not k.startswith('xmlns'):
+            if not k.startswith("xmlns"):
                 yield (k, v)
 
     def gotTagStart(self, name, attributes):
@@ -853,8 +907,9 @@ class MicroDOMParser(XMLParser):
         el_args = (name, new_attributes, parent, self.filename, self.saveMark())
 
         kwargs = {
-            'case_insensitive': self.case_insensitive,
-            'namespace': new_namespaces.get('')}
+            "case_insensitive": self.case_insensitive,
+            "namespace": new_namespaces.get(""),
+        }
 
         el = Element(*el_args, **kwargs)
         revspaces = invert_dict(newspaces)
@@ -869,7 +924,7 @@ class MicroDOMParser(XMLParser):
         if parent:
             parent.appendChild(el)
 
-        if (self.lenient and el.tagName in self.soonClosers):
+        if self.lenient and el.tagName in self.soonClosers:
             self.gotTagEnd(name)
 
     def _gotStandalone(self, factory, data):
@@ -896,7 +951,7 @@ class MicroDOMParser(XMLParser):
 
     def _check_name(self, name, el):
         pfxdix = self.nsstack[-1][2]
-        nsplit = name.split(':', 1)
+        nsplit = name.split(":", 1)
 
         if len(nsplit) == 2:
             pfx, newname = nsplit
@@ -921,7 +976,7 @@ class MicroDOMParser(XMLParser):
             updated = True
 
         if not updated:
-            del self.elementstack[-(idx + 1):]
+            del self.elementstack[-(idx + 1) :]
 
         if not (updated or self.elementstack):
             self.documents.append(lastEl)
@@ -985,16 +1040,16 @@ class MicroDOMParser(XMLParser):
 
 def parse(f, *args, **kwargs):
     """Parse HTML or XML readable."""
-    fp = f.fp if hasattr(f, 'fp') else f
-    readable = fp if hasattr(fp, 'read') else open(f, 'rb')
-    filename = getattr(readable, 'name', 'unnamed')
+    fp = f.fp if hasattr(f, "fp") else f
+    readable = fp if hasattr(fp, "read") else open(f, "rb")
+    filename = getattr(readable, "name", "unnamed")
     mdp = MicroDOMParser(filename=filename, **kwargs)
     mdp.makeConnection(None)
 
     try:
         mdp.dataReceived(readable.getvalue())
     except AttributeError:
-        sentinel = b'' if 'BufferedReader' in str(type(readable)) else ''
+        sentinel = b"" if "BufferedReader" in str(type(readable)) else ""
         for r in iter(partial(readable.read, 1024), sentinel):
             mdp.dataReceived(r)
 

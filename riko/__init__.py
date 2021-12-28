@@ -32,19 +32,19 @@ Examples:
 """
 from os import path as p
 
-__version__ = '0.66.0'
+__version__ = "0.66.0"
 
-__title__ = 'riko'
-__package_name__ = 'riko'
-__author__ = 'Reuben Cummings'
-__description__ = 'A stream processing engine modeled after Yahoo! Pipes.'
-__email__ = 'reubano@gmail.com'
-__license__ = 'MIT'
-__copyright__ = 'Copyright 2015 Reuben Cummings'
+__title__ = "riko"
+__package_name__ = "riko"
+__author__ = "Reuben Cummings"
+__description__ = "A stream processing engine modeled after Yahoo! Pipes."
+__email__ = "reubano@gmail.com"
+__license__ = "MIT"
+__copyright__ = "Copyright 2015 Reuben Cummings"
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
-ENCODING = 'utf-8'
+ENCODING = "utf-8"
 
 
 def get_path(name):
-    return 'file://%s' % p.join(PARENT_DIR, 'data', name)
+    return "file://%s" % p.join(PARENT_DIR, "data", name)

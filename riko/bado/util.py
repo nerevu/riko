@@ -41,11 +41,11 @@ def async_sleep(seconds):
 
 
 def defer_to_process(command):
-    return getProcessOutput(executable, ['-c', command], environ)
+    return getProcessOutput(executable, ["-c", command], environ)
 
 
 def xml2etree(f, xml=True):
-    readable = hasattr(f, 'read')
+    readable = hasattr(f, "read")
 
     if xml and readable:
         parse = microdom.parseXML
@@ -59,14 +59,14 @@ def xml2etree(f, xml=True):
     return parse(f)
 
 
-def etree2dict(element, tag='content'):
+def etree2dict(element, tag="content"):
     """Convert a microdom element tree into a dict imitating how Yahoo Pipes
     does it.
 
     TODO: checkout twisted.words.xish
     """
-    i = dict(element.attributes) if hasattr(element, 'attributes') else {}
-    value = element.nodeValue if hasattr(element, 'nodeValue') else None
+    i = dict(element.attributes) if hasattr(element, "attributes") else {}
+    value = element.nodeValue if hasattr(element, "nodeValue") else None
 
     if isinstance(element, EntityReference):
         value = entity2text(value)
@@ -74,7 +74,7 @@ def etree2dict(element, tag='content'):
     i.update(_make_content(i, value, tag))
 
     for child in element.childNodes:
-        tag = child.tagName if hasattr(child, 'tagName') else 'content'
+        tag = child.tagName if hasattr(child, "tagName") else "content"
         value = etree2dict(child, tag)
 
         # try to join the content first since microdom likes to split up
@@ -84,8 +84,8 @@ def etree2dict(element, tag='content'):
         except TypeError:
             i.update(_make_content(i, value, tag))
 
-    if ('content' in i) and not set(i).difference(['content']):
+    if ("content" in i) and not set(i).difference(["content"]):
         # element is leaf node and doesn't have attributes
-        i = i['content']
+        i = i["content"]
 
     return i

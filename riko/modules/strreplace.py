@@ -31,26 +31,25 @@ from functools import reduce
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
 
-OPTS = {
-    'listize': True, 'ftype': 'text', 'field': 'content', 'extract': 'rule'}
+OPTS = {"listize": True, "ftype": "text", "field": "content", "extract": "rule"}
 
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 OPS = {
-    'first': lambda word, rule: word.replace(rule.find, rule.replace, 1),
-    'last': lambda word, rule: rule.replace.join(word.rsplit(rule.find, 1)),
-    'every': lambda word, rule: word.replace(rule.find, rule.replace),
+    "first": lambda word, rule: word.replace(rule.find, rule.replace, 1),
+    "last": lambda word, rule: rule.replace.join(word.rsplit(rule.find, 1)),
+    "every": lambda word, rule: word.replace(rule.find, rule.replace),
 }
 
 
 def reducer(word, rule):
-    return OPS.get(rule.param, OPS['every'])(word, rule)
+    return OPS.get(rule.param, OPS["every"])(word, rule)
 
 
 @coroutine
 def async_parser(word, rules, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         word (str): The string to transform
@@ -86,7 +85,7 @@ def async_parser(word, rules, skip=False, **kwargs):
         bye world
     """
     if skip:
-        value = kwargs['stream']
+        value = kwargs["stream"]
     else:
         value = yield ait.coop_reduce(reducer, rules, word)
 
@@ -94,7 +93,7 @@ def async_parser(word, rules, skip=False, **kwargs):
 
 
 def parser(word, rules, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         word (str): The string to transform
@@ -119,7 +118,7 @@ def parser(word, rules, skip=False, **kwargs):
         >>> parser(item['content'], [rule], **kwargs) == 'bye world'
         True
     """
-    return kwargs['stream'] if skip else reduce(reducer, rules, word)
+    return kwargs["stream"] if skip else reduce(reducer, rules, word)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

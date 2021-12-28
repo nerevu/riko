@@ -39,26 +39,26 @@ from . import operator
 from riko.parsers import parse_conf
 from riko.cast import cast_date
 
-OPTS = {'listize': True, 'extract': 'rule'}
-DEFAULTS = {'combine': 'and', 'mode': 'permit'}
-ITER_ATTRS = {'__next__', 'next', '__iter__'}
-COMBINE_BOOLEAN = {'and': all, 'or': any}
+OPTS = {"listize": True, "extract": "rule"}
+DEFAULTS = {"combine": "and", "mode": "permit"}
+ITER_ATTRS = {"__next__", "next", "__iter__"}
+COMBINE_BOOLEAN = {"and": all, "or": any}
 
 SWITCH = {
-    'contains': lambda x, y: x and y.lower() in x.lower(),
-    'doesnotcontain': lambda x, y: x and y.lower() not in x.lower(),
-    'matches': lambda x, y: re.search(y, x),
-    'eq': op.eq,
-    'is': op.eq,
-    'isnot': op.ne,
-    'truthy': bool,
-    'falsy': op.not_,
-    'greater': op.gt,
-    'after': op.gt,
-    'atleast': op.ge,
-    'less': op.lt,
-    'before': op.lt,
-    'atmost': op.le,
+    "contains": lambda x, y: x and y.lower() in x.lower(),
+    "doesnotcontain": lambda x, y: x and y.lower() not in x.lower(),
+    "matches": lambda x, y: re.search(y, x),
+    "eq": op.eq,
+    "is": op.eq,
+    "isnot": op.ne,
+    "truthy": bool,
+    "falsy": op.not_,
+    "greater": op.gt,
+    "after": op.gt,
+    "atleast": op.ge,
+    "less": op.lt,
+    "before": op.lt,
+    "atmost": op.le,
 }
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -71,8 +71,8 @@ def _parse_x_y(_x, _y):
         y = Decimal(_y)
     except (InvalidOperation, TypeError, ValueError):
         try:
-            x = cast_date(_x)['date']
-            y = cast_date(_y)['date']
+            x = cast_date(_x)["date"]
+            y = cast_date(_y)["date"]
         except (ValueError, KeyError, IndexError, TypeError):
             x, y = _x, _y
 
@@ -80,7 +80,7 @@ def _parse_x_y(_x, _y):
 
 
 def parse_rule(rule, item, **kwargs):
-    truthy_like = rule.op in {'truthy', 'falsy'}
+    truthy_like = rule.op in {"truthy", "falsy"}
     _x, _y = item.get(rule.field, **kwargs), rule.value
     has_value = _y is not None
 
@@ -106,7 +106,7 @@ def parse_rule(rule, item, **kwargs):
 
 
 def parser(stream, rules, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -139,17 +139,17 @@ def parser(stream, rules, tuples, **kwargs):
         >>> next(parser(stream, [objrule], tuples, **kwargs)) == {'ex': 4}
         True
     """
-    conf = kwargs['conf']
+    conf = kwargs["conf"]
 
     # TODO: add terminal check
-    dynamic = any('subkey' in v for v in conf.values() if is_iterable(v))
+    dynamic = any("subkey" in v for v in conf.values() if is_iterable(v))
     objconf = None if dynamic else parse_conf({}, conf=conf, objectify=True)
 
     for item in stream:
         if dynamic:
             objconf = parse_conf(item, conf=conf, objectify=True)
 
-        permit = objconf.mode == 'permit'
+        permit = objconf.mode == "permit"
         results = (parse_rule(rule, item, **kwargs) for rule in rules)
 
         try:

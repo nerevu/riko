@@ -42,13 +42,13 @@ from riko.utils import gen_entries, get_abspath
 from riko.parsers import parse_rss
 from riko.bado import coroutine, return_value, io
 
-OPTS = {'ftype': 'none'}
+OPTS = {"ftype": "none"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
 def async_parser(_, objconf, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -82,11 +82,11 @@ def async_parser(_, objconf, skip=False, **kwargs):
         Using NFC tags in the car
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
         rss = yield autorss.async_get_rss(url)
-        link = get_abspath(next(rss)['link'])
+        link = get_abspath(next(rss)["link"])
         content = yield io.async_url_read(link)
         parsed = parse_rss(content)
         stream = gen_entries(parsed)
@@ -95,7 +95,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
 
 
 def parser(_, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -119,11 +119,11 @@ def parser(_, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
         rss = autorss.get_rss(url)
-        objconf.url = get_abspath(next(rss)['link'])
+        objconf.url = get_abspath(next(rss)["link"])
 
         parsed = parse_rss(**objconf)
         stream = gen_entries(parsed)

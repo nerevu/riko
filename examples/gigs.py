@@ -3,22 +3,25 @@ from riko import get_path
 from riko.bado import coroutine
 from riko.collections import SyncPipe, AsyncPipe
 
-p1_conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-p2_conf = {'uniq_key': 'link'}
+p1_conf = {"url": get_path("gigs.json"), "path": "value.items"}
+p2_conf = {"uniq_key": "link"}
 p3_conf = {
-    'combine': 'or',
-    'mode': 'block',
-    'rule': [{'field': 'title', 'value': 'php', 'op': 'contains'}]}
+    "combine": "or",
+    "mode": "block",
+    "rule": [{"field": "title", "value": "php", "op": "contains"}],
+}
 
-p4_conf = {'rule': [{'sort_key': 'pubDate', 'sort_dir': 'desc'}]}
+p4_conf = {"rule": [{"sort_key": "pubDate", "sort_dir": "desc"}]}
 
 
 def pipe(test=False):
-    stream = (SyncPipe('fetchdata', conf=p1_conf, test=test)
+    stream = (
+        SyncPipe("fetchdata", conf=p1_conf, test=test)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
-        .list)
+        .list
+    )
 
     for i in stream:
         pprint(i)
@@ -28,11 +31,13 @@ def pipe(test=False):
 
 @coroutine
 def async_pipe(reactor, test=False):
-    stream = yield (AsyncPipe('fetchdata', conf=p1_conf, test=test)
+    stream = yield (
+        AsyncPipe("fetchdata", conf=p1_conf, test=test)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
-        .output)
+        .output
+    )
 
     for i in stream:
         pprint(i)

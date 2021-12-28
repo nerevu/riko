@@ -36,14 +36,14 @@ from riko.bado import coroutine, return_value, itertools as ait
 from riko.dotdict import DotDict
 from meza.process import merge
 
-OPTS = {'listize': True, 'extract': 'rule', 'emit': True}
-DEFAULTS = {'convert': True, 'multi': False}
+OPTS = {"listize": True, "extract": "rule", "emit": True}
+DEFAULTS = {"convert": True, "multi": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
 def async_parser(item, rules, skip=False, **kwargs):
-    """ Asynchronously parsers the pipe content
+    """Asynchronously parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -82,14 +82,14 @@ def async_parser(item, rules, skip=False, **kwargs):
         ...
         worldwide
     """
-    multi = kwargs['conf']['multi']
+    multi = kwargs["conf"]["multi"]
     recompile = not multi
 
     @coroutine
     def async_reducer(item, rules):
-        field = rules[0]['field']
+        field = rules[0]["field"]
         word = item.get(field, **kwargs)
-        grouped = group_by(rules, 'flags')
+        grouped = group_by(rules, "flags")
         group_rules = [g[1] for g in grouped] if multi else rules
         reducer = multi_substitute if multi else substitute
         replacement = yield ait.coop_reduce(reducer, group_rules, word)
@@ -97,10 +97,10 @@ def async_parser(item, rules, skip=False, **kwargs):
         return_value(DotDict(combined))
 
     if skip:
-        item = kwargs['stream']
+        item = kwargs["stream"]
     else:
         new_rules = [get_new_rule(r, recompile=recompile) for r in rules]
-        grouped = group_by(new_rules, 'field')
+        grouped = group_by(new_rules, "field")
         field_rules = [g[1] for g in grouped]
         item = yield ait.async_reduce(async_reducer, field_rules, item)
 
@@ -108,7 +108,7 @@ def async_parser(item, rules, skip=False, **kwargs):
 
 
 def parser(item, rules, skip=False, **kwargs):
-    """ Parsers the pipe content
+    """Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -138,23 +138,23 @@ def parser(item, rules, skip=False, **kwargs):
         >>> parser(item, rules, **kwargs) == regexed
         True
     """
-    multi = kwargs['conf']['multi']
+    multi = kwargs["conf"]["multi"]
     recompile = not multi
 
     def meta_reducer(item, rules):
-        field = rules[0]['field']
+        field = rules[0]["field"]
         word = item.get(field, **kwargs)
-        grouped = group_by(rules, 'flags')
+        grouped = group_by(rules, "flags")
         group_rules = [g[1] for g in grouped] if multi else rules
         reducer = multi_substitute if multi else substitute
         replacement = reduce(reducer, group_rules, word)
         return DotDict(merge([item, {field: replacement}]))
 
     if skip:
-        item = kwargs['stream']
+        item = kwargs["stream"]
     else:
         new_rules = [get_new_rule(r, recompile=recompile) for r in rules]
-        grouped = group_by(new_rules, 'field')
+        grouped = group_by(new_rules, "field")
         field_rules = [g[1] for g in grouped]
         item = reduce(meta_reducer, field_rules, item)
 

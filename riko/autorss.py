@@ -26,12 +26,12 @@ class LinkParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         entry = dict(attrs)
-        alternate = entry.get('rel') == 'alternate'
-        rss = 'rss' in entry.get('type', '')
+        alternate = entry.get("rel") == "alternate"
+        rss = "rss" in entry.get("type", "")
 
-        if (alternate or rss) and 'href' in entry:
-            entry['link'] = entry['href']
-            entry['tag'] = tag
+        if (alternate or rss) and "href" in entry:
+            entry["link"] = entry["href"]
+            entry["tag"] = tag
             self.entry = chain(self.entry, [entry])
 
 
@@ -45,16 +45,16 @@ def file2entries(f, parser):
 
 def doc2entries(document):
     for node in document.childNodes:
-        if hasattr(node, 'attributes') and node.attributes:
+        if hasattr(node, "attributes") and node.attributes:
             entry = node.attributes
-            alternate = entry.get('rel') == 'alternate'
-            rss = 'rss' in entry.get('type', '')
+            alternate = entry.get("rel") == "alternate"
+            rss = "rss" in entry.get("type", "")
         else:
             alternate = rss = None
 
-        if (alternate or rss) and 'href' in entry:
-            entry['link'] = entry['href']
-            entry['tag'] = node.nodeName
+        if (alternate or rss) and "href" in entry:
+            entry["link"] = entry["href"]
+            entry["tag"] = node.nodeName
             yield entry
 
     for node in document.childNodes:

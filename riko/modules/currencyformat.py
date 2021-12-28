@@ -23,15 +23,15 @@ from babel.numbers import format_currency
 from . import processor
 import pygogo as gogo
 
-OPTS = {'ftype': 'decimal', 'field': 'content'}
-DEFAULTS = {'currency': 'USD'}
-NaN = Decimal('NaN')
+OPTS = {"ftype": "decimal", "field": "content"}
+DEFAULTS = {"currency": "USD"}
+NaN = Decimal("NaN")
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(amount, objconf, skip=False, **kwargs):
-    """ Parsers the pipe content
+    """Parsers the pipe content
 
     Args:
         amount (Decimal): The amount to format
@@ -50,7 +50,7 @@ def parser(amount, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        parsed = kwargs['stream']
+        parsed = kwargs["stream"]
     elif amount is not None:
         try:
             parsed = format_currency(amount, objconf.currency)

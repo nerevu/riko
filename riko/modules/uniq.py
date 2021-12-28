@@ -29,12 +29,12 @@ from collections import deque
 from . import operator
 
 OPTS = {}
-DEFAULTS = {'uniq_key': 'content', 'limit': 1024}
+DEFAULTS = {"uniq_key": "content", "limit": 1024}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -92,6 +92,7 @@ def async_pipe(*args, **kwargs):
 
             uniq_key (str): Item attribute which should be unique (default:
                 'content').
+
             limit (int): Maximum number of unique items to track (default:
                 1024)
 
@@ -133,6 +134,7 @@ def pipe(*args, **kwargs):
 
             uniq_key (str): Item attribute which should be unique (default:
                 'content').
+
             limit (int): Maximum number of unique items to track (default:
                 1024)
 

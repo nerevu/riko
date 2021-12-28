@@ -25,15 +25,14 @@ import pygogo as gogo
 
 from . import processor
 
-OPTS = {'ftype': 'text', 'field': 'content'}
-DEFAULTS = {
-    'delimiter': ',', 'dedupe': False, 'sort': False, 'token_key': 'content'}
+OPTS = {"ftype": "text", "field": "content"}
+DEFAULTS = {"delimiter": ",", "dedupe": False, "sort": False, "token_key": "content"}
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(content, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         content (str): The content to tokenize
@@ -52,7 +51,7 @@ def parser(content, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         splits = [s.strip() for s in content.split(objconf.delimiter) if s]
         deduped = set(splits) if objconf.dedupe else splits

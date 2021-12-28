@@ -24,13 +24,13 @@ import pygogo as gogo
 from urllib.parse import urlparse
 from . import processor
 
-OPTS = {'ftype': 'text', 'field': 'content'}
-DEFAULTS = {'parse_key': 'content'}
+OPTS = {"ftype": "text", "field": "content"}
+DEFAULTS = {"parse_key": "content"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(url, objconf, skip=False, **kwargs):
-    """ Parsers the pipe content
+    """Parsers the pipe content
 
     Args:
         url (str): The link to parse
@@ -54,13 +54,13 @@ def parser(url, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         parsed = urlparse(url)
 
         # noqa pylint: disable=dict-items-not-iterating
         items = parsed._asdict().items()
-        stream = ({'component': k, objconf.parse_key: v} for k, v in items)
+        stream = ({"component": k, objconf.parse_key: v} for k, v in items)
 
     return stream
 

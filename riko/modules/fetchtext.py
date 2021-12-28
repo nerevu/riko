@@ -29,14 +29,14 @@ from riko import ENCODING
 from riko.utils import fetch, auto_close, get_abspath
 from riko.bado import coroutine, return_value, io
 
-OPTS = {'ftype': 'none', 'assign': 'content'}
-DEFAULTS = {'encoding': ENCODING}
+OPTS = {"ftype": "none", "assign": "content"}
+DEFAULTS = {"encoding": ENCODING}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
 def async_parser(_, objconf, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -71,11 +71,11 @@ def async_parser(_, objconf, skip=False, **kwargs):
         What is Lorem Ipsum?
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
         f = yield io.async_url_open(url)
-        assign = kwargs['assign']
+        assign = kwargs["assign"]
         encoding = objconf.encoding
         _stream = ({assign: line.strip().decode(encoding)} for line in f)
         stream = auto_close(_stream, f)
@@ -84,7 +84,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
 
 
 def parser(_, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -109,10 +109,10 @@ def parser(_, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         f = fetch(decode=True, **objconf)
-        _stream = ({kwargs['assign']: line.strip()} for line in f)
+        _stream = ({kwargs["assign"]: line.strip()} for line in f)
         stream = auto_close(_stream, f)
 
     return stream

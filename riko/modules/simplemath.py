@@ -25,7 +25,7 @@ import operator
 from . import processor
 import pygogo as gogo
 
-OPTS = {'ftype': 'decimal', 'ptype': 'decimal', 'field': 'content'}
+OPTS = {"ftype": "decimal", "ptype": "decimal", "field": "content"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -34,23 +34,23 @@ def mean(*nums):
     try:
         return sum(nums) / len(nums)
     except ZeroDivisionError:
-        return float('inf')
+        return float("inf")
 
 
 OPS = {
-    'add': operator.add,
-    'subtract': operator.sub,
-    'multiply': operator.mul,
-    'mean': mean,
-    'divide': operator.truediv,
-    'floor': operator.floordiv,
-    'modulo': operator.mod,
-    'power': operator.pow,
+    "add": operator.add,
+    "subtract": operator.sub,
+    "multiply": operator.mul,
+    "mean": mean,
+    "divide": operator.truediv,
+    "floor": operator.floordiv,
+    "modulo": operator.mod,
+    "power": operator.pow,
 }
 
 
 def parser(num, objconf, skip=False, **kwargs):
-    """ Parsers the pipe content
+    """Parsers the pipe content
 
     Args:
         num (Decimal): The first number to operate on
@@ -67,8 +67,8 @@ def parser(num, objconf, skip=False, **kwargs):
         >>> parser(10, objconf, conf=conf)
         2.5
     """
-    operation = OPS[kwargs['conf']['op']]
-    return kwargs['stream'] if skip else operation(num, objconf.other)
+    operation = OPS[kwargs["conf"]["op"]]
+    return kwargs["stream"] if skip else operation(num, objconf.other)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

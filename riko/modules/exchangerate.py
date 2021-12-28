@@ -34,45 +34,46 @@ from . import processor
 from riko.bado import coroutine, return_value, requests as treq, io
 from riko.utils import fetch, get_abspath
 
-EXCHANGE_API = 'https://openexchangerates.org/api/latest.json'
-PARAMS = {'app_id': getenv('OPEN_EXCHANGE_RATES_APP_ID')}
+EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
+PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_APP_ID")}
 
-OPTS = {'field': 'content', 'ftype': 'text'}
+OPTS = {"field": "content", "ftype": "text"}
 DEFAULTS = {
-    'currency': 'USD',
-    'delay': 0,
-    'memoize': True,
-    'precision': 6,
-    'url': EXCHANGE_API,
-    'params': PARAMS}
+    "currency": "USD",
+    "delay": 0,
+    "memoize": True,
+    "precision": 6,
+    "url": EXCHANGE_API,
+    "params": PARAMS,
+}
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parse_response(json):
-    if 'rates' in json:
-        resp = {k: Decimal(v) for k, v in json['rates'].items() if v}
+    if "rates" in json:
+        resp = {k: Decimal(v) for k, v in json["rates"].items() if v}
     else:
         # TODO: make sure this log shows up in console
-        logger.warning('invalid json response:')
+        logger.warning("invalid json response:")
         logger.warning(json)
         resp = {}
 
     return resp
 
 
-def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
+def calc_rate(from_cur, to_cur, rates, places=Decimal("0.0001")):
     def get_rate(currency):
-        rate = rates.get(currency, Decimal('nan'))
+        rate = rates.get(currency, Decimal("nan"))
 
         if not rate:
-            logger.warning('rate USD/%s not found in rates' % currency)
+            logger.warning("rate USD/%s not found in rates" % currency)
 
         return rate
 
     if from_cur == to_cur:
         rate = Decimal(1)
-    elif to_cur == 'USD':
+    elif to_cur == "USD":
         rate = get_rate(from_cur)
     else:
         usd_to_given = get_rate(from_cur)
@@ -84,7 +85,7 @@ def calc_rate(from_cur, to_cur, rates, places=Decimal('0.0001')):
 
 @coroutine
 def async_parser(base, objconf, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         base (str): The base currency (exchanging from)
@@ -125,10 +126,10 @@ def async_parser(base, objconf, skip=False, **kwargs):
     same_currency = base == objconf.currency
 
     if skip:
-        rate = kwargs['stream']
+        rate = kwargs["stream"]
     elif same_currency:
         rate = Decimal(1)
-    elif objconf.url.startswith('http'):
+    elif objconf.url.startswith("http"):
         r = yield treq.get(objconf.url, params=objconf.params)
         json = yield treq.json(r)
     else:
@@ -145,7 +146,7 @@ def async_parser(base, objconf, skip=False, **kwargs):
 
 
 def parser(base, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         base (str): The base currency (exchanging from)
@@ -175,18 +176,18 @@ def parser(base, objconf, skip=False, **kwargs):
     same_currency = base == objconf.currency
 
     if skip:
-        rate = kwargs['stream']
+        rate = kwargs["stream"]
     elif same_currency:
         rate = Decimal(1)
     else:
-        decode = objconf.url.startswith('http')
+        decode = objconf.url.startswith("http")
 
         with fetch(decode=decode, **objconf) as f:
             try:
-                json = next(items(f, ''))
+                json = next(items(f, ""))
             except Exception as e:
                 f.seek(0)
-                logger.error('Error parsing {url}'.format(**objconf))
+                logger.error("Error parsing {url}".format(**objconf))
                 logger.debug(f.read())
                 logger.error(e)
                 logger.error(traceback.format_exc())

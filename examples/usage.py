@@ -376,14 +376,15 @@ from pprint import pprint
 from riko.collections import SyncPipe
 
 attrs = [
-    {'key': 'title', 'value': 'riko pt. 1'},
-    {'key': 'content', 'value': "Let's talk about riko!"}]
+    {"key": "title", "value": "riko pt. 1"},
+    {"key": "content", "value": "Let's talk about riko!"},
+]
 
-ib_conf = {'attrs': attrs}
+ib_conf = {"attrs": attrs}
 
 
 def pipe(test=False):
-    flow = SyncPipe('itembuilder', conf=ib_conf, test=test).hash()
+    flow = SyncPipe("itembuilder", conf=ib_conf, test=test).hash()
 
     for i in flow.output:
         pprint(i)

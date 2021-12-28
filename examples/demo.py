@@ -45,31 +45,35 @@ from riko import get_path
 from riko.bado import coroutine
 from riko.collections import SyncPipe, AsyncPipe
 
-replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
-health = get_path('health.xml')
-caltrain = get_path('caltrain.html')
+replace_conf = {"rule": {"find": "\n", "replace": " "}}
+health = get_path("health.xml")
+caltrain = get_path("caltrain.html")
 start = '<body id="thebody" class="Level2">'
-fetch_conf = {'url': caltrain, 'start': start, 'end': '</body>', 'detag': True}
+fetch_conf = {"url": caltrain, "start": start, "end": "</body>", "detag": True}
 
 
 def pipe(test=False):
-    s1 = SyncPipe('fetch', test=test, conf={'url': health}).output
-    s2 = (SyncPipe('fetchpage', test=test, conf=fetch_conf)
-        .strreplace(conf=replace_conf, assign='content')
-        .tokenizer(conf={'delimiter': ' '}, emit=True)
+    s1 = SyncPipe("fetch", test=test, conf={"url": health}).output
+    s2 = (
+        SyncPipe("fetchpage", test=test, conf=fetch_conf)
+        .strreplace(conf=replace_conf, assign="content")
+        .tokenizer(conf={"delimiter": " "}, emit=True)
         .count()
-        .output)
+        .output
+    )
 
-    print(next(s1)['title'], next(s2)['count'])
+    print(next(s1)["title"], next(s2)["count"])
 
 
 @coroutine
 def async_pipe(reactor, test=False):
-    s1 = yield AsyncPipe('fetch', test=test, conf={'url': health}).output
-    s2 = yield (AsyncPipe('fetchpage', test=test, conf=fetch_conf)
-        .strreplace(conf=replace_conf, assign='content')
-        .tokenizer(conf={'delimiter': ' '}, emit=True)
+    s1 = yield AsyncPipe("fetch", test=test, conf={"url": health}).output
+    s2 = yield (
+        AsyncPipe("fetchpage", test=test, conf=fetch_conf)
+        .strreplace(conf=replace_conf, assign="content")
+        .tokenizer(conf={"delimiter": " "}, emit=True)
         .count()
-        .output)
+        .output
+    )
 
-    print(next(s1)['title'], next(s2)['count'])
+    print(next(s1)["title"], next(s2)["count"])

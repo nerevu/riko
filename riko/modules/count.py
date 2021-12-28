@@ -24,13 +24,13 @@ from operator import itemgetter
 
 from . import operator
 
-OPTS = {'extract': 'count_key'}
-DEFAULTS = {'count_key': None}
+OPTS = {"extract": "count_key"}
+DEFAULTS = {"count_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, key, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -74,7 +74,7 @@ def parser(stream, key, tuples, **kwargs):
         grouped = it.groupby(sorted_stream, keyfunc)
         counted = ({key: len(list(group))} for key, group in grouped)
     else:
-        counted = {kwargs['assign']: len(list(stream))}
+        counted = {kwargs["assign"]: len(list(stream))}
 
     return counted
 

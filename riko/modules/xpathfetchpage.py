@@ -58,7 +58,7 @@ from riko.parsers import xml2etree, etree2dict, xpath
 from riko.bado import coroutine, return_value, util, io
 from meza.compat import encode
 
-OPTS = {'ftype': 'none'}
+OPTS = {"ftype": "none"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -69,7 +69,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 @coroutine
 def async_parser(_, objconf, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -121,11 +121,11 @@ def async_parser(_, objconf, skip=False, **kwargs):
         Help Page -- ScienceDaily
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
-        ext = splitext(url)[1].lstrip('.')
-        xml = (ext == 'xml') or objconf.strict
+        ext = splitext(url)[1].lstrip(".")
+        xml = (ext == "xml") or objconf.strict
 
         try:
             f = yield io.async_url_open(url)
@@ -137,14 +137,14 @@ def async_parser(_, objconf, skip=False, **kwargs):
         elements = xpath(tree, objconf.xpath)
         f.close()
         items = map(util.etree2dict, elements)
-        stringified = ({kwargs['assign']: encode(i)} for i in items)
+        stringified = ({kwargs["assign"]: encode(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
     return_value(stream)
 
 
 def parser(_, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -166,18 +166,18 @@ def parser(_, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
-        ext = splitext(url)[1].lstrip('.')
-        xml = (ext == 'xml') or objconf.strict
+        ext = splitext(url)[1].lstrip(".")
+        xml = (ext == "xml") or objconf.strict
 
         with fetch(**objconf) as f:
             root = xml2etree(f, xml=xml, html5=objconf.html5).getroot()
             elements = xpath(root, objconf.xpath)
 
         items = map(etree2dict, elements)
-        stringified = ({kwargs['assign']: str(i)} for i in items)
+        stringified = ({kwargs["assign"]: str(i)} for i in items)
         stream = stringified if objconf.stringify else items
 
     return stream

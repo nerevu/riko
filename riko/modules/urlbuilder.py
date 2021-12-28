@@ -64,13 +64,13 @@ from riko.dotdict import DotDict
 from riko.parsers import get_value
 from riko.cast import cast_url
 
-OPTS = {'extract': 'params', 'listize': True, 'emit': True}
+OPTS = {"extract": "params", "listize": True, "emit": True}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(item, params, skip=False, **kwargs):
-    """ Parsers the pipe content
+    """Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -102,13 +102,13 @@ def parser(item, params, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
-        conf = kwargs.pop('conf')
-        path = conf.get('path')
+        conf = kwargs.pop("conf")
+        path = conf.get("path")
         paths = (get_value(item, DotDict(p), **kwargs) for p in path)
         params = urlencode([(p.key, p.value) for p in params])
-        url = '%s?%s' % (urljoin(conf['base'], '/'.join(paths)), params)
+        url = "%s?%s" % (urljoin(conf["base"], "/".join(paths)), params)
         stream = cast_url(url)
 
     return stream

@@ -57,13 +57,13 @@ from . import processor
 from riko.utils import gen_items
 import pygogo as gogo
 
-OPTS = {'emit': True}
-DEFAULTS = {'token_key': 'content'}
+OPTS = {"emit": True}
+DEFAULTS = {"token_key": "content"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(item, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -92,7 +92,7 @@ def parser(item, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         element = item.get(objconf.path, **kwargs)
         stream = gen_items(element, objconf.token_key)
