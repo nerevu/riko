@@ -22,12 +22,12 @@ from . import operator
 import pygogo as gogo
 
 # disable `dictize` since we do not need to access the configuration
-OPTS = {'dictize': False}
+OPTS = {"dictize": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`

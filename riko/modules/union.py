@@ -28,12 +28,12 @@ from . import operator
 from riko.utils import multiplex
 
 # disable `dictize` since we do not need to access the configuration
-OPTS = {'dictize': False}
+OPTS = {"dictize": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -66,7 +66,7 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> len(list(parser(stream, None, tuples, **kwargs)))
         15
     """
-    return chain(stream, multiplex(kwargs['others']))
+    return chain(stream, multiplex(kwargs["others"]))
 
 
 @operator(isasync=True, **OPTS)

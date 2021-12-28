@@ -32,12 +32,12 @@ from . import processor
 import pygogo as gogo
 from riko.dotdict import DotDict
 
-OPTS = {'listize': True, 'extract': 'attrs', 'ftype': 'none'}
+OPTS = {"listize": True, "extract": "attrs", "ftype": "none"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(_, attrs, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -61,7 +61,7 @@ def parser(_, attrs, skip=False, **kwargs):
         True
     """
     items = ((a.key, a.value) for a in attrs)
-    return kwargs['stream'] if skip else DotDict(items)
+    return kwargs["stream"] if skip else DotDict(items)
 
 
 @processor(isasync=True, **OPTS)

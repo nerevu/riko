@@ -27,12 +27,12 @@ from decimal import Decimal
 from . import operator
 
 OPTS = {}
-DEFAULTS = {'sum_key': 'content', 'group_key': None}
+DEFAULTS = {"sum_key": "content", "group_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -83,7 +83,7 @@ def parser(stream, objconf, tuples, **kwargs):
         grouped = it.groupby(sorted_stream, keyfunc)
         summed = ({key: _sum(group)} for key, group in grouped)
     else:
-        summed = {kwargs['assign']: _sum(stream)}
+        summed = {kwargs["assign"]: _sum(stream)}
 
     return summed
 

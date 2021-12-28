@@ -37,13 +37,13 @@ from time import strftime
 from . import processor
 import pygogo as gogo
 
-OPTS = {'field': 'date', 'ftype': 'date'}
-DEFAULTS = {'format': '%m/%d/%Y %H:%M:%S'}
+OPTS = {"field": "date", "ftype": "date"}
+DEFAULTS = {"format": "%m/%d/%Y %H:%M:%S"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(date, objconf, skip=False, **kwargs):
-    """ Obtains the user input
+    """Obtains the user input
 
     Args:
         date (dict): Must have key 'date' with a date-like object value
@@ -61,8 +61,8 @@ def parser(date, objconf, skip=False, **kwargs):
         >>> parser({'date': date(2015, 5, 4)}, objconf)
         '05/04/2015'
     """
-    timetuple = date['date'].timetuple()
-    return kwargs['stream'] if skip else strftime(objconf.format, timetuple)
+    timetuple = date["date"].timetuple()
+    return kwargs["stream"] if skip else strftime(objconf.format, timetuple)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

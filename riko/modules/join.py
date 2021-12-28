@@ -32,13 +32,13 @@ from meza.process import merge, join
 from . import operator
 
 # disable `dictize` since we do not need to access the configuration
-OPTS = {'dictize': False}
-DEFAULTS = {'join_key': None, 'lower': False}
+OPTS = {"dictize": False}
+DEFAULTS = {"join_key": None, "lower": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -82,9 +82,10 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> len(list(joined))
         4
     """
+
     def compare(x, y):
         if objconf.lower:
-            x_value, y_value = x.get(x_key, ''), y.get(y_key, '')
+            x_value, y_value = x.get(x_key, ""), y.get(y_key, "")
             equal = x_value.lower() == y_value.lower()
         else:
             equal = x.get(x_key) == y.get(y_key)
@@ -94,12 +95,11 @@ def parser(stream, objconf, tuples, **kwargs):
     if objconf.join_key or objconf.other_join_key:
         x_key = objconf.join_key or objconf.other_join_key
         y_key = objconf.other_join_key or x_key
-        prod = product(stream, kwargs['other'])
+        prod = product(stream, kwargs["other"])
 
-        joined = (
-            merge([x, y]) for x, y in prod if compare(x, y))
+        joined = (merge([x, y]) for x, y in prod if compare(x, y))
     else:
-        joined = join(stream, kwargs['other'])
+        joined = join(stream, kwargs["other"])
 
     return joined
 

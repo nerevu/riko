@@ -28,13 +28,13 @@ from copy import deepcopy
 from . import operator
 import pygogo as gogo
 
-OPTS = {'extract': 'splits', 'ptype': 'int', 'objectify': False}
-DEFAULTS = {'splits': 2}
+OPTS = {"extract": "splits", "ptype": "int", "objectify": False}
+DEFAULTS = {"splits": 2}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, splits, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source stream. Note: this shares the `tuples`

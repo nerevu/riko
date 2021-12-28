@@ -31,13 +31,13 @@ Attributes:
 from . import processor
 import pygogo as gogo
 
-OPTS = {'ftype': 'text', 'ptype': 'int', 'field': 'content'}
-DEFAULTS = {'start': 0, 'length': 0}
+OPTS = {"ftype": "text", "ptype": "int", "field": "content"}
+DEFAULTS = {"start": 0, "length": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(word, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         word (str): The string to parse
@@ -63,7 +63,7 @@ def parser(word, objconf, skip=False, **kwargs):
         True
     """
     end = objconf.start + objconf.length if objconf.length else None
-    return kwargs['stream'] if skip else word[objconf.start:end]
+    return kwargs["stream"] if skip else word[objconf.start : end]
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -27,26 +27,27 @@ from . import processor
 import pygogo as gogo
 from riko.dotdict import DotDict
 
-OPTS = {'emit': True}
-DEFAULTS = {'pubDate': dt.now().isoformat()}
+OPTS = {"emit": True}
+DEFAULTS = {"pubDate": dt.now().isoformat()}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 # yahoo style rss items (dots are for sub-levels)
 RSS = {
-    'title': 'y:title',
-    'guid': 'y:id',
-    'mediaThumbURL': 'media:thumbnail.url',
-    'mediaThumbHeight': 'media:thumbnail.height',
-    'mediaThumbWidth': 'media:thumbnail.width',
-    'mediaContentType': 'media:content.type',
-    'mediaContentURL': 'media:content.url',
-    'mediaContentHeight': 'media:content.height',
-    'mediaContentWidth': 'media:content.width'}
+    "title": "y:title",
+    "guid": "y:id",
+    "mediaThumbURL": "media:thumbnail.url",
+    "mediaThumbHeight": "media:thumbnail.height",
+    "mediaThumbWidth": "media:thumbnail.width",
+    "mediaContentType": "media:content.type",
+    "mediaContentURL": "media:content.url",
+    "mediaContentHeight": "media:content.height",
+    "mediaContentWidth": "media:content.width",
+}
 
 
 def parser(item, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -73,7 +74,7 @@ def parser(item, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         items = objconf.items()
         rdict = ((RSS.get(k, k), item.get(v, v, **kwargs)) for k, v in items)

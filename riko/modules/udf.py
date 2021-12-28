@@ -23,7 +23,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -52,7 +52,7 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> next(parser(stream, None, tuples, func=func))
         {'y': 3}
     """
-    return map(kwargs['func'], stream)
+    return map(kwargs["func"], stream)
 
 
 @operator(isasync=True)

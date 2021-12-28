@@ -28,41 +28,44 @@ except ImportError:
     try:
         import xml.etree.cElementTree as etree
     except ImportError:
-        logger.debug('xml parser: ElementTree')
+        logger.debug("xml parser: ElementTree")
         import xml.etree.ElementTree as etree
         from xml.etree.ElementTree import ElementTree
     else:
-        logger.debug('xml parser: cElementTree')
+        logger.debug("xml parser: cElementTree")
         from xml.etree.cElementTree import ElementTree
 
     import html5lib as html
+
     html5parser = None
 else:
-    logger.debug('xml parser: lxml')
+    logger.debug("xml parser: lxml")
     from lxml.html import html5parser
 
 try:
     import speedparser3 as speedparser
 except ImportError:
     import feedparser
-    logger.debug('rss parser: feedparser')
+
+    logger.debug("rss parser: feedparser")
     speedparser = None
 else:
-    logger.debug('rss parser: speedparser')
+    logger.debug("rss parser: speedparser")
 
 rssparser = speedparser or feedparser
 
 
 NAMESPACES = {
-    'owl': 'http://www.w3.org/2002/07/owl#',
-    'xhtml': 'http://www.w3.org/1999/xhtml'}
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "xhtml": "http://www.w3.org/1999/xhtml",
+}
 
-ESCAPE = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'}
+ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 
 SKIP_SWITCH = {
-    'contains': lambda text, value: text.lower() in value.lower(),
-    'intersection': lambda text, value: set(text).intersection(value),
-    're.search': lambda text, value: re.search(text, value, re.IGNORECASE),
+    "contains": lambda text, value: text.lower() in value.lower(),
+    "intersection": lambda text, value: set(text).intersection(value),
+    "re.search": lambda text, value: re.search(text, value, re.IGNORECASE),
 }
 
 
@@ -72,7 +75,7 @@ class LinkParser(HTMLParser):
         self.data = StringIO()
 
     def handle_data(self, data):
-        self.data.write('%s\n' % decode(data))
+        self.data.write("%s\n" % decode(data))
 
 
 def get_text(html, convert_charrefs=False):
@@ -105,27 +108,27 @@ def parse_rss(url=None, **kwargs):
     return parsed
 
 
-def xpath(tree, path='/', pos=0, namespace=None):
+def xpath(tree, path="/", pos=0, namespace=None):
     try:
         elements = tree.xpath(path)
     except AttributeError:
-        stripped = path.lstrip('/')
-        tags = stripped.split('/') if stripped else []
+        stripped = path.lstrip("/")
+        tags = stripped.split("/") if stripped else []
 
         try:
             # TODO: consider replacing with twisted.words.xish.xpath
             elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
         except AttributeError:
-            element_name = str(tree).split(' ')[1]
+            element_name = str(tree).split(" ")[1]
 
-            if not namespace and {'{', '}'}.issubset(element_name):
-                start, end = element_name.find('{') + 1, element_name.find('}')
+            if not namespace and {"{", "}"}.issubset(element_name):
+                start, end = element_name.find("{") + 1, element_name.find("}")
                 ns = element_name[start:end]
                 ns_iter = (name for name in NAMESPACES if name in ns)
                 namespace = next(ns_iter, namespace)
 
-            prefix = ('/%s:' % namespace) if namespace else '/'
-            match = './%s%s' % (prefix, prefix.join(tags[1:]))
+            prefix = ("/%s:" % namespace) if namespace else "/"
+            match = "./%s%s" % (prefix, prefix.join(tags[1:]))
             elements = tree.findall(match, NAMESPACES)
         except IndexError:
             elements = [tree]
@@ -151,7 +154,7 @@ def xml2etree(f, xml=True, html5=False):
     return element_tree
 
 
-def _make_content(i, value=None, tag='content', append=True, strip=False):
+def _make_content(i, value=None, tag="content", append=True, strip=False):
     content = i.get(tag)
 
     try:
@@ -163,7 +166,7 @@ def _make_content(i, value=None, tag='content', append=True, strip=False):
         content = listize(content)
         content.append(value)
     elif content and value:
-        content = ''.join([content, value])
+        content = "".join([content, value])
     elif value:
         content = value
 
@@ -171,8 +174,7 @@ def _make_content(i, value=None, tag='content', append=True, strip=False):
 
 
 def etree2dict(element):
-    """Convert an element tree into a dict imitating how Yahoo Pipes does it.
-    """
+    """Convert an element tree into a dict imitating how Yahoo Pipes does it."""
     i = dict(element.items())
     i.update(_make_content(i, element.text, strip=True))
 
@@ -181,23 +183,23 @@ def etree2dict(element):
         value = etree2dict(child)
         i.update(_make_content(i, value, tag))
 
-    if element.text and not set(i).difference(['content']):
+    if element.text and not set(i).difference(["content"]):
         # element is leaf node and doesn't have attributes
-        i = i.get('content')
+        i = i.get("content")
 
     return i
 
 
-def any2dict(f, ext='xml', html5=False, path=None):
-    path = path or ''
+def any2dict(f, ext="xml", html5=False, path=None):
+    path = path or ""
 
-    if ext in {'xml', 'html'}:
-        xml = ext == 'xml'
+    if ext in {"xml", "html"}:
+        xml = ext == "xml"
         root = xml2etree(f, xml, html5).getroot()
-        replaced = '/'.join(path.split('.'))
+        replaced = "/".join(path.split("."))
         tree = next(xpath(root, replaced)) if replaced else root
         content = etree2dict(tree)
-    elif ext == 'json':
+    elif ext == "json":
         content = next(items(f, path))
     else:
         raise TypeError("Invalid file type: '%s'" % ext)
@@ -209,10 +211,10 @@ def get_value(item, conf=None, force=False, default=None, **kwargs):
     item = item or {}
 
     try:
-        value = item.get(conf['subkey'], **kwargs)
+        value = item.get(conf["subkey"], **kwargs)
     except KeyError:
-        if conf and not (hasattr(conf, 'delete') or force):
-            raise TypeError('conf must be of type DotDict')
+        if conf and not (hasattr(conf, "delete") or force):
+            raise TypeError("conf must be of type DotDict")
         elif force:
             value = conf
         elif conf:
@@ -233,13 +235,13 @@ def parse_conf(item, **kwargs):
     kw = Objectify(kwargs, defaults={}, conf={})
     # TODO: fix so .items() returns a DotDict instance
     # parsed = {k: get_value(item, v) for k, v in kw.conf.items()}
-    sentinel = {'subkey', 'value', 'terminal'}
-    not_dict = not hasattr(kw.conf, 'keys')
+    sentinel = {"subkey", "value", "terminal"}
+    not_dict = not hasattr(kw.conf, "keys")
 
     if not_dict or (len(kw.conf) == 1 and sentinel.intersection(kw.conf)):
         objectified = get_value(item, **kwargs)
     else:
-        no_conf = remove_keys(kwargs, 'conf')
+        no_conf = remove_keys(kwargs, "conf")
         parsed = {k: get_value(item, kw.conf[k], **no_conf) for k in kw.conf}
         result = merge([kw.defaults, parsed])
         objectified = Objectify(result) if kw.objectify else result
@@ -248,7 +250,7 @@ def parse_conf(item, **kwargs):
 
 
 def get_skip(item, skip_if=None, **kwargs):
-    """ Determine whether or not to skip an item
+    """Determine whether or not to skip an item
 
     Args:
         item (dict): The entry to process
@@ -283,11 +285,11 @@ def get_skip(item, skip_if=None, **kwargs):
         if callable(_skip):
             skip = _skip(item)
         elif _skip:
-            value = item.get(_skip['field'], '')
-            text = _skip.get('text')
-            op = _skip.get('op', 'contains')
+            value = item.get(_skip["field"], "")
+            text = _skip.get("text")
+            op = _skip.get("op", "contains")
             match = not SKIP_SWITCH[op](text, value) if text else value
-            skip = match if _skip.get('include') else not match
+            skip = match if _skip.get("include") else not match
         else:
             skip = False
 
@@ -302,8 +304,7 @@ def get_field(item, field=None, **kwargs):
 
 
 def text2entity(text):
-    """Convert HTML/XML special chars to entity references
-    """
+    """Convert HTML/XML special chars to entity references"""
     return ESCAPE.get(text, text)
 
 
@@ -311,11 +312,11 @@ def entity2text(entitydef):
     """Convert an HTML entity reference into unicode.
     http://stackoverflow.com/a/58125/408556
     """
-    if entitydef.startswith('&#x'):
+    if entitydef.startswith("&#x"):
         cp = int(entitydef[3:-1], 16)
-    elif entitydef.startswith('&#'):
+    elif entitydef.startswith("&#"):
         cp = int(entitydef[2:-1])
-    elif entitydef.startswith('&'):
+    elif entitydef.startswith("&"):
         cp = name2codepoint[entitydef[1:-1]]
     else:
         logger.debug(entitydef)

@@ -38,20 +38,20 @@ from riko.cast import cast
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
-DEF_NS = 'https://github.com/nerevu/riko'
+DEF_NS = "https://github.com/nerevu/riko"
 
 
 def get_abspath(url):
-    url = 'http://%s' % url if url and '://' not in url else url
+    url = "http://%s" % url if url and "://" not in url else url
 
-    if url and url.startswith('file:///'):
+    if url and url.startswith("file:///"):
         # already have an abspath
         pass
-    elif url and url.startswith('file://'):
+    elif url and url.startswith("file://"):
         parent = p.dirname(p.dirname(__file__))
         rel_path = url[7:]
         abspath = p.abspath(p.join(parent, rel_path))
-        url = 'file://%s' % abspath
+        url = "file://%s" % abspath
 
     return compat.decode(url)
 
@@ -67,8 +67,8 @@ def make_blocking(f):
         fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
 
 
-if 'nose' in sys.modules:
-    logger.debug('Running in nose environment...')
+if "nose" in sys.modules:
+    logger.debug("Running in nose environment...")
     make_blocking(sys.stderr)
 
 
@@ -77,7 +77,7 @@ def default_user_agent(name="riko"):
     Return a string representing the default user agent.
     :rtype: str
     """
-    return '%s/%s' % (name, __version__)
+    return "%s/%s" % (name, __version__)
 
 
 class Chainable(object):
@@ -119,9 +119,9 @@ def multi_try(source, zipped, default=None):
 
 def get_response_content_type(response):
     try:
-        content_type = response.getheader('Content-Type', '')
+        content_type = response.getheader("Content-Type", "")
     except AttributeError:
-        content_type = response.headers.get('Content-Type', '')
+        content_type = response.headers.get("Content-Type", "")
 
     return content_type.lower()
 
@@ -134,16 +134,16 @@ def get_response_encoding(response, def_encoding=ENCODING):
     except AttributeError:
         encoding = info.get_charset()
 
-    encoding = None if encoding == '7bit' else encoding
+    encoding = None if encoding == "7bit" else encoding
 
-    if not encoding and hasattr(info, 'get_content_charset'):
+    if not encoding and hasattr(info, "get_content_charset"):
         encoding = info.get_content_charset()
 
     if not encoding:
         content_type = get_response_content_type(response)
 
-        if 'charset' in content_type:
-            ctype = content_type.split('=')[1]
+        if "charset" in content_type:
+            ctype = content_type.split("=")[1]
             encoding = ctype.strip().strip('"').strip("'")
 
     extracted = encoding or def_encoding
@@ -162,15 +162,15 @@ def auto_close(stream, f):
 
 def opener(url, memoize=False, delay=0, encoding=ENCODING, params=None, **kwargs):
     params = params or {}
-    timeout = kwargs.get('timeout')
-    decode = kwargs.get('decode')
+    timeout = kwargs.get("timeout")
+    decode = kwargs.get("decode")
 
-    if url.startswith('http') and params:
+    if url.startswith("http") and params:
         r = requests.get(url, params=params, stream=True)
         r.raw.decode_content = decode
         response = r.text if memoize else r.raw
     else:
-        req = Request(url, headers={'User-Agent': default_user_agent()})
+        req = Request(url, headers={"User-Agent": default_user_agent()})
         context = SleepyDict(delay=delay) if delay else None
 
         try:
@@ -178,9 +178,9 @@ def opener(url, memoize=False, delay=0, encoding=ENCODING, params=None, **kwargs
         except TypeError:
             r = urlopen(req, timeout=timeout)
         except HTTPError as e:
-            raise URLError(f'{url} returned {e.code}: {e.reason}')
+            raise URLError(f"{url} returned {e.code}: {e.reason}")
         except URLError as e:
-            raise URLError(f'{url}: {e.reason}')
+            raise URLError(f"{url}: {e.reason}")
 
         text = r.read() if memoize else None
 
@@ -204,7 +204,7 @@ def get_opener(memoize=False, **kwargs):
     current_opener = wraps(opener)(wrapper)
 
     if memoize:
-        kwargs.setdefault('cache_type', get_cache_type(spread=False))
+        kwargs.setdefault("cache_type", get_cache_type(spread=False))
         memoizer = mezmorize.memoize(**kwargs)
         current_opener = memoizer(current_opener)
 
@@ -226,10 +226,10 @@ class fetch(TextIOBase):
             response, self.content_type = responses
         except ValueError:
             # HACK: This happens for memoized responses. Not sure why though!
-            response, self.content_type = responses, 'application/json'
+            response, self.content_type = responses, "application/json"
 
         if memoize:
-            wrapper = StringIO if kwargs.get('decode') else BytesIO
+            wrapper = StringIO if kwargs.get("decode") else BytesIO
             f = wrapper(response)
         else:
             f = response
@@ -253,12 +253,12 @@ class fetch(TextIOBase):
     def ext(self):
         if not self.content_type:
             ext = None
-        elif 'xml' in self.content_type:
-            ext = 'xml'
-        elif 'json' in self.content_type:
-            ext = 'json'
+        elif "xml" in self.content_type:
+            ext = "xml"
+        elif "json" in self.content_type:
+            ext = "json"
         else:
-            ext = self.content_type.split('/')[1].split(';')[0]
+            ext = self.content_type.split("/")[1].split(";")[0]
 
         return ext
 
@@ -306,7 +306,7 @@ def unique_everseen(iterable, key=None):
 
 
 def betwix(iterable, start=None, stop=None, inc=False):
-    """ Extract selected elements from an iterable. But unlike `islice`,
+    """Extract selected elements from an iterable. But unlike `islice`,
     extract based on the element's value instead of its position.
 
     Args:
@@ -334,6 +334,7 @@ def betwix(iterable, start=None, stop=None, inc=False):
         >>> list(betwix('ABCDEFG', 'C', 'E', True)) == ['C', 'D', 'E']
         True
     """
+
     def inc_takewhile(predicate, _iter):
         for x in _iter:
             yield x
@@ -411,22 +412,22 @@ def _gen_words(match, splits):
 
 
 def multi_substitute(word, rules):
-    """ Apply multiple regex rules to 'word'
+    """Apply multiple regex rules to 'word'
     http://code.activestate.com/recipes/
     576710-multi-regex-single-pass-replace-of-multiple-regexe/
     """
-    flags = rules[0]['flags']
+    flags = rules[0]["flags"]
 
     # Create a combined regex from the rules
-    tuples = ((p, r['match']) for p, r in enumerate(rules))
-    regexes = ('(?P<match_%i>%s)' % (p, r) for p, r in tuples)
-    pattern = '|'.join(regexes)
+    tuples = ((p, r["match"]) for p, r in enumerate(rules))
+    regexes = ("(?P<match_%i>%s)" % (p, r) for p, r in tuples)
+    pattern = "|".join(regexes)
     regex = re.compile(pattern, flags)
-    resplit = re.compile('\\$(\\d+)')
+    resplit = re.compile("\\$(\\d+)")
 
     # For each match, look-up corresponding replace value in dictionary
-    rules_in_series = filter(itemgetter('series'), rules)
-    rules_in_parallel = (r for r in rules if not r['series'])
+    rules_in_series = filter(itemgetter("series"), rules)
+    rules_in_parallel = (r for r in rules if not r["series"])
 
     try:
         has_parallel = [next(rules_in_parallel)]
@@ -463,11 +464,11 @@ def multi_substitute(word, rules):
 
             name = item[0]
             rule = rules[int(name[6:])]
-            series = rule.get('series')
-            kwargs = {'count': rule['count'], 'series': series}
+            series = rule.get("series")
+            kwargs = {"count": rule["count"], "series": series}
             is_previous = name == prev_name
-            singlematch = kwargs['count'] == 1
-            is_series = prev_is_series or kwargs['series']
+            singlematch = kwargs["count"] == 1
+            is_series = prev_is_series or kwargs["series"]
             isnt_previous = bool(prev_name) and not is_previous
 
             if (is_previous and singlematch) or (isnt_previous and is_series):
@@ -476,17 +477,17 @@ def multi_substitute(word, rules):
             prev_name = name
             prev_is_series = series
 
-            if resplit.findall(rule['replace']):
-                splits = resplit.split(rule['replace'])
+            if resplit.findall(rule["replace"]):
+                splits = resplit.split(rule["replace"])
                 words = _gen_words(match, splits)
             else:
-                splits = rule['replace']
+                splits = rule["replace"]
                 start = match.start() + i
                 end = match.end() + i
                 words = [word[:start], splits, word[end:]]
-                i += rule['offset']
+                i += rule["offset"]
 
-            word = ''.join(words)
+            word = "".join(words)
 
             # print('name:', name)
             # print('prereplace:', rule['replace'])
@@ -504,11 +505,11 @@ def multi_substitute(word, rules):
 
 def substitute(word, rule):
     if word:
-        result = rule['match'].subn(rule['replace'], word, rule['count'])
+        result = rule["match"].subn(rule["replace"], word, rule["count"])
         replaced, replacements = result
 
-        if rule.get('default') is not None and not replacements:
-            replaced = rule.get('default')
+        if rule.get("default") is not None and not replacements:
+            replaced = rule.get("default")
     else:
         replaced = word
 
@@ -516,30 +517,30 @@ def substitute(word, rule):
 
 
 def get_new_rule(rule, recompile=False):
-    flags = 0 if rule.get('casematch') else re.IGNORECASE
+    flags = 0 if rule.get("casematch") else re.IGNORECASE
 
-    if not rule.get('singlelinematch'):
+    if not rule.get("singlelinematch"):
         flags |= re.MULTILINE
         flags |= re.DOTALL
 
-    count = 1 if rule.get('singlematch') else 0
+    count = 1 if rule.get("singlematch") else 0
 
-    if recompile and '$' in rule['replace']:
-        replace = re.sub(r'\$(\d+)', r'\\\1', rule['replace'], 0)
+    if recompile and "$" in rule["replace"]:
+        replace = re.sub(r"\$(\d+)", r"\\\1", rule["replace"], 0)
     else:
-        replace = rule['replace']
+        replace = rule["replace"]
 
-    match = re.compile(rule['match'], flags) if recompile else rule['match']
+    match = re.compile(rule["match"], flags) if recompile else rule["match"]
 
     nrule = {
-        'match': match,
-        'replace': replace,
-        'default': rule.get('default'),
-        'field': rule.get('field'),
-        'count': count,
-        'flags': flags,
-        'series': rule.get('seriesmatch', True),
-        'offset': int(rule.get('offset') or 0),
+        "match": match,
+        "replace": replace,
+        "default": rule.get("default"),
+        "field": rule.get("field"),
+        "count": count,
+        "flags": flags,
+        "series": rule.get("seriesmatch", True),
+        "offset": int(rule.get("offset") or 0),
     }
 
     return nrule
@@ -551,30 +552,28 @@ def multiplex(sources):
 
 
 def gen_entries(parsed):
-    if parsed.get('bozo_exception'):
-        raise Exception(parsed['bozo_exception'])
+    if parsed.get("bozo_exception"):
+        raise Exception(parsed["bozo_exception"])
 
-    for entry in parsed['entries']:
+    for entry in parsed["entries"]:
         # prevent feedparser deprecation warnings
-        if 'published_parsed' in entry:
-            updated = entry['published_parsed']
+        if "published_parsed" in entry:
+            updated = entry["published_parsed"]
         else:
-            updated = entry.get('updated_parsed')
+            updated = entry.get("updated_parsed")
 
-        entry['pubDate'] = updated
-        entry['y:published'] = updated
-        entry['dc:creator'] = entry.get('author')
-        entry['author.uri'] = entry.get('author_detail', {}).get(
-            'href')
-        entry['author.name'] = entry.get('author_detail', {}).get(
-            'name')
-        entry['y:title'] = entry.get('title')
-        entry['y:id'] = entry.get('id')
+        entry["pubDate"] = updated
+        entry["y:published"] = updated
+        entry["dc:creator"] = entry.get("author")
+        entry["author.uri"] = entry.get("author_detail", {}).get("href")
+        entry["author.name"] = entry.get("author_detail", {}).get("name")
+        entry["y:title"] = entry.get("title")
+        entry["y:id"] = entry.get("id")
         yield entry
 
 
 def gen_items(content, key=None):
-    if hasattr(content, 'append'):
+    if hasattr(content, "append"):
         for nested in content:
             for i in gen_items(nested, key):
                 yield i

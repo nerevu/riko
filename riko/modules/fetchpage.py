@@ -35,7 +35,7 @@ from riko.bado import coroutine, return_value, io
 from riko.parsers import get_text
 from riko.utils import betwix, fetch, get_abspath
 
-OPTS = {'ftype': 'none'}
+OPTS = {"ftype": "none"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -45,14 +45,14 @@ def get_string(content, start, end):
     # TODO: clean html with Tidy
     content = encode(content)
     start_pos = content.find(encode(start)) if start else 0
-    right = content[start_pos + (len(start) if start else 0):]
+    right = content[start_pos + (len(start) if start else 0) :]
     end_pos = right[1:].find(encode(end)) + 1 if end else len(right)
     return right[:end_pos] if end_pos > 0 else right
 
 
 @coroutine
 def async_parser(_, objconf, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -91,20 +91,20 @@ def async_parser(_, objconf, skip=False, **kwargs):
         CNN.com International - Breaking
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
         content = yield io.async_url_read(url)
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
         splits = detagged.split(objconf.token) if objconf.token else [detagged]
-        stream = ({kwargs['assign']: chunk} for chunk in splits)
+        stream = ({kwargs["assign"]: chunk} for chunk in splits)
 
     return_value(stream)
 
 
 def parser(_, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -129,16 +129,16 @@ def parser(_, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         with fetch(decode=True, **objconf) as f:
             sliced = betwix(f, objconf.start, objconf.end, True)
-            content = '\n'.join(sliced)
+            content = "\n".join(sliced)
 
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
         splits = detagged.split(objconf.token) if objconf.token else [detagged]
-        stream = ({kwargs['assign']: chunk} for chunk in splits)
+        stream = ({kwargs["assign"]: chunk} for chunk in splits)
 
     return stream
 
