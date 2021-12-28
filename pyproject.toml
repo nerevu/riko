@@ -1,3 +1,3 @@
 [build-system]
-requires = ["setuptools>=36.2.4", "pkutils>=1.0.0,<2.0.0"]
+requires = ["setuptools>=42.0.2", "pkutils>=3.0.0,<4.0.0"]
 build-backend = "setuptools.build_meta"

@@ -1,15 +1,24 @@
 # Python
 *.py[cod]
+*.DS_Store
+*.ipynb
+*checkpoint.ipynb
 .cookiecutter
 .ipynb_checkpoints/*
-*checkpoint.ipynb
+.idea/
+example*.log
+examples/.ipynb_checkpoints/*
 
 # C extensions
 *.so
 
 # Packages
 *.egg*
+*.egg-info
+.eggs
 .installed.cfg
+.installed.cfg
+*-0.*/*
 dist
 build
 eggs
@@ -17,8 +26,9 @@ parts
 var
 sdist
 develop-eggs
+lib
 lib64
-riko-0.*/*
+venv
 
 # Installer logs
 pip-log.txt
@@ -31,10 +41,12 @@ pip-log.txt
 .coverage
 .tox
 .noseids
-.scripttest/*
 .cache/*
+.scripttest
 coverage.xml
 cover/*
+htmlcov/*
+nosetests.xml
 
 # Translations
 *.mo
@@ -54,11 +66,7 @@ build/*
 
 # Misc
 *.pstats
+.vscode
 callgraph.svg
 ttyrecord
 
-# virtualenv
-venv
-
-# vscode
-.vscode
