@@ -1,31 +1,61 @@
 #!/usr/bin/env sh -u
 #
 
+cecho(){
+  GREEN="\033[0;32m"
+  YELLOW="\033[1;33m"
+  RED="\033[0;31m"
+  NO_COLOR="\033[0m"
+  printf "${!1}${2} ${NO_COLOR}\n"
+}
+
+beginswith() { case $2 in "$1"*) true;; *) false;; esac; }
+
 _install () {
   package=$1
-  echo "installing $package from $PIP_WHEEL_DIR..."
-  pip install --use-wheel --no-index --find-links="$PIP_WHEEL_DIR" $package
 
-  if [ $? -eq 1 ]; then
-    echo "$package not found in cache, downloading..."
+  if beginswith -e "$package"; then
+    cecho "GREEN" "installing $package normally…"
+    pip install "$package"
+  else
+    cecho "GREEN" "installing $package from ${PIP_WHEEL_DIR}…"
+    pip install --no-index --only-binary=:all: --find-links="$PIP_WHEEL_DIR" "$package"
 
-    if [ $package == 'wheel' ]; then
-      pip install wheel
-    else
-      pip download --dest="$PIP_CACHE_DIR" $package
-      pip wheel --no-index --find-links="$PIP_CACHE_DIR" \
-        --wheel-dir="$PIP_WHEEL_DIR" $package
-      pip install --use-wheel --no-index --find-links="$PIP_WHEEL_DIR" $package
+    if [ $? -eq 1 ]; then
+      cecho "YELLOW" "$package not found in cache, downloading…"
+
+      if beginswith wheel "$package" || beginswith pip "$package"; then
+        pip install -U "$package"
+      else
+        pip download --dest="$PIP_CACHE_DIR" "$package"
+        pip wheel --no-index --find-links="$PIP_CACHE_DIR" --wheel-dir="$PIP_WHEEL_DIR" "$package"
+        pip install --no-index --only-binary=:all: --find-links="$PIP_WHEEL_DIR" "$package"
+      fi
+    fi
+
+    if [ $? -eq 1 ]; then
+      cecho "RED" "$package has no wheel, installing normally…"
+      pip install "$package"
     fi
   fi
 }
 
-if [ "$1" == "-e" ]; then
-  pip install $@
-else
-  _install wheel
+parse () {
+  file=$1
 
-  for package in "$@"; do
-    _install $package
-  done
-fi
+  if beginswith -r "$file"; then
+    REQUIREMENTS=`echo "$file" | sed 's/^-r\s*//'`
+
+    while read line; do
+      parse $line
+    done < "$REQUIREMENTS"
+  else
+    echo "$file"
+  fi
+}
+
+for package in `parse "$@"`; do
+  cecho "GREEN" "$package"
+  _install "$package"
+done
+
