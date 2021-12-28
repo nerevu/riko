@@ -685,7 +685,7 @@ License
 ``riko`` is distributed under the `MIT License`_.
 
 .. |travis| image:: https://img.shields.io/travis/nerevu/riko/master.svg
-    :target: https://travis-ci.org/nerevu/riko
+    :target: https://app.travis-ci.com/nerevu/riko
 
 .. |versions| image:: https://img.shields.io/pypi/pyversions/riko.svg
     :target: https://pypi.python.org/pypi/riko
