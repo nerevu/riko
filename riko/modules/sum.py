@@ -90,7 +90,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously and eagerly sums fields of items
+    """An operator that asynchronously and eagerly sums fields of items
     in a stream. Note that this pipe is not lazy if `group_key` is specified.
 
     Args:
@@ -136,7 +136,7 @@ def async_pipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An aggregator that eagerly sums fields of items in a stream.
+    """An operator that eagerly sums fields of items in a stream.
     Note that this pipe is not lazy if `group_key` is specified.
 
     Args:

@@ -124,7 +124,7 @@ def parser(stream, rules, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously and eagerly sorts the input source
+    """An operator that asynchronously and eagerly sorts the input source
     according to a specified key. Note that this pipe is not lazy.
 
     Args:

@@ -66,7 +66,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously truncates a stream to the last N items.
+    """An operator that asynchronously truncates a stream to the last N items.
 
     Args:
         items (Iter[dict]): The source.

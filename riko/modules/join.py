@@ -106,7 +106,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously merges multiple source streams together.
+    """An operator that asynchronously merges multiple source streams together.
 
     Args:
         items (Iter[dict]): The source.

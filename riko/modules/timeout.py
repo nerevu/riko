@@ -112,7 +112,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously returns items from a stream until a
+    """An operator that asynchronously returns items from a stream until a
         certain amount of time has passed.
 
     Args:

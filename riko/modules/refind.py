@@ -163,7 +163,7 @@ def async_pipe(*args, **kwargs):
                 location (str): Direction of the substring to return. Must be
                     either 'before', 'after', or 'at' (default: 'before').
 
-                param (str): The type of replacement. Must be either 'first'
+                param (str): The type of search. Must be either 'first'
                     or 'last' (default: 'first').
 
         assign (str): Attribute to assign parsed content (default: refind)
@@ -211,7 +211,7 @@ def pipe(*args, **kwargs):
                 location (str): Direction of the substring to return. Must be
                     either 'before', 'after', or 'at' (default: 'before').
 
-                param (str): The type of replacement. Must be either 'first'
+                param (str): The type of search. Must be either 'first'
                     or 'last' (default: 'first').
 
         assign (str): Attribute to assign parsed content (default: refind)

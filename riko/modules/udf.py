@@ -57,8 +57,8 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(isasync=True)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously returns a specified number of items
-    from a stream.
+    """An operator that asynchronously performs an arbitrary (user-defined) function on
+    items of a stream.
 
     Args:
         items (Iter[dict]): The source.
@@ -93,7 +93,8 @@ def async_pipe(*args, **kwargs):
 
 @operator()
 def pipe(*args, **kwargs):
-    """An operator that returns a specified number of items from a stream.
+    """An operator that performs an arbitrary (user-defined) function on items of a
+    stream.
 
     Args:
         items (Iter[dict]): The source.
