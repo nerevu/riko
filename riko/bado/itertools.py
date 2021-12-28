@@ -29,8 +29,9 @@ else:
 
 def get_task():
     if reactor.fake:
-        task = Cooperator(scheduler=partial(FakeReactor().callLater,
-                                            FakeReactor._DELAY))
+        task = Cooperator(
+            scheduler=partial(FakeReactor().callLater, FakeReactor._DELAY)
+        )
     else:
         task = real_task.Cooperator()
 
@@ -46,12 +47,12 @@ def coop_reduce(func, iterable, initializer=None):
 
     def work(func, it, x):
         for y in it:
-            result['value'] = x = func(x, y)
+            result["value"] = x = func(x, y)
             yield
 
     _task = task.cooperate(work(func, iterable, x))
     yield _task.whenDone()
-    return_value(result['value'])
+    return_value(result["value"])
 
 
 def async_reduce(async_func, iterable, initializer=None):
@@ -86,8 +87,7 @@ def async_map(async_func, iterable, connections=0):
 
 
 def async_starmap(async_func, iterable):
-    """itertools.starmap for deferred callables
-    """
+    """itertools.starmap for deferred callables"""
     deferreds = it.starmap(async_func, iterable)
     return gatherResults(deferreds, consumeErrors=True)
 

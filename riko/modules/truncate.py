@@ -26,13 +26,13 @@ from itertools import islice
 from . import operator
 import pygogo as gogo
 
-OPTS = {'ptype': 'int'}
-DEFAULTS = {'start': 0}
+OPTS = {"ptype": "int"}
+DEFAULTS = {"start": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -69,7 +69,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously returns a specified number of items
+    """An operator that asynchronously returns a specified number of items
     from a stream.
 
     Args:

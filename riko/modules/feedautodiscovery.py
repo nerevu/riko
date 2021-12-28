@@ -39,13 +39,13 @@ from riko.utils import get_abspath
 from riko.bado import coroutine, return_value
 
 
-OPTS = {'ftype': 'none'}
+OPTS = {"ftype": "none"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
 def async_parser(_, objconf, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -79,7 +79,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         file://riko/data/greenhughes.xml
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
         stream = yield autorss.async_get_rss(url)
@@ -88,7 +88,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
 
 
 def parser(_, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -112,7 +112,7 @@ def parser(_, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
         stream = autorss.get_rss(url)

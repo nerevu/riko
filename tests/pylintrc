@@ -30,7 +30,12 @@ load-plugins=
 # can either give multiple identifier separated by comma (,) or put this option
 # multiple time (only on the command line, not in the configuration file where
 # it should appear only once).
-disable=W0401,W0614,W0622
+disable=
+    W0401,W0614,W0622
+    # handled by black
+    C0330,C0326,format,bad-continuation,bad-whitespace
+    # report - external dependencies graph - maybe this is not needed as well
+    RP0401
 
 
 [REPORTS]

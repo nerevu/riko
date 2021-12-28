@@ -32,13 +32,13 @@ import ctypes
 from . import processor
 import pygogo as gogo
 
-OPTS = {'ftype': 'text', 'ptype': 'none', 'field': 'content'}
+OPTS = {"ftype": "text", "ptype": "none", "field": "content"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(word, _, skip=False, **kwargs):
-    """ Parsers the pipe content
+    """Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -62,7 +62,7 @@ def parser(word, _, skip=False, **kwargs):
         >>> parser(item['content'], None, **kwargs) == _hash
         True
     """
-    return kwargs['stream'] if skip else ctypes.c_uint(hash(word)).value
+    return kwargs["stream"] if skip else ctypes.c_uint(hash(word)).value
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

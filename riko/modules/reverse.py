@@ -22,12 +22,12 @@ from . import operator
 import pygogo as gogo
 
 # disable `dictize` since we do not need to access the configuration
-OPTS = {'dictize': False}
+OPTS = {"dictize": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -60,7 +60,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously reverses the order of source items in
+    """An operator that asynchronously reverses the order of source items in
     a stream. Note that this pipe is not lazy.
 
     Args:

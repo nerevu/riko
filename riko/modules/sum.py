@@ -27,12 +27,12 @@ from decimal import Decimal
 from . import operator
 
 OPTS = {}
-DEFAULTS = {'sum_key': 'content', 'group_key': None}
+DEFAULTS = {"sum_key": "content", "group_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -83,14 +83,14 @@ def parser(stream, objconf, tuples, **kwargs):
         grouped = it.groupby(sorted_stream, keyfunc)
         summed = ({key: _sum(group)} for key, group in grouped)
     else:
-        summed = {kwargs['assign']: _sum(stream)}
+        summed = {kwargs["assign"]: _sum(stream)}
 
     return summed
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously and eagerly sums fields of items
+    """An operator that asynchronously and eagerly sums fields of items
     in a stream. Note that this pipe is not lazy if `group_key` is specified.
 
     Args:
@@ -136,7 +136,7 @@ def async_pipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An aggregator that eagerly sums fields of items in a stream.
+    """An operator that eagerly sums fields of items in a stream.
     Note that this pipe is not lazy if `group_key` is specified.
 
     Args:

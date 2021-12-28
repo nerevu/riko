@@ -23,7 +23,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -52,13 +52,13 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> next(parser(stream, None, tuples, func=func))
         {'y': 3}
     """
-    return map(kwargs['func'], stream)
+    return map(kwargs["func"], stream)
 
 
 @operator(isasync=True)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously returns a specified number of items
-    from a stream.
+    """An operator that asynchronously performs an arbitrary (user-defined) function on
+    items of a stream.
 
     Args:
         items (Iter[dict]): The source.
@@ -93,7 +93,8 @@ def async_pipe(*args, **kwargs):
 
 @operator()
 def pipe(*args, **kwargs):
-    """An operator that returns a specified number of items from a stream.
+    """An operator that performs an arbitrary (user-defined) function on items of a
+    stream.
 
     Args:
         items (Iter[dict]): The source.

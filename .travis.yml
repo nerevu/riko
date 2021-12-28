@@ -1,10 +1,10 @@
 sudo: false
 language: python
 python:
-  - 3.6
-  - 3.7
-  - 3.8
-  - pypy3
+  - "3.7"
+  - "3.8"
+  - "3.9"
+  - pypy3.7-7.3.2
 
 cache:
   directories:
@@ -18,18 +18,14 @@ env:
     - PIP_WHEEL_DIR=$HOME/.cache/pip/wheels
     - PIP_FIND_LINKS=file://$HOME/.cache/pip/wheels
     - PYTHONHASHSEED=94967295
-    - PYPY_GIT=https://github.com/yyuu/pyenv.git
-    - PYENV_VENV_GIT=https://github.com/pyenv/pyenv-virtualenv.git
-    - PYENV_ROOT=$HOME/.pyenv
-    - PYPY_VENV=$HOME/virtualenvs
-    - PYPY_PATH=$PYENV_ROOT/versions
-    - PATH="$PYENV_ROOT/shims:${PATH}"
-    - PATH="$PYENV_ROOT/bin:${PATH}"
 
 matrix:
   fast_finish: true
   allow_failures:
-  - python: pypy3
+  - python: pypy3.7-7.3.2
+  exclude:
+  - python: pypy3.7-7.3.2
+    env: OPTIONAL=true
 
 notifications:
   email:
@@ -40,36 +36,10 @@ branches:
     - /^v[0-9]/
 
 before_install:
-  - |
-      if [ "$TRAVIS_PYTHON_VERSION" == "pypy3" ]; then
-        # https://github.com/pyenv/pyenv/tree/master/plugins/python-build/share/python-build
-        export PYPY_BUILD="pypy3.6-7.3.0"
-        export PYPY_EXEC="pypy3-v7.3.0"
-      fi
-  - |
-      if [[ "$TRAVIS_PYTHON_VERSION" == "pypy"* ]]; then
-        if [ -f "$PYENV_ROOT/bin/pyenv" ]; then
-          pushd "$PYENV_ROOT" && git pull && popd
-        else
-          rm -rf "$PYENV_ROOT" && git clone --depth 1 "$PYPY_GIT" "$PYENV_ROOT"
-        fi
-
-        export PYENV_VERSION="$PYPY_BUILD"
-        git clone "$PYENV_VENV_GIT" "$PYENV_ROOT"/plugins/pyenv-virtualenv
-        eval "$(pyenv init -)"
-        pyenv deactivate
-        pyenv install --skip-existing "$PYENV_VERSION"
-        pyenv global "$PYENV_VERSION"
-        pyenv virtualenv "$PYENV_VERSION" "$PYPY_EXEC"
-        pyenv activate "$PYPY_EXEC"
-        python --version
-        curl https://bootstrap.pypa.io/get-pip.py | python
-        pip --version
-      fi
-
-install:
   - pip install -U pip
   - pip install wheel
+
+install:
   - pip install -r dev-requirements.txt
   - pip install -r requirements.txt
   - |
@@ -84,14 +54,4 @@ script:
 after_success:
   - if [[ "$TRAVIS_PULL_REQUEST" == "true" ]]; then exit 0; fi
   - if [[ "$TRAVIS_BRANCH" != "master" ]]; then exit 0; fi
-
-deploy:
-  provider: pypi
-  user: reubano
-  password:
-    secure: N7MPQIBC8UbFhlQtxuNmYJuApcxnDwK3eVD8LN1mP5gtVQjZ82g5sRFcsOmQPgAGSVhSSgdaU63XfXiIDT+62Z9wm+I1eS5eZJ1pGbiqdM7RMUDsfthkRvl5Rret2RgJa5yd8UifDtEPThdbNot7soAfeIq2fnL1jnGG9dw0ffmoh0HQaHnvbAq8aVvAdrp4/KhkvhsKFKcKvAFOJKnw5E0N0ZTuPQk+kxKBlOC7qI8Zy8WY/+pdYHFk0PHQw05Sl/aX5OkQ44Tx6DhQX8gZepQGWfbTpz9m14n1wnJJnXQp+shby3N+0/yiT7KEeQP5YxlFOubSZm5IsuqyWnmm7vIry8Zz8oXn3IadWhoWcUtNJZVvF5rKRJV9V4lU16gj0z06iLJj/U67qEcWy+EufcS6TcxYvTsYzbMfbG1Z4sWEZZySJEqO8oGDMezt+XCGcQoZpJs5hrt8a4KJ1zYHyAJTXeLPce7clFGKFEXOQQiS1tBif6AjVSTWJdj0DEs0xXpk4x9q0/cza7Q+2K7fIFxkntGBfkbdUSL5/INBZ0ph0OGQ/fnTtHnvymx5N4+kqYNCuXxCyWeFzcwEN43G+lMeNlZ6Hj3aYqMYWg/Ji6txNdf6v3ERq0jxEKmdQAoRNMqIQZbozUeFFrOvH2cIQCQFthIHjr1petll71lAzcg=
-
-  distributions: sdist bdist_wheel
-  on:
-    python: '3.5'
-    tags: true
+  - if [[ "$TRAVIS_PYTHON_VERSION" != "3.9" ]]; then exit 0; fi

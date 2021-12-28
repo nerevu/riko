@@ -22,65 +22,65 @@ from meza.process import merge
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 __sources__ = [
-    'csv',
-    'feedautodiscovery',
-    'fetch',
-    'fetchdata',
-    'fetchpage',
-    'fetchsitefeed',
-    'itembuilder',
-    'rssitembuilder',
-    'xpathfetchpage',
-    'yql',
-    'input',
+    "csv",
+    "feedautodiscovery",
+    "fetch",
+    "fetchdata",
+    "fetchpage",
+    "fetchsitefeed",
+    "itembuilder",
+    "rssitembuilder",
+    "xpathfetchpage",
+    "yql",
+    "input",
 ]
 
 __aggregators__ = [
-    'count',
-    'sum',
+    "count",
+    "sum",
     # 'mean',
     # 'min',
     # 'max',
 ]
 
 __composers__ = [
-    'filter',
-    'reverse',
-    'sort',
-    'split',
-    'tail',
-    'truncate',
-    'union',
-    'uniq',
+    "filter",
+    "reverse",
+    "sort",
+    "split",
+    "tail",
+    "truncate",
+    "union",
+    "uniq",
     # 'webservice',
 ]
 
 __transformers__ = [
-    'currencyformat',
-    'dateformat',
-    'exchangerate',
-    'hash',
+    "currencyformat",
+    "dateformat",
+    "exchangerate",
+    "hash",
     # 'locationextractor',
     # 'outputcsv',
     # 'outputical',
     # 'outputjson',
     # 'outputkml',
-    'regex',
-    'rename',
-    'refind',
-    'simplemath',
-    'slugify',
-    'strconcat',
-    'strfind',
-    'strreplace',
-    'strtransform',
-    'subelement',
-    'substr',
+    "regex",
+    "rename",
+    "refind",
+    "simplemath",
+    "slugify",
+    "strconcat",
+    "strfind",
+    "strreplace",
+    "strtransform",
+    "subelement",
+    "substr",
     # 'termextractor',
-    'tokenizer',
+    "tokenizer",
     # 'translate',
-    'urlbuilder',
-    'urlparse',
+    "urlbuilder",
+    "urlparse",
     # 'yahooshortcuts',
 ]
 
@@ -110,17 +110,17 @@ def get_assignment(result, skip=False, **kwargs):
         result = chain([first_result], [second_result], result)
         multiple = True
 
-    first = kwargs.get('count') == 'first'
-    _all = kwargs.get('count') == 'all'
+    first = kwargs.get("count") == "first"
+    _all = kwargs.get("count") == "all"
     one = first or not (multiple or _all)
     return one, iter([first_result]) if one else result
 
 
 def assign(item, assignment, **kwargs):
-    key = kwargs.get('assign')
-    value = next(assignment) if kwargs.get('one') else list(assignment)
+    key = kwargs.get("assign")
+    value = next(assignment) if kwargs.get("one") else list(assignment)
     merged = merge([item, {key: value}])
-    yield DotDict(merged) if kwargs.get('dictize') else merged
+    yield DotDict(merged) if kwargs.get("dictize") else merged
 
 
 class processor(object):
@@ -306,44 +306,48 @@ class processor(object):
             ...         pass
             True
         """
+
         @wraps(pipe)
         def wrapper(item=None, **kwargs):
-            module_name = wrapper.__module__.split('.')[-1]
+            module_name = wrapper.__module__.split(".")[-1]
 
             defaults = {
-                'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
-                'objectify': True}
+                "dictize": True,
+                "ftype": "pass",
+                "ptype": "pass",
+                "objectify": True,
+            }
 
             combined = merge([self.defaults, defaults, self.opts, kwargs])
-            is_source = combined['ftype'] == 'none'
-            def_assign = 'content' if is_source else module_name
-            extracted = 'extract' in combined
-            pdictize = combined.get('listize') if extracted else True
+            is_source = combined["ftype"] == "none"
+            def_assign = "content" if is_source else module_name
+            extracted = "extract" in combined
+            pdictize = combined.get("listize") if extracted else True
 
-            combined.setdefault('assign', def_assign)
-            combined.setdefault('emit', is_source)
-            combined.setdefault('pdictize', pdictize)
+            combined.setdefault("assign", def_assign)
+            combined.setdefault("emit", is_source)
+            combined.setdefault("pdictize", pdictize)
             conf = {k: combined[k] for k in self.defaults}
-            conf.update(kwargs.get('conf', {}))
-            combined.update({'conf': conf})
+            conf.update(kwargs.get("conf", {}))
+            combined.update({"conf": conf})
 
-            uconf = DotDict(conf) if combined.get('dictize') else conf
-            updates = {'conf': uconf, 'assign': combined.get('assign')}
+            uconf = DotDict(conf) if combined.get("dictize") else conf
+            updates = {"conf": uconf, "assign": combined.get("assign")}
             kwargs.update(updates)
 
             item = item or {}
-            _input = DotDict(item) if combined.get('dictize') else item
+            _input = DotDict(item) if combined.get("dictize") else item
             bfuncs = get_broadcast_funcs(**combined)
             skip = get_skip(_input, **combined)
-            types = set([]) if skip else {combined['ftype'], combined['ptype']}
+            types = set([]) if skip else {combined["ftype"], combined["ptype"]}
 
-            if types.difference({'pass', 'none'}):
+            if types.difference({"pass", "none"}):
                 dfuncs = get_dispatch_funcs(**combined)
             else:
                 dfuncs = None
 
             parsed, orig_item = _dispatch(_input, bfuncs, dfuncs=dfuncs)
-            kwargs.update({'skip': skip, 'stream': orig_item})
+            kwargs.update({"skip": skip, "stream": orig_item})
 
             if self.isasync:
                 stream = yield pipe(*parsed, **kwargs)
@@ -352,7 +356,7 @@ class processor(object):
 
             one, assignment = get_assignment(stream, skip=skip, **combined)
 
-            if skip or combined.get('emit'):
+            if skip or combined.get("emit"):
                 stream = assignment
             elif not skip:
                 stream = assign(_input, assignment, one=one, **combined)
@@ -363,10 +367,10 @@ class processor(object):
                 for s in stream:
                     yield s
 
-        is_source = self.opts.get('ftype') == 'none'
-        wrapper.__dict__['name'] = wrapper.__module__.split('.')[-1]
-        wrapper.__dict__['type'] = 'processor'
-        wrapper.__dict__['sub_type'] = 'source' if is_source else 'transformer'
+        is_source = self.opts.get("ftype") == "none"
+        wrapper.__dict__["name"] = wrapper.__module__.split(".")[-1]
+        wrapper.__dict__["type"] = "processor"
+        wrapper.__dict__["sub_type"] = "source" if is_source else "transformer"
         return coroutine(wrapper) if self.isasync else wrapper
 
 
@@ -574,34 +578,40 @@ class operator(object):
             True
             True
         """
+
         @wraps(pipe)
         def wrapper(items=None, **kwargs):
-            module_name = wrapper.__module__.split('.')[-1]
-            wrapper.__dict__['name'] = module_name
+            module_name = wrapper.__module__.split(".")[-1]
+            wrapper.__dict__["name"] = module_name
 
             defaults = {
-                'dictize': True, 'ftype': 'pass', 'ptype': 'pass',
-                'objectify': True, 'emit': True, 'assign': module_name}
+                "dictize": True,
+                "ftype": "pass",
+                "ptype": "pass",
+                "objectify": True,
+                "emit": True,
+                "assign": module_name,
+            }
 
             combined = merge([self.defaults, defaults, self.opts, kwargs])
-            extracted = 'extract' in combined
-            pdictize = combined.get('listize') if extracted else True
+            extracted = "extract" in combined
+            pdictize = combined.get("listize") if extracted else True
 
-            combined.setdefault('pdictize', pdictize)
+            combined.setdefault("pdictize", pdictize)
             conf = {k: combined[k] for k in self.defaults}
-            conf.update(kwargs.get('conf', {}))
-            combined.update({'conf': conf})
+            conf.update(kwargs.get("conf", {}))
+            combined.update({"conf": conf})
 
-            uconf = DotDict(conf) if combined.get('dictize') else conf
-            updates = {'conf': uconf, 'assign': combined.get('assign')}
+            uconf = DotDict(conf) if combined.get("dictize") else conf
+            updates = {"conf": uconf, "assign": combined.get("assign")}
             kwargs.update(updates)
 
             items = items or iter([])
-            _INPUT = map(DotDict, items) if combined.get('dictize') else items
+            _INPUT = map(DotDict, items) if combined.get("dictize") else items
             bfuncs = get_broadcast_funcs(**combined)
-            types = {combined['ftype'], combined['ptype']}
+            types = {combined["ftype"], combined["ptype"]}
 
-            if types.difference({'pass', 'none'}):
+            if types.difference({"pass", "none"}):
                 dfuncs = get_dispatch_funcs(**combined)
             else:
                 dfuncs = None
@@ -623,18 +633,17 @@ class operator(object):
             else:
                 stream = pipe(orig_stream, objconf, tuples, **kwargs)
 
-            sub_type = 'aggregator' if hasattr(stream, 'keys') else 'composer'
-            wrapper.__dict__['sub_type'] = sub_type
+            sub_type = "aggregator" if hasattr(stream, "keys") else "composer"
+            wrapper.__dict__["sub_type"] = sub_type
 
             # operators can only assign one value per item and can't skip items
             _, assignment = get_assignment(stream, **combined)
 
-            if combined.get('emit'):
+            if combined.get("emit"):
                 stream = assignment
             else:
                 singles = (iter([v]) for v in assignment)
-                assigned = (
-                    assign({}, s, one=True, **combined) for s in singles)
+                assigned = (assign({}, s, one=True, **combined) for s in singles)
 
                 stream = multiplex(assigned)
 
@@ -644,7 +653,7 @@ class operator(object):
                 for s in stream:
                     yield s
 
-        wrapper.__dict__['type'] = 'operator'
+        wrapper.__dict__["type"] = "operator"
         return coroutine(wrapper) if self.isasync else wrapper
 
 
@@ -657,8 +666,8 @@ def _dispatch(item, bfuncs, dfuncs=None):
 def get_broadcast_funcs(**kwargs):
     kw = Objectify(kwargs, conf={})
     pieces = kw.conf[kw.extract] if kw.extract else kw.conf
-    no_conf = remove_keys(kwargs, 'conf')
-    noop = partial(cast, _type='none')
+    no_conf = remove_keys(kwargs, "conf")
+    noop = partial(cast, _type="none")
 
     if kw.listize:
         listed = listize(pieces)
@@ -666,21 +675,21 @@ def get_broadcast_funcs(**kwargs):
         parser = partial(parse_conf, **no_conf)
         pfuncs = [partial(parser, conf=conf) for conf in piece_defs]
         get_pieces = lambda item: broadcast(item, *pfuncs)
-    elif kw.ptype != 'none':
+    elif kw.ptype != "none":
         conf = DotDict(pieces) if kw.pdictize and pieces else pieces
         get_pieces = partial(parse_conf, conf=conf, **no_conf)
     else:
         get_pieces = noop
 
-    ffunc = noop if kw.ftype == 'none' else partial(get_field, **kwargs)
+    ffunc = noop if kw.ftype == "none" else partial(get_field, **kwargs)
     return (ffunc, get_pieces)
 
 
 def get_dispatch_funcs(**kwargs):
-    pfunc = partial(cast, _type=kwargs['ptype'])
-    field_dispatch = partial(cast, _type=kwargs['ftype'])
+    pfunc = partial(cast, _type=kwargs["ptype"])
+    field_dispatch = partial(cast, _type=kwargs["ftype"])
 
-    if kwargs['objectify'] and kwargs['ptype'] not in {'none', 'pass'}:
+    if kwargs["objectify"] and kwargs["ptype"] not in {"none", "pass"}:
         piece_dispatch = lambda p: Objectify(p.items(), func=pfunc)
     else:
         piece_dispatch = pfunc

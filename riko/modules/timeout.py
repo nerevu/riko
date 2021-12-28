@@ -34,7 +34,7 @@ from datetime import timedelta
 from . import operator
 import pygogo as gogo
 
-OPTS = {'ptype': 'int'}
+OPTS = {"ptype": "int"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -69,7 +69,7 @@ class TimeoutIterator(object):
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -112,7 +112,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously returns items from a stream until a
+    """An operator that asynchronously returns items from a stream until a
         certain amount of time has passed.
 
     Args:

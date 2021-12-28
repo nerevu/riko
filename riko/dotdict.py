@@ -20,14 +20,15 @@ class DotDict(dict):
     >>> r['a.content'] == 'value'
     True
     """
+
     def __init__(self, data=None, **kwargs):
         self.update(data)
 
     def _parse_key(self, key=None):
         try:
-            keys = key.rstrip('.').split('.') if key else []
+            keys = key.rstrip(".").split(".") if key else []
         except AttributeError:
-            keys = [key['subkey']] if key else []
+            keys = [key["subkey"]] if key else []
 
         return keys
 
@@ -36,11 +37,11 @@ class DotDict(dict):
             parsed = value[key]
         except KeyError:
             try:
-                parsed = value['value']
+                parsed = value["value"]
             except KeyError:
                 parsed = default
         except (TypeError, IndexError):
-            if hasattr(value, 'append'):
+            if hasattr(value, "append"):
                 parsed = [v[key] for v in value]
             else:
                 parsed = value
@@ -52,11 +53,11 @@ class DotDict(dict):
         value = super(DotDict, self).__getitem__(keys[0])
 
         if len(keys) > 1:
-            return value['.'.join(keys[1:])]
-        elif hasattr(value, 'keys') and 'value' in value:
-            value = value['value']
+            return value[".".join(keys[1:])]
+        elif hasattr(value, "keys") and "value" in value:
+            value = value["value"]
 
-        return DotDict(value) if hasattr(value, 'keys') else value
+        return DotDict(value) if hasattr(value, "keys") else value
 
     def get(self, key=None, default=None, **kwargs):
         keys = self._parse_key(key)
@@ -70,14 +71,14 @@ class DotDict(dict):
 
             value = self._parse_value(value, key, default)
 
-        if hasattr(value, 'keys') and 'terminal' in value:
+        if hasattr(value, "keys") and "terminal" in value:
             # value fed in from another module
-            stream = kwargs[value['terminal']]
-            value = next(stream)[value.get('path', 'content')]
-        elif hasattr(value, 'keys') and 'value' in value:
-            value = value['value']
+            stream = kwargs[value["terminal"]]
+            value = next(stream)[value.get("path", "content")]
+        elif hasattr(value, "keys") and "value" in value:
+            value = value["value"]
 
-        return DotDict(value) if hasattr(value, 'keys') else value
+        return DotDict(value) if hasattr(value, "keys") else value
 
     def delete(self, key):
         keys = self._parse_key(key)
@@ -101,12 +102,12 @@ class DotDict(dict):
             return
 
         _dict = dict(data)
-        dot_keys = [d for d in _dict if '.' in d]
+        dot_keys = [d for d in _dict if "." in d]
 
         if dot_keys:
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
-            keys = ['.'.join(self._parse_key(dk)[:-1]) for dk in dot_keys]
+            keys = [".".join(self._parse_key(dk)[:-1]) for dk in dot_keys]
             items = ((k, v) for k, v in _dict.items() if k not in keys)
         else:
             items = _dict.items()

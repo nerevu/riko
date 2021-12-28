@@ -23,13 +23,13 @@ import pygogo as gogo
 from . import processor
 from riko.utils import cast
 
-OPTS = {'field': 'content'}
-DEFAULTS = {'type': 'text'}
+OPTS = {"field": "content"}
+DEFAULTS = {"type": "text"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(content, objconf, skip=False, **kwargs):
-    """ Parsers the pipe content
+    """Parsers the pipe content
 
     Args:
         content (scalar): The content to cast
@@ -53,7 +53,7 @@ def parser(content, objconf, skip=False, **kwargs):
         >>> parser(item['content'], objconf, **kwargs)
         1
     """
-    return kwargs['stream'] if skip else cast(content, objconf.type)
+    return kwargs["stream"] if skip else cast(content, objconf.type)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

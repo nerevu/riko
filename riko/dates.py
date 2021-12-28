@@ -13,8 +13,8 @@ import pytz
 from pytz import utc
 from dateutil.tz import gettz, tzoffset
 
-DATE_FORMAT = '%m/%d/%Y'
-DATETIME_FORMAT = '{0} %H:%M:%S'.format(DATE_FORMAT)
+DATE_FORMAT = "%m/%d/%Y"
+DATETIME_FORMAT = "{0} %H:%M:%S".format(DATE_FORMAT)
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
 TODAY = dt.utcnow()
@@ -37,13 +37,13 @@ def get_date(unit, count, op):
     new_month = op(TODAY.month, count) % 12 or 12
 
     DATES = {
-        'seconds': op(TODAY, timedelta(seconds=count)),
-        'minutes': op(TODAY, timedelta(minutes=count)),
-        'hours': op(TODAY, timedelta(hours=count)),
-        'days': op(TODAY, timedelta(days=count)),
-        'weeks': op(TODAY, timedelta(weeks=count)),
-        'months': TODAY.replace(month=new_month),
-        'years': TODAY.replace(year=op(TODAY.year, count)),
+        "seconds": op(TODAY, timedelta(seconds=count)),
+        "minutes": op(TODAY, timedelta(minutes=count)),
+        "hours": op(TODAY, timedelta(hours=count)),
+        "days": op(TODAY, timedelta(days=count)),
+        "weeks": op(TODAY, timedelta(weeks=count)),
+        "months": TODAY.replace(month=new_month),
+        "years": TODAY.replace(year=op(TODAY.year, count)),
     }
 
     return DATES[unit]
@@ -83,12 +83,12 @@ def normalize_date(date):
 
 
 def get_tt(date):
-    formatted = ''.join(date.isoformat().rsplit(':', 1))
-    sformat = '%Y-%m-%d' if len(formatted) == 10 else '%Y-%m-%dT%H:%M:%S%z'
+    formatted = "".join(date.isoformat().rsplit(":", 1))
+    sformat = "%Y-%m-%d" if len(formatted) == 10 else "%Y-%m-%dT%H:%M:%S%z"
 
     try:
         tt = strptime(formatted, sformat)
     except ValueError:
-        tt = strptime(formatted[:19], '%Y-%m-%dT%H:%M:%S')
+        tt = strptime(formatted[:19], "%Y-%m-%dT%H:%M:%S")
 
     return tt

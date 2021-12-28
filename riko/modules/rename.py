@@ -38,7 +38,7 @@ from riko.bado import coroutine, return_value, itertools as ait
 from riko.dotdict import DotDict
 from meza.fntools import remove_keys
 
-OPTS = {'extract': 'rule', 'listize': True, 'emit': True}
+OPTS = {"extract": "rule", "listize": True, "emit": True}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -51,7 +51,7 @@ def reducer(item, rule):
 
 @coroutine
 def async_parser(item, rules, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -87,7 +87,7 @@ def async_parser(item, rules, skip=False, **kwargs):
         True
     """
     if skip:
-        item = kwargs['stream']
+        item = kwargs["stream"]
     else:
         item = yield ait.coop_reduce(reducer, rules, item)
 
@@ -95,7 +95,7 @@ def async_parser(item, rules, skip=False, **kwargs):
 
 
 def parser(item, rules, skip=False, **kwargs):
-    """ Parsers the pipe content
+    """Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -120,7 +120,7 @@ def parser(item, rules, skip=False, **kwargs):
         >>> parser(*args, **kwargs) == {'greeting': 'hello world'}
         True
     """
-    return kwargs['stream'] if skip else reduce(reducer, rules, item)
+    return kwargs["stream"] if skip else reduce(reducer, rules, item)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -49,16 +49,16 @@ from riko.parsers import xml2etree, etree2dict
 from riko.utils import fetch
 from riko.bado import coroutine, return_value, util, requests as treq
 
-OPTS = {'ftype': 'none'}
+OPTS = {"ftype": "none"}
 
 # we use the default format of xml since json looses some structure
-DEFAULTS = {'url': 'http://query.yahooapis.com/v1/public/yql', 'debug': False}
+DEFAULTS = {"url": "http://query.yahooapis.com/v1/public/yql", "debug": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine
 def async_parser(_, objconf, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -105,24 +105,24 @@ def async_parser(_, objconf, skip=False, **kwargs):
         Bring pizza home
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
-        f = kwargs.get('response')
+        f = kwargs.get("response")
 
         if not f:
-            params = {'q': objconf.query, 'diagnostics': objconf.debug}
+            params = {"q": objconf.query, "diagnostics": objconf.debug}
             r = yield treq.get(objconf.url, params=params)
             f = yield treq.content(r)
 
         tree = yield util.xml2etree(f)
-        results = next(tree.getElementsByTagName('results'))
+        results = next(tree.getElementsByTagName("results"))
         stream = map(util.etree2dict, results.childNodes)
 
     return_value(stream)
 
 
 def parser(_, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -157,17 +157,17 @@ def parser(_, objconf, skip=False, **kwargs):
         'Bring pizza home'
     """
     if skip:
-        stream = kwargs['stream']
+        stream = kwargs["stream"]
     else:
-        f = kwargs.get('response')
+        f = kwargs.get("response")
 
         if not f:
-            params = {'q': objconf.query, 'diagnostics': objconf.debug}
+            params = {"q": objconf.query, "diagnostics": objconf.debug}
             f = fetch(params=params, **objconf)
 
         # TODO: consider paging for large result sets
         root = xml2etree(f).getroot()
-        results = root.find('results')
+        results = root.find("results")
         stream = map(etree2dict, results)
 
     return stream

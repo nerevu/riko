@@ -39,7 +39,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 # http://stackoverflow.com/a/33708936/408556
 class FileReader(AccumulatingProtocol):
     def __init__(self, filename, transform=None, delay=0, verbose=False):
-        self.f = open(filename, 'rb')
+        self.f = open(filename, "rb")
         self.transform = transform
         self.delay = delay
         self.producer = FileSender()
@@ -50,7 +50,7 @@ class FileReader(AccumulatingProtocol):
         self.producer.stopProducing()
 
     def resumeProducing(self):
-        chunk = self.file.read(self.CHUNK_SIZE) if self.file else ''
+        chunk = self.file.read(self.CHUNK_SIZE) if self.file else ""
 
         if not chunk:
             self.file = None
@@ -65,11 +65,11 @@ class FileReader(AccumulatingProtocol):
             return
 
     def connectionLost(self, reason):
-        self.logger.debug('connectionLost: %s', reason)
+        self.logger.debug("connectionLost: %s", reason)
         self.cleanup()
 
     def connectionMade(self):
-        self.logger.debug('Connection made from %s', self.transport.getPeer())
+        self.logger.debug("Connection made from %s", self.transport.getPeer())
         args = (self.f, self.transport, self.transform)
         self.d = self.closedDeferred = self.producer.beginFileTransfer(*args)
 
@@ -82,7 +82,7 @@ class FileReader(AccumulatingProtocol):
 
 @coroutine
 def async_read_file(filename, transport, protocol=FileReader, **kwargs):
-    proto = protocol(filename.replace('file://', ''), **kwargs)
+    proto = protocol(filename.replace("file://", ""), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
     # return_value(proto.data)
@@ -91,7 +91,7 @@ def async_read_file(filename, transport, protocol=FileReader, **kwargs):
 
 @coroutine
 def async_get_file(filename, transport, protocol=FileReader, **kwargs):
-    proto = protocol(filename.replace('file://', ''), **kwargs)
+    proto = protocol(filename.replace("file://", ""), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
     proto.transport.io.seek(0)
@@ -100,7 +100,7 @@ def async_get_file(filename, transport, protocol=FileReader, **kwargs):
 
 @coroutine
 def async_url_open(url, timeout=0, **kwargs):
-    if url.startswith('http'):
+    if url.startswith("http"):
         page = NamedTemporaryFile(delete=False)
         new_url = page.name
         yield downloadPage(encode(url), page, timeout=timeout)
@@ -109,8 +109,8 @@ def async_url_open(url, timeout=0, **kwargs):
 
     f = yield async_get_file(new_url, StringTransport(), **kwargs)
 
-    if not hasattr(f, 'name') and url.startswith('file'):
-        f.name = url.split('://')[1]
+    if not hasattr(f, "name") and url.startswith("file"):
+        f.name = url.split("://")[1]
 
     if page:
         page.close()
@@ -120,7 +120,7 @@ def async_url_open(url, timeout=0, **kwargs):
 
 
 def async_url_read(url, timeout=0, **kwargs):
-    if url.startswith('http'):
+    if url.startswith("http"):
         content = getPage(encode(url), timeout=timeout)
     else:
         content = async_read_file(url, StringTransport(), **kwargs)

@@ -27,13 +27,13 @@ from . import processor
 from riko.utils import cast
 
 
-OPTS = {'ftype': 'text', 'field': 'content'}
-DEFAULTS = {'type': 'street_address'}
+OPTS = {"ftype": "text", "field": "content"}
+DEFAULTS = {"type": "street_address"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(address, objconf, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         address (str): The address to lookup
@@ -60,9 +60,9 @@ def parser(address, objconf, skip=False, **kwargs):
         True
     """
     if skip:
-        location = kwargs['stream']
+        location = kwargs["stream"]
     else:
-        location = cast(address, 'location', loc_type=objconf.type)
+        location = cast(address, "location", loc_type=objconf.type)
 
     return location
 

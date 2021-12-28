@@ -24,13 +24,13 @@ from operator import itemgetter
 
 from . import operator
 
-OPTS = {'extract': 'count_key'}
-DEFAULTS = {'count_key': None}
+OPTS = {"extract": "count_key"}
+DEFAULTS = {"count_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, key, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -74,14 +74,14 @@ def parser(stream, key, tuples, **kwargs):
         grouped = it.groupby(sorted_stream, keyfunc)
         counted = ({key: len(list(group))} for key, group in grouped)
     else:
-        counted = {kwargs['assign']: len(list(stream))}
+        counted = {kwargs["assign"]: len(list(stream))}
 
     return counted
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously and eagerly counts the number of items
+    """An operator that asynchronously and eagerly counts the number of items
     in a stream. Note that this pipe is not lazy.
 
     Args:
@@ -125,7 +125,7 @@ def async_pipe(*args, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An aggregator that eagerly counts the number of items in a stream.
+    """An operator that eagerly counts the number of items in a stream.
     Note that this pipe is not lazy.
 
     Args:

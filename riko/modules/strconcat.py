@@ -26,12 +26,12 @@ import pygogo as gogo
 
 from . import processor
 
-OPTS = {'listize': True, 'extract': 'part'}
+OPTS = {"listize": True, "extract": "part"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(_, parts, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         _ (dict): The item (ignored)
@@ -50,9 +50,9 @@ def parser(_, parts, skip=False, **kwargs):
         True
     """
     if skip:
-        parsed = kwargs['stream']
+        parsed = kwargs["stream"]
     else:
-        parsed = ''.join(str(p) for p in parts if p)
+        parsed = "".join(str(p) for p in parts if p)
 
     return parsed
 

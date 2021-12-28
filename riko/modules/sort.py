@@ -26,19 +26,19 @@ from . import operator
 from riko.bado import itertools as ait
 from riko.utils import def_itemgetter as itemgetter
 
-OPTS = {'listize': True, 'extract': 'rule'}
-DEFAULTS = {'rule': {'sort_dir': 'asc', 'sort_key': 'content'}}
+OPTS = {"listize": True, "extract": "rule"}
+DEFAULTS = {"rule": {"sort_dir": "asc", "sort_key": "content"}}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def reducer(stream, rule):
-    reverse = rule.sort_dir == 'desc'
+    reverse = rule.sort_dir == "desc"
     keyfunc = itemgetter(rule.sort_key, _type=rule.type)
     return sorted(stream, key=keyfunc, reverse=reverse)
 
 
 def async_parser(stream, rules, tuples, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -87,7 +87,7 @@ def async_parser(stream, rules, tuples, **kwargs):
 
 
 def parser(stream, rules, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -124,7 +124,7 @@ def parser(stream, rules, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously and eagerly sorts the input source
+    """An operator that asynchronously and eagerly sorts the input source
     according to a specified key. Note that this pipe is not lazy.
 
     Args:

@@ -26,12 +26,12 @@ from collections import deque
 from . import operator
 import pygogo as gogo
 
-OPTS = {'ptype': 'int'}
+OPTS = {"ptype": "int"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -66,7 +66,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An aggregator that asynchronously truncates a stream to the last N items.
+    """An operator that asynchronously truncates a stream to the last N items.
 
     Args:
         items (Iter[dict]): The source.

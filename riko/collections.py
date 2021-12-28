@@ -81,8 +81,8 @@ Examples:
 from functools import partial
 from itertools import repeat
 from importlib import import_module
-from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool, cpu_count
+from multiprocessing.dummy import Pool as ThreadPool
 
 import pygogo as gogo
 
@@ -96,11 +96,12 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 class PyPipe(object):
     """A riko module fetching object"""
+
     def __init__(self, name=None, source=None, parallel=False, **kwargs):
         self.name = name
         self.parallel = parallel
 
-        if kwargs.pop('listize', False) and source:
+        if kwargs.pop("listize", False) and source:
             self.source = list(source)
         else:
             self.source = source or []
@@ -114,17 +115,18 @@ class PyPipe(object):
 
 class SyncPipe(PyPipe):
     """A synchronous Pipe object"""
+
     def __init__(self, name=None, source=None, workers=None, **kwargs):
         super(SyncPipe, self).__init__(name, source, **kwargs)
-        chunksize = kwargs.get('chunksize')
+        chunksize = kwargs.get("chunksize")
 
-        self.threads = kwargs.get('threads', True)
-        self.reuse_pool = kwargs.get('reuse_pool', True)
-        self.pool = kwargs.get('pool')
+        self.threads = kwargs.get("threads", True)
+        self.reuse_pool = kwargs.get("reuse_pool", True)
+        self.pool = kwargs.get("pool")
 
         if self.name:
-            self.pipe = import_module('riko.modules.%s' % self.name).pipe
-            self.is_processor = self.pipe.__dict__.get('type') == 'processor'
+            self.pipe = import_module("riko.modules.%s" % self.name).pipe
+            self.is_processor = self.pipe.__dict__.get("type") == "processor"
             self.mapify = self.is_processor and self.source
             self.parallelize = self.parallel and self.mapify
         else:
@@ -133,7 +135,7 @@ class SyncPipe(PyPipe):
             self.parallelize = False
 
         if self.parallelize:
-            ordered = kwargs.get('ordered')
+            ordered = kwargs.get("ordered")
             length = lenish(self.source)
             def_pool = ThreadPool if self.threads else Pool
 
@@ -148,11 +150,12 @@ class SyncPipe(PyPipe):
 
     def __getattr__(self, name):
         kwargs = {
-            'parallel': self.parallel,
-            'threads': self.threads,
-            'pool': self.pool if self.reuse_pool else None,
-            'reuse_pool': self.reuse_pool,
-            'workers': self.workers}
+            "parallel": self.parallel,
+            "threads": self.threads,
+            "pool": self.pool if self.reuse_pool else None,
+            "reuse_pool": self.reuse_pool,
+            "workers": self.workers,
+        }
 
         return SyncPipe(name, source=self.output, **kwargs)
 
@@ -179,9 +182,15 @@ class SyncPipe(PyPipe):
 
 class PyCollection(object):
     """A riko bulk url fetching object"""
+
     def __init__(self, sources, parallel=False, workers=None, **kwargs):
         self.parallel = parallel
-        conf = kwargs.get('conf', {})
+        conf = kwargs.get("conf", {})
+        # sources_1 = [{"url": "site.com/a"}, {"url": "site.com/b"}]
+        # sources_2 = [
+        #     {"url": "site.com/c", "type": "xpathfetchpage"},
+        #     {"url": "site.com/d", "type": "xpathfetchpage"},
+        # ]
         self.zargs = zip(sources, repeat(conf))
         self.length = lenish(sources)
         self.workers = workers or get_worker_cnt(self.length)
@@ -189,6 +198,7 @@ class PyCollection(object):
 
 class SyncCollection(PyCollection):
     """A synchronous PyCollection object"""
+
     def __init__(self, *args, **kwargs):
         super(SyncCollection, self).__init__(*args, **kwargs)
 
@@ -201,7 +211,7 @@ class SyncCollection(PyCollection):
 
     def fetch(self):
         """Fetch all source urls"""
-        kwargs = {'chunksize': self.chunksize} if self.parallel else {}
+        kwargs = {"chunksize": self.chunksize} if self.parallel else {}
         mapped = self.map(getpipe, self.zargs, **kwargs)
         return multiplex(mapped)
 
@@ -216,16 +226,17 @@ class SyncCollection(PyCollection):
 
 class AsyncPipe(PyPipe):
     """An asynchronous PyPipe object"""
+
     def __init__(self, name=None, source=None, connections=16, **kwargs):
         super(AsyncPipe, self).__init__(name, source, **kwargs)
         self.connections = connections
 
         if self.name:
-            self.module = import_module('riko.modules.%s' % self.name)
+            self.module = import_module("riko.modules.%s" % self.name)
             self.async_pipe = self.module.async_pipe
 
-            pipe_type = self.async_pipe.__dict__.get('type')
-            self.is_processor = pipe_type == 'processor'
+            pipe_type = self.async_pipe.__dict__.get("type")
+            self.is_processor = pipe_type == "processor"
             self.mapify = self.is_processor and self.source
         else:
             self.async_pipe = lambda source, **kw: util.async_return(source)
@@ -258,6 +269,7 @@ class AsyncPipe(PyPipe):
 
 class AsyncCollection(PyCollection):
     """An asynchronous PyCollection object"""
+
     def __init__(self, sources, connections=16, **kwargs):
         super(AsyncCollection, self).__init__(sources, **kwargs)
         self.connections = connections
@@ -303,7 +315,7 @@ def listpipe(args):
 
 def getpipe(args, pipe=SyncPipe):
     source, conf = args
-    ptype = source.get('type', 'fetch')
+    ptype = source.get("type", "fetch")
     return pipe(ptype, conf=merge([conf, source])).output
 
 

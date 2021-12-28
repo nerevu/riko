@@ -11,8 +11,12 @@ Examples:
 
         >>> from riko.modules.refind import pipe
         >>>
-        >>> conf = {'rule': {'find': '[aiou]'}}
+        >>> rule = {'find': '[aiou]'}
+        >>> conf = {'rule': rule}
         >>> item = {'content': 'hello world'}
+        >>> next(pipe(item, conf=conf))['refind'] == 'hell'
+        True
+        >>> rule = {'find': '[aiou]', 'location': 'at'}
         >>> next(pipe(item, conf=conf))['refind'] == 'hell'
         True
 
@@ -28,49 +32,50 @@ from functools import reduce
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
 
-OPTS = {
-    'listize': True, 'ftype': 'text', 'field': 'content', 'extract': 'rule'}
+OPTS = {"listize": True, "ftype": "text", "field": "content", "extract": "rule"}
 
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 PARAMS = {
-    'first': lambda word, rule: re.split(rule.find, word, maxsplit=1),
-    'last': lambda word, rule: re.split(rule.find, word)}
+    "first": lambda word, rule: re.split(rule.find, word, maxsplit=1),
+    "last": lambda word, rule: re.split(rule.find, word),
+}
 
 AT_PARAMS = {
-    'first': lambda word, rule: re.search(rule.find, word),
-    'last': lambda word, rule: re.findall(rule.find, word)}
+    "first": lambda word, rule: re.search(rule.find, word),
+    "last": lambda word, rule: re.findall(rule.find, word),
+}
 
 OPS = {
-    'before': lambda splits, rule: rule.find.join(splits[:len(splits) - 1]),
-    'after': lambda splits, rule: splits[-1],
-    'at': lambda splits, rule: splits,
+    "before": lambda splits, rule: rule.find.join(splits[: len(splits) - 1]),
+    "after": lambda splits, rule: splits[-1],
+    "at": lambda splits, rule: splits,
 }
 
 
 def reducer(word, rule):
-    param = rule.param or 'first'
-    default = rule.default or ''
+    param = rule.param or "first"
+    default = rule.default or ""
 
-    if rule.location == 'at':
-        result = AT_PARAMS.get(param, AT_PARAMS['first'])(word, rule)
+    if rule.location == "at":
+        result = AT_PARAMS.get(param, AT_PARAMS["first"])(word, rule)
 
-        if result and param == 'first':
+        if result and param == "first":
             splits = result.group(0)
-        elif result and param == 'last':
+        elif result and param == "last":
             splits = result[-1]
         else:
             splits = default
     else:
-        splits = PARAMS.get(param, PARAMS['first'])(word, rule)
+        splits = PARAMS.get(param, PARAMS["first"])(word, rule)
 
-    return OPS.get(rule.location, OPS['before'])(splits, rule).strip()
+    return OPS.get(rule.location, OPS["before"])(splits, rule).strip()
 
 
 @coroutine
 def async_parser(word, rules, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         word (str): The string to transform
@@ -106,7 +111,7 @@ def async_parser(word, rules, skip=False, **kwargs):
         hell
     """
     if skip:
-        value = kwargs['stream']
+        value = kwargs["stream"]
     else:
         value = yield ait.coop_reduce(reducer, rules, word)
 
@@ -114,7 +119,7 @@ def async_parser(word, rules, skip=False, **kwargs):
 
 
 def parser(word, rules, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         word (str): The string to transform
@@ -140,7 +145,7 @@ def parser(word, rules, skip=False, **kwargs):
         >>> parser(*args, **kwargs) == 'hell'
         True
     """
-    return kwargs['stream'] if skip else reduce(reducer, rules, word)
+    return kwargs["stream"] if skip else reduce(reducer, rules, word)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -163,7 +168,7 @@ def async_pipe(*args, **kwargs):
                 location (str): Direction of the substring to return. Must be
                     either 'before', 'after', or 'at' (default: 'before').
 
-                param (str): The type of replacement. Must be either 'first'
+                param (str): The type of search. Must be either 'first'
                     or 'last' (default: 'first').
 
         assign (str): Attribute to assign parsed content (default: refind)
@@ -211,7 +216,7 @@ def pipe(*args, **kwargs):
                 location (str): Direction of the substring to return. Must be
                     either 'before', 'after', or 'at' (default: 'before').
 
-                param (str): The type of replacement. Must be either 'first'
+                param (str): The type of search. Must be either 'first'
                     or 'last' (default: 'first').
 
         assign (str): Attribute to assign parsed content (default: refind)

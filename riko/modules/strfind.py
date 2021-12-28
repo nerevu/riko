@@ -27,42 +27,43 @@ from functools import reduce
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
 
-OPTS = {
-    'listize': True, 'ftype': 'text', 'field': 'content', 'extract': 'rule'}
+OPTS = {"listize": True, "ftype": "text", "field": "content", "extract": "rule"}
 
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 PARAMS = {
-    'first': lambda word, rule: word.split(rule.find, 1),
-    'last': lambda word, rule: word.split(rule.find)}
+    "first": lambda word, rule: word.split(rule.find, 1),
+    "last": lambda word, rule: word.split(rule.find),
+}
 
 AT_PARAMS = {
-    'first': lambda word, rule: word.find(rule.find),
-    'last': lambda word, rule: word.rfind(rule.find)}
+    "first": lambda word, rule: word.find(rule.find),
+    "last": lambda word, rule: word.rfind(rule.find),
+}
 
 OPS = {
-    'before': lambda splits, rule: rule.find.join(splits[:len(splits) - 1]),
-    'after': lambda splits, rule: splits[-1],
-    'at': lambda splits, rule: splits,
+    "before": lambda splits, rule: rule.find.join(splits[: len(splits) - 1]),
+    "after": lambda splits, rule: splits[-1],
+    "at": lambda splits, rule: splits,
 }
 
 
 def reducer(word, rule):
-    default = rule.default or ''
+    default = rule.default or ""
 
-    if rule.location == 'at':
-        result = AT_PARAMS.get(rule.param, AT_PARAMS['first'])(word, rule)
-        splits = word[result:len(rule.find)] if result != -1 else default
+    if rule.location == "at":
+        result = AT_PARAMS.get(rule.param, AT_PARAMS["first"])(word, rule)
+        splits = word[result : len(rule.find)] if result != -1 else default
     else:
-        splits = PARAMS.get(rule.param, PARAMS['first'])(word, rule)
+        splits = PARAMS.get(rule.param, PARAMS["first"])(word, rule)
 
-    return OPS.get(rule.location, OPS['before'])(splits, rule).strip()
+    return OPS.get(rule.location, OPS["before"])(splits, rule).strip()
 
 
 @coroutine
 def async_parser(word, rules, skip=False, **kwargs):
-    """ Asynchronously parses the pipe content
+    """Asynchronously parses the pipe content
 
     Args:
         word (str): The string to transform
@@ -98,7 +99,7 @@ def async_parser(word, rules, skip=False, **kwargs):
         hell
     """
     if skip:
-        value = kwargs['stream']
+        value = kwargs["stream"]
     else:
         value = yield ait.coop_reduce(reducer, rules, word)
 
@@ -106,7 +107,7 @@ def async_parser(word, rules, skip=False, **kwargs):
 
 
 def parser(word, rules, skip=False, **kwargs):
-    """ Parses the pipe content
+    """Parses the pipe content
 
     Args:
         word (str): The string to transform
@@ -132,7 +133,7 @@ def parser(word, rules, skip=False, **kwargs):
         >>> parser(*args, **kwargs) == 'hell'
         True
     """
-    return kwargs['stream'] if skip else reduce(reducer, rules, word)
+    return kwargs["stream"] if skip else reduce(reducer, rules, word)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

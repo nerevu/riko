@@ -18,11 +18,12 @@ except ImportError:
     react = lambda _, _reactor=None: None
     inlineCallbacks = lambda _: lambda: None
     returnValue = lambda _: lambda: None
-    backend = 'empty'
+    backend = "empty"
 else:
     from twisted.internet.defer import inlineCallbacks
     from twisted.internet.defer import returnValue
-    backend = 'twisted'
+
+    backend = "twisted"
 
 
 class Reactor(object):
@@ -32,5 +33,5 @@ class Reactor(object):
 reactor = Reactor()
 coroutine = inlineCallbacks
 return_value = returnValue
-_issync = backend == 'empty'
+_issync = backend == "empty"
 _isasync = not _issync

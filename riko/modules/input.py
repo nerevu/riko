@@ -51,13 +51,13 @@ from . import processor
 from riko.utils import cast
 
 
-OPTS = {'ftype': 'none'}
-DEFAULTS = {'type': 'text', 'default': ''}
+OPTS = {"ftype": "none"}
+DEFAULTS = {"type": "text", "default": ""}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(_, objconf, skip=False, **kwargs):
-    """ Obtains the user input
+    """Obtains the user input
 
     Args:
         _ (None): Ignored
@@ -77,16 +77,16 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> parser(None, objconf, **kwargs) == {'age': 30}
         True
     """
-    if kwargs.get('inputs'):
-        value = kwargs['inputs'].get(kwargs['assign'], objconf.default)
-    elif kwargs.get('test') or skip:
+    if kwargs.get("inputs"):
+        value = kwargs["inputs"].get(kwargs["assign"], objconf.default)
+    elif kwargs.get("test") or skip:
         value = objconf.default
     else:
         raw = input("%s (default=%s) " % (objconf.prompt, objconf.default))
         value = raw or objconf.default
 
     casted = cast(value, objconf.type)
-    return casted if hasattr(casted, 'keys') else {kwargs['assign']: casted}
+    return casted if hasattr(casted, "keys") else {kwargs["assign"]: casted}
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -36,8 +36,7 @@ Notes
 Requirements
 ------------
 
-``riko`` has been tested and is known to work on Python 3.6, 3.7, and 3.8;
-and PyPy3.6 7.3.0.
+``riko`` has been tested and is known to work on Python 3.7, 3.8, and 3.9; and PyPy3.7.
 
 Optional Dependencies
 ^^^^^^^^^^^^^^^^^^^^^
@@ -686,7 +685,7 @@ License
 ``riko`` is distributed under the `MIT License`_.
 
 .. |travis| image:: https://img.shields.io/travis/nerevu/riko/master.svg
-    :target: https://travis-ci.org/nerevu/riko
+    :target: https://app.travis-ci.com/nerevu/riko
 
 .. |versions| image:: https://img.shields.io/pypi/pyversions/riko.svg
     :target: https://pypi.python.org/pypi/riko
