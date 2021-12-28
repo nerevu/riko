@@ -4,13 +4,9 @@
 import sys
 
 from os import path as p
+from setuptools import setup, find_packages
 
 import pkutils
-
-try:
-    from setuptools import setup, find_packages
-except ImportError:
-    from distutils.core import setup, find_packages
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
 
