@@ -187,7 +187,10 @@ class PyCollection(object):
         self.parallel = parallel
         conf = kwargs.get("conf", {})
         # sources_1 = [{"url": "site.com/a"}, {"url": "site.com/b"}]
-        # sources_2 = [{"url": "site.com/c", "type": "xpathfetchpage"}, {"url": "site.com/d", "type": "xpathfetchpage"}]
+        # sources_2 = [
+        #     {"url": "site.com/c", "type": "xpathfetchpage"},
+        #     {"url": "site.com/d", "type": "xpathfetchpage"},
+        # ]
         self.zargs = zip(sources, repeat(conf))
         self.length = lenish(sources)
         self.workers = workers or get_worker_cnt(self.length)
