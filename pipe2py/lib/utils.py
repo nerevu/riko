@@ -28,7 +28,9 @@ from pipe2py import Context
 from pipe2py.lib.log import Logger
 from mezmorize import Cache
 
-if environ.get('DATABASE_URL'):  # HEROKU
+logger = Logger(__name__).logger
+
+if environ.get("DATABASE_URL"):  # HEROKU
     cache_config = {
         'CACHE_TYPE': 'saslmemcached',
         'CACHE_MEMCACHED_SERVERS': [environ.get('MEMCACHIER_SERVERS')],
@@ -196,7 +198,7 @@ def etree_to_dict(element):
     return i
 
 
-def get_value(field, item=None, force=False, **opts):
+def get_value(field, item=None, conf=None, force=False, **opts):
     item = item or {}
 
     switch = {
@@ -209,6 +211,7 @@ def get_value(field, item=None, force=False, **opts):
 
     try:
         defaults = switch.get(field.get('type', 'text'), {})
+        defaults = switch.get(conf.get("type", "text"), {})
     except AttributeError:
         defaults = switch['text']
 

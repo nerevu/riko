@@ -38,16 +38,29 @@ class AsyncPipe(PyPipe):
         if name is 'data':
             return self.pipeline(self.context, self.item, **self.kwargs)
         else:
-            return AsyncPipe(name, source=self.name, input=self.data)
+            return AsyncPipe(name, context=self.context, source=self.output)
 
     @inlineCallbacks
-    def __call__(self, **kwargs):
+    def __call__(self, context=None, **kwargs):
+        # self.context = context or self.context
+        # self.kwargs = kwargs
+        # return self
         embed = self.embed(**kwargs)
         f = partial(AsyncPipe, self.name, self.context, embed=embed, **kwargs)
         map_func = lambda item: f(item=item).data
         _input = yield self.input
         item = yield self.map(map_func, _input)
         returnValue(AsyncPipe('output', item=item))
+
+    @property
+    @inlineCallbacks
+    def output(self):
+        source = yield self.source
+        asyncPipeline = partial(self.asyncPipe, context=self.context, **self.kwargs)
+
+        if self.processor:
+            mapped = yield tu.asyncImap(asyncPipeline, source)
+            output = multiplex(mapped)
 
     @property
     @inlineCallbacks

@@ -21,20 +21,80 @@ except ImportError:
 from functools import partial
 from itertools import imap
 from importlib import import_module
+from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing import Pool, cpu_count
+
 from pipe2py import Context, modules
-from pipe2py.lib.utils import combine_dicts as cdicts
+from pipe2py.lib.utils import combine_dicts as cdicts, multiplex
+
+from pipe2py.lib.log import Logger
+
+logger = Logger(__name__).logger
 
 
 class PyPipe(object):
     """A pipe2py module fetching object"""
-    def __init__(self, name, context=None):
+    def __init__(self, name, context=None, parallel=False, **kwargs)):
         self.name = name
         self.context = context or Context()
+        self.parallel = parallel
         self.module = import_module('pipe2py.modules.pipe%s' % self.name)
+        self.kwargs = kwargs
 
     @property
     def output(self):
         return self.pipeline(self.context, self.pipe_input, **self.kwargs)
+
+
+class SyncPipe(PyPipe):
+    """A synchronous Pipe object"""
+    def __init__(self, name, source=None, workers=None, chunksize=None, **kwargs):
+        super(SyncPipe, self).__init__(name, **kwargs)
+
+        if kwargs.pop('listize', False) and source:
+            self.source = list(source)
+        else:
+            self.source = source
+
+        self.threads = kwargs.get('threads', True)
+        self.reuse_pool = kwargs.get('reuse_pool', True)
+        self.pool = kwargs.get('pool')
+        self.module = import_module('pipe2py.modules.pipe%s' % self.name)
+        self.pipe = self.module.pipe
+        self.processor = self.pipe.func_dict.get('sub_type') == 'processor'
+
+        if self.parallel and self.processor:
+            ordered = kwargs.get('ordered')
+            length = lenish(self.source)
+            def_pool = ThreadPool if self.threads else Pool
+
+            self.workers = workers or get_worker_cnt(length, self.threads)
+            self.chunksize = chunksize or get_chunksize(length, self.workers)
+            self.pool = self.pool or def_pool(self.workers)
+            self.map = self.pool.imap if ordered else self.pool.imap_unordered
+        else:
+            self.workers = workers
+            self.chunksize = chunksize
+            self.map = imap
+
+    def __getattr__(self, name):
+        kwargs = {
+            'parallel': self.parallel,
+            'threads': self.threads,
+            'pool': self.pool if self.reuse_pool else None,
+            'reuse_pool': self.reuse_pool,
+            'workers': self.workers}
+
+        return SyncPipe(name, context=self.context, source=self.output, **kwargs)
+
+    def __call__(self, context=None, **kwargs):
+        self.context = context or self.context
+        self.kwargs = kwargs
+        return self
+
+    @property
+    def output(self):
+        pipeline = partial(self.pipe, context=self.context, **self.kwargs)
 
 
 class SyncPipe(PyPipe):
