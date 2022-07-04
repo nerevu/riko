@@ -44,9 +44,9 @@
                     "type": "text",
                     "value": "and"
                 },
-                "MODE": {
-                    "type": "text",
-                    "value": "permit"
+                "permit": {
+                    "type": "bool",
+                    "value": true
                 },
                 "RULE": [
                     {

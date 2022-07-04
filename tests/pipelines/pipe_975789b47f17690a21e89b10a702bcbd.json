@@ -36,7 +36,7 @@
             ]
         }, 
         {
-            "id": "sw-470", 
+            "id": "sw-478",
             "xy": [
                 203, 
                 291
@@ -60,6 +60,7 @@
     "modules": [
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text", 
                     "value": ""
@@ -82,7 +83,7 @@
                 }
             }, 
             "id": "sw-417", 
-            "type": "textinput"
+            "type": "input"
         }, 
         {
             "conf": {}, 
@@ -113,9 +114,9 @@
                     "type": "text", 
                     "value": "and"
                 }, 
-                "MODE": {
-                    "type": "text", 
-                    "value": "permit"
+                "permit": {
+                    "type": "bool",
+                    "value": true
                 }, 
                 "RULE": [
                     {
@@ -179,42 +180,21 @@
         }, 
         {
             "conf": {
-                "assign_part": {
-                    "type": "text", 
+                "count": {
+                    "type": "text",
                     "value": "all"
-                }, 
-                "assign_to": {
-                    "type": "text", 
+                },
+                "assign": {
+                    "type": "text",
                     "value": "loop:stringtokenizer"
-                }, 
-                "embed": {
-                    "type": "module", 
-                    "value": {
-                        "conf": {
-                            "to-str": {
-                                "type": "text", 
-                                "value": " "
-                            }
-                        }, 
-                        "id": "sw-478", 
-                        "type": "stringtokenizer"
-                    }
-                }, 
-                "emit_part": {
-                    "type": "text", 
-                    "value": "all"
-                }, 
-                "mode": {
-                    "type": "text", 
-                    "value": "EMIT"
-                }, 
-                "with": {
-                    "type": "text", 
-                    "value": "title"
+                },
+                "to-str": {
+                    "type": "text",
+                    "value": " "
                 }
-            }, 
-            "id": "sw-470", 
-            "type": "loop"
+            },
+            "id": "sw-478",
+            "type": "stringtokenizer"
         }, 
         {
             "conf": {
@@ -222,9 +202,9 @@
                     "type": "text", 
                     "value": "and"
                 }, 
-                "MODE": {
-                    "type": "text", 
-                    "value": "permit"
+                "permit": {
+                    "type": "bool",
+                    "value": true
                 }, 
                 "RULE": [
                     {
@@ -328,7 +308,7 @@
                 "_type": "item"
             }, 
             "id": "_OUTPUT", 
-            "moduleid": "sw-470"
+            "moduleid": "sw-478"
         }, 
         {
             "data": {
@@ -402,14 +382,14 @@
             }, 
             "tgt": {
                 "id": "_INPUT", 
-                "moduleid": "sw-470"
+                "moduleid": "sw-478"
             }
         }, 
         {
             "id": "_w4", 
             "src": {
                 "id": "_OUTPUT", 
-                "moduleid": "sw-470"
+                "moduleid": "sw-478"
             }, 
             "tgt": {
                 "id": "_INPUT", 

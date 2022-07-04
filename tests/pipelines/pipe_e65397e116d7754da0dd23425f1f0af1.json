@@ -22,7 +22,7 @@
             ]
         }, 
         {
-            "id": "sw-626", 
+            "id": "sw-634",
             "xy": [
                 196, 
                 184
@@ -76,78 +76,57 @@
         }, 
         {
             "conf": {
-                "assign_part": {
-                    "type": "text", 
+                "count": {
+                    "type": "text",
                     "value": "all"
-                }, 
-                "assign_to": {
-                    "type": "text", 
+                },
+                "assign": {
+                    "type": "text",
                     "value": "media:content.url"
-                }, 
-                "embed": {
-                    "type": "module", 
-                    "value": {
-                        "conf": {
-                            "BASE": {
-                                "type": "text", 
-                                "value": ""
-                            }, 
-                            "PARAM": [
-                                {
-                                    "key": {
-                                        "type": "text", 
-                                        "value": "cht"
-                                    }, 
-                                    "value": {
-                                        "type": "text", 
-                                        "value": "qr"
-                                    }
-                                }, 
-                                {
-                                    "key": {
-                                        "type": "text", 
-                                        "value": "chs"
-                                    }, 
-                                    "value": {
-                                        "type": "text", 
-                                        "value": "200x200"
-                                    }
-                                }, 
-                                {
-                                    "key": {
-                                        "type": "text", 
-                                        "value": "chl"
-                                    }, 
-                                    "value": {
-                                        "subkey": "link", 
-                                        "type": "text"
-                                    }
-                                }
-                            ], 
-                            "PATH": {
-                                "type": "text", 
-                                "value": ""
-                            }
-                        }, 
-                        "id": "sw-634", 
-                        "type": "urlbuilder"
+                },
+                "BASE": {
+                    "type": "text",
+                    "value": ""
+                },
+                "PARAM": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "cht"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "qr"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "chs"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "200x200"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "chl"
+                        },
+                        "value": {
+                            "subkey": "link",
+                            "type": "text"
+                        }
                     }
-                }, 
-                "emit_part": {
-                    "type": "text", 
-                    "value": "all"
-                }, 
-                "mode": {
-                    "type": "text", 
-                    "value": "assign"
-                }, 
-                "with": {
-                    "type": "text", 
+                ],
+                "PATH": {
+                    "type": "text",
                     "value": ""
                 }
-            }, 
-            "id": "sw-626", 
-            "type": "loop"
+            },
+            "id": "sw-634",
+            "type": "urlbuilder"
         }, 
         {
             "conf": {
@@ -538,7 +517,7 @@
                 "_type": "item"
             }, 
             "id": "_OUTPUT", 
-            "moduleid": "sw-626"
+            "moduleid": "sw-634"
         }, 
         {
             "data": {
@@ -676,7 +655,7 @@
             }, 
             "tgt": {
                 "id": "_INPUT", 
-                "moduleid": "sw-626"
+                "moduleid": "sw-634"
             }
         }, 
         {
@@ -694,7 +673,7 @@
             "id": "_w6", 
             "src": {
                 "id": "_OUTPUT", 
-                "moduleid": "sw-626"
+                "moduleid": "sw-634"
             }, 
             "tgt": {
                 "id": "_INPUT", 

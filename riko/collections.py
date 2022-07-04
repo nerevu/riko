@@ -138,11 +138,26 @@ CONVERSION_FUNCS = {
 
 
 class PyPipe(object):
-    """A riko module fetching object"""
+    """A riko module fetching object
+
+    Kwargs:
+
+    verbose = debug printing during compilation and running
+    describe_input = return pipe input requirements
+    describe_dependencies = return a list of sub-pipelines used
+    test = takes input values from default (skips the console prompt)
+    inputs = a dictionary of values that overrides the defaults
+        e.g. {'name one': 'test value1'}
+    """
 
     def __init__(self, name=None, source=None, parallel=False, **kwargs):
         self.name = name
         self.parallel = parallel
+        self.inputs = kwargs.get("inputs", {})
+        self.verbose = kwargs.get("verbose")
+        self.test = kwargs.get("test")
+        self.describe_input = kwargs.get("describe_input")
+        self.describe_dependencies = kwargs.get("describe_dependencies")
 
         if kwargs.pop("listize", False) and source:
             self.source = list(source)
@@ -170,6 +185,8 @@ class SyncPipe(PyPipe):
 
         if self.name:
             self.pipe = import_module("riko.modules.%s" % self.name).pipe
+
+            # TODO: why am using __dict__?
             self.is_processor = self.pipe.__dict__.get("type") == "processor"
             self.pollable = self.pipe.__dict__.get("pollable")
             self.mapify = self.is_processor and self.source
@@ -286,10 +303,13 @@ class SyncCollection(PyCollection):
 
     def __init__(self, *args, **kwargs):
         super(SyncCollection, self).__init__(*args, **kwargs)
+        self.threads = kwargs.get("threads", True)
 
         if self.parallel:
             self.chunksize = get_chunksize(self.length, self.workers)
-            self.pool = ThreadPool(self.workers)
+
+            def_pool = ThreadPool if self.threads else Pool
+            self.pool = def_pool(self.workers)
             self.map = self.pool.imap_unordered
         else:
             self.map = map
@@ -319,9 +339,7 @@ class AsyncPipe(PyPipe):
         if self.name:
             self.module = import_module("riko.modules.%s" % self.name)
             self.async_pipe = self.module.async_pipe
-
-            pipe_type = self.async_pipe.__dict__.get("type")
-            self.is_processor = pipe_type == "processor"
+            self.is_processor = self.async_pipe.__dict__.get("type") == "processor"
             self.mapify = self.is_processor and self.source
         else:
             self.async_pipe = lambda source, **kw: util.async_return(source)

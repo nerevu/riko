@@ -7,7 +7,7 @@ p1_conf = {"url": get_path("gigs.json"), "path": "value.items"}
 p2_conf = {"uniq_key": "link"}
 p3_conf = {
     "combine": "or",
-    "mode": "block",
+    "permit": False,
     "rule": [{"field": "title", "value": "php", "op": "contains"}],
 }
 

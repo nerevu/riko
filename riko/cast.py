@@ -129,6 +129,7 @@ def cast_location(address, loc_type="street_address"):
     return result
 
 
+# TODO: inherit from meza
 def cast_date(date_str):
     try:
         words = date_str.split(" ")
@@ -164,11 +165,14 @@ def cast_date(date_str):
     return result
 
 
+# TODO: see what I can use from meza
 CAST_SWITCH = {
     "float": {"default": float("nan"), "func": float},
     "decimal": {"default": Decimal("NaN"), "func": Decimal},
     "int": {"default": 0, "func": lambda i: int(float(i))},
     "text": {"default": "", "func": decode},
+    "datetime": {"default": {"date": TODAY}, "func": cast_date},
+    # TODO: make this return date without time
     "date": {"default": {"date": TODAY}, "func": cast_date},
     "url": {"default": {}, "func": cast_url},
     "location": {"default": {}, "func": cast_location},
@@ -176,6 +180,18 @@ CAST_SWITCH = {
     "pass": {"default": None, "func": lambda i: i},
     "none": {"default": None, "func": lambda _: None},
 }
+
+# funcs = {
+#     'num': utils.get_num,
+#     'broadcast': utils.broadcast,
+#     'dispatch': utils.dispatch,
+#     'field': partial(utils.get_field, **kwargs),
+#     'conf': partial(utils.parse_conf, **no_conf),
+#     'params': partial(utils.parse_params, **no_conf),
+#     'value': partial(utils.get_value, **no_conf),
+#     'skip': partial(utils.get_skip, **kwargs),
+#     'partial': partial,
+# }
 
 
 def cast(content, _type="text", **kwargs):

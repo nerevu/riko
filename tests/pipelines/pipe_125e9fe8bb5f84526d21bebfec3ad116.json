@@ -46,64 +46,43 @@
     "modules": [
         {
             "conf": {
-                "assign_part": {
+                "count": {
                     "type": "text",
                     "value": "all"
                 },
-                "assign_to": {
+                "assign": {
                     "type": "text",
                     "value": "language-url"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "BASE": {
-                                "type": "text",
-                                "value": "http://ajax.googleapis.com/ajax/services/language/detect"
-                            },
-                            "PARAM": [
-                                {
-                                    "key": {
-                                        "type": "text",
-                                        "value": "q"
-                                    },
-                                    "value": {
-                                        "subkey": "title",
-                                        "type": "text"
-                                    }
-                                },
-                                {
-                                    "key": {
-                                        "type": "text",
-                                        "value": "v"
-                                    },
-                                    "value": {
-                                        "type": "text",
-                                        "value": "1.0"
-                                    }
-                                }
-                            ]
+                "BASE": {
+                    "type": "text",
+                    "value": "http://ajax.googleapis.com/ajax/services/language/detect"
+                },
+                "PARAM": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "q"
                         },
-                        "id": "sw-72",
-                        "type": "urlbuilder"
+                        "value": {
+                            "subkey": "title",
+                            "type": "text"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "v"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "1.0"
+                        }
                     }
-                },
-                "emit_part": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "mode": {
-                    "type": "text",
-                    "value": "assign"
-                },
-                "with": {
-                    "type": "text",
-                    "value": ""
-                }
+                ]
             },
-            "id": "sw-61",
-            "type": "loop"
+            "id": "sw-72",
+            "type": "urlbuilder"
         },
         {
             "conf": {},
@@ -112,46 +91,18 @@
         },
         {
             "conf": {
-                "assign_part": {
-                    "type": "text",
-                    "value": "all"
+                "URL": {
+                    "subkey": "language-url",
+                    "type": "url"
                 },
-                "assign_to": {
+                "path": {
                     "type": "text",
-                    "value": "language"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "URL": {
-                                "subkey": "language-url",
-                                "type": "url"
-                            },
-                            "path": {
-                                "type": "text",
-                                "value": "responseData.language"
-                            }
-                        },
-                        "id": "sw-150",
-                        "type": "fetchdata"
-                    }
-                },
-                "emit_part": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "mode": {
-                    "type": "text",
-                    "value": "assign"
-                },
-                "with": {
-                    "type": "text",
-                    "value": ""
+                    "value": "responseData.language"
                 }
             },
-            "id": "sw-142",
-            "type": "loop"
+            "id": "sw-150",
+            "type": "fetchdata"
+
         },
         {
             "conf": {
@@ -173,6 +124,7 @@
         },
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": ""
@@ -195,7 +147,7 @@
                 }
             },
             "id": "sw-479",
-            "type": "textinput"
+            "type": "input"
         },
         {
             "conf": {

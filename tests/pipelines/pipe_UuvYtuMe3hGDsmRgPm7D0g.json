@@ -36,14 +36,14 @@
             ]
         },
         {
-            "id": "sw-400",
+            "id": "sw-408",
             "xy": [
                 647,
                 80
             ]
         },
         {
-            "id": "sw-573",
+            "id": "sw-581",
             "xy": [
                 364,
                 820
@@ -206,6 +206,7 @@
         },
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": ""
@@ -228,7 +229,7 @@
                 }
             },
             "id": "sw-371",
-            "type": "textinput"
+            "type": "input"
         },
         {
             "conf": {
@@ -236,9 +237,9 @@
                     "type": "text",
                     "value": "and"
                 },
-                "MODE": {
-                    "type": "text",
-                    "value": "permit"
+                "permit": {
+                    "type": "bool",
+                    "value": true
                 },
                 "RULE": [
                     {
@@ -284,169 +285,127 @@
         },
         {
             "conf": {
-                "assign_part": {
+                "count": {
                     "type": "text",
                     "value": "all"
                 },
-                "assign_to": {
+                "assign": {
                     "type": "text",
                     "value": "description"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "part": [
-                                {
-                                    "type": "text",
-                                    "value": "Total allowances claimed, inc travel: "
-                                },
-                                {
-                                    "subkey": "TotalAllowancesClaimedIncTravel",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>Total basic allowances claimed, ex travel: "
-                                },
-                                {
-                                    "subkey": "TotalBasicAllowancesExcTravel",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>Total Travel claimed: "
-                                },
-                                {
-                                    "subkey": "TotalTravelClaimed",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>MP Mileage: "
-                                },
-                                {
-                                    "subkey": "Mileage",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>MP Rail Travel: "
-                                },
-                                {
-                                    "subkey": "MPRail",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>MP Air Travel: "
-                                },
-                                {
-                                    "subkey": "MPAir",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>Cost of staying away from main home: "
-                                },
-                                {
-                                    "subkey": "CostofStayingAwayFromMainHome",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>London Supplement: "
-                                },
-                                {
-                                    "subkey": "LondonSupplement",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>Office Running Costs: "
-                                },
-                                {
-                                    "subkey": "OfficeRunningCosts",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "<br>Staffing Costs: "
-                                },
-                                {
-                                    "subkey": "StaffingCosts",
-                                    "type": "text"
-                                }
-                            ]
-                        },
-                        "id": "sw-408",
-                        "type": "strconcat"
+                "part": [
+                    {
+                        "type": "text",
+                        "value": "Total allowances claimed, inc travel: "
+                    },
+                    {
+                        "subkey": "TotalAllowancesClaimedIncTravel",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>Total basic allowances claimed, ex travel: "
+                    },
+                    {
+                        "subkey": "TotalBasicAllowancesExcTravel",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>Total Travel claimed: "
+                    },
+                    {
+                        "subkey": "TotalTravelClaimed",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>MP Mileage: "
+                    },
+                    {
+                        "subkey": "Mileage",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>MP Rail Travel: "
+                    },
+                    {
+                        "subkey": "MPRail",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>MP Air Travel: "
+                    },
+                    {
+                        "subkey": "MPAir",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>Cost of staying away from main home: "
+                    },
+                    {
+                        "subkey": "CostofStayingAwayFromMainHome",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>London Supplement: "
+                    },
+                    {
+                        "subkey": "LondonSupplement",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>Office Running Costs: "
+                    },
+                    {
+                        "subkey": "OfficeRunningCosts",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "<br>Staffing Costs: "
+                    },
+                    {
+                        "subkey": "StaffingCosts",
+                        "type": "text"
                     }
-                },
-                "emit_part": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "mode": {
-                    "type": "text",
-                    "value": "assign"
-                },
-                "with": {
-                    "type": "text",
-                    "value": ""
-                }
+                ]
             },
-            "id": "sw-400",
-            "type": "loop"
+            "id": "sw-408",
+            "type": "strconcat"
         },
         {
             "conf": {
-                "assign_part": {
+                "count": {
                     "type": "text",
                     "value": "all"
                 },
-                "assign_to": {
+                "assign": {
                     "type": "text",
                     "value": "title"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "part": [
-                                {
-                                    "subkey": "firstName",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": " "
-                                },
-                                {
-                                    "subkey": "Member",
-                                    "type": "text"
-                                }
-                            ]
-                        },
-                        "id": "sw-581",
-                        "type": "strconcat"
+                "part": [
+                    {
+                        "subkey": "firstName",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": " "
+                    },
+                    {
+                        "subkey": "Member",
+                        "type": "text"
                     }
-                },
-                "emit_part": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "mode": {
-                    "type": "text",
-                    "value": "assign"
-                },
-                "with": {
-                    "type": "text",
-                    "value": ""
-                }
+                ]
             },
-            "id": "sw-573",
-            "type": "loop"
+            "id": "sw-581",
+            "type": "strconcat"
         }
     ],
     "terminaldata": [
@@ -968,7 +927,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-400"
+            "moduleid": "sw-408"
         },
         {
             "data": {
@@ -1101,7 +1060,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-573"
+            "moduleid": "sw-581"
         }
     ],
     "wires": [
@@ -1146,25 +1105,25 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-400"
+                "moduleid": "sw-408"
             }
         },
         {
             "id": "_w4",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-400"
+                "moduleid": "sw-408"
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-573"
+                "moduleid": "sw-581"
             }
         },
         {
             "id": "_w5",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-573"
+                "moduleid": "sw-581"
             },
             "tgt": {
                 "id": "_INPUT",

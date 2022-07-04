@@ -15,14 +15,14 @@
             ]
         },
         {
-            "id": "sw-595",
+            "id": "sw-603",
             "xy": [
                 245,
                 -186
             ]
         },
         {
-            "id": "sw-619",
+            "id": "sw-692",
             "xy": [
                 655,
                 167
@@ -72,81 +72,39 @@
         },
         {
             "conf": {
-                "assign_part": {
+                "count": {
                     "type": "text",
                     "value": "first"
                 },
-                "assign_to": {
+                "assign": {
                     "type": "text",
                     "value": "mpdetails"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "gid": {
-                                "subkey": "result.winning-mp.aristotle-id",
-                                "type": "text"
-                            }
-                        },
-                        "id": "sw-603",
-                        "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
-                    }
-                },
-                "emit_part": {
-                    "type": "text",
-                    "value": "first"
-                },
-                "mode": {
-                    "type": "text",
-                    "value": "assign"
-                },
-                "with": {
-                    "type": "text",
-                    "value": ""
+                "gid": {
+                    "subkey": "result.winning-mp.aristotle-id",
+                    "type": "text"
                 }
             },
-            "id": "sw-595",
-            "type": "loop"
+            "id": "sw-603",
+            "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
         },
         {
             "conf": {
-                "assign_part": {
+                "count": {
                     "type": "text",
                     "value": "first"
                 },
-                "assign_to": {
+                "assign": {
                     "type": "text",
                     "value": "y:location"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "LOCATION": {
-                                "subkey": "mpdetails.university",
-                                "type": "text"
-                            }
-                        },
-                        "id": "sw-692",
-                        "type": "locationbuilder"
-                    }
-                },
-                "emit_part": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "mode": {
-                    "type": "text",
-                    "value": "assign"
-                },
-                "with": {
-                    "type": "text",
-                    "value": ""
+                "LOCATION": {
+                    "subkey": "mpdetails.university",
+                    "type": "text"
                 }
             },
-            "id": "sw-619",
-            "type": "loop"
+            "id": "sw-692",
+            "type": "locationbuilder"
         },
         {
             "conf": {
@@ -154,9 +112,9 @@
                     "type": "text",
                     "value": "and"
                 },
-                "MODE": {
-                    "type": "text",
-                    "value": "permit"
+                "permit": {
+                    "type": "bool",
+                    "value": true
                 },
                 "RULE": [
                     {
@@ -750,7 +708,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-595"
+            "moduleid": "sw-603"
         },
         {
             "data": {
@@ -1956,14 +1914,14 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-595"
+                "moduleid": "sw-603"
             }
         },
         {
             "id": "_w1",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-595"
+                "moduleid": "sw-603"
             },
             "tgt": {
                 "id": "_INPUT",

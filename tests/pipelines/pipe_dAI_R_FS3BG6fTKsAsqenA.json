@@ -1,7 +1,7 @@
 {
     "layout": [
         {
-            "id": "sw-138",
+            "id": "sw-298",
             "xy": [
                 204,
                 210
@@ -32,56 +32,35 @@
     "modules": [
         {
             "conf": {
-                "assign_part": {
+                "count": {
                     "type": "text",
                     "value": "all"
                 },
-                "assign_to": {
+                "assign": {
                     "type": "text",
                     "value": "title"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "part": [
-                                {
-                                    "subkey": "headline",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": " ("
-                                },
-                                {
-                                    "subkey": "severity",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": ")"
-                                }
-                            ]
-                        },
-                        "id": "sw-298",
-                        "type": "strconcat"
+                "part": [
+                    {
+                        "subkey": "headline",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": " ("
+                    },
+                    {
+                        "subkey": "severity",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": ")"
                     }
-                },
-                "emit_part": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "mode": {
-                    "type": "text",
-                    "value": "assign"
-                },
-                "with": {
-                    "type": "text",
-                    "value": ""
-                }
+                ]
             },
-            "id": "sw-138",
-            "type": "loop"
+            "id": "sw-298",
+            "type": "strconcat"
         },
         {
             "conf": {},
@@ -210,7 +189,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-138"
+            "moduleid": "sw-298"
         },
         {
             "data": {
@@ -389,7 +368,7 @@
             "id": "_w0",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-138"
+                "moduleid": "sw-298"
             },
             "tgt": {
                 "id": "_INPUT",
@@ -415,7 +394,7 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-138"
+                "moduleid": "sw-298"
             }
         }
     ]

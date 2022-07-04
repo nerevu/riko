@@ -35,42 +35,21 @@
         }, 
         {
             "conf": {
-                "assign_part": {
-                    "type": "text", 
+                "count": {
+                    "type": "text",
                     "value": "all"
-                }, 
-                "assign_to": {
-                    "type": "text", 
+                },
+                "assign": {
+                    "type": "text",
                     "value": "terms"
-                }, 
-                "embed": {
-                    "type": "module", 
-                    "value": {
-                        "conf": {
-                            "mode": {
-                                "type": "text", 
-                                "value": "list"
-                            }
-                        }, 
-                        "id": "sw-508", 
-                        "type": "termextraction"
-                    }
-                }, 
-                "emit_part": {
-                    "type": "text", 
-                    "value": "all"
-                }, 
+                },
                 "mode": {
-                    "type": "text", 
-                    "value": "assign"
-                }, 
-                "with": {
-                    "type": "text", 
-                    "value": "title"
+                    "type": "text",
+                    "value": "list"
                 }
-            }, 
-            "id": "sw-500", 
-            "type": "loop"
+            },
+            "id": "sw-508",
+            "type": "termextraction"
         }
     ], 
     "terminaldata": [

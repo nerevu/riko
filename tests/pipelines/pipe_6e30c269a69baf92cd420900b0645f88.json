@@ -101,9 +101,9 @@
                     "type": "text",
                     "value": "or"
                 },
-                "MODE": {
-                    "type": "text",
-                    "value": "block"
+                "permit": {
+                    "type": "bool",
+                    "value": false
                 },
                 "RULE": [
                     {

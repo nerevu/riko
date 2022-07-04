@@ -180,6 +180,7 @@ def etree2dict(element):
 
     for child in element:
         tag = child.tag
+        # tag = child.tag.split("}", 1)[-1]
         value = etree2dict(child)
         i.update(_make_content(i, value, tag))
 
@@ -233,14 +234,56 @@ def get_value(item, conf=None, force=False, default=None, **kwargs):
     return value
 
 
+def get_value(field, item=None, conf=None, force=False, **opts):
+    item = item or {}
+
+    switch = {
+        "number": {"default": 0.0, "func": float},
+        "integer": {"default": 0, "func": int},
+        "text": {"default": "", "func": encode},
+        "unicode": {"default": "", "func": unicode},
+        "bool": {"default": False, "func": lambda i: bool(int(i))},
+    }
+
+    try:
+        defaults = switch.get(field.get("type", "text"), {})
+        defaults = switch.get(conf.get("type", "text"), {})
+    except AttributeError:
+        defaults = switch["text"]
+
+    kwargs = defaultdict(str, **defaults)
+    kwargs.update(opts)
+    default = kwargs["default"]
+
+    try:
+        value = item.get(field["subkey"], **kwargs)
+    except KeyError:
+        if field and not (hasattr(field, "delete") or force):
+            raise TypeError("field must be of type DotDict")
+        elif force:
+            value = field
+        elif field:
+            value = field.get(**kwargs)
+        else:
+            value = default
+    except (TypeError, AttributeError):
+        # field is already set to a value so use it or the default
+        value = field or default
+    except (ValueError):
+        # error converting subkey value with OPS['func'] so use the default
+        value = default
+
+    return value
+
+
 def parse_conf(item, **kwargs):
     kw = Objectify(kwargs, defaults={}, conf={})
     # TODO: fix so .items() returns a DotDict instance
     # parsed = {k: get_value(item, v) for k, v in kw.conf.items()}
-    sentinel = {"subkey", "value", "terminal"}
+    sentinels = {"subkey", "value", "terminal"}
     not_dict = not hasattr(kw.conf, "keys")
 
-    if not_dict or (len(kw.conf) == 1 and sentinel.intersection(kw.conf)):
+    if not_dict or (len(kw.conf) == 1 and sentinels.intersection(kw.conf)):
         objectified = get_value(item, **kwargs)
     else:
         no_conf = remove_keys(kwargs, "conf")
@@ -281,9 +324,8 @@ def get_skip(item, skip_if=None, **kwargs):
         True
     """
     item = item or {}
-    skips = listize(skip_if)
 
-    for _skip in skips:
+    for _skip in listize(skip_if):
         if callable(_skip):
             skip = _skip(item)
         elif _skip:

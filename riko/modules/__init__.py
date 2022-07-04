@@ -170,9 +170,9 @@ class processor(object):
                 Performs conversion after obtaining the `objectify` value above.
                 If set, objectified `conf` items will be converted upon
                 attribute retrieval, and normal `conf` items will be converted
-                immediately. Must be one of 'pass', 'none', 'text', or 'num'.
-                Default: 'pass', i.e., return `conf` as is. Note: setting to
-                'none' automatically disables `objectify`.
+                immediately. Must be one of 'pass', 'none', 'text', 'int', 'float',
+                or 'decimal'. Default: 'pass', i.e., return `conf` as is. Note:
+                setting to 'none' automatically disables `objectify`.
 
             dictize (bool): Convert the input `item` to a DotDict instance
                 (default: True)
@@ -184,7 +184,7 @@ class processor(object):
             ftype (str): Used to convert the input `item` to a specific type.
                 Performs conversion after obtaining the `field` value above.
                 If set, the wrapped pipe will receive this value instead of
-                `item`. Must be one of 'pass', 'none', 'text', 'int', 'number',
+                `item`. Must be one of 'pass', 'none', 'text', 'int', 'float',
                 or 'decimal'. Default: 'pass', i.e., return the item as is.
                 Note: setting to 'none' automatically enables `emit`.
 
@@ -420,9 +420,9 @@ class operator(object):
                 Performs conversion after obtaining the `objectify` value above.
                 If set, objectified `conf` items will be converted upon
                 attribute retrieval, and normal `conf` items will be converted
-                immediately. Must be one of 'pass', 'none', 'text', or 'num'.
-                Default: 'pass', i.e., return `conf` as is. Note: setting to
-                'none' automatically disables `objectify`.
+                immediately. Must be one of 'pass', 'none', 'text', 'int', 'float',
+                or 'decimal'. Default: 'pass', i.e., return `conf` as is. Note:
+                setting to 'none' automatically disables `objectify`.
 
             dictize (bool): Convert the input `items` to DotDict instances
                 (default: True)
@@ -434,8 +434,8 @@ class operator(object):
             ftype (str): Used to convert the input `items` to a specific type.
                 Performs conversion after obtaining the `field` values above.
                 If set, the wrapped pipe will receive these values instead of
-                `items`. Must be one of 'pass', 'none', 'text', or 'num' (
-                default: 'pass', i.e., return the item as is)
+                `items`. Must be one of 'pass', 'none', 'text', 'int', 'float',
+                or 'decimal' (default: 'pass', i.e., return the item as is)
 
             count (str): Stream count. Must be either 'first' (yields only the
                 first result) or 'all' (yields all results in a list). Default:

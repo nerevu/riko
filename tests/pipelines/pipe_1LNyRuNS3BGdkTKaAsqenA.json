@@ -87,6 +87,7 @@
         },
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": "yhoo"
@@ -109,7 +110,7 @@
                 }
             },
             "id": "sw-116",
-            "type": "textinput"
+            "type": "input"
         },
         {
             "conf": {
@@ -117,9 +118,9 @@
                     "type": "text",
                     "value": "and"
                 },
-                "MODE": {
-                    "type": "text",
-                    "value": "permit"
+                "permit": {
+                    "type": "bool",
+                    "value": true
                 },
                 "RULE": [
                     {
@@ -143,6 +144,7 @@
         },
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": ""
@@ -165,7 +167,7 @@
                 }
             },
             "id": "sw-131",
-            "type": "textinput"
+            "type": "input"
         }
     ],
     "terminaldata": [

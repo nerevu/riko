@@ -40,7 +40,7 @@ from riko.parsers import parse_conf
 from riko.cast import cast_date
 
 OPTS = {"listize": True, "extract": "rule"}
-DEFAULTS = {"combine": "and", "mode": "permit"}
+DEFAULTS = {"combine": "and", "permit": True}
 ITER_ATTRS = {"__next__", "next", "__iter__"}
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
@@ -130,7 +130,7 @@ def parser(stream, rules, tuples, **kwargs):
         >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
         >>>
-        >>> conf = DotDict({'mode': 'permit', 'combine': 'and'})
+        >>> conf = DotDict({'permit': True, 'combine': 'and'})
         >>> kwargs = {'conf': conf}
         >>> rule = {'field': 'ex', 'op': 'greater', 'value': 3}
         >>> objrule = Objectify(rule)
@@ -149,7 +149,6 @@ def parser(stream, rules, tuples, **kwargs):
         if dynamic:
             objconf = parse_conf(item, conf=conf, objectify=True)
 
-        permit = objconf.mode == "permit"
         results = (parse_rule(rule, item, **kwargs) for rule in rules)
 
         try:
@@ -158,7 +157,7 @@ def parser(stream, rules, tuples, **kwargs):
             msg = "Invalid combine: %s. (Expected 'and' or 'or')"
             raise Exception(msg % objconf.combine)
 
-        if (result and permit) or not (result or permit):
+        if (result and objconf.permit) or not (result or objconf.permit):
             yield item
         elif objconf.stop:
             break
@@ -175,10 +174,10 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'mode', 'combine', or 'stop'.
+            contain the keys 'permit', 'combine', or 'stop'.
 
-            mode (str): returns the matches if set to 'permit', otherwise
-                returns the non-matches (default: 'permit').
+            permit (bool): returns the matches if True, otherwise
+                returns the non-matches (default: True).
 
             rule (dict): can be either a dict or list of dicts. Must contain
                 the keys 'field', 'op', and 'value'.
@@ -232,10 +231,10 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'rule'. May
-            contain the keys 'mode', 'combine', or 'stop'.
+            contain the keys 'permit', 'combine', or 'stop'.
 
-            mode (str): returns the matches if set to 'permit', otherwise
-                returns the non-matches (default: 'permit').
+            permit (bool): returns the matches if True, otherwise
+                returns the non-matches (default: True).
 
             rule (dict): can be either a dict or list of dicts. Must contain
                 the keys 'field', 'op', and 'value'.

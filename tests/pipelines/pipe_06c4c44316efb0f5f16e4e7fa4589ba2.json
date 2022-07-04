@@ -54,6 +54,7 @@
         },
         {
             "conf": {
+                "type": "int",
                 "debug": {
                     "type": "number",
                     "value": ""
@@ -76,7 +77,7 @@
                 }
             },
             "id": "sw-131",
-            "type": "numberinput"
+            "type": "input"
         },
         {
             "conf": {

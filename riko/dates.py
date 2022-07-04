@@ -18,6 +18,14 @@ DATETIME_FORMAT = "{0} %H:%M:%S".format(DATE_FORMAT)
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
 TODAY = dt.now(UTC)
+ALTERNATIVE_DATE_FORMATS = (
+    "%m-%d-%Y",
+    "%m/%d/%y",
+    "%m/%d/%Y",
+    "%m-%d-%y",
+    "%Y-%m-%dt%H:%M:%Sz",
+    # todo more: whatever Yahoo can accept
+)
 
 
 def gen_tzinfos():
@@ -47,6 +55,14 @@ def get_date(unit, count, op):
     }
 
     return DATES[unit]
+
+
+def get_date(date_string):
+    for date_format in ALTERNATIVE_DATE_FORMATS:
+        try:
+            return datetime.strptime(date_string, date_format)
+        except ValueError:
+            pass
 
 
 def normalize_date(date):

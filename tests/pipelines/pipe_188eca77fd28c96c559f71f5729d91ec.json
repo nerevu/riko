@@ -15,7 +15,7 @@
             ]
         },
         {
-            "id": "sw-111",
+            "id": "sw-119",
             "xy": [
                 "538",
                 "236"
@@ -47,54 +47,33 @@
         },
         {
             "conf": {
-                "assign_part": {
+                "count": {
                     "type": "text",
                     "value": "all"
                 },
-                "assign_to": {
+                "assign": {
                     "type": "text",
                     "value": "loop:fetchpage"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "URL": {
-                                "subkey": "url",
-                                "type": "url"
-                            },
-                            "from": {
-                                "type": "text",
-                                "value": "One Way</span>"
-                            },
-                            "to": {
-                                "type": "text",
-                                "value": "</tr>"
-                            },
-                            "token": {
-                                "type": "text",
-                                "value": "<td style=\"TEXT-ALIGN: center\">"
-                            }
-                        },
-                        "id": "sw-119",
-                        "type": "fetchpage"
-                    }
+                "URL": {
+                    "subkey": "url",
+                    "type": "url"
                 },
-                "emit_part": {
+                "from": {
                     "type": "text",
-                    "value": "all"
+                    "value": "One Way</span>"
                 },
-                "mode": {
+                "to": {
                     "type": "text",
-                    "value": "EMIT"
+                    "value": "</tr>"
                 },
-                "with": {
+                "token": {
                     "type": "text",
-                    "value": ""
+                    "value": "<td style=\"TEXT-ALIGN: center\">"
                 }
             },
-            "id": "sw-111",
-            "type": "loop"
+            "id": "sw-119",
+            "type": "fetchpage"
         },
         {
             "conf": {
@@ -138,7 +117,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-111"
+            "moduleid": "sw-119"
         },
         {
             "data": {
@@ -170,7 +149,7 @@
             "id": "_w4",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-111"
+                "moduleid": "sw-119"
             },
             "tgt": {
                 "id": "_INPUT",
@@ -185,7 +164,7 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-111"
+                "moduleid": "sw-119"
             }
         }
     ]

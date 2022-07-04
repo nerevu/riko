@@ -58,7 +58,8 @@ def parser(content, objconf, skip=False, **kwargs):
 
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously parses a URL into its components.
+    """A processor that asynchronously converts a text string into a variety of
+    different types, e.g., int, bool, date, etc. Useful as terminal data. Loopable.
 
     Args:
         item (dict): The entry to process
@@ -66,7 +67,8 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the key 'type'.
-            type (str): The object type to cast to (default: text)
+            type (str): The object type to cast to. Must be one of 'text', 'int',
+            'float', 'bool', 'url', 'location', or 'date' (default: text).
 
         assign (str): Attribute to assign parsed content (default: typecast)
         field (str): Item attribute to operate on (default: 'content')
@@ -95,7 +97,8 @@ def async_pipe(*args, **kwargs):
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that parses a URL into its components.
+    """A processor that converts a text string into a variety of different types, e.g.,
+    int, bool, date, etc. Useful as terminal data. Loopable.
 
     Args:
         item (dict): The entry to process
@@ -103,7 +106,8 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the key 'type'.
-            type (str): The object type to cast to (default: text)
+            type (str): The object type to cast to. Must be one of 'text', 'int',
+            'float', 'bool', 'url', 'location', or 'date' (default: text).
 
         assign (str): Attribute to assign parsed content (default: typecast)
         field (str): Item attribute to operate on (default: 'content')

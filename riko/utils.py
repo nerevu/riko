@@ -19,6 +19,7 @@ from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
+from graphlib import TopologicalSorter
 
 from werkzeug.local import LocalProxy
 
@@ -33,7 +34,7 @@ except ImportError:
 
 from meza import compat
 from meza.io import reencode
-from meza.fntools import SleepyDict
+from meza.fntools import SleepyDict, listize
 from mezmorize.utils import get_cache_type
 from riko import ENCODING, __version__
 from riko.cast import cast
@@ -528,13 +529,19 @@ def substitute(word, rule):
     return replaced
 
 
+# @memoize(TIMEOUT)
 def get_new_rule(rule, recompile=False):
+    # flag 'i' --> 2
     flags = 0 if rule.get("casematch") else re.IGNORECASE
 
     if not rule.get("singlelinematch"):
+        # flag 'm' --> 8
         flags |= re.MULTILINE
+
+        # flag 's' --> 16
         flags |= re.DOTALL
 
+    # flag 'g' --> 0
     count = 1 if rule.get("singlematch") else 0
 
     if recompile and "$" in rule["replace"]:
@@ -591,13 +598,15 @@ def gen_entries(parsed):
         yield entry
 
 
-def gen_items(content, key=None):
+def gen_items(content, key=None, yield_if_none=False):
     if hasattr(content, "append"):
         for nested in content:
             for i in gen_items(nested, key):
                 yield i
     elif content:
         yield {key: content} if key else content
+    elif yield_if_none:
+        yield
 
 
 def send(target, item):
@@ -629,3 +638,119 @@ def actor(registry_name=None, maxlen=256):
         return wrapper
 
     return decorator
+
+
+def gen_dependencies(pipe_def):
+    for module in pipe_def["modules"]:
+        yield "pipe%s" % module["type"]
+
+
+def extract_dependencies(pipe_def=None, pipe_generator=None):
+    """Extract modules used by a pipe"""
+    if pipe_def:
+        pydeps = gen_dependencies(pipe_def)
+    elif pipe_generator:
+        pydeps = pipe_generator(describe_dependencies=True)
+    else:
+        raise Exception("Must supply at least one kwarg!")
+
+    return sorted(set(pydeps))
+
+
+def gen_input(pipe_def):
+    fields = ["position", "name", "prompt"]
+
+    for module in pipe_def["modules"]:
+        # Note: there seems to be no need to recursively collate inputs
+        # from subpipelines
+        try:
+            module_confs = [module["conf"][x]["value"] for x in fields]
+        except (KeyError, TypeError):
+            pass
+        else:
+            values = ["type", "value"]
+            module_confs.extend((module["conf"]["default"][x] for x in values))
+            yield tuple(module_confs)
+
+
+def get_input(conf, **kwargs):
+    """Gets a user parameter, either from the console or from an outer
+     submodule/system
+
+    Assumes conf has name, default, prompt and debug
+    """
+    name = conf["name"]["value"]
+    prompt = conf["prompt"]["value"]
+    default = conf["default"]["value"] or conf["debug"]["value"]
+
+    if inputs := kwargs.get("inputs"):
+        value = inputs.get(name, default)
+    elif not kwargs.get("test"):
+        # we skip user interaction during tests
+        raw = raw_input("%s (default=%s) " % (prompt, default))
+        value = raw or default
+    else:
+        value = default
+
+    return value
+
+
+def extract_input(pipe_def=None, pipe_generator=None):
+    """Extract inputs required by a pipe"""
+    if pipe_def:
+        pyinput = gen_input(pipe_def)
+    elif pipe_generator:
+        pyinput = pipe_generator(describe_input=True)
+    else:
+        raise Exception("Must supply at least one kwarg!")
+
+    return sorted(list(pyinput))
+
+
+def pythonise(id, encoding="ascii"):
+    """Return a Python-friendly id"""
+    replace = {"-": "_", ":": "_", "/": "_"}
+    func = lambda id, pair: id.replace(pair[0], pair[1])
+    id = reduce(func, replace.iteritems(), id)
+    id = "_%s" % id if id[0] in string.digits else id
+    return id.encode(encoding)
+
+
+def gen_names(module_ids, pipe, ntype="module"):
+    for module_id in module_ids:
+        module_type = pipe["modules"][module_id]["type"]
+
+        if module_type.startswith("pipe:"):
+            name = pythonise(module_type)
+        elif ntype == "module":
+            name = module_type
+        elif ntype == "pipe":
+            name = "pipe_%s" % module_type
+        else:
+            raise Exception("Invalid type: %s. (Expected 'module' or 'pipe')" % ntype)
+
+        yield name
+
+
+def gen_modules(pipe_def):
+    for module in listize(pipe_def["modules"]):
+        yield (pythonise(module["id"]), module)
+
+
+def gen_wires(pipe_def):
+    for wire in listize(pipe_def["wires"]):
+        yield (pythonise(wire["id"]), wire)
+
+
+def gen_graph(pipe_def):
+    for wire in listize(pipe_def["wires"]):
+        src_id = pythonise(wire["src"]["moduleid"])
+        tgt_id = pythonise(wire["tgt"]["moduleid"])
+        yield (src_id, tgt_id)
+
+
+def gen_parented_graph(graph):
+    """Remove any orphan nodes"""
+    for node, value in graph.items():
+        if value or any(node in v for v in graph.values()):
+            yield (node, value)

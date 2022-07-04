@@ -123,6 +123,7 @@
         },
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": ""
@@ -145,7 +146,7 @@
                 }
             },
             "id": "sw-552",
-            "type": "textinput"
+            "type": "input"
         }
     ],
     "terminaldata": [

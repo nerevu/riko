@@ -69,6 +69,7 @@
         }, 
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text", 
                     "value": ""
@@ -91,7 +92,7 @@
                 }
             }, 
             "id": "sw-606", 
-            "type": "textinput"
+            "type": "input"
         }, 
         {
             "conf": {

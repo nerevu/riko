@@ -53,6 +53,7 @@
     "modules": [
         {
             "conf": {
+                "type": "url",
                 "debug": {
                     "type": "url",
                     "value": ""
@@ -75,7 +76,7 @@
                 }
             },
             "id": "sw-521",
-            "type": "urlinput"
+            "type": "input"
         },
         {
             "conf": {},
@@ -102,9 +103,9 @@
                     "type": "text",
                     "value": "and"
                 },
-                "MODE": {
-                    "type": "text",
-                    "value": "permit"
+                "permit": {
+                    "type": "bool",
+                    "value": true
                 },
                 "RULE": [
                     {
@@ -186,6 +187,7 @@
         },
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": ""
@@ -208,7 +210,7 @@
                 }
             },
             "id": "sw-621",
-            "type": "textinput"
+            "type": "input"
         }
     ],
     "terminaldata": [

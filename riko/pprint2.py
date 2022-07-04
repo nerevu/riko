@@ -1,13 +1,15 @@
-# pprint2.py
-#
-
-from __future__ import (
-    absolute_import, division, print_function, with_statement,
-    unicode_literals)
+# -*- coding: utf-8 -*-
+# vim: sw=4:ts=4:expandtab
+"""
+riko.pprint2
+~~~~~~~~~~~~
+Provides function pretty printing
+"""
 
 
 class Id(object):
     """An object that is not quoted as literal by repr"""
+
     def __init__(self, name):
         self.name = name
 
@@ -34,7 +36,7 @@ def repr_args(args):
             res += ["%s=%s" % (key, repr_arg(value))]
         else:
             res += [repr_arg(x)]
-    return ', '.join(res)
+    return ", ".join(res)
 
 
 def repr_arg(d):
@@ -44,7 +46,8 @@ def repr_arg(d):
     if isinstance(d, dict):
         # if d can be expressed in key=value syntax:
         return "{%s}" % ", ".join(
-            "%s: %s" % (repr_arg(k), repr_arg(v)) for k, v in d.items())
+            "%s: %s" % (repr_arg(k), repr_arg(v)) for k, v in d.items()
+        )
     if isinstance(d, list):
         return "[%s]" % ", ".join(repr_arg(elem) for elem in d)
     if isinstance(d, unicode):
@@ -69,7 +72,7 @@ def str_args(args):
                 res += ["%s=%s" % (key, str_arg(value))]
         else:
             res += [str_arg(x)]
-    return ', '.join(res)
+    return ", ".join(res)
 
 
 def str_arg(d):
@@ -80,11 +83,11 @@ def str_arg(d):
     if not d:
         return None
     if isinstance(d, dict):
-        if len(d) == 2 and d.get('type') == 'text' and 'value' in d:
-            return str_arg(d['value'])
-        if len(d) == 2 and d.get('type') == 'text' and 'subkey' in d:
-            return ".%s" % d['subkey']
-        if d.get('type') == 'module':
+        if len(d) == 2 and d.get("type") == "text" and "value" in d:
+            return str_arg(d["value"])
+        if len(d) == 2 and d.get("type") == "text" and "subkey" in d:
+            return ".%s" % d["subkey"]
+        if d.get("type") == "module":
             return None
         return "{%s}" % str_args(d.items())
     if isinstance(d, list):

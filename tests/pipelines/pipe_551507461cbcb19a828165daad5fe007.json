@@ -47,6 +47,7 @@
         },
         {
             "conf": {
+                "type": "url",
                 "debug": {
                     "type": "url",
                     "value": "file://data/www.bbc.co.uk_news.html"
@@ -69,7 +70,7 @@
                 }
             },
             "id": "sw-242",
-            "type": "urlinput"
+            "type": "input"
         },
         {
             "conf": {

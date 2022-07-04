@@ -117,6 +117,7 @@
         },
         {
             "conf": {
+                "type": "int",
                 "debug": {
                     "type": "number",
                     "value": ""
@@ -139,10 +140,11 @@
                 }
             },
             "id": "sw-576",
-            "type": "numberinput"
+            "type": "input"
         },
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": "The debug is not private so can be left in?"
@@ -169,10 +171,11 @@
                 }
             },
             "id": "sw-580",
-            "type": "privateinput"
+            "type": "input"
         },
         {
             "conf": {
+                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": "does debeug text appear anywhere?"
@@ -195,10 +198,11 @@
                 }
             },
             "id": "sw-584",
-            "type": "textinput"
+            "type": "input"
         },
         {
             "conf": {
+                "type": "url",
                 "debug": {
                     "type": "url",
                     "value": ""
@@ -221,7 +225,7 @@
                 }
             },
             "id": "sw-588",
-            "type": "urlinput"
+            "type": "input"
         },
         {
             "conf": {
