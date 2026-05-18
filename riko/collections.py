@@ -20,18 +20,18 @@ Examples:
         >>> (SyncPipe('fetchdata', conf=fconf)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
-        ...     .count().list) == [{'count': 169}]
-        True
+        ...     .count().list)
+        [{'count': 169}]
         >>> (SyncPipe('fetchdata', conf=fconf, parallel=True)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
-        ...     .count().list) == [{'count': 169}]
-        True
+        ...     .count().list)
+        [{'count': 169}]
         >>> (SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
-        ...     .count().list) == [{'count': 169}]
-        True
+        ...     .count().list)
+        [{'count': 169}]
         >>> fconf['type'] = 'fetchdata'
         >>> sources = [{'url': {'value': get_path('feed.xml')}}, fconf]
         >>> len(SyncCollection(sources).list)
@@ -60,7 +60,7 @@ Examples:
         ...         .count()
         ...         .list)
         ...
-        ...     print(d1 == [{'count': 169}])
+        ...     print(d1)
         ...
         ...     fconf['type'] = 'fetchdata'
         ...     sources = [{'url': {'value': get_path('feed.xml')}}, fconf]
@@ -68,14 +68,14 @@ Examples:
         ...     print(len(d2))
         ...
         >>> if _issync:
-        ...     True
+        ...     [{'count': 169}]
         ...     56
         ... else:
         ...     try:
         ...         react(run, _reactor=FakeReactor())
         ...     except SystemExit:
         ...         pass
-        True
+        [{'count': 169}]
         56
 """
 from functools import partial
@@ -168,12 +168,14 @@ class SyncPipe(PyPipe):
             mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
         elif self.mapify:
             mapped = self.map(pipeline, self.source)
+        else:
+            mapped = None
 
-        if self.parallelize and not self.reuse_pool:
+        if mapped and self.parallelize and not self.reuse_pool:
             self.pool.close()
             self.pool.join()
 
-        return multiplex(mapped) if self.mapify else pipeline(self.source)
+        return multiplex(mapped) if mapped else pipeline(self.source)
 
     @property
     def list(self):
@@ -184,13 +186,13 @@ class PyCollection(object):
     """A riko bulk url fetching object"""
 
     def __init__(self, sources, parallel=False, workers=None, **kwargs):
-        self.parallel = parallel
-        conf = kwargs.get("conf", {})
         # sources_1 = [{"url": "site.com/a"}, {"url": "site.com/b"}]
         # sources_2 = [
         #     {"url": "site.com/c", "type": "xpathfetchpage"},
         #     {"url": "site.com/d", "type": "xpathfetchpage"},
         # ]
+        self.parallel = parallel
+        conf = kwargs.get("conf", {})
         self.zargs = zip(sources, repeat(conf))
         self.length = lenish(sources)
         self.workers = workers or get_worker_cnt(self.length)

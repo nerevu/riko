@@ -22,8 +22,8 @@ Examples:
         >>>
         >>> conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf)) == {'greeting': 'hello world'}
-        True
+        >>> next(pipe(item, conf=conf))
+        {'greeting': 'hello world'}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -75,8 +75,7 @@ def async_parser(item, rules, skip=False, **kwargs):
         ...     callback = lambda x: print(x == {'greeting': 'hello world'})
         ...     item = DotDict({'content': 'hello world'})
         ...     rule = {'field': 'content', 'newval': 'greeting'}
-        ...     kwargs = {'stream': item}
-        ...     d = async_parser(item, [Objectify(rule)], **kwargs)
+        ...     d = async_parser(item, [Objectify(rule)], stream=item)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -115,10 +114,9 @@ def parser(item, rules, skip=False, **kwargs):
         >>>
         >>> item = DotDict({'content': 'hello world'})
         >>> rule = {'field': 'content', 'newval': 'greeting'}
-        >>> kwargs = {'stream': item}
         >>> args = [item, [Objectify(rule)], False]
-        >>> parser(*args, **kwargs) == {'greeting': 'hello world'}
-        True
+        >>> parser(*args, stream=item)
+        {'greeting': 'hello world'}
     """
     return kwargs["stream"] if skip else reduce(reducer, rules, item)
 
@@ -195,14 +193,14 @@ def pipe(*args, **kwargs):
     Examples:
         >>> rule = {'field': 'content', 'newval': 'greeting'}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf={'rule': rule})) == {'greeting': 'hello world'}
-        True
+        >>> next(pipe(item, conf={'rule': rule}))
+        {'greeting': 'hello world'}
         >>> conf = {'rule': {'field': 'content'}}
         >>> next(pipe({'content': 'hello world'}, conf=conf))
         {}
         >>> rule['copy'] = True
         >>> result = pipe({'content': 'hello world'}, conf={'rule': rule})
-        >>> sorted(next(result).keys()) == ['content', 'greeting']
-        True
+        >>> sorted(next(result).keys())
+        ['content', 'greeting']
     """
     return parser(*args, **kwargs)

@@ -14,8 +14,8 @@ Examples:
         >>> from riko.modules.tail import pipe
         >>>
         >>> items = ({'x': x} for x in range(5))
-        >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
-        True
+        >>> next(pipe(items, conf={'count': 2}))
+        {'x': 3}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -58,8 +58,8 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> objconf = Objectify(kwargs)
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
-        >>> parser(stream, objconf, tuples, **kwargs)[0] == {'x': 3}
-        True
+        >>> parser(stream, objconf, tuples, **kwargs)[0]
+        {'x': 3}
     """
     return deque(stream, objconf.count)
 
@@ -118,7 +118,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> items = [{'x': x} for x in range(5)]
-        >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
-        True
+        >>> next(pipe(items, conf={'count': 2}))
+        {'x': 3}
     """
     return parser(*args, **kwargs)

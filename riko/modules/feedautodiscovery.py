@@ -2,7 +2,7 @@
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.feedautodiscovery
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for finding the all available RSS and Atom feeds in a web
 site.
 

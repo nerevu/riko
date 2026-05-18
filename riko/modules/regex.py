@@ -19,8 +19,8 @@ Examples:
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['content'] == 'worldwide'
-        True
+        >>> next(pipe(item, conf=conf))['content']
+        'worldwide'
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -262,20 +262,20 @@ def pipe(*args, **kwargs):
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> result = next(pipe(item, conf=conf))
-        >>> result == {'content': 'worldwide', 'title': 'greeting'}
-        True
+        >>> result
+        {'content': 'worldwide', 'title': 'greeting'}
         >>> # multiple regex mode
         >>> conf['multi'] = True
-        >>> next(pipe(item, conf=conf)) == result
-        True
+        >>> next(pipe(item, conf=conf))
+        {'content': 'worldwide', 'title': 'greeting'}
         >>> # case insensitive matching
         >>> item = {'content': 'Hello hello'}
         >>> rule.update({'match': r'hello.*', 'replace': 'bye'})
-        >>> next(pipe(item, conf=conf))['content'] == 'bye'
-        True
+        >>> next(pipe(item, conf=conf))['content']
+        'bye'
         >>> # case sensitive matching
         >>> rule['casematch'] = True
-        >>> next(pipe(item, conf=conf))['content'] == 'Hello bye'
-        True
+        >>> next(pipe(item, conf=conf))['content']
+        'Hello bye'
     """
     return parser(*args, **kwargs)

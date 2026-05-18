@@ -95,7 +95,6 @@ __all__ = __sources__ + __composers__ + __transformers__ + __aggregators__
 
 
 def get_assignment(result, skip=False, **kwargs):
-    # print(result)
     result = iter(listize(result))
 
     if skip:
@@ -357,15 +356,15 @@ class processor(object):
             kwargs.update({"skip": skip, "stream": orig_item})
 
             if self.isasync:
-                stream = yield pipe(*parsed, **kwargs)
+                _stream = yield pipe(*parsed, **kwargs)
             else:
-                stream = pipe(*parsed, **kwargs)
+                _stream = pipe(*parsed, **kwargs)
 
-            one, assignment = get_assignment(stream, skip=skip, **combined)
+            one, assignment = get_assignment(_stream, **combined)
 
             if skip or combined.get("emit"):
                 stream = assignment
-            elif not skip:
+            else:
                 stream = assign(_input, assignment, one=one, **combined)
 
             if self.isasync:
@@ -636,29 +635,27 @@ class operator(object):
             objconf = parsed[1]
 
             if self.isasync:
-                stream = yield pipe(orig_stream, objconf, tuples, **kwargs)
+                _stream = yield pipe(orig_stream, objconf, tuples, **kwargs)
             else:
-                stream = pipe(orig_stream, objconf, tuples, **kwargs)
+                _stream = pipe(orig_stream, objconf, tuples, **kwargs)
 
-            sub_type = "aggregator" if hasattr(stream, "keys") else "composer"
+            sub_type = "aggregator" if hasattr(_stream, "keys") else "composer"
             wrapper.__dict__["sub_type"] = sub_type
 
             # operators can only assign one value per item and can't skip items
-            _, assignment = get_assignment(stream, **combined)
+            _, assignment = get_assignment(_stream, **combined)
 
             if combined.get("emit"):
                 stream = assignment
             else:
                 singles = (iter([v]) for v in assignment)
                 assigned = (assign({}, s, one=True, **combined) for s in singles)
-
                 stream = multiplex(assigned)
 
             if self.isasync:
                 return_value(stream)
             else:
-                for s in stream:
-                    yield s
+                yield from stream
 
         wrapper.__dict__["type"] = "operator"
         return coroutine(wrapper) if self.isasync else wrapper

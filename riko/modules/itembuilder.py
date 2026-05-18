@@ -60,8 +60,8 @@ def parser(_, attrs, skip=False, **kwargs):
         >>> result == {'title': 'the title', 'desc': 'the desc'}
         True
     """
-    items = ((a.key, a.value) for a in attrs)
-    return kwargs["stream"] if skip else DotDict(items)
+    item = ((a.key, a.value) for a in attrs)
+    return kwargs["stream"] if skip else DotDict(item)
 
 
 @processor(isasync=True, **OPTS)
