@@ -19,6 +19,7 @@ from os import remove
 
 from meza.compat import encode
 
+from riko import ENCODING
 from . import coroutine, return_value
 
 try:
@@ -99,7 +100,7 @@ def async_get_file(filename, transport, protocol=FileReader, **kwargs):
 
 
 @coroutine
-def async_url_open(url, timeout=0, **kwargs):
+def async_url_open(url, timeout=0, encoding=ENCODING, decode=False, **kwargs):
     if url.startswith("http"):
         page = NamedTemporaryFile(delete=False)
         new_url = page.name
@@ -115,6 +116,9 @@ def async_url_open(url, timeout=0, **kwargs):
     if page:
         page.close()
         remove(page.name)
+
+    if decode:
+        pass
 
     return_value(f)
 

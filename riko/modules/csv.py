@@ -87,7 +87,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         stream = kwargs["stream"]
     else:
         url = get_abspath(objconf.url)
-        r = yield io.async_url_open(url)
+        r = yield io.async_url_open(url, decode=True, encoding=objconf.encoding)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {"first_row": first_row, "custom_header": custom_header}
         rkwargs = merge([objconf, renamed])
