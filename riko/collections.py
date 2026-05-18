@@ -83,6 +83,7 @@ from itertools import repeat, chain
 from importlib import import_module
 from multiprocessing import Pool, cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
+from operator import length_hint
 
 import pygogo as gogo
 
@@ -94,7 +95,7 @@ try:
 except ModuleNotFoundError:
     mapping = OFX = QIF = gen_data = None
 
-from riko.utils import multiplex, multi_try
+from riko.utils import multiplex
 from riko.bado import coroutine, return_value
 from riko.bado import util, itertools as ait
 from meza import convert as cv, io
@@ -178,7 +179,7 @@ class SyncPipe(PyPipe):
 
         if self.parallelize:
             ordered = kwargs.get("ordered")
-            length = lenish(self.source)
+            length = length_hint(self.source)
             def_pool = ThreadPool if self.threads else Pool
 
             self.workers = workers or get_worker_cnt(length, self.threads)
@@ -250,7 +251,7 @@ class PyCollection(object):
         self.parallel = parallel
         conf = kwargs.get("conf", {})
         self.zargs = zip(sources, repeat(conf))
-        self.length = lenish(sources)
+        self.length = length_hint(sources)
         self.workers = workers or get_worker_cnt(self.length)
 
 
@@ -357,13 +358,6 @@ def get_chunksize(length, workers):
 def get_worker_cnt(length, threads=True):
     multiplier = 2 if threads else 1
     return min(length or 1, cpu_count() * multiplier)
-
-
-def lenish(source, default=50):
-    funcs = (len, lambda x: x.__length_hint__())
-    errors = (TypeError, AttributeError)
-    zipped = list(zip(funcs, errors))
-    return multi_try(source, zipped, default)
 
 
 def listpipe(args):
