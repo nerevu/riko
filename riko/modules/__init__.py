@@ -55,6 +55,7 @@ __aggregators__ = [
 __composers__ = [
     "filter",
     "join",
+    "loop",
     "reverse",
     "sort",
     "split",
