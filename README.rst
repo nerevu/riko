@@ -1,8 +1,6 @@
 riko: A stream processing engine modeled after Yahoo! Pipes
 ===========================================================
 
-|travis| |versions| |pypi|
-
 Index
 -----
 
@@ -683,15 +681,6 @@ License
 -------
 
 ``riko`` is distributed under the `MIT License`_.
-
-.. |travis| image:: https://img.shields.io/travis/nerevu/riko/master.svg
-    :target: https://app.travis-ci.com/nerevu/riko
-
-.. |versions| image:: https://img.shields.io/pypi/pyversions/riko.svg
-    :target: https://pypi.python.org/pypi/riko
-
-.. |pypi| image:: https://img.shields.io/pypi/v/riko.svg
-    :target: https://pypi.python.org/pypi/riko
 
 .. _synchronous: #synchronous-processing
 .. _asynchronous: #asynchronous-processing
