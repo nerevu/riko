@@ -388,7 +388,7 @@ can use the output of one ``pipe`` as the input to another ``pipe``.
 
 ``riko`` ``pipes`` come in two flavors; ``operators`` and ``processors``.
 ``operators`` operate on an entire ``stream`` at once and are unable to handle
-individual items. Example ``operators`` include ``count``, ``pipefilter``,
+individual items. Example ``operators`` include ``count``, ``filter``,
 and ``reverse``.
 
 .. code-block:: python
@@ -401,7 +401,7 @@ and ``reverse``.
 
 ``processors`` process individual ``items`` and can be parallelized across
 threads or processes. Example ``processors`` include ``fetchsitefeed``,
-``hash``, ``pipeitembuilder``, and ``piperegex``.
+``hash``, ``itembuilder``, and ``regex``.
 
 .. code-block:: python
 
@@ -412,7 +412,7 @@ threads or processes. Example ``processors`` include ``fetchsitefeed``,
     >>> next(stream)
     {'title': 'riko pt. 1', 'hash': 2853617420}
 
-Some ``processors``, e.g., ``pipetokenizer``, return multiple results.
+Some ``processors``, e.g., ``tokenizer``, return multiple results.
 
 .. code-block:: python
 

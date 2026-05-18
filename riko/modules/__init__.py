@@ -28,6 +28,7 @@ __sources__ = [
     "fetchdata",
     "fetchpage",
     "fetchsitefeed",
+    "fetchtext",
     "itembuilder",
     "rssitembuilder",
     "xpathfetchpage",
@@ -38,6 +39,7 @@ __sources__ = [
 __aggregators__ = [
     "count",
     "sum",
+    "timeout",
     # 'mean',
     # 'min',
     # 'max',
@@ -45,6 +47,7 @@ __aggregators__ = [
 
 __composers__ = [
     "filter",
+    "join",
     "reverse",
     "sort",
     "split",
@@ -59,6 +62,7 @@ __transformers__ = [
     "currencyformat",
     "dateformat",
     "exchangerate",
+    "geolocate",
     "hash",
     # 'locationextractor',
     # 'outputcsv',
@@ -76,6 +80,7 @@ __transformers__ = [
     "strtransform",
     "subelement",
     "substr",
+    "typecast",
     # 'termextractor',
     "tokenizer",
     # 'translate',
@@ -132,7 +137,7 @@ class processor(object):
 
         Args:
             defaults (dict): Default `conf` values.
-            async (bool): Wrap an async pipe (default: False)
+            isasync (bool): Wraps an async pipe (default: False)
             debug (bool): Print pipe content to stdout (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
@@ -380,7 +385,7 @@ class operator(object):
 
         Args:
             defaults (dict): Default `conf` values.
-            isasync (bool): Wrap an async pipe (default: False)
+            isasync (bool): Wraps an async pipe (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:

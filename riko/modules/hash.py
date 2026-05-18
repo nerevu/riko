@@ -41,7 +41,7 @@ def parser(word, _, skip=False, **kwargs):
     """Parsers the pipe content
 
     Args:
-        item (obj): The entry to process (a DotDict instance)
+        word (str): The string to hash
         _ (None): Ignored.
         skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
