@@ -79,19 +79,61 @@ Examples:
         56
 """
 from functools import partial
-from itertools import repeat
+from itertools import repeat, chain
 from importlib import import_module
 from multiprocessing import Pool, cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 
 import pygogo as gogo
 
+try:
+    from csv2ofx.mappings.default import mapping
+    from csv2ofx.ofx import OFX
+    from csv2ofx.qif import QIF
+    from csv2ofx.utils import gen_data
+except ModuleNotFoundError:
+    mapping = OFX = QIF = gen_data = None
+
 from riko.utils import multiplex, multi_try
 from riko.bado import coroutine, return_value
 from riko.bado import util, itertools as ait
+from meza import convert as cv, io
 from meza.process import merge
 
 logger = gogo.Gogo(__name__, monolog=True).logger
+
+
+def records2ofx(items, **kwargs):
+    ofx = OFX(mapping)
+    groups = ofx.gen_groups(items)
+    trxns = ofx.gen_trxns(groups)
+    cleaned_trxns = ofx.clean_trxns(trxns)
+    data = gen_data(cleaned_trxns)
+    return chain([ofx.header(), ofx.gen_body(data), ofx.footer()])
+
+
+def records2qif(items, **kwargs):
+    qif = QIF(mapping)
+    groups = qif.gen_groups(items)
+    trxns = qif.gen_trxns(groups)
+    cleaned_trxns = qif.clean_trxns(trxns)
+    data = gen_data(cleaned_trxns)
+    return chain([qif.header(), qif.gen_body(data), qif.footer()])
+
+
+CONVERSION_FUNCS = {
+    "array": cv.records2array,
+    "csv": cv.records2csv,
+    "dataframe": cv.records2df,
+    "geojson": cv.records2geojson,
+    # 'ical': cv.records2ical,
+    "json": cv.records2json,
+    # 'kml': cv.records2kml,
+    "list": lambda items, **kw: list(items),
+    "ofx": records2ofx,
+    "qif": records2qif,
+    "tuple": lambda items, **kw: tuple(items),
+}
 
 
 class PyPipe(object):
@@ -157,7 +199,21 @@ class SyncPipe(PyPipe):
             "workers": self.workers,
         }
 
-        return SyncPipe(name, source=self.output, **kwargs)
+        return SyncPipe(name, source=iter(self), **kwargs)
+
+    def __iter__(self):
+        return self.output
+
+    def export(self, out_type="list", f=None, **kwargs):
+        result = None
+
+        if converter := CONVERSION_FUNCS.get(out_type):
+            _result = converter(iter(self), **kwargs)
+            result = io.write(f, _result, **kwargs) if f else _result
+        else:
+            logger.error(f"Invalid type, {out_type}. You must supply a supported type.")
+
+        return result
 
     @property
     def output(self):
@@ -179,7 +235,7 @@ class SyncPipe(PyPipe):
 
     @property
     def list(self):
-        return list(self.output)
+        return self.export()
 
 
 class PyCollection(object):
@@ -318,6 +374,12 @@ def listpipe(args):
 def getpipe(args, pipe=SyncPipe):
     source, conf = args
     ptype = source.get("type", "fetch")
+    return iter(pipe(ptype, conf=merge([conf, source])))
+
+
+def async_get_pipe(args, pipe=AsyncPipe):
+    source, conf = args
+    ptype = source.get("type", "fetch")
     return pipe(ptype, conf=merge([conf, source])).output
 
 
@@ -326,6 +388,3 @@ def async_list_pipe(args):
     source, async_pipeline = args
     output = yield async_pipeline(source)
     return_value(list(output))
-
-
-async_get_pipe = partial(getpipe, pipe=AsyncPipe)
