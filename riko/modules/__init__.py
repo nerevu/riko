@@ -4,6 +4,7 @@
 riko.modules
 ~~~~~~~~~~~~
 """
+from time import sleep
 import pygogo as gogo
 
 from functools import partial, wraps
@@ -13,7 +14,7 @@ from builtins import iter, list, map, next
 
 from riko.bado import coroutine, return_value
 from riko.cast import cast
-from riko.utils import multiplex, broadcast, dispatch
+from riko.utils import multiplex, broadcast, dispatch, Stream
 from riko.parsers import parse_conf, get_skip, get_field
 from riko.dotdict import DotDict
 from meza.fntools import remove_keys, listize, Objectify
@@ -35,6 +36,10 @@ __sources__ = [
     "xpathfetchpage",
     "yql",
     "input",
+]
+
+__targets__ = [
+    "coroutine",
 ]
 
 __aggregators__ = [
@@ -88,7 +93,9 @@ __transformers__ = [
     # 'yahooshortcuts',
 ]
 
-__all__ = __sources__ + __composers__ + __transformers__ + __aggregators__
+__all__ = __sources__ + __targets__ + __composers__ + __transformers__ + __aggregators__
+
+SENTINELS = {Stream.DONE}
 
 
 def get_assignment(result, skip=False, **kwargs):
@@ -127,7 +134,9 @@ def assign(item, assignment, **kwargs):
 
 
 class processor(object):
-    def __init__(self, defaults=None, isasync=False, debug=False, **opts):
+    def __init__(
+        self, defaults=None, isasync=False, pollable=False, debug=False, **opts
+    ):
         """Creates a sync/async pipe that processes individual items. These
         pipes are classified as `type: processor` and as either
         `sub_type: transformer` or `subtype: source`. To be recognized as
@@ -136,6 +145,7 @@ class processor(object):
         Args:
             defaults (dict): Default `conf` values.
             isasync (bool): Wraps an async pipe (default: False)
+            pollable (bool): Pipe returns a callable stream (default: False)
             debug (bool): Print pipe content to stdout (default: False)
             opts (dict): The keyword arguments passed to the wrapper
 
@@ -245,6 +255,7 @@ class processor(object):
         self.opts = opts or {}
         self.isasync = isasync
         self.debug = debug
+        self.pollable = pollable
 
     def __call__(self, pipe):
         """Creates a sync/async pipe that processes individual items
@@ -309,7 +320,6 @@ class processor(object):
             ...         pass
             True
         """
-
         @wraps(pipe)
         def wrapper(item=None, **kwargs):
             module_name = wrapper.__module__.split(".")[-1]
@@ -357,6 +367,9 @@ class processor(object):
             else:
                 _stream = pipe(*parsed, **kwargs)
 
+            if callable(_stream):
+                _stream = _stream()
+
             one, assignment = get_assignment(_stream, **combined)
 
             if skip or combined.get("emit"):
@@ -367,18 +380,18 @@ class processor(object):
             if self.isasync:
                 return_value(stream)
             else:
-                for s in stream:
-                    yield s
+                yield from stream
 
         is_source = self.opts.get("ftype") == "none"
         wrapper.__dict__["name"] = wrapper.__module__.split(".")[-1]
         wrapper.__dict__["type"] = "processor"
         wrapper.__dict__["sub_type"] = "source" if is_source else "transformer"
+        wrapper.__dict__["pollable"] = self.pollable
         return coroutine(wrapper) if self.isasync else wrapper
 
 
 class operator(object):
-    def __init__(self, defaults=None, isasync=False, **opts):
+    def __init__(self, defaults=None, isasync=False, pollable=False, **opts):
         """Creates a sync/async pipe that processes an entire stream of items
 
         Args:
@@ -499,6 +512,7 @@ class operator(object):
         self.defaults = defaults or {}
         self.opts = opts or {}
         self.isasync = isasync
+        self.pollable = pollable
 
     def __call__(self, pipe):
         """Creates a wrapper that allows a sync/async pipe to processes a
@@ -635,6 +649,9 @@ class operator(object):
                 _stream = yield pipe(orig_stream, objconf, tuples, **kwargs)
             else:
                 _stream = pipe(orig_stream, objconf, tuples, **kwargs)
+
+            if callable(_stream):
+                _stream = _stream()
 
             sub_type = "aggregator" if hasattr(_stream, "keys") else "composer"
             wrapper.__dict__["sub_type"] = sub_type

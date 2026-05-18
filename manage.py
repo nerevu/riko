@@ -141,7 +141,7 @@ def prettify(where, sort=False):
 @click.option("-w", "--where", help="test path", default=None)
 @click.option("-x", "--stop", help="Stop after first error", is_flag=True)
 @click.option("-f", "--failed", help="Run failed tests", is_flag=True)
-@click.option("-c", "--cover", help="Add coverage report", is_flag=True)
+@click.option("-c", "--cover/--no-cover", help="Add coverage report")
 @click.option("-t", "--tox", help="Run tox tests", is_flag=True)
 @click.option("-d", "--detox", help="Run detox tests", is_flag=True)
 @click.option("-v", "--verbose", help="Use detailed errors", is_flag=True)
@@ -154,7 +154,7 @@ def prettify(where, sort=False):
 def test(where=None, stop=None, **kwargs):
     """Run pytest, tox, and script tests"""
     opts = "-xv" if stop else "-v"
-    opts += " --cov=riko" if kwargs.get("cover") else ""
+    opts += " --cov=riko" if kwargs.get("cover") else " --no-cov"
     opts += " --last-failed" if kwargs.get("failed") else ""
     opts += " --tb=long -ra" if kwargs.get("verbose") else ""
     opts += f" {where}" if where else ""

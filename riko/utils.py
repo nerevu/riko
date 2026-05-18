@@ -10,7 +10,9 @@ import sys
 import itertools as it
 import fcntl
 
+from collections import deque
 from math import isnan
+from enum import Enum, auto
 from functools import partial, wraps
 from operator import itemgetter
 from os import O_NONBLOCK, path as p
@@ -36,9 +38,19 @@ from mezmorize.utils import get_cache_type
 from riko import ENCODING, __version__
 from riko.cast import cast
 
+
+_registry = {}
+_receive_queue = {}
+
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+noop = lambda item: item
 
 DEF_NS = "https://github.com/nerevu/riko"
+
+
+class Stream(Enum):
+    PENDING = auto()
+    DONE = auto()
 
 
 def get_abspath(url):
@@ -586,3 +598,34 @@ def gen_items(content, key=None):
                 yield i
     elif content:
         yield {key: content} if key else content
+
+
+def send(target, item):
+    if target in _registry:
+        _registry[target].send(item)
+    else:
+        logger.error(f"Attempted to send {item} to non-existent '{target}'")
+
+
+def close(name):
+    if gen := _registry.get(name):
+        gen.close()
+
+
+def actor(registry_name=None, maxlen=256):
+    """Decorator for generator-based coroutines."""
+
+    def decorator(func):
+        name = registry_name or func.__name__
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            gen = func(*args, **kwargs)
+            next(gen)
+            _registry[name] = gen
+            _receive_queue[name] = deque(maxlen=maxlen)
+            return gen
+
+        return wrapper
+
+    return decorator

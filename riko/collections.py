@@ -95,7 +95,7 @@ try:
 except ModuleNotFoundError:
     mapping = OFX = QIF = gen_data = None
 
-from riko.utils import multiplex
+from riko.utils import multiplex, send, Stream
 from riko.bado import coroutine, return_value
 from riko.bado import util, itertools as ait
 from meza import convert as cv, io
@@ -166,16 +166,20 @@ class SyncPipe(PyPipe):
         self.threads = kwargs.get("threads", True)
         self.reuse_pool = kwargs.get("reuse_pool", True)
         self.pool = kwargs.get("pool")
+        self._output_gen = None
 
         if self.name:
             self.pipe = import_module("riko.modules.%s" % self.name).pipe
             self.is_processor = self.pipe.__dict__.get("type") == "processor"
+            self.pollable = self.pipe.__dict__.get("pollable")
             self.mapify = self.is_processor and self.source
             self.parallelize = self.parallel and self.mapify
         else:
             self.pipe = lambda source, **kw: source
-            self.mapify = False
-            self.parallelize = False
+            self.pollable = self.mapify = self.parallelize = False
+
+        if self.pollable:
+            self.stream_func = self.pipe.__dict__.get("stream_func")
 
         if self.parallelize:
             ordered = kwargs.get("ordered")
@@ -191,33 +195,7 @@ class SyncPipe(PyPipe):
             self.chunksize = chunksize
             self.map = map
 
-    def __getattr__(self, name):
-        kwargs = {
-            "parallel": self.parallel,
-            "threads": self.threads,
-            "pool": self.pool if self.reuse_pool else None,
-            "reuse_pool": self.reuse_pool,
-            "workers": self.workers,
-        }
-
-        return SyncPipe(name, source=iter(self), **kwargs)
-
-    def __iter__(self):
-        return self.output
-
-    def export(self, out_type="list", f=None, **kwargs):
-        result = None
-
-        if converter := CONVERSION_FUNCS.get(out_type):
-            _result = converter(iter(self), **kwargs)
-            result = io.write(f, _result, **kwargs) if f else _result
-        else:
-            logger.error(f"Invalid type, {out_type}. You must supply a supported type.")
-
-        return result
-
-    @property
-    def output(self):
+    def _init_output(self):
         pipeline = partial(self.pipe, **self.kwargs)
 
         if self.parallelize:
@@ -232,7 +210,55 @@ class SyncPipe(PyPipe):
             self.pool.close()
             self.pool.join()
 
-        return multiplex(mapped) if mapped else pipeline(self.source)
+        self._mapped = mapped
+        self._output_gen = self.gen_output()
+
+    @property
+    def output(self):
+        if self._output_gen is None:
+            self._init_output()
+
+        return self._output_gen
+
+    def __getattr__(self, name):
+        kwargs = {
+            "parallel": self.parallel,
+            "threads": self.threads,
+            "pool": self.pool if self.reuse_pool else None,
+            "reuse_pool": self.reuse_pool,
+            "workers": self.workers,
+        }
+
+        return SyncPipe(name, source=iter(self), **kwargs)
+
+    def __iter__(self):
+        return self.output
+
+    def __next__(self):
+        try:
+            return next(self.output)
+        except StopIteration:
+            if self.name == "send":
+                others = self.kwargs.get("others", [])
+                [send(target, {"state": Stream.DONE}) for target in others]
+
+            raise
+
+    def export(self, out_type="list", f=None, **kwargs):
+        result = None
+
+        if converter := CONVERSION_FUNCS.get(out_type):
+            _result = converter(self, **kwargs)
+            result = io.write(f, _result, **kwargs) if f else _result
+        else:
+            logger.error(f"Invalid type, {out_type}. You must supply a supported type.")
+
+        return result
+
+    def gen_output(self):
+        pipeline = partial(self.pipe, **self.kwargs)
+        mapped = self._mapped
+        yield from multiplex(mapped) if mapped else pipeline(self.source)
 
     @property
     def list(self):

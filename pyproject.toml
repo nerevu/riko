@@ -65,6 +65,7 @@ dev = [
     "ruff>=0.13.1",
     "pytest-xdist>=3.8.0",
     "scripttest>=2.0.post1",
+    "pytest-timeout>=2.4.0",
 ]
 
 [project.scripts]
@@ -103,6 +104,7 @@ exclude = [
 addopts = ["--doctest-modules", "--cov=riko", "--tb=short"]
 testpaths = ["tests", "riko"]
 doctest_optionflags = ["ELLIPSIS"]
+timeout = 300
 
 [tool.flake8]
 ignore = [
