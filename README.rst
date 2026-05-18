@@ -547,7 +547,6 @@ CLI Setup
 
 .. code-block:: python
 
-    from __future__ import print_function
     from riko.collections import SyncPipe
 
     conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
