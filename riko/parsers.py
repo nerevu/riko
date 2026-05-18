@@ -213,7 +213,9 @@ def get_value(item, conf=None, force=False, default=None, **kwargs):
     try:
         value = item.get(conf["subkey"], **kwargs)
     except KeyError:
-        if conf and not (hasattr(conf, "delete") or force):
+        if "value" in conf and not set(kwargs).difference(["objectify"]):
+            value = conf["value"]
+        elif conf and not (hasattr(conf, "delete") or force):
             raise TypeError("conf must be of type DotDict")
         elif force:
             value = conf
@@ -300,7 +302,12 @@ def get_skip(item, skip_if=None, **kwargs):
 
 
 def get_field(item, field=None, **kwargs):
-    return item.get(field, **kwargs) if field else item
+    try:
+        value = item.get(field, **kwargs) if field else item
+    except TypeError:
+        value = item.get(field) if field else item
+
+    return value
 
 
 def text2entity(text):
