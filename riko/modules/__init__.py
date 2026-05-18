@@ -29,6 +29,7 @@ __sources__ = [
     "fetchpage",
     "fetchsitefeed",
     "fetchtext",
+    "fetchtable",
     "itembuilder",
     "rssitembuilder",
     "xpathfetchpage",
