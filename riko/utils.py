@@ -556,14 +556,21 @@ def gen_entries(parsed):
         raise Exception(parsed["bozo_exception"])
 
     for entry in parsed["entries"]:
+        published = updated = None
+
         # prevent feedparser deprecation warnings
         if "published_parsed" in entry:
-            updated = entry["published_parsed"]
-        else:
+            published = updated = entry["published_parsed"]
+        elif "pubDate" in entry:
+            # TODO: convert this to utc_datetime obj
+            published = updated = entry["pubDate"]
+
+        if "updated_parsed" in entry:
             updated = entry.get("updated_parsed")
 
-        entry["pubDate"] = updated
-        entry["y:published"] = updated
+        entry.setdefault("updated_parsed", updated)
+        entry.setdefault("pubDate", published)
+        entry["y:published"] = entry["pubDate"]
         entry["dc:creator"] = entry.get("author")
         entry["author.uri"] = entry.get("author_detail", {}).get("href")
         entry["author.name"] = entry.get("author_detail", {}).get("name")
