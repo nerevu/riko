@@ -294,11 +294,11 @@ def group_by(iterable, attr, default=None):
 
 def unique_everseen(iterable, key=None):
     # List unique elements, preserving order. Remember all elements ever seen
-    # unique_everseen('ABBCcAD', str.lower) --> a b c d
+    # unique_everseen('ABBcCaD', str.lower) --> a b c d
     seen = set()
 
     for element in iterable:
-        k = str(key(element))
+        k = str(key(element)) if key else element
 
         if k not in seen:
             seen.add(k)
