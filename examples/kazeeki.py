@@ -90,7 +90,7 @@ def add_tags(source, rule, field="summary", assign="k:tags"):
     return tagged
 
 
-def add_budget(source, budget_text, fixed_text="", hourly_text="", double=True):
+def add_budget(source, fixed_text="", hourly_text="", double=True):
     codes = "$£€₹"
     no_raw_budget = {"field": "k:budget_raw"}
     has_code = {"field": "k:cur_code", "include": True}
@@ -332,7 +332,7 @@ def parse_odesk(source, stream=True):
     source = add_source(source)
     source = add_posted(source, posted_rule)
     source = add_id(source, find_id_rule, field="summary")
-    source = add_budget(source, budget_text, double=False)
+    source = add_budget(source, double=False)
     source = add_tags(source, skills_rule)
     source = add_tags(source, categ_rule, assign="k:categories")
     source = clean_locations(source)
@@ -380,7 +380,7 @@ def parse_guru(source, stream=True):
     source = add_source(source)
     source = add_posted(source)
     source = add_id(source, find_id_rule)
-    source = add_budget(source, budget_text, **kwargs)
+    source = add_budget(source, **kwargs)
     source = add_tags(source, skills_rule)
     source = add_tags(source, categ_rule, assign="k:categories")
     source = clean_locations(source)
@@ -495,7 +495,7 @@ def parse_elance(source, stream=True):
     source = add_source(source)
     source = add_posted(source)
     source = add_id(source, find_id_rule)
-    source = add_budget(source, budget_text, **kwargs)
+    source = add_budget(source, **kwargs)
     source = add_tags(source, skills_rule)
     source = add_tags(source, categ_rule, assign="k:categories")
     source = clean_locations(source)
@@ -525,7 +525,7 @@ def parse_freelancer(source, stream=True):
 
     source = add_source(source)
     source = add_posted(source)
-    source = add_budget(source, budget_text)
+    source = add_budget(source)
     source = add_tags(source, skills_rule)
     source = clean_locations(source)
     source = remove_cruft(source)

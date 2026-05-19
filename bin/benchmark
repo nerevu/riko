@@ -103,7 +103,7 @@ def async_pipeline():
     d.addCallbacks(list, print)
 
 
-def async_pipe():
+def async_pipe(conf=None):
     asyncCallable = lambda conf: AsyncPipe("fetch", conf=conf).list
     d = async_imap(asyncCallable, confs)
     d.addCallbacks(list, print)
