@@ -175,7 +175,7 @@ def pipe(*args, **kwargs):
         >>>
         >>> # date
         >>> import datetime
-        >>> from pytz import utc
+        >>> from datetime import datetime as dt, UTC
         >>>
         >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
         >>> result = next(pipe(conf=conf, inputs={'content': '5/4/82'}))
@@ -194,7 +194,7 @@ def pipe(*args, **kwargs):
         ...     'daylight_savings', 'hour', 'minute', 'month', 'second',
         ...     'timezone', 'utime', 'year']
         True
-        >>> now = utc.localize(datetime.datetime.utcnow())
+        >>> now = dt.now(UTC)
         >>> td = d['date'] - now
         >>> hours = td.total_seconds() / 3600
         >>> 24 > hours > 23

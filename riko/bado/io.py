@@ -23,14 +23,14 @@ from riko import ENCODING
 from . import coroutine, return_value
 
 try:
-    from twisted.test.proto_helpers import AccumulatingProtocol
+    from twisted.internet.testing import AccumulatingProtocol
 except ImportError:
     AccumulatingProtocol = object
 else:
     from twisted.internet.reactor import callLater
+    from twisted.internet.testing import StringTransport
     from twisted.protocols.basic import FileSender
     from twisted.web.client import getPage, downloadPage
-    from twisted.test.proto_helpers import StringTransport
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 

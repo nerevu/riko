@@ -1,3 +1,34 @@
+[project]
+version = "0.67.0"
+name = "riko"
+authors = [
+    {name = "Reuben Cummings", email = "reubano@gmail.com"}
+]
+maintainers = [
+    {name = "Reuben Cummings", email = "reubano@gmail.com"}
+]
+description = "A stream processing engine modeled after Yahoo! Pipes."
+readme = "README.rst"
+license = "MIT"
+license-files = ["LICENSE*"]
+classifiers=[
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Environment :: Console",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+]
+requires-python = ">=3.10, <3.13"
 dependencies = [
     "babel>=2.8.0,<3.0.0",
     "chardet>=3.0.4,<8.0.0",
@@ -10,6 +41,7 @@ dependencies = [
     "pytz>=2019.3",
     "requests>=2.22.0,<3.0.0",
 ]
+
 [project.optional-dependencies]
 perf = [
     "lxml>=4.5.0,<7.0.0",
@@ -32,6 +64,84 @@ dev = [
     "ruff>=0.13.1",
     "scripttest>=2.0.post1",
 ]
+
+[project.scripts]
+manage = "manage:manager"
+run = "runpipe:run"
+
+[tool.ruff.lint]
+extend-select = [
+    "B", # flake8-bugbear: opinionated warnings
+    "Q", # flake8-quotes: enforce consistent quote style)
+    "E302", # pycodestyle: Two blank lines before top-level defs
+]
+
+preview = true
+
+[tool.isort]
+profile = "black"
+skip_gitignore = true
+line_length = 88
+multi_line_output = 3
+lines_between_types = 1
+combine_as_imports = true
+
+[tool.pyright]
+exclude = [
+    "**/pycache",
+    ".cache",
+    ".ruff_cache",
+    ".tox/*",
+    "tmp",
+    "build/*",
+    "dist/*",
+]
+
+[tool.pytest.ini_options]
+addopts = ["--doctest-modules", "--cov=riko"]
+
+testpaths = [
+    "tests",
+    "riko",
+]
+
+[tool.flake8]
+ignore = [
+    # handled by black/ruff
+    "W191",  # indentation contains tabs
+    "E126",  # continuation line over-indented for hanging indent
+    "E128",  # continuation line under-indented for visual indent
+    "E122",  # continuation line missing indentation or outdented
+    # do not assign a lambda expression, use a def
+    "E731",
+]
+max-complexity = 10
+max-line-length = 88
+exclude = [
+    "./build/*",
+    "./dist/*",
+    "./.tox/*",
+]
+
+[tool.pylint.format]
+max-line-length=88
+
+[tool.setuptools]
+packages = ["riko"]
+py-modules = ["manage"]
+platforms = ["MacOS X", "Windows", "Linux"]
+
+[tool.setuptools.package-data]
+data = ["riko/data/*"]
+helpers = ["helpers/*"]
+tests = ["tests/*"]
+docs = ["*.rst", "docs/*"]
+examples = ["examples/*"]
+
+[tool.uv.build-backend]
+module-name = "riko"
+module-root = ""
+
 [build-system]
 requires = ["uv_build>=0.11.3,<0.12.0"]
 build-backend = "uv_build"

@@ -5,7 +5,7 @@ riko.dates
 ~~~~~~~~~~
 Provides date and time helpers
 """
-from datetime import timedelta, datetime as dt
+from datetime import timedelta, datetime as dt, UTC
 from time import strptime
 
 import pytz
@@ -17,13 +17,13 @@ DATE_FORMAT = "%m/%d/%Y"
 DATETIME_FORMAT = "{0} %H:%M:%S".format(DATE_FORMAT)
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
-TODAY = dt.utcnow()
+TODAY = dt.now(UTC)
 
 
 def gen_tzinfos():
     for zone in pytz.common_timezones:
         try:
-            tzdate = pytz.timezone(zone).localize(dt.utcnow(), is_dst=None)
+            tzdate = dt.now(UTC).astimezone(pytz.timezone(zone))
         except pytz.NonExistentTimeError:
             pass
         else:

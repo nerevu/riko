@@ -1,32 +1,86 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
 """ A script to manage development tasks """
+import sys
+from functools import partial
+from os import environ
 from os import path as p
-from subprocess import call, check_call, CalledProcessError
-from manager import Manager
+from subprocess import CalledProcessError, call, check_call
+from sys import exit
 
-manager = Manager()
+import click
+from click import Choice
+
+from riko.helpers import exception_hook
+
 BASEDIR = p.dirname(__file__)
-DEF_WHERE = ["riko", "tests", "examples", "setup.py", "manage.py"]
+DEF_PY_WHERE = "riko examples bin helpers *.py"
+CONFIG_MODES = ["Test", "Development", "Production"]
+ARGS_KEY = f"{__name__}.args"
+
+sys.excepthook = partial(exception_hook, debug=False)
 
 
-def _upload():
-    """Upload distribution files"""
-    _uploaddir = p.join(BASEDIR, "dist", "*")
-    url = "https://upload.pypi.org/legacy/"
-    check_call(["twine", "upload", "--repository-url", url, _uploaddir])
+def parse_verbosity(verbose=0, quiet=None):
+    if quiet:
+        verbosity = "0"
+    elif verbose:
+        verbosity = str(verbose)
+    else:
+        verbosity = ""
+
+    return verbosity
 
 
-def _sdist():
-    """Create a source distribution package"""
-    check_call(p.join(BASEDIR, "helpers", "srcdist"))
+@click.group()
+@click.option(
+    "-f",
+    "--config-file",
+    type=p.abspath,
+    help="Loads a configuration from a file (overrides `config-envvar` and `config-mode`).",
+)
+@click.option(
+    "-E",
+    "--config-envvar",
+    help="Loads a configuration from an environment variable pointing to a configuration file (overrides `config-mode`, overridden by `config-file`).",
+)
+@click.option(
+    "-m",
+    "--config-mode",
+    type=Choice(CONFIG_MODES, case_sensitive=False),
+    default="Development",
+    help="Loads configuration from the preset mode (overridden by `config-file` and `config-envvar`).",
+)
+@click.option(
+    "-v",
+    "--verbose",
+    help="Specify multiple times to increase logging verbosity (overridden by -q)",
+    count=True,
+)
+@click.option("-q", "--quiet", help="Only log errors (overrides -v)", is_flag=True)
+@click.pass_context
+def manager(ctx, verbose=0, quiet=False, **kwargs):
+    cmd = ctx.command.get_command(ctx, ctx.invoked_subcommand)
+    args = ctx.meta.get(ARGS_KEY)
+    cmd.parse_args(ctx, args)
+    verbose = ctx.params["verbose"]
+    environ["VERBOSITY"] = parse_verbosity(verbose, quiet)
 
 
-def _wheel():
-    """Create a wheel package"""
-    check_call(p.join(BASEDIR, "helpers", "wheel"))
+@manager.command()
+def hello():
+    """Says hello"""
+    print("Hello world")
+
+
+@manager.command()
+@click.pass_context
+def help(ctx):
+    """Show available commands"""
+    commands = "\n  ".join(manager.list_commands(ctx))
+    print("Usage: manage <command> [OPTIONS]")
+    print("commands:")
+    print(f"  {commands}")
 
 
 def _clean():
@@ -34,142 +88,112 @@ def _clean():
     check_call(p.join(BASEDIR, "helpers", "clean"))
 
 
-@manager.command
+@manager.command()
 def check():
     """Check staged changes for lint errors"""
     exit(call(p.join(BASEDIR, "helpers", "check-stage")))
 
 
-@manager.arg("where", "w", help="Modules to check")
-@manager.arg("strict", "s", help="Check with pylint")
-@manager.command
-def lint(where=None, strict=False):
-    """Check style with linters"""
-    extra = where.split(" ") if where else DEF_WHERE
-    args = ["pylint", "--rcfile=tests/pylintrc", "-rn", "-fparseable"]
-
-    try:
-        if strict:
-            check_call(args + extra)
-        else:
-            check_call(["flake8"] + extra)
-    except CalledProcessError as e:
-        exit(e.returncode)
-
-
-@manager.arg("where", "w", help="Modules to check")
-@manager.command
-def prettify(where=None):
-    """Prettify code with black"""
-    extra = where.split(" ") if where else DEF_WHERE
-
-    try:
-        check_call(["black"] + extra)
-    except CalledProcessError as e:
-        exit(e.returncode)
-
-
-@manager.command
-def require():
-    """Create requirements.txt"""
-    cmd = "pip freeze -l | grep -vxFf dev-requirements.txt > requirements.txt"
-    exit(call(cmd, shell=True))
-
-
-@manager.arg("where", "w", help="test path", default=None)
-@manager.arg("stop", "x", help="Stop after first error", type=bool, default=False)
-@manager.arg("failed", "f", help="Run failed tests", type=bool, default=False)
-@manager.arg("cover", "c", help="Add coverage report", type=bool, default=False)
-@manager.arg("tox", "t", help="Run tox tests", type=bool, default=False)
-@manager.arg("detox", "d", help="Run detox tests", type=bool, default=False)
-@manager.arg("verbose", "v", help="Use detailed errors", type=bool, default=False)
-@manager.arg(
-    "parallel",
-    "p",
-    help="Run tests in parallel in multiple processes",
-    type=bool,
-    default=False,
+@manager.command()
+@click.option("-w", "--where", help="Modules to check", default=DEF_PY_WHERE)
+@click.option("-f", "--fix", help="Fix errors", is_flag=True)
+@click.option("-s", "--strict", help="Check with pylint", is_flag=True)
+@click.option(
+    "-p",
+    "--parallel",
+    help="Run linter in parallel in multiple processes",
+    is_flag=True,
 )
-@manager.arg("debug", "D", help="Use nose.loader debugger", type=bool, default=False)
-@manager.command
+def lint(where=DEF_PY_WHERE, fix=False, strict=False, parallel=False):
+    """Check style with linters"""
+    args = "pylint --rcfile=tests/standard.rc -rn -fparseable riko"
+    args += " -j 0" if parallel else ""
+    r_args = "ruff check --fix" if fix else "ruff check"
+    r_args += f" {where}" if where else ""
+
+    try:
+        check_call(r_args.split(" "))
+        check_call(args.split(" ")) if strict else None
+    except CalledProcessError as e:
+        exit(e.returncode)
+
+
+@manager.command()
+@click.option("-w", "--where", help="Modules to check")
+@click.option("-s", "--sort", help="Sort module imports", is_flag=True)
+def prettify(where, sort=False):
+    """Prettify code with ruff"""
+    extra = where.split(" ") if where else []
+
+    try:
+        args = ["ruff", "check", "--select", "I", "--fix"]
+        check_call(args + extra) if sort else None
+        check_call(["ruff", "format"] + extra)
+    except CalledProcessError as e:
+        return_code = e.returncode
+    else:
+        return_code = 0
+
+    exit(return_code)
+
+
+@manager.command()
+@click.option("-w", "--where", help="test path", default=None)
+@click.option("-x", "--stop", help="Stop after first error", is_flag=True)
+@click.option("-f", "--failed", help="Run failed tests", is_flag=True)
+@click.option("-c", "--cover", help="Add coverage report", is_flag=True)
+@click.option("-t", "--tox", help="Run tox tests", is_flag=True)
+@click.option("-d", "--detox", help="Run detox tests", is_flag=True)
+@click.option("-v", "--verbose", help="Use detailed errors", is_flag=True)
+@click.option(
+    "-p",
+    "--parallel",
+    help="Run tests in parallel in multiple processes",
+    is_flag=True,
+)
 def test(where=None, stop=None, **kwargs):
-    """Run nose, tox, and script tests"""
+    """Run pytest, tox, and script tests"""
     opts = "-xv" if stop else "-v"
-    opts += " --with-coverage" if kwargs.get("cover") else ""
-    opts += " --failed" if kwargs.get("failed") else " --with-id"
-    opts += " --processes=-1" if kwargs.get("parallel") else ""
-    opts += " --detailed-errors" if kwargs.get("verbose") else ""
-    opts += " --debug=nose.loader" if kwargs.get("debug") else ""
-    opts += " -w %s" % where if where else ""
+    opts += " --cov=riko" if kwargs.get("cover") else ""
+    opts += " --last-failed" if kwargs.get("failed") else ""
+    opts += " --numprocesses=auto" if kwargs.get("parallel") else ""
+    opts += " --tb=long -ra" if kwargs.get("verbose") else ""
+    opts += f" {where}" if where else ""
 
     try:
-        if kwargs.get("tox"):
-            check_call("tox")
-        elif kwargs.get("detox"):
-            check_call("detox")
+        if kwargs.get("tox") and kwargs.get("parallel"):
+            check_call(["uv", "run", "tox", "-p"])
+        elif kwargs.get("tox"):
+            check_call("uv run tox", shell=True)
         else:
-            check_call(("nosetests %s" % opts).split(" "))
+            check_call(("pytest %s" % opts).split(" "))
     except CalledProcessError as e:
         exit(e.returncode)
 
 
-@manager.command
-def register():
-    """Register package with PyPI"""
-    exit(call("python", p.join(BASEDIR, "setup.py"), "register"))
-
-
-@manager.command
-def release():
-    """Package and upload a release"""
-    try:
-        _clean()
-        _sdist()
-        _wheel()
-        _upload()
-    except CalledProcessError as e:
-        exit(e.returncode)
-
-
-@manager.command
+@manager.command()
 def build():
-    """Create a source distribution and wheel package"""
+    """Build riko package"""
     try:
         _clean()
-        _sdist()
-        _wheel()
+        check_call("uv build", shell=True)
     except CalledProcessError as e:
         exit(e.returncode)
 
 
-@manager.command
-def upload():
-    """Upload distribution files"""
-    try:
-        _upload()
-    except CalledProcessError as e:
-        exit(e.returncode)
+@manager.command()
+@click.option("-d", "--dry-run", help="Test that the package can be installed and imported", is_flag=True)
+def publish(dry_run=False):
+    """Publish riko to PyPI"""
+    if dry_run:
+        cmd = 'uv run --with riko --no-project -- python -c "import riko"'
+    else:
+        cmd = "uv publish"
+
+    check_call(cmd, shell=True)
 
 
-@manager.command
-def sdist():
-    """Create a source distribution package"""
-    try:
-        _sdist()
-    except CalledProcessError as e:
-        exit(e.returncode)
-
-
-@manager.command
-def wheel():
-    """Create a wheel package"""
-    try:
-        _wheel()
-    except CalledProcessError as e:
-        exit(e.returncode)
-
-
-@manager.command
+@manager.command()
 def clean():
     """Remove Python file and build artifacts"""
     try:
@@ -179,4 +203,4 @@ def clean():
 
 
 if __name__ == "__main__":
-    manager.main()
+    manager()

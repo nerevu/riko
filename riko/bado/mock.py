@@ -16,7 +16,7 @@ import pygogo as gogo
 from . import reactor
 
 try:
-    from twisted.test.proto_helpers import MemoryReactorClock
+    from twisted.internet.testing import MemoryReactorClock
 except ImportError:
     MemoryReactorClock = object
     FakeReactor = lambda _: lambda: None

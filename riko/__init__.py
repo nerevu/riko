@@ -31,15 +31,30 @@ Examples:
         True
 """
 from os import path as p
+from importlib.metadata import version, metadata
 
-__version__ = "0.67.0"
+# https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
+meta = metadata("riko")
 
-__title__ = "riko"
-__package_name__ = "riko"
-__author__ = "Reuben Cummings"
-__description__ = "A stream processing engine modeled after Yahoo! Pipes."
-__email__ = "reubano@gmail.com"
-__license__ = "MIT"
+PACKAGE_INFO = {
+    "__version__": version("riko"),
+    "__title__": meta["Name"],
+    "__package_name__": meta["Name"],
+    "__description__": meta.get("Summary") or meta.get("Description", ""),
+    "__license__": meta.get("License-Expression") or meta.get("License", ""),
+    "__author__": meta.get("Author", ""),
+    "__email__": meta.get("Author-email", ""),
+}
+
+
+def __getattr__(name: str) -> str:
+    if name in PACKAGE_INFO:
+        return PACKAGE_INFO[name]
+    else:
+        msg = f"module {__name__} has no attribute {name}"
+        raise AttributeError(msg)
+
+
 __copyright__ = "Copyright 2015 Reuben Cummings"
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
