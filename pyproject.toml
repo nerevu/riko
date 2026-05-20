@@ -59,9 +59,11 @@ dev = [
     "coverage>=4.3.4,<8.0.0",
     "flake8-ruff>=0.3.1",
     "flake8>=3.7.9,<8.0.0",
+    "pytest>=8.0.0",
     "pytest-cov>=7.0.0,<8.0.0",
     "pylint>=4.0.5,<5.0.0",
     "ruff>=0.13.1",
+    "pytest-xdist>=3.8.0",
     "scripttest>=2.0.post1",
 ]
 
@@ -98,12 +100,9 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--doctest-modules", "--cov=riko"]
-
-testpaths = [
-    "tests",
-    "riko",
-]
+addopts = ["--doctest-modules", "--cov=riko", "--tb=short"]
+testpaths = ["tests", "riko"]
+doctest_optionflags = ["ELLIPSIS"]
 
 [tool.flake8]
 ignore = [

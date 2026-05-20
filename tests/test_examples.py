@@ -6,23 +6,11 @@ tests.test_examples
 
 Provides example pipeline tests.
 """
-import nose.tools as nt
-
 from importlib import import_module
 from decimal import Decimal
 
 
-def setup_module():
-    """site initialization"""
-    global initialized
-    initialized = True
-    print("Basic Module Setup\n")
-
-
 class TestExamples(object):
-    def __init__(self):
-        self.cls_initialized = False
-
     def _get_pipeline(self, pipe_name):
         module = import_module("examples.%s" % pipe_name)
         pipeline = module.pipe(test=True)
@@ -75,8 +63,8 @@ class TestExamples(object):
         expected = 180
         length = len(pipeline)
         msg = "Pipeline %s has length %i, not %i"
-        nt.assert_equal(length, expected, msg % (pipe_name, length, expected))
-        nt.assert_equal(example, pipeline[-1])
+        assert length == expected, msg % (pipe_name, length, expected)
+        assert example == pipeline[-1]
 
     def test_gigs(self):
         """Tests the gigs pipeline"""
@@ -122,8 +110,8 @@ class TestExamples(object):
 
         length = len(pipeline)
         msg = "Pipeline %s has length %i, not 1"
-        nt.assert_equal(length, 49, msg % (pipe_name, length))
-        nt.assert_equal(example, pipeline[-1])
+        assert length == 49, msg % (pipe_name, length)
+        assert example == pipeline[-1]
 
     def test_simple1(self):
         """Tests the simple1 pipeline"""
@@ -131,8 +119,8 @@ class TestExamples(object):
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
         msg = "Pipeline %s has length %i, not 1"
-        nt.assert_equal(length, 1, msg % (pipe_name, length))
-        nt.assert_equal({"url": "farechart"}, pipeline[-1])
+        assert length == 1, msg % (pipe_name, length)
+        assert {"url": "farechart"} == pipeline[-1]
 
     def test_simple2(self):
         """Tests the simple2 pipeline"""
@@ -142,8 +130,8 @@ class TestExamples(object):
 
         length = len(pipeline)
         msg = "Pipeline %s has length %i, not 1"
-        nt.assert_equal(length, 1, msg % (pipe_name, length))
-        nt.assert_equal(example, pipeline[-1])
+        assert length == 1, msg % (pipe_name, length)
+        assert example == pipeline[-1]
 
     def test_split(self):
         """Tests the split pipeline"""
@@ -152,8 +140,8 @@ class TestExamples(object):
         example = {"date": "December 02, 2014", "year": 2014}
         length = len(pipeline)
         msg = "Pipeline %s has length %i, not 1"
-        nt.assert_equal(length, 1, msg % (pipe_name, length))
-        nt.assert_equal(example, pipeline[-1])
+        assert length == 1, msg % (pipe_name, length)
+        assert example == pipeline[-1]
 
     def test_wired(self):
         """Tests the wired pipeline"""
@@ -161,5 +149,5 @@ class TestExamples(object):
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
         msg = "Pipeline %s has length %i, not 1"
-        nt.assert_equal(length, 1, msg % (pipe_name, length))
-        nt.assert_equal({"date": "May 04, 1982"}, pipeline[-1])
+        assert length == 1, msg % (pipe_name, length)
+        assert {"date": "May 04, 1982"} == pipeline[-1]

@@ -156,17 +156,21 @@ def test(where=None, stop=None, **kwargs):
     opts = "-xv" if stop else "-v"
     opts += " --cov=riko" if kwargs.get("cover") else ""
     opts += " --last-failed" if kwargs.get("failed") else ""
-    opts += " --numprocesses=auto" if kwargs.get("parallel") else ""
     opts += " --tb=long -ra" if kwargs.get("verbose") else ""
     opts += f" {where}" if where else ""
 
     try:
         if kwargs.get("tox") and kwargs.get("parallel"):
-            check_call(["uv", "run", "tox", "-p"])
+            check_call(["uv", "run", "tox", "-p", "auto"])
         elif kwargs.get("tox"):
             check_call("uv run tox", shell=True)
         else:
-            check_call(("pytest %s" % opts).split(" "))
+            params = ("pytest %s" % opts).split(" ")
+
+            if kwargs.get("parallel"):
+                params += ["-n", "auto"]
+
+            check_call(params)
     except CalledProcessError as e:
         exit(e.returncode)
 
