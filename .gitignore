@@ -69,4 +69,4 @@ build/*
 .vscode
 callgraph.svg
 ttyrecord
-
+*.local.json
