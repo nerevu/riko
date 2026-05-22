@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # remove build artifacts
-rm -fr dist/
+rm -rf dist/ build/ *.egg-info src/*.egg-info
 
 # remove Python file artifacts
 find . -name '*.pyc' -exec rm -f {} +

@@ -17,16 +17,14 @@ from difflib import unified_diff, SequenceMatcher
 from os import path as p
 from io import StringIO, open
 
-sys.path.append("../riko")
-
 try:
     from riko.bado import _issync
 except ImportError:
     _issync = True
 
 PARENT_DIR = p.abspath(p.dirname(p.dirname(__file__)))
-DEMO_SCRIPT = p.join(PARENT_DIR, "bin", "runpipe")
-BENCHMARK_SCRIPT = p.join(PARENT_DIR, "bin", "benchmark")
+DEMO_SCRIPT = "runpipe"
+BENCHMARK_SCRIPT = "benchmark"
 DEMO_TEXT = "Deadline to clear up health law eligibility near 682\n"
 BENCHMARK_TEXTS = [
     "baseline_sync - 1 repetitions/loop, best of 1 loops",
@@ -67,7 +65,7 @@ def run_command(script: str, argument: str, *opts: str) -> str:
     return result.stdout
 
 
-def assert_output_matches(output: str, *expects, short_command: str = "", partial=False) -> None:
+def assert_output_matches(output: str, *expects, command: str = "", partial=False) -> None:
     """Assert that *output* matches *expected*.
 
     *expected* can be:
@@ -98,12 +96,12 @@ def assert_output_matches(output: str, *expects, short_command: str = "", partia
             s = SequenceMatcher(None, checkwords, outwords)
             blocks = s.get_matching_blocks()
             diffs = f"{checklines} not found in {outlines}"
-            msg = f"Output for {short_command} doesn't match expected.\n{diffs}"
+            msg = f"Output for {command} doesn't match expected.\n{diffs}"
             assert blocks[0].size == 7, msg
         else:
             args = ("expected", "got")
             diffs = "".join(unified_diff(checklines, outlines, *args))
-            msg = f"Output for {short_command} doesn't match expected.\n{diffs}"
+            msg = f"Output for {command} doesn't match expected.\n{diffs}"
             assert not diffs, msg
 
 
@@ -117,10 +115,9 @@ def gen_params():
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_sync(value):
     argument, expected = value
-    short_script = p.basename(DEMO_SCRIPT)
-    short_command = f"{short_script} {argument}"
+    command = f"{DEMO_SCRIPT} {argument}"
     output = run_command(DEMO_SCRIPT, argument)
-    assert_output_matches(output, expected, short_command=short_command)
+    assert_output_matches(output, expected, command=command)
 
 
 @pytest.mark.skipif(_issync, reason="async support not available")
@@ -129,19 +126,14 @@ def test_demo_async(value):
     argument, expected = value
     opts = ["-a"]
 
-    short_script = p.basename(DEMO_SCRIPT)
     joined_opts = " ".join(opts)
-    short_command = f"{short_script} {joined_opts} {argument}"
+    command = f"{DEMO_SCRIPT} {joined_opts} {argument}"
 
     output = run_command(DEMO_SCRIPT, argument, *opts)
-    assert_output_matches(output, expected, short_command=short_command)
+    assert_output_matches(output, expected, command=command)
 
 
 def test_benchmark():
     output = run_command(BENCHMARK_SCRIPT, "")
-    kwargs = {
-        "short_command": p.basename(BENCHMARK_SCRIPT),
-        "partial": True
-    }
-
+    kwargs = {"command": BENCHMARK_SCRIPT, "partial": True}
     assert_output_matches(output, *BENCHMARK_TEXTS, **kwargs)

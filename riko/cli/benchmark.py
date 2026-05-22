@@ -2,18 +2,11 @@
 # -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
-import sys
-
-from os import path as p
 from functools import partial
 from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing import Pool
 from time import time, sleep
 from itertools import chain
-
-from builtins import *  # noqa # pylint: disable=unused-import
-
-sys.path.append("../riko")
 
 from riko import get_path
 from riko.bado import coroutine, return_value, react
@@ -33,7 +26,6 @@ NUMBER = 1
 LOOPS = 1
 DELAY = 0.1
 
-parent = p.join(p.abspath(p.dirname(p.dirname(__file__))), "data")
 files = [
     "ouseful.xml",
     "feed.xml",
@@ -152,7 +144,7 @@ def run_async(reactor, tests, max_chars):
     return_value(None)
 
 
-if __name__ == "__main__":
+def main():
     from timeit import repeat
 
     run = partial(repeat, repeat=LOOPS, number=NUMBER)
@@ -171,8 +163,12 @@ if __name__ == "__main__":
     max_chars = max(list(map(len, combined_tests)))
 
     for test in sync_tests:
-        results = run("%s()" % test, setup="from __main__ import %s" % test)
+        results = run("%s()" % test, setup="from riko.cli.benchmark import %s" % test)
         run_time, units = parse_results(results)
         print_time(test, max_chars, run_time, units)
 
     react(run_async, [async_tests, max_chars])
+
+
+if __name__ == "__main__":
+    main()

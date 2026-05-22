@@ -9,14 +9,10 @@ from subprocess import CalledProcessError, call, check_call
 from sys import exit
 
 import click
-from click import Choice
 
 from riko.helpers import exception_hook
 
-BASEDIR = p.dirname(__file__)
-DEF_PY_WHERE = "riko examples bin helpers *.py"
-CONFIG_MODES = ["Test", "Development", "Production"]
-ARGS_KEY = f"{__name__}.args"
+BASEDIR = p.dirname(p.dirname(p.dirname(p.abspath(__file__))))
 
 sys.excepthook = partial(exception_hook, debug=False)
 
@@ -34,24 +30,6 @@ def parse_verbosity(verbose=0, quiet=None):
 
 @click.group()
 @click.option(
-    "-f",
-    "--config-file",
-    type=p.abspath,
-    help="Loads a configuration from a file (overrides `config-envvar` and `config-mode`).",
-)
-@click.option(
-    "-E",
-    "--config-envvar",
-    help="Loads a configuration from an environment variable pointing to a configuration file (overrides `config-mode`, overridden by `config-file`).",
-)
-@click.option(
-    "-m",
-    "--config-mode",
-    type=Choice(CONFIG_MODES, case_sensitive=False),
-    default="Development",
-    help="Loads configuration from the preset mode (overridden by `config-file` and `config-envvar`).",
-)
-@click.option(
     "-v",
     "--verbose",
     help="Specify multiple times to increase logging verbosity (overridden by -q)",
@@ -60,10 +38,6 @@ def parse_verbosity(verbose=0, quiet=None):
 @click.option("-q", "--quiet", help="Only log errors (overrides -v)", is_flag=True)
 @click.pass_context
 def manager(ctx, verbose=0, quiet=False, **kwargs):
-    cmd = ctx.command.get_command(ctx, ctx.invoked_subcommand)
-    args = ctx.meta.get(ARGS_KEY)
-    cmd.parse_args(ctx, args)
-    verbose = ctx.params["verbose"]
     environ["VERBOSITY"] = parse_verbosity(verbose, quiet)
 
 
@@ -85,17 +59,32 @@ def help(ctx):
 
 def _clean():
     """Remove Python file and build artifacts"""
-    check_call(p.join(BASEDIR, "helpers", "clean"))
+    check_call(p.join(BASEDIR, "bin", "clean"))
+
+
+def _build():
+    """Build riko package"""
+    check_call("uv build", shell=True)
+
+
+def _publish(dry_run=False):
+    """Publish riko to PyPI"""
+    if dry_run:
+        cmd = 'uv run --with riko --no-project -- python -c "import riko"'
+    else:
+        cmd = "uv publish"
+
+    check_call(cmd, shell=True)
 
 
 @manager.command()
 def check():
     """Check staged changes for lint errors"""
-    exit(call(p.join(BASEDIR, "helpers", "check-stage")))
+    exit(call(p.join(BASEDIR, "bin", "check-stage")))
 
 
 @manager.command()
-@click.option("-w", "--where", help="Modules to check", default=DEF_PY_WHERE)
+@click.option("-w", "--where", help="Modules to check")
 @click.option("-f", "--fix", help="Fix errors", is_flag=True)
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
 @click.option(
@@ -104,7 +93,7 @@ def check():
     help="Run linter in parallel in multiple processes",
     is_flag=True,
 )
-def lint(where=DEF_PY_WHERE, fix=False, strict=False, parallel=False):
+def lint(where=None, fix=False, strict=False, parallel=False):
     """Check style with linters"""
     args = "pylint --rcfile=tests/standard.rc -rn -fparseable riko"
     args += " -j 0" if parallel else ""
@@ -176,11 +165,20 @@ def test(where=None, stop=None, **kwargs):
 
 
 @manager.command()
+def clean():
+    """Remove Python file and build artifacts"""
+    try:
+        _clean()
+    except CalledProcessError as e:
+        exit(e.returncode)
+
+
+@manager.command()
 def build():
     """Build riko package"""
     try:
         _clean()
-        check_call("uv build", shell=True)
+        _build()
     except CalledProcessError as e:
         exit(e.returncode)
 
@@ -189,19 +187,20 @@ def build():
 @click.option("-d", "--dry-run", help="Test that the package can be installed and imported", is_flag=True)
 def publish(dry_run=False):
     """Publish riko to PyPI"""
-    if dry_run:
-        cmd = 'uv run --with riko --no-project -- python -c "import riko"'
-    else:
-        cmd = "uv publish"
+    try:
+        _publish(dry_run)
+    except CalledProcessError as e:
+        exit(e.returncode)
 
-    check_call(cmd, shell=True)
 
 
 @manager.command()
-def clean():
-    """Remove Python file and build artifacts"""
+@click.option("-d", "--dry-run", help="Test that the package can be installed and imported", is_flag=True)
+def release(dry_run=False):
+    """Build and publish new riko version"""
     try:
-        _clean()
+        _build()
+        _publish(dry_run)
     except CalledProcessError as e:
         exit(e.returncode)
 

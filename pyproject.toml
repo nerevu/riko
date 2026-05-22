@@ -69,8 +69,9 @@ dev = [
 ]
 
 [project.scripts]
-manage = "manage:manager"
-run = "runpipe:run"
+manage = "riko.cli.manage:manager"
+runpipe = "riko.cli.runpipe:run"
+benchmark = "riko.cli.benchmark:main"
 
 [tool.ruff.lint]
 extend-select = [
@@ -141,7 +142,6 @@ disable = [
 
 [tool.setuptools]
 packages = ["riko"]
-py-modules = ["manage"]
 platforms = ["MacOS X", "Windows", "Linux"]
 
 [tool.setuptools.package-data]
