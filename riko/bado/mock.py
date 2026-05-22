@@ -30,22 +30,28 @@ class FakeReactor(MemoryReactorClock):
     they will never succeed.
 
     Examples:
-        >>> import sys
-        >>>
         >>> try:
         ...     from twisted import internet
         ... except ImportError:
         ...     pass
         ... else:
+        ...     import os
         ...     from twisted.internet.fdesc import readFromFD, setNonBlocking
+        ...
         ...     FileDescriptor = internet.abstract.FileDescriptor
         ...
         ...     reactor = FakeReactor()
         ...     f = FileDescriptor(reactor)
-        ...     f.fileno = sys.__stdout__.fileno
+        ...     r_fd, w_fd = os.pipe()
+        ...     os.write(w_fd, b'riko')
+        ...     os.close(w_fd)
+        ...     f.fileno = lambda: r_fd
         ...     fd = f.fileno()
         ...     setNonBlocking(fd)
         ...     readFromFD(fd, print)
+        ...     os.close(r_fd)
+        4
+        b'riko'
     """
 
     _DELAY = 1
