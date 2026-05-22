@@ -80,11 +80,6 @@ def make_blocking(f):
         fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
 
 
-if "nose" in sys.modules:
-    logger.debug("Running in nose environment...")
-    make_blocking(sys.stderr)
-
-
 def default_user_agent(name="riko"):
     """
     Return a string representing the default user agent.
