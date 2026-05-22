@@ -23,13 +23,14 @@ Attributes:
     DEFAULTS (dict): The default parser options
 """
 from os import path as p
+from typing import Mapping
 
 import pygogo as gogo
 
 from . import processor
 from riko.bado import coroutine, return_value, io
 from riko.parsers import any2dict
-from riko.utils import fetch, get_abspath
+from riko.utils import fetch
 
 OPTS = {"ftype": "none"}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -74,9 +75,8 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        ext = p.splitext(url)[1].lstrip(".")
-        f = yield io.async_url_open(url)
+        ext = p.splitext(objconf.url)[1].lstrip(".")
+        f = yield io.async_url_open(objconf.url)
         stream = any2dict(f, ext, objconf.html5, path=objconf.path)
         f.close()
 
@@ -111,14 +111,16 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        ext = p.splitext(url)[1].lstrip(".")
+        ext = p.splitext(objconf.url)[1].lstrip(".")
 
         with fetch(**objconf) as f:
             ext = ext or f.ext
             stream = any2dict(f, ext, objconf.html5, path=objconf.path)
 
-    return stream
+    if isinstance(stream, (Mapping, str, int)):
+        yield stream
+    else:
+        yield from stream
 
 
 @processor(isasync=True, **OPTS)

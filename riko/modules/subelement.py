@@ -57,8 +57,8 @@ from . import processor
 from riko.utils import gen_items
 import pygogo as gogo
 
-OPTS = {"emit": True}
-DEFAULTS = {"token_key": "content"}
+OPTS = {}
+DEFAULTS = {"token_key": "content", "emit": True}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 

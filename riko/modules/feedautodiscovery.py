@@ -22,10 +22,10 @@ Examples:
         >>> from riko.modules.feedautodiscovery import pipe
         >>>
         >>> entry = next(pipe(conf={'url': get_path('bbc.html')}))
-        >>> sorted(entry) == ['href', 'hreflang', 'link', 'rel', 'tag']
-        True
-        >>> entry['link'] == 'file://riko/data/greenhughes.xml'
-        True
+        >>> sorted(entry)
+        ['href', 'hreflang', 'link', 'rel', 'tag']
+        >>> entry['link']
+        'greenhughes.xml'
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -35,7 +35,6 @@ import pygogo as gogo
 
 from . import processor
 from riko import autorss
-from riko.utils import get_abspath
 from riko.bado import coroutine, return_value
 
 
@@ -76,13 +75,12 @@ def async_parser(_, objconf, skip=False, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        file://riko/data/greenhughes.xml
+        greenhughes.xml
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        stream = yield autorss.async_get_rss(url)
+        stream = yield autorss.async_get_rss(objconf.url)
 
     return_value(stream)
 
@@ -108,14 +106,13 @@ def parser(_, objconf, skip=False, **kwargs):
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
         >>> result = parser(None, objconf, stream={})
-        >>> next(result)['link'] == 'file://riko/data/greenhughes.xml'
-        True
+        >>> next(result)['link']
+        'greenhughes.xml'
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        stream = autorss.get_rss(url)
+        stream = autorss.get_rss(objconf.url)
 
     return stream
 
@@ -152,7 +149,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        file://riko/data/greenhughes.xml
+        greenhughes.xml
     """
     return async_parser(*args, **kwargs)
 
@@ -176,7 +173,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from riko import get_path
         >>> conf = {'url': get_path('bbc.html')}
-        >>> next(pipe(conf=conf))['link'] == 'file://riko/data/greenhughes.xml'
-        True
+        >>> next(pipe(conf=conf))['link']
+        'greenhughes.xml'
     """
     return parser(*args, **kwargs)

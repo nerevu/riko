@@ -32,19 +32,19 @@ from meza.compat import decode
 
 from . import processor
 from riko.bado import coroutine, return_value, requests as treq, io
-from riko.utils import fetch, get_abspath
+from riko.utils import fetch
 
 EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_APP_ID")}
 
-OPTS = {"field": "content", "ftype": "text"}
+OPTS = {"ftype": "text", "field": "content"}
 DEFAULTS = {
     "currency": "USD",
     "delay": 0,
     "memoize": True,
     "precision": 6,
     "url": EXCHANGE_API,
-    "params": PARAMS,
+    "param": PARAMS,
 }
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -130,11 +130,10 @@ def async_parser(base, objconf, skip=False, **kwargs):
     elif same_currency:
         rate = Decimal(1)
     elif objconf.url.startswith("http"):
-        r = yield treq.get(objconf.url, params=objconf.params)
+        r = yield treq.get(objconf.url, param=objconf.param)
         json = yield treq.json(r)
     else:
-        url = get_abspath(objconf.url)
-        content = yield io.async_url_read(url, delay=objconf.delay)
+        content = yield io.async_url_read(objconf.url, delay=objconf.delay)
         json = loads(decode(content))
 
     if not (skip or same_currency):
@@ -213,12 +212,12 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'delay', 'memoize', or 'field'.
+            'param', 'currency', 'delay', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
 
-            params (dict): The API url parameters (default: {'format': 'json'})
+            param (dict): The API url parameters (default: {'format': 'json'})
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
 
@@ -269,12 +268,12 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'delay', 'memoize', or 'field'.
+            'param', 'currency', 'delay', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
 
-            params (dict): The API url parameters (default: {'format': 'json'})
+            param (dict): The API url parameters (default: {'format': 'json'})
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
 

@@ -5,6 +5,7 @@ riko.utils
 ~~~~~~~~~~~~~~
 Provides utility classes and functions
 """
+import builtins
 import re
 import sys
 import itertools as it
@@ -13,13 +14,14 @@ import fcntl
 from collections import deque
 from math import isnan
 from enum import Enum, auto
-from functools import partial, wraps
+from functools import partial, reduce, wraps
 from operator import itemgetter
 from os import O_NONBLOCK, path as p
 from io import BytesIO, StringIO, TextIOBase
+from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, TypeVar
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
-from graphlib import TopologicalSorter
+from riko.dotdict import DotDict
 
 from werkzeug.local import LocalProxy
 
@@ -27,17 +29,13 @@ import requests
 import pygogo as gogo
 import mezmorize
 
-try:
-    import __builtin__ as _builtins
-except ImportError:
-    import builtins as _builtins
-
 from meza import compat
 from meza.io import reencode
 from meza.fntools import SleepyDict, listize
 from mezmorize.utils import get_cache_type
-from riko import ENCODING, __version__
+from riko import ENCODING, Context, __version__, get_abspath, replacer
 from riko.cast import cast
+from riko.types import Item, ItemFunc, PipeDef, PipelineDependencies, SyncPipeline
 
 
 _registry = {}
@@ -47,26 +45,11 @@ logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
 
 DEF_NS = "https://github.com/nerevu/riko"
+T = TypeVar('T')
 
 
-class Stream(Enum):
-    PENDING = auto()
-    DONE = auto()
-
-
-def get_abspath(url):
-    url = "http://%s" % url if url and "://" not in url else url
-
-    if url and url.startswith("file:///"):
-        # already have an abspath
-        pass
-    elif url and url.startswith("file://"):
-        parent = p.dirname(p.dirname(__file__))
-        rel_path = url[7:]
-        abspath = p.abspath(p.join(parent, rel_path))
-        url = "file://%s" % abspath
-
-    return compat.decode(url)
+def combine_dicts(*dicts: dict[str, Any]) -> dict[str, Any]:
+    return dict(it.chain.from_iterable(map(dict.items, dicts)))
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1
@@ -88,6 +71,11 @@ def default_user_agent(name="riko"):
     return "%s/%s" % (name, __version__)
 
 
+class StreamState(Enum):
+    PENDING = auto()
+    DONE = auto()
+
+
 class Chainable(object):
     def __init__(self, data, method=None):
         self.data = data
@@ -95,7 +83,7 @@ class Chainable(object):
         self.list = list(data)
 
     def __getattr__(self, name):
-        funcs = (partial(getattr, x) for x in [self.data, _builtins, it])
+        funcs = (partial(getattr, x) for x in [self.data, builtins, it])
         zipped = zip(funcs, it.repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)
@@ -168,10 +156,20 @@ def auto_close(stream, f):
         f.close()
 
 
-def opener(url, memoize=False, delay=0, encoding=ENCODING, params=None, **kwargs):
+def opener(
+    url,
+    memoize=False,
+    delay=0,
+    encoding=ENCODING,
+    params=None,
+    offline=True,
+    **kwargs
+):
     params = params or {}
     timeout = kwargs.get("timeout")
     decode = kwargs.get("decode")
+
+    url = get_abspath(url, offline=offline)
 
     if url.startswith("http") and params:
         r = requests.get(url, params=params, stream=True)
@@ -221,14 +219,14 @@ def get_opener(memoize=False, **kwargs):
 
 class fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
-    def __init__(self, url=None, memoize=False, **kwargs):
+    def __init__(self, url: str, memoize=False, **kwargs):
         # TODO: need to use separate timeouts for memoize and urlopen
         if memoize:
             self.opener = LocalProxy(lambda: get_opener(memoize=True, **kwargs))
         else:
             self.opener = get_opener(**kwargs)
 
-        responses = self.opener(get_abspath(url))
+        responses = self.opener(url)
 
         try:
             response, self.content_type = responses
@@ -364,8 +362,8 @@ def betwix(iterable, start=None, stop=None, inc=False):
     return last
 
 
-def dispatch(split, *funcs):
-    """takes a tuple of items and delivers each item to a different function
+def dispatch(split: Iterable[Any], *funcs: ItemFunc) -> list[Any]:
+    """Takes a tuple of items and delivers each item to a different function
 
            /--> item1 --> double(item1) -----> \
           /                                     \
@@ -385,8 +383,10 @@ def dispatch(split, *funcs):
     return [func(item) for item, func in zip(split, funcs)]
 
 
-def broadcast(item, *funcs):
-    """delivers the same item to different functions
+def broadcast(item: Item, *funcs: ItemFunc) -> list[Any]:
+    """Delivers the same item to different functions.
+
+    Differs from `map` which applies multiple items to the same function.
 
            /--> item --> double(item) -----> \
           /                                   \
@@ -635,24 +635,27 @@ def actor(registry_name=None, maxlen=256):
     return decorator
 
 
-def gen_dependencies(pipe_def):
+def gen_dependencies(pipe_def: PipeDef) -> Iterator[str]:
     for module in pipe_def["modules"]:
         yield "pipe%s" % module["type"]
 
 
-def extract_dependencies(pipe_def=None, pipe_generator=None):
+def extract_dependencies(
+    pipe_def: Optional[PipeDef] = None,
+    pipeline: Optional[PipelineDependencies] = None
+) -> list[str]:
     """Extract modules used by a pipe"""
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
-    elif pipe_generator:
-        pydeps = pipe_generator(describe_dependencies=True)
+    elif pipeline:
+        pydeps = pipeline(Context(describe_dependencies=True))
     else:
-        raise Exception("Must supply at least one kwarg!")
+        raise TypeError("Must supply at least one kwarg!")
 
     return sorted(set(pydeps))
 
 
-def gen_input(pipe_def):
+def gen_input(pipe_def: PipeDef) -> Iterator[tuple[str]]:
     fields = ["position", "name", "prompt"]
 
     for module in pipe_def["modules"]:
@@ -668,7 +671,7 @@ def gen_input(pipe_def):
             yield tuple(module_confs)
 
 
-def get_input(conf, **kwargs):
+def get_input(conf: Mapping[str, Any], **kwargs):
     """Gets a user parameter, either from the console or from an outer
      submodule/system
 
@@ -682,7 +685,7 @@ def get_input(conf, **kwargs):
         value = inputs.get(name, default)
     elif not kwargs.get("test"):
         # we skip user interaction during tests
-        raw = raw_input("%s (default=%s) " % (prompt, default))
+        raw = input(f"{prompt} (default={default}) ")
         value = raw or default
     else:
         value = default
@@ -690,30 +693,48 @@ def get_input(conf, **kwargs):
     return value
 
 
-def extract_input(pipe_def=None, pipe_generator=None):
+def extract_input(
+    pipe_def: Optional[PipeDef] = None,
+    pipeline: Optional[PipelineDependencies] = None
+) -> Sequence[str | tuple[str]]:
     """Extract inputs required by a pipe"""
     if pipe_def:
         pyinput = gen_input(pipe_def)
-    elif pipe_generator:
-        pyinput = pipe_generator(describe_input=True)
+    elif pipeline:
+        pyinput = pipeline(Context(describe_input=True))
     else:
-        raise Exception("Must supply at least one kwarg!")
+        raise TypeError("Must supply at least one kwarg!")
 
     return sorted(list(pyinput))
 
 
-def pythonise(id, encoding="ascii"):
+def pythonise(
+    content: str | Mapping[str, Any],
+    encoding="ascii",
+    replace: Sequence[str] = ("-", ":", "/", ""),
+    key: Optional[str] = None
+) -> str:
     """Return a Python-friendly id"""
-    replace = {"-": "_", ":": "_", "/": "_"}
-    func = lambda id, pair: id.replace(pair[0], pair[1])
-    id = reduce(func, replace.iteritems(), id)
-    id = "_%s" % id if id[0] in string.digits else id
-    return id.encode(encoding)
+    if key:
+        resolved = DotDict(content).get(key)
+
+        if isinstance(resolved, str):
+            content = resolved
+        elif isinstance(resolved, (Mapping, Sequence)):
+            _type = type(resolved).__name__
+            raise TypeError(f"Key '{key}' resolved to unsupported type {_type}.")
+        else:
+            content = str(resolved)
+    elif isinstance(content, Mapping):
+        raise TypeError("Received a dict without a key.")
+
+    reduced = reduce(replacer, replace, content)
+    return reduced.encode(encoding, 'replace').decode(encoding)
 
 
-def gen_names(module_ids, pipe, ntype="module"):
+def gen_names(module_ids, parsed_pipe_def, ntype="module"):
     for module_id in module_ids:
-        module_type = pipe["modules"][module_id]["type"]
+        module_type = parsed_pipe_def["modules"][module_id]["type"]
 
         if module_type.startswith("pipe:"):
             name = pythonise(module_type)
@@ -727,21 +748,36 @@ def gen_names(module_ids, pipe, ntype="module"):
         yield name
 
 
-def gen_modules(pipe_def):
+def gen_modules(pipe_def, embedded=False):
     for module in listize(pipe_def["modules"]):
         yield (pythonise(module["id"]), module)
 
+        if embedded and module["type"] == "loop":
+            embed = module["conf"]["embed"]["value"]
+            yield (pythonise(embed["id"]), embed)
 
-def gen_wires(pipe_def):
+
+def gen_wires(pipe_def: PipeDef):
     for wire in listize(pipe_def["wires"]):
         yield (pythonise(wire["id"]), wire)
 
 
-def gen_graph(pipe_def):
+def gen_graph(pipe_def: PipeDef):
     for wire in listize(pipe_def["wires"]):
         src_id = pythonise(wire["src"]["moduleid"])
         tgt_id = pythonise(wire["tgt"]["moduleid"])
         yield (src_id, tgt_id)
+
+
+def gen_embed_graph(pipe_def: PipeDef):
+    for module in listize(pipe_def["modules"]):
+        module_id = pythonise(module["id"])
+        yield (module_id, [])
+
+        # make the loop dependent on its embedded module
+        if module["type"] == "loop":
+            embed = module["conf"]["embed"]["value"]
+            yield (pythonise(embed["id"]), [module_id])
 
 
 def gen_parented_graph(graph):

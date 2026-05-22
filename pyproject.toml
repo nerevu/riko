@@ -57,15 +57,15 @@ twisted = [
 dev = [
     "click>=8.4.0",
     "coverage>=4.3.4,<8.0.0",
-    "flake8-ruff>=0.3.1",
-    "flake8>=3.7.9,<8.0.0",
     "pytest>=8.0.0",
     "pytest-cov>=7.0.0,<8.0.0",
     "pylint>=4.0.5,<5.0.0",
     "ruff>=0.13.1",
     "pytest-xdist>=3.8.0",
-    "scripttest>=2.0.post1",
     "pytest-timeout>=2.4.0",
+    "jinja2>=3.1.6",
+    "ipython>=8.39.0",
+    "networkx>=3.4.2",
 ]
 
 [project.scripts]
@@ -75,20 +75,55 @@ benchmark = "riko.cli.benchmark:main"
 
 [tool.ruff.lint]
 extend-select = [
-    "B", # flake8-bugbear: opinionated warnings
-    "Q", # flake8-quotes: enforce consistent quote style)
+    "E",    # pycodestyle errors
     "E302", # pycodestyle: Two blank lines before top-level defs
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+    "I",    # isort
+    "B",    # flake8-bugbear: opinionated warnings
+    "Q",    # flake8-quotes: enforce consistent quote style)
+    "C4",   # flake8-comprehensions
+    "N",    # pep8-naming
+    "D",    # pydocstyle
+    "S",    # flake8-bandit
+    "T20",  # flake8-print
+    "PT",   # flake8-pytest-style
+    "PLC0415", # Import not at top of file
+]
+
+ignore = [
+    "E731", # do not assign a lambda expression, use a def
+    "E501",  # line too long
+
+     # this is incompatible with D211 no-blank-line-before-class
+    "D203",  # incorrect-blank-line-before-class
+
+     # this is incompatible with D213 multi-line-summary-second-line
+    "D212",  # multi-line-summary-first-line
+]
+
+exclude = [
+    "**/pycache",
+    ".cache",
+    ".ruff_cache",
+    ".tox/*",
+    "tmp",
+    "build/*",
+    "dist/*",
 ]
 
 preview = true
 
-[tool.isort]
-profile = "black"
-skip_gitignore = true
-line_length = 88
-multi_line_output = 3
-lines_between_types = 1
-combine_as_imports = true
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+known-first-party = ["riko"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*" = [
+    "S101",   # Use of `assert` detected
+]
 
 [tool.pyright]
 exclude = [
@@ -106,24 +141,6 @@ addopts = ["--doctest-modules", "--cov=riko", "--tb=short"]
 testpaths = ["tests", "riko"]
 doctest_optionflags = ["ELLIPSIS"]
 timeout = 300
-
-[tool.flake8]
-ignore = [
-    # handled by black/ruff
-    "W191",  # indentation contains tabs
-    "E126",  # continuation line over-indented for hanging indent
-    "E128",  # continuation line under-indented for visual indent
-    "E122",  # continuation line missing indentation or outdented
-    # do not assign a lambda expression, use a def
-    "E731",
-]
-max-complexity = 10
-max-line-length = 88
-exclude = [
-    "./build/*",
-    "./dist/*",
-    "./.tox/*",
-]
 
 [tool.pylint.format]
 max-line-length=88

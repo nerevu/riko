@@ -56,17 +56,17 @@ def parser(stream, key, tuples, **kwargs):
         >>>
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(None))
-        >>> parser(stream, None, tuples, assign='content') == {'content': 5}
-        True
+        >>> parser(stream, None, tuples, assign='content')
+        {'content': 5}
         >>> conf = {'count_key': 'word'}
         >>> kwargs = {'conf': conf}
         >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]
         >>> tuples = zip(stream, repeat(conf['count_key']))
         >>> counted = parser(stream, conf['count_key'], tuples, **kwargs)
-        >>> next(counted) == {'one': 1}
-        True
-        >>> next(counted) == {'two': 2}
-        True
+        >>> next(counted)
+        {'one': 1}
+        >>> next(counted)
+        {'two': 2}
     """
     if key:
         keyfunc = itemgetter(key)
@@ -74,7 +74,7 @@ def parser(stream, key, tuples, **kwargs):
         grouped = it.groupby(sorted_stream, keyfunc)
         counted = ({key: len(list(group))} for key, group in grouped)
     else:
-        counted = {kwargs["assign"]: len(list(stream))}
+        counted = len(list(stream))
 
     return counted
 
@@ -108,7 +108,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x) == {'count': 5})
+        ...     callback = lambda x: print(next(x))
         ...     items = ({'x': x} for x in range(5))
         ...     d = async_pipe(items)
         ...     return d.addCallbacks(callback, logger.error)
@@ -118,7 +118,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'count': 5}
     """
     return parser(*args, **kwargs)
 
@@ -148,13 +148,13 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> stream = ({'x': x} for x in range(5))
-        >>> next(pipe(stream)) == {'count': 5}
-        True
+        >>> next(pipe(stream))
+        {'count': 5}
         >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]
         >>> counted = pipe(stream, conf={'count_key': 'word'})
-        >>> next(counted) == {'one': 1}
-        True
-        >>> next(counted) == {'two': 2}
-        True
+        >>> next(counted)
+        {'one': 1}
+        >>> next(counted)
+        {'two': 2}
     """
     return parser(*args, **kwargs)

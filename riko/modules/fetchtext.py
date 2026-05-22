@@ -26,11 +26,11 @@ import pygogo as gogo
 
 from . import processor
 from riko import ENCODING
-from riko.utils import fetch, auto_close, get_abspath
+from riko.utils import fetch, auto_close
 from riko.bado import coroutine, return_value, io
 
-OPTS = {"ftype": "none", "assign": "content"}
-DEFAULTS = {"encoding": ENCODING}
+OPTS = {"ftype": "none"}
+DEFAULTS = {"encoding": ENCODING, "assign": "content"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -73,11 +73,8 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        f = yield io.async_url_open(url)
-        assign = kwargs["assign"]
-        encoding = objconf.encoding
-        _stream = ({assign: line.strip().decode(encoding)} for line in f)
+        f = yield io.async_url_open(objconf.url)
+        _stream = (line.strip().decode(objconf.encoding) for line in f)
         stream = auto_close(_stream, f)
 
     return_value(stream)
@@ -112,7 +109,7 @@ def parser(_, objconf, skip=False, **kwargs):
         stream = kwargs["stream"]
     else:
         f = fetch(decode=True, **objconf)
-        _stream = ({kwargs["assign"]: line.strip()} for line in f)
+        _stream = (line.strip() for line in f)
         stream = auto_close(_stream, f)
 
     return stream

@@ -37,7 +37,7 @@ from time import sleep
 import pygogo as gogo
 
 from . import operator
-from riko.utils import actor, Stream, _registry, _receive_queue, close
+from riko.utils import actor, StreamState, _registry, _receive_queue, close
 from meza.fntools import dfilter
 
 
@@ -108,7 +108,7 @@ def parser(_, objconf, tuples, **kwargs):
             total_waited = 0
             state, result = _buf.popleft()
 
-            if state is Stream.DONE:
+            if state is StreamState.DONE:
                 close(gen)
                 break
             else:
@@ -119,7 +119,7 @@ def parser(_, objconf, tuples, **kwargs):
         else:
             sleep(wait)
             total_waited += wait
-            yield {"content": Stream.PENDING}
+            yield {"content": StreamState.PENDING}
 
 
 @operator(DEFAULTS, **OPTS)

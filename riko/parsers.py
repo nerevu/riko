@@ -5,15 +5,20 @@ riko.parsers
 ~~~~~~~~~~~~
 Provides utility classes and functions
 """
+from itertools import chain
 import re
 
 from io import StringIO
 from html.entities import name2codepoint
 from html.parser import HTMLParser
+from typing import Any, Iterable, Mapping, Optional, Sequence
 from urllib.error import URLError
 
+import feedparser
 import pygogo as gogo
 
+from riko.dotdict import DotDict
+from riko.types import Item
 from riko.utils import fetch
 from meza.fntools import Objectify, remove_keys, listize
 from meza.process import merge
@@ -23,8 +28,11 @@ from ijson import items
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 
 try:
-    from lxml import etree, html
+    from lxml import html, etree
 except ImportError:
+    html5parser = None
+    import html5lib as html
+
     try:
         import xml.etree.cElementTree as etree
     except ImportError:
@@ -34,19 +42,14 @@ except ImportError:
     else:
         logger.debug("xml parser: cElementTree")
         from xml.etree.cElementTree import ElementTree
-
-    import html5lib as html
-
-    html5parser = None
 else:
+    ElementTree = None
     logger.debug("xml parser: lxml")
     from lxml.html import html5parser
 
 try:
     import speedparser3 as speedparser
 except ImportError:
-    import feedparser
-
     logger.debug("rss parser: feedparser")
     speedparser = None
 else:
@@ -70,9 +73,39 @@ SKIP_SWITCH = {
 
 
 class LinkParser(HTMLParser):
+    def __init__(
+        self,
+        *args,
+        rss_only=False,
+        link_type: Optional[str|Iterable[str]]=None,
+        **kwargs
+    ):
+        if rss_only:
+            self.link_type = ["rss+xml", "rdf+xml", "atom+xml", "text/xml", "xml"]
+        elif isinstance(link_type, str):
+            self.link_type = [link_type]
+        elif link_type:
+            self.link_type = list(link_type)
+        else:
+            self.link_type = None
+
+        super().__init__(*args, **kwargs)
+
     def reset(self):
         HTMLParser.reset(self)
+        self.entry = iter(())
         self.data = StringIO()
+
+    def handle_starttag(self, tag, attrs):
+        entry = dict(attrs)
+        link = entry.get("href")
+        _type = entry.get("type", "")
+        type_match = (_type.endswith(t) for t in self.link_type)
+
+        if link and (not self.link_type or next(type_match, None)):
+            entry["link"] = link
+            entry["tag"] = tag
+            self.entry = chain(self.entry, [entry])
 
     def handle_data(self, data):
         self.data.write("%s\n" % decode(data))
@@ -92,7 +125,7 @@ def get_text(html, convert_charrefs=False):
     return parser.data.getvalue()
 
 
-def parse_rss(url=None, **kwargs):
+def parse_rss(url="", **kwargs):
     try:
         f = fetch(decode(url), **kwargs)
     except (ValueError, URLError):
@@ -146,10 +179,13 @@ def xml2etree(f, xml=True, html5=False):
         element_tree = html5parser.parse(f)
     elif html5parser:
         element_tree = html.parse(f)
-    else:
+    elif ElementTree:
         # html5lib's parser returns an Element, so we must convert it into an
         # ElementTree
         element_tree = ElementTree(html.parse(f))
+    else:
+        logger.error("No suitable HTML parser found. Please install lxml or html5lib.")
+        element_tree = None
 
     return element_tree
 
@@ -208,88 +244,91 @@ def any2dict(f, ext="xml", html5=False, path=None):
     return content
 
 
-def get_value(item, conf=None, force=False, default=None, **kwargs):
-    item = item or {}
-
-    try:
-        value = item.get(conf["subkey"], **kwargs)
-    except KeyError:
-        if "value" in conf and not set(kwargs).difference(["objectify"]):
-            value = conf["value"]
-        elif conf and not (hasattr(conf, "delete") or force):
-            raise TypeError("conf must be of type DotDict")
-        elif force:
-            value = conf
-        elif conf:
-            value = conf.get(**kwargs)
-        else:
-            value = default
-    except (TypeError, AttributeError):
-        # conf is already set to a value so use it or the default
-        value = default if conf is None else conf
-    except (ValueError):
-        # error converting subkey value with OPS['func'] so use the default
-        value = default
-
-    return value
-
-
-def get_value(field, item=None, conf=None, force=False, **opts):
-    item = item or {}
-
-    switch = {
-        "number": {"default": 0.0, "func": float},
-        "integer": {"default": 0, "func": int},
-        "text": {"default": "", "func": encode},
-        "unicode": {"default": "", "func": unicode},
-        "bool": {"default": False, "func": lambda i: bool(int(i))},
+def get_value(
+    item: Item,
+    subconf: Optional[Mapping[str, Any] | Sequence[Any]] = None,
+    default=None,
+    **kwargs
+) -> Any:
+    """
+    param = {
+        "key": {"type": "text", "value": "q"},
+        "value": {"type": "text", "subkey": "title"}
     }
 
-    try:
-        defaults = switch.get(field.get("type", "text"), {})
-        defaults = switch.get(conf.get("type", "text"), {})
-    except AttributeError:
-        defaults = switch["text"]
+    item = {"title": "the title"}
+    get_value(item, subconf=param, objectify=True)
+    "the title"
 
-    kwargs = defaultdict(str, **defaults)
-    kwargs.update(opts)
-    default = kwargs["default"]
+    params = [
+        {
+            "key": {"type": "text", "value": "q"},
+            "value": {"type": "text", "subkey": "title"}
+        },
+        {
+            "key": {"type": "text", "value": "v"},
+            "value": {"type": "text", "value": "1.0"}
+        }
+    ]
 
-    try:
-        value = item.get(field["subkey"], **kwargs)
-    except KeyError:
-        if field and not (hasattr(field, "delete") or force):
-            raise TypeError("field must be of type DotDict")
-        elif force:
-            value = field
-        elif field:
-            value = field.get(**kwargs)
-        else:
-            value = default
-    except (TypeError, AttributeError):
-        # field is already set to a value so use it or the default
-        value = field or default
-    except (ValueError):
-        # error converting subkey value with OPS['func'] so use the default
-        value = default
+    get_value(item, subconf=param, objectify=True)
+    [{"q": "the title"}, {"v": "1.0"}]
+    """
+    value = default
+    dd_item = DotDict(item or {})
+
+    if isinstance(subconf, Mapping):
+        subconf = DotDict(subconf)
+
+        if subvalue := subconf.get("subkey"):
+            value = dd_item.get(subvalue, **kwargs)
+        elif subconf:
+            value = subconf.get(default=default, **kwargs)
+    elif subconf is not None:
+        value = subconf
 
     return value
 
 
-def parse_conf(item, **kwargs):
-    kw = Objectify(kwargs, defaults={}, conf={})
-    # TODO: fix so .items() returns a DotDict instance
-    # parsed = {k: get_value(item, v) for k, v in kw.conf.items()}
-    sentinels = {"subkey", "value", "terminal"}
-    not_dict = not hasattr(kw.conf, "keys")
+def parse_conf(item: Item, conf=None, **kwargs):
+    """
+    conf = {
+            "count": {"type": "text", "value": "all"},
+            "assign": {"type": "text", "value": "url"},
+            "BASE": {"type": "text", "value": "http://example.com"},
+            "PARAM": [
+                {
+                    "key": {"type": "text", "value": "q"},
+                    "value": {"type": "text", "subkey": "title"}
+                },
+                {
+                    "key": {"type": "text", "value": "v"},
+                    "value": {"type": "text", "value": "1.0"}
+                }
+            ]
+        },
+        "type": "urlbuilder"
+    }
 
-    if not_dict or (len(kw.conf) == 1 and sentinels.intersection(kw.conf)):
-        objectified = get_value(item, **kwargs)
-    else:
-        no_conf = remove_keys(kwargs, "conf")
-        parsed = {k: get_value(item, kw.conf[k], **no_conf) for k in kw.conf}
+    item = {"title": "the title"}
+    parse_conf(item, conf=conf, objectify=True)
+    {
+        "count": "all",
+        "assign": "url",
+        "base": "http://example.com",
+        "param": [{"q": "the title"}, {"v": "1.0"}]
+    }
+    """
+
+    kw = Objectify(kwargs, defaults={})
+
+    if isinstance(conf, Mapping):
+        conf = Objectify(conf)
+        parsed = {k.lower(): get_value(item, v, **kwargs) for k, v in conf.items()}
         result = merge([kw.defaults, parsed])
         objectified = Objectify(result) if kw.objectify else result
+    else:
+        objectified = get_value(item, conf, **kwargs)
 
     return objectified
 
@@ -343,11 +382,22 @@ def get_skip(item, skip_if=None, **kwargs):
     return skip
 
 
-def get_field(item, field=None, **kwargs):
+def get_field(item: Item, field="", **kwargs) -> Any:
     try:
         value = item.get(field, **kwargs) if field else item
     except TypeError:
         value = item.get(field) if field else item
+
+    return value
+
+
+def get_with(item: Item, **kwargs) -> Any:
+    loop_with = kwargs.pop('with', None)
+
+    try:
+        value = item.get(loop_with, **kwargs) if loop_with else item
+    except TypeError:
+        value = item.get(loop_with) if loop_with else item
 
     return value
 

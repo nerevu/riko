@@ -65,7 +65,7 @@ def parser(stream, splits, tuples, **kwargs):
     """
     source = list(stream)
 
-    # deepcopy each item so that each split is independent
+    # deepcopy so that each split is independent
     for num in range(splits):
         yield map(deepcopy, source)
 

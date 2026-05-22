@@ -5,7 +5,7 @@ from riko.modules.strconcat import pipe as strconcat
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
-from riko.modules.createrss import pipe as createrss
+# from riko.modules.createrss import pipe as createrss
 
 
 def pipe_a08134746e30a6dd3a7cb3c0cf098692(
@@ -19,20 +19,20 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
 
     if context and context.describe_dependencies:
         return [
-            "pipecreaterss",
-            "pipeloop",
-            "pipeoutput",
-            "piperename",
-            "pipestrconcat",
-            "pipexpathfetchpage",
+            # "createrss",
+            "loop",
+            "rename",
+            "strconcat",
+            "xpathfetchpage",
         ]
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_515(context=None, item=None, conf=None, **kwargs):
+    def pipe_sw_515(item=None, context=None, conf=None, **kwargs):
         # todo: insert submodule description here
-        return pipe_strconcat(
-            context,
+        return strconcat(
+            item,
+            context=context,
             conf={
                 "part": [
                     {"type": "text", "value": '<img src="'},
@@ -40,10 +40,11 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
                     {"type": "text", "value": '">'},
                 ]
             },
+            **kwargs
         )
 
     sw_327 = xpathfetchpage(
-        context,
+        context=context,
         conf={
             "URL": {"type": "url", "value": "http://pinterest.com/popular/"},
             "xpath": {"type": "text", "value": "//a[@class='PinImage ImgLink']"},
@@ -51,8 +52,8 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
     )
 
     sw_507 = loop(
-        context,
         sw_327,
+        context=context,
         embed=pipe_sw_515,
         conf={
             "count": {"type": "text", "value": "all"},
@@ -77,8 +78,8 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
     )
 
     sw_303 = rename(
-        context,
         sw_507,
+        context=context,
         conf={
             "RULE": {
                 "field": {"type": "text", "value": "href"},
@@ -88,33 +89,31 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
         },
     )
 
-    sw_443 = createrss(
-        context,
-        sw_303,
-        conf={
-            "mediaContentHeight": {"type": "text", "value": ""},
-            "mediaThumbURL": {"type": "text", "value": ""},
-            "mediaContentType": {"type": "text", "value": ""},
-            "description": {"type": "text", "value": ""},
-            "pubdate": {"type": "text", "value": ""},
-            "author": {"type": "text", "value": ""},
-            "title": {"type": "text", "value": "img.alt"},
-            "mediaThumbHeight": {"type": "text", "value": ""},
-            "link": {"type": "text", "value": ""},
-            "mediaContentWidth": {"type": "text", "value": ""},
-            "mediaContentURL": {"type": "text", "value": "img.src"},
-            "guid": {"type": "text", "value": ""},
-            "mediaThumbWidth": {"type": "text", "value": ""},
-        },
-    )
+    # sw_443 = createrss(
+    #     context=context,
+    #     sw_303,
+    #     conf={
+    #         "mediaContentHeight": {"type": "text", "value": ""},
+    #         "mediaThumbURL": {"type": "text", "value": ""},
+    #         "mediaContentType": {"type": "text", "value": ""},
+    #         "description": {"type": "text", "value": ""},
+    #         "pubdate": {"type": "text", "value": ""},
+    #         "author": {"type": "text", "value": ""},
+    #         "title": {"type": "text", "value": "img.alt"},
+    #         "mediaThumbHeight": {"type": "text", "value": ""},
+    #         "link": {"type": "text", "value": ""},
+    #         "mediaContentWidth": {"type": "text", "value": ""},
+    #         "mediaContentURL": {"type": "text", "value": "img.src"},
+    #         "guid": {"type": "text", "value": ""},
+    #         "mediaThumbWidth": {"type": "text", "value": ""},
+    #     },
+    # )
 
-    sw_261 = output(context, sw_443, conf=None)
-
-    return sw_261
+    return sw_303
 
 
 if __name__ == "__main__":
     pipeline = pipe_a08134746e30a6dd3a7cb3c0cf098692(Context())
 
     for i in pipeline:
-        print i
+        print(i)

@@ -27,7 +27,7 @@ from meza.process import merge
 from . import processor
 from riko import ENCODING
 from riko.bado import coroutine, return_value, io
-from riko.utils import fetch, auto_close, get_abspath
+from riko.utils import fetch, auto_close
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {
@@ -86,8 +86,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        r = yield io.async_url_open(url, decode=True, encoding=objconf.encoding)
+        r = yield io.async_url_open(objconf.url, decode=True, encoding=objconf.encoding)
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {"first_row": first_row, "custom_header": custom_header}
         rkwargs = merge([objconf, renamed])

@@ -95,7 +95,7 @@ try:
 except ModuleNotFoundError:
     mapping = OFX = QIF = gen_data = None
 
-from riko.utils import multiplex, send, Stream
+from riko.utils import multiplex, send, StreamState
 from riko.bado import coroutine, return_value
 from riko.bado import util, itertools as ait
 from meza import convert as cv, io
@@ -257,7 +257,7 @@ class SyncPipe(PyPipe):
         except StopIteration:
             if self.name == "send":
                 others = self.kwargs.get("others", [])
-                [send(target, {"state": Stream.DONE}) for target in others]
+                [send(target, {"state": StreamState.DONE}) for target in others]
 
             raise
 

@@ -7,7 +7,7 @@ Provides functions for obtaining and parsing user input.
 
 Use this module any time you need to obtain and parse user input to wire into
 another pipe. Supported parsers are 'text', 'int', 'float', 'bool', 'url', and
-'date'.
+'date'. Not loopable.
 
 Valid Date Values
 
@@ -38,8 +38,9 @@ Examples:
         >>> from riko.modules.input import pipe
         >>>
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-        >>> next(pipe(conf=conf, inputs={'content': '30'})) == {'content': 30}
-        True
+        >>> next(pipe(conf=conf))
+        >>> next(pipe(conf=conf, inputs={'content': '30'}))
+        {'content': 30}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -52,7 +53,7 @@ from riko.utils import cast
 
 
 OPTS = {"ftype": "none"}
-DEFAULTS = {"type": "text", "default": ""}
+DEFAULTS = {"type": "text", "default": "", "test": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -74,19 +75,18 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'inputs': inputs, 'assign': 'age'}
-        >>> parser(None, objconf, **kwargs) == {'age': 30}
-        True
+        >>> parser(None, objconf, **kwargs)
+        {'age': 30}
     """
     if kwargs.get("inputs"):
         value = kwargs["inputs"].get(kwargs["assign"], objconf.default)
-    elif kwargs.get("test") or skip:
+    elif objconf.test or skip:
         value = objconf.default
     else:
-        raw = input("%s (default=%s) " % (objconf.prompt, objconf.default))
+        raw = input(f"{objconf.prompt} (default={objconf.default}) ")
         value = raw or objconf.default
 
-    casted = cast(value, objconf.type)
-    return casted if hasattr(casted, "keys") else {kwargs["assign"]: casted}
+    return cast(value, objconf.type)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -123,7 +123,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x) == {'content': 30})
+        ...     callback = lambda x: print(next(x))
         ...     conf = {'prompt': 'How old are you?', 'type': 'int'}
         ...     d = async_pipe(conf=conf, inputs={'content': '30'})
         ...     return d.addCallbacks(callback, logger.error)
@@ -133,7 +133,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'content': 30}
     """
     return parser(*args, **kwargs)
 
@@ -170,8 +170,8 @@ def pipe(*args, **kwargs):
     Examples:
         >>> # int
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-        >>> next(pipe(conf=conf, inputs={'content': '30'})) == {'content': 30}
-        True
+        >>> next(pipe(conf=conf, inputs={'content': '30'}))
+        {'content': 30}
         >>>
         >>> # date
         >>> import datetime
@@ -184,8 +184,8 @@ def pipe(*args, **kwargs):
         ...     'daylight_savings', 'hour', 'minute', 'month',
         ...     'second', 'timezone', 'utime', 'year']
         True
-        >>> result['date'].isoformat() == '1982-05-04T00:00:00+00:00'
-        True
+        >>> result['date'].isoformat()
+        '1982-05-04T00:00:00+00:00'
         >>>
         >>> stream = pipe(conf={'type': 'date'}, inputs={'content': 'tomorrow'})
         >>> d = next(stream)
@@ -207,10 +207,10 @@ def pipe(*args, **kwargs):
         >>>
         >>> for t, c, r in matrix:
         ...     kwargs = {'conf': {'type': t}, 'inputs': {'content': c}}
-        ...     next(pipe(**kwargs)) == {'content': r}
-        True
-        True
-        True
+        ...     next(pipe(**kwargs))
+        {'content': r}
+        {'content': r}
+        {'content': r}
         >>> # url
         >>> inputs = {'content': 'google.com'}
         >>> result = next(pipe(conf={'type': 'url'}, inputs=inputs))
@@ -218,15 +218,15 @@ def pipe(*args, **kwargs):
         ...     'fragment', 'netloc', 'params', 'path', 'query', 'scheme',
         ...     'url']
         True
-        >>> result['url'] == 'http://google.com'
-        True
+        >>> result['url'] ==
+        'http://google.com'
         >>> # location
         >>> inputs = {'content': 'palo alto, ca'}
         >>> result = next(pipe(conf={'type': 'location'}, inputs=inputs))
         >>> keys = ['admin1', 'admin2', 'admin3', 'city', 'country']
-        >>> sorted(result.keys())[:5] == keys
-        True
-        >>> result['city'] == 'city'
-        True
+        >>> sorted(result.keys())[:5]
+        keys
+        >>> result['city']
+        'city'
     """
     return parser(*args, **kwargs)

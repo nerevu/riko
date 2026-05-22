@@ -19,20 +19,20 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
 
     if context and context.describe_dependencies:
         return [
-            "pipefetch",
-            "pipeloop",
-            "pipeoutput",
-            "piperegex",
-            "piperename",
-            "pipeurlbuilder",
+            "fetch",
+            "loop",
+            "regex",
+            "rename",
+            "urlbuilder",
         ]
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_634(context=None, item=None, conf=None, **kwargs):
+    def pipe_sw_634(item=None, context=None, conf=None, **kwargs):
         # todo: insert submodule description here
-        return pipe_urlbuilder(
-            context,
+        return urlbuilder(
+            item,
+            context=context,
             conf={
                 "PATH": {"type": "text", "value": ""},
                 "BASE": {"type": "text", "value": ""},
@@ -51,13 +51,14 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
                     },
                 ],
             },
+            **kwargs
         )
 
     sw_565 = fetch(context, conf={"URL": {"type": "url", "value": ""}})
 
     sw_626 = loop(
-        context,
         sw_565,
+        context=context,
         embed=pipe_sw_634,
         conf={
             "count": {"type": "text", "value": "all"},
@@ -93,8 +94,8 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
     )
 
     sw_592 = rename(
-        context,
         sw_626,
+        context=context,
         conf={
             "RULE": [
                 {
@@ -107,8 +108,8 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
     )
 
     sw_636 = regex(
-        context,
         sw_592,
+        context=context,
         conf={
             "RULE": [
                 {
@@ -130,4 +131,4 @@ if __name__ == "__main__":
     pipeline = pipe_e65397e116d7754da0dd23425f1f0af1(Context())
 
     for i in pipeline:
-        print i
+        print(i)

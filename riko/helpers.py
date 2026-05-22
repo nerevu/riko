@@ -8,7 +8,6 @@
 import logging
 import pdb
 
-from datetime import date
 from json.decoder import JSONDecodeError
 from logging import Formatter
 from traceback import format_exception
@@ -106,14 +105,3 @@ def select_by_id(_result, _id, id_field):
         result = {}
 
     return result
-
-
-def parse_date(date_str):
-    try:
-        month, day, year = map(int, date_str.split("/"))
-    except ValueError:
-        parsed = ""
-    else:
-        parsed = date(year, month, day).isoformat()
-
-    return parsed

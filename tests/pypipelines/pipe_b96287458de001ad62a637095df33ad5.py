@@ -17,10 +17,10 @@ def pipe_b96287458de001ad62a637095df33ad5(
         return []
 
     if context and context.describe_dependencies:
-        return ["pipeitembuilder", "pipeoutput", "pipestrconcat", "pipeunion"]
+        return ["itembuilder", "output", "strconcat", "union"]
 
     sw_632 = itembuilder(
-        context,
+        context=context,
         conf={
             "attrs": [
                 {
@@ -38,7 +38,7 @@ def pipe_b96287458de001ad62a637095df33ad5(
     sw_605 = strconcat(context, conf={"part": {"type": "text", "value": "extVal"}})
 
     sw_551 = itembuilder(
-        context,
+        context=context,
         attrs_3_value=sw_605,
         conf={
             "attrs": [
@@ -62,7 +62,7 @@ def pipe_b96287458de001ad62a637095df33ad5(
         },
     )
 
-    sw_613 = union(context, sw_551, _OTHER1=sw_632, conf={})
+    sw_613 = union(sw_551, context=context, _OTHER1=sw_632, conf={})
 
     return sw_613
 
@@ -71,4 +71,4 @@ if __name__ == "__main__":
     pipeline = pipe_b96287458de001ad62a637095df33ad5(Context())
 
     for i in pipeline:
-        print i
+        print(i)

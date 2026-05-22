@@ -38,8 +38,8 @@ from riko.bado import coroutine, return_value, itertools as ait
 from riko.dotdict import DotDict
 from meza.fntools import remove_keys
 
-OPTS = {"extract": "rule", "listize": True, "emit": True}
-DEFAULTS = {}
+OPTS = {"extract": "rule", "listize": True}
+DEFAULTS = {"emit": True}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 

@@ -13,8 +13,8 @@
      b) from riko import compile
 
         pipe_def = json.loads(pjson)
-        pipe = parse_pipe_def(pipe_def, pipe_name)
-        pipeline = build_pipeline(pipe)
+        parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
+        pipeline = build_pipeline(parsed_pipe_def)
         print(list(pipeline))
 
     Instead of passing a filename, a pipe id can be passed (-p) to fetch the
@@ -32,18 +32,22 @@
    License: see LICENSE file
 """
 
+from functools import partial
 from json import dumps, JSONEncoder
 from codecs import open
 from itertools import chain
 from collections import defaultdict
 from importlib import import_module
 from pprint import PrettyPrinter
+from typing import Any, Callable, Iterable, Iterator, Optional
 
 from jinja2 import Environment, PackageLoader
 
 from riko import utils
+from riko.modules.forever import pipe as forever
 from riko.pprint2 import Id, repr_args, str_args
 from riko.topsort import topological_sort
+from riko.types import ParsedPipeDef, PipeDef, Step, Steps, SyncPipeline
 
 
 class MyPrettyPrinter(PrettyPrinter):
@@ -55,13 +59,16 @@ class MyPrettyPrinter(PrettyPrinter):
 
 
 class CustomEncoder(JSONEncoder):
-    def default(self, obj):
-        if set(["quantize", "year", "tm_hour"]).intersection(dir(obj)):
-            return str(obj)
-        elif set(["next", "union"]).intersection(dir(obj)):
-            return list(obj)
+    def default(self, o):
+        if set(["quantize", "year", "tm_hour"]).intersection(dir(o)):
+            return str(o)
+        elif set(["next", "union"]).intersection(dir(o)):
+            return list(o)
 
-        return JSONEncoder.default(self, obj)
+        return JSONEncoder.default(self, o)
+
+
+get_module_id = partial(utils.pythonise, key="src.moduleid")
 
 
 def write_file(data, path, pretty=False):
@@ -79,26 +86,32 @@ def write_file(data, path, pretty=False):
             elif hasattr(data, "keys"):
                 data = dumps(data, ensure_ascii=False)
             elif pretty:
-                data = unicode(MyPrettyPrinter().pformat(data), "utf-8")
+                data = MyPrettyPrinter().pformat(data)
 
             return f.write(data)
 
 
 def _gen_string_modules(
-    pipe, module_ids=None, module_names=None, pipe_names=None, **kwargs
+    parsed_pipe_def: dict[str, Any],
+    module_ids: Iterable[str],
+    module_names: Iterable[str],
+    pipe_names: Iterable[str],
+    context=None,
+    **kwargs
 ):
     zipped = zip(module_ids, module_names, pipe_names)
+    verbose = kwargs.get("verbose") or (context and context.verbose)
 
     for module_id, module_name, pipe_name in zipped:
-        pyarg = _get_pyarg(pipe, module_id, **kwargs)
-        pykwargs = dict(_gen_pykwargs(pipe, module_id, **kwargs))
+        pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
+        pykwargs = dict(_gen_pykwargs(parsed_pipe_def, module_id, **kwargs))
 
-        if kwargs.get("verbose"):
+        if verbose:
+            # con_args = filter(lambda x: x != Id("context"), pyargs):
             nconf_kwargs = filter(lambda x: x[0] != "conf", pykwargs.items())
             conf_kwargs = filter(lambda x: x[0] == "conf", pykwargs.items())
             all_args = chain([pyarg], nconf_kwargs, conf_kwargs)
-
-            print("%s = %s(%s)" % (module_id, pipe_name, str_args(all_args)))
+            print(f"{module_id} = {pipe_name}({str_args(all_args)})")
 
         yield {
             "args": repr_args(chain([pyarg], pykwargs.items())),
@@ -109,92 +122,139 @@ def _gen_string_modules(
         }
 
 
-def _gen_steps(pipe, module_ids=None, module_names=None, pipe_names=None, **kwargs):
-    zipped = zip(module_ids, module_names, pipe_names)
-
-    for module_id, module_name, pipe_name in zipped:
-        if module_name.startswith("pipe_"):
-            # Import any required sub-pipelines and user inputs
-            # Note: assumes they have already been compiled to accessible .py
-            # files
-            import_name = "riko.pypipelines.%s" % module_name
-        else:
-            import_name = "riko.modules.%s" % module_name
-
-        module = import_module(import_name)
-        pipe_generator = getattr(module, pipe_name)
-        pyarg = _get_pyarg(pipe, module_id, **kwargs)
-        pykwargs = dict(_gen_pykwargs(pipe, module_id, **kwargs))
-        yield (module_id, pipe_generator(pyarg, **pykwargs))
-
-
-def _get_pyarg(pipe, module_id, steps=None, **kwargs):
+def _get_pyarg(
+    parsed_pipe_def: dict[str, Any],
+    module_id: str,
+    steps: Optional[Steps] = None,
+    **kwargs
+):
     describe = kwargs.get("describe_input") or kwargs.get("describe_dependencies")
 
-    if not (describe and steps):
-        # find the default input of this module
-        input_module = _get_input_module(pipe, module_id, steps)
-        return Id(input_module)
+    # find the default input of this module
+    input_module = _get_input_module(parsed_pipe_def, module_id, steps)
+
+    if describe and steps:
+        print("You must not specify both describe and steps. Assuming steps.")
+
+    return input_module if steps else Id(input_module)
 
 
-def _gen_pykwargs(pipe, module_id, steps=None, **kwargs):
-    module = pipe["modules"][module_id]
+def _gen_pykwargs(
+    parsed_pipe_def: dict[str, Any],
+    module_id: str,
+    steps=None,
+    context=None,
+    **kwargs
+):
+    module = parsed_pipe_def["modules"][module_id]
     yield ("conf", module["conf"])
 
-    describe = kwargs.get("describe_input") or kwargs.get("describe_dependencies")
+    if context:
+        yield ("context", context)
 
-    if not (describe and steps):
-        # find the default input of this module
-        for wire in pipe["wires"].values():
-            moduleid = utils.pythonise(wire["src"]["moduleid"])
+    cdescribe = context and (context.describe_input or context.describe_dependencies)
+    kdescribe = kwargs.get("describe_input") or kwargs.get("describe_dependencies")
+    describe = cdescribe or kdescribe
 
-            # todo? this equates the outputs
-            is_default_out_only = (
-                utils.pythonise(wire["tgt"]["moduleid"]) == module_id
-                and wire["tgt"]["id"] != "_INPUT"
-                and wire["src"]["id"].startswith("_OUTPUT")
-            )
+    if describe and steps:
+        print("You must not specify both describe and steps. Assuming steps.")
 
-            # if the wire is to this module and it's *NOT* the default input
-            # but it *is* the default output
-            if is_default_out_only:
-                # set the extra inputs of this module as pykwargs of this module
-                pipe_id = utils.pythonise(wire["tgt"]["id"])
-                yield (pipe_id, steps[moduleid] if steps else Id(moduleid))
-
-        # set splits in the pykwargs if this is split module
-        filter_func = lambda v: module_id == utils.pythonise(v["src"]["moduleid"])
-
-        if module["type"] == "split":
-            filtered = filter(filter_func, pipe["wires"].values())
-            count = len(list(filtered))
-            updated = count if steps else Id(count)
-            yield ("splits", updated)
-
-
-def _get_input_module(pipe, module_id, steps):
-    input_module = None
-
-    for wire in pipe["wires"].values():
-        moduleid = utils.pythonise(wire["src"]["moduleid"])
+    # find the default input of this module
+    for wire in parsed_pipe_def["wires"].values():
+        module_id = get_module_id(wire)
 
         # todo? this equates the outputs
-        is_default_in_and_out = (
-            utils.pythonise(wire["tgt"]["moduleid"]) == module_id
-            and wire["tgt"]["id"] == "_INPUT"
+        is_default_out_only = (
+            utils.pythonise(wire, key="tgt.moduleid") == module_id
+            and wire["tgt"]["id"] != "_INPUT"
             and wire["src"]["id"].startswith("_OUTPUT")
         )
 
-        # if the wire is to this module and it's the default input and it's
-        # the default output:
-        if is_default_in_and_out:
-            input_module = steps[moduleid] if steps else moduleid
-            break
+        # if the wire is to this module and it's *NOT* the default input
+        # but it *is* the default output
+        if is_default_out_only:
+            # set the extra inputs of this module as pykwargs of this module
+            pipe_id = utils.pythonise(wire, key="tgt.id")
+            yield (pipe_id, steps[module_id] if steps else Id(module_id))
+
+    if module["type"] == "loop":
+        value = module["conf"]["embed"]["value"]
+        pipe_id = utils.pythonise(value["id"])
+        updated = steps[pipe_id] if steps else Id(f"pipe_{pipe_id}")
+        yield ("embed", updated)
+
+    if module["type"] == "split":
+        filtered = [v for v in parsed_pipe_def["wires"].values() if module_id == get_module_id(v)]
+        count = len(filtered)
+        updated = count if steps else Id(count)
+        yield ("splits", updated)
+
+
+def _gen_steps(
+    parsed_pipe_def: ParsedPipeDef,
+    *,
+    module_ids: Iterable[str],
+    module_names: Iterable[str],
+    pipe_names: Iterable[str],
+    **kwargs
+) -> Iterator[Step]:
+    zipped = zip(module_ids, module_names, pipe_names)
+    kwargs.setdefault("steps", {})
+
+    for module_id, module_name, pipe_name in zipped:
+        if module_name.startswith("pipe_"):
+            import_name = f"riko.pypipelines.{module_name}"
+        else:
+            import_name = f"riko.modules.{module_name}"
+
+        module = import_module(import_name)
+        pipeline: SyncPipeline = getattr(module, pipe_name)
+
+        if module_id in parsed_pipe_def["embed"]:
+            # We need to wrap submodules (used by loops) so we can pass the
+            # input at runtime (as we can to sub-pipelines)
+            # Note: no embed (so no subloops) or wire pykwargs are passed
+            pipeline.__name__ = str(f"pipe_{module_id}")
+            step = (module_id, pipeline)
+        else:  # else this module is not embedded:
+            pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
+            pykwargs = dict(_gen_pykwargs(parsed_pipe_def, module_id, **kwargs))
+            step = (module_id, pipeline(pyarg, **pykwargs))
+
+        kwargs["steps"].update(step)
+        yield step
+
+
+def _get_input_module(
+    parsed_pipe_def: dict[str, Any],
+    module_id: str,
+    steps: Optional[Steps] = None
+):
+    input_module = steps.get('forever') if steps else None
+
+    if module_id in parsed_pipe_def['embed']:
+        input_module = '_INPUT'
+    else:
+        for wire in parsed_pipe_def["wires"].values():
+            moduleid = get_module_id(wire)
+
+            # todo? this equates the outputs
+            is_default_in_and_out = (
+                utils.pythonise(wire["tgt"]["moduleid"]) == module_id
+                and wire["tgt"]["id"] == "_INPUT"
+                and wire["src"]["id"].startswith("_OUTPUT")
+            )
+
+            # if the wire is to this module and it's the default input and it's
+            # the default output:
+            if is_default_in_and_out:
+                input_module = steps[moduleid] if steps else moduleid
+                break
 
     return input_module
 
 
-def parse_pipe_def(pipe_def, pipe_name="anonymous"):
+def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
     """Parse pipe JSON into internal structures
 
     Parameters
@@ -205,70 +265,81 @@ def parse_pipe_def(pipe_def, pipe_name="anonymous"):
     Returns:
     pipe -- an internal representation of a pipe
     """
-    graph = defaultdict(list)
+    graph = defaultdict(list, utils.gen_embed_graph(pipe_def))
     [graph[k].append(v) for k, v in utils.gen_graph(pipe_def)]
+    modules = dict(utils.gen_modules(pipe_def))
+    embed = dict(utils.gen_modules(pipe_def, embedded=True))
+    modules.update(embed)
 
     return {
         "name": utils.pythonise(pipe_name),
         "modules": dict(utils.gen_modules(pipe_def)),
+        "embed": embed,
         "graph": dict(utils.gen_parented_graph(graph)),
         "wires": dict(utils.gen_wires(pipe_def)),
     }
 
 
-def build_pipeline(pipe, pipe_def, **kwargs):
+def build_pipeline(
+    parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, context=None, **kwargs
+) -> Iterator[Any]:
     """Convert a pipe into an executable Python pipeline
 
     If describe_input or describe_dependencies then just
     return that instead of the pipeline
     """
-    module_ids = topological_sort(pipe["graph"])
+    module_ids = topological_sort(parsed_pipe_def["graph"])
     pydeps = utils.extract_dependencies(pipe_def=pipe_def)
     pyinput = utils.extract_input(pipe_def=pipe_def)
 
-    if kwargs.get("describe_input") and kwargs.get("describe_dependencies"):
+    describe_input = kwargs.get("describe_input") or context and context.describe_input
+    describe_dependencies = kwargs.get("describe_dependencies") or context and context.describe_dependencies
+
+    if describe_input and describe_dependencies:
         pipeline = [{"inputs": pyinput, "dependencies": pydeps}]
-    elif kwargs.get("describe_input"):
+    elif describe_input:
         pipeline = pyinput
-    elif kwargs.get("describe_dependencies"):
+    elif describe_dependencies:
         pipeline = pydeps
     else:
         updates = {
             "module_ids": module_ids,
-            "module_names": utils.gen_names(module_ids, pipe),
-            "pipe_names": utils.gen_names(module_ids, pipe, "pipe"),
+            "module_names": utils.gen_names(module_ids, parsed_pipe_def),
+            "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
+            "steps": {"forever", forever()}
         }
 
-        steps = dict(_gen_steps(pipe, **kwargs, **updates))
+        steps = dict(_gen_steps(parsed_pipe_def, **kwargs, **updates))
         pipeline = steps[module_ids[-1]]
 
     yield from pipeline
 
 
-def stringify_pipe(pipe, pipe_def, **kwargs):
+def stringify_pipe(
+    parsed_pipe_def: dict[str, Any], pipe_def: PipeDef, context=None, **kwargs
+) -> str:
     """Convert a pipe into Python script"""
-    module_ids = topological_sort(pipe["graph"])
+    module_ids = topological_sort(parsed_pipe_def["graph"])
 
     updates = {
         "module_ids": module_ids,
-        "module_names": utils.gen_names(module_ids, pipe),
-        "pipe_names": utils.gen_names(module_ids, pipe, "pipe"),
+        "module_names": utils.gen_names(module_ids, parsed_pipe_def),
+        "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
     }
 
-    pydeps = utils.extract_dependencies(pipe_def=pipe_def)
-    pyinput = utils.extract_input(pipe_def=pipe_def)
     env = Environment(loader=PackageLoader("riko"))
     template = env.get_template("pypipe.txt")
-    modules = list(_gen_string_modules(pipe, **kwargs, **updates))
+    modules = list(_gen_string_modules(parsed_pipe_def, context=context, **kwargs, **updates))
     keys = ["sub_pipe", "name", "pipe_name"]
     uniq_modules = set(tuple(m[k] for k in keys) for m in modules)
 
     data = {
         "uniq_modules": [dict(zip(keys, m)) for m in uniq_modules],
         "modules": modules,
-        "pipe_name": pipe["name"],
-        "inputs": pyinput,
-        "dependencies": pydeps,
+        "pipe_name": parsed_pipe_def["name"],
+        "inputs": utils.extract_input(pipe_def=pipe_def),
+        "dependencies": utils.extract_dependencies(pipe_def=pipe_def),
+        "embedded_pipes": parsed_pipe_def["embed"],
         "last_module": module_ids[-1],
     }
 

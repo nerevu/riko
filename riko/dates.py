@@ -6,6 +6,7 @@ riko.dates
 Provides date and time helpers
 """
 from datetime import timedelta, datetime as dt, UTC
+from datetime import date
 from time import strptime
 
 import pytz
@@ -57,19 +58,31 @@ def get_date(unit, count, op):
     return DATES[unit]
 
 
-def get_date(date_string):
-    for date_format in ALTERNATIVE_DATE_FORMATS:
-        try:
-            return datetime.strptime(date_string, date_format)
-        except ValueError:
-            pass
+def parse_date(content):
+    # TODO: see how I do this in csv2ofx
+    parsed = None
+
+    try:
+        month, day, year = map(int, content.split("/"))
+    except ValueError:
+        for date_format in ALTERNATIVE_DATE_FORMATS:
+            try:
+                parsed = dt.strptime(content, date_format)
+            except ValueError:
+                pass
+            else:
+                break
+    else:
+        parsed = date(year, month, day)
+
+    return parsed
 
 
-def normalize_date(date):
+def normalize_date(content):
     try:
         # See if date is a `time.struct_time`
         # if so, convert it and account for leapseconds
-        tt, date = date, dt(*date[:5] + (min(date[5], 59),))
+        tt, content = content, dt(*content[:5] + (min(content[5], 59),))
     except TypeError:
         pass
     else:
@@ -84,22 +97,22 @@ def normalize_date(date):
             tm_gmtoff = tt.tm_gmtoff
 
         if tm_zone:
-            date = pytz.timezone(tm_zone).localize(date, is_dst=is_dst)
+            content = pytz.timezone(tm_zone).localize(content, is_dst=is_dst)
         elif tm_gmtoff:
             offset = tzoffset(None, tm_gmtoff)
-            date.replace(tzinfo=offset)
+            content.replace(tzinfo=offset)
 
     # Set timezone to UTC
     try:
-        tzdate = date.astimezone(utc) if date.tzinfo else utc.localize(date)
+        tzdate = content.astimezone(utc) if content.tzinfo else utc.localize(content)
     except AttributeError:
-        tzdate = date
+        tzdate = content
 
     return tzdate
 
 
-def get_tt(date):
-    formatted = "".join(date.isoformat().rsplit(":", 1))
+def get_tt(content):
+    formatted = "".join(content.isoformat().rsplit(":", 1))
     sformat = "%Y-%m-%d" if len(formatted) == 10 else "%Y-%m-%dT%H:%M:%S%z"
 
     try:

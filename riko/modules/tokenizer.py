@@ -25,7 +25,7 @@ import pygogo as gogo
 
 from . import processor
 
-OPTS = {"ftype": "text", "field": "content"}
+OPTS: dict[str, str | bool] = {"ftype": "text", "field": "content"}
 DEFAULTS = {"delimiter": ",", "dedupe": False, "sort": False, "token_key": "content"}
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -53,9 +53,9 @@ def parser(content, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
+        def keyfunc(s: str): return s.lower()
         splits = [s.strip() for s in content.split(objconf.delimiter) if s]
         deduped = set(splits) if objconf.dedupe else splits
-        keyfunc = lambda s: s.lower()
         chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
         stream = ({objconf.token_key: chunk} for chunk in chunks)
 

@@ -1,0 +1,12 @@
+[flake8]
+max-line-length = 88
+max-complexity = 10
+ignore =
+    "E731",  # do not assign a lambda expression, use a def
+    "UP045", # Use X | None instead of Optional[X]
+
+     # incompatible with D211 no-blank-line-before-class
+    "D203",  # incorrect-blank-line-before-class
+
+     # incompatible with D213 multi-line-summary-second-line
+    "D212",  # multi-line-summary-first-line

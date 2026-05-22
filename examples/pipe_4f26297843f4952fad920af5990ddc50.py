@@ -28,7 +28,7 @@ def pipe_4f26297843f4952fad920af5990ddc50(item=None, conf=None, **kwargs):
     sw_120 = _input(
         conf={
             "default": {"type": "text", "value": "%B %d, %Y"},
-            "position": {"type": "number", "value": "1"},
+            "position": {"type": "int", "value": "1"},
             "prompt": {"type": "text", "value": "enter date format"},
             "name": {"type": "text", "value": "format_input"},
             "debug": {"type": "text", "value": "%B %d, %Y"},
@@ -38,7 +38,7 @@ def pipe_4f26297843f4952fad920af5990ddc50(item=None, conf=None, **kwargs):
     sw_124 = _input(
         conf={
             "default": {"type": "text", "value": "EST"},
-            "position": {"type": "number", "value": "2"},
+            "position": {"type": "int", "value": "2"},
             "prompt": {"type": "text", "value": "enter time zone"},
             "name": {"type": "text", "value": "zone_input"},
             "debug": {"type": "text", "value": "EST"},

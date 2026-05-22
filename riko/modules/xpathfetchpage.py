@@ -53,7 +53,7 @@ import pygogo as gogo
 from os.path import splitext
 
 from . import processor
-from riko.utils import fetch, get_abspath
+from riko.utils import fetch
 from riko.parsers import xml2etree, etree2dict, xpath
 from riko.bado import coroutine, return_value, util, io
 from meza.compat import encode
@@ -120,25 +120,23 @@ def async_parser(_, objconf, skip=False, **kwargs):
         Running “Native” Data Wrangling Applications
         Help Page -- ScienceDaily
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        url = get_abspath(objconf.url)
-        ext = splitext(url)[1].lstrip(".")
+    stream = kwargs["stream"]
+
+    if not skip:
+        ext = splitext(objconf.url)[1].lstrip(".")
         xml = (ext == "xml") or objconf.strict
 
         try:
-            f = yield io.async_url_open(url)
-            tree = yield util.xml2etree(f, xml=xml)
+            f = yield io.async_url_open(objconf.url)
         except Exception as e:
             logger.error(e)
             logger.error(traceback.format_exc())
-
-        elements = xpath(tree, objconf.xpath)
-        f.close()
-        items = map(util.etree2dict, elements)
-        stringified = ({kwargs["assign"]: encode(i)} for i in items)
-        stream = stringified if objconf.stringify else items
+        else:
+            tree = yield util.xml2etree(f, xml=xml)
+            elements = xpath(tree, objconf.xpath)
+            f.close()
+            items = map(util.etree2dict, elements)
+            stream = map(encode, items) if objconf.stringify else items
 
     return_value(stream)
 
@@ -168,8 +166,7 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        ext = splitext(url)[1].lstrip(".")
+        ext = splitext(objconf.url)[1].lstrip(".")
         xml = (ext == "xml") or objconf.strict
 
         with fetch(**objconf) as f:
@@ -177,8 +174,7 @@ def parser(_, objconf, skip=False, **kwargs):
             elements = xpath(root, objconf.xpath)
 
         items = map(etree2dict, elements)
-        stringified = ({kwargs["assign"]: str(i)} for i in items)
-        stream = stringified if objconf.stringify else items
+        stream = map(str,items) if objconf.stringify else items
 
     return stream
 

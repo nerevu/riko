@@ -18,7 +18,8 @@ Examples:
 from . import processor
 import pygogo as gogo
 
-OPTS = {"listize": True, "emit": True}
+OPTS = {"listize": True}
+DEFAULTS = {"emit": True}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -49,7 +50,7 @@ def parser(item, objconf, skip=False, **kwargs):
     return kwargs["stream"] if skip else kwargs["func"](item)
 
 
-@processor(isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
     """A processor that asynchronously performs an arbitrary (user-defined)
     function on an item.
@@ -84,7 +85,7 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A processor that performs an arbitrary (user-defined) function
     on an item.

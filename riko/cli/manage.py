@@ -36,8 +36,7 @@ def parse_verbosity(verbose=0, quiet=None):
     count=True,
 )
 @click.option("-q", "--quiet", help="Only log errors (overrides -v)", is_flag=True)
-@click.pass_context
-def manager(ctx, verbose=0, quiet=False, **kwargs):
+def manager(verbose=0, quiet=False):
     environ["VERBOSITY"] = parse_verbosity(verbose, quiet)
 
 
@@ -129,8 +128,11 @@ def prettify(where, sort=False):
 @manager.command()
 @click.option("-w", "--where", help="test path", default=None)
 @click.option("-x", "--stop", help="Stop after first error", is_flag=True)
-@click.option("-f", "--failed", help="Run failed tests", is_flag=True)
-@click.option("-c", "--cover/--no-cover", help="Add coverage report")
+@click.option("-f", "--failed", help="Run failed tests (overrides --debug)", is_flag=True)
+@click.option("-D", "--debug", help="Drop into pdb on failure (overridden by --failed)", is_flag=True)
+@click.option("-W", "--watch", help="Rerun tests on file changes", is_flag=True)
+@click.option("-c", "--cover/--no-cover", help="Add coverage report", default=True)
+@click.option("-C", "--capture/--no-capture", help="Capture stdout/sdterr (disables --watch)", default=True)
 @click.option("-t", "--tox", help="Run tox tests", is_flag=True)
 @click.option("-d", "--detox", help="Run detox tests", is_flag=True)
 @click.option("-v", "--verbose", help="Use detailed errors", is_flag=True)
@@ -144,15 +146,24 @@ def test(where=None, stop=None, **kwargs):
     """Run pytest, tox, and script tests"""
     opts = "-xv" if stop else "-v"
     opts += " --cov=riko" if kwargs.get("cover") else " --no-cov"
+    opts += "" if kwargs.get("capture") else " -s"
     opts += " --last-failed" if kwargs.get("failed") else ""
-    opts += " --tb=long -ra" if kwargs.get("verbose") else ""
+    opts += " --tb=long -ra" if kwargs.get("verbose") else " --tb=short -ra"
+
+    if kwargs.get("watch") and kwargs.get("capture"):
+        opts += " --looponfail"
+    elif kwargs.get("debug"):
+        opts += " --pdb"
+
     opts += f" {where}" if where else ""
 
     try:
         if kwargs.get("tox") and kwargs.get("parallel"):
-            check_call(["uv", "run", "tox", "-p", "auto"])
+            check_call(["tox", "-p", "auto"])
         elif kwargs.get("tox"):
-            check_call("uv run tox", shell=True)
+            check_call("tox", shell=True)
+        elif kwargs.get("detox"):
+            pass
         else:
             params = ("pytest %s" % opts).split(" ")
 

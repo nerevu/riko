@@ -3,7 +3,7 @@
 from riko import Context
 from riko.modules.fetch import pipe as fetch
 from riko.modules.uniq import pipe as uniq
-from riko.modules.filter import pipe as filter
+from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
 
 
@@ -17,7 +17,7 @@ def pipe_926a27580e74684fc63559b92bddaa30(
         return []
 
     sw_68 = fetch(
-        context,
+        context=context,
         conf={
             "URL": [
                 {
@@ -32,14 +32,14 @@ def pipe_926a27580e74684fc63559b92bddaa30(
         },
     )
 
-    sw_90 = uniq(context, sw_68, conf={"field": {"type": "text", "value": "link"}})
+    sw_90 = uniq(sw_68, context=context, conf={"field": {"type": "text", "value": "link"}})
 
-    sw_87 = filter(
-        context,
+    sw_87 = _filter(
         sw_90,
+        context=context,
         conf={
             "COMBINE": {"type": "text", "value": "or"},
-            "MODE": {"type": "text", "value": "block"},
+            "PERMIT": {"type": "bool", "value": False},
             "RULE": [
                 {
                     "field": {"type": "text", "value": "title"},
@@ -51,8 +51,8 @@ def pipe_926a27580e74684fc63559b92bddaa30(
     )
 
     sw_101 = sort(
-        context,
         sw_87,
+        context=context,
         conf={
             "KEY": [
                 {
@@ -71,4 +71,4 @@ if __name__ == "__main__":
     pipeline = pipe_926a27580e74684fc63559b92bddaa30(context, None)
 
     for i in pipeline:
-        print i
+        print(i)

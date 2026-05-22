@@ -15,8 +15,8 @@ Examples:
         >>>
         >>> item = {'word': 'hello'}
         >>> part = [{'subkey': 'word'}, {'value': ' world'}]
-        >>> next(pipe(item, conf={'part': part}))['strconcat'] == 'hello world'
-        True
+        >>> next(pipe(item, conf={'part': part}))['strconcat']
+        'hello world'
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -46,8 +46,8 @@ def parser(_, parts, skip=False, **kwargs):
         str: The concatenated string
 
     Examples:
-        >>> parser(None, ['one', 'two']) == 'onetwo'
-        True
+        >>> parser(None, ['one', 'two'])
+        'onetwo'
     """
     if skip:
         parsed = kwargs["stream"]
@@ -136,10 +136,9 @@ def pipe(*args, **kwargs):
         ...     {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
         ... ]
         >>> conf = {'part': part}
-        >>> resp = '<img src="http://www.site.com">'
-        >>> next(pipe(item, conf=conf))['strconcat'] == resp
-        True
-        >>> next(pipe(item, conf=conf, assign='result'))['result'] == resp
-        True
+        >>> next(pipe(item, conf=conf))['strconcat']
+        '<img src="http://www.site.com">'
+        >>> next(pipe(item, conf=conf, assign='result'))['result']
+        '<img src="http://www.site.com">'
     """
     return parser(*args, **kwargs)

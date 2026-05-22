@@ -23,20 +23,19 @@ def pipe_1166de33b0ea6936d96808717355beaa(
 
     if context and context.describe_dependencies:
         return [
-            "pipeitembuilder",
-            "pipeloop",
-            "pipeoutput",
-            "piperssitembuilder",
-            "pipeunion",
+            "itembuilder",
+            "loop",
+            "rssitembuilder",
+            "union",
         ]
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_710(context=None, item=None, conf=None, **kwargs):
+    def pipe_sw_710(item=None, context=None, conf=None, **kwargs):
         # todo: insert submodule description here
-        return pipe_itembuilder(
-            context,
-            _INPUT,
+        return itembuilder(
+            item,
+            context=context,
             conf={
                 "attrs": [
                     {
@@ -49,15 +48,16 @@ def pipe_1166de33b0ea6936d96808717355beaa(
                     },
                 ]
             },
+            **kwargs
         )
 
     # We need to wrap submodules (used by loops) so we can pass the
     # input at runtime (as we can to subpipelines)
-    def pipe_sw_696(context=None, item=None, conf=None, **kwargs):
+    def pipe_sw_696(item=None, context=None, conf=None, **kwargs):
         # todo: insert submodule description here
-        return pipe_itembuilder(
-            context,
-            _INPUT,
+        return itembuilder(
+            item,
+            context=context,
             conf={
                 "attrs": [
                     {
@@ -70,10 +70,11 @@ def pipe_1166de33b0ea6936d96808717355beaa(
                     },
                 ]
             },
+            **kwargs
         )
 
     sw_674 = rssitembuilder(
-        context,
+        context=context,
         conf={
             "mediaContentHeight": {"type": "text", "value": ""},
             "mediaThumbURL": {"type": "text", "value": "http://example.com/a.jpg"},
@@ -92,7 +93,7 @@ def pipe_1166de33b0ea6936d96808717355beaa(
     )
 
     sw_554 = itembuilder(
-        context,
+        context=context,
         conf={
             "attrs": [
                 {
@@ -104,7 +105,7 @@ def pipe_1166de33b0ea6936d96808717355beaa(
     )
 
     sw_569 = itembuilder(
-        context,
+        context=context,
         conf={
             "attrs": [
                 {
@@ -123,11 +124,11 @@ def pipe_1166de33b0ea6936d96808717355beaa(
         },
     )
 
-    sw_637 = union(context, sw_554, _OTHER2=sw_569, conf={})
+    sw_637 = union(sw_554, context=context, _OTHER2=sw_569, conf={})
 
     sw_656 = loop(
-        context,
         sw_637,
+        context=context,
         embed=pipe_sw_696,
         conf={
             "count": {"type": "text", "value": "all"},
@@ -157,8 +158,8 @@ def pipe_1166de33b0ea6936d96808717355beaa(
     )
 
     sw_688 = loop(
-        context,
         sw_656,
+        context=context,
         embed=pipe_sw_710,
         conf={
             "count": {"type": "text", "value": "all"},
@@ -187,7 +188,7 @@ def pipe_1166de33b0ea6936d96808717355beaa(
         },
     )
 
-    sw_730 = union(context, sw_674, _OTHER2=sw_688, conf={})
+    sw_730 = union(sw_674, context=context, _OTHER2=sw_688, conf={})
 
     return sw_730
 
@@ -196,4 +197,4 @@ if __name__ == "__main__":
     pipeline = pipe_1166de33b0ea6936d96808717355beaa(Context())
 
     for i in pipeline:
-        print i
+        print(i)

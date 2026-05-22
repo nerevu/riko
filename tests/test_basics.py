@@ -4,100 +4,81 @@
     We need more extensive tests with stable data feeds!
 """
 
+from decimal import Decimal
+
 from json import loads
 from os import path as p, remove
 from importlib import import_module
 from itertools import islice
 from riko.compile import parse_pipe_def, build_pipeline, stringify_pipe
+from riko.types import Item, Items, PipelineDependencies, SyncPipeline
 from riko.utils import extract_dependencies
-from riko import Context
+from riko import Context, get_path
+
+COMPARISONS = {Decimal('1'): ">", Decimal('-1'): "<", Decimal('0'): "=="}
 
 
 class TestBasics:
     """Test a few sample pipelines"""
 
-    def _get_pipeline(self, pipe_name):
+    def _get_pipeline(self, pipe_name) -> list[Item]:
         try:
-            module = import_module("tests.pypipelines.%s" % pipe_name)
+            module = import_module(f"tests.pypipelines.{pipe_name}")
         except ImportError:
             parent = p.dirname(__file__)
-            pipe_file_name = p.join(parent, "pipelines", "%s.json" % pipe_name)
+            pipe_file_name = p.join(parent, "pipelines", f"{pipe_name}.json")
 
             with open(pipe_file_name) as f:
                 pipe_def = loads(f.read())
 
-            pipe = parse_pipe_def(pipe_def, pipe_name)
-            pipeline = build_pipeline(self.context, pipe, pipe_def)
+            parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
+            stream = build_pipeline(parsed_pipe_def, pipe_def, context=self.context)
         else:
-            pipe_generator = getattr(module, pipe_name)
-            pipeline = pipe_generator(self.context)
+            pipeline: SyncPipeline = getattr(module, pipe_name)
+            stream = pipeline(context=self.context)
 
-        return list(pipeline)
+        return list(stream)
 
-    def _load(self, pipeline, pipe_name, value=0, check=1):
-        length = len(pipeline)
-        switch = {1: ">", -1: "<", 0: "=="}
-
-        # compare pipeline length to baseline value and obtain the following
-        # result
-        # 1 if length > value
-        # -1 if length < value
-        # 0 if length == value
-        compared = (length > value) - (length < value)
+    def _load(self, items: Items, pipe_name, value=0, check=1):
+        _check = Decimal(check)
+        length = len(items)
+        compared = Decimal(length).compare(value)
 
         try:
-            module = import_module("tests.pypipelines.%s" % pipe_name)
+            module = import_module(f"tests.pypipelines.{pipe_name}")
         except ImportError:
             parent = p.dirname(__file__)
-            pipe_file_name = p.join(parent, "pipelines", "%s.json" % pipe_name)
+            pipe_file_name = p.join(parent, "pipelines", f"{pipe_name}.json")
 
             with open(pipe_file_name) as f:
-                pjson = f.read()
+                pipe_def = loads(f.read())
 
-            pydeps = extract_dependencies(loads(pjson))
+            pydeps = extract_dependencies(pipe_def)
         else:
-            pipe_generator = getattr(module, pipe_name)
-            pydeps = extract_dependencies(pipe_generator=pipe_generator)
+            pipeline: PipelineDependencies = getattr(module, pipe_name)
+            pydeps = extract_dependencies(pipeline=pipeline)
 
-        if compared != check:
-            print(
-                "pipeline length %s %i, but expected %s %i."
-                % (switch.get(compared), value, switch.get(check), value)
-            )
+        if compared != _check:
+            actual, desired = COMPARISONS[compared], COMPARISONS[_check]
+            msg = f"pipeline length {actual} {value}, but expected {desired} {value}."
+            print(msg)
 
-        print("Modules used in %s: %s" % (pipe_name, pydeps))
+        print(f"Modules used in {pipe_name}: {pydeps}")
         assert compared == check
 
     def setup_method(self):
         """Compile common subpipe"""
         kwargs = {
             "test": True,
-            "describe_input": True,
-            "describe_dependencies": True,
+            "describe_input": False,
+            "describe_dependencies": False,
         }
 
         self.context = Context(**kwargs)
-        pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
-        parent = p.dirname(__file__)
-        pipe_file_name = p.join(parent, "pipelines", "%s.json" % pipe_name)
 
-        with open(pipe_file_name) as f:
-            pipe_def = loads(f.read())
 
-        pipe = parse_pipe_def(pipe_def, pipe_name)
-        parent = p.dirname(p.dirname(__file__))
-        pipe_file_name = p.join(parent, "pipe2py", "pypipelines", "%s.py" % pipe_name)
 
-        with open(pipe_file_name, "w") as f:
-            f.write(stringify_pipe(self.context, pipe, pipe_def))
-            self.context.describe_input = False
-            self.context.describe_dependencies = False
 
-    def teardown_method(self):
-        pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
-        parent = p.dirname(p.dirname(__file__))
-        pipe_file_name = p.join(parent, "pipe2py", "pypipelines", "%s.py" % pipe_name)
-        remove(pipe_file_name)
 
     ##############
     # Online Tests
@@ -107,39 +88,40 @@ class TestBasics:
         fetch-feed in a loop with emit all
         """
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_fetchsitefeed(self):
         """Loads a pipeline containing a fetchsitefeed module"""
         pipe_name = "pipe_551507461cbcb19a828165daad5fe007"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop"""
         pipe_name = "pipe_125e9fe8bb5f84526d21bebfec3ad116"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name, 1, 0)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 1, 0)
 
-        for i in pipeline:
-            assert i["info"]["login"] == "defunkt"
+        assert items[0]["info"]["login"] == "defunkt"
+        assert items[0]["info"]["user_view_type"] == "public"
+        assert items[0]["description"] == "public"
 
     def test_urlbuilder(self):
         """Loads the RTW URL Builder test pipeline and compiles and executes it
         to check the results
         """
         pipe_name = "pipe_e519dd393f943315f7e4128d19db2eac"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_input_override(self):
         """Loads a pipeline with input override"""
         self.context.inputs = {"textinput1": "IBM"}
         pipe_name = "pipe_1LNyRuNS3BGdkTKaAsqenA"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
-        sliced = islice(pipeline, 3)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
+        sliced = islice(items, 3)
         contains = self.context.inputs["textinput1"]
         # check if the ticker is in the title of any of the first 3 items
         assert contains in " ".join(item["title"] for item in sliced)
@@ -150,8 +132,8 @@ class TestBasics:
     def test_kazeeki(self):
         """Loads the kazeeki simple test pipeline"""
         pipe_name = "pipe_kazeeki"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
         example = {
             "author": {"name": None, "uri": None},
@@ -196,15 +178,7 @@ class TestBasics:
             "y:id": "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595",
         }
 
-        assert example == pipeline[0]
-
-    def test_simplest(self):
-        """Loads the RTW simple test pipeline and compiles and executes it to
-        check the results
-        """
-        pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        assert example == items[0]
 
     def test_feed(self):
         """Loads a simple test pipeline and compiles and executes it to check
@@ -213,52 +187,42 @@ class TestBasics:
         TODO: have these tests iterate over a number of test pipelines
         """
         pipe_name = "pipe_testpipe1"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
-        for i in pipeline:
-            assert "the" in i.get("description")
-
-    def test_filtered_multiple_sources(self):
-        """Loads the filter multiple sources pipeline and compiles and executes
-         it to check the results
-        Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
-         (assumes its been compiled to a .py file - see test setUp)
-        """
-        pipe_name = "pipe_c1cfa58f96243cea6ff50a12fc50c984"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        for i in items:
+            assert "the" in i["description"]
 
     def test_european_performance_cars(self):
         """Loads a pipeline containing a sort"""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     # todo: need tests with single and mult-part key
 
     def test_reverse_truncate(self):
         """Loads a pipeline containing a reverse and truncate"""
         pipe_name = "pipe_58a53262da5a095fe7a0d6d905cc4db6"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name, 3, 0)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 3, 0)
         prev_title = None
 
-        for i in pipeline:
+        for i in items:
             assert not prev_title or i["title"] < prev_title
             prev_title = i["title"]
 
     def test_tail(self):
         """Loads a pipeline containing a tail"""
         pipe_name = "pipe_06c4c44316efb0f5f16e4e7fa4589ba2"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_itembuilder(self):
         """Loads a pipeline containing an itembuilder"""
         pipe_name = "pipe_b96287458de001ad62a637095df33ad5"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name, 2, 0)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 2, 0)
 
         contains = [
             {"attrpath": {"attr2": "VAL2"}, "ATTR1": "VAL1"},
@@ -270,13 +234,13 @@ class TestBasics:
         ]
 
         for item in contains:
-            assert item in pipeline
+            assert item in items
 
     def test_rssitembuilder(self):
         """Loads a pipeline containing an rssitembuilder"""
         pipe_name = "pipe_1166de33b0ea6936d96808717355beaa"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name, 3, 0)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 3, 0)
 
         contains = [
             {
@@ -309,13 +273,13 @@ class TestBasics:
         ]
 
         for item in contains:
-            assert item in pipeline
+            assert item in items
 
     def test_csv(self):
         """Loads a pipeline containing a csv source"""
         pipe_name = "pipe_UuvYtuMe3hGDsmRgPm7D0g"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
         description = (
             "Total allowances claimed, inc travel: "
@@ -360,16 +324,16 @@ class TestBasics:
             "SpouseNumOfJourneys": "1",
         }
 
-        for item in pipeline:
+        for item in items:
             assert contains == item
 
     def test_describe_input(self):
         """Loads a pipeline but just gets the input requirements"""
         self.context.describe_input = True
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
-        assert pipeline == [
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
+        assert items == [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
             (
                 "",
@@ -387,23 +351,23 @@ class TestBasics:
                 "text",
                 "This is default text - is there debug text too?",
             ),
-            ("", "urlinput1", "urlinput1", "url", "file://data/example.html"),
+            ("", "urlinput1", "urlinput1", "url", get_path("example.html")),
         ]
 
     def test_describe_dependencies(self):
         self.context.describe_dependencies = True
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
-        assert pipeline == [
-            "pipedateinput",
-            "pipelocationinput",
-            "pipenumberinput",
-            "pipeoutput",
-            "pipeprivateinput",
-            "piperssitembuilder",
-            "pipetextinput",
-            "pipeurlinput",
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
+        assert items == [
+            "dateinput",
+            "locationinput",
+            "numberinput",
+            "output",
+            "privateinput",
+            "rssitembuilder",
+            "textinput",
+            "urlinput",
         ]
 
     def test_describe_both(self):
@@ -411,8 +375,8 @@ class TestBasics:
         self.context.describe_input = True
         self.context.describe_dependencies = True
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
         inputs = [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
@@ -426,100 +390,99 @@ class TestBasics:
                 "text",
                 "This is default text - is there debug text too?",
             ),
-            ("", "urlinput1", "urlinput1", "url", "file://data/example.html"),
+            ("", "urlinput1", "urlinput1", "url", get_path("example.html")),
         ]
 
         dependencies = [
-            "pipedateinput",
-            "pipelocationinput",
-            "pipenumberinput",
-            "pipeoutput",
-            "pipeprivateinput",
-            "piperssitembuilder",
-            "pipetextinput",
-            "pipeurlinput",
+            "dateinput",
+            "locationinput",
+            "numberinput",
+            "privateinput",
+            "rssitembuilder",
+            "input",
+            "urlinput",
         ]
 
-        assert pipeline == [{"inputs": inputs, "dependencies": dependencies}]
+        assert items == [{"inputs": inputs, "dependencies": dependencies}]
 
     def test_union_just_other(self):
         """Loads a pipeline containing a union with the first input unconnected
         Also tests for empty source string and reference to 'y:id.value'
         """
         pipe_name = "pipe_6e30c269a69baf92cd420900b0645f88"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_stringtokeniser(self):
         """Loads a pipeline containing a stringtokeniser"""
         pipe_name = "pipe_975789b47f17690a21e89b10a702bcbd"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name, 2, 0)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 2, 0)
         contains = [{"title": "#hashtags"}, {"title": "#with"}]
 
         for item in contains:
-            assert item in pipeline
+            assert item in items
 
     def test_fetchpage(self):
         """Loads a pipeline containing a fetchpage module"""
         pipe_name = "pipe_9420a757a49ddf11d8b98349abb5bcf4"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_fetchpage_loop(self):
         """Loads a pipeline containing a fetchpage module within a loop"""
         pipe_name = "pipe_188eca77fd28c96c559f71f5729d91ec"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_split(self):
         """Loads an example pipeline containing a split module"""
         pipe_name = "pipe_QMrlL_FS3BGlpwryODY80A"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_simplemath_1(self):
         """Loads a pipeline containing simplemath"""
         pipe_name = "pipe_zKJifuNS3BGLRQK_GsevXg"  # empty feed
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name, check=0)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, check=0)
 
     def test_twitter_caption_search(self):
         """Loads the Twitter Caption Search pipeline and compiles and
         executes it to check the results
         """
         pipe_name = "pipe_eb3e27f8f1841835fdfd279cd96ff9d8"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name)
 
     def test_loop_example(self):
         """Loads the loop example pipeline and compiles and executes it to
         check the results
         """
         pipe_name = "pipe_dAI_R_FS3BG6fTKsAsqenA"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name, value=1, check=0)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, value=1, check=0)
         contains = (
             "THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ "
             "WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY (Severe)"
         )
 
         # todo: check the data! e.g. pubdate etc.
-        for item in pipeline:
+        for item in items:
             assert contains == item["title"]
 
     def test_namespaceless_xml_input(self):
         """Loads a pipeline containing deep xml source with no namespace"""
         pipe_name = "pipe_402e244d09a4146cd80421c6628eb6d9"
-        pipeline = self._get_pipeline(pipe_name)
-        self._load(pipeline, pipe_name, value=5, check=1)
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, value=5, check=1)
         contains = [
             "Gower to Anglesey",
             "The Riddle of the Tides",
             "Wales: Severn Bore",
         ]
 
-        sliced = islice(pipeline, 3)
+        sliced = islice(items, 3)
 
         for item in sliced:
             assert item["title"] in contains
@@ -529,17 +492,17 @@ class TestBasics:
     #     """Loads a pipeline containing a yql query
     #     """
     #     pipe_name = 'pipe_ea463d94cd7c63ea003d9b1d0589d9df'
-    #     pipeline = self._get_pipeline(pipe_name)
-    #     self._load(pipeline, pipe_name)
-    #     [self.assertEqual(i['title'], i['a']['content']) for i in pipeline]
-
+    #     items = self._get_pipeline(pipe_name)
+    #     self._load(items, pipe_name)
+    #     [self.assertEqual(i['title'], i['a']['content']) for i in items]
+    #
     # todo: test simplemath - divide by zero and check/implement yahoo handling
     # todo: test malformed pipeline syntax
     # todo: move these tests to the module doc blocks so each module is tested
     # individually
     # todo: test pipe compilation (compare output against expected .py file)
-
-
+    #
+    #
 #######################
 # Unimplemented modules
 #######################
@@ -550,10 +513,10 @@ class TestBasics:
 #         part of loop result, and regexes multi-part reference.
 #     """
 #     pipe_name = 'pipe_b3d43c00f9e1145ff522fb71ea743e99'
-#     pipeline = self._get_pipeline(pipe_name)
-#     self._load(pipeline, pipe_name)
+#     items = self._get_pipeline(pipe_name)
+#     self._load(items, pipe_name)
 #     contains = u'Hywel Francis (University of Wales, Swansea (UWS))'
-#     sliced = islice(pipeline, 3)  # lots of data, so just check some of it
+#     sliced = islice(items, 3)  # lots of data, so just check some of it
 #     [self.assertEqual(item['title'], contains) for item in sliced]
 
 # # TermExtractor module not yet implemented
@@ -562,8 +525,8 @@ class TestBasics:
 #          to check the results
 #     """
 #     pipe_name = 'pipe_93abb8500bd41d56a37e8885094c8d10'
-#     pipeline = self._get_pipeline(pipe_name)
-#     self._load(pipeline, pipe_name)
+#     items = self._get_pipeline(pipe_name)
+#     self._load(items, pipe_name)
 
 ###############
 # Failing Tests
@@ -574,16 +537,16 @@ class TestBasics:
 #     """Loads a pipeline containing a loop, complex regex etc. for twitter
 #     """
 #     pipe_name = 'pipe_21a90f8ebdba0265c136861a49cf3d93'
-#     pipeline = self._get_pipeline(pipe_name)
-#     self._load(pipeline, pipe_name)
+#     items = self._get_pipeline(pipe_name)
+#     self._load(items, pipe_name)
 
 # # need to fix xpath
 # def test_xpathfetchpage_1(self):
 #     """Loads a pipeline containing xpathfetchpage
 #     """
 #     pipe_name = 'pipe_a08134746e30a6dd3a7cb3c0cf098692'
-#     pipeline = self._get_pipeline(pipe_name)
-#     self._load(pipeline, pipe_name)
+#     items = self._get_pipeline(pipe_name)
+#     self._load(items, pipe_name)
 #     [self.assertIn(i, 'title') for i in pipe]
 
 # # dead link, need to find a new data source
@@ -591,5 +554,5 @@ class TestBasics:
 #     """Loads a pipeline containing a URL builder in a loop
 #     """
 #     pipe_name = 'pipe_e65397e116d7754da0dd23425f1f0af1'
-#     pipeline = self._get_pipeline(pipe_name)
-#     self._load(pipeline, pipe_name)
+#     items = self._get_pipeline(pipe_name)
+#     self._load(items, pipe_name)

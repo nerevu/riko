@@ -128,7 +128,9 @@ def pipe(*args, **kwargs):
         >>> date = next(pipe(item, conf=conf, emit=True))['date']
         >>> date.isoformat() == '1982-05-04T00:00:00+00:00'
         True
-        >>> item = {'content': 'False'}
+        >>> item = {'content': None}
+        >>> next(pipe(item, emit=True))
+        None
         >>> conf = {'type': 'bool'}
         >>> next(pipe(item, conf=conf, emit=True))
         False

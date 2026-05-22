@@ -83,7 +83,7 @@ def parser(stream, objconf, tuples, **kwargs):
         grouped = it.groupby(sorted_stream, keyfunc)
         summed = ({key: _sum(group)} for key, group in grouped)
     else:
-        summed = {kwargs["assign"]: _sum(stream)}
+        summed = _sum(stream)
 
     return summed
 

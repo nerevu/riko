@@ -36,8 +36,8 @@ from riko.bado import coroutine, return_value, itertools as ait
 from riko.dotdict import DotDict
 from meza.process import merge
 
-OPTS = {"listize": True, "extract": "rule", "emit": True}
-DEFAULTS = {"convert": True, "multi": False}
+OPTS = {"listize": True, "extract": "rule"}
+DEFAULTS = {"convert": True, "multi": False, "emit": True}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 

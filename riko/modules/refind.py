@@ -32,7 +32,7 @@ from functools import reduce
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
 
-OPTS = {"listize": True, "ftype": "text", "field": "content", "extract": "rule"}
+OPTS = {"ftype": "text", "listize": True, "field": "content", "extract": "rule"}
 
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger

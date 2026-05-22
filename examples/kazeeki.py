@@ -24,7 +24,7 @@ def make_regex(field, match, replace, default=None):
 
 
 def make_simplemath(other, op):
-    return {"other": {"subkey": other, "type": "number"}, "op": op}
+    return {"other": {"subkey": other, "type": "float"}, "op": op}
 
 
 def add_source(source):

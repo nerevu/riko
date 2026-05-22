@@ -1,0 +1,3309 @@
+%PDF-1.4
+%“Œ‹ž ReportLab Generated PDF document http://www.reportlab.com
+1 0 obj
+<<
+/F1 2 0 R /F2 3 0 R /F3 8 0 R /F4 58 0 R /F5 60 0 R /F6 61 0 R
+>>
+endobj
+2 0 obj
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
+endobj
+3 0 obj
+<<
+/BaseFont /Times-Roman /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
+>>
+endobj
+4 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 27 0 R /XYZ 57.02362 657.5236 0 ] /Rect [ 57.02362 666.0236 166.5136 678.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+5 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 70 0 R /XYZ 57.02362 576.5236 0 ] /Rect [ 174.6736 666.0236 304.7336 678.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+6 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 70 0 R /XYZ 57.02362 417.5236 0 ] /Rect [ 312.8936 666.0236 444.0636 678.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+7 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 70 0 R /XYZ 63.02362 213.9843 0 ] /Rect [ 235.6736 590.4236 240.1216 600.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+8 0 obj
+<<
+/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding /Name /F3 /Subtype /Type1 /Type /Font
+>>
+endobj
+9 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/aggregate.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 534.7736 108.0536 546.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+10 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/count.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 504.7736 87.48362 516.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+11 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/csv.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 474.7736 78.02362 486.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+12 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/currencyformat.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 444.7736 121.3636 456.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+13 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/currencyformat.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 432.7736 71.36362 444.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+14 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/dateformat.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 414.7736 110.8236 426.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+15 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/exchangerate.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 384.7736 123.6136 396.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+16 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/feedautodiscovery.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 354.7736 125.2836 366.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+17 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/feedautodiscovery.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 342.7736 81.91362 354.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+18 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/fetch.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 324.7736 84.70362 336.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+19 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/fetchdata.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 294.7736 104.1636 306.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+20 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/fetchpage.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 264.7736 106.9436 276.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+21 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/fetchsitefeed.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 234.7736 119.7236 246.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+22 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/fetchtext.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 204.7736 100.8236 216.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+23 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/filter.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 174.7736 81.91362 186.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+24 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/hash.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 144.7736 84.70362 156.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+25 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/input.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 114.7736 84.70362 126.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+26 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/itembuilder.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 84.77362 111.9236 96.77362 ] /Subtype /Link /Type /Annot
+>>
+endobj
+27 0 obj
+<<
+/Annots [ 4 0 R 5 0 R 6 0 R 7 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 
+  15 0 R 16 0 R 17 0 R 18 0 R 19 0 R 20 0 R 21 0 R 22 0 R 23 0 R 24 0 R 
+  25 0 R 26 0 R ] /Contents 83 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 82 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 
+  /Trans <<
+
+>> /Type /Page
+>>
+endobj
+28 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/join.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 750.7736 78.58362 762.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+29 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/regex.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 720.7736 88.03362 732.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+30 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/refind.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 690.7736 88.03362 702.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+31 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/rename.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 660.7736 96.92362 672.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+32 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/reverse.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 630.7736 96.36362 642.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+33 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/rssitembuilder.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 600.7736 125.2536 612.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+34 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/simplemath.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 570.7736 114.1436 582.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+35 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/slugify.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 540.7736 91.36362 552.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+36 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/sort.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 510.7736 79.69362 522.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+37 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/split.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 480.7736 80.80362 492.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+38 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/strconcat.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 450.7736 103.5936 462.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+39 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/strfind.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 420.7736 90.25362 432.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+40 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/strreplace.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 390.7736 106.9236 402.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+41 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/strtransform.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 360.7736 116.3636 372.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+42 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/subelement.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 330.7736 114.7136 342.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+43 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/substr.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 300.7736 90.25362 312.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+44 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/sum.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 270.7736 81.91362 282.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+45 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/tail.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 240.7736 75.80362 252.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+46 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/timeout.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 210.7736 95.81362 222.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+47 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/tokenizer.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 180.7736 103.5936 192.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+48 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/truncate.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 150.7736 99.15362 162.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+49 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/udf.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 120.7736 76.92362 132.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+50 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/union.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 90.77362 87.48362 102.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+51 0 obj
+<<
+/Annots [ 28 0 R 29 0 R 30 0 R 31 0 R 32 0 R 33 0 R 34 0 R 35 0 R 36 0 R 37 0 R 
+  38 0 R 39 0 R 40 0 R 41 0 R 42 0 R 43 0 R 44 0 R 45 0 R 46 0 R 47 0 R 
+  48 0 R 49 0 R 50 0 R ] /Contents 84 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 82 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 
+  /Trans <<
+
+>> /Type /Page
+>>
+endobj
+52 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/uniq.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 750.7736 81.92362 762.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+53 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/urlbuilder.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 720.7736 104.1436 732.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+54 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/urlparse.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 690.7736 99.14362 702.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+55 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/xpathfetchpage.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 660.7736 120.2836 672.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+56 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/xpathfetchpage.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 648.7736 74.14362 660.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+57 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/riko/modules/yql.py)
+>> /Border [ 0 0 0 ] /Rect [ 63.02362 630.7736 75.80362 642.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+58 0 obj
+<<
+/BaseFont /Courier /Encoding /WinAnsiEncoding /Name /F4 /Subtype /Type1 /Type /Font
+>>
+endobj
+59 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 70 0 R /XYZ 63.02362 201.9843 0 ] /Rect [ 326.8536 572.4236 535.472 582.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+60 0 obj
+<<
+/BaseFont /Courier-Bold /Encoding /WinAnsiEncoding /Name /F5 /Subtype /Type1 /Type /Font
+>>
+endobj
+61 0 obj
+<<
+/BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding /Name /F6 /Subtype /Type1 /Type /Font
+>>
+endobj
+62 0 obj
+<<
+/Annots [ 52 0 R 53 0 R 54 0 R 55 0 R 56 0 R 57 0 R 59 0 R ] /Contents 85 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 82 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 
+  /Trans <<
+
+>> /Type /Page
+>>
+endobj
+63 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (http://google.com)
+>> /Border [ 0 0 0 ] /Rect [ 141.5915 336.7736 218.3015 348.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+64 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/reubano/feed)
+>> /Border [ 0 0 0 ] /Rect [ 141.5915 318.7736 282.2315 330.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+65 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (file:///Users/reubano/Downloads/feed.xml)
+>> /Border [ 0 0 0 ] /Rect [ 141.5915 300.7736 323.8815 312.7736 ] /Subtype /Link /Type /Annot
+>>
+endobj
+66 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 27 0 R /XYZ 235.6736 599.0236 0 ] /Rect [ 63.02362 199.9843 68.58362 211.9843 ] /Subtype /Link /Type /Annot
+>>
+endobj
+67 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/README.rst#design-principles)
+>> /Border [ 0 0 0 ] /Rect [ 168.633 199.9843 245.873 211.9843 ] /Subtype /Link /Type /Annot
+>>
+endobj
+68 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 62 0 R /XYZ 326.8536 581.0236 0 ] /Rect [ 63.02362 187.9843 68.58362 199.9843 ] /Subtype /Link /Type /Annot
+>>
+endobj
+69 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#synchronous-processing)
+>> /Border [ 0 0 0 ] /Rect [ 168.633 187.9843 288.673 199.9843 ] /Subtype /Link /Type /Annot
+>>
+endobj
+70 0 obj
+<<
+/Annots [ 63 0 R 64 0 R 65 0 R 66 0 R 67 0 R 68 0 R 69 0 R ] /Contents 86 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 82 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 
+  /Trans <<
+
+>> /Type /Page
+>>
+endobj
+71 0 obj
+<<
+/Outlines 73 0 R /PageLabels 87 0 R /PageMode /UseNone /Pages 82 0 R /Type /Catalog
+>>
+endobj
+72 0 obj
+<<
+/Author () /CreationDate (D:20250110195959-06'00') /Creator (\(unspecified\)) /Keywords () /ModDate (D:20250110195959-06'00') /Producer (ReportLab PDF Library - www.reportlab.com) 
+  /Subject (\(unspecified\)) /Title (riko FAQ) /Trapped /False
+>>
+endobj
+73 0 obj
+<<
+/Count 9 /First 74 0 R /Last 81 0 R /Type /Outlines
+>>
+endobj
+74 0 obj
+<<
+/Dest [ 27 0 R /XYZ 57.02362 705.0236 0 ] /Next 75 0 R /Parent 73 0 R /Title (Index)
+>>
+endobj
+75 0 obj
+<<
+/Count 4 /Dest [ 27 0 R /XYZ 57.02362 654.0236 0 ] /First 76 0 R /Last 79 0 R /Next 80 0 R /Parent 73 0 R 
+  /Prev 74 0 R /Title (What pipes are available?)
+>>
+endobj
+76 0 obj
+<<
+/Dest [ 27 0 R /XYZ 57.02362 621.0236 0 ] /Next 77 0 R /Parent 75 0 R /Title (Overview)
+>>
+endobj
+77 0 obj
+<<
+/Dest [ 62 0 R /XYZ 57.02362 603.0236 0 ] /Next 78 0 R /Parent 75 0 R /Prev 76 0 R /Title (Args)
+>>
+endobj
+78 0 obj
+<<
+/Dest [ 62 0 R /XYZ 57.02362 324.6236 0 ] /Next 79 0 R /Parent 75 0 R /Prev 77 0 R /Title (Kwargs)
+>>
+endobj
+79 0 obj
+<<
+/Dest [ 70 0 R /XYZ 57.02362 603.0236 0 ] /Parent 75 0 R /Prev 78 0 R /Title (Notes)
+>>
+endobj
+80 0 obj
+<<
+/Dest [ 70 0 R /XYZ 57.02362 573.0236 0 ] /Next 81 0 R /Parent 73 0 R /Prev 75 0 R /Title (What file types are supported?)
+>>
+endobj
+81 0 obj
+<<
+/Dest [ 70 0 R /XYZ 57.02362 414.0236 0 ] /Parent 73 0 R /Prev 80 0 R /Title (What protocols are supported?)
+>>
+endobj
+82 0 obj
+<<
+/Count 4 /Kids [ 27 0 R 51 0 R 62 0 R 70 0 R ] /Type /Pages
+>>
+endobj
+83 0 obj
+<<
+/Length 9932
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 57.02362 741.0236 cm
+q
+BT 1 0 0 1 0 4 Tm 202.0042 0 Td 24 TL /F2 20 Tf .133333 .133333 .133333 rg (riko FAQ) Tj T* -202.0042 0 Td ET
+Q
+Q
+q
+1 0 0 1 57.02362 684.0236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (Index) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 666.0236 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 .4 .6 rg (What pipes are available) Tj 0 0 0 rg ( | ) Tj 0 .4 .6 rg (What file types are supported) Tj 0 0 0 rg ( | ) Tj 0 .4 .6 rg (What protocols are supported) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 633.0236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (What pipes are available?) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 603.0236 cm
+q
+BT 1 0 0 1 0 3 Tm 18 TL /F2 15 Tf .133333 .133333 .133333 rg (Overview) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 585.0236 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (riko's available pipes are outlined below ) Tj /F1 8 Tf 0 .4 .6 rg 5 Ts (1) Tj /F1 10 Tf 0 0 0 rg 0 Ts (:) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 579.0236 cm
+Q
+q
+1 0 0 1 57.02362 69.02362 cm
+q
+1 1 1 rg
+n 0 510 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 480 481.2283 -30 re f*
+1 1 1 rg
+n 0 450 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 420 481.2283 -30 re f*
+1 1 1 rg
+n 0 390 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 360 481.2283 -30 re f*
+1 1 1 rg
+n 0 330 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 300 481.2283 -30 re f*
+1 1 1 rg
+n 0 270 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 240 481.2283 -30 re f*
+1 1 1 rg
+n 0 210 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 180 481.2283 -30 re f*
+1 1 1 rg
+n 0 150 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 120 481.2283 -30 re f*
+1 1 1 rg
+n 0 90 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 60 481.2283 -30 re f*
+1 1 1 rg
+n 0 30 481.2283 -30 re f*
+0 0 0 rg
+BT /F3 10 Tf 12 TL ET
+q
+1 0 0 1 6 483 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 6.268252 0 Td (Pipe name) Tj T* -6.268252 0 Td ET
+Q
+Q
+q
+1 0 0 1 80.5565 483 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F3 10 Tf 12 TL 2.079126 0 Td (Pipe) Tj T* .28 0 Td (type) Tj T* -2.359126 0 Td ET
+Q
+Q
+q
+1 0 0 1 117.8348 483 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F3 10 Tf 12 TL 1.63199 0 Td (Pipe su) Tj T* 2.785 0 Td (b-type) Tj T* -4.41699 0 Td ET
+Q
+Q
+q
+1 0 0 1 168.6687 483 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 114.3798 0 Td (Pipe description) Tj T* -114.3798 0 Td ET
+Q
+Q
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 465 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (aggregate) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 453 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 453 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (aggrega) Tj T* (tor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 465 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (performs an arbitrary \(user-defined\) function on a stream) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 435 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (count) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 423 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 423 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (aggrega) Tj T* (tor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 435 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (counts the number of items in a feed) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 405 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (csv) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 393 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 405 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 405 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (parses a csv file to yield items) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 363 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (currencyform) Tj T* (at) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 363 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 363 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 375 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (formats a number to a given currency string) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 345 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (dateformat) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 333 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 333 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 345 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (formats a date) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 315 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (exchangerate) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 303 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 303 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 315 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (retrieves the current exchange rate for a given currency pair) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 273 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (feedautodisco) Tj T* (very) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 273 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 285 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 285 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetches and parses the first feed found on a site) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 255 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetch) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 243 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 255 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 255 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetches and parses a feed to return the entries) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 225 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetchdata) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 213 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 225 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 225 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetches and parses an XML or JSON file to return the feed entries) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 195 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetchpage) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 183 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 195 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 195 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetches the content of a given web site as a string) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 165 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetchsitefeed) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 153 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 165 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 165 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetches and parses the first feed found on a site) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 135 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetchtext) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 123 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 135 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 135 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetches and parses a text file) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 105 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (filter) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 93 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 93 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 105 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (extracts items matching the given rules) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 75 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (hash) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 75 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (hashes the field of a feed item) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 45 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (input) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 45 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL -0.02003 Tw (prompts for text and parses it into a variety of different types, e.g., int,) Tj T* 0 Tw (bool, date, etc) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 15 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (itembuilder) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 15 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 15 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (builds an item) Tj T* ET
+Q
+Q
+q
+1 J
+1 j
+0 0 0 RG
+.25 w
+n 0 0 m 481.2283 0 l S
+n 0 480 m 481.2283 480 l S
+n 0 450 m 481.2283 450 l S
+n 0 420 m 481.2283 420 l S
+n 0 390 m 481.2283 390 l S
+n 0 360 m 481.2283 360 l S
+n 0 330 m 481.2283 330 l S
+n 0 300 m 481.2283 300 l S
+n 0 270 m 481.2283 270 l S
+n 0 240 m 481.2283 240 l S
+n 0 210 m 481.2283 210 l S
+n 0 180 m 481.2283 180 l S
+n 0 150 m 481.2283 150 l S
+n 0 120 m 481.2283 120 l S
+n 0 90 m 481.2283 90 l S
+n 0 60 m 481.2283 60 l S
+n 0 30 m 481.2283 30 l S
+n 74.5565 0 m 74.5565 510 l S
+n 111.8348 0 m 111.8348 510 l S
+n 162.6687 0 m 162.6687 510 l S
+n 0 510 m 481.2283 510 l S
+n 0 0 m 0 510 l S
+n 481.2283 0 m 481.2283 510 l S
+Q
+Q
+Q
+ 
+endstream
+endobj
+84 0 obj
+<<
+/Length 11838
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 57.02362 75.02362 cm
+q
+1 1 1 rg
+n 0 690 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 660 481.2283 -30 re f*
+1 1 1 rg
+n 0 630 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 600 481.2283 -30 re f*
+1 1 1 rg
+n 0 570 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 540 481.2283 -30 re f*
+1 1 1 rg
+n 0 510 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 480 481.2283 -30 re f*
+1 1 1 rg
+n 0 450 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 420 481.2283 -30 re f*
+1 1 1 rg
+n 0 390 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 360 481.2283 -30 re f*
+1 1 1 rg
+n 0 330 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 300 481.2283 -30 re f*
+1 1 1 rg
+n 0 270 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 240 481.2283 -30 re f*
+1 1 1 rg
+n 0 210 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 180 481.2283 -30 re f*
+1 1 1 rg
+n 0 150 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 120 481.2283 -30 re f*
+1 1 1 rg
+n 0 90 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 60 481.2283 -30 re f*
+1 1 1 rg
+n 0 30 481.2283 -30 re f*
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 675 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (join) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 663 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 663 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (aggrega) Tj T* (tor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 675 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (perform a SQL like join on two feeds) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 645 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (regex) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 633 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 633 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 645 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (replaces text in fields of a feed item using regexes) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 615 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (refind) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 603 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 603 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 603 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (finds text located before, after, or between substrings using regular) Tj T* (expressions) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 585 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (rename) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 573 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 573 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 585 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (renames or copies fields in a feed item) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 555 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (reverse) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 543 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 543 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 555 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (reverses the order of source items in a feed) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 525 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (rssitembuilder) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 513 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 525 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 525 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (builds an rss item) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 495 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (simplemath) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 483 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 483 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 495 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (performs basic arithmetic, such as addition and subtraction) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 465 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (slugify) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 453 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 453 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 465 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (slugifies text) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 435 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (sort) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 423 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 423 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 435 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (sorts a feed according to a specified key) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 405 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (split) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 393 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 393 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 405 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (splits a feed into identical copies) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 375 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (strconcat) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 363 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 363 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 375 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (concatenates strings) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 345 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (strfind) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 333 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 333 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 345 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (finds text located before, after, or between substrings) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 315 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (strreplace) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 303 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 303 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 315 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (replaces the text of a field of a feed item) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 285 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (strtransform) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 273 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 273 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 285 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (performs string transformations on the field of a feed item) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 255 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (subelement) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 243 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 243 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 255 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (extracts sub-elements for the item of a feed) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 225 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (substr) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 213 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 213 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 225 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (returns a substring of a field of a feed item) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 195 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (sum) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 183 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 183 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (aggrega) Tj T* (tor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 195 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (sums a field of items in a feed) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 165 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (tail) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 153 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 153 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 165 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (truncates a feed to the last N items) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 135 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (timeout) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 123 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 123 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 135 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL -0.065033 Tw (returns items from a stream until a certain amount of time has passed) Tj T* 0 Tw ET
+Q
+Q
+q
+1 0 0 1 6 105 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (tokenizer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 93 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 93 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 105 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (splits a string by a delimiter) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 75 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (truncate) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 75 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (returns a specified number of items from a feed) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 45 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (udf) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 45 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (performs an arbitrary \(user-defined\) function on an item) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 15 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (union) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 15 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (merges multiple feeds together) Tj T* ET
+Q
+Q
+q
+1 J
+1 j
+0 0 0 RG
+.25 w
+n 0 690 m 481.2283 690 l S
+n 0 0 m 481.2283 0 l S
+n 0 660 m 481.2283 660 l S
+n 0 630 m 481.2283 630 l S
+n 0 600 m 481.2283 600 l S
+n 0 570 m 481.2283 570 l S
+n 0 540 m 481.2283 540 l S
+n 0 510 m 481.2283 510 l S
+n 0 480 m 481.2283 480 l S
+n 0 450 m 481.2283 450 l S
+n 0 420 m 481.2283 420 l S
+n 0 390 m 481.2283 390 l S
+n 0 360 m 481.2283 360 l S
+n 0 330 m 481.2283 330 l S
+n 0 300 m 481.2283 300 l S
+n 0 270 m 481.2283 270 l S
+n 0 240 m 481.2283 240 l S
+n 0 210 m 481.2283 210 l S
+n 0 180 m 481.2283 180 l S
+n 0 150 m 481.2283 150 l S
+n 0 120 m 481.2283 120 l S
+n 0 90 m 481.2283 90 l S
+n 0 60 m 481.2283 60 l S
+n 0 30 m 481.2283 30 l S
+n 74.5565 0 m 74.5565 690 l S
+n 111.8348 0 m 111.8348 690 l S
+n 162.6687 0 m 162.6687 690 l S
+n 0 0 m 0 690 l S
+n 481.2283 0 m 481.2283 690 l S
+Q
+Q
+Q
+ 
+endstream
+endobj
+85 0 obj
+<<
+/Length 15763
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 57.02362 615.0236 cm
+q
+1 1 1 rg
+n 0 150 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 120 481.2283 -30 re f*
+1 1 1 rg
+n 0 90 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 60 481.2283 -30 re f*
+1 1 1 rg
+n 0 30 481.2283 -30 re f*
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 135 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (uniq) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 123 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (oper) Tj T* (ator) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 123 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (compos) Tj T* (er) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 135 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (filters out non unique items according to a specified field) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 105 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (urlbuilder) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 93 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 93 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 105 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (builds a url) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 75 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (urlparse) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (transfor) Tj T* (mer) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 75 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (parses a URL into its six components) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 33 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (xpathfetchpa) Tj T* (ge) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 45 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 45 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetches the content of a given website as DOM nodes or a string) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 15 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (yql) Tj T* ET
+Q
+Q
+q
+1 0 0 1 80.5565 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (proce) Tj T* (ssor) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.8348 15 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (source) Tj T* ET
+Q
+Q
+q
+1 0 0 1 168.6687 15 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetches the result of a given YQL query) Tj T* ET
+Q
+Q
+q
+1 J
+1 j
+0 0 0 RG
+.25 w
+n 0 150 m 481.2283 150 l S
+n 0 120 m 481.2283 120 l S
+n 0 90 m 481.2283 90 l S
+n 0 60 m 481.2283 60 l S
+n 0 30 m 481.2283 30 l S
+n 74.5565 0 m 74.5565 150 l S
+n 111.8348 0 m 111.8348 150 l S
+n 162.6687 0 m 162.6687 150 l S
+n 0 0 m 0 150 l S
+n 481.2283 0 m 481.2283 150 l S
+n 0 0 m 481.2283 0 l S
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 615.0236 cm
+Q
+q
+1 0 0 1 57.02362 585.0236 cm
+q
+BT 1 0 0 1 0 3 Tm 18 TL /F2 15 Tf .133333 .133333 .133333 rg (Args) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 543.0236 cm
+q
+BT 1 0 0 1 0 26 Tm 22.68559 Tw 12 TL /F1 10 Tf 0 0 0 rg (riko ) Tj /F4 10 Tf (pipes) Tj /F1 10 Tf ( come in two flavors; ) Tj /F4 10 Tf (operator) Tj /F1 10 Tf ( and ) Tj /F4 10 Tf (processor) Tj /F1 10 Tf ( ) Tj /F1 8 Tf 0 .4 .6 rg 5 Ts (2) Tj /F1 10 Tf 0 0 0 rg 0 Ts (.) Tj T* 0 Tw 19.39854 Tw /F4 10 Tf (operator``s) Tj ( ) Tj (operate) Tj ( ) Tj (on) Tj ( ) Tj (an) Tj ( ) Tj (entire) Tj ( ) Tj (``stream) Tj /F1 10 Tf ( at once. Example) Tj T* 0 Tw /F4 10 Tf (operator``s) Tj ( ) Tj (include) Tj ( ) Tj (``pipecount) Tj /F1 10 Tf (, ) Tj /F4 10 Tf (pipefilter) Tj /F1 10 Tf (, and ) Tj /F4 10 Tf (pipereverse) Tj /F1 10 Tf (.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 461.8236 cm
+q
+q
+1 0 0 1 0 0 cm
+q
+1 0 0 1 6.6 6.6 cm
+q
+.662745 .662745 .662745 RG
+.5 w
+.941176 .972549 1 rg
+n -6 -6 480.0283 72 re B*
+Q
+q
+.941176 .972549 1 rg
+n 0 48 6 12 re f*
+.941176 .972549 1 rg
+n 6 48 6 12 re f*
+.941176 .972549 1 rg
+n 12 48 6 12 re f*
+.941176 .972549 1 rg
+n 24 48 24 12 re f*
+.941176 .972549 1 rg
+n 48 48 6 12 re f*
+.941176 .972549 1 rg
+n 54 48 120 12 re f*
+.941176 .972549 1 rg
+n 174 48 6 12 re f*
+.941176 .972549 1 rg
+n 180 48 36 12 re f*
+.941176 .972549 1 rg
+n 222 48 24 12 re f*
+.941176 .972549 1 rg
+n 246 48 0 12 re f*
+.941176 .972549 1 rg
+n 0 36 6 12 re f*
+.941176 .972549 1 rg
+n 6 36 6 12 re f*
+.941176 .972549 1 rg
+n 12 36 6 12 re f*
+.941176 .972549 1 rg
+n 18 36 0 12 re f*
+.941176 .972549 1 rg
+n 0 24 6 12 re f*
+.941176 .972549 1 rg
+n 6 24 6 12 re f*
+.941176 .972549 1 rg
+n 12 24 6 12 re f*
+.941176 .972549 1 rg
+n 24 24 36 12 re f*
+.941176 .972549 1 rg
+n 66 24 6 12 re f*
+.941176 .972549 1 rg
+n 78 24 12 12 re f*
+.941176 .972549 1 rg
+n 90 24 42 12 re f*
+.941176 .972549 1 rg
+n 132 24 6 12 re f*
+.941176 .972549 1 rg
+n 144 24 72 12 re f*
+.941176 .972549 1 rg
+n 216 24 12 12 re f*
+.941176 .972549 1 rg
+n 234 24 6 12 re f*
+.941176 .972549 1 rg
+n 240 24 42 12 re f*
+.941176 .972549 1 rg
+n 282 24 6 12 re f*
+.941176 .972549 1 rg
+n 294 24 72 12 re f*
+.941176 .972549 1 rg
+n 366 24 12 12 re f*
+.941176 .972549 1 rg
+n 378 24 0 12 re f*
+.941176 .972549 1 rg
+n 0 12 6 12 re f*
+.941176 .972549 1 rg
+n 6 12 6 12 re f*
+.941176 .972549 1 rg
+n 12 12 6 12 re f*
+.941176 .972549 1 rg
+n 24 12 24 12 re f*
+.941176 .972549 1 rg
+n 48 12 6 12 re f*
+.941176 .972549 1 rg
+n 54 12 24 12 re f*
+.941176 .972549 1 rg
+n 78 12 6 12 re f*
+.941176 .972549 1 rg
+n 84 12 36 12 re f*
+.941176 .972549 1 rg
+n 120 12 12 12 re f*
+.941176 .972549 1 rg
+n 132 12 0 12 re f*
+.941176 .972549 1 rg
+n 0 0 6 12 re f*
+.941176 .972549 1 rg
+n 6 0 42 12 re f*
+.941176 .972549 1 rg
+n 48 0 6 12 re f*
+.941176 .972549 1 rg
+n 60 0 72 12 re f*
+.941176 .972549 1 rg
+n 132 0 6 12 re f*
+.941176 .972549 1 rg
+n 138 0 0 12 re f*
+BT 1 0 0 1 0 50 Tm 12 TL /F4 10 Tf .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf 0 .501961 0 rg (from) Tj /F4 10 Tf .733333 .733333 .733333 rg ( ) Tj /F5 10 Tf 0 0 1 rg (riko.modules.reverse) Tj /F4 10 Tf .733333 .733333 .733333 rg ( ) Tj /F5 10 Tf 0 .501961 0 rg (import) Tj /F4 10 Tf 0 0 0 rg ( ) Tj (pipe) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ([{) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('riko pt. 1') Tj 0 0 0 rg (},) Tj ( ) Tj ({) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('riko pt. 2') Tj 0 0 0 rg (}]) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (pipe) Tj (\() Tj (stream) Tj (\)\)) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('riko pt. 2') Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* ET
+Q
+Q
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 429.8236 cm
+q
+BT 1 0 0 1 0 14 Tm 13.33139 Tw 12 TL /F4 10 Tf 0 0 0 rg (processor``s) Tj ( ) Tj (process) Tj ( ) Tj (individual) Tj ( ) Tj (``items) Tj /F1 10 Tf (. Example ) Tj /F4 10 Tf (processor``s) Tj ( ) Tj (include) Tj T* 0 Tw (``pipefetchsitefeed) Tj /F1 10 Tf (, ) Tj /F4 10 Tf (pipehash) Tj /F1 10 Tf (, ) Tj /F4 10 Tf (pipeitembuilder) Tj /F1 10 Tf (, and ) Tj /F4 10 Tf (piperegex) Tj /F1 10 Tf (.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 336.6236 cm
+q
+q
+1 0 0 1 0 0 cm
+q
+1 0 0 1 6.6 6.6 cm
+q
+.662745 .662745 .662745 RG
+.5 w
+.941176 .972549 1 rg
+n -6 -6 480.0283 84 re B*
+Q
+q
+.941176 .972549 1 rg
+n 0 60 6 12 re f*
+.941176 .972549 1 rg
+n 6 60 6 12 re f*
+.941176 .972549 1 rg
+n 12 60 6 12 re f*
+.941176 .972549 1 rg
+n 24 60 24 12 re f*
+.941176 .972549 1 rg
+n 48 60 6 12 re f*
+.941176 .972549 1 rg
+n 54 60 102 12 re f*
+.941176 .972549 1 rg
+n 156 60 6 12 re f*
+.941176 .972549 1 rg
+n 162 60 36 12 re f*
+.941176 .972549 1 rg
+n 204 60 24 12 re f*
+.941176 .972549 1 rg
+n 228 60 0 12 re f*
+.941176 .972549 1 rg
+n 0 48 6 12 re f*
+.941176 .972549 1 rg
+n 6 48 6 12 re f*
+.941176 .972549 1 rg
+n 12 48 6 12 re f*
+.941176 .972549 1 rg
+n 18 48 0 12 re f*
+.941176 .972549 1 rg
+n 0 36 6 12 re f*
+.941176 .972549 1 rg
+n 6 36 6 12 re f*
+.941176 .972549 1 rg
+n 12 36 6 12 re f*
+.941176 .972549 1 rg
+n 24 36 24 12 re f*
+.941176 .972549 1 rg
+n 54 36 6 12 re f*
+.941176 .972549 1 rg
+n 66 36 6 12 re f*
+.941176 .972549 1 rg
+n 72 36 42 12 re f*
+.941176 .972549 1 rg
+n 114 36 6 12 re f*
+.941176 .972549 1 rg
+n 126 36 72 12 re f*
+.941176 .972549 1 rg
+n 198 36 6 12 re f*
+.941176 .972549 1 rg
+n 204 36 0 12 re f*
+.941176 .972549 1 rg
+n 0 24 6 12 re f*
+.941176 .972549 1 rg
+n 6 24 6 12 re f*
+.941176 .972549 1 rg
+n 12 24 6 12 re f*
+.941176 .972549 1 rg
+n 24 24 36 12 re f*
+.941176 .972549 1 rg
+n 66 24 6 12 re f*
+.941176 .972549 1 rg
+n 78 24 24 12 re f*
+.941176 .972549 1 rg
+n 102 24 6 12 re f*
+.941176 .972549 1 rg
+n 108 24 24 12 re f*
+.941176 .972549 1 rg
+n 132 24 6 12 re f*
+.941176 .972549 1 rg
+n 144 24 30 12 re f*
+.941176 .972549 1 rg
+n 174 24 6 12 re f*
+.941176 .972549 1 rg
+n 180 24 42 12 re f*
+.941176 .972549 1 rg
+n 222 24 6 12 re f*
+.941176 .972549 1 rg
+n 228 24 0 12 re f*
+.941176 .972549 1 rg
+n 0 12 6 12 re f*
+.941176 .972549 1 rg
+n 6 12 6 12 re f*
+.941176 .972549 1 rg
+n 12 12 6 12 re f*
+.941176 .972549 1 rg
+n 24 12 24 12 re f*
+.941176 .972549 1 rg
+n 48 12 6 12 re f*
+.941176 .972549 1 rg
+n 54 12 36 12 re f*
+.941176 .972549 1 rg
+n 90 12 6 12 re f*
+.941176 .972549 1 rg
+n 96 12 0 12 re f*
+.941176 .972549 1 rg
+n 0 0 6 12 re f*
+.941176 .972549 1 rg
+n 6 0 42 12 re f*
+.941176 .972549 1 rg
+n 48 0 6 12 re f*
+.941176 .972549 1 rg
+n 60 0 72 12 re f*
+.941176 .972549 1 rg
+n 132 0 6 12 re f*
+.941176 .972549 1 rg
+n 144 0 36 12 re f*
+.941176 .972549 1 rg
+n 180 0 6 12 re f*
+.941176 .972549 1 rg
+n 192 0 60 12 re f*
+.941176 .972549 1 rg
+n 252 0 6 12 re f*
+.941176 .972549 1 rg
+n 258 0 6 12 re f*
+.941176 .972549 1 rg
+n 264 0 0 12 re f*
+BT 1 0 0 1 0 62 Tm 12 TL /F4 10 Tf .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf 0 .501961 0 rg (from) Tj /F4 10 Tf .733333 .733333 .733333 rg ( ) Tj /F5 10 Tf 0 0 1 rg (riko.modules.hash) Tj /F4 10 Tf .733333 .733333 .733333 rg ( ) Tj /F5 10 Tf 0 .501961 0 rg (import) Tj /F4 10 Tf 0 0 0 rg ( ) Tj (pipe) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (item) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('riko pt. 1') Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (pipe) Tj (\() Tj (item) Tj (,) Tj ( ) Tj (field) Tj .4 .4 .4 rg (=) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (stream) Tj (\)) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('riko pt. 1') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('hash') Tj 0 0 0 rg (:) Tj ( ) Tj .4 .4 .4 rg (2853617420) Tj 0 0 0 rg (L) Tj (}) Tj .733333 .733333 .733333 rg  T* ET
+Q
+Q
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 306.6236 cm
+q
+BT 1 0 0 1 0 3 Tm 18 TL /F2 15 Tf .133333 .133333 .133333 rg (Kwargs) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 288.6236 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (The following table outlines the available kwargs.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 282.6236 cm
+Q
+q
+1 0 0 1 57.02362 78.62362 cm
+q
+1 1 1 rg
+n 0 204 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 174 481.2283 -18 re f*
+1 1 1 rg
+n 0 156 481.2283 -18 re f*
+.878431 .878431 .878431 rg
+n 0 138 481.2283 -30 re f*
+1 1 1 rg
+n 0 108 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 78 481.2283 -30 re f*
+1 1 1 rg
+n 0 48 481.2283 -18 re f*
+.878431 .878431 .878431 rg
+n 0 30 481.2283 -30 re f*
+0 0 0 rg
+BT /F3 10 Tf 12 TL ET
+q
+1 0 0 1 6 177 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 14.42162 0 Td (kwarg) Tj T* -14.42162 0 Td ET
+Q
+Q
+q
+1 0 0 1 75.74324 177 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F3 10 Tf 12 TL .448648 0 Td (typ) Tj T* 4.72 0 Td (e) Tj T* -5.168648 0 Td ET
+Q
+Q
+q
+1 0 0 1 103.6405 177 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 134.4338 0 Td (description) Tj T* -134.4338 0 Td ET
+Q
+Q
+q
+1 0 0 1 438.4081 177 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 2.020134 0 Td (default) Tj T* -2.020134 0 Td ET
+Q
+Q
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 159 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (conf) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 159 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (dict) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 159 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (The pipe configuration) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 159 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (varies) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 141 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (extract) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 141 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (str) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 141 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (The key with which to get a value from ) Tj /F6 10 Tf (conf) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 141 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (None) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 123 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (listize) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 111 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (bo) Tj T* (ol) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 123 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (Ensure that an ) Tj /F6 10 Tf (extract) Tj /F1 10 Tf ( value is list-like) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 123 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (False) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 93 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (pdictize) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 81 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (bo) Tj T* (ol) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 93 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (Convert ) Tj /F6 10 Tf (conf) Tj /F1 10 Tf ( / ) Tj /F6 10 Tf (extract) Tj /F1 10 Tf ( to a DotDict instance) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 93 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (varies) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (objectify) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 51 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (bo) Tj T* (ol) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 63 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (Convert ) Tj /F6 10 Tf (conf) Tj /F1 10 Tf ( to an Objectify instance) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (varies) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (ptype) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (str) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 33 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (Used to convert ) Tj /F6 10 Tf (conf) Tj /F1 10 Tf ( items to a specific type.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (pass) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 15 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (dictize) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (bo) Tj T* (ol) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 15 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (Convert the input ) Tj /F6 10 Tf (item) Tj /F1 10 Tf ( to a DotDict instance) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 15 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (True) Tj T* ET
+Q
+Q
+q
+1 J
+1 j
+0 0 0 RG
+.25 w
+n 0 0 m 481.2283 0 l S
+n 0 174 m 481.2283 174 l S
+n 0 156 m 481.2283 156 l S
+n 0 138 m 481.2283 138 l S
+n 0 108 m 481.2283 108 l S
+n 0 78 m 481.2283 78 l S
+n 0 48 m 481.2283 48 l S
+n 0 30 m 481.2283 30 l S
+n 69.74324 0 m 69.74324 204 l S
+n 97.64053 0 m 97.64053 204 l S
+n 432.4081 0 m 432.4081 204 l S
+n 0 204 m 481.2283 204 l S
+n 0 0 m 0 204 l S
+n 481.2283 0 m 481.2283 204 l S
+Q
+Q
+Q
+ 
+endstream
+endobj
+86 0 obj
+<<
+/Length 8688
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 57.02362 615.0236 cm
+q
+1 1 1 rg
+n 0 150 481.2283 -18 re f*
+.878431 .878431 .878431 rg
+n 0 132 481.2283 -18 re f*
+1 1 1 rg
+n 0 114 481.2283 -18 re f*
+.878431 .878431 .878431 rg
+n 0 96 481.2283 -18 re f*
+1 1 1 rg
+n 0 78 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 48 481.2283 -30 re f*
+1 1 1 rg
+n 0 18 481.2283 -18 re f*
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 135 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (field) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 135 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (str) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 135 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (The key with which to get a value from the input) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 135 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (None) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 117 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (ftype) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 117 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (str) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 117 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (Converts the input ) Tj /F6 10 Tf (item) Tj /F1 10 Tf ( to a specific type) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 117 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (pass) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 99 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (count) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 99 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (str) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 99 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (The output count) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 99 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (all) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 81 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (assign) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 81 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (str) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 81 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (Attribute used to assign output) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 81 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (varies) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (emit) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 51 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (bo) Tj T* (ol) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (Return the output as is \(don't assign\)) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 63 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (varies) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (skip_if) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 21 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F1 10 Tf 12 TL (fun) Tj T* (c) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (Determines if processing should be skipped) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 33 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (None) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (inputs) Tj T* ET
+Q
+Q
+q
+1 0 0 1 75.74324 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (dict) Tj T* ET
+Q
+Q
+q
+1 0 0 1 103.6405 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (Values to be used in place of prompting the user) Tj T* ET
+Q
+Q
+q
+1 0 0 1 438.4081 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (None) Tj T* ET
+Q
+Q
+q
+1 J
+1 j
+0 0 0 RG
+.25 w
+n 0 150 m 481.2283 150 l S
+n 0 132 m 481.2283 132 l S
+n 0 114 m 481.2283 114 l S
+n 0 96 m 481.2283 96 l S
+n 0 78 m 481.2283 78 l S
+n 0 48 m 481.2283 48 l S
+n 0 18 m 481.2283 18 l S
+n 69.74324 0 m 69.74324 150 l S
+n 97.64053 0 m 97.64053 150 l S
+n 432.4081 0 m 432.4081 150 l S
+n 0 0 m 0 150 l S
+n 481.2283 0 m 481.2283 150 l S
+n 0 0 m 481.2283 0 l S
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 615.0236 cm
+Q
+q
+1 0 0 1 57.02362 585.0236 cm
+q
+BT 1 0 0 1 0 3 Tm 18 TL /F2 15 Tf .133333 .133333 .133333 rg (Notes) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 552.0236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (What file types are supported?) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 534.0236 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (File types that riko supports are outlined below:) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 528.0236 cm
+Q
+q
+1 0 0 1 57.02362 426.0236 cm
+q
+1 1 1 rg
+n 0 102 481.2283 -30 re f*
+.878431 .878431 .878431 rg
+n 0 72 481.2283 -18 re f*
+1 1 1 rg
+n 0 54 481.2283 -18 re f*
+.878431 .878431 .878431 rg
+n 0 36 481.2283 -18 re f*
+1 1 1 rg
+n 0 18 481.2283 -18 re f*
+0 0 0 rg
+BT /F3 10 Tf 12 TL ET
+q
+1 0 0 1 6 75 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 29.67178 0 Td (File type) Tj T* -29.67178 0 Td ET
+Q
+Q
+q
+1 0 0 1 117.9136 75 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 14 Tm /F3 10 Tf 12 TL 30.2903 0 Td (Recognized) Tj T* -1.389998 0 Td (extension\(s\)) Tj T* -28.9003 0 Td ET
+Q
+Q
+q
+1 0 0 1 246.6142 75 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 74.85709 0 Td (Supported pipes) Tj T* -74.85709 0 Td ET
+Q
+Q
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 57 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (HTML) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.9136 57 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (html) Tj T* ET
+Q
+Q
+q
+1 0 0 1 246.6142 57 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (feedautodiscovery, fetchpage, fetchsitefeed) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 39 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (XML) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.9136 39 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (xml) Tj T* ET
+Q
+Q
+q
+1 0 0 1 246.6142 39 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetch, fetchdata) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 21 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (JSON) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.9136 21 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (json) Tj T* ET
+Q
+Q
+q
+1 0 0 1 246.6142 21 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (fetchdata) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (Comma separated file) Tj T* ET
+Q
+Q
+q
+1 0 0 1 117.9136 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (csv, tsv) Tj T* ET
+Q
+Q
+q
+1 0 0 1 246.6142 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (csv) Tj T* ET
+Q
+Q
+q
+1 J
+1 j
+0 0 0 RG
+.25 w
+n 0 72 m 481.2283 72 l S
+n 0 54 m 481.2283 54 l S
+n 0 36 m 481.2283 36 l S
+n 0 18 m 481.2283 18 l S
+n 111.9136 0 m 111.9136 102 l S
+n 240.6142 0 m 240.6142 102 l S
+n 0 102 m 481.2283 102 l S
+n 0 0 m 481.2283 0 l S
+n 0 0 m 0 102 l S
+n 481.2283 0 m 481.2283 102 l S
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 426.0236 cm
+Q
+q
+1 0 0 1 57.02362 393.0236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (What protocols are supported?) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 375.0236 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (Protocols that riko supports are outlined below:) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 369.0236 cm
+Q
+q
+1 0 0 1 57.02362 297.0236 cm
+q
+1 1 1 rg
+n 0 72 481.2283 -18 re f*
+.878431 .878431 .878431 rg
+n 0 54 481.2283 -18 re f*
+1 1 1 rg
+n 0 36 481.2283 -18 re f*
+.878431 .878431 .878431 rg
+n 0 18 481.2283 -18 re f*
+0 0 0 rg
+BT /F3 10 Tf 12 TL ET
+q
+1 0 0 1 6 57 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 13.00395 0 Td (Protocol) Tj T* -13.00395 0 Td ET
+Q
+Q
+q
+1 0 0 1 84.56789 57 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F3 10 Tf 12 TL 175.3202 0 Td (example) Tj T* -175.3202 0 Td ET
+Q
+Q
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 39 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (http) Tj T* ET
+Q
+Q
+q
+1 0 0 1 84.56789 39 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (http://google.com) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 21 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (https) Tj T* ET
+Q
+Q
+q
+1 0 0 1 84.56789 21 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (https://github.com/reubano/feed) Tj T* ET
+Q
+Q
+q
+1 0 0 1 6 3 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (file) Tj T* ET
+Q
+Q
+q
+1 0 0 1 84.56789 3 cm
+q
+0 .4 .6 rg
+BT 1 0 0 1 0 2 Tm /F1 10 Tf 12 TL (file:///Users/reubano/Downloads/feed.xml) Tj T* ET
+Q
+Q
+q
+1 J
+1 j
+0 0 0 RG
+.25 w
+n 0 54 m 481.2283 54 l S
+n 0 36 m 481.2283 36 l S
+n 0 18 m 481.2283 18 l S
+n 78.56789 0 m 78.56789 72 l S
+n 0 72 m 481.2283 72 l S
+n 0 0 m 481.2283 0 l S
+n 0 0 m 0 72 l S
+n 481.2283 0 m 481.2283 72 l S
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 297.0236 cm
+Q
+q
+1 0 0 1 57.02362 240.3307 cm
+Q
+q
+1 0 0 1 57.02362 211.9843 cm
+n 0 14.17323 m 481.2283 14.17323 l S
+Q
+q
+1 0 0 1 57.02362 199.9843 cm
+q
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 0 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 .4 .6 rg (1) Tj T* ET
+Q
+Q
+q
+1 0 0 1 91.03937 0 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (See ) Tj 0 .4 .6 rg (Design Principles) Tj 0 0 0 rg ( for explanation on ) Tj /F6 10 Tf (pipe) Tj /F1 10 Tf ( types and sub-types) Tj T* ET
+Q
+Q
+q
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 187.9843 cm
+q
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 0 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 .4 .6 rg (2) Tj T* ET
+Q
+Q
+q
+1 0 0 1 91.03937 0 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (See ) Tj 0 .4 .6 rg (Alternate workflow creation) Tj 0 0 0 rg ( for pipe composition examples) Tj T* ET
+Q
+Q
+q
+Q
+Q
+Q
+ 
+endstream
+endobj
+87 0 obj
+<<
+/Nums [ 0 88 0 R 1 89 0 R 2 90 0 R 3 91 0 R ]
+>>
+endobj
+88 0 obj
+<<
+/S /D /St 1
+>>
+endobj
+89 0 obj
+<<
+/S /D /St 2
+>>
+endobj
+90 0 obj
+<<
+/S /D /St 3
+>>
+endobj
+91 0 obj
+<<
+/S /D /St 4
+>>
+endobj
+xref
+0 92
+0000000000 65535 f 
+0000000073 00000 n 
+0000000157 00000 n 
+0000000264 00000 n 
+0000000373 00000 n 
+0000000541 00000 n 
+0000000709 00000 n 
+0000000877 00000 n 
+0000001045 00000 n 
+0000001157 00000 n 
+0000001377 00000 n 
+0000001594 00000 n 
+0000001809 00000 n 
+0000002035 00000 n 
+0000002261 00000 n 
+0000002483 00000 n 
+0000002707 00000 n 
+0000002936 00000 n 
+0000003165 00000 n 
+0000003382 00000 n 
+0000003603 00000 n 
+0000003824 00000 n 
+0000004049 00000 n 
+0000004270 00000 n 
+0000004488 00000 n 
+0000004704 00000 n 
+0000004921 00000 n 
+0000005144 00000 n 
+0000005517 00000 n 
+0000005733 00000 n 
+0000005950 00000 n 
+0000006168 00000 n 
+0000006386 00000 n 
+0000006605 00000 n 
+0000006831 00000 n 
+0000007053 00000 n 
+0000007272 00000 n 
+0000007488 00000 n 
+0000007705 00000 n 
+0000007926 00000 n 
+0000008145 00000 n 
+0000008367 00000 n 
+0000008591 00000 n 
+0000008813 00000 n 
+0000009031 00000 n 
+0000009246 00000 n 
+0000009462 00000 n 
+0000009681 00000 n 
+0000009902 00000 n 
+0000010122 00000 n 
+0000010337 00000 n 
+0000010554 00000 n 
+0000010939 00000 n 
+0000011155 00000 n 
+0000011377 00000 n 
+0000011597 00000 n 
+0000011823 00000 n 
+0000012049 00000 n 
+0000012264 00000 n 
+0000012370 00000 n 
+0000012538 00000 n 
+0000012649 00000 n 
+0000012765 00000 n 
+0000013032 00000 n 
+0000013202 00000 n 
+0000013386 00000 n 
+0000013579 00000 n 
+0000013748 00000 n 
+0000013970 00000 n 
+0000014139 00000 n 
+0000014373 00000 n 
+0000014640 00000 n 
+0000014746 00000 n 
+0000015012 00000 n 
+0000015086 00000 n 
+0000015193 00000 n 
+0000015372 00000 n 
+0000015482 00000 n 
+0000015601 00000 n 
+0000015722 00000 n 
+0000015829 00000 n 
+0000015974 00000 n 
+0000016105 00000 n 
+0000016187 00000 n 
+0000026171 00000 n 
+0000038062 00000 n 
+0000053878 00000 n 
+0000062618 00000 n 
+0000062686 00000 n 
+0000062720 00000 n 
+0000062754 00000 n 
+0000062788 00000 n 
+trailer
+<<
+/ID 
+[<3ce30fd85937820fd4a84f7a90754085><3ce30fd85937820fd4a84f7a90754085>]
+% ReportLab generated PDF document -- digest (http://www.reportlab.com)
+
+/Info 72 0 R
+/Root 71 0 R
+/Size 92
+>>
+startxref
+62822
+%%EOF

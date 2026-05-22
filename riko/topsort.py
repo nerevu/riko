@@ -7,105 +7,55 @@
 """
 
 from graphlib import TopologicalSorter, CycleError
-from collections import Counter
-from operator import add
-from functools import reduce
+from typing import (
+    Iterable,
+    Mapping,
+    Sequence,
+    TypeVar,
+)
+
+import networkx as nx
+
+T = TypeVar("T", bound=str | int)
+
+# After upgrading to Python 3.12, we can use the new TypeAlias syntax and remove the
+# redundant type constraints:
+# https://docs.python.org/3/reference/compound_stmts.html#generic-type-aliases
+# type Nodes[T: (str | int)] = Sequence[T]
+# type Graph[T: (str | int)] = Mapping[T, Sequence[T]]
+# type NodeList[T: (str | int)] = list[T]
 
 
-def _gen_result(graph, count, *ready):
-    while ready:
-        node = ready.pop()
-        yield node
-
-        for x in graph.get(node, []):
-            assert count[x]
-            count[x] -= 1
-
-            if not count[x]:
-                ready.append(x)
-
-
-def _visit(node, *stack, low=None, **graph):
-    low = low or {}
-
-    if node not in low:
-        num = len(low)
-        low[node] = len(low)
-        position = len(stack)
-        stack.append(node)
-
-        for x in graph.get(node, [node]):
-            _visit(x, *stack, low=low, **graph)
-            low[node] = min(low[node], low[x])
-
-        if num == low[node]:
-            component = tuple(stack[position:])
-            del stack[position:]
-            [low.update({x: len(graph)}) for x in component]
-            return component
-
-
-def _gen_node_component(components):
-    for component in components:
-        for node in component:
-            yield (node, component)
-
-
-def _gen_graph_value(value, node, node_component):
-    for x in value:
-        _value = node_component.get(x, (x,))
-
-        if node_component[node] != _value:
-            yield _value
-
-
-def _gen_graph_component(graph, node_component, value_generator):
-    for node in graph:
-        value = list(value_generator(graph[node], node, node_component))
-        yield (node_component[node], value)
-
-
-def get_graph_component(graph):
+def scc_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> list[tuple[T, ...]]:
     """Identify strongly connected components in a graph using
     Tarjan's algorithm.
 
     graph should be a dictionary mapping node names to an
-    iterable of successor nodes.
+    sequence of successor nodes.
+
+    # A --> B --> C --> D
+    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
+    >>> scc_sort(graph)
+    [('A',), ('B',), ('C',), ('D',)]
+
     # A --> B <--> C --> D
     >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
-    >>> get_graph_component(graph)
-    {('A',): [('C', 'B')], ('C', 'B'): [('D',)], ('D',): []}
+    >>> scc_sort(graph)
+    [('A',), ('B', 'C'), ('D',)]
 
-    # 0 --> 1 --> 2 --> 3
-    #       ↑     ↓
-    #       +-----+
-    >>> graph = {0: [1], 1: [2], 2: [1, 3], 3: [3]}
-    >>> get_graph_component(graph)
-    {(0,): [(2, 1)], (2, 1): [(3,)], (3,): []}
-    """
-    components = (_visit(g, **graph) for g in graph)
-    node_component = dict(_gen_node_component(components))
-    graph_component = {component: [] for component in components}
-    updates = dict(_gen_graph_component(graph, node_component, _gen_graph_value))
-    graph_component.update(updates)
-    return graph_component
-
-
-def ext_topological_sort(graph_component):
-    """
-    # A --> B <--> C --> D
-    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
-    >>> ext_topological_sort(get_graph_component(graph))
-    [('A',), ('C', 'B'), ('D',)]
+    # A --> B --> D --> E
+    # ↓           ↑
+    # + --> C ----+
+    >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
+    >>> scc_sort(graph)
+    [('A',), ('C',), ('B',), ('D',), ('E',)]
 
     # 0 --> 1 --> 2 --> 3
     #       ↑     ↓
     #       +-----+
     >>> graph = {0: [1], 1: [2], 2: [1, 3]}
-    >>> ext_topological_sort(get_graph_component(graph))
-    [(0,), (2, 1), (3,)]
-    >>> native_topological_sort(graph)
-    CycleError: ('nodes are in a cycle', [1, 2, 1])
+    >>> scc_sort(graph)
+    [(0,), (1, 2), (3,)]
 
     #             6 ----+
     #             ↓     ↓
@@ -113,46 +63,104 @@ def ext_topological_sort(graph_component):
     #       ↓     ↑
     #       +---> 4 <-- 5
     >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
-    >>> ext_topological_sort(get_graph_component(graph))
+    >>> scc_sort(graph)
     [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
     """
-    count = reduce(add, map(Counter, graph_component.values()))
-    ready = [node for node in graph_component if not count[node]]
-    return list(_gen_result(graph_component, count, *ready))
+    G = nx.DiGraph(graph)
+    components: Iterable[set[T]] = nx.strongly_connected_components(G)
+    order = [tuple(c) for c in components]
+    return order if reverse else order[::-1]
 
 
-def native_topological_sort(graph, as_predecessors=False):
+def native_topological_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> list[T]:
     """
-    # A --> B --> D --> E
-    # ↓           ↑
-    # +---> C ----+
-    >>> graph = {"E": {"D"}, "D": {"B", "C"}, "C": {"A"}, "B": {"A"}}
-    >>> ts = TopologicalSorter(graph)
-    >>> tuple(ts.static_order())
-    ('A', 'C', 'B', 'D', 'E')
+    # A --> B --> C --> D
+    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
+    >>> native_topological_sort(graph)
+    ['A', 'B', 'C', 'D']
+
+    # A --> B <--> C --> D
+    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
+    >>> native_topological_sort(graph)
+    Traceback (most recent call last):
+    ...
+    graphlib.CycleError: ('nodes are in a cycle', ['B', 'C', 'B'])
 
     # A --> B --> D --> E
     # ↓           ↑
-    # +---> C ----+
+    # + --> C ----+
     >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
-    >>> tuple(reversed(tuple(TopologicalSorter(graph).static_order())))
-    ('A', 'C', 'B', 'D', 'E')
     >>> native_topological_sort(graph)
-    ('A', 'C', 'B', 'D', 'E')
-    >>> ext_topological_sort(get_graph_component(graph))
-    [('A',), ('C',), ('B',), ('D',), ('E',)]
-    >>> native_topological_sort(get_graph_component(graph))
-    [('A',), ('C',), ('B',), ('D',), ('E',)]
+    ['A', 'C', 'B', 'D', 'E']
+    >>> native_topological_sort(graph, reverse=True)
+    ['E', 'D', 'B', 'C', 'A']
+
+    # 0 --> 1 --> 2 --> 3
+    #       ↑     ↓
+    #       +-----+
+    >>> graph = {0: [1], 1: [2], 2: [1, 3]}
+    >>> native_topological_sort(graph)
+    Traceback (most recent call last):
+    ...
+    graphlib.CycleError: ('nodes are in a cycle', [1, 2, 1])
+
+    #             6 ----+
+    #             ↓     ↓
+    # 0 --> 1 --> 2 --> 3
+    #       ↓     ↑
+    #       +---> 4 <-- 5
+    >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
+    >>> native_topological_sort(graph)
+    [0, 5, 1, 6, 4, 2, 3]
     """
     ts = TopologicalSorter(graph)
-    static_order = tuple(ts.static_order())
-    return static_order if as_predecessors else tuple(reversed(static_order))
+    static_order = list(ts.static_order())
+    return static_order if reverse else static_order[::-1]
 
 
-def topological_sort(graph_or_component, **kwargs):
+def topological_sort(
+    graph: Mapping[T, Sequence[T]],
+    **kwargs
+) -> list[T] | list[tuple[T, ...]]:
+    """
+    # A --> B --> C --> D
+    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
+    >>> topological_sort(graph)
+    ['A', 'B', 'C', 'D']
+
+    # A --> B <--> C --> D
+    >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"B", "D"}}
+    >>> topological_sort(graph)
+    [('A',), ('B', 'C'), ('D',)]
+
+    # A --> B --> D --> E
+    # ↓           ↑
+    # + --> C ----+
+    >>> graph = {"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}
+    >>> topological_sort(graph)
+    ['A', 'C', 'B', 'D', 'E']
+    >>> topological_sort(graph, reverse=True)
+    ['E', 'D', 'B', 'C', 'A']
+
+    # 0 --> 1 --> 2 --> 3
+    #       ↑     ↓
+    #       +-----+
+    >>> graph = {0: [1], 1: [2], 2: [1, 3]}
+    >>> topological_sort(graph)
+    [(0,), (1, 2), (3,)]
+
+    #             6 ----+
+    #             ↓     ↓
+    # 0 --> 1 --> 2 --> 3
+    #       ↓     ↑
+    #       +---> 4 <-- 5
+    >>> graph = {0: [1], 1: [2, 4], 4: [2], 2: [3], 5: [4], 6: [2, 3]}
+    >>> topological_sort(graph)
+    [0, 5, 1, 6, 4, 2, 3]
+    """
     try:
-        result = native_topological_sort(graph_or_component, **kwargs)
+        result = native_topological_sort(graph, **kwargs)
     except CycleError:
-        result = ext_topological_sort(graph_or_component)
+        result = scc_sort(graph, **kwargs)
 
     return result

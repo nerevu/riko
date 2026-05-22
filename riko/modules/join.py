@@ -31,8 +31,7 @@ from meza.process import merge, join
 
 from . import operator
 
-# disable `dictize` since we do not need to access the configuration
-OPTS = {"dictize": False}
+OPTS = {}
 DEFAULTS = {"join_key": None, "lower": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 

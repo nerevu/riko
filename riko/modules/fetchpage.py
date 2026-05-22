@@ -33,7 +33,7 @@ from meza.compat import encode
 from . import processor
 from riko.bado import coroutine, return_value, io
 from riko.parsers import get_text
-from riko.utils import betwix, fetch, get_abspath
+from riko.utils import betwix, fetch
 
 OPTS = {"ftype": "none"}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -93,12 +93,10 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        content = yield io.async_url_read(url)
+        content = yield io.async_url_read(objconf.url)
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
-        splits = detagged.split(objconf.token) if objconf.token else [detagged]
-        stream = ({kwargs["assign"]: chunk} for chunk in splits)
+        stream = detagged.split(objconf.token) if objconf.token else [detagged]
 
     return_value(stream)
 
@@ -137,8 +135,7 @@ def parser(_, objconf, skip=False, **kwargs):
 
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
-        splits = detagged.split(objconf.token) if objconf.token else [detagged]
-        stream = ({kwargs["assign"]: chunk} for chunk in splits)
+        stream = detagged.split(objconf.token) if objconf.token else [detagged]
 
     return stream
 

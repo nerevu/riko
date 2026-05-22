@@ -31,7 +31,7 @@ from functools import reduce
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
 
-OPTS = {"listize": True, "ftype": "text", "field": "content", "extract": "rule"}
+OPTS = {"ftype": "text", "listize": True, "field": "content", "extract": "rule"}
 
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -195,15 +195,15 @@ def pipe(*args, **kwargs):
     Examples:
         >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['strreplace'] == 'bye world'
-        True
+        >>> next(pipe(item, conf=conf))['strreplace']
+        'bye world'
         >>> rules = [
         ...     {'find': 'Gr', 'replace': 'M'},
         ...     {'find': 'e', 'replace': 'a', 'param': 'last'}]
         >>> conf = {'rule': rules}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
         >>> item = {'title': 'Greetings'}
-        >>> next(pipe(item, **kwargs))['result'] == 'Meatings'
-        True
+        >>> next(pipe(item, **kwargs))['result']
+        'Meatings'
     """
     return parser(*args, **kwargs)

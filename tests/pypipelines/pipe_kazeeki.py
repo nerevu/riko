@@ -5,24 +5,24 @@
 from os import path as p
 from pprint import pprint
 from twisted.internet.task import react
-from riko import Context
+from riko import Context, get_path
 from riko.compile import write_file
+from riko.collections import SyncPipe, AsyncPipe
 from riko.utils import combine_dicts as cdict
-from riko.collections import SyncPipe
-from riko.collections import AsyncPipe
+
 
 PARENT = p.dirname(p.dirname(p.dirname(__file__)))
 make_regex = lambda f, m, r: {"field": f, "match": m, "replace": r}
 
 
 def make_simplemath(other, op):
-    return {"OTHER": {"subkey": other, "type": "number"}, "OP": op}
+    return {"OTHER": {"subkey": other, "type": "float"}, "OP": op}
 
 
 def make_substring(_from, length):
     return {
-        "from": {"type": "integer", "value": _from},
-        "length": {"type": "integer", "value": length},
+        "from": {"type": "int", "value": _from},
+        "length": {"type": "int", "value": length},
     }
 
 
@@ -171,8 +171,8 @@ sources = [
     {"url": "http://feeds.feedburner.com/elance/design"},
 ]
 
-abspath = p.abspath(p.join(PARENT, "pipe2py", "data", "kazeeki3.json"))
-url = "file://%s" % abspath
+url = get_path("kazeeki3.json")
+
 config = {
     "fetch": {"conf": {"URL": [s["url"] for s in sources]}, "type": "fetch"},
     "fetchdata": {"conf": {"URL": url, "path": "items"}, "type": "fetchdata"},
@@ -197,7 +197,7 @@ def print_content(output):
 
 
 def write_content(output, pipe_name="kazeeki"):
-    path = p.join(PARENT, "pipe2py", "data", "%s.json" % pipe_name)
+    path = p.join(PARENT, "riko", "data", "%s.json" % pipe_name)
     data = {"items": list(output)}
     size = write_file(data, path, True)
 

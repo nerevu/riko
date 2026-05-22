@@ -1,0 +1,2960 @@
+%PDF-1.4
+%“Œ‹ž ReportLab Generated PDF document http://www.reportlab.com
+1 0 obj
+<<
+/F1 2 0 R /F2 3 0 R /F3 8 0 R /F4 9 0 R /F5 10 0 R /F6 17 0 R
+>>
+endobj
+2 0 obj
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
+endobj
+3 0 obj
+<<
+/BaseFont /Times-Roman /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
+>>
+endobj
+4 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 11 0 R /XYZ 57.02362 657.5236 0 ] /Rect [ 57.02362 666.0236 102.5936 678.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+5 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 11 0 R /XYZ 57.02362 501.3236 0 ] /Rect [ 110.7536 666.0236 218.0436 678.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+6 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 14 0 R /XYZ 57.02362 467.3236 0 ] /Rect [ 226.2036 666.0236 339.5936 678.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+7 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 14 0 R /XYZ 57.02362 275.1236 0 ] /Rect [ 347.7536 666.0236 467.7936 678.0236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+8 0 obj
+<<
+/BaseFont /Courier /Encoding /WinAnsiEncoding /Name /F3 /Subtype /Type1 /Type /Font
+>>
+endobj
+9 0 obj
+<<
+/BaseFont /Courier-Bold /Encoding /WinAnsiEncoding /Name /F4 /Subtype /Type1 /Type /Font
+>>
+endobj
+10 0 obj
+<<
+/BaseFont /Courier-Oblique /Encoding /WinAnsiEncoding /Name /F5 /Subtype /Type1 /Type /Font
+>>
+endobj
+11 0 obj
+<<
+/Annots [ 4 0 R 5 0 R 6 0 R 7 0 R ] /Contents 30 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 29 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 
+  /Trans <<
+
+>> /Type /Page
+>>
+endobj
+12 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/README.rst#synchronous-processing)
+>> /Border [ 0 0 0 ] /Rect [ 117.0636 232.6236 216.5336 244.6236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+13 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 19 0 R /XYZ 63.02362 657.9843 0 ] /Rect [ 387.2736 238.0236 391.7216 247.6236 ] /Subtype /Link /Type /Annot
+>>
+endobj
+14 0 obj
+<<
+/Annots [ 12 0 R 13 0 R ] /Contents 31 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 29 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 
+  /Trans <<
+
+>> /Type /Page
+>>
+endobj
+15 0 obj
+<<
+/Contents 32 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 29 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+16 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 14 0 R /XYZ 387.2736 246.6236 0 ] /Rect [ 63.02362 643.9843 68.58362 655.9843 ] /Subtype /Link /Type /Annot
+>>
+endobj
+17 0 obj
+<<
+/BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding /Name /F6 /Subtype /Type1 /Type /Font
+>>
+endobj
+18 0 obj
+<<
+/A <<
+/S /URI /Type /Action /URI (https://github.com/nerevu/riko/blob/master/README.rst#design-principles)
+>> /Border [ 0 0 0 ] /Rect [ 168.633 643.9843 245.873 655.9843 ] /Subtype /Link /Type /Annot
+>>
+endobj
+19 0 obj
+<<
+/Annots [ 16 0 R 18 0 R ] /Contents 33 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 29 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 
+  /Trans <<
+
+>> /Type /Page
+>>
+endobj
+20 0 obj
+<<
+/Outlines 22 0 R /PageLabels 34 0 R /PageMode /UseNone /Pages 29 0 R /Type /Catalog
+>>
+endobj
+21 0 obj
+<<
+/Author () /CreationDate (D:20250110195938-06'00') /Creator (\(unspecified\)) /Keywords () /ModDate (D:20250110195938-06'00') /Producer (ReportLab PDF Library - www.reportlab.com) 
+  /Subject (\(unspecified\)) /Title (riko Cookbook) /Trapped /False
+>>
+endobj
+22 0 obj
+<<
+/Count 7 /First 23 0 R /Last 27 0 R /Type /Outlines
+>>
+endobj
+23 0 obj
+<<
+/Dest [ 11 0 R /XYZ 57.02362 705.0236 0 ] /Next 24 0 R /Parent 22 0 R /Title (Index)
+>>
+endobj
+24 0 obj
+<<
+/Dest [ 11 0 R /XYZ 57.02362 654.0236 0 ] /Next 25 0 R /Parent 22 0 R /Prev 23 0 R /Title (User input)
+>>
+endobj
+25 0 obj
+<<
+/Dest [ 11 0 R /XYZ 57.02362 497.8236 0 ] /Next 26 0 R /Parent 22 0 R /Prev 24 0 R /Title (Fetching data and feeds)
+>>
+endobj
+26 0 obj
+<<
+/Dest [ 14 0 R /XYZ 57.02362 463.8236 0 ] /Next 27 0 R /Parent 22 0 R /Prev 25 0 R /Title (Alternate conf value entry)
+>>
+endobj
+27 0 obj
+<<
+/Count 1 /Dest [ 14 0 R /XYZ 57.02362 271.6236 0 ] /First 28 0 R /Last 28 0 R /Parent 22 0 R /Prev 26 0 R 
+  /Title (Alternate workflow creation)
+>>
+endobj
+28 0 obj
+<<
+/Dest [ 19 0 R /XYZ 57.02362 765.0236 0 ] /Parent 27 0 R /Title (Notes)
+>>
+endobj
+29 0 obj
+<<
+/Count 4 /Kids [ 11 0 R 14 0 R 15 0 R 19 0 R ] /Type /Pages
+>>
+endobj
+30 0 obj
+<<
+/Length 23076
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 57.02362 741.0236 cm
+q
+BT 1 0 0 1 0 4 Tm 180.3342 0 Td 24 TL /F2 20 Tf .133333 .133333 .133333 rg (riko Cookbook) Tj T* -180.3342 0 Td ET
+Q
+Q
+q
+1 0 0 1 57.02362 684.0236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (Index) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 666.0236 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 .4 .6 rg (User input) Tj 0 0 0 rg ( | ) Tj 0 .4 .6 rg (Fetching data and feeds) Tj 0 0 0 rg ( | ) Tj 0 .4 .6 rg (Alternate conf value entry) Tj 0 0 0 rg ( | ) Tj 0 .4 .6 rg (Alternate workflow creation) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 633.0236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (User input) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 579.0236 cm
+q
+BT 1 0 0 1 0 38 Tm .50189 Tw 12 TL /F1 10 Tf 0 0 0 rg (Some workflows require user input \(via the ) Tj /F3 10 Tf (pipeinput) Tj /F1 10 Tf ( pipe\). By default, ) Tj /F3 10 Tf (pipeinput) Tj /F1 10 Tf ( prompts the user via) Tj T* 0 Tw .332686 Tw (the console, but in some situations this may not be appropriate, e.g., testing or integrating with a website. In) Tj T* 0 Tw -0.104536 Tw (such cases, the input values can instead be read from the workflow's ) Tj /F3 10 Tf (inputs) Tj /F1 10 Tf ( kwargs \(a set of values passed) Tj T* 0 Tw (into every pipe\).) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 509.8236 cm
+q
+q
+1 0 0 1 0 0 cm
+q
+1 0 0 1 6.6 6.6 cm
+q
+.662745 .662745 .662745 RG
+.5 w
+.941176 .972549 1 rg
+n -6 -6 480.0283 60 re B*
+Q
+q
+.941176 .972549 1 rg
+n 0 36 6 12 re f*
+.941176 .972549 1 rg
+n 6 36 6 12 re f*
+.941176 .972549 1 rg
+n 12 36 6 12 re f*
+.941176 .972549 1 rg
+n 24 36 24 12 re f*
+.941176 .972549 1 rg
+n 48 36 6 12 re f*
+.941176 .972549 1 rg
+n 54 36 108 12 re f*
+.941176 .972549 1 rg
+n 162 36 6 12 re f*
+.941176 .972549 1 rg
+n 168 36 36 12 re f*
+.941176 .972549 1 rg
+n 210 36 24 12 re f*
+.941176 .972549 1 rg
+n 234 36 0 12 re f*
+.941176 .972549 1 rg
+n 0 24 6 12 re f*
+.941176 .972549 1 rg
+n 6 24 6 12 re f*
+.941176 .972549 1 rg
+n 12 24 6 12 re f*
+.941176 .972549 1 rg
+n 24 24 24 12 re f*
+.941176 .972549 1 rg
+n 54 24 6 12 re f*
+.941176 .972549 1 rg
+n 66 24 6 12 re f*
+.941176 .972549 1 rg
+n 72 24 48 12 re f*
+.941176 .972549 1 rg
+n 120 24 6 12 re f*
+.941176 .972549 1 rg
+n 132 24 108 12 re f*
+.941176 .972549 1 rg
+n 240 24 6 12 re f*
+.941176 .972549 1 rg
+n 252 24 36 12 re f*
+.941176 .972549 1 rg
+n 288 24 6 12 re f*
+.941176 .972549 1 rg
+n 300 24 30 12 re f*
+.941176 .972549 1 rg
+n 330 24 6 12 re f*
+.941176 .972549 1 rg
+n 336 24 0 12 re f*
+.941176 .972549 1 rg
+n 0 12 6 12 re f*
+.941176 .972549 1 rg
+n 6 12 6 12 re f*
+.941176 .972549 1 rg
+n 12 12 6 12 re f*
+.941176 .972549 1 rg
+n 24 12 24 12 re f*
+.941176 .972549 1 rg
+n 48 12 6 12 re f*
+.941176 .972549 1 rg
+n 54 12 24 12 re f*
+.941176 .972549 1 rg
+n 78 12 6 12 re f*
+.941176 .972549 1 rg
+n 84 12 24 12 re f*
+.941176 .972549 1 rg
+n 108 12 6 12 re f*
+.941176 .972549 1 rg
+n 114 12 24 12 re f*
+.941176 .972549 1 rg
+n 138 12 6 12 re f*
+.941176 .972549 1 rg
+n 150 12 36 12 re f*
+.941176 .972549 1 rg
+n 186 12 6 12 re f*
+.941176 .972549 1 rg
+n 192 12 6 12 re f*
+.941176 .972549 1 rg
+n 198 12 54 12 re f*
+.941176 .972549 1 rg
+n 252 12 6 12 re f*
+.941176 .972549 1 rg
+n 264 12 24 12 re f*
+.941176 .972549 1 rg
+n 288 12 18 12 re f*
+.941176 .972549 1 rg
+n 306 12 0 12 re f*
+.941176 .972549 1 rg
+n 0 0 6 12 re f*
+.941176 .972549 1 rg
+n 6 0 54 12 re f*
+.941176 .972549 1 rg
+n 60 0 6 12 re f*
+.941176 .972549 1 rg
+n 72 0 12 12 re f*
+.941176 .972549 1 rg
+n 84 0 6 12 re f*
+.941176 .972549 1 rg
+n 90 0 0 12 re f*
+BT 1 0 0 1 0 38 Tm 12 TL /F3 10 Tf .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko.modules.input) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (pipe) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (conf) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('prompt') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('How old are you?') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('type') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('int') Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (pipe) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg (conf) Tj (,) Tj ( ) Tj (inputs) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('content') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('30') Tj 0 0 0 rg (}\)\)) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('content') Tj 0 0 0 rg (:) Tj ( ) Tj .4 .4 .4 rg (30) Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* ET
+Q
+Q
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 476.8236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (Fetching data and feeds) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 446.8236 cm
+q
+BT 1 0 0 1 0 14 Tm 1.391772 Tw 12 TL /F3 10 Tf 0 0 0 rg (riko) Tj /F1 10 Tf ( can read both local and remote filepaths via ) Tj /F3 10 Tf (source) Tj /F1 10 Tf ( pipes. All ) Tj /F3 10 Tf (source) Tj /F1 10 Tf ( pipes return an equivalent) Tj T* 0 Tw /F3 10 Tf (feed) Tj /F1 10 Tf ( iterator of dictionaries, aka ) Tj /F3 10 Tf (items) Tj /F1 10 Tf (.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 65.62362 cm
+q
+q
+1 0 0 1 0 0 cm
+q
+1 0 0 1 6.6 6.6 cm
+q
+.662745 .662745 .662745 RG
+.5 w
+.941176 .972549 1 rg
+n -6 -6 480.0283 372 re B*
+Q
+q
+.941176 .972549 1 rg
+n 0 348 6 12 re f*
+.941176 .972549 1 rg
+n 6 348 6 12 re f*
+.941176 .972549 1 rg
+n 12 348 6 12 re f*
+.941176 .972549 1 rg
+n 24 348 24 12 re f*
+.941176 .972549 1 rg
+n 48 348 6 12 re f*
+.941176 .972549 1 rg
+n 54 348 54 12 re f*
+.941176 .972549 1 rg
+n 108 348 6 12 re f*
+.941176 .972549 1 rg
+n 114 348 36 12 re f*
+.941176 .972549 1 rg
+n 156 348 30 12 re f*
+.941176 .972549 1 rg
+n 186 348 0 12 re f*
+.941176 .972549 1 rg
+n 0 336 6 12 re f*
+.941176 .972549 1 rg
+n 6 336 6 12 re f*
+.941176 .972549 1 rg
+n 12 336 6 12 re f*
+.941176 .972549 1 rg
+n 24 336 24 12 re f*
+.941176 .972549 1 rg
+n 48 336 6 12 re f*
+.941176 .972549 1 rg
+n 54 336 24 12 re f*
+.941176 .972549 1 rg
+n 78 336 6 12 re f*
+.941176 .972549 1 rg
+n 84 336 36 12 re f*
+.941176 .972549 1 rg
+n 126 336 48 12 re f*
+.941176 .972549 1 rg
+n 174 336 0 12 re f*
+.941176 .972549 1 rg
+n 0 324 6 12 re f*
+.941176 .972549 1 rg
+n 6 324 6 12 re f*
+.941176 .972549 1 rg
+n 12 324 6 12 re f*
+.941176 .972549 1 rg
+n 24 324 24 12 re f*
+.941176 .972549 1 rg
+n 48 324 6 12 re f*
+.941176 .972549 1 rg
+n 54 324 72 12 re f*
+.941176 .972549 1 rg
+n 126 324 6 12 re f*
+.941176 .972549 1 rg
+n 132 324 36 12 re f*
+.941176 .972549 1 rg
+n 174 324 6 12 re f*
+.941176 .972549 1 rg
+n 180 324 0 12 re f*
+.941176 .972549 1 rg
+n 0 312 18 12 re f*
+.941176 .972549 1 rg
+n 48 312 30 12 re f*
+.941176 .972549 1 rg
+n 78 312 6 12 re f*
+.941176 .972549 1 rg
+n 90 312 54 12 re f*
+.941176 .972549 1 rg
+n 144 312 6 12 re f*
+.941176 .972549 1 rg
+n 156 312 78 12 re f*
+.941176 .972549 1 rg
+n 234 312 6 12 re f*
+.941176 .972549 1 rg
+n 246 312 102 12 re f*
+.941176 .972549 1 rg
+n 348 312 6 12 re f*
+.941176 .972549 1 rg
+n 354 312 0 12 re f*
+.941176 .972549 1 rg
+n 0 300 6 12 re f*
+.941176 .972549 1 rg
+n 6 300 6 12 re f*
+.941176 .972549 1 rg
+n 12 300 6 12 re f*
+.941176 .972549 1 rg
+n 18 300 0 12 re f*
+.941176 .972549 1 rg
+n 0 288 6 12 re f*
+.941176 .972549 1 rg
+n 6 288 6 12 re f*
+.941176 .972549 1 rg
+n 12 288 6 12 re f*
+.941176 .972549 1 rg
+n 24 288 114 12 re f*
+.941176 .972549 1 rg
+n 138 288 0 12 re f*
+.941176 .972549 1 rg
+n 0 276 6 12 re f*
+.941176 .972549 1 rg
+n 6 276 6 12 re f*
+.941176 .972549 1 rg
+n 12 276 6 12 re f*
+.941176 .972549 1 rg
+n 24 276 36 12 re f*
+.941176 .972549 1 rg
+n 66 276 6 12 re f*
+.941176 .972549 1 rg
+n 78 276 54 12 re f*
+.941176 .972549 1 rg
+n 132 276 6 12 re f*
+.941176 .972549 1 rg
+n 138 276 24 12 re f*
+.941176 .972549 1 rg
+n 162 276 6 12 re f*
+.941176 .972549 1 rg
+n 168 276 24 12 re f*
+.941176 .972549 1 rg
+n 192 276 6 12 re f*
+.941176 .972549 1 rg
+n 198 276 6 12 re f*
+.941176 .972549 1 rg
+n 204 276 30 12 re f*
+.941176 .972549 1 rg
+n 234 276 6 12 re f*
+.941176 .972549 1 rg
+n 246 276 180 12 re f*
+.941176 .972549 1 rg
+n 426 276 12 12 re f*
+.941176 .972549 1 rg
+n 438 276 0 12 re f*
+.941176 .972549 1 rg
+n 0 264 6 12 re f*
+.941176 .972549 1 rg
+n 6 264 6 12 re f*
+.941176 .972549 1 rg
+n 12 264 6 12 re f*
+.941176 .972549 1 rg
+n 18 264 0 12 re f*
+.941176 .972549 1 rg
+n 0 252 6 12 re f*
+.941176 .972549 1 rg
+n 6 252 6 12 re f*
+.941176 .972549 1 rg
+n 12 252 6 12 re f*
+.941176 .972549 1 rg
+n 24 252 144 12 re f*
+.941176 .972549 1 rg
+n 168 252 0 12 re f*
+.941176 .972549 1 rg
+n 0 240 6 12 re f*
+.941176 .972549 1 rg
+n 6 240 6 12 re f*
+.941176 .972549 1 rg
+n 12 240 6 12 re f*
+.941176 .972549 1 rg
+n 24 240 6 12 re f*
+.941176 .972549 1 rg
+n 30 240 0 12 re f*
+.941176 .972549 1 rg
+n 0 228 6 12 re f*
+.941176 .972549 1 rg
+n 6 228 6 12 re f*
+.941176 .972549 1 rg
+n 12 228 6 12 re f*
+.941176 .972549 1 rg
+n 24 228 378 12 re f*
+.941176 .972549 1 rg
+n 402 228 0 12 re f*
+.941176 .972549 1 rg
+n 0 216 6 12 re f*
+.941176 .972549 1 rg
+n 6 216 6 12 re f*
+.941176 .972549 1 rg
+n 12 216 6 12 re f*
+.941176 .972549 1 rg
+n 24 216 36 12 re f*
+.941176 .972549 1 rg
+n 66 216 6 12 re f*
+.941176 .972549 1 rg
+n 78 216 54 12 re f*
+.941176 .972549 1 rg
+n 132 216 6 12 re f*
+.941176 .972549 1 rg
+n 138 216 24 12 re f*
+.941176 .972549 1 rg
+n 162 216 6 12 re f*
+.941176 .972549 1 rg
+n 168 216 24 12 re f*
+.941176 .972549 1 rg
+n 192 216 6 12 re f*
+.941176 .972549 1 rg
+n 198 216 6 12 re f*
+.941176 .972549 1 rg
+n 204 216 30 12 re f*
+.941176 .972549 1 rg
+n 234 216 6 12 re f*
+.941176 .972549 1 rg
+n 246 216 48 12 re f*
+.941176 .972549 1 rg
+n 294 216 6 12 re f*
+.941176 .972549 1 rg
+n 300 216 72 12 re f*
+.941176 .972549 1 rg
+n 372 216 18 12 re f*
+.941176 .972549 1 rg
+n 390 216 0 12 re f*
+.941176 .972549 1 rg
+n 0 204 6 12 re f*
+.941176 .972549 1 rg
+n 6 204 6 12 re f*
+.941176 .972549 1 rg
+n 12 204 6 12 re f*
+.941176 .972549 1 rg
+n 18 204 0 12 re f*
+.941176 .972549 1 rg
+n 0 192 6 12 re f*
+.941176 .972549 1 rg
+n 6 192 6 12 re f*
+.941176 .972549 1 rg
+n 12 192 6 12 re f*
+.941176 .972549 1 rg
+n 24 192 174 12 re f*
+.941176 .972549 1 rg
+n 198 192 0 12 re f*
+.941176 .972549 1 rg
+n 0 180 6 12 re f*
+.941176 .972549 1 rg
+n 6 180 6 12 re f*
+.941176 .972549 1 rg
+n 12 180 6 12 re f*
+.941176 .972549 1 rg
+n 24 180 24 12 re f*
+.941176 .972549 1 rg
+n 54 180 6 12 re f*
+.941176 .972549 1 rg
+n 66 180 24 12 re f*
+.941176 .972549 1 rg
+n 90 180 6 12 re f*
+.941176 .972549 1 rg
+n 96 180 36 12 re f*
+.941176 .972549 1 rg
+n 132 180 6 12 re f*
+.941176 .972549 1 rg
+n 138 180 0 12 re f*
+.941176 .972549 1 rg
+n 0 168 6 12 re f*
+.941176 .972549 1 rg
+n 6 168 6 12 re f*
+.941176 .972549 1 rg
+n 12 168 6 12 re f*
+.941176 .972549 1 rg
+n 24 168 24 12 re f*
+.941176 .972549 1 rg
+n 48 168 6 12 re f*
+.941176 .972549 1 rg
+n 54 168 36 12 re f*
+.941176 .972549 1 rg
+n 90 168 12 12 re f*
+.941176 .972549 1 rg
+n 102 168 66 12 re f*
+.941176 .972549 1 rg
+n 168 168 12 12 re f*
+.941176 .972549 1 rg
+n 180 168 6 12 re f*
+.941176 .972549 1 rg
+n 186 168 12 12 re f*
+.941176 .972549 1 rg
+n 198 168 60 12 re f*
+.941176 .972549 1 rg
+n 258 168 12 12 re f*
+.941176 .972549 1 rg
+n 270 168 48 12 re f*
+.941176 .972549 1 rg
+n 318 168 12 12 re f*
+.941176 .972549 1 rg
+n 330 168 48 12 re f*
+.941176 .972549 1 rg
+n 378 168 6 12 re f*
+.941176 .972549 1 rg
+n 384 168 0 12 re f*
+.941176 .972549 1 rg
+n 0 156 42 12 re f*
+.941176 .972549 1 rg
+n 42 156 0 12 re f*
+.941176 .972549 1 rg
+n 0 144 0 12 re f*
+.941176 .972549 1 rg
+n 0 132 6 12 re f*
+.941176 .972549 1 rg
+n 6 132 6 12 re f*
+.941176 .972549 1 rg
+n 12 132 6 12 re f*
+.941176 .972549 1 rg
+n 24 132 150 12 re f*
+.941176 .972549 1 rg
+n 174 132 0 12 re f*
+.941176 .972549 1 rg
+n 0 120 6 12 re f*
+.941176 .972549 1 rg
+n 6 120 6 12 re f*
+.941176 .972549 1 rg
+n 12 120 6 12 re f*
+.941176 .972549 1 rg
+n 24 120 36 12 re f*
+.941176 .972549 1 rg
+n 66 120 6 12 re f*
+.941176 .972549 1 rg
+n 78 120 30 12 re f*
+.941176 .972549 1 rg
+n 108 120 6 12 re f*
+.941176 .972549 1 rg
+n 114 120 24 12 re f*
+.941176 .972549 1 rg
+n 138 120 6 12 re f*
+.941176 .972549 1 rg
+n 144 120 24 12 re f*
+.941176 .972549 1 rg
+n 168 120 6 12 re f*
+.941176 .972549 1 rg
+n 174 120 6 12 re f*
+.941176 .972549 1 rg
+n 180 120 30 12 re f*
+.941176 .972549 1 rg
+n 210 120 6 12 re f*
+.941176 .972549 1 rg
+n 222 120 204 12 re f*
+.941176 .972549 1 rg
+n 426 120 12 12 re f*
+.941176 .972549 1 rg
+n 438 120 0 12 re f*
+.941176 .972549 1 rg
+n 0 108 6 12 re f*
+.941176 .972549 1 rg
+n 6 108 6 12 re f*
+.941176 .972549 1 rg
+n 12 108 6 12 re f*
+.941176 .972549 1 rg
+n 18 108 0 12 re f*
+.941176 .972549 1 rg
+n 0 96 6 12 re f*
+.941176 .972549 1 rg
+n 6 96 6 12 re f*
+.941176 .972549 1 rg
+n 12 96 6 12 re f*
+.941176 .972549 1 rg
+n 24 96 228 12 re f*
+.941176 .972549 1 rg
+n 252 96 0 12 re f*
+.941176 .972549 1 rg
+n 0 84 6 12 re f*
+.941176 .972549 1 rg
+n 6 84 6 12 re f*
+.941176 .972549 1 rg
+n 12 84 6 12 re f*
+.941176 .972549 1 rg
+n 24 84 36 12 re f*
+.941176 .972549 1 rg
+n 66 84 6 12 re f*
+.941176 .972549 1 rg
+n 78 84 78 12 re f*
+.941176 .972549 1 rg
+n 156 84 6 12 re f*
+.941176 .972549 1 rg
+n 162 84 24 12 re f*
+.941176 .972549 1 rg
+n 186 84 6 12 re f*
+.941176 .972549 1 rg
+n 192 84 24 12 re f*
+.941176 .972549 1 rg
+n 216 84 6 12 re f*
+.941176 .972549 1 rg
+n 222 84 6 12 re f*
+.941176 .972549 1 rg
+n 228 84 30 12 re f*
+.941176 .972549 1 rg
+n 258 84 6 12 re f*
+.941176 .972549 1 rg
+n 270 84 150 12 re f*
+.941176 .972549 1 rg
+n 420 84 12 12 re f*
+.941176 .972549 1 rg
+n 432 84 0 12 re f*
+.941176 .972549 1 rg
+n 0 72 6 12 re f*
+.941176 .972549 1 rg
+n 6 72 6 12 re f*
+.941176 .972549 1 rg
+n 12 72 6 12 re f*
+.941176 .972549 1 rg
+n 18 72 0 12 re f*
+.941176 .972549 1 rg
+n 0 60 6 12 re f*
+.941176 .972549 1 rg
+n 6 60 6 12 re f*
+.941176 .972549 1 rg
+n 12 60 6 12 re f*
+.941176 .972549 1 rg
+n 24 60 276 12 re f*
+.941176 .972549 1 rg
+n 300 60 0 12 re f*
+.941176 .972549 1 rg
+n 0 48 6 12 re f*
+.941176 .972549 1 rg
+n 6 48 6 12 re f*
+.941176 .972549 1 rg
+n 12 48 6 12 re f*
+.941176 .972549 1 rg
+n 24 48 18 12 re f*
+.941176 .972549 1 rg
+n 48 48 6 12 re f*
+.941176 .972549 1 rg
+n 60 48 222 12 re f*
+.941176 .972549 1 rg
+n 282 48 0 12 re f*
+.941176 .972549 1 rg
+n 0 36 6 12 re f*
+.941176 .972549 1 rg
+n 6 36 6 12 re f*
+.941176 .972549 1 rg
+n 12 36 6 12 re f*
+.941176 .972549 1 rg
+n 24 36 42 12 re f*
+.941176 .972549 1 rg
+n 72 36 6 12 re f*
+.941176 .972549 1 rg
+n 84 36 102 12 re f*
+.941176 .972549 1 rg
+n 186 36 6 12 re f*
+.941176 .972549 1 rg
+n 192 36 24 12 re f*
+.941176 .972549 1 rg
+n 216 36 6 12 re f*
+.941176 .972549 1 rg
+n 222 36 24 12 re f*
+.941176 .972549 1 rg
+n 246 36 6 12 re f*
+.941176 .972549 1 rg
+n 252 36 6 12 re f*
+.941176 .972549 1 rg
+n 258 36 30 12 re f*
+.941176 .972549 1 rg
+n 288 36 6 12 re f*
+.941176 .972549 1 rg
+n 300 36 18 12 re f*
+.941176 .972549 1 rg
+n 318 36 12 12 re f*
+.941176 .972549 1 rg
+n 330 36 0 12 re f*
+.941176 .972549 1 rg
+n 0 24 6 12 re f*
+.941176 .972549 1 rg
+n 6 24 6 12 re f*
+.941176 .972549 1 rg
+n 12 24 6 12 re f*
+.941176 .972549 1 rg
+n 24 24 24 12 re f*
+.941176 .972549 1 rg
+n 54 24 6 12 re f*
+.941176 .972549 1 rg
+n 66 24 6 12 re f*
+.941176 .972549 1 rg
+n 72 24 6 12 re f*
+.941176 .972549 1 rg
+n 78 24 6 12 re f*
+.941176 .972549 1 rg
+n 84 24 36 12 re f*
+.941176 .972549 1 rg
+n 120 24 6 12 re f*
+.941176 .972549 1 rg
+n 132 24 18 12 re f*
+.941176 .972549 1 rg
+n 156 24 6 12 re f*
+.941176 .972549 1 rg
+n 168 24 12 12 re f*
+.941176 .972549 1 rg
+n 186 24 42 12 re f*
+.941176 .972549 1 rg
+n 228 24 6 12 re f*
+.941176 .972549 1 rg
+n 234 24 0 12 re f*
+.941176 .972549 1 rg
+n 0 12 6 12 re f*
+.941176 .972549 1 rg
+n 6 12 6 12 re f*
+.941176 .972549 1 rg
+n 12 12 6 12 re f*
+.941176 .972549 1 rg
+n 24 12 36 12 re f*
+.941176 .972549 1 rg
+n 66 12 6 12 re f*
+.941176 .972549 1 rg
+n 78 12 30 12 re f*
+.941176 .972549 1 rg
+n 108 12 6 12 re f*
+.941176 .972549 1 rg
+n 114 12 78 12 re f*
+.941176 .972549 1 rg
+n 192 12 6 12 re f*
+.941176 .972549 1 rg
+n 198 12 30 12 re f*
+.941176 .972549 1 rg
+n 228 12 6 12 re f*
+.941176 .972549 1 rg
+n 234 12 24 12 re f*
+.941176 .972549 1 rg
+n 258 12 6 12 re f*
+.941176 .972549 1 rg
+n 264 12 6 12 re f*
+.941176 .972549 1 rg
+n 270 12 30 12 re f*
+.941176 .972549 1 rg
+n 300 12 6 12 re f*
+.941176 .972549 1 rg
+n 312 12 18 12 re f*
+.941176 .972549 1 rg
+n 330 12 12 12 re f*
+.941176 .972549 1 rg
+n 348 12 18 12 re f*
+.941176 .972549 1 rg
+n 372 12 18 12 re f*
+.941176 .972549 1 rg
+n 396 12 12 12 re f*
+.941176 .972549 1 rg
+n 414 12 24 12 re f*
+.941176 .972549 1 rg
+n 438 12 6 12 re f*
+.941176 .972549 1 rg
+n 444 12 0 12 re f*
+.941176 .972549 1 rg
+n 0 0 6 12 re f*
+.941176 .972549 1 rg
+n 6 0 6 12 re f*
+.941176 .972549 1 rg
+n 12 0 6 12 re f*
+.941176 .972549 1 rg
+n 18 0 0 12 re f*
+BT 1 0 0 1 0 350 Tm 12 TL /F3 10 Tf .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (itertools) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (chain) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (get_path) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko.modules) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (\() Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (...) Tj 0 0 0 rg (     ) Tj (fetch) Tj (,) Tj ( ) Tj (fetchdata) Tj (,) Tj ( ) Tj (fetchsitefeed) Tj (,) Tj ( ) Tj (feedautodiscovery) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Fetch a url ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (fetchpage) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('https://news.ycombinator.com') Tj 0 0 0 rg (}\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Fetch a filepath ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# Note: `get_path` just looks up a file in the `data` directory) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (fetchdata) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj (get_path) Tj (\() Tj .729412 .129412 .129412 rg ('quote.json') Tj 0 0 0 rg (\)}\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### View the fetched data ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (item) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (stream) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (item) Tj ([) Tj .729412 .129412 .129412 rg ('list') Tj 0 0 0 rg (][) Tj .729412 .129412 .129412 rg ('resources') Tj 0 0 0 rg (][) Tj .4 .4 .4 rg (0) Tj 0 0 0 rg (][) Tj .729412 .129412 .129412 rg ('resource') Tj 0 0 0 rg (][) Tj .729412 .129412 .129412 rg ('fields') Tj 0 0 0 rg (][) Tj .729412 .129412 .129412 rg ('symbol') Tj 0 0 0 rg (]) Tj .733333 .733333 .733333 rg  T* .729412 .129412 .129412 rg ('KRW=X') Tj .733333 .733333 .733333 rg  T*  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Fetch an rss feed ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (fetch) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('https://news.ycombinator.com/rss') Tj 0 0 0 rg (}\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Fetch the first rss feed found ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (fetchsitefeed) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('http://www.bbc.com/news') Tj 0 0 0 rg (}\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Find all rss links and fetch the feeds ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (url) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj .729412 .129412 .129412 rg ('http://edition.cnn.com/services/rss') Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (entries) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (feedautodiscovery) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj (url) Tj (}\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (urls) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (\() Tj (e) Tj ([) Tj .729412 .129412 .129412 rg ('link') Tj 0 0 0 rg (]) Tj ( ) Tj /F4 10 Tf 0 .501961 0 rg (for) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (e) Tj ( ) Tj /F4 10 Tf .666667 .133333 1 rg (in) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (entries) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (chain) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (from_iterable) Tj (\() Tj (fetch) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj (url) Tj (}\)) Tj ( ) Tj /F4 10 Tf 0 .501961 0 rg (for) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (url) Tj ( ) Tj /F4 10 Tf .666667 .133333 1 rg (in) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (urls) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* ET
+Q
+Q
+Q
+Q
+Q
+ 
+endstream
+endobj
+31 0 obj
+<<
+/Length 28414
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 57.02362 475.8236 cm
+q
+q
+1 0 0 1 0 0 cm
+q
+1 0 0 1 6.6 6.6 cm
+q
+.662745 .662745 .662745 RG
+.5 w
+.941176 .972549 1 rg
+n -6 -6 480.0283 288 re B*
+Q
+q
+.941176 .972549 1 rg
+n 0 264 6 12 re f*
+.941176 .972549 1 rg
+n 6 264 6 12 re f*
+.941176 .972549 1 rg
+n 12 264 6 12 re f*
+.941176 .972549 1 rg
+n 24 264 276 12 re f*
+.941176 .972549 1 rg
+n 300 264 0 12 re f*
+.941176 .972549 1 rg
+n 0 252 6 12 re f*
+.941176 .972549 1 rg
+n 6 252 6 12 re f*
+.941176 .972549 1 rg
+n 12 252 6 12 re f*
+.941176 .972549 1 rg
+n 24 252 6 12 re f*
+.941176 .972549 1 rg
+n 30 252 0 12 re f*
+.941176 .972549 1 rg
+n 0 240 6 12 re f*
+.941176 .972549 1 rg
+n 6 240 6 12 re f*
+.941176 .972549 1 rg
+n 12 240 6 12 re f*
+.941176 .972549 1 rg
+n 24 240 426 12 re f*
+.941176 .972549 1 rg
+n 450 240 0 12 re f*
+.941176 .972549 1 rg
+n 0 228 6 12 re f*
+.941176 .972549 1 rg
+n 6 228 6 12 re f*
+.941176 .972549 1 rg
+n 12 228 6 12 re f*
+.941176 .972549 1 rg
+n 24 228 126 12 re f*
+.941176 .972549 1 rg
+n 150 228 0 12 re f*
+.941176 .972549 1 rg
+n 0 216 6 12 re f*
+.941176 .972549 1 rg
+n 6 216 6 12 re f*
+.941176 .972549 1 rg
+n 12 216 6 12 re f*
+.941176 .972549 1 rg
+n 24 216 24 12 re f*
+.941176 .972549 1 rg
+n 48 216 6 12 re f*
+.941176 .972549 1 rg
+n 54 216 96 12 re f*
+.941176 .972549 1 rg
+n 150 216 6 12 re f*
+.941176 .972549 1 rg
+n 156 216 36 12 re f*
+.941176 .972549 1 rg
+n 198 216 84 12 re f*
+.941176 .972549 1 rg
+n 282 216 0 12 re f*
+.941176 .972549 1 rg
+n 0 204 6 12 re f*
+.941176 .972549 1 rg
+n 6 204 6 12 re f*
+.941176 .972549 1 rg
+n 12 204 6 12 re f*
+.941176 .972549 1 rg
+n 18 204 0 12 re f*
+.941176 .972549 1 rg
+n 0 192 6 12 re f*
+.941176 .972549 1 rg
+n 6 192 6 12 re f*
+.941176 .972549 1 rg
+n 12 192 6 12 re f*
+.941176 .972549 1 rg
+n 24 192 42 12 re f*
+.941176 .972549 1 rg
+n 72 192 6 12 re f*
+.941176 .972549 1 rg
+n 84 192 12 12 re f*
+.941176 .972549 1 rg
+n 96 192 30 12 re f*
+.941176 .972549 1 rg
+n 126 192 6 12 re f*
+.941176 .972549 1 rg
+n 138 192 18 12 re f*
+.941176 .972549 1 rg
+n 156 192 6 12 re f*
+.941176 .972549 1 rg
+n 168 192 18 12 re f*
+.941176 .972549 1 rg
+n 192 192 18 12 re f*
+.941176 .972549 1 rg
+n 216 192 12 12 re f*
+.941176 .972549 1 rg
+n 234 192 24 12 re f*
+.941176 .972549 1 rg
+n 258 192 6 12 re f*
+.941176 .972549 1 rg
+n 264 192 0 12 re f*
+.941176 .972549 1 rg
+n 0 180 6 12 re f*
+.941176 .972549 1 rg
+n 6 180 6 12 re f*
+.941176 .972549 1 rg
+n 12 180 6 12 re f*
+.941176 .972549 1 rg
+n 24 180 36 12 re f*
+.941176 .972549 1 rg
+n 66 180 6 12 re f*
+.941176 .972549 1 rg
+n 78 180 84 12 re f*
+.941176 .972549 1 rg
+n 162 180 6 12 re f*
+.941176 .972549 1 rg
+n 168 180 42 12 re f*
+.941176 .972549 1 rg
+n 210 180 6 12 re f*
+.941176 .972549 1 rg
+n 216 180 6 12 re f*
+.941176 .972549 1 rg
+n 222 180 30 12 re f*
+.941176 .972549 1 rg
+n 252 180 12 12 re f*
+.941176 .972549 1 rg
+n 264 180 0 12 re f*
+.941176 .972549 1 rg
+n 0 168 6 12 re f*
+.941176 .972549 1 rg
+n 6 168 6 12 re f*
+.941176 .972549 1 rg
+n 12 168 6 12 re f*
+.941176 .972549 1 rg
+n 18 168 0 12 re f*
+.941176 .972549 1 rg
+n 0 156 6 12 re f*
+.941176 .972549 1 rg
+n 6 156 6 12 re f*
+.941176 .972549 1 rg
+n 12 156 6 12 re f*
+.941176 .972549 1 rg
+n 24 156 216 12 re f*
+.941176 .972549 1 rg
+n 240 156 0 12 re f*
+.941176 .972549 1 rg
+n 0 144 6 12 re f*
+.941176 .972549 1 rg
+n 6 144 6 12 re f*
+.941176 .972549 1 rg
+n 12 144 6 12 re f*
+.941176 .972549 1 rg
+n 24 144 6 12 re f*
+.941176 .972549 1 rg
+n 30 144 0 12 re f*
+.941176 .972549 1 rg
+n 0 132 6 12 re f*
+.941176 .972549 1 rg
+n 6 132 6 12 re f*
+.941176 .972549 1 rg
+n 12 132 6 12 re f*
+.941176 .972549 1 rg
+n 24 132 420 12 re f*
+.941176 .972549 1 rg
+n 444 132 0 12 re f*
+.941176 .972549 1 rg
+n 0 120 6 12 re f*
+.941176 .972549 1 rg
+n 6 120 6 12 re f*
+.941176 .972549 1 rg
+n 12 120 6 12 re f*
+.941176 .972549 1 rg
+n 24 120 66 12 re f*
+.941176 .972549 1 rg
+n 90 120 0 12 re f*
+.941176 .972549 1 rg
+n 0 108 6 12 re f*
+.941176 .972549 1 rg
+n 6 108 6 12 re f*
+.941176 .972549 1 rg
+n 12 108 6 12 re f*
+.941176 .972549 1 rg
+n 24 108 24 12 re f*
+.941176 .972549 1 rg
+n 54 108 6 12 re f*
+.941176 .972549 1 rg
+n 66 108 24 12 re f*
+.941176 .972549 1 rg
+n 90 108 6 12 re f*
+.941176 .972549 1 rg
+n 96 108 36 12 re f*
+.941176 .972549 1 rg
+n 132 108 6 12 re f*
+.941176 .972549 1 rg
+n 138 108 0 12 re f*
+.941176 .972549 1 rg
+n 0 96 6 12 re f*
+.941176 .972549 1 rg
+n 6 96 6 12 re f*
+.941176 .972549 1 rg
+n 12 96 6 12 re f*
+.941176 .972549 1 rg
+n 24 96 36 12 re f*
+.941176 .972549 1 rg
+n 60 96 6 12 re f*
+.941176 .972549 1 rg
+n 66 96 24 12 re f*
+.941176 .972549 1 rg
+n 90 96 6 12 re f*
+.941176 .972549 1 rg
+n 96 96 24 12 re f*
+.941176 .972549 1 rg
+n 120 96 18 12 re f*
+.941176 .972549 1 rg
+n 138 96 0 12 re f*
+.941176 .972549 1 rg
+n 0 84 6 12 re f*
+.941176 .972549 1 rg
+n 6 84 0 12 re f*
+.941176 .972549 1 rg
+n 24 72 48 12 re f*
+.941176 .972549 1 rg
+n 72 72 6 12 re f*
+.941176 .972549 1 rg
+n 84 72 78 12 re f*
+.941176 .972549 1 rg
+n 162 72 6 12 re f*
+.941176 .972549 1 rg
+n 174 72 72 12 re f*
+.941176 .972549 1 rg
+n 246 72 6 12 re f*
+.941176 .972549 1 rg
+n 258 72 60 12 re f*
+.941176 .972549 1 rg
+n 318 72 6 12 re f*
+.941176 .972549 1 rg
+n 330 72 54 12 re f*
+.941176 .972549 1 rg
+n 384 72 6 12 re f*
+.941176 .972549 1 rg
+n 390 72 0 12 re f*
+.941176 .972549 1 rg
+n 24 60 72 12 re f*
+.941176 .972549 1 rg
+n 96 60 6 12 re f*
+.941176 .972549 1 rg
+n 108 60 24 12 re f*
+.941176 .972549 1 rg
+n 132 60 6 12 re f*
+.941176 .972549 1 rg
+n 144 60 36 12 re f*
+.941176 .972549 1 rg
+n 180 60 6 12 re f*
+.941176 .972549 1 rg
+n 192 60 54 12 re f*
+.941176 .972549 1 rg
+n 246 60 6 12 re f*
+.941176 .972549 1 rg
+n 258 60 54 12 re f*
+.941176 .972549 1 rg
+n 312 60 6 12 re f*
+.941176 .972549 1 rg
+n 324 60 42 12 re f*
+.941176 .972549 1 rg
+n 366 60 6 12 re f*
+.941176 .972549 1 rg
+n 372 60 0 12 re f*
+.941176 .972549 1 rg
+n 24 48 54 12 re f*
+.941176 .972549 1 rg
+n 78 48 6 12 re f*
+.941176 .972549 1 rg
+n 90 48 96 12 re f*
+.941176 .972549 1 rg
+n 186 48 6 12 re f*
+.941176 .972549 1 rg
+n 198 48 36 12 re f*
+.941176 .972549 1 rg
+n 234 48 6 12 re f*
+.941176 .972549 1 rg
+n 246 48 78 12 re f*
+.941176 .972549 1 rg
+n 324 48 6 12 re f*
+.941176 .972549 1 rg
+n 336 48 54 12 re f*
+.941176 .972549 1 rg
+n 390 48 6 12 re f*
+.941176 .972549 1 rg
+n 396 48 0 12 re f*
+.941176 .972549 1 rg
+n 0 36 6 12 re f*
+.941176 .972549 1 rg
+n 6 36 6 12 re f*
+.941176 .972549 1 rg
+n 12 36 6 12 re f*
+.941176 .972549 1 rg
+n 24 36 24 12 re f*
+.941176 .972549 1 rg
+n 48 36 6 12 re f*
+.941176 .972549 1 rg
+n 54 36 42 12 re f*
+.941176 .972549 1 rg
+n 96 36 12 12 re f*
+.941176 .972549 1 rg
+n 114 36 24 12 re f*
+.941176 .972549 1 rg
+n 138 36 6 12 re f*
+.941176 .972549 1 rg
+n 144 36 48 12 re f*
+.941176 .972549 1 rg
+n 192 36 12 12 re f*
+.941176 .972549 1 rg
+n 210 36 24 12 re f*
+.941176 .972549 1 rg
+n 234 36 6 12 re f*
+.941176 .972549 1 rg
+n 240 36 36 12 re f*
+.941176 .972549 1 rg
+n 276 36 6 12 re f*
+.941176 .972549 1 rg
+n 282 36 0 12 re f*
+.941176 .972549 1 rg
+n 0 24 6 12 re f*
+.941176 .972549 1 rg
+n 6 24 0 12 re f*
+.941176 .972549 1 rg
+n 24 12 6 12 re f*
+.941176 .972549 1 rg
+n 30 12 162 12 re f*
+.941176 .972549 1 rg
+n 192 12 6 12 re f*
+.941176 .972549 1 rg
+n 204 12 6 12 re f*
+.941176 .972549 1 rg
+n 210 12 114 12 re f*
+.941176 .972549 1 rg
+n 324 12 6 12 re f*
+.941176 .972549 1 rg
+n 330 12 0 12 re f*
+.941176 .972549 1 rg
+n 24 0 6 12 re f*
+.941176 .972549 1 rg
+n 30 0 330 12 re f*
+.941176 .972549 1 rg
+n 360 0 6 12 re f*
+.941176 .972549 1 rg
+n 366 0 0 12 re f*
+BT 1 0 0 1 0 266 Tm 12 TL /F3 10 Tf .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Alternatively, create a SyncCollection ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# `SyncCollection` is a url fetching convenience class with support for) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# parallel processing) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko.collections) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (SyncCollection) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (sources) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ([{) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj (url) Tj (}) Tj ( ) Tj /F4 10 Tf 0 .501961 0 rg (for) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (url) Tj ( ) Tj /F4 10 Tf .666667 .133333 1 rg (in) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (urls) Tj (]) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (SyncCollection) Tj (\() Tj (sources) Tj (\)) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (fetch) Tj (\(\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### View the fetched rss feed\(s\) ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# Note: regardless of how you fetch an rss feed, it will have the same) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# structure) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (item) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (stream) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (sorted) Tj 0 0 0 rg (\() Tj (item) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (keys) Tj (\(\)\)) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg ([) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg (    ) Tj .729412 .129412 .129412 rg ('author') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('author.name') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('author.uri') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('comments') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('content') Tj 0 0 0 rg (,) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg (    ) Tj .729412 .129412 .129412 rg ('dc:creator') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('id') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('link') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('pubDate') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('summary') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (,) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg (    ) Tj .729412 .129412 .129412 rg ('updated') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('updated_parsed') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('y:id') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('y:published') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('y:title') Tj 0 0 0 rg (]) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (item) Tj ([) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (],) Tj ( ) Tj (item) Tj ([) Tj .729412 .129412 .129412 rg ('author') Tj 0 0 0 rg (],) Tj ( ) Tj (item) Tj ([) Tj .729412 .129412 .129412 rg ('link') Tj 0 0 0 rg (]) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg (\() Tj .733333 .733333 .733333 rg  T* 0 0 0 rg (    ) Tj .729412 .129412 .129412 rg (u) Tj ('Using NFC tags in the car') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg (u) Tj ('Liam Green-Hughes') Tj 0 0 0 rg (,) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg (    ) Tj .729412 .129412 .129412 rg (u) Tj ('http://www.greenhughes.com/content/using-nfc-tags-car') Tj 0 0 0 rg (\)) Tj .733333 .733333 .733333 rg  T* ET
+Q
+Q
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 442.8236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (Alternate ) Tj /F3 17.5 Tf 0 0 0 rg (conf) Tj /F2 17.5 Tf .133333 .133333 .133333 rg ( value entry) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 424.8236 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (Some workflows have ) Tj /F3 10 Tf (conf) Tj /F1 10 Tf ( values that are wired from other pipes) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 283.6236 cm
+q
+q
+1 0 0 1 0 0 cm
+q
+1 0 0 1 6.6 6.6 cm
+q
+.662745 .662745 .662745 RG
+.5 w
+.941176 .972549 1 rg
+n -6 -6 480.0283 132 re B*
+Q
+q
+.941176 .972549 1 rg
+n 0 108 6 12 re f*
+.941176 .972549 1 rg
+n 6 108 6 12 re f*
+.941176 .972549 1 rg
+n 12 108 6 12 re f*
+.941176 .972549 1 rg
+n 24 108 24 12 re f*
+.941176 .972549 1 rg
+n 48 108 6 12 re f*
+.941176 .972549 1 rg
+n 54 108 24 12 re f*
+.941176 .972549 1 rg
+n 78 108 6 12 re f*
+.941176 .972549 1 rg
+n 84 108 36 12 re f*
+.941176 .972549 1 rg
+n 126 108 48 12 re f*
+.941176 .972549 1 rg
+n 174 108 0 12 re f*
+.941176 .972549 1 rg
+n 0 96 6 12 re f*
+.941176 .972549 1 rg
+n 6 96 6 12 re f*
+.941176 .972549 1 rg
+n 12 96 6 12 re f*
+.941176 .972549 1 rg
+n 24 96 24 12 re f*
+.941176 .972549 1 rg
+n 48 96 6 12 re f*
+.941176 .972549 1 rg
+n 54 96 108 12 re f*
+.941176 .972549 1 rg
+n 162 96 6 12 re f*
+.941176 .972549 1 rg
+n 168 96 36 12 re f*
+.941176 .972549 1 rg
+n 210 96 24 12 re f*
+.941176 .972549 1 rg
+n 234 96 0 12 re f*
+.941176 .972549 1 rg
+n 0 84 6 12 re f*
+.941176 .972549 1 rg
+n 6 84 6 12 re f*
+.941176 .972549 1 rg
+n 12 84 6 12 re f*
+.941176 .972549 1 rg
+n 18 84 0 12 re f*
+.941176 .972549 1 rg
+n 0 72 6 12 re f*
+.941176 .972549 1 rg
+n 6 72 6 12 re f*
+.941176 .972549 1 rg
+n 12 72 6 12 re f*
+.941176 .972549 1 rg
+n 24 72 24 12 re f*
+.941176 .972549 1 rg
+n 54 72 6 12 re f*
+.941176 .972549 1 rg
+n 66 72 6 12 re f*
+.941176 .972549 1 rg
+n 72 72 30 12 re f*
+.941176 .972549 1 rg
+n 102 72 6 12 re f*
+.941176 .972549 1 rg
+n 114 72 6 12 re f*
+.941176 .972549 1 rg
+n 120 72 48 12 re f*
+.941176 .972549 1 rg
+n 168 72 6 12 re f*
+.941176 .972549 1 rg
+n 180 72 30 12 re f*
+.941176 .972549 1 rg
+n 210 72 12 12 re f*
+.941176 .972549 1 rg
+n 222 72 0 12 re f*
+.941176 .972549 1 rg
+n 0 60 6 12 re f*
+.941176 .972549 1 rg
+n 6 60 6 12 re f*
+.941176 .972549 1 rg
+n 12 60 6 12 re f*
+.941176 .972549 1 rg
+n 24 60 36 12 re f*
+.941176 .972549 1 rg
+n 66 60 6 12 re f*
+.941176 .972549 1 rg
+n 78 60 24 12 re f*
+.941176 .972549 1 rg
+n 102 60 12 12 re f*
+.941176 .972549 1 rg
+n 114 60 30 12 re f*
+.941176 .972549 1 rg
+n 144 60 6 12 re f*
+.941176 .972549 1 rg
+n 156 60 48 12 re f*
+.941176 .972549 1 rg
+n 204 60 6 12 re f*
+.941176 .972549 1 rg
+n 210 60 60 12 re f*
+.941176 .972549 1 rg
+n 270 60 18 12 re f*
+.941176 .972549 1 rg
+n 294 60 24 12 re f*
+.941176 .972549 1 rg
+n 318 60 6 12 re f*
+.941176 .972549 1 rg
+n 324 60 24 12 re f*
+.941176 .972549 1 rg
+n 348 60 6 12 re f*
+.941176 .972549 1 rg
+n 354 60 0 12 re f*
+.941176 .972549 1 rg
+n 0 48 6 12 re f*
+.941176 .972549 1 rg
+n 6 48 6 12 re f*
+.941176 .972549 1 rg
+n 12 48 6 12 re f*
+.941176 .972549 1 rg
+n 24 48 18 12 re f*
+.941176 .972549 1 rg
+n 42 48 6 12 re f*
+.941176 .972549 1 rg
+n 48 48 24 12 re f*
+.941176 .972549 1 rg
+n 72 48 6 12 re f*
+.941176 .972549 1 rg
+n 78 48 36 12 re f*
+.941176 .972549 1 rg
+n 114 48 6 12 re f*
+.941176 .972549 1 rg
+n 120 48 6 12 re f*
+.941176 .972549 1 rg
+n 126 48 24 12 re f*
+.941176 .972549 1 rg
+n 150 48 18 12 re f*
+.941176 .972549 1 rg
+n 174 48 12 12 re f*
+.941176 .972549 1 rg
+n 192 48 6 12 re f*
+.941176 .972549 1 rg
+n 198 48 0 12 re f*
+.941176 .972549 1 rg
+n 0 36 18 12 re f*
+.941176 .972549 1 rg
+n 48 36 54 12 re f*
+.941176 .972549 1 rg
+n 102 36 6 12 re f*
+.941176 .972549 1 rg
+n 114 36 96 12 re f*
+.941176 .972549 1 rg
+n 210 36 6 12 re f*
+.941176 .972549 1 rg
+n 222 36 54 12 re f*
+.941176 .972549 1 rg
+n 276 36 6 12 re f*
+.941176 .972549 1 rg
+n 288 36 48 12 re f*
+.941176 .972549 1 rg
+n 336 36 6 12 re f*
+.941176 .972549 1 rg
+n 348 36 78 12 re f*
+.941176 .972549 1 rg
+n 426 36 6 12 re f*
+.941176 .972549 1 rg
+n 432 36 0 12 re f*
+.941176 .972549 1 rg
+n 0 24 18 12 re f*
+.941176 .972549 1 rg
+n 48 24 42 12 re f*
+.941176 .972549 1 rg
+n 90 24 6 12 re f*
+.941176 .972549 1 rg
+n 102 24 60 12 re f*
+.941176 .972549 1 rg
+n 162 24 6 12 re f*
+.941176 .972549 1 rg
+n 174 24 54 12 re f*
+.941176 .972549 1 rg
+n 228 24 6 12 re f*
+.941176 .972549 1 rg
+n 240 24 54 12 re f*
+.941176 .972549 1 rg
+n 294 24 6 12 re f*
+.941176 .972549 1 rg
+n 306 24 36 12 re f*
+.941176 .972549 1 rg
+n 342 24 6 12 re f*
+.941176 .972549 1 rg
+n 354 24 54 12 re f*
+.941176 .972549 1 rg
+n 408 24 6 12 re f*
+.941176 .972549 1 rg
+n 414 24 0 12 re f*
+.941176 .972549 1 rg
+n 0 12 18 12 re f*
+.941176 .972549 1 rg
+n 48 12 72 12 re f*
+.941176 .972549 1 rg
+n 120 12 6 12 re f*
+.941176 .972549 1 rg
+n 132 12 72 12 re f*
+.941176 .972549 1 rg
+n 204 12 6 12 re f*
+.941176 .972549 1 rg
+n 216 12 78 12 re f*
+.941176 .972549 1 rg
+n 294 12 6 12 re f*
+.941176 .972549 1 rg
+n 306 12 24 12 re f*
+.941176 .972549 1 rg
+n 330 12 6 12 re f*
+.941176 .972549 1 rg
+n 342 12 36 12 re f*
+.941176 .972549 1 rg
+n 378 12 6 12 re f*
+.941176 .972549 1 rg
+n 384 12 0 12 re f*
+.941176 .972549 1 rg
+n 0 0 24 12 re f*
+.941176 .972549 1 rg
+n 24 0 0 12 re f*
+BT 1 0 0 1 0 110 Tm 12 TL /F3 10 Tf .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (get_path) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko.modules.fetch) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (pipe) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (conf) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj ({) Tj .729412 .129412 .129412 rg ('subkey') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (}}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (result) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (pipe) Tj (\({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj (get_path) Tj (\() Tj .729412 .129412 .129412 rg ('feed.xml') Tj 0 0 0 rg (\)},) Tj ( ) Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg (conf) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (set) Tj 0 0 0 rg (\() Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (result) Tj (\)) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (keys) Tj (\(\)\)) Tj ( ) Tj .4 .4 .4 rg (==) Tj 0 0 0 rg ( ) Tj ({) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (...) Tj 0 0 0 rg (     ) Tj .729412 .129412 .129412 rg ('updated') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('updated_parsed') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('pubDate') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('author') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('y:published') Tj 0 0 0 rg (,) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (...) Tj 0 0 0 rg (     ) Tj .729412 .129412 .129412 rg ('title') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('comments') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('summary') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('content') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('link') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('y:title') Tj 0 0 0 rg (,) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (...) Tj 0 0 0 rg (     ) Tj .729412 .129412 .129412 rg ('dc:creator') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('author.uri') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('author.name') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('id') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('y:id') Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* /F4 10 Tf 0 .501961 0 rg (True) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* ET
+Q
+Q
+Q
+Q
+Q
+q
+1 0 0 1 57.02362 250.6236 cm
+q
+BT 1 0 0 1 0 3.5 Tm 21 TL /F2 17.5 Tf .133333 .133333 .133333 rg (Alternate workflow creation) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 232.6236 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (In addition to ) Tj 0 .4 .6 rg (class based workflows) Tj 0 0 0 rg ( ) Tj /F3 10 Tf (riko) Tj /F1 10 Tf ( supports a pure functional style ) Tj /F1 8 Tf 0 .4 .6 rg 5 Ts (1) Tj /F1 10 Tf 0 0 0 rg 0 Ts (.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 73.08296 cm
+q
+q
+.963999 0 0 .963999 0 0 cm
+q
+1 0 0 1 6.6 6.846479 cm
+q
+.662745 .662745 .662745 RG
+.5 w
+.941176 .972549 1 rg
+n -6 -6 498 156 re B*
+Q
+q
+.941176 .972549 1 rg
+n 0 132 6 12 re f*
+.941176 .972549 1 rg
+n 6 132 6 12 re f*
+.941176 .972549 1 rg
+n 12 132 6 12 re f*
+.941176 .972549 1 rg
+n 24 132 36 12 re f*
+.941176 .972549 1 rg
+n 60 132 6 12 re f*
+.941176 .972549 1 rg
+n 66 132 54 12 re f*
+.941176 .972549 1 rg
+n 120 132 6 12 re f*
+.941176 .972549 1 rg
+n 126 132 12 12 re f*
+.941176 .972549 1 rg
+n 138 132 6 12 re f*
+.941176 .972549 1 rg
+n 144 132 12 12 re f*
+.941176 .972549 1 rg
+n 156 132 0 12 re f*
+.941176 .972549 1 rg
+n 0 120 6 12 re f*
+.941176 .972549 1 rg
+n 6 120 6 12 re f*
+.941176 .972549 1 rg
+n 12 120 6 12 re f*
+.941176 .972549 1 rg
+n 24 120 24 12 re f*
+.941176 .972549 1 rg
+n 48 120 6 12 re f*
+.941176 .972549 1 rg
+n 54 120 24 12 re f*
+.941176 .972549 1 rg
+n 78 120 6 12 re f*
+.941176 .972549 1 rg
+n 84 120 36 12 re f*
+.941176 .972549 1 rg
+n 126 120 48 12 re f*
+.941176 .972549 1 rg
+n 174 120 0 12 re f*
+.941176 .972549 1 rg
+n 0 108 6 12 re f*
+.941176 .972549 1 rg
+n 6 108 6 12 re f*
+.941176 .972549 1 rg
+n 12 108 6 12 re f*
+.941176 .972549 1 rg
+n 24 108 24 12 re f*
+.941176 .972549 1 rg
+n 48 108 6 12 re f*
+.941176 .972549 1 rg
+n 54 108 72 12 re f*
+.941176 .972549 1 rg
+n 126 108 6 12 re f*
+.941176 .972549 1 rg
+n 132 108 36 12 re f*
+.941176 .972549 1 rg
+n 174 108 54 12 re f*
+.941176 .972549 1 rg
+n 228 108 6 12 re f*
+.941176 .972549 1 rg
+n 240 108 60 12 re f*
+.941176 .972549 1 rg
+n 300 108 6 12 re f*
+.941176 .972549 1 rg
+n 312 108 54 12 re f*
+.941176 .972549 1 rg
+n 366 108 6 12 re f*
+.941176 .972549 1 rg
+n 378 108 30 12 re f*
+.941176 .972549 1 rg
+n 408 108 0 12 re f*
+.941176 .972549 1 rg
+n 0 96 6 12 re f*
+.941176 .972549 1 rg
+n 6 96 6 12 re f*
+.941176 .972549 1 rg
+n 12 96 6 12 re f*
+.941176 .972549 1 rg
+n 18 96 0 12 re f*
+.941176 .972549 1 rg
+n 0 84 6 12 re f*
+.941176 .972549 1 rg
+n 6 84 6 12 re f*
+.941176 .972549 1 rg
+n 12 84 6 12 re f*
+.941176 .972549 1 rg
+n 24 84 210 12 re f*
+.941176 .972549 1 rg
+n 234 84 0 12 re f*
+.941176 .972549 1 rg
+n 0 72 6 12 re f*
+.941176 .972549 1 rg
+n 6 72 6 12 re f*
+.941176 .972549 1 rg
+n 12 72 6 12 re f*
+.941176 .972549 1 rg
+n 24 72 6 12 re f*
+.941176 .972549 1 rg
+n 30 72 0 12 re f*
+.941176 .972549 1 rg
+n 0 60 6 12 re f*
+.941176 .972549 1 rg
+n 6 60 6 12 re f*
+.941176 .972549 1 rg
+n 12 60 6 12 re f*
+.941176 .972549 1 rg
+n 24 60 48 12 re f*
+.941176 .972549 1 rg
+n 72 60 0 12 re f*
+.941176 .972549 1 rg
+n 0 48 6 12 re f*
+.941176 .972549 1 rg
+n 6 48 6 12 re f*
+.941176 .972549 1 rg
+n 12 48 6 12 re f*
+.941176 .972549 1 rg
+n 24 48 432 12 re f*
+.941176 .972549 1 rg
+n 456 48 0 12 re f*
+.941176 .972549 1 rg
+n 0 36 6 12 re f*
+.941176 .972549 1 rg
+n 6 36 6 12 re f*
+.941176 .972549 1 rg
+n 12 36 6 12 re f*
+.941176 .972549 1 rg
+n 24 36 84 12 re f*
+.941176 .972549 1 rg
+n 108 36 0 12 re f*
+.941176 .972549 1 rg
+n 0 24 6 12 re f*
+.941176 .972549 1 rg
+n 6 24 6 12 re f*
+.941176 .972549 1 rg
+n 12 24 6 12 re f*
+.941176 .972549 1 rg
+n 24 24 390 12 re f*
+.941176 .972549 1 rg
+n 414 24 0 12 re f*
+.941176 .972549 1 rg
+n 0 12 6 12 re f*
+.941176 .972549 1 rg
+n 6 12 6 12 re f*
+.941176 .972549 1 rg
+n 12 12 6 12 re f*
+.941176 .972549 1 rg
+n 24 12 18 12 re f*
+.941176 .972549 1 rg
+n 48 12 6 12 re f*
+.941176 .972549 1 rg
+n 60 12 48 12 re f*
+.941176 .972549 1 rg
+n 108 12 6 12 re f*
+.941176 .972549 1 rg
+n 114 12 114 12 re f*
+.941176 .972549 1 rg
+n 228 12 6 12 re f*
+.941176 .972549 1 rg
+n 234 12 0 12 re f*
+.941176 .972549 1 rg
+n 0 0 6 12 re f*
+.941176 .972549 1 rg
+n 6 0 6 12 re f*
+.941176 .972549 1 rg
+n 12 0 6 12 re f*
+.941176 .972549 1 rg
+n 24 0 60 12 re f*
+.941176 .972549 1 rg
+n 90 0 6 12 re f*
+.941176 .972549 1 rg
+n 102 0 6 12 re f*
+.941176 .972549 1 rg
+n 108 0 30 12 re f*
+.941176 .972549 1 rg
+n 138 0 6 12 re f*
+.941176 .972549 1 rg
+n 150 0 18 12 re f*
+.941176 .972549 1 rg
+n 168 0 6 12 re f*
+.941176 .972549 1 rg
+n 180 0 42 12 re f*
+.941176 .972549 1 rg
+n 222 0 6 12 re f*
+.941176 .972549 1 rg
+n 234 0 6 12 re f*
+.941176 .972549 1 rg
+n 240 0 6 12 re f*
+.941176 .972549 1 rg
+n 246 0 24 12 re f*
+.941176 .972549 1 rg
+n 270 0 6 12 re f*
+.941176 .972549 1 rg
+n 276 0 6 12 re f*
+.941176 .972549 1 rg
+n 282 0 6 12 re f*
+.941176 .972549 1 rg
+n 294 0 30 12 re f*
+.941176 .972549 1 rg
+n 324 0 6 12 re f*
+.941176 .972549 1 rg
+n 336 0 6 12 re f*
+.941176 .972549 1 rg
+n 342 0 6 12 re f*
+.941176 .972549 1 rg
+n 348 0 30 12 re f*
+.941176 .972549 1 rg
+n 378 0 6 12 re f*
+.941176 .972549 1 rg
+n 384 0 6 12 re f*
+.941176 .972549 1 rg
+n 390 0 6 12 re f*
+.941176 .972549 1 rg
+n 402 0 42 12 re f*
+.941176 .972549 1 rg
+n 444 0 6 12 re f*
+.941176 .972549 1 rg
+n 456 0 24 12 re f*
+.941176 .972549 1 rg
+n 480 0 6 12 re f*
+.941176 .972549 1 rg
+n 486 0 0 12 re f*
+BT 1 0 0 1 0 134 Tm 12 TL /F3 10 Tf .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (itertools) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (as) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (it) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (get_path) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko.modules) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (fetchpage) Tj (,) Tj ( ) Tj (strreplace) Tj (,) Tj ( ) Tj (tokenizer) Tj (,) Tj ( ) Tj (count) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Set the pipe configurations ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# Notes:) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   - `get_path` just looks up files in the `data` directory to simplify) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#      testing) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   - the `detag` option will strip all html tags from the result) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (url) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (get_path) Tj (\() Tj .729412 .129412 .129412 rg ('users.jyu.fi.html') Tj 0 0 0 rg (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (fetch_conf) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj (url) Tj (,) Tj ( ) Tj .729412 .129412 .129412 rg ('start') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg (') Tj (<) Tj (body) Tj (>) Tj (') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('end') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg (') Tj (<) Tj (/body) Tj (>) Tj (') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('detag') Tj 0 0 0 rg (:) Tj ( ) Tj /F4 10 Tf 0 .501961 0 rg (True) Tj /F3 10 Tf 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* ET
+Q
+Q
+Q
+Q
+Q
+ 
+endstream
+endobj
+32 0 obj
+<<
+/Length 34164
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 57.02362 116.0594 cm
+q
+q
+.963999 0 0 .963999 0 0 cm
+q
+1 0 0 1 6.6 6.846479 cm
+q
+.662745 .662745 .662745 RG
+.5 w
+.941176 .972549 1 rg
+n -6 -6 492 672 re B*
+Q
+q
+.941176 .972549 1 rg
+n 0 648 6 12 re f*
+.941176 .972549 1 rg
+n 6 648 6 12 re f*
+.941176 .972549 1 rg
+n 12 648 6 12 re f*
+.941176 .972549 1 rg
+n 24 648 72 12 re f*
+.941176 .972549 1 rg
+n 102 648 6 12 re f*
+.941176 .972549 1 rg
+n 114 648 6 12 re f*
+.941176 .972549 1 rg
+n 120 648 36 12 re f*
+.941176 .972549 1 rg
+n 156 648 6 12 re f*
+.941176 .972549 1 rg
+n 168 648 6 12 re f*
+.941176 .972549 1 rg
+n 174 648 36 12 re f*
+.941176 .972549 1 rg
+n 210 648 6 12 re f*
+.941176 .972549 1 rg
+n 222 648 6 12 re f*
+.941176 .972549 1 rg
+n 228 648 12 12 re f*
+.941176 .972549 1 rg
+n 240 648 6 12 re f*
+.941176 .972549 1 rg
+n 246 648 6 12 re f*
+.941176 .972549 1 rg
+n 258 648 54 12 re f*
+.941176 .972549 1 rg
+n 312 648 6 12 re f*
+.941176 .972549 1 rg
+n 324 648 18 12 re f*
+.941176 .972549 1 rg
+n 342 648 12 12 re f*
+.941176 .972549 1 rg
+n 354 648 0 12 re f*
+.941176 .972549 1 rg
+n 0 636 6 12 re f*
+.941176 .972549 1 rg
+n 6 636 6 12 re f*
+.941176 .972549 1 rg
+n 12 636 6 12 re f*
+.941176 .972549 1 rg
+n 18 636 0 12 re f*
+.941176 .972549 1 rg
+n 0 624 6 12 re f*
+.941176 .972549 1 rg
+n 6 624 6 12 re f*
+.941176 .972549 1 rg
+n 12 624 6 12 re f*
+.941176 .972549 1 rg
+n 24 624 150 12 re f*
+.941176 .972549 1 rg
+n 174 624 0 12 re f*
+.941176 .972549 1 rg
+n 0 612 6 12 re f*
+.941176 .972549 1 rg
+n 6 612 6 12 re f*
+.941176 .972549 1 rg
+n 12 612 6 12 re f*
+.941176 .972549 1 rg
+n 24 612 6 12 re f*
+.941176 .972549 1 rg
+n 30 612 0 12 re f*
+.941176 .972549 1 rg
+n 0 600 6 12 re f*
+.941176 .972549 1 rg
+n 6 600 6 12 re f*
+.941176 .972549 1 rg
+n 12 600 6 12 re f*
+.941176 .972549 1 rg
+n 24 600 180 12 re f*
+.941176 .972549 1 rg
+n 204 600 0 12 re f*
+.941176 .972549 1 rg
+n 0 588 6 12 re f*
+.941176 .972549 1 rg
+n 6 588 6 12 re f*
+.941176 .972549 1 rg
+n 12 588 6 12 re f*
+.941176 .972549 1 rg
+n 24 588 390 12 re f*
+.941176 .972549 1 rg
+n 414 588 0 12 re f*
+.941176 .972549 1 rg
+n 0 576 6 12 re f*
+.941176 .972549 1 rg
+n 6 576 6 12 re f*
+.941176 .972549 1 rg
+n 12 576 6 12 re f*
+.941176 .972549 1 rg
+n 24 576 210 12 re f*
+.941176 .972549 1 rg
+n 234 576 0 12 re f*
+.941176 .972549 1 rg
+n 0 564 6 12 re f*
+.941176 .972549 1 rg
+n 6 564 6 12 re f*
+.941176 .972549 1 rg
+n 12 564 6 12 re f*
+.941176 .972549 1 rg
+n 24 564 384 12 re f*
+.941176 .972549 1 rg
+n 408 564 0 12 re f*
+.941176 .972549 1 rg
+n 0 552 6 12 re f*
+.941176 .972549 1 rg
+n 6 552 6 12 re f*
+.941176 .972549 1 rg
+n 12 552 6 12 re f*
+.941176 .972549 1 rg
+n 24 552 132 12 re f*
+.941176 .972549 1 rg
+n 156 552 0 12 re f*
+.941176 .972549 1 rg
+n 0 540 6 12 re f*
+.941176 .972549 1 rg
+n 6 540 6 12 re f*
+.941176 .972549 1 rg
+n 12 540 6 12 re f*
+.941176 .972549 1 rg
+n 24 540 6 12 re f*
+.941176 .972549 1 rg
+n 30 540 0 12 re f*
+.941176 .972549 1 rg
+n 0 528 6 12 re f*
+.941176 .972549 1 rg
+n 6 528 6 12 re f*
+.941176 .972549 1 rg
+n 12 528 6 12 re f*
+.941176 .972549 1 rg
+n 24 528 426 12 re f*
+.941176 .972549 1 rg
+n 450 528 0 12 re f*
+.941176 .972549 1 rg
+n 0 516 6 12 re f*
+.941176 .972549 1 rg
+n 6 516 6 12 re f*
+.941176 .972549 1 rg
+n 12 516 6 12 re f*
+.941176 .972549 1 rg
+n 24 516 426 12 re f*
+.941176 .972549 1 rg
+n 450 516 0 12 re f*
+.941176 .972549 1 rg
+n 0 504 6 12 re f*
+.941176 .972549 1 rg
+n 6 504 6 12 re f*
+.941176 .972549 1 rg
+n 12 504 6 12 re f*
+.941176 .972549 1 rg
+n 24 504 24 12 re f*
+.941176 .972549 1 rg
+n 54 504 6 12 re f*
+.941176 .972549 1 rg
+n 66 504 24 12 re f*
+.941176 .972549 1 rg
+n 90 504 6 12 re f*
+.941176 .972549 1 rg
+n 96 504 54 12 re f*
+.941176 .972549 1 rg
+n 150 504 6 12 re f*
+.941176 .972549 1 rg
+n 156 504 24 12 re f*
+.941176 .972549 1 rg
+n 180 504 6 12 re f*
+.941176 .972549 1 rg
+n 186 504 24 12 re f*
+.941176 .972549 1 rg
+n 210 504 6 12 re f*
+.941176 .972549 1 rg
+n 216 504 60 12 re f*
+.941176 .972549 1 rg
+n 276 504 12 12 re f*
+.941176 .972549 1 rg
+n 288 504 0 12 re f*
+.941176 .972549 1 rg
+n 0 492 6 12 re f*
+.941176 .972549 1 rg
+n 6 492 6 12 re f*
+.941176 .972549 1 rg
+n 12 492 6 12 re f*
+.941176 .972549 1 rg
+n 24 492 48 12 re f*
+.941176 .972549 1 rg
+n 78 492 6 12 re f*
+.941176 .972549 1 rg
+n 90 492 24 12 re f*
+.941176 .972549 1 rg
+n 114 492 6 12 re f*
+.941176 .972549 1 rg
+n 120 492 60 12 re f*
+.941176 .972549 1 rg
+n 180 492 6 12 re f*
+.941176 .972549 1 rg
+n 186 492 24 12 re f*
+.941176 .972549 1 rg
+n 210 492 6 12 re f*
+.941176 .972549 1 rg
+n 216 492 24 12 re f*
+.941176 .972549 1 rg
+n 240 492 6 12 re f*
+.941176 .972549 1 rg
+n 252 492 24 12 re f*
+.941176 .972549 1 rg
+n 276 492 6 12 re f*
+.941176 .972549 1 rg
+n 282 492 72 12 re f*
+.941176 .972549 1 rg
+n 354 492 6 12 re f*
+.941176 .972549 1 rg
+n 366 492 36 12 re f*
+.941176 .972549 1 rg
+n 402 492 6 12 re f*
+.941176 .972549 1 rg
+n 408 492 54 12 re f*
+.941176 .972549 1 rg
+n 462 492 12 12 re f*
+.941176 .972549 1 rg
+n 474 492 0 12 re f*
+.941176 .972549 1 rg
+n 0 480 6 12 re f*
+.941176 .972549 1 rg
+n 6 480 6 12 re f*
+.941176 .972549 1 rg
+n 12 480 6 12 re f*
+.941176 .972549 1 rg
+n 24 480 30 12 re f*
+.941176 .972549 1 rg
+n 60 480 6 12 re f*
+.941176 .972549 1 rg
+n 72 480 54 12 re f*
+.941176 .972549 1 rg
+n 126 480 6 12 re f*
+.941176 .972549 1 rg
+n 132 480 24 12 re f*
+.941176 .972549 1 rg
+n 156 480 6 12 re f*
+.941176 .972549 1 rg
+n 162 480 48 12 re f*
+.941176 .972549 1 rg
+n 210 480 6 12 re f*
+.941176 .972549 1 rg
+n 222 480 24 12 re f*
+.941176 .972549 1 rg
+n 246 480 6 12 re f*
+.941176 .972549 1 rg
+n 252 480 6 12 re f*
+.941176 .972549 1 rg
+n 258 480 66 12 re f*
+.941176 .972549 1 rg
+n 324 480 6 12 re f*
+.941176 .972549 1 rg
+n 336 480 18 12 re f*
+.941176 .972549 1 rg
+n 354 480 12 12 re f*
+.941176 .972549 1 rg
+n 372 480 24 12 re f*
+.941176 .972549 1 rg
+n 396 480 6 12 re f*
+.941176 .972549 1 rg
+n 402 480 24 12 re f*
+.941176 .972549 1 rg
+n 426 480 6 12 re f*
+.941176 .972549 1 rg
+n 432 480 0 12 re f*
+.941176 .972549 1 rg
+n 0 468 6 12 re f*
+.941176 .972549 1 rg
+n 6 468 6 12 re f*
+.941176 .972549 1 rg
+n 12 468 6 12 re f*
+.941176 .972549 1 rg
+n 24 468 36 12 re f*
+.941176 .972549 1 rg
+n 66 468 6 12 re f*
+.941176 .972549 1 rg
+n 78 468 30 12 re f*
+.941176 .972549 1 rg
+n 108 468 6 12 re f*
+.941176 .972549 1 rg
+n 114 468 24 12 re f*
+.941176 .972549 1 rg
+n 138 468 6 12 re f*
+.941176 .972549 1 rg
+n 144 468 30 12 re f*
+.941176 .972549 1 rg
+n 174 468 6 12 re f*
+.941176 .972549 1 rg
+n 180 468 0 12 re f*
+.941176 .972549 1 rg
+n 0 456 6 12 re f*
+.941176 .972549 1 rg
+n 6 456 6 12 re f*
+.941176 .972549 1 rg
+n 12 456 6 12 re f*
+.941176 .972549 1 rg
+n 24 456 24 12 re f*
+.941176 .972549 1 rg
+n 48 456 6 12 re f*
+.941176 .972549 1 rg
+n 54 456 36 12 re f*
+.941176 .972549 1 rg
+n 90 456 6 12 re f*
+.941176 .972549 1 rg
+n 96 456 0 12 re f*
+.941176 .972549 1 rg
+n 0 444 6 12 re f*
+.941176 .972549 1 rg
+n 6 444 42 12 re f*
+.941176 .972549 1 rg
+n 48 444 6 12 re f*
+.941176 .972549 1 rg
+n 60 444 12 12 re f*
+.941176 .972549 1 rg
+n 72 444 6 12 re f*
+.941176 .972549 1 rg
+n 78 444 0 12 re f*
+.941176 .972549 1 rg
+n 0 432 0 12 re f*
+.941176 .972549 1 rg
+n 0 420 6 12 re f*
+.941176 .972549 1 rg
+n 6 420 6 12 re f*
+.941176 .972549 1 rg
+n 12 420 6 12 re f*
+.941176 .972549 1 rg
+n 24 420 24 12 re f*
+.941176 .972549 1 rg
+n 48 420 6 12 re f*
+.941176 .972549 1 rg
+n 54 420 54 12 re f*
+.941176 .972549 1 rg
+n 108 420 6 12 re f*
+.941176 .972549 1 rg
+n 114 420 36 12 re f*
+.941176 .972549 1 rg
+n 156 420 30 12 re f*
+.941176 .972549 1 rg
+n 186 420 0 12 re f*
+.941176 .972549 1 rg
+n 0 408 6 12 re f*
+.941176 .972549 1 rg
+n 6 408 6 12 re f*
+.941176 .972549 1 rg
+n 12 408 6 12 re f*
+.941176 .972549 1 rg
+n 24 408 24 12 re f*
+.941176 .972549 1 rg
+n 48 408 6 12 re f*
+.941176 .972549 1 rg
+n 54 408 24 12 re f*
+.941176 .972549 1 rg
+n 78 408 6 12 re f*
+.941176 .972549 1 rg
+n 84 408 36 12 re f*
+.941176 .972549 1 rg
+n 126 408 48 12 re f*
+.941176 .972549 1 rg
+n 174 408 0 12 re f*
+.941176 .972549 1 rg
+n 0 396 6 12 re f*
+.941176 .972549 1 rg
+n 6 396 6 12 re f*
+.941176 .972549 1 rg
+n 12 396 6 12 re f*
+.941176 .972549 1 rg
+n 24 396 24 12 re f*
+.941176 .972549 1 rg
+n 48 396 6 12 re f*
+.941176 .972549 1 rg
+n 54 396 72 12 re f*
+.941176 .972549 1 rg
+n 126 396 6 12 re f*
+.941176 .972549 1 rg
+n 132 396 36 12 re f*
+.941176 .972549 1 rg
+n 174 396 30 12 re f*
+.941176 .972549 1 rg
+n 204 396 6 12 re f*
+.941176 .972549 1 rg
+n 216 396 36 12 re f*
+.941176 .972549 1 rg
+n 252 396 6 12 re f*
+.941176 .972549 1 rg
+n 264 396 60 12 re f*
+.941176 .972549 1 rg
+n 324 396 6 12 re f*
+.941176 .972549 1 rg
+n 336 396 30 12 re f*
+.941176 .972549 1 rg
+n 366 396 6 12 re f*
+.941176 .972549 1 rg
+n 378 396 24 12 re f*
+.941176 .972549 1 rg
+n 402 396 0 12 re f*
+.941176 .972549 1 rg
+n 0 384 6 12 re f*
+.941176 .972549 1 rg
+n 6 384 6 12 re f*
+.941176 .972549 1 rg
+n 12 384 6 12 re f*
+.941176 .972549 1 rg
+n 18 384 0 12 re f*
+.941176 .972549 1 rg
+n 0 372 6 12 re f*
+.941176 .972549 1 rg
+n 6 372 6 12 re f*
+.941176 .972549 1 rg
+n 12 372 6 12 re f*
+.941176 .972549 1 rg
+n 24 372 210 12 re f*
+.941176 .972549 1 rg
+n 234 372 0 12 re f*
+.941176 .972549 1 rg
+n 0 360 6 12 re f*
+.941176 .972549 1 rg
+n 6 360 6 12 re f*
+.941176 .972549 1 rg
+n 12 360 6 12 re f*
+.941176 .972549 1 rg
+n 24 360 6 12 re f*
+.941176 .972549 1 rg
+n 30 360 0 12 re f*
+.941176 .972549 1 rg
+n 0 348 6 12 re f*
+.941176 .972549 1 rg
+n 6 348 6 12 re f*
+.941176 .972549 1 rg
+n 12 348 6 12 re f*
+.941176 .972549 1 rg
+n 24 348 390 12 re f*
+.941176 .972549 1 rg
+n 414 348 0 12 re f*
+.941176 .972549 1 rg
+n 0 336 6 12 re f*
+.941176 .972549 1 rg
+n 6 336 6 12 re f*
+.941176 .972549 1 rg
+n 12 336 6 12 re f*
+.941176 .972549 1 rg
+n 24 336 108 12 re f*
+.941176 .972549 1 rg
+n 132 336 0 12 re f*
+.941176 .972549 1 rg
+n 0 324 6 12 re f*
+.941176 .972549 1 rg
+n 6 324 6 12 re f*
+.941176 .972549 1 rg
+n 12 324 6 12 re f*
+.941176 .972549 1 rg
+n 24 324 60 12 re f*
+.941176 .972549 1 rg
+n 90 324 6 12 re f*
+.941176 .972549 1 rg
+n 102 324 6 12 re f*
+.941176 .972549 1 rg
+n 108 324 30 12 re f*
+.941176 .972549 1 rg
+n 138 324 6 12 re f*
+.941176 .972549 1 rg
+n 150 324 48 12 re f*
+.941176 .972549 1 rg
+n 198 324 6 12 re f*
+.941176 .972549 1 rg
+n 204 324 60 12 re f*
+.941176 .972549 1 rg
+n 264 324 12 12 re f*
+.941176 .972549 1 rg
+n 276 324 0 12 re f*
+.941176 .972549 1 rg
+n 0 312 6 12 re f*
+.941176 .972549 1 rg
+n 6 312 6 12 re f*
+.941176 .972549 1 rg
+n 12 312 6 12 re f*
+.941176 .972549 1 rg
+n 24 312 66 12 re f*
+.941176 .972549 1 rg
+n 96 312 6 12 re f*
+.941176 .972549 1 rg
+n 108 312 6 12 re f*
+.941176 .972549 1 rg
+n 114 312 0 12 re f*
+.941176 .972549 1 rg
+n 0 300 18 12 re f*
+.941176 .972549 1 rg
+n 48 300 42 12 re f*
+.941176 .972549 1 rg
+n 90 300 6 12 re f*
+.941176 .972549 1 rg
+n 102 300 78 12 re f*
+.941176 .972549 1 rg
+n 180 300 6 12 re f*
+.941176 .972549 1 rg
+n 192 300 24 12 re f*
+.941176 .972549 1 rg
+n 216 300 6 12 re f*
+.941176 .972549 1 rg
+n 228 300 48 12 re f*
+.941176 .972549 1 rg
+n 276 300 6 12 re f*
+.941176 .972549 1 rg
+n 288 300 42 12 re f*
+.941176 .972549 1 rg
+n 330 300 6 12 re f*
+.941176 .972549 1 rg
+n 342 300 48 12 re f*
+.941176 .972549 1 rg
+n 390 300 6 12 re f*
+.941176 .972549 1 rg
+n 396 300 0 12 re f*
+.941176 .972549 1 rg
+n 0 288 6 12 re f*
+.941176 .972549 1 rg
+n 6 288 6 12 re f*
+.941176 .972549 1 rg
+n 12 288 6 12 re f*
+.941176 .972549 1 rg
+n 24 288 48 12 re f*
+.941176 .972549 1 rg
+n 78 288 6 12 re f*
+.941176 .972549 1 rg
+n 90 288 6 12 re f*
+.941176 .972549 1 rg
+n 96 288 36 12 re f*
+.941176 .972549 1 rg
+n 132 288 6 12 re f*
+.941176 .972549 1 rg
+n 144 288 90 12 re f*
+.941176 .972549 1 rg
+n 234 288 6 12 re f*
+.941176 .972549 1 rg
+n 240 288 0 12 re f*
+.941176 .972549 1 rg
+n 0 276 6 12 re f*
+.941176 .972549 1 rg
+n 6 276 6 12 re f*
+.941176 .972549 1 rg
+n 12 276 6 12 re f*
+.941176 .972549 1 rg
+n 24 276 30 12 re f*
+.941176 .972549 1 rg
+n 60 276 6 12 re f*
+.941176 .972549 1 rg
+n 72 276 6 12 re f*
+.941176 .972549 1 rg
+n 78 276 168 12 re f*
+.941176 .972549 1 rg
+n 246 276 0 12 re f*
+.941176 .972549 1 rg
+n 0 264 6 12 re f*
+.941176 .972549 1 rg
+n 6 264 6 12 re f*
+.941176 .972549 1 rg
+n 12 264 6 12 re f*
+.941176 .972549 1 rg
+n 24 264 60 12 re f*
+.941176 .972549 1 rg
+n 90 264 6 12 re f*
+.941176 .972549 1 rg
+n 102 264 6 12 re f*
+.941176 .972549 1 rg
+n 108 264 42 12 re f*
+.941176 .972549 1 rg
+n 150 264 6 12 re f*
+.941176 .972549 1 rg
+n 162 264 54 12 re f*
+.941176 .972549 1 rg
+n 216 264 6 12 re f*
+.941176 .972549 1 rg
+n 228 264 42 12 re f*
+.941176 .972549 1 rg
+n 270 264 6 12 re f*
+.941176 .972549 1 rg
+n 282 264 30 12 re f*
+.941176 .972549 1 rg
+n 312 264 6 12 re f*
+.941176 .972549 1 rg
+n 324 264 54 12 re f*
+.941176 .972549 1 rg
+n 378 264 6 12 re f*
+.941176 .972549 1 rg
+n 390 264 24 12 re f*
+.941176 .972549 1 rg
+n 414 264 6 12 re f*
+.941176 .972549 1 rg
+n 420 264 0 12 re f*
+.941176 .972549 1 rg
+n 0 252 6 12 re f*
+.941176 .972549 1 rg
+n 6 252 6 12 re f*
+.941176 .972549 1 rg
+n 12 252 6 12 re f*
+.941176 .972549 1 rg
+n 24 252 54 12 re f*
+.941176 .972549 1 rg
+n 84 252 6 12 re f*
+.941176 .972549 1 rg
+n 96 252 6 12 re f*
+.941176 .972549 1 rg
+n 102 252 36 12 re f*
+.941176 .972549 1 rg
+n 138 252 6 12 re f*
+.941176 .972549 1 rg
+n 150 252 6 12 re f*
+.941176 .972549 1 rg
+n 156 252 60 12 re f*
+.941176 .972549 1 rg
+n 216 252 6 12 re f*
+.941176 .972549 1 rg
+n 228 252 54 12 re f*
+.941176 .972549 1 rg
+n 282 252 6 12 re f*
+.941176 .972549 1 rg
+n 294 252 60 12 re f*
+.941176 .972549 1 rg
+n 354 252 6 12 re f*
+.941176 .972549 1 rg
+n 366 252 36 12 re f*
+.941176 .972549 1 rg
+n 402 252 12 12 re f*
+.941176 .972549 1 rg
+n 414 252 0 12 re f*
+.941176 .972549 1 rg
+n 0 240 6 12 re f*
+.941176 .972549 1 rg
+n 6 240 6 12 re f*
+.941176 .972549 1 rg
+n 12 240 6 12 re f*
+.941176 .972549 1 rg
+n 18 240 0 12 re f*
+.941176 .972549 1 rg
+n 0 228 6 12 re f*
+.941176 .972549 1 rg
+n 6 228 6 12 re f*
+.941176 .972549 1 rg
+n 12 228 6 12 re f*
+.941176 .972549 1 rg
+n 24 228 150 12 re f*
+.941176 .972549 1 rg
+n 174 228 0 12 re f*
+.941176 .972549 1 rg
+n 0 216 6 12 re f*
+.941176 .972549 1 rg
+n 6 216 6 12 re f*
+.941176 .972549 1 rg
+n 12 216 6 12 re f*
+.941176 .972549 1 rg
+n 24 216 6 12 re f*
+.941176 .972549 1 rg
+n 30 216 0 12 re f*
+.941176 .972549 1 rg
+n 0 204 6 12 re f*
+.941176 .972549 1 rg
+n 6 204 6 12 re f*
+.941176 .972549 1 rg
+n 12 204 6 12 re f*
+.941176 .972549 1 rg
+n 24 204 180 12 re f*
+.941176 .972549 1 rg
+n 204 204 0 12 re f*
+.941176 .972549 1 rg
+n 0 192 6 12 re f*
+.941176 .972549 1 rg
+n 6 192 6 12 re f*
+.941176 .972549 1 rg
+n 12 192 6 12 re f*
+.941176 .972549 1 rg
+n 24 192 150 12 re f*
+.941176 .972549 1 rg
+n 174 192 0 12 re f*
+.941176 .972549 1 rg
+n 0 180 6 12 re f*
+.941176 .972549 1 rg
+n 6 180 6 12 re f*
+.941176 .972549 1 rg
+n 12 180 6 12 re f*
+.941176 .972549 1 rg
+n 24 180 294 12 re f*
+.941176 .972549 1 rg
+n 318 180 0 12 re f*
+.941176 .972549 1 rg
+n 0 168 6 12 re f*
+.941176 .972549 1 rg
+n 6 168 6 12 re f*
+.941176 .972549 1 rg
+n 12 168 6 12 re f*
+.941176 .972549 1 rg
+n 24 168 354 12 re f*
+.941176 .972549 1 rg
+n 378 168 0 12 re f*
+.941176 .972549 1 rg
+n 0 156 6 12 re f*
+.941176 .972549 1 rg
+n 6 156 6 12 re f*
+.941176 .972549 1 rg
+n 12 156 6 12 re f*
+.941176 .972549 1 rg
+n 24 156 396 12 re f*
+.941176 .972549 1 rg
+n 420 156 0 12 re f*
+.941176 .972549 1 rg
+n 0 144 6 12 re f*
+.941176 .972549 1 rg
+n 6 144 6 12 re f*
+.941176 .972549 1 rg
+n 12 144 6 12 re f*
+.941176 .972549 1 rg
+n 24 144 96 12 re f*
+.941176 .972549 1 rg
+n 120 144 0 12 re f*
+.941176 .972549 1 rg
+n 0 132 6 12 re f*
+.941176 .972549 1 rg
+n 6 132 6 12 re f*
+.941176 .972549 1 rg
+n 12 132 6 12 re f*
+.941176 .972549 1 rg
+n 24 132 294 12 re f*
+.941176 .972549 1 rg
+n 318 132 0 12 re f*
+.941176 .972549 1 rg
+n 0 120 6 12 re f*
+.941176 .972549 1 rg
+n 6 120 6 12 re f*
+.941176 .972549 1 rg
+n 12 120 6 12 re f*
+.941176 .972549 1 rg
+n 24 120 6 12 re f*
+.941176 .972549 1 rg
+n 30 120 0 12 re f*
+.941176 .972549 1 rg
+n 0 108 6 12 re f*
+.941176 .972549 1 rg
+n 6 108 6 12 re f*
+.941176 .972549 1 rg
+n 12 108 6 12 re f*
+.941176 .972549 1 rg
+n 24 108 384 12 re f*
+.941176 .972549 1 rg
+n 408 108 0 12 re f*
+.941176 .972549 1 rg
+n 0 96 6 12 re f*
+.941176 .972549 1 rg
+n 6 96 6 12 re f*
+.941176 .972549 1 rg
+n 12 96 6 12 re f*
+.941176 .972549 1 rg
+n 24 96 36 12 re f*
+.941176 .972549 1 rg
+n 66 96 6 12 re f*
+.941176 .972549 1 rg
+n 78 96 30 12 re f*
+.941176 .972549 1 rg
+n 108 96 6 12 re f*
+.941176 .972549 1 rg
+n 114 96 24 12 re f*
+.941176 .972549 1 rg
+n 138 96 6 12 re f*
+.941176 .972549 1 rg
+n 144 96 24 12 re f*
+.941176 .972549 1 rg
+n 168 96 6 12 re f*
+.941176 .972549 1 rg
+n 174 96 60 12 re f*
+.941176 .972549 1 rg
+n 234 96 6 12 re f*
+.941176 .972549 1 rg
+n 240 96 0 12 re f*
+.941176 .972549 1 rg
+n 0 84 6 12 re f*
+.941176 .972549 1 rg
+n 6 84 6 12 re f*
+.941176 .972549 1 rg
+n 12 84 6 12 re f*
+.941176 .972549 1 rg
+n 24 84 48 12 re f*
+.941176 .972549 1 rg
+n 78 84 6 12 re f*
+.941176 .972549 1 rg
+n 90 84 36 12 re f*
+.941176 .972549 1 rg
+n 126 84 6 12 re f*
+.941176 .972549 1 rg
+n 132 84 24 12 re f*
+.941176 .972549 1 rg
+n 156 84 6 12 re f*
+.941176 .972549 1 rg
+n 162 84 36 12 re f*
+.941176 .972549 1 rg
+n 198 84 6 12 re f*
+.941176 .972549 1 rg
+n 210 84 24 12 re f*
+.941176 .972549 1 rg
+n 234 84 6 12 re f*
+.941176 .972549 1 rg
+n 240 84 6 12 re f*
+.941176 .972549 1 rg
+n 246 84 36 12 re f*
+.941176 .972549 1 rg
+n 282 84 6 12 re f*
+.941176 .972549 1 rg
+n 294 84 66 12 re f*
+.941176 .972549 1 rg
+n 360 84 12 12 re f*
+.941176 .972549 1 rg
+n 372 84 0 12 re f*
+.941176 .972549 1 rg
+n 0 72 6 12 re f*
+.941176 .972549 1 rg
+n 6 72 6 12 re f*
+.941176 .972549 1 rg
+n 12 72 6 12 re f*
+.941176 .972549 1 rg
+n 24 72 54 12 re f*
+.941176 .972549 1 rg
+n 84 72 6 12 re f*
+.941176 .972549 1 rg
+n 96 72 6 12 re f*
+.941176 .972549 1 rg
+n 102 72 60 12 re f*
+.941176 .972549 1 rg
+n 162 72 6 12 re f*
+.941176 .972549 1 rg
+n 168 72 24 12 re f*
+.941176 .972549 1 rg
+n 192 72 6 12 re f*
+.941176 .972549 1 rg
+n 198 72 6 12 re f*
+.941176 .972549 1 rg
+n 204 72 6 12 re f*
+.941176 .972549 1 rg
+n 216 72 24 12 re f*
+.941176 .972549 1 rg
+n 240 72 6 12 re f*
+.941176 .972549 1 rg
+n 246 72 48 12 re f*
+.941176 .972549 1 rg
+n 294 72 6 12 re f*
+.941176 .972549 1 rg
+n 306 72 24 12 re f*
+.941176 .972549 1 rg
+n 330 72 6 12 re f*
+.941176 .972549 1 rg
+n 336 72 24 12 re f*
+.941176 .972549 1 rg
+n 360 72 6 12 re f*
+.941176 .972549 1 rg
+n 372 72 18 12 re f*
+.941176 .972549 1 rg
+n 396 72 6 12 re f*
+.941176 .972549 1 rg
+n 408 72 12 12 re f*
+.941176 .972549 1 rg
+n 426 72 48 12 re f*
+.941176 .972549 1 rg
+n 474 72 6 12 re f*
+.941176 .972549 1 rg
+n 480 72 0 12 re f*
+.941176 .972549 1 rg
+n 0 60 6 12 re f*
+.941176 .972549 1 rg
+n 6 60 6 12 re f*
+.941176 .972549 1 rg
+n 12 60 6 12 re f*
+.941176 .972549 1 rg
+n 24 60 72 12 re f*
+.941176 .972549 1 rg
+n 102 60 6 12 re f*
+.941176 .972549 1 rg
+n 114 60 30 12 re f*
+.941176 .972549 1 rg
+n 144 60 6 12 re f*
+.941176 .972549 1 rg
+n 150 60 78 12 re f*
+.941176 .972549 1 rg
+n 228 60 6 12 re f*
+.941176 .972549 1 rg
+n 234 60 54 12 re f*
+.941176 .972549 1 rg
+n 288 60 6 12 re f*
+.941176 .972549 1 rg
+n 294 60 0 12 re f*
+.941176 .972549 1 rg
+n 0 48 6 12 re f*
+.941176 .972549 1 rg
+n 6 48 6 12 re f*
+.941176 .972549 1 rg
+n 12 48 6 12 re f*
+.941176 .972549 1 rg
+n 24 48 42 12 re f*
+.941176 .972549 1 rg
+n 72 48 6 12 re f*
+.941176 .972549 1 rg
+n 84 48 6 12 re f*
+.941176 .972549 1 rg
+n 90 48 30 12 re f*
+.941176 .972549 1 rg
+n 120 48 6 12 re f*
+.941176 .972549 1 rg
+n 126 48 24 12 re f*
+.941176 .972549 1 rg
+n 150 48 6 12 re f*
+.941176 .972549 1 rg
+n 156 48 6 12 re f*
+.941176 .972549 1 rg
+n 162 48 6 12 re f*
+.941176 .972549 1 rg
+n 174 48 24 12 re f*
+.941176 .972549 1 rg
+n 198 48 6 12 re f*
+.941176 .972549 1 rg
+n 204 48 6 12 re f*
+.941176 .972549 1 rg
+n 210 48 36 12 re f*
+.941176 .972549 1 rg
+n 246 48 6 12 re f*
+.941176 .972549 1 rg
+n 258 48 60 12 re f*
+.941176 .972549 1 rg
+n 318 48 12 12 re f*
+.941176 .972549 1 rg
+n 336 48 18 12 re f*
+.941176 .972549 1 rg
+n 360 48 6 12 re f*
+.941176 .972549 1 rg
+n 372 48 12 12 re f*
+.941176 .972549 1 rg
+n 390 48 72 12 re f*
+.941176 .972549 1 rg
+n 462 48 6 12 re f*
+.941176 .972549 1 rg
+n 468 48 0 12 re f*
+.941176 .972549 1 rg
+n 0 36 6 12 re f*
+.941176 .972549 1 rg
+n 6 36 6 12 re f*
+.941176 .972549 1 rg
+n 12 36 6 12 re f*
+.941176 .972549 1 rg
+n 24 36 60 12 re f*
+.941176 .972549 1 rg
+n 90 36 6 12 re f*
+.941176 .972549 1 rg
+n 102 36 30 12 re f*
+.941176 .972549 1 rg
+n 132 36 6 12 re f*
+.941176 .972549 1 rg
+n 138 36 78 12 re f*
+.941176 .972549 1 rg
+n 216 36 6 12 re f*
+.941176 .972549 1 rg
+n 222 36 42 12 re f*
+.941176 .972549 1 rg
+n 264 36 6 12 re f*
+.941176 .972549 1 rg
+n 270 36 0 12 re f*
+.941176 .972549 1 rg
+n 0 24 6 12 re f*
+.941176 .972549 1 rg
+n 6 24 6 12 re f*
+.941176 .972549 1 rg
+n 12 24 6 12 re f*
+.941176 .972549 1 rg
+n 24 24 72 12 re f*
+.941176 .972549 1 rg
+n 102 24 6 12 re f*
+.941176 .972549 1 rg
+n 114 24 24 12 re f*
+.941176 .972549 1 rg
+n 138 24 6 12 re f*
+.941176 .972549 1 rg
+n 144 24 24 12 re f*
+.941176 .972549 1 rg
+n 168 24 6 12 re f*
+.941176 .972549 1 rg
+n 174 24 60 12 re f*
+.941176 .972549 1 rg
+n 234 24 6 12 re f*
+.941176 .972549 1 rg
+n 246 24 24 12 re f*
+.941176 .972549 1 rg
+n 270 24 6 12 re f*
+.941176 .972549 1 rg
+n 276 24 54 12 re f*
+.941176 .972549 1 rg
+n 330 24 6 12 re f*
+.941176 .972549 1 rg
+n 336 24 0 12 re f*
+.941176 .972549 1 rg
+n 0 12 6 12 re f*
+.941176 .972549 1 rg
+n 6 12 6 12 re f*
+.941176 .972549 1 rg
+n 12 12 6 12 re f*
+.941176 .972549 1 rg
+n 24 12 24 12 re f*
+.941176 .972549 1 rg
+n 48 12 6 12 re f*
+.941176 .972549 1 rg
+n 54 12 72 12 re f*
+.941176 .972549 1 rg
+n 126 12 6 12 re f*
+.941176 .972549 1 rg
+n 132 12 0 12 re f*
+.941176 .972549 1 rg
+n 0 0 6 12 re f*
+.941176 .972549 1 rg
+n 6 0 54 12 re f*
+.941176 .972549 1 rg
+n 60 0 6 12 re f*
+.941176 .972549 1 rg
+n 72 0 180 12 re f*
+.941176 .972549 1 rg
+n 252 0 6 12 re f*
+.941176 .972549 1 rg
+n 258 0 0 12 re f*
+BT 1 0 0 1 0 650 Tm 12 TL /F3 10 Tf .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (replace_conf) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('rule') Tj 0 0 0 rg (:) Tj ( ) Tj ({) Tj .729412 .129412 .129412 rg ('find') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg (') Tj /F4 10 Tf .733333 .4 .133333 rg (\\n) Tj /F3 10 Tf .729412 .129412 .129412 rg (') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('replace') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg (' ') Tj 0 0 0 rg (}}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Create a workflow ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# The following workflow will:) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   1. fetch the url and return the content between the body tags) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   2. replace newlines with spaces) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   3. tokenize \(split\) the content by spaces, i.e., yield words) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   4. count the words) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# Note: because `fetchpage` and `strreplace` each return an iterator of) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# just one item, we can safely call `next` without fear of loosing data) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (page) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (fetchpage) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg (fetch_conf) Tj (\)\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (replaced) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (strreplace) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (page) Tj (,) Tj ( ) Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg (replace_conf) Tj (,) Tj ( ) Tj (assign) Tj .4 .4 .4 rg (=) Tj .729412 .129412 .129412 rg ('content') Tj 0 0 0 rg (\)\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (words) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (tokenizer) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (replaced) Tj (,) Tj ( ) Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('delimiter') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg (' ') Tj 0 0 0 rg (},) Tj ( ) Tj (emit) Tj .4 .4 .4 rg (=) Tj /F4 10 Tf 0 .501961 0 rg (True) Tj /F3 10 Tf 0 0 0 rg (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (counts) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (count) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (words) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (counts) Tj (\)) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('count') Tj 0 0 0 rg (:) Tj ( ) Tj .4 .4 .4 rg (70) Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T*  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (itertools) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (chain) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (get_path) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (from) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 0 1 rg (riko.modules) Tj /F3 10 Tf .733333 .733333 .733333 rg ( ) Tj /F4 10 Tf 0 .501961 0 rg (import) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (fetch) Tj (,) Tj ( ) Tj 0 .501961 0 rg (filter) Tj 0 0 0 rg (,) Tj ( ) Tj (subelement) Tj (,) Tj ( ) Tj (regex) Tj (,) Tj ( ) Tj (sort) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Set the pipe configurations ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# Note: `get_path` just looks up files in the `data` directory to) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# simplify testing) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (fetch_conf) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('url') Tj 0 0 0 rg (:) Tj ( ) Tj (get_path) Tj (\() Tj .729412 .129412 .129412 rg ('feed.xml') Tj 0 0 0 rg (\)}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (filter_rule) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (...) Tj 0 0 0 rg (     ) Tj .729412 .129412 .129412 rg ('field') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('y:published') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('op') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('before') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('value') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('2/5/09') Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (sub_conf) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('path') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('content.value') Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (match) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj .729412 .129412 .129412 rg (r) Tj ('\(.*href="\)\([\\w:/.@]+\)\(".*\)') Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (regex_rule) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('field') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('content') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('match') Tj 0 0 0 rg (:) Tj ( ) Tj (match) Tj (,) Tj ( ) Tj .729412 .129412 .129412 rg ('replace') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('$2') Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (sort_conf) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj ({) Tj .729412 .129412 .129412 rg ('rule') Tj 0 0 0 rg (:) Tj ( ) Tj ({) Tj .729412 .129412 .129412 rg ('sort_key') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('content') Tj 0 0 0 rg (,) Tj ( ) Tj .729412 .129412 .129412 rg ('sort_dir') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('desc') Tj 0 0 0 rg (}}) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (### Create a workflow ###) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# The following workflow will:) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   1. fetch the rss feed) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   2. filter for items published before 2/5/2009) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   3. extract the path `content.value` from each feed item) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   4. replace the extracted text with the last href url contained) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#      within it) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#   5. reverse sort the items by the replaced url) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (#) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj /F5 10 Tf .25098 .501961 .501961 rg (# Note: sorting is not lazy so take caution when using this pipe) Tj /F3 10 Tf .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (stream) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (fetch) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg (fetch_conf) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (filtered) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (filter) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (stream) Tj (,) Tj ( ) Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('rule') Tj 0 0 0 rg (:) Tj ( ) Tj (filter_rule) Tj (}\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (extracted) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (\() Tj (subelement) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (i) Tj (,) Tj ( ) Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg (sub_conf) Tj (,) Tj ( ) Tj (emit) Tj .4 .4 .4 rg (=) Tj /F4 10 Tf 0 .501961 0 rg (True) Tj /F3 10 Tf 0 0 0 rg (\)) Tj ( ) Tj /F4 10 Tf 0 .501961 0 rg (for) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (i) Tj ( ) Tj /F4 10 Tf .666667 .133333 1 rg (in) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (filtered) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (flat_extract) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (chain) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (from_iterable) Tj (\() Tj (extracted) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (matched) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (\() Tj (regex) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (i) Tj (,) Tj ( ) Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('rule') Tj 0 0 0 rg (:) Tj ( ) Tj (regex_rule) Tj (}\)) Tj ( ) Tj /F4 10 Tf 0 .501961 0 rg (for) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (i) Tj ( ) Tj /F4 10 Tf .666667 .133333 1 rg (in) Tj /F3 10 Tf 0 0 0 rg ( ) Tj (flat_extract) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (flat_match) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (chain) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (from_iterable) Tj (\() Tj (matched) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj (sorted_match) Tj ( ) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg ( ) Tj (sort) Tj .4 .4 .4 rg (.) Tj 0 0 0 rg (pipe) Tj (\() Tj (flat_match) Tj (,) Tj ( ) Tj (conf) Tj .4 .4 .4 rg (=) Tj 0 0 0 rg (sort_conf) Tj (\)) Tj .733333 .733333 .733333 rg  T* .4 .4 .4 rg (>) Tj (>) Tj (>) Tj 0 0 0 rg ( ) Tj 0 .501961 0 rg (next) Tj 0 0 0 rg (\() Tj (sorted_match) Tj (\)) Tj .733333 .733333 .733333 rg  T* 0 0 0 rg ({) Tj .729412 .129412 .129412 rg ('content') Tj 0 0 0 rg (:) Tj ( ) Tj .729412 .129412 .129412 rg ('mailto:mail@writetoreply.org') Tj 0 0 0 rg (}) Tj .733333 .733333 .733333 rg  T* ET
+Q
+Q
+Q
+Q
+Q
+ 
+endstream
+endobj
+33 0 obj
+<<
+/Length 627
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 57.02362 747.0236 cm
+q
+BT 1 0 0 1 0 3 Tm 18 TL /F2 15 Tf .133333 .133333 .133333 rg (Notes) Tj T* ET
+Q
+Q
+q
+1 0 0 1 57.02362 684.3307 cm
+Q
+q
+1 0 0 1 57.02362 655.9843 cm
+n 0 14.17323 m 481.2283 14.17323 l S
+Q
+q
+1 0 0 1 57.02362 643.9843 cm
+q
+0 0 0 rg
+BT /F1 10 Tf 12 TL ET
+q
+1 0 0 1 6 0 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 .4 .6 rg (1) Tj T* ET
+Q
+Q
+q
+1 0 0 1 91.03937 0 cm
+q
+BT 1 0 0 1 0 2 Tm 12 TL /F1 10 Tf 0 0 0 rg (See ) Tj 0 .4 .6 rg (Design Principles) Tj 0 0 0 rg ( for explanation on ) Tj /F6 10 Tf (pipe) Tj /F1 10 Tf ( types and sub-types) Tj T* ET
+Q
+Q
+q
+Q
+Q
+Q
+ 
+endstream
+endobj
+34 0 obj
+<<
+/Nums [ 0 35 0 R 1 36 0 R 2 37 0 R 3 38 0 R ]
+>>
+endobj
+35 0 obj
+<<
+/S /D /St 1
+>>
+endobj
+36 0 obj
+<<
+/S /D /St 2
+>>
+endobj
+37 0 obj
+<<
+/S /D /St 3
+>>
+endobj
+38 0 obj
+<<
+/S /D /St 4
+>>
+endobj
+xref
+0 39
+0000000000 65535 f 
+0000000073 00000 n 
+0000000156 00000 n 
+0000000263 00000 n 
+0000000372 00000 n 
+0000000540 00000 n 
+0000000708 00000 n 
+0000000876 00000 n 
+0000001044 00000 n 
+0000001149 00000 n 
+0000001259 00000 n 
+0000001373 00000 n 
+0000001615 00000 n 
+0000001844 00000 n 
+0000002013 00000 n 
+0000002245 00000 n 
+0000002451 00000 n 
+0000002620 00000 n 
+0000002736 00000 n 
+0000002958 00000 n 
+0000003190 00000 n 
+0000003296 00000 n 
+0000003567 00000 n 
+0000003641 00000 n 
+0000003748 00000 n 
+0000003873 00000 n 
+0000004011 00000 n 
+0000004152 00000 n 
+0000004320 00000 n 
+0000004414 00000 n 
+0000004496 00000 n 
+0000027625 00000 n 
+0000056092 00000 n 
+0000090309 00000 n 
+0000090987 00000 n 
+0000091055 00000 n 
+0000091089 00000 n 
+0000091123 00000 n 
+0000091157 00000 n 
+trailer
+<<
+/ID 
+[<235318822025c3f7a67cd86d723635f2><235318822025c3f7a67cd86d723635f2>]
+% ReportLab generated PDF document -- digest (http://www.reportlab.com)
+
+/Info 21 0 R
+/Root 20 0 R
+/Size 39
+>>
+startxref
+91191
+%%EOF

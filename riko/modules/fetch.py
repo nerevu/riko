@@ -27,7 +27,7 @@ import pygogo as gogo
 from . import processor
 from riko.bado import coroutine, return_value, io
 from riko.parsers import parse_rss
-from riko.utils import gen_entries, get_abspath
+from riko.utils import gen_entries
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {"delay": 0}
@@ -87,8 +87,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        content = yield io.async_url_read(url, delay=objconf.delay)
+        content = yield io.async_url_read(objconf.url, delay=objconf.delay)
         parsed = parse_rss(content)
         stream = gen_entries(parsed)
 

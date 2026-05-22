@@ -38,7 +38,7 @@ import pygogo as gogo
 from . import processor
 
 from riko import autorss
-from riko.utils import gen_entries, get_abspath
+from riko.utils import gen_entries
 from riko.parsers import parse_rss
 from riko.bado import coroutine, return_value, io
 
@@ -79,14 +79,14 @@ def async_parser(_, objconf, skip=False, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
+        Attention! Running fake reactor. Some deferreds may not work as intended.
         Using NFC tags in the car
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        rss = yield autorss.async_get_rss(url)
-        link = get_abspath(next(rss)["link"])
+        rss = yield autorss.async_get_rss(objconf.url)
+        link = next(rss)["link"]
         content = yield io.async_url_read(link)
         parsed = parse_rss(content)
         stream = gen_entries(parsed)
@@ -121,11 +121,9 @@ def parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        rss = autorss.get_rss(url)
-        objconf.url = get_abspath(next(rss)["link"])
-
-        parsed = parse_rss(**objconf)
+        rss = autorss.get_rss(objconf.url)
+        link = next(rss)["link"]
+        parsed = parse_rss(link)
         stream = gen_entries(parsed)
 
     return stream
@@ -163,6 +161,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
+        Attention! Running fake reactor. Some deferreds may not work as intended.
         Using NFC tags in the car
     """
     return async_parser(*args, **kwargs)

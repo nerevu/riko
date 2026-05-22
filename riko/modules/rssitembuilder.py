@@ -27,8 +27,8 @@ from . import processor
 import pygogo as gogo
 from riko.dotdict import DotDict
 
-OPTS = {"emit": True}
-DEFAULTS = {"pubDate": dt.now().isoformat()}
+OPTS = {}
+DEFAULTS = {"pubDate": dt.now().isoformat(), "emit": True}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 

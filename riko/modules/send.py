@@ -30,7 +30,8 @@ from riko.utils import send
 
 import pygogo as gogo
 
-OPTS = {"emit": True, "pollable": True}
+OPTS = {"pollable": True}
+DEFAULTS = {"emit": True}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -83,7 +84,7 @@ def parser(stream, objconf, tuples, **kwargs):
         yield item
 
 
-@operator(**OPTS)
+@operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """An operator that pushes items of a stream to a function using generator based
     coroutines.

@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" 
+     xmlns:content="http://purl.org/rss/1.0/modules/content/" 
+     xmlns:wfw="http://wellformedweb.org/CommentAPI/" 
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" 
+     xmlns:dc="http://purl.org/dc/elements/1.1/" 
+     xmlns:cc="http://web.resource.org/cc/">
+    <channel>
+        <title>Delicious/psychemedia</title>
+        <link>http://delicious.com/psychemedia</link>
+        <description>links posted by psychemedia</description>
+        <atom:link rel="self" type="application/rss+xml" href="http://feeds.delicious.com/v2/rss/psychemedia?count=15"/>
+        
+        <item>
+            <title>The Challenger</title>
+            <pubDate>Wed, 20 Mar 2013 22:42:01 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/04fafda606699cfe226c6cff0f3efdee#psychemedia</guid>
+            <link>http://www.bbc.co.uk/programmes/p00zstkn</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/04fafda606699cfe226c6cff0f3efdee</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/04fafda606699cfe226c6cff0f3efdee</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description>The story of how Richard Feynman helped to discover the cause of the Challenger disaster.</description>
+            <category domain="http://delicious.com/psychemedia/">oubbccopro</category>
+            
+        </item>
+        
+        <item>
+            <title>Sacred Music</title>
+            <pubDate>Wed, 27 Feb 2013 23:10:21 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/fbd5e5ddd6d5e298fc5706219768f112#psychemedia</guid>
+            <link>http://www.bbc.co.uk/programmes/b00rgp8x</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/fbd5e5ddd6d5e298fc5706219768f112</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/fbd5e5ddd6d5e298fc5706219768f112</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">oubbccopro</category>
+            
+        </item>
+        
+        <item>
+            <title>A History of Scotland, Series 2</title>
+            <pubDate>Wed, 27 Feb 2013 22:49:46 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/8b147dacbf73f45e956ff0a14286d6e0#psychemedia</guid>
+            <link>http://www.bbc.co.uk/programmes/b00nz36l</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/8b147dacbf73f45e956ff0a14286d6e0</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/8b147dacbf73f45e956ff0a14286d6e0</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description>A History of Scotland</description>
+            <category domain="http://delicious.com/psychemedia/">oubbccopro</category>
+            
+        </item>
+        
+        <item>
+            <title>The Sound and the Fury: A Century of Music</title>
+            <pubDate>Wed, 27 Feb 2013 22:50:03 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/a0c8e2ce7bacbb69916378e12ea38277#psychemedia</guid>
+            <link>http://www.bbc.co.uk/programmes/b01qqrqm</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/a0c8e2ce7bacbb69916378e12ea38277</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/a0c8e2ce7bacbb69916378e12ea38277</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description>Three-part series on the revolution in 20th century music.</description>
+            <category domain="http://delicious.com/psychemedia/">oubbccopro</category>
+            
+        </item>
+        
+        <item>
+            <title>SBlog » Blog Archive » opml2rss.py – An opml to rss converter</title>
+            <pubDate>Fri, 25 Jan 2013 10:24:58 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/a2bd3e85648ec4984ce1eafe2bfb1952#psychemedia</guid>
+            <link>http://simaomata.com/blog/2010/04/opml2rss-py-an-opml-to-rss-converter/</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/a2bd3e85648ec4984ce1eafe2bfb1952</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/a2bd3e85648ec4984ce1eafe2bfb1952</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">aggregator</category>
+            <category domain="http://delicious.com/psychemedia/">py</category>
+            <category domain="http://delicious.com/psychemedia/">opml</category>
+            <category domain="http://delicious.com/psychemedia/">opml2rss</category>
+            <category domain="http://delicious.com/psychemedia/">feedGenerator</category>
+            
+        </item>
+        
+        <item>
+            <title>Introducing the streamR package</title>
+            <pubDate>Fri, 25 Jan 2013 01:29:49 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/ab22510bb2baa8c89f0bca7ab69f38a9#psychemedia</guid>
+            <link>http://pablobarbera.com/blog/archives/1.html</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/ab22510bb2baa8c89f0bca7ab69f38a9</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/ab22510bb2baa8c89f0bca7ab69f38a9</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">streaming</category>
+            <category domain="http://delicious.com/psychemedia/">stream</category>
+            <category domain="http://delicious.com/psychemedia/">twitteR</category>
+            <category domain="http://delicious.com/psychemedia/">twStreaming</category>
+            <category domain="http://delicious.com/psychemedia/">twStream</category>
+            <category domain="http://delicious.com/psychemedia/">search</category>
+            <category domain="http://delicious.com/psychemedia/">tw</category>
+            <category domain="http://delicious.com/psychemedia/">R</category>
+            <category domain="http://delicious.com/psychemedia/">api</category>
+            <category domain="http://delicious.com/psychemedia/">streamR</category>
+            
+        </item>
+        
+        <item>
+            <title>Nike Developer Site</title>
+            <pubDate>Wed, 23 Jan 2013 11:42:55 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/82c1912697f63ae4715a6dbb6c390fc5#psychemedia</guid>
+            <link>http://developer.nike.com/</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/82c1912697f63ae4715a6dbb6c390fc5</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/82c1912697f63ae4715a6dbb6c390fc5</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">consumerData</category>
+            <category domain="http://delicious.com/psychemedia/">personalData</category>
+            <category domain="http://delicious.com/psychemedia/">Nike</category>
+            <category domain="http://delicious.com/psychemedia/">userData</category>
+            
+        </item>
+        
+        <item>
+            <title>Measuring Skewness: A Forgotten Statistic?</title>
+            <pubDate>Wed, 23 Jan 2013 08:51:41 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/4cda1adf0f46c8d209ab1e659f8b6780#psychemedia</guid>
+            <link>http://www.amstat.org/publications/jse/v19n2/doane.pdf</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/4cda1adf0f46c8d209ab1e659f8b6780</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/4cda1adf0f46c8d209ab1e659f8b6780</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">stats</category>
+            <category domain="http://delicious.com/psychemedia/">skewness</category>
+            <category domain="http://delicious.com/psychemedia/">skew</category>
+            <category domain="http://delicious.com/psychemedia/">statistics</category>
+            
+        </item>
+        
+        <item>
+            <title>Safely Loading Packages in R | Anthony A. Boyles</title>
+            <pubDate>Tue, 22 Jan 2013 20:24:53 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/f74f54958264ce4d5611c941950807c0#psychemedia</guid>
+            <link>http://aaboyles.com/2013/01/safely-loading-packages-in-r/?utm_source=rss&amp;utm_medium=rss&amp;utm_campaign=safely-loading-packages-in-r</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/f74f54958264ce4d5611c941950807c0</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/f74f54958264ce4d5611c941950807c0</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">loader</category>
+            <category domain="http://delicious.com/psychemedia/">R</category>
+            
+        </item>
+        
+        <item>
+            <title>Deutsche Post DHL | Formula 1</title>
+            <pubDate>Tue, 22 Jan 2013 19:34:49 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/699720bd54949bafff25d2053f16f2a9#psychemedia</guid>
+            <link>http://www.dp-dhl.com/en/about_us/campaigns_sponsorship/formel_1.html</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/699720bd54949bafff25d2053f16f2a9</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/699720bd54949bafff25d2053f16f2a9</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">logisitics</category>
+            <category domain="http://delicious.com/psychemedia/">f1</category>
+            
+        </item>
+        
+        <item>
+            <title>Finding important connections in a network – automatically « Xebia Blog</title>
+            <pubDate>Mon, 21 Jan 2013 17:22:00 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/de7925d8171af0797c3413767d84145c#psychemedia</guid>
+            <link>http://blog.xebia.com/2013/01/21/finding-important-connections-in-a-network-automatically/</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/de7925d8171af0797c3413767d84145c</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/de7925d8171af0797c3413767d84145c</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">sensor</category>
+            <category domain="http://delicious.com/psychemedia/">sna</category>
+            <category domain="http://delicious.com/psychemedia/">salience</category>
+            <category domain="http://delicious.com/psychemedia/">linkSalience</category>
+            <category domain="http://delicious.com/psychemedia/">neo4j</category>
+            <category domain="http://delicious.com/psychemedia/">filter</category>
+            <category domain="http://delicious.com/psychemedia/">detector</category>
+            
+        </item>
+        
+        <item>
+            <title>Improved evolution of correlations</title>
+            <pubDate>Mon, 21 Jan 2013 17:18:29 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/9097a12a58e8062875a495ab937bc4b0#psychemedia</guid>
+            <link>http://www.nicebread.de/improve-evolution-of-correlations/</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/9097a12a58e8062875a495ab937bc4b0</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/9097a12a58e8062875a495ab937bc4b0</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">significance</category>
+            <category domain="http://delicious.com/psychemedia/">bestpractice</category>
+            <category domain="http://delicious.com/psychemedia/">animation</category>
+            <category domain="http://delicious.com/psychemedia/">sampleSize</category>
+            <category domain="http://delicious.com/psychemedia/">R</category>
+            <category domain="http://delicious.com/psychemedia/">correlation</category>
+            <category domain="http://delicious.com/psychemedia/">populationSize</category>
+            
+        </item>
+        
+        <item>
+            <title>How to indent html with xmllint? - Stack Overflow</title>
+            <pubDate>Mon, 21 Jan 2013 13:34:49 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/89efd1df8cc897fa54e1ef63a0335578#psychemedia</guid>
+            <link>http://stackoverflow.com/questions/9197660/how-to-indent-html-with-xmllint</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/89efd1df8cc897fa54e1ef63a0335578</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/89efd1df8cc897fa54e1ef63a0335578</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">xml</category>
+            <category domain="http://delicious.com/psychemedia/">format</category>
+            <category domain="http://delicious.com/psychemedia/">formatting</category>
+            
+        </item>
+        
+        <item>
+            <title>SHODAN API in R (With Examples) | rud.is</title>
+            <pubDate>Mon, 21 Jan 2013 09:51:57 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/ec71c1ff6c15eab07353e3d6356174ec#psychemedia</guid>
+            <link>http://rud.is/b/2013/01/17/shodan-api-in-r-with-examples/</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/ec71c1ff6c15eab07353e3d6356174ec</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/ec71c1ff6c15eab07353e3d6356174ec</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">connectedDevices</category>
+            <category domain="http://delicious.com/psychemedia/">iot</category>
+            <category domain="http://delicious.com/psychemedia/">R</category>
+            <category domain="http://delicious.com/psychemedia/">discovery</category>
+            
+        </item>
+        
+        <item>
+            <title>Visual Business Intelligence - 2012 Perceptual Edge Dashboard Design Competition: A Solution of My Own</title>
+            <pubDate>Fri, 18 Jan 2013 19:05:38 +0000</pubDate>
+            <guid isPermaLink="false">http://delicious.com/url/a377faaff0.13.0e52503cf9be0c0fc5#psychemedia</guid>
+            <link>http://www.perceptualedge.com/blog/?p=1466</link>
+            <dc:creator><![CDATA[psychemedia]]></dc:creator>
+            <comments>http://delicious.com/url/a377faaff0.13.0e52503cf9be0c0fc5</comments>
+            <wfw:commentRss>http://feeds.delicious.com/v2/rss/url/a377faaff0.13.0e52503cf9be0c0fc5</wfw:commentRss>
+            <source url="http://feeds.delicious.com/v2/rss/psychemedia">psychemedia's links</source>
+            <description></description>
+            <category domain="http://delicious.com/psychemedia/">bestpractice</category>
+            <category domain="http://delicious.com/psychemedia/">viz</category>
+            <category domain="http://delicious.com/psychemedia/">learningAnalytics</category>
+            <category domain="http://delicious.com/psychemedia/">dashboard</category>
+            <category domain="http://delicious.com/psychemedia/">design</category>
+            
+        </item>
+        
+    </channel>
+</rss>

@@ -19,7 +19,7 @@ from os import remove
 
 from meza.compat import encode
 
-from riko import ENCODING
+from riko import ENCODING, get_abspath
 from . import coroutine, return_value
 
 try:
@@ -124,6 +124,8 @@ def async_url_open(url, timeout=0, encoding=ENCODING, decode=False, **kwargs):
 
 
 def async_url_read(url, timeout=0, **kwargs):
+    url = get_abspath(url, offline=True)
+
     if url.startswith("http"):
         content = getPage(encode(url), timeout=timeout)
     else:

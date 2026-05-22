@@ -21,8 +21,7 @@ Attributes:
 from . import operator
 import pygogo as gogo
 
-# disable `dictize` since we do not need to access the configuration
-OPTS = {"dictize": False}
+OPTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 

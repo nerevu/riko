@@ -33,6 +33,8 @@ Examples:
 from os import path as p
 from importlib.metadata import version, metadata
 
+from meza import compat
+
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
 meta = metadata("riko")
 
@@ -61,5 +63,66 @@ PARENT_DIR = p.abspath(p.dirname(__file__))
 ENCODING = "utf-8"
 
 
-def get_path(name):
-    return "file://%s" % p.join(PARENT_DIR, "data", name)
+def get_path(name: str):
+    if name.startswith("http") or name.startswith("file:"):
+        url = name
+    else:
+        url = f"file://{p.join(PARENT_DIR, "data", name)}"
+
+    return url
+
+
+def get_abspath(url: str, offline=False):
+    if url.startswith("http"):
+        pass
+    elif url.startswith("file:///"):
+        pass
+    elif url.startswith("file://"):
+        parent = p.dirname(p.dirname(__file__))
+        rel_path = url[7:]
+        abspath = p.abspath(p.join(parent, rel_path))
+        url = "file://%s" % abspath
+    elif offline:
+        url = get_path(url)
+    else:
+        url = "http://%s" % url if url and "://" not in url else url
+
+    return compat.decode(url)
+
+
+def replacer(content: str, old: str, new="_") -> str:
+    if old:
+        replaced = content.replace(old, new)
+    elif content[0].isdecimal() or not content[0].isascii():
+        replaced = f"{new}{content}"
+    else:
+        replaced = content
+
+    return replaced
+
+
+class Context(object):
+    """The context of a pipeline
+        verbose = debug printing during compilation and running
+        describe_input = return pipe input requirements
+        describe_dependencies = return a list of sub-pipelines used
+        test = takes input values from default (skips the console prompt)
+        inputs = a dictionary of values that overrides the defaults
+            e.g. {'name one': 'test value1'}
+        submodule = takes input values from inputs (or default)
+    """
+
+    def __init__(self, **kwargs):
+        self.verbose = kwargs.get('verbose', False)
+        self.test = kwargs.get('test', False)
+        self.describe_input = kwargs.get('describe_input', False)
+        self.describe_dependencies = kwargs.get('describe_dependencies', False)
+        self.inputs = kwargs.get('inputs', {})
+        self.submodule = kwargs.get('submodule', False)
+
+    def __repr__(self):
+        content = f"verbose={self.verbose}, test={self.test}, "
+        content += f"describe_input={self.describe_input}, "
+        content = f"describe_dependencies={self.describe_dependencies}, "
+        content = f"inputs={self.inputs}, submodule={self.submodule}"
+        return f"Context({content})"

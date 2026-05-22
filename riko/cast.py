@@ -11,6 +11,7 @@ from operator import add, sub
 from time import gmtime
 from datetime import timedelta
 from calendar import timegm
+from typing import Any, Optional
 from urllib.parse import quote, urlparse
 from ast import literal_eval
 
@@ -47,14 +48,14 @@ TZINFOS = dict(gen_tzinfos())
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 
 
-def literal_parse(string):
-    if string.lower() in {"true", "false"}:
-        parsed = loads(string.lower())
+def literal_parse(content: str) -> Any:
+    if content.lower() in {"true", "false"}:
+        parsed = loads(content.lower())
     else:
         try:
-            parsed = literal_eval(string)
+            parsed = literal_eval(content)
         except (ValueError, SyntaxError):
-            parsed = string
+            parsed = content
 
     return parsed
 
@@ -174,7 +175,7 @@ CAST_SWITCH = {
     "datetime": {"default": {"date": TODAY}, "func": cast_date},
     # TODO: make this return date without time
     "date": {"default": {"date": TODAY}, "func": cast_date},
-    "url": {"default": {}, "func": cast_url},
+    "url": {"default": {}, "func": lambda i: i},
     "location": {"default": {}, "func": cast_location},
     "bool": {"default": False, "func": lambda i: bool(literal_parse(i))},
     "pass": {"default": None, "func": lambda i: i},
@@ -192,9 +193,47 @@ CAST_SWITCH = {
 #     'skip': partial(utils.get_skip, **kwargs),
 #     'partial': partial,
 # }
+#
+#
+# def parse_params(params):
+#     true_params = filter(all, params)
+#     return dict((x.key, x.value) for x in true_params)
+#
+#
+# def get_word(item):
+#     try:
+#         raw = ''.join(item.itervalues())
+#     except AttributeError:
+#         raw = item
+#     except TypeError:
+#         raw = None
+#
+#     return raw or ''
+#
+#
+# def get_num(item):
+#     try:
+#         joined = ''.join(item.itervalues())
+#     except AttributeError:
+#         joined = item
+#
+#     try:
+#         num = float(joined)
+#     except (ValueError, TypeError):
+#         num = 0.0
+#
+#     return num
+#
+#
+# def passthrough(item):
+#     return item
+#
+#
+# def passnone(item):
+#     return None
 
 
-def cast(content, _type="text", **kwargs):
+def cast(content: Optional[Any] = None, _type="text", **kwargs) -> Any:
     """Convert content from one type to another
 
     Args:
@@ -225,14 +264,21 @@ def cast(content, _type="text", **kwargs):
         >>> cast('foo', 'int')
         0
     """
-    if content is None:
-        value = CAST_SWITCH[_type]["default"]
-    elif kwargs:
-        value = CAST_SWITCH[_type]["func"](content, **kwargs)
+    try:
+        caster = CAST_SWITCH[_type.lower()]
+    except KeyError:
+        print(f"Unsupported type: {_type}. Returning '{content}' as is.")
+        caster = CAST_SWITCH["pass"]
+
+    default = caster["default"]
+
+    if content is None and _type.lower() != "none":
+        value = default
     else:
         try:
-            value = CAST_SWITCH[_type]["func"](content)
-        except (InvalidOperation, ValueError):
-            value = 0 if _type == "int" else CAST_SWITCH[_type]["func"]("NaN")
+            value = caster["func"](content, **kwargs)
+        except (InvalidOperation, ValueError) as e:
+            print(f"Error casting '{content}' to {_type}: {e}. Defaulting to {default}.")
+            value = default
 
     return value

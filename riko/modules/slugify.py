@@ -22,7 +22,7 @@ import pygogo as gogo
 from slugify import slugify
 from . import processor
 
-OPTS = {"ftype": "text", "extract": "separator", "field": "content"}
+OPTS = {"ftype": "text", "extract": "separator", "field": "content", "objectify": False}
 DEFAULTS = {"separator": "-"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
