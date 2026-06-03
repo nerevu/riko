@@ -15,7 +15,7 @@
             ]
         },
         {
-            "id": "sw-119",
+            "id": "sw-111",
             "xy": [
                 "538",
                 "236"
@@ -55,25 +55,46 @@
                     "type": "text",
                     "value": "loop:fetchpage"
                 },
-                "URL": {
-                    "subkey": "url",
-                    "type": "url"
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "URL": {
+                                "subkey": "url",
+                                "type": "url"
+                            },
+                            "from": {
+                                "type": "text",
+                                "value": "One Way</span>"
+                            },
+                            "to": {
+                                "type": "text",
+                                "value": "</tr>"
+                            },
+                            "token": {
+                                "type": "text",
+                                "value": "<td style=\"TEXT-ALIGN: center\">"
+                            }
+                        },
+                        "id": "sw-119",
+                        "type": "fetchpage"
+                    }
                 },
-                "from": {
+                "count": {
                     "type": "text",
-                    "value": "One Way</span>"
+                    "value": "all"
                 },
-                "to": {
-                    "type": "text",
-                    "value": "</tr>"
+                "assign": {
+                    "type": "bool",
+                    "value": false
                 },
-                "token": {
+                "field": {
                     "type": "text",
-                    "value": "<td style=\"TEXT-ALIGN: center\">"
+                    "value": ""
                 }
             },
-            "id": "sw-119",
-            "type": "fetchpage"
+            "id": "sw-111",
+            "type": "loop"
         },
         {
             "conf": {
@@ -84,7 +105,7 @@
                     },
                     "value": {
                         "type": "text",
-                        "value": "file://data/www.caltrain.com_Fares_farechart.html"
+                        "value": "file://riko/data/www.caltrain.com_Fares_farechart.html"
                     }
                 }
             },
@@ -117,7 +138,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-119"
+            "moduleid": "sw-111"
         },
         {
             "data": {
@@ -149,7 +170,7 @@
             "id": "_w4",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-119"
+                "moduleid": "sw-111"
             },
             "tgt": {
                 "id": "_INPUT",
@@ -164,7 +185,7 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-119"
+                "moduleid": "sw-111"
             }
         }
     ]

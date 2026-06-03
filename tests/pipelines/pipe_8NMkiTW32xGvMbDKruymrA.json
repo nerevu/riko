@@ -35,15 +35,15 @@
                 "URL": [
                     {
                         "type": "url",
-                        "value": "file://data/www.fourtitude.com_news_publish_rss.xml"
+                        "value": "file://riko/data/www.fourtitude.com_news_publish_rss.xml"
                     },
                     {
                         "type": "url",
-                        "value": "file://data/feeds.gawker.com_jalopnik_full.xml"
+                        "value": "file://riko/data/feeds.gawker.com_jalopnik_full.xml"
                     },
                     {
                         "type": "url",
-                        "value": "file://data/www.autoblog.com_rss.xml"
+                        "value": "file://riko/data/www.autoblog.com_rss.xml"
                     }
                 ]
             },
@@ -61,7 +61,7 @@
                     "type": "text",
                     "value": "or"
                 },
-                "permit": {
+                "PERMIT": {
                     "type": "bool",
                     "value": true
                 },

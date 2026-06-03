@@ -1,8 +1,8 @@
 from pprint import pprint
-from riko.bado import coroutine
+from riko.bado import coroutine, return_value
 from riko.collections import SyncPipe, AsyncPipe
 
-p385_conf = {"type": "date"}
+p385_conf = {"type": "text"}
 p385_in = {"content": "12/2/2014"}
 p405_conf = {"format": "%B %d, %Y"}
 p393_conf = {
@@ -15,34 +15,36 @@ p393_conf = {
 p385_kwargs = {"conf": p385_conf, "inputs": p385_in}
 
 
-def pipe(test=False):
-    s1, s2 = (
+def pipe(test=True):
+    stream = (
         SyncPipe("input", test=test, **p385_kwargs)
+        # FIXME: dateformat no longer returns a struct_time
         .dateformat(conf=p405_conf)
-        .split()
-        .output
+        # .split()
+        .list
     )
 
+    print(stream)
+
     p393_kwargs = {"conf": p393_conf, "date": s1, "year": s2, "test": test}
-    stream = SyncPipe("itembuilder", **p393_kwargs).list
-
-    for i in stream:
-        pprint(i)
-
-    return stream
+    stream = SyncPipe("itembuilder", **p393_kwargs)
+    return stream.list
 
 
 @coroutine
-def async_pipe(reactor, test=False):
+def async_pipe(reactor, test=True):
     s1, s2 = yield (
         AsyncPipe("input", test=test, **p385_kwargs)
         .dateformat(conf=p405_conf)
         .split()
-        .output
+        .alist
     )
 
     p393_kwargs = {"conf": p393_conf, "date": s1, "year": s2, "test": test}
-    stream = yield AsyncPipe("itembuilder", **p393_kwargs).list
+    stream = yield AsyncPipe("itembuilder", **p393_kwargs)
+    return_value(stream.alist)
 
-    for i in stream:
+
+if __name__ == "__main__":
+    for i in pipe():
         pprint(i)

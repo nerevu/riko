@@ -63,11 +63,11 @@
                 "URL": [
                     {
                         "type": "url",
-                        "value": "file://data/blog.ouseful.info_feed.xml"
+                        "value": "file://riko/data/blog.ouseful.info_feed.xml"
                     },
                     {
                         "type": "url",
-                        "value": "file://data/feeds.feedburner.com_TheEdTechie.xml"
+                        "value": "file://riko/data/feeds.feedburner.com_TheEdTechie.xml"
                     }
                 ]
             },
@@ -126,7 +126,7 @@
             "conf": {
                 "BASE": {
                     "type": "text",
-                    "value": "file://data/www.greenhughes.com_rssfeed.xml"
+                    "value": "file://riko/data/www.greenhughes.com_rssfeed.xml"
                 },
                 "PARAM": [
                     {

@@ -3,9 +3,10 @@
 
 from pprint import pprint
 from functools import partial
+from typing import Mapping, Optional, Sequence
 
 from riko import get_path
-from riko.bado import coroutine
+from riko.bado import coroutine, return_value
 from riko.collections import SyncPipe, AsyncPipe
 
 BR = {"find": "<br>"}
@@ -38,7 +39,7 @@ def add_source(source):
 
 
 def add_id(source, rule, field="link"):
-    make_id_part = [{"subkey": "k:source"}, {"value": "-"}, {"subkey": "id"}]
+    make_id_part = [{"subkey": "k:source"}, "-", {"subkey": "id"}]
 
     ideed = source.strfind(conf={"rule": rule}, field=field, assign="id").strconcat(
         conf={"part": make_id_part}, assign="id"
@@ -47,7 +48,7 @@ def add_id(source, rule, field="link"):
     return ideed
 
 
-def add_posted(source, rule="", field="summary"):
+def add_posted(source, rule: Optional[Sequence[Mapping[str, str]] | Mapping[str, str]] = None, field="summary"):
     if rule:
         conf = {"rule": rule}
         source = source.strfind(conf=conf, field=field, assign="k:posted")
@@ -138,13 +139,13 @@ def add_budget(source, fixed_text="", hourly_text="", double=True):
 
     converted_budget_part = [
         {"subkey": "k:budget_w_sym"},
-        {"value": " ("},
+        " (",
         {"subkey": "k:budget_converted_w_sym"},
-        {"value": ")"},
+        ")",
     ]
 
     def_full_budget_part = {"subkey": "k:budget_w_sym"}
-    hourly_budget_part = [{"subkey": "k:budget_full"}, {"value": " / hr"}]
+    hourly_budget_part = [{"subkey": "k:budget_full"}, " / hr"]
     exchangerate_conf = {"url": get_path("quote.json")}
     native_currencyformat_conf = {"currency": {"subkey": "k:cur_code"}}
     def_currencyformat_conf = {"currency": DEF_CUR_CODE}
@@ -153,12 +154,12 @@ def add_budget(source, fixed_text="", hourly_text="", double=True):
 
     if fixed_text:
         source = source.strconcat(
-            conf={"part": {"value": "fixed"}}, assign="k:job_type", skip_if=isnt_fixed
+            conf={"part": "fixed"}, assign="k:job_type", skip_if=isnt_fixed
         )
 
     if hourly_text:
         source = source.strconcat(
-            conf={"part": {"value": "hourly"}}, assign="k:job_type", skip_if=isnt_hourly
+            conf={"part": "hourly"}, assign="k:job_type", skip_if=isnt_hourly
         )
 
     source = source.refind(
@@ -303,7 +304,7 @@ def remove_cruft(source):
     return source.rename(conf={"rule": remove_rule})
 
 
-def parse_odesk(source, stream=True):
+def parse_odesk(source):
     budget_text = "Budget</b>:"
     no_budget = {"field": "summary", "text": budget_text, "include": True}
     raw_budget_rule = [{"find": budget_text, "location": "after"}, BR]
@@ -328,7 +329,6 @@ def parse_odesk(source, stream=True):
             skip_if=no_budget,
         )
     )
-
     source = add_source(source)
     source = add_posted(source, posted_rule)
     source = add_id(source, find_id_rule, field="summary")
@@ -336,11 +336,10 @@ def parse_odesk(source, stream=True):
     source = add_tags(source, skills_rule)
     source = add_tags(source, categ_rule, assign="k:categories")
     source = clean_locations(source)
-    source = remove_cruft(source)
-    return source.output if stream else source
+    return remove_cruft(source)
 
 
-def parse_guru(source, stream=True):
+def parse_guru(source):
     budget_text = "budget:</b>"
     fixed_text = "Fixed Price budget:</b>"
     hourly_text = "Hourly budget:</b>"
@@ -384,11 +383,10 @@ def parse_guru(source, stream=True):
     source = add_tags(source, skills_rule)
     source = add_tags(source, categ_rule, assign="k:categories")
     source = clean_locations(source)
-    source = remove_cruft(source)
-    return source.output if stream else source
+    return remove_cruft(source)
 
 
-def parse_elance(source, stream=True):
+def parse_elance(source):
     budget_text = "Budget:</b>"
     fixed_text = "Budget:</b> Fixed Price"
     hourly_text = "Budget:</b> Hourly"
@@ -499,11 +497,11 @@ def parse_elance(source, stream=True):
     source = add_tags(source, skills_rule)
     source = add_tags(source, categ_rule, assign="k:categories")
     source = clean_locations(source)
-    source = remove_cruft(source)
-    return source.output if stream else source
+    # source = remove_cruft(source)
+    return source
 
 
-def parse_freelancer(source, stream=True):
+def parse_freelancer(source):
     budget_text = "(Budget:"
     no_budget = {"field": "summary", "text": budget_text, "include": True}
     raw_budget_rule = [{"find": budget_text, "location": "after"}, {"find": ","}]
@@ -528,8 +526,7 @@ def parse_freelancer(source, stream=True):
     source = add_budget(source)
     source = add_tags(source, skills_rule)
     source = clean_locations(source)
-    source = remove_cruft(source)
-    return source.output if stream else source
+    return remove_cruft(source)
 
 
 def pipe(test=False, parallel=False, threads=False):
@@ -540,21 +537,15 @@ def pipe(test=False, parallel=False, threads=False):
     guru_source = Pipe(conf=guru_conf)
     freelancer_source = Pipe(conf=freelancer_conf)
     elance_source = Pipe(conf=elance_conf)
-    # odesk_source = SyncPipe('fetchdata', conf=odesk_conf, **kwargs)
-    # guru_source = SyncPipe('fetchdata', conf=guru_conf, **kwargs)
-    # elance_source = SyncPipe('fetchdata', conf=elance_conf, **kwargs)
-    # freelancer_source = SyncPipe('fetchdata', conf=freelancer_conf, **kwargs)
 
-    odesk_pipe = parse_odesk(odesk_source, stream=False)
-    guru_stream = parse_guru(guru_source)
-    elance_stream = parse_elance(elance_source)
-    freelancer_stream = parse_freelancer(freelancer_source)
+    odesk_pipe = parse_odesk(odesk_source)  # 10
+    guru_stream = parse_guru(guru_source)  # 75
+    freelancer_stream = parse_freelancer(freelancer_source)  # 20
+    elance_stream = parse_elance(elance_source)  # 75
 
     others = [guru_stream, freelancer_stream, elance_stream]
-    stream = odesk_pipe.union(others=others).list
-
-    pprint(stream[-1])
-    return stream
+    return odesk_pipe.union(others=others).list
+    # return elance_stream.list
 
 
 @coroutine
@@ -565,11 +556,16 @@ def async_pipe(reactor, test=None):
     freelancer_source = Pipe(conf=freelancer_conf)
     elance_source = Pipe(conf=elance_conf)
 
-    odesk_pipe = yield parse_odesk(odesk_source, stream=False)
+    odesk_pipe = yield parse_odesk(odesk_source)
     guru_stream = yield parse_guru(guru_source)
     elance_stream = yield parse_elance(elance_source)
     freelancer_stream = yield parse_freelancer(freelancer_source)
 
     others = [guru_stream, freelancer_stream, elance_stream]
     stream = odesk_pipe.union(others=others).list
+    return_value(stream)
+
+
+if __name__ == "__main__":
+    stream = pipe()
     pprint(stream[-1])

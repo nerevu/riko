@@ -10,7 +10,7 @@ from operator import itemgetter
 import pytest
 
 from riko.collections import SyncPipe
-from riko.utils import StreamState, send, noop
+from riko.utils import StreamState, noop
 from riko.bado import _issync
 
 
@@ -32,8 +32,8 @@ class TestCollections(object):
     def test_udf(self):
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .udf(func=itemgetter("content"))
+            .tokenizer(emit=True)
+            .udf(func=itemgetter("content"))
         )
         assert next(stream) == "once is 1x"
 
@@ -43,8 +43,8 @@ class TestCollections(object):
 
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .send(others=["receiver", "printer"])
+            .tokenizer(emit=True)
+            .send(others=["receiver", "printer"])
         )
 
         assert next(stream) == {"content": "once is 1x"}
@@ -59,8 +59,8 @@ class TestCollections(object):
 
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .send(others=["receiver", "changer", "printer"])
+            .tokenizer(emit=True)
+            .send(others=["receiver", "changer", "printer"])
         )
 
         assert next(stream) == {"content": "once is 1x"}
@@ -76,9 +76,9 @@ class TestCollections(object):
     def test_split(self):
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .udf(func=self.udf)
-                .split()
+            .tokenizer(emit=True)
+            .udf(func=self.udf)
+            .split()
         )
 
         stream1, stream2 = stream
@@ -93,9 +93,9 @@ class TestCollections(object):
 
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .udf(func=self.udf)
-                .send(others=["receiver1", "receiver2"])
+            .tokenizer(emit=True)
+            .udf(func=self.udf)
+            .send(others=["receiver1", "receiver2"])
         )
 
         assert next(stream) == {"content": "once is 1x"}
@@ -126,11 +126,11 @@ class TestCollections(object):
         """Tests a basic stream pipeline"""
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .strreplace(conf=strr_conf, assign="content")
-                .slugify(assign="content")
-                .hash(assign="content")
-                .udf(func=self.udf)
+            .tokenizer(emit=True)
+            .strreplace(conf=strr_conf, assign="content")
+            .slugify(assign="content")
+            .hash(assign="content")
+            .udf(func=self.udf)
         )
 
         first_item = next(stream)
@@ -142,35 +142,35 @@ class TestCollections(object):
         """Tests a parallel stream pipeline"""
         stream = (
             SyncPipe("itembuilder", conf=builder_conf, parallel=True)
-                .tokenizer(emit=True)
-                .strreplace(conf=strr_conf, assign="content")
-                .slugify(assign="content")
-                .hash(assign="content")
-                .udf(func=self.udf)
+            .tokenizer(emit=True)
+            .strreplace(conf=strr_conf, assign="content")
+            .slugify(assign="content")
+            .hash(assign="content")
+            .udf(func=self.udf)
         )
 
         first_item = next(stream)
         assert first_item == {"content": 396558121}
-        assert self.runs < 3
+        assert self.runs == 3
 
     @pytest.mark.skipif(_issync, reason="async support not available")
     def test_astream(self, capsys):
         """Tests a asynchronous stream pipeline"""
-        from riko.bado import coroutine, react, _issync
+        from riko.bado import coroutine, react
         from riko.bado.mock import FakeReactor
         from riko.collections import AsyncPipe
 
-        @coroutine
+        @coroutine  # pyright: ignore[reportArgumentType]
         def run(reactor):
             stream = yield (
                 AsyncPipe("itembuilder", conf=builder_conf)
-                    .tokenizer(emit=True)
-                    .udf(func=self.udf)
-                    .strreplace(conf=strr_conf, assign="content")
-                    .udf(func=self.udf)
-                    .slugify(assign="content")
-                    .udf(func=self.udf)
-                    .hash(assign="content")
+                .tokenizer(emit=True)
+                .udf(func=self.udf)
+                .strreplace(conf=strr_conf, assign="content")
+                .udf(func=self.udf)
+                .slugify(assign="content")
+                .udf(func=self.udf)
+                .hash(assign="content")
             )
 
             print(next(stream)["content"])

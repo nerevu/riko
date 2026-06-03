@@ -34,7 +34,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/www.bbc.co.uk_programmes_b006mvlc_episodes_player.xml"
+                    "value": "file://riko/data/www.bbc.co.uk_programmes_b006mvlc_episodes_player.xml"
                 },
                 "path": {
                     "type": "text",
@@ -61,9 +61,9 @@
                             "type": "text",
                             "value": "title"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "copy"
+                        "copy": {
+                            "type": "bool",
+                            "value": true
                         }
                     },
                     {
@@ -75,9 +75,9 @@
                             "type": "text",
                             "value": "link"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "copy"
+                        "copy": {
+                            "type": "bool",
+                            "value": true
                         }
                     },
                     {
@@ -89,9 +89,9 @@
                             "type": "text",
                             "value": "description"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "copy"
+                        "copy": {
+                            "type": "bool",
+                            "value": true
                         }
                     }
                 ]

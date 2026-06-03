@@ -98,11 +98,23 @@ Some workflows have ``conf`` values that are wired from other pipes
     >>>
     >>> conf = {'url': {'subkey': 'url'}}
     >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
-    >>> set(next(result).keys()) == {
-    ...     'updated', 'updated_parsed', 'pubDate', 'author', 'y:published',
-    ...     'title', 'comments', 'summary', 'content', 'link', 'y:title',
-    ...     'dc:creator', 'author.uri', 'author.name', 'id', 'y:id'}
-    True
+    >>> set(next(result).keys())
+    {'author',
+     'author.name',
+     'author.uri',
+     'comments',
+     'content',
+     'dc:creator',
+     'id',
+     'link',
+     'pubDate',
+     'summary',
+     'title',
+     'updated',
+     'updated_parsed',
+     'y:id',
+     'y:published',
+     'y:title'}
 
 Alternate workflow creation
 ---------------------------
@@ -157,7 +169,7 @@ style [#]_.
     >>> sub_conf = {'path': 'content.value'}
     >>> match = r'(.*href=")([\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
-    >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
+    >>> sort_conf = {'rule': {'field': 'content', 'dir': 'desc'}}
     >>>
     >>> ### Create a workflow ###
     >>> #

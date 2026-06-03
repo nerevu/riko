@@ -59,8 +59,6 @@ class FakeReactor(MemoryReactorClock):
     def __init__(self):
         super(FakeReactor, self).__init__()
         reactor.fake = True
-        msg = "Attention! Running fake reactor."
-        logger.debug(f"{msg} Some deferreds may not work as intended.")
 
     def callLater(self, when, what, *args, **kwargs):
         """Schedule a unit of work to be done later."""

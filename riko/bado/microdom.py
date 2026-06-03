@@ -18,13 +18,16 @@ sample of XML.
 Microdom mainly focuses on working with HTML and XHTML.
 """
 
+from http.client import HTTPResponse
 import re
+from re import Match
 import itertools as it
 
 from io import open, BytesIO, StringIO
 from functools import partial
+from typing import Callable, Iterable, Mapping, Optional, Sequence, cast
 
-from meza.compat import encode, decode
+from meza.compat import encode as _encode, decode as _decode
 
 try:
     from twisted.python.util import InsensitiveDict
@@ -37,24 +40,37 @@ from riko.parsers import ESCAPE, entity2text, text2entity
 from meza.process import merge
 
 HTML_ESCAPE_CHARS = {"&amp;", "&lt;", "&gt;", "&quot;"}
-entity_prog = re.compile("&(.*?);")
-escape_prog = re.compile("['%s']" % "".join(ESCAPE))
+entity_pattern = re.compile("&(.*?);")
+escape_pattern = re.compile(f"['{"".join(ESCAPE)}']")
+
+encode = cast(Callable[[str], bytes], _encode)
+decode = cast(Callable[[bytes], str], _decode)
 
 
-def unescape(text):
-    def repl(matchobj):
-        match = matchobj.group(0)
-        return entity2text(match) if match in HTML_ESCAPE_CHARS else match
+def get_repl(matchobj: Match, escape_chars: Optional[Iterable[str]] = None, parse_all=False) -> str:
+    match: str = matchobj.group(0)
 
-    return entity_prog.sub(repl, text)
+    if parse_all:
+        escaped = entity2text(match)
+    elif escape_chars:
+        escaped = entity2text(match) if match in set(escape_chars) else match
+    else:
+        escaped = match
+
+    return escaped
 
 
-def escape(text):
-    repl = lambda matchobj: text2entity(matchobj.group(0))
-    return escape_prog.sub(repl, text)
+def unescape(text: str):
+    repl = partial(get_repl, escape_chars=HTML_ESCAPE_CHARS)
+    return entity_pattern.sub(repl, text)
 
 
-def unescape_dict(d):
+def escape(text: str):
+    repl = partial(get_repl, parse_all=True)
+    return escape_pattern.sub(repl, text)
+
+
+def unescape_dict(d: Mapping[str, str]) -> Mapping[str, str]:
     return {k: unescape(v) for k, v in d.items()}
 
 
@@ -351,7 +367,7 @@ class CharacterData(Node):
         Node.__init__(self, parentNode)
         self.value = self.data = self.nodeValue = data
 
-    def isEqualToCharacterData(self, n):
+    def isEqualToCharacterData(self, n) -> bool:
         return self.value == n.value
 
     isEqualToNode = isEqualToCharacterData
@@ -360,9 +376,9 @@ class CharacterData(Node):
 class Comment(CharacterData):
     """A comment node"""
 
-    def writexml(self, stream, *args, **kwargs):
+    def writexml(self, stream: BytesIO, *args, **kwargs):
         val = encode(self.data)
-        stream.write("<!--%s-->" % val)
+        stream.write(b"<!--{%s}-->" % val)
 
     def cloneNode(self, deep=0, parent=None):
         return Comment(self.nodeValue, parent)
@@ -384,7 +400,7 @@ class Text(CharacterData):
     def cloneNode(self, deep=0, parent=None):
         return Text(self.nodeValue, parent, self.raw)
 
-    def writexml(self, stream, *args, **kwargs):
+    def writexml(self, stream: BytesIO, *args, **kwargs) -> int:
         if self.raw:
             val = decode(self.nodeValue)
         else:
@@ -393,7 +409,7 @@ class Text(CharacterData):
             val = escape(v)
 
         val = encode(val)
-        stream.write(val)
+        return stream.write(val)
 
     def __repr__(self):
         return "Text(%s" % repr(self.nodeValue) + ")"
@@ -828,7 +844,7 @@ class MicroDOMParser(XMLParser):
 
             if match:
                 prefix = match.group()
-                oldvalue = oldvalue[len(prefix) :]
+                oldvalue = oldvalue[len(prefix):]
 
             # now see if contents are actual node and comment or CDATA
             try:
@@ -1038,19 +1054,23 @@ class MicroDOMParser(XMLParser):
                 raise MismatchedTags(*args)
 
 
-def parse(f, *args, **kwargs):
+def parse(f: str | BytesIO | HTTPResponse, *args, **kwargs) -> Document:
     """Parse HTML or XML readable."""
-    fp = f.fp if hasattr(f, "fp") else f
-    readable = fp if hasattr(fp, "read") else open(f, "rb")
+    if isinstance(f, HTTPResponse):
+        readable = f.fp
+    elif isinstance(f, str):
+        readable = open(f, "rb")
+    else:
+        readable = f
+
     filename = getattr(readable, "name", "unnamed")
     mdp = MicroDOMParser(filename=filename, **kwargs)
     mdp.makeConnection(None)
 
-    try:
+    if isinstance(readable, BytesIO):
         mdp.dataReceived(readable.getvalue())
-    except AttributeError:
-        sentinel = b"" if "BufferedReader" in str(type(readable)) else ""
-        for r in iter(partial(readable.read, 1024), sentinel):
+    else:
+        for r in iter(partial(readable.read, 1024), b""):
             mdp.dataReceived(r)
 
     mdp.connectionLost(None)
@@ -1074,16 +1094,16 @@ def parse(f, *args, **kwargs):
     return doc
 
 
-def parseString(content, *args, **kwargs):
+def parseString(content: str, *args, **kwargs) -> Document:
     f = BytesIO(encode(content))
     return parse(f, *args, **kwargs)
 
 
-def parseXML(readable):
+def parseXML(readable) -> Document:
     """Parse an XML readable object."""
     return parse(readable, case_insensitive=True)
 
 
-def parseXMLString(content):
+def parseXMLString(content) -> Document:
     """Parse an XML readable object."""
     return parseString(content, case_insensitive=True)

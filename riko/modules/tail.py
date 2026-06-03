@@ -27,6 +27,7 @@ from . import operator
 import pygogo as gogo
 
 OPTS = {"ptype": "int"}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -85,7 +86,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x) == {'x': 3})
+        ...     callback = lambda x: print(next(x))
         ...     items = ({'x': x} for x in range(5))
         ...     d = async_pipe(items, conf={'count': 2})
         ...     return d.addCallbacks(callback, logger.error)
@@ -95,7 +96,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'x': 3}
     """
     return parser(*args, **kwargs)
 

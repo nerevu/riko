@@ -72,7 +72,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/news.yahoo.com_rss_health.xml"
+                    "value": "file://riko/data/news.yahoo.com_rss_health.xml"
                 }
             },
             "id": "sw-140",
@@ -84,7 +84,7 @@
                     "type": "text",
                     "value": "and"
                 },
-                "permit": {
+                "PERMIT": {
                     "type": "bool",
                     "value": true
                 },
@@ -112,7 +112,7 @@
                     "type": "text",
                     "value": "and"
                 },
-                "permit": {
+                "PERMIT": {
                     "type": "bool",
                     "value": true
                 },

@@ -67,7 +67,7 @@ def parser(stream, objconf, tuples, **kwargs):
     return islice(stream, start, stop)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously returns a specified number of items
     from a stream.
@@ -129,7 +129,7 @@ def pipe(*args, **kwargs):
         >>> len(list(pipe(items, conf={'count': '4'})))
         4
         >>> stream = pipe(items, conf={'count': '2', 'start': '2'})
-        >>> next(stream) == {'x': 2}
-        True
+        >>> next(stream)
+        {'x': 2}
     """
     return parser(*args, **kwargs)

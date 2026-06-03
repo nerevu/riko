@@ -8,11 +8,12 @@ from riko.modules.datebuilder import pipe as datebuilder
 
 def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(item=None, conf=None, context=None, **kwargs):
     conf = conf or {}
+    context = context or Context(**kwargs)
 
-    if kwargs.get("describe_input"):
+    if context.describe_input:
         return []
 
-    if kwargs.get("describe_dependencies"):
+    if context.describe_dependencies:
         return ["pipedatebuilder", "pipedateformat", "itembuilder"]
 
     sw_385 = datebuilder(

@@ -94,12 +94,11 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     ...         .tokenizer(conf={'delimiter': ' '}, emit=True)               # 4
     ...         .count(conf={'count_key': 'content'}))                       # 5
     >>>
-    >>> stream = flow.output                                                 # 6
-    >>> next(stream)                                                         # 7
+    >>> next(flow)                                                         # 7
     {"'sad": 1}
-    >>> next(stream)                                                         # 8
+    >>> next(flow)                                                         # 8
     {'(': 28}
-    >>> next(stream)                                                         # 9
+    >>> next(flow)                                                         # 9
     {'(1999)': 1}
 
 Motivation
@@ -242,19 +241,17 @@ Synchronous processing
     >>> #   2. filter for items with '.com' in the link
     >>> #   3. sort the items ascending by title
     >>> #   4. fetch the first comment from each item
-    >>> #   5. flatten the result into one raw stream
-    >>> #   6. extract the first item's content
+    >>> #   5. extract the first item's content
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
     >>>
     >>> flow = (
     ...     SyncPipe('fetch', conf=fetch_conf)               # 1
     ...         .filter(conf={'rule': filter_rule})          # 2
-    ...         .sort(conf={'rule': {'sort_key': 'title'}})  # 3
+    ...         .sort(conf={'rule': {'field': 'title'}})     # 3
     ...         .xpathfetchpage(conf=xpath_conf))            # 4
     >>>
-    >>> stream = flow.output                                 # 5
-    >>> next(stream)['content']                              # 6
+    >>> next(flow)['content']                                # 5
     'Open Artificial Pancreas home:'
 
 Please see `alternate workflow creation`_ for an alternative (function based) method for
@@ -281,8 +278,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
     >>> #   1. fetch the hackernews RSS feed
     >>> #   2. filter for items with '.com' in the article link
     >>> #   3. fetch the first comment from all items in parallel (using 4 workers)
-    >>> #   4. flatten the result into one raw stream
-    >>> #   5. extract the first item's content
+    >>> #   4. extract the first item's content
     >>> #
     >>> # Note: no point in sorting after the filter since parallel fetching doesn't guarantee
     >>> # order
@@ -291,8 +287,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
     ...         .filter(conf={'rule': filter_rule})                       # 2
     ...         .xpathfetchpage(conf=xpath_conf))                         # 3
     >>>
-    >>> stream = flow.output                                              # 4
-    >>> next(stream)['content']                                           # 5
+    >>> next(flow)['content']                                             # 4
     'He uses the following example for when to throw your own errors:'
 
 Asynchronous processing
@@ -323,8 +318,7 @@ An example using ``riko``'s asynchronous API.
     >>> #   1. fetch the hackernews RSS feed
     >>> #   2. filter for items with '.com' in the article link
     >>> #   3. asynchronously fetch the first comment from each item (using 4 connections)
-    >>> #   4. flatten the result into one raw stream
-    >>> #   5. extract the first item's content
+    >>> #   4. extract the first item's content
     >>> #
     >>> # Note: no point in sorting after the filter since async fetching doesn't guarantee
     >>> # order
@@ -333,10 +327,9 @@ An example using ``riko``'s asynchronous API.
     ...     stream = yield (
     ...         AsyncPipe('fetch', conf=fetch_conf, connections=4)  # 1
     ...             .filter(conf={'rule': filter_rule})             # 2
-    ...             .xpathfetchpage(conf=xpath_conf)                # 3
-    ...             .output)                                        # 4
+    ...             .xpathfetchpage(conf=xpath_conf))               # 3                                        # 4
     ...
-    ...     print(next(stream)['content'])                          # 5
+    ...     print(next(stream)['content'])                          # 4
     >>>
     >>> try:
     ...     react(run)
@@ -555,9 +548,8 @@ CLI Setup
     def pipe(test=False):
         kwargs = {'conf': conf1, 'test': test}
         flow = SyncPipe('itembuilder', **kwargs).strreplace(conf=conf2)
-        stream = flow.output
 
-        for i in stream:
+        for i in flow:
             print(i)
 
 CLI Examples

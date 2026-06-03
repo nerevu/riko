@@ -2,7 +2,7 @@
 
 from riko import Context, get_path
 from riko.modules.fetch import pipe as fetch
-from riko.modules.fetch import pipe as fetch
+from riko.modules.loop import pipe as loop
 from riko.modules.union import pipe as union
 from riko.modules.uniq import pipe as uniq
 from riko.modules.filter import pipe as _filter
@@ -11,9 +11,7 @@ from riko.modules.regex import pipe as regex
 from riko.modules.sort import pipe as sort
 
 
-def pipe_6e30c269a69baf92cd420900b0645f88(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_6e30c269a69baf92cd420900b0645f88(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -51,64 +49,78 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
         },
     )
 
-    sw_154 = union(context, _OTHER3=sw_233, conf={}, _OTHER=sw_135)
+    sw_154 = union(context=context, OTHERS=[sw_233, sw_135], conf={})
 
-    sw_173 = uniq(sw_154, context=context, conf={"field": {"type": "text", "value": "title"}})
+    sw_173 = uniq(sw_154, context=context, conf={"uniq_key": {"type": "text", "value": "title"}})
 
     sw_180 = _filter(
         sw_173,
         context=context,
         conf={
             "COMBINE": {"type": "text", "value": "or"},
-            "PERMIT": {"type": "bool", "value": False},
+            "PERMIT": {"type": "bool", "value": True},
             "RULE": [
                 {
                     "field": {"type": "text", "value": "link"},
-                    "value": {"type": "text", "value": "/sport/"},
+                    "value": {"type": "text", "value": "sz.de"},
                     "op": {"type": "text", "value": "contains"},
                 },
                 {
                     "field": {"type": "text", "value": "title"},
-                    "value": {"type": "text", "value": "Bildstrecke:"},
+                    "value": {"type": "text", "value": "Poroschenko"},
                     "op": {"type": "text", "value": "contains"},
                 },
             ],
         },
     )
 
-    sw_210 = rename(
+    sw_210 = loop(
         sw_180,
+        embed=rename,
         context=context,
         conf={
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "y:id.value"},
-                    "op": {"type": "text", "value": "copy"},
-                    "newval": {"type": "text", "value": "link"},
-                }
-            ]
+            "count": "all",
+            "embed": {
+                "emit": True,
+                "conf": {
+                    "RULE": [
+                        {
+                            "field": {"type": "text", "value": "y:id.value"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "link"},
+                        }
+                    ]
+                },
+            },
         },
     )
 
-    sw_195 = regex(
+    sw_195 = loop(
         sw_210,
+        embed=regex,
         context=context,
         conf={
-            "RULE": [
-                {
-                    "singlelinematch": {"type": "text", "value": "2"},
-                    "globalmatch": {"type": "text", "value": "1"},
-                    "replace": {"type": "text", "value": ""},
-                    "field": {"type": "text", "value": "description"},
-                    "casematch": {"type": "text", "value": "8"},
-                    "match": {"type": "text", "value": "</div>.*$"},
+            "count": "all",
+            "embed": {
+                "emit": True,
+                "conf": {
+                    "RULE": [
+                        {
+                            "singlelinematch": {"type": "bool", "value": True},
+                            "singlematch": {"type": "bool", "value": False},
+                            "replace": {"type": "text", "value": ""},
+                            "field": {"type": "text", "value": "description"},
+                            "casematch": {"type": "bool", "value": True},
+                            "match": {"type": "text", "value": "</div>.*$"},
+                        },
+                        {
+                            "field": {"type": "text", "value": "link"},
+                            "match": {"type": "text", "value": "^(.*\\/.*)\\/"},
+                            "replace": {"type": "text", "value": "$1/2.220/"},
+                        },
+                    ]
                 },
-                {
-                    "field": {"type": "text", "value": "link"},
-                    "match": {"type": "text", "value": "^(.*\\/.*)\\/"},
-                    "replace": {"type": "text", "value": "$1/2.220/"},
-                },
-            ]
+            },
         },
     )
 
@@ -116,7 +128,7 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
         sw_195,
         context=context,
         conf={
-            "KEY": [
+            "RULE": [
                 {
                     "field": {"type": "text", "value": "pubDate"},
                     "dir": {"type": "text", "value": "DESC"},

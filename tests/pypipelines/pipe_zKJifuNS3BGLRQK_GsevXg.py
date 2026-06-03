@@ -5,11 +5,10 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.split import pipe as split
 from riko.modules.count import pipe as count
 from riko.modules.simplemath import pipe as simplemath
-from riko.modules.simplemath import pipe as simplemath
 from riko.modules.truncate import pipe as truncate
 
 
-def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -30,36 +29,26 @@ def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, _INPUT=None, conf=None, **kwargs):
         conf={
             "URL": {
                 "type": "url",
-                "value": get_path("www.sciencedaily.com_rss_computers_math.html"),
+                "value": get_path("TheEdTechie.xml"),
             }
         },
     )
 
-    sw_250 = split(sw_224, context=context, splits=2, conf=None)
+    sw_250, sw_251 = split(sw_224, context=context, conf=None)
 
     sw_243 = count(sw_250, context=context, conf=None)
-
-    sw_94 = simplemath(
-        sw_243,
-        context=context,
-        conf={
-            "OTHER": {"type": "int", "value": "5"},
-            "OP": {"type": "text", "value": "modulo"},
-        },
-    )
 
     sw_169 = simplemath(
         sw_243,
         context=context,
-        OTHER=sw_94,
         conf={
-            "OTHER": {"terminal": "OTHER", "type": "float"},
-            "OP": {"type": "text", "value": "subtract"},
+            "OTHER": {"type": "int", "value": "6"},
+            "OP": {"type": "text", "value": "modulo"},
         },
     )
 
     sw_232 = truncate(
-        sw_250,
+        sw_251,
         context=context,
         count=sw_169,
         conf={"count": {"terminal": "count", "type": "int"}},

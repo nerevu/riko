@@ -7,9 +7,17 @@ Provides function pretty printing
 """
 
 
-from typing import Any, Mapping, Sequence
+from functools import total_ordering
+from typing import Mapping, Sequence
+
+from riko.types.general import BasicArg
 
 
+def cmp(a, b):
+    return (a > b) - (a < b)
+
+
+@total_ordering
 class Id(object):
     """An object that is not quoted as literal by repr"""
 
@@ -19,11 +27,18 @@ class Id(object):
     def __repr__(self):
         return str(self.name)
 
-    def __cmp__(self, other):
+    def __lt__(self, other):
         if isinstance(other, Id):
             return cmp(self.name, other.name)
         else:
             return -1
+
+    def __eq__(self, other):
+        if isinstance(other, Id):
+            return self.name == other.name
+        else:
+            return False
+
 
 
 def repr_args(args):
@@ -42,7 +57,7 @@ def repr_args(args):
     return ", ".join(res)
 
 
-def repr_arg(d: Any) -> str:
+def repr_arg(d: BasicArg) -> str:
     """formats a function argument prettily but as working code
 
     unicode encodable as ascii is formatted as str
@@ -58,9 +73,11 @@ def repr_arg(d: Any) -> str:
             value = repr(d)
     elif isinstance(d, Sequence):
         value = f"[{', '.join(repr_arg(elem) for elem in d)}]"
-    else:
+    elif d is not None:
         print(f"Unsupported type {type(d)} for argument {d}")
-        value = d
+        value = str(d)
+    else:
+        value = ""
 
     return value
 

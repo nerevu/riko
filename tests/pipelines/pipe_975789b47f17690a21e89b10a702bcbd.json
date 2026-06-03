@@ -1,183 +1,182 @@
 {
     "layout": [
         {
-            "id": "sw-417", 
+            "id": "sw-417",
             "xy": [
-                514, 
+                514,
                 -122
             ]
-        }, 
+        },
         {
-            "id": "_OUTPUT", 
+            "id": "_OUTPUT",
             "xy": [
-                453, 
+                453,
                 510
             ]
-        }, 
+        },
         {
-            "id": "sw-424", 
+            "id": "sw-424",
             "xy": [
-                183, 
+                183,
                 -76
             ]
-        }, 
+        },
         {
-            "id": "sw-436", 
+            "id": "sw-436",
             "xy": [
-                177, 
+                177,
                 27
             ]
-        }, 
+        },
         {
-            "id": "sw-447", 
+            "id": "sw-447",
             "xy": [
-                239, 
+                239,
                 150
             ]
-        }, 
+        },
         {
-            "id": "sw-478",
+            "id": "sw-470",
             "xy": [
-                203, 
+                203,
                 291
             ]
-        }, 
+        },
         {
-            "id": "sw-490", 
+            "id": "sw-490",
             "xy": [
-                649, 
+                649,
                 289
             ]
-        }, 
+        },
         {
-            "id": "sw-501", 
+            "id": "sw-501",
             "xy": [
-                618, 
+                618,
                 430
             ]
         }
-    ], 
+    ],
     "modules": [
         {
             "conf": {
-                "type": "text",
                 "debug": {
-                    "type": "text", 
+                    "type": "text",
                     "value": ""
-                }, 
+                },
                 "default": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "Here's #: some #hashtags to play #with"
-                }, 
+                },
                 "name": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "q"
-                }, 
+                },
                 "position": {
-                    "type": "number", 
+                    "type": "number",
                     "value": ""
-                }, 
+                },
                 "prompt": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "Status update"
                 }
-            }, 
-            "id": "sw-417", 
+            },
+            "id": "sw-417",
             "type": "input"
-        }, 
+        },
         {
-            "conf": {}, 
-            "id": "_OUTPUT", 
+            "conf": {},
+            "id": "_OUTPUT",
             "type": "output"
-        }, 
+        },
         {
             "conf": {
                 "attrs": [
                     {
                         "key": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "title"
-                        }, 
+                        },
                         "value": {
-                            "terminal": "attrs_1_value", 
+                            "terminal": "attrs_1_value",
                             "type": "text"
                         }
                     }
                 ]
-            }, 
-            "id": "sw-424", 
+            },
+            "id": "sw-424",
             "type": "itembuilder"
-        }, 
+        },
         {
             "conf": {
                 "COMBINE": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "and"
-                }, 
-                "permit": {
+                },
+                "PERMIT": {
                     "type": "bool",
                     "value": true
-                }, 
+                },
                 "RULE": [
                     {
                         "field": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "title"
-                        }, 
+                        },
                         "op": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "contains"
-                        }, 
+                        },
                         "value": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "#"
                         }
                     }
                 ]
-            }, 
-            "id": "sw-436", 
+            },
+            "id": "sw-436",
             "type": "filter"
-        }, 
+        },
         {
             "conf": {
                 "RULE": [
                     {
                         "field": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "title"
-                        }, 
-                        "globalmatch": {
-                            "type": "text", 
-                            "value": "1"
-                        }, 
+                        },
+                        "singlematch": {
+                            "type": "bool",
+                            "value": false
+                        },
                         "match": {
-                            "type": "text", 
+                            "type": "text",
                             "value": " [^#]*"
-                        }, 
+                        },
                         "replace": {
-                            "type": "text", 
+                            "type": "text",
                             "value": " "
                         }
-                    }, 
+                    },
                     {
                         "field": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "title"
-                        }, 
+                        },
                         "match": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "^[^#]*"
-                        }, 
+                        },
                         "replace": {
-                            "type": "text", 
+                            "type": "text",
                             "value": ""
                         }
                     }
                 ]
-            }, 
-            "id": "sw-447", 
+            },
+            "id": "sw-447",
             "type": "regex"
-        }, 
+        },
         {
             "conf": {
                 "count": {
@@ -188,233 +187,254 @@
                     "type": "text",
                     "value": "loop:stringtokenizer"
                 },
-                "to-str": {
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "to-str": {
+                                "type": "text",
+                                "value": " "
+                            }
+                        },
+                        "id": "sw-478",
+                        "type": "stringtokenizer"
+                    }
+                },
+                "count": {
                     "type": "text",
-                    "value": " "
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "bool",
+                    "value": false
+                },
+                "field": {
+                    "type": "text",
+                    "value": "title"
                 }
             },
-            "id": "sw-478",
-            "type": "stringtokenizer"
-        }, 
+            "id": "sw-470",
+            "type": "loop"
+        },
         {
             "conf": {
                 "COMBINE": {
-                    "type": "text", 
+                    "type": "text",
                     "value": "and"
-                }, 
-                "permit": {
+                },
+                "PERMIT": {
                     "type": "bool",
                     "value": true
-                }, 
+                },
                 "RULE": [
                     {
                         "field": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "content"
-                        }, 
+                        },
                         "op": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "matches"
-                        }, 
+                        },
                         "value": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "#[\\w]"
                         }
                     }
                 ]
-            }, 
-            "id": "sw-490", 
+            },
+            "id": "sw-490",
             "type": "filter"
-        }, 
+        },
         {
             "conf": {
                 "RULE": [
                     {
                         "field": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "content"
-                        }, 
+                        },
                         "newval": {
-                            "type": "text", 
+                            "type": "text",
                             "value": "title"
-                        }, 
-                        "op": {
-                            "type": "text", 
-                            "value": "rename"
+                        },
+                        "copy": {
+                            "type": "bool",
+                            "value": false
                         }
                     }
                 ]
-            }, 
-            "id": "sw-501", 
+            },
+            "id": "sw-501",
             "type": "rename"
         }
-    ], 
+    ],
     "terminaldata": [
         {
             "data": {
-                "_count": "1", 
+                "_count": "1",
                 "_type": "text"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-417"
-        }, 
+        },
         {
             "data": {
                 "_attr": {
                     "title": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-424"
-        }, 
+        },
         {
             "data": {
                 "_attr": {
                     "title": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-436"
-        }, 
+        },
         {
             "data": {
                 "_attr": {
                     "title": {
-                        "_count": "1", 
+                        "_count": "1",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-447"
-        }, 
+        },
         {
             "data": {
                 "_attr": {
                     "content": {
-                        "_count": "3", 
+                        "_count": "3",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
-            "moduleid": "sw-478"
-        }, 
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-470"
+        },
         {
             "data": {
                 "_attr": {
                     "content": {
-                        "_count": "2", 
+                        "_count": "2",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-490"
-        }, 
+        },
         {
             "data": {
                 "_attr": {
                     "content": {
                         "_type": "blank"
-                    }, 
+                    },
                     "title": {
-                        "_count": "2", 
+                        "_count": "2",
                         "_type": "text"
                     }
-                }, 
+                },
                 "_type": "item"
-            }, 
-            "id": "_OUTPUT", 
+            },
+            "id": "_OUTPUT",
             "moduleid": "sw-501"
         }
-    ], 
+    ],
     "wires": [
         {
-            "id": "_w0", 
+            "id": "_w0",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-417"
-            }, 
+            },
             "tgt": {
-                "id": "attrs_1_value", 
+                "id": "attrs_1_value",
                 "moduleid": "sw-424"
             }
-        }, 
+        },
         {
-            "id": "_w1", 
+            "id": "_w1",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-424"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-436"
             }
-        }, 
+        },
         {
-            "id": "_w2", 
+            "id": "_w2",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-436"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-447"
             }
-        }, 
+        },
         {
-            "id": "_w3", 
+            "id": "_w3",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-447"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
-                "moduleid": "sw-478"
+                "id": "_INPUT",
+                "moduleid": "sw-470"
             }
-        }, 
+        },
         {
-            "id": "_w4", 
+            "id": "_w4",
             "src": {
-                "id": "_OUTPUT", 
-                "moduleid": "sw-478"
-            }, 
+                "id": "_OUTPUT",
+                "moduleid": "sw-470"
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-490"
             }
-        }, 
+        },
         {
-            "id": "_w5", 
+            "id": "_w5",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-490"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "sw-501"
             }
-        }, 
+        },
         {
-            "id": "_w6", 
+            "id": "_w6",
             "src": {
-                "id": "_OUTPUT", 
+                "id": "_OUTPUT",
                 "moduleid": "sw-501"
-            }, 
+            },
             "tgt": {
-                "id": "_INPUT", 
+                "id": "_INPUT",
                 "moduleid": "_OUTPUT"
             }
         }

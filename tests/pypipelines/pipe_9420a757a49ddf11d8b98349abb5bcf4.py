@@ -5,9 +5,7 @@ from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.truncate import pipe as truncate
 
 
-def pipe_9420a757a49ddf11d8b98349abb5bcf4(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_9420a757a49ddf11d8b98349abb5bcf4(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -15,7 +13,7 @@ def pipe_9420a757a49ddf11d8b98349abb5bcf4(
         return []
 
     if context and context.describe_dependencies:
-        return ["fetchpage", "output", "truncate"]
+        return ["fetchpage", "truncate"]
 
     sw_266 = fetchpage(
         context=context,
@@ -24,9 +22,9 @@ def pipe_9420a757a49ddf11d8b98349abb5bcf4(
                 "type": "url",
                 "value": get_path("www.caltrain.com_Fares_farechart.html"),
             },
-            "to": {"type": "text", "value": "</tr>"},
-            "token": {"type": "text", "value": '<td style="TEXT-ALIGN: center">'},
-            "from": {"type": "text", "value": "One Way</span>"},
+            "start": {"type": "text", "value": "One Way</span>"},
+            "end": {"type": "text", "value": "</tr>"},
+            "token": {"type": "text", "value": '<td style="text-align: center;">'},
         },
     )
 

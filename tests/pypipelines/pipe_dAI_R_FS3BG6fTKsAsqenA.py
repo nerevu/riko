@@ -7,7 +7,7 @@ from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 
 
-def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -39,13 +39,13 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
         embed=strconcat,
         conf={
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "title"},
-            "emit": {"type": "bool", "value": False},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "strconcat",
                     "id": "sw-298",
+                    "assign": "title",
+                    "emit": False,
                     "conf": {
                         "part": [
                             {"type": "text", "subkey": "headline"},
@@ -56,7 +56,6 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
                     },
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
     )
 
@@ -67,7 +66,7 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
             "RULE": [
                 {
                     "field": {"type": "text", "value": "expires"},
-                    "op": {"type": "text", "value": "rename"},
+                    "copy": {"type": "bool", "value": False},
                     "newval": {"type": "text", "value": "pubDate"},
                 }
             ]

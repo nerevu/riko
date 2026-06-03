@@ -15,13 +15,13 @@ Examples:
         >>>
         >>> target = receiver(conf={'name': 'receiver1'}, func=noop)
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
         >>> source = sender(stream, others=['receiver1'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
 """
@@ -30,8 +30,8 @@ from riko.utils import send
 
 import pygogo as gogo
 
-OPTS = {"pollable": True}
-DEFAULTS = {"emit": True}
+OPTS = {"pollable": True, "emit": True}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -66,14 +66,14 @@ def parser(stream, objconf, tuples, **kwargs):
         >>>
         >>> target = receiver(conf={'name': 'receiver2'}, func=noop)
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(None))
         >>> source = parser(stream, None, tuples, others=['receiver2'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
     """
@@ -108,12 +108,12 @@ def pipe(*args, **kwargs):
         >>>
         >>> target = receiver(conf={'name': 'receiver3'}, func=noop)
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> source = pipe([{'x': 0}], others=['receiver3'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
     """

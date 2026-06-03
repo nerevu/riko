@@ -39,26 +39,29 @@ Examples:
         >>>
         >>> url = get_path('ouseful.xml')
         >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
-        >>> title = 'Running “Native” Data Wrangling Applications'
-        >>> next(pipe(conf=conf))['title'][:44] == title
-        True
+        >>> next(pipe(conf=conf))['title'][:44]
+        'Running “Native” Data Wrangling Applications'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
 import traceback
+from typing import Iterator, cast
 import pygogo as gogo
 
 from os.path import splitext
 
+from riko.types.general import BasicArg, BasicMapping, Extraction, ItemArg, Items
+
 from . import processor
+from riko import Objconf
 from riko.utils import fetch
-from riko.parsers import xml2etree, etree2dict, xpath
+from riko.parsers import Stringy, any2dict, xpath
 from riko.bado import coroutine, return_value, util, io
-from meza.compat import encode
 
 OPTS = {"ftype": "none"}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -67,8 +70,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 # TODO: clean html with Tidy
 
 
-@coroutine
-def async_parser(_, objconf, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -95,11 +98,11 @@ def async_parser(_, objconf, skip=False, **kwargs):
         ...     xml_url = get_path('ouseful.xml')
         ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
         ...     xml_objconf = Objectify(xml_conf)
-        ...     xml_args = (None, xml_objconf)
+        ...     xml_args = (None, None, xml_objconf)
         ...     html_url = get_path('sciencedaily.html')
         ...     html_conf = {'url': html_url, 'xpath': '/html/head/title'}
         ...     html_objconf = Objectify(html_conf)
-        ...     html_args = (None, html_objconf)
+        ...     html_args = (None, None, html_objconf)
         ...     kwargs = {'stream': {}}
         ...
         ...     try:
@@ -124,24 +127,30 @@ def async_parser(_, objconf, skip=False, **kwargs):
 
     if not skip:
         ext = splitext(objconf.url)[1].lstrip(".")
-        xml = (ext == "xml") or objconf.strict
+        xml = ext == "xml"
 
         try:
-            f = yield io.async_url_open(objconf.url)
+            f = yield io.async_url_open(objconf.url)  # pyright: ignore[reportCallIssue]
         except Exception as e:
             logger.error(e)
             logger.error(traceback.format_exc())
         else:
+            # yield from any2dict(f, ext, objconf.html5, path=objconf.xpath)
             tree = yield util.xml2etree(f, xml=xml)
             elements = xpath(tree, objconf.xpath)
             f.close()
-            items = map(util.etree2dict, elements)
-            stream = map(encode, items) if objconf.stringify else items
+            stream = map(util.etree2dict, elements)
 
     return_value(stream)
 
 
-def parser(_, objconf, skip=False, **kwargs):
+def parser(
+    _: BasicMapping,
+    extraction: Extraction,
+    objconf: Objconf,
+    skip=False,
+    **kwargs
+) -> Items | Iterator[Stringy]:
     """Parses the pipe content
 
     Args:
@@ -158,28 +167,23 @@ def parser(_, objconf, skip=False, **kwargs):
         >>>
         >>> url = get_path('ouseful.xml')
         >>> objconf = Objectify({'url': url, 'xpath': '/rss/channel/item'})
-        >>> result = parser(None, objconf, stream={})
-        >>> title = 'Running “Native” Data Wrangling Applications'
-        >>> next(result)['title'][:44] == title
-        True
+        >>> result = parser(None, None, objconf, stream={})
+        >>> next(result)['title'][:44]
+        'Running “Native” Data Wrangling Applications'
     """
     if skip:
-        stream = kwargs["stream"]
+        yield cast(ItemArg, kwargs["stream"])
     else:
         ext = splitext(objconf.url)[1].lstrip(".")
-        xml = (ext == "xml") or objconf.strict
 
-        with fetch(**objconf) as f:
-            root = xml2etree(f, xml=xml, html5=objconf.html5).getroot()
-            elements = xpath(root, objconf.xpath)
+        if objconf.url.startswith("http") and not ext:
+            ext = "html"
 
-        items = map(etree2dict, elements)
-        stream = map(str,items) if objconf.stringify else items
-
-    return stream
+        with fetch(**{k: objconf[k] for k in objconf}) as f:
+            yield from any2dict(f, ext, objconf.html5, path=objconf.xpath)
 
 
-@processor(isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given website as
     DOM nodes or a string.
@@ -190,15 +194,13 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'xpath', 'html5', or 'stringify'.
+            contain the keys 'xpath', or 'html5'.
 
             url (str): The web site to fetch
             xpath (str): The XPATH to extract (default: None, i.e., return
                 entire page)
 
-            strict (bool): Use the strict XML parser (default: False)
             html5 (bool): Use the HTML5 parser (default: False)
-            stringify (bool): Return the web site as a string (default: False)
 
         assign (str): Attribute to assign parsed content (default: content)
 
@@ -238,7 +240,7 @@ def async_pipe(*args, **kwargs):
     return async_parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A source that fetches the content of a given website as DOM nodes or a
     string.
@@ -249,15 +251,13 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'xpath', 'html5', or 'stringify'.
+            contain the keys 'xpath', or 'html5'.
 
             url (str): The web site to fetch
             xpath (str): The XPATH to extract (default: None, i.e., return
                 entire page)
 
-            strict (bool): Use the strict XML parser (default: False)
             html5 (bool): Use the HTML5 parser (default: False)
-            stringify (bool): Return the web site as a string (default: False)
 
         assign (str): Attribute to assign parsed content (default: content)
 
@@ -269,11 +269,14 @@ def pipe(*args, **kwargs):
         >>>
         >>> url = get_path('ouseful.xml')
         >>> conf = {'url': url, 'xpath': '/rss/channel/item'}
-        >>> next(pipe(conf=conf))['guid']['content']
-        'http://blog.ouseful.info/?p=12065'
+        >>> sorted(next(pipe(conf=conf)))[-3:]
+        ['link', 'pubDate', 'title']
+        >>> next(pipe(conf=conf)).get("guid")
+        {'isPermaLink': 'false', 'content': 'http://blog.ouseful.info/?p=12065'}
         >>> url = get_path('sciencedaily.html')
         >>> conf = {'url': url, 'xpath': '/html/head/title'}
-        >>> next(pipe(conf=conf)) == 'Help Page -- ScienceDaily'
-        True
+        >>> next(pipe(conf=conf))
+        'Help Page -- ScienceDaily'
     """
+    # FIXME
     return parser(*args, **kwargs)

@@ -23,16 +23,18 @@ Attributes:
 """
 import pygogo as gogo
 
-from . import processor
-from riko.utils import cast
+from riko import Objconf
+from riko.cast import CastType, cast
+from riko.types.general import BasicArg, Extraction, ItemArg, AnyLocation
 
+from . import processor
 
 OPTS = {"ftype": "text", "field": "content"}
 DEFAULTS = {"type": "street_address"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(address, objconf, skip=False, **kwargs):
+def parser(address: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg | AnyLocation:
     """Parses the pipe content
 
     Args:
@@ -55,18 +57,18 @@ def parser(address, objconf, skip=False, **kwargs):
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify({'type': 'currency'})
         >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> parser(item['content'], objconf, **kwargs)['country']
+        >>> parser(item['content'], None, objconf, **kwargs)['country']
         'United Kingdom'
     """
     if skip:
         location = kwargs["stream"]
     else:
-        location = cast(address, "location", loc_type=objconf.type)
+        location = cast(address, CastType.LOCATION, loc_type=objconf.type)
 
     return location
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.

@@ -1,14 +1,14 @@
 {
     "items": [
         {
-            "author.name": null,
-            "author.uri": null,
+            "author.name": "riko",
+            "author.uri": "https://github.com/nerevu/riko",
             "content": [
                 {
                     "value": "<span><b>Description:</b> With this specification sheet we want to give you a request for implementing a website for a german...<br><b>Category:</b> Web, Software &amp; IT<br><b>Required skills:</b> html, php<br><b>Fixed Price budget:</b> Under $250<br><b>Job type:</b> Public<br><b>Freelancer Location:</b> Worldwide<br></span>"
                 }
             ],
-            "dc:creator": null,
+            "dc:creator": "riko",
             "id": "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595",
             "link": "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595",
             "links": [

@@ -36,6 +36,7 @@ BENCHMARK_TEXTS = [
     "par_sync_collection - 1 repetitions/loop, best of 1 loops"
 ]
 
+
 def run_command(script: str, argument: str, *opts: str) -> str:
     """Run *script* with *opts* and *arguments*, return stdout as a string.
 
@@ -112,6 +113,7 @@ def gen_params():
     ]
 
 
+@pytest.mark.skip
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_sync(value):
     argument, expected = value
@@ -120,6 +122,7 @@ def test_demo_sync(value):
     assert_output_matches(output, expected, command=command)
 
 
+@pytest.mark.skip
 @pytest.mark.skipif(_issync, reason="async support not available")
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_async(value):

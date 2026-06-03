@@ -7,9 +7,7 @@ from riko.modules.loop import pipe as loop
 from riko.modules.truncate import pipe as truncate
 
 
-def pipe_188eca77fd28c96c559f71f5729d91ec(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_188eca77fd28c96c559f71f5729d91ec(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -23,22 +21,6 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
             "loop",
             "truncate",
         ]
-
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_sw_119(item=None, context=None, conf=None, **kwargs):
-        # todo: insert submodule description here
-        return fetchpage(
-            item,
-            context=context,
-            conf={
-                "URL": {"type": "url", "subkey": "url"},
-                "to": {"type": "text", "value": "</tr>"},
-                "token": {"type": "text", "value": '<td style="TEXT-ALIGN: center">'},
-                "from": {"type": "text", "value": "One Way</span>"},
-            },
-            **kwargs
-        )
 
     sw_163 = itembuilder(
         context=context,
@@ -56,28 +38,27 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
     sw_111 = loop(
         sw_163,
         context=context,
-        embed=pipe_sw_119,
+        embed=fetchpage,
         conf={
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "loop:fetchpage"},
-            "emit": {"type": "bool", "value": True},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "fetchpage",
                     "id": "sw-119",
+                    "emit": True,
+                    "assign": "loop:fetchpage",
                     "conf": {
                         "URL": {"type": "url", "subkey": "url"},
-                        "to": {"type": "text", "value": "</tr>"},
+                        "end": {"type": "text", "value": "</tr>"},
                         "token": {
                             "type": "text",
-                            "value": '<td style="TEXT-ALIGN: center">',
+                            "value": '<td style="text-align: center;">',
                         },
-                        "from": {"type": "text", "value": "One Way</span>"},
+                        "start": {"type": "text", "value": "One Way</span>"},
                     },
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
     )
 

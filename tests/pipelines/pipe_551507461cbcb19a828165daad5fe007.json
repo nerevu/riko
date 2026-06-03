@@ -47,14 +47,13 @@
         },
         {
             "conf": {
-                "type": "url",
                 "debug": {
                     "type": "url",
-                    "value": "file://data/www.bbc.co.uk_news.html"
+                    "value": "file://riko/data/www.bbc.co.uk_news.html"
                 },
                 "default": {
                     "type": "url",
-                    "value": "file://data/www.bbc.co.uk_news.html"
+                    "value": "file://riko/data/www.bbc.co.uk_news.html"
                 },
                 "name": {
                     "type": "text",
@@ -70,7 +69,7 @@
                 }
             },
             "id": "sw-242",
-            "type": "input"
+            "type": "urlinput"
         },
         {
             "conf": {

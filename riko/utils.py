@@ -6,6 +6,9 @@ riko.utils
 Provides utility classes and functions
 """
 import builtins
+from collections.abc import Mapping
+from decimal import Decimal
+from http.client import HTTPResponse
 import re
 import sys
 import itertools as it
@@ -13,13 +16,13 @@ import fcntl
 
 from collections import deque
 from math import isnan
-from enum import Enum, auto
 from functools import partial, reduce, wraps
 from operator import itemgetter
-from os import O_NONBLOCK, path as p
-from io import BytesIO, StringIO, TextIOBase
-from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, TypeVar
-from urllib.error import HTTPError, URLError
+from os import O_NONBLOCK
+from io import StringIO, TextIOBase
+from time import struct_time
+from typing import Callable, Deque, Generator, Iterable, Iterator, Optional, Sequence, TypeVar, cast as cast_type, overload
+from urllib.error import URLError
 from urllib.request import urlopen, Request
 from riko.dotdict import DotDict
 
@@ -31,25 +34,26 @@ import mezmorize
 
 from meza import compat
 from meza.io import reencode
-from meza.fntools import SleepyDict, listize
+from riko import listize
 from mezmorize.utils import get_cache_type
-from riko import ENCODING, Context, __version__, get_abspath, replacer
-from riko.cast import cast
-from riko.types import Item, ItemFunc, PipeDef, PipelineDependencies, SyncPipeline
+from riko import ENCODING, Context, Objectify, __version__, get_abspath, replacer
+from riko.cast import CAST_SWITCH, CastType, cast as cast_value
+from riko.types.compile import Module, Wire
+from riko.types.general import ComplexArg, BasicArg, BasicValue, DateLike, IntermediateValue, ItemArg, NumLike, ObjconfRegexRule, Opener, ParsedPipeDef, StatefulItem, StreamState, SyncAnyFunc, SyncItemFunc, PipeDef, PipelineDependencies, BasicMapping
+from riko.types.modules import EmbeddedModule, InputConf, LoopConf
 
-
-_registry = {}
-_receive_queue = {}
+_registry: dict[str, Generator[StatefulItem, StatefulItem, StatefulItem]] = {}
+_receive_queue: dict[str, Deque[tuple[Optional[StreamState], ComplexArg]]] = {}
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
 
 DEF_NS = "https://github.com/nerevu/riko"
-T = TypeVar('T')
+T = TypeVar("T", bound=ComplexArg)
 
 
-def combine_dicts(*dicts: dict[str, Any]) -> dict[str, Any]:
-    return dict(it.chain.from_iterable(map(dict.items, dicts)))
+def combine_dicts(*dicts: Mapping[str, BasicArg]) -> dict[str, BasicArg]:
+    return dict(it.chain.from_iterable(map(Mapping.items, dicts)))
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1
@@ -69,11 +73,6 @@ def default_user_agent(name="riko"):
     :rtype: str
     """
     return "%s/%s" % (name, __version__)
-
-
-class StreamState(Enum):
-    PENDING = auto()
-    DONE = auto()
 
 
 class Chainable(object):
@@ -148,7 +147,7 @@ def get_response_encoding(response, def_encoding=ENCODING):
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close(stream, f):
+def auto_close(stream: Iterable[T], f) -> Iterator[T]:
     try:
         for record in stream:
             yield record
@@ -157,55 +156,51 @@ def auto_close(stream, f):
 
 
 def opener(
-    url,
+    url: str,
     memoize=False,
     delay=0,
     encoding=ENCODING,
     params=None,
     offline=True,
     **kwargs
-):
+) -> tuple[str | StringIO, Optional[str]]:
     params = params or {}
     timeout = kwargs.get("timeout")
-    decode = kwargs.get("decode")
-
     url = get_abspath(url, offline=offline)
+    r = None
 
     if url.startswith("http") and params:
         r = requests.get(url, params=params, stream=True)
-        r.raw.decode_content = decode
+        r.raw.decode_content = True
         response = r.text if memoize else r.raw
     else:
         req = Request(url, headers={"User-Agent": default_user_agent()})
-        context = SleepyDict(delay=delay) if delay else None
 
-        try:
-            r = urlopen(req, context=context, timeout=timeout)
-        except TypeError:
-            r = urlopen(req, timeout=timeout)
-        except HTTPError as e:
-            raise URLError(f"{url} returned {e.code}: {e.reason}")
-        except URLError as e:
-            raise URLError(f"{url}: {e.reason}")
+        if delay:
+            logger.debug("Request delaying not currently implemented.")
 
-        text = r.read() if memoize else None
-
-        if decode:
+        if r := urlopen(req, timeout=timeout):
+            r = cast_type(HTTPResponse, r)
+            text = r.read() if memoize else None
             encoding = get_response_encoding(r, encoding)
 
             if text:
-                response = compat.decode(text, encoding)
+                response = cast_type(str, compat.decode(text, encoding))
             else:
-                response = reencode(r.fp, encoding, decode=True)
-                response.r = r
-        else:
-            response = text or r
+                reencoded = reencode(r.fp, encoding, decode=True)
+                content: str = reencoded.read()
 
-    content_type = get_response_content_type(r)
+                # FIXME: this is a band-aid for the fact that reencode objects don't
+                # support seek
+                response = StringIO(content)
+        else:
+            response = ""
+
+    content_type = get_response_content_type(r) if r else None
     return (response, content_type)
 
 
-def get_opener(memoize=False, **kwargs):
+def get_opener(memoize=False, **kwargs) -> Opener:
     wrapper = partial(opener, memoize=memoize, **kwargs)
     current_opener = wraps(opener)(wrapper)
 
@@ -221,38 +216,40 @@ class fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
     def __init__(self, url: str, memoize=False, **kwargs):
         # TODO: need to use separate timeouts for memoize and urlopen
+        self.content_type = None
+        self.file = None
+
         if memoize:
-            self.opener = LocalProxy(lambda: get_opener(memoize=True, **kwargs))
+            opener = LocalProxy(partial(get_opener, memoize=True, **kwargs))
+            self.opener = cast_type(Opener, opener)
+            response, self.content_type = self.opener(url)
         else:
             self.opener = get_opener(**kwargs)
 
-        responses = self.opener(url)
+            try:
+                response, self.content_type = self.opener(url)
+            except URLError as e:
+                if "File name too long" in str(e.reason):
+                    raise
+                else:
+                    logger.error(f"Error opening {url}: {e.reason}")
+                    response = None
 
-        try:
-            response, self.content_type = responses
-        except ValueError:
-            # HACK: This happens for memoized responses. Not sure why though!
-            response, self.content_type = responses, "application/json"
+        if isinstance(response, str):
+            self.file = StringIO(response)
+        elif response:
+            self.file = response
 
-        if memoize:
-            wrapper = StringIO if kwargs.get("decode") else BytesIO
-            f = wrapper(response)
-        else:
-            f = response
-
-        self.close = f.close
-        self.read = f.read
-        self.readline = f.readline
-
-        try:
-            self.seek = f.seek
-        except AttributeError:
-            pass
+        if self.file:
+            self.close = self.file.close
+            self.read = self.file.read
+            self.readline = self.file.readline
+            self.seek = self.file.seek
 
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *_):
         self.close()
 
     @property
@@ -269,42 +266,111 @@ class fetch(TextIOBase):
         return ext
 
 
-def def_itemgetter(attr, default=0, _type=None):
+# TODO add strict option to opt into sortability
+def def_itemgetter(
+    attr: str,
+    default: Optional[IntermediateValue] = None,
+    _type: Optional[str] = None
+) -> Callable[[ItemArg], BasicValue | DateLike | NumLike | bool]:
     # like operator.itemgetter but fills in missing keys with a default value
-    def keyfunc(item):
-        value = item.get(attr, default)
-        casted = cast(value, _type) if _type else value
+    _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
+    invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
 
-        try:
-            is_nan = isnan(casted)
-        except TypeError:
-            is_nan = False
+    if invalid_type and default is None:
+        msg = f"Invalid cast type={_type}. Setting default to empty string."
+        logger.warning(msg)
+    elif _type and default is None:
+        _default = CAST_SWITCH[_type].get("default")
+        default = cast_type(IntermediateValue, _default)
 
-        return default if is_nan else casted
+    if default is None:
+        default = ""
+
+    _invalid_type = _type in {CastType.LOCATION, CastType.PASS, CastType.NONE}
+    invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
+
+    def keyfunc(item: ItemArg) -> BasicValue | DateLike | NumLike | bool:
+        if isinstance(item, Mapping):
+            value = item.get(attr, default)
+        else:
+            value = item
+
+        msg = f"Invalid cast type={_type} for key '{attr}'."
+
+        if invalid_type:
+            if isinstance(value, (str, int, struct_time)):
+                msg += ". Returning value without casting."
+                logger.warning(msg)
+                casted = value
+            elif isinstance(value, (Mapping, Objectify)):
+                msg += ". Returning default value."
+                logger.warning(msg)
+                casted = default
+            elif isinstance(value, Sequence):
+                msg += ". Returning default value."
+                logger.warning(msg)
+                casted = default
+            else:
+                msg += ". Returning value without casting."
+                logger.warning(msg)
+                casted = value
+        elif _type:
+            # pyright: ignore[reportCallIssue,reportArgumentType]
+            _casted = cast_value(value, CastType(_type))
+            casted = cast_type(IntermediateValue, _casted)
+        elif isinstance(value, (str, int, struct_time)):
+            casted = value
+        elif isinstance(value, Mapping):
+            msg = "Received non-sortable Mapping value. Returning default instead."
+            logger.warning(msg)
+            casted = default
+        elif isinstance(value, Objectify):
+            msg = "Received non-sortable Objectify value. Returning default instead."
+            logger.warning(msg)
+            casted = default
+        elif isinstance(value, Sequence):
+            msg = "Received non-sortable Sequence value. Returning default instead."
+            logger.warning(msg)
+            casted = default
+        elif value is not None:
+            casted = value
+        else:
+            casted = default
+
+        if casted is None or (isinstance(casted, (float, Decimal)) and isnan(casted)):
+            casted = default
+
+        return casted
 
     return keyfunc
 
 
 # TODO: move this to meza.process.group
-def group_by(iterable, attr, default=None):
+def group_by(content: Iterable[Mapping[str, str]], attr: str, default=None):
     keyfunc = def_itemgetter(attr, default)
-    data = list(iterable)
-    order = unique_everseen(data, keyfunc)
+    data = list(content)
+    uniq = unique_everseen(data, keyfunc)
     sorted_iterable = sorted(data, key=keyfunc)
     grouped = it.groupby(sorted_iterable, keyfunc)
     groups = {str(k): list(v) for k, v in grouped}
 
     # return groups in original order
-    return ((key, groups[key]) for key in order)
+    return ((key, groups[key]) for key in uniq)
 
 
-def unique_everseen(iterable, key=None):
+@overload
+def unique_everseen(content: Iterable[T]) -> Iterator[T]:
+    ...
+@overload  # noqa: E302
+def unique_everseen(content: Iterable[T], keyfunc: Callable) -> Iterator[str]:
+    ...
+def unique_everseen(content: Iterable[T], keyfunc: Optional[Callable] = None) -> Iterator[str | T]:  # noqa: E302
     # List unique elements, preserving order. Remember all elements ever seen
     # unique_everseen('ABBcCaD', str.lower) --> a b c d
     seen = set()
 
-    for element in iterable:
-        k = str(key(element)) if key else element
+    for element in content:
+        k = str(keyfunc(element)) if keyfunc else element
 
         if k not in seen:
             seen.add(k)
@@ -328,17 +394,17 @@ def betwix(iterable, start=None, stop=None, inc=False):
     Examples:
         >>> from io import StringIO
         >>>
-        >>> list(betwix('ABCDEFG', stop='C')) == ['A', 'B']
-        True
-        >>> list(betwix('ABCDEFG', 'C', 'E')) == ['C', 'D']
-        True
-        >>> list(betwix('ABCDEFG', 'C')) == ['C', 'D', 'E', 'F', 'G']
-        True
+        >>> list(betwix('ABCDEFG', stop='C'))
+        ['A', 'B']
+        >>> list(betwix('ABCDEFG', 'C', 'E'))
+        ['C', 'D']
+        >>> list(betwix('ABCDEFG', 'C'))
+        ['C', 'D', 'E', 'F', 'G']
         >>> f = StringIO('alpha\\n<beta>\\ngamma\\n')
-        >>> list(betwix(f, '<', '>', True)) == ['<beta>\\n']
-        True
-        >>> list(betwix('ABCDEFG', 'C', 'E', True)) == ['C', 'D', 'E']
-        True
+        >>> list(betwix(f, '<', '>', True))
+        ['<beta>\\n']
+        >>> list(betwix('ABCDEFG', 'C', 'E', True))
+        ['C', 'D', 'E']
     """
 
     def inc_takewhile(predicate, _iter):
@@ -362,50 +428,56 @@ def betwix(iterable, start=None, stop=None, inc=False):
     return last
 
 
-def dispatch(split: Iterable[Any], *funcs: ItemFunc) -> list[Any]:
-    """Takes a tuple of items and delivers each item to a different function
+def dispatch(split: Sequence[ComplexArg], *funcs: SyncAnyFunc) -> tuple[ComplexArg, ...]:
+    """Takes a tuple of items and delivers each one to a different function
+
+    Differs from `map` which applies multiple items to the same function.
 
            /--> item1 --> double(item1) -----> \
           /                                     \
-    split ----> item2 --> triple(item2) -----> _OUTPUT
+    split ----> item2 --> oct(item2) ------->   _OUTPUT
           \\                                     /
-           \\--> item3 --> quadruple(item3) --> /
+           \\--> item3 --> max(item3) --------> /
 
     One way to construct such a flow in code would be::
 
-        split = ('bar', 'baz', 'qux')
-        double = lambda word: word * 2
-        triple = lambda word: word * 3
-        quadruple = lambda word: word * 4
-        _OUTPUT = dispatch(split, double, triple, quadruple)
-        _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
+    Example
+    >>> split = (3, 8365641317588141140, ['a', 'b', 'r'])
+    >>> double = lambda item: item * 2
+    >>> _OUTPUT = dispatch(split, double, oct, max)
+    >>> _OUTPUT
+    (6, '0o720305647221513002124', 'r')
     """
-    return [func(item) for item, func in zip(split, funcs)]
+    # split = list(split)
+    # for item, func in zip(split, funcs):
+    #     v = func(item)
+    #     print(f"dispatch: {func}({item}) = {v}")
+
+    return tuple(func(item) for item, func in zip(split, funcs))
 
 
-def broadcast(item: Item, *funcs: ItemFunc) -> list[Any]:
+def broadcast(item: ItemArg, *funcs: SyncItemFunc, **kwargs) -> tuple[ComplexArg, ...]:
     """Delivers the same item to different functions.
 
     Differs from `map` which applies multiple items to the same function.
 
-           /--> item --> double(item) -----> \
+           /--> item --> len(item) --------> \
           /                                   \
-    item -----> item --> triple(item) -----> _OUTPUT
+    item -----> item --> hash(item) ------->  split
           \\                                   /
-           \\--> item --> quadruple(item) --> /
+           \\--> item --> sorted(item) -----> /
 
     One way to construct such a flow in code would be::
 
-        double = lambda word: word * 2
-        triple = lambda word: word * 3
-        quadruple = lambda word: word * 4
-        _OUTPUT = broadcast('bar', double, triple, quadruple)
-        _OUTPUT == ('barbar', 'bazbazbaz', 'quxquxquxqux')
+    Example
+    >>> split = broadcast('bar', len, hash, sorted)
+    >>> split
+    (3, -6516517828960271057, ['a', 'b', 'r'])
     """
-    return [func(item) for func in funcs]
+    return tuple(func(item, **kwargs) for func in funcs)
 
 
-def _gen_words(match, splits):
+def _gen_words(match, splits: Iterable[BasicValue]):
     groups = list(it.dropwhile(lambda x: not x, match.groups()))
 
     for s in splits:
@@ -419,7 +491,7 @@ def _gen_words(match, splits):
         yield word
 
 
-def multi_substitute(word, rules):
+def multi_substitute(word: str, rules):
     """Apply multiple regex rules to 'word'
     http://code.activestate.com/recipes/
     576710-multi-regex-single-pass-replace-of-multiple-regexe/
@@ -511,7 +583,7 @@ def multi_substitute(word, rules):
     return word
 
 
-def substitute(word, rule):
+def substitute(word: str, rule):
     if word:
         result = rule["match"].subn(rule["replace"], word, rule["count"])
         replaced, replacements = result
@@ -525,51 +597,44 @@ def substitute(word, rule):
 
 
 # @memoize(TIMEOUT)
-def get_new_rule(rule, recompile=False):
-    # flag 'i' --> 2
-    flags = 0 if rule.get("casematch") else re.IGNORECASE
+def get_new_rule(rule: ObjconfRegexRule, recompile=False) -> dict[str, str | int]:
+    flags = 0 if rule.casematch else re.IGNORECASE
 
-    if not rule.get("singlelinematch"):
-        # flag 'm' --> 8
+    if not rule.singlelinematch:
         flags |= re.MULTILINE
-
-        # flag 's' --> 16
         flags |= re.DOTALL
 
-    # flag 'g' --> 0
-    count = 1 if rule.get("singlematch") else 0
+    count: int = 1 if rule.singlelinematch else 0
 
-    if recompile and "$" in rule["replace"]:
-        replace = re.sub(r"\$(\d+)", r"\\\1", rule["replace"], 0)
+    if recompile and "$" in rule.replace:
+        replace = re.sub(r"\$(\d+)", r"\\\1", rule.replace, 0)
     else:
-        replace = rule["replace"]
+        replace = rule.replace
 
-    match = re.compile(rule["match"], flags) if recompile else rule["match"]
+    match = re.compile(rule.match, flags) if recompile else rule.match
 
     nrule = {
         "match": match,
         "replace": replace,
-        "default": rule.get("default"),
-        "field": rule.get("field"),
+        "default": rule.default,
+        "field": rule.field,
         "count": count,
         "flags": flags,
-        "series": rule.get("seriesmatch", True),
-        "offset": int(rule.get("offset") or 0),
+        "series": rule.seriesmatch,
+        "offset": rule.offset or 0,
     }
 
     return nrule
 
 
-def multiplex(sources):
+def multiplex(sources: Iterable[Iterable[T]]) -> Iterable[T]:
     """Combine multiple generators into one"""
     return it.chain.from_iterable(sources)
 
 
-def gen_entries(parsed):
-    if parsed.get("bozo_exception"):
-        raise Exception(parsed["bozo_exception"])
-
-    for entry in parsed["entries"]:
+def gen_entries(entries: Iterable[Mapping]):
+    for _entry in entries:
+        entry = dict(_entry)
         published = updated = None
 
         # prevent feedparser deprecation warnings
@@ -593,33 +658,36 @@ def gen_entries(parsed):
         yield entry
 
 
-def gen_items(content, key=None, yield_if_none=False):
-    if hasattr(content, "append"):
-        for nested in content:
-            for i in gen_items(nested, key):
-                yield i
-    elif content:
+def gen_items(
+    content: Optional[BasicArg],
+    key: Optional[str] = None,
+    yield_if_none=False
+) -> Iterator[BasicArg | BasicMapping | None]:
+    if isinstance(content, (str, int, Mapping)):
         yield {key: content} if key else content
+    elif content:
+        for nested in content:
+            yield from gen_items(nested, key)
     elif yield_if_none:
         yield
 
 
-def send(target, item):
+def send(target: str, item: ItemArg | StatefulItem):
     if target in _registry:
         _registry[target].send(item)
     else:
         logger.error(f"Attempted to send {item} to non-existent '{target}'")
 
 
-def close(name):
+def close(name: str):
     if gen := _registry.get(name):
         gen.close()
 
 
-def actor(registry_name=None, maxlen=256):
+def actor(registry_name: Optional[str] = None, maxlen=256):
     """Decorator for generator-based coroutines."""
 
-    def decorator(func):
+    def decorator(func: Callable[..., Generator[StatefulItem, StatefulItem, StatefulItem]]):
         name = registry_name or func.__name__
 
         @wraps(func)
@@ -637,7 +705,7 @@ def actor(registry_name=None, maxlen=256):
 
 def gen_dependencies(pipe_def: PipeDef) -> Iterator[str]:
     for module in pipe_def["modules"]:
-        yield "pipe%s" % module["type"]
+        yield module["type"]
 
 
 def extract_dependencies(
@@ -671,7 +739,7 @@ def gen_input(pipe_def: PipeDef) -> Iterator[tuple[str]]:
             yield tuple(module_confs)
 
 
-def get_input(conf: Mapping[str, Any], **kwargs):
+def get_input(conf: InputConf, **kwargs):
     """Gets a user parameter, either from the console or from an outer
      submodule/system
 
@@ -679,7 +747,8 @@ def get_input(conf: Mapping[str, Any], **kwargs):
     """
     name = conf["name"]["value"]
     prompt = conf["prompt"]["value"]
-    default = conf["default"]["value"] or conf["debug"]["value"]
+    _default = conf.get("default") or conf.get("debug") or {}
+    default = _default.get("value")
 
     if inputs := kwargs.get("inputs"):
         value = inputs.get(name, default)
@@ -709,74 +778,90 @@ def extract_input(
 
 
 def pythonise(
-    content: str | Mapping[str, Any],
+    content: str | BasicMapping | Wire,
     encoding="ascii",
     replace: Sequence[str] = ("-", ":", "/", ""),
     key: Optional[str] = None
 ) -> str:
     """Return a Python-friendly id"""
-    if key:
-        resolved = DotDict(content).get(key)
+    if not isinstance(content, str):
+        if key:
+            resolved = DotDict(content).get(key)
 
-        if isinstance(resolved, str):
-            content = resolved
-        elif isinstance(resolved, (Mapping, Sequence)):
-            _type = type(resolved).__name__
-            raise TypeError(f"Key '{key}' resolved to unsupported type {_type}.")
+            if isinstance(resolved, str):
+                content = resolved
+            elif isinstance(resolved, (Mapping, Sequence)):
+                _type = type(resolved).__name__
+                raise TypeError(f"Key '{key}' resolved to unsupported type {_type}.")
+            else:
+                content = str(resolved)
         else:
-            content = str(resolved)
-    elif isinstance(content, Mapping):
-        raise TypeError("Received a dict without a key.")
+            raise ValueError("Received a dict without a key.")
+    elif key:
+        raise ValueError("Received a key without a dict.")
 
     reduced = reduce(replacer, replace, content)
     return reduced.encode(encoding, 'replace').decode(encoding)
 
 
-def gen_names(module_ids, parsed_pipe_def, ntype="module"):
+def gen_names(
+    module_ids: Sequence[str] | Sequence[tuple[str, ...]],
+    parsed_pipe_def: ParsedPipeDef,
+    ntype="module"
+) -> Iterator[str]:
     for module_id in module_ids:
-        module_type = parsed_pipe_def["modules"][module_id]["type"]
+        if isinstance(module_id, str):
+            module_id = (module_id,)
 
-        if module_type.startswith("pipe:"):
-            name = pythonise(module_type)
-        elif ntype == "module":
-            name = module_type
-        elif ntype == "pipe":
-            name = "pipe_%s" % module_type
-        else:
-            raise Exception("Invalid type: %s. (Expected 'module' or 'pipe')" % ntype)
+        for _module_id in module_id:
+            module_type = parsed_pipe_def["modules"][_module_id]["type"]
 
-        yield name
+            if module_type.startswith("pipe:"):
+                name = pythonise(module_type)
+            elif ntype == "module":
+                name = module_type
+            elif ntype == "pipe":
+                name = "pipe"
+            else:
+                raise ValueError(f"Invalid {ntype=}. (Expected 'module' or 'pipe')")
+
+            yield name
 
 
-def gen_modules(pipe_def, embedded=False):
+def gen_modules(
+    pipe_def: PipeDef,
+    embedded=False
+) -> Iterator[tuple[str, Module] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
         yield (pythonise(module["id"]), module)
 
         if embedded and module["type"] == "loop":
-            embed = module["conf"]["embed"]["value"]
+            conf = cast_type(LoopConf, module["conf"])
+            embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), embed)
 
 
-def gen_wires(pipe_def: PipeDef):
-    for wire in listize(pipe_def["wires"]):
+def gen_wires(pipe_def: PipeDef) -> Iterator[tuple[str, Wire]]:
+    for wire in pipe_def["wires"]:
         yield (pythonise(wire["id"]), wire)
 
 
-def gen_graph(pipe_def: PipeDef):
-    for wire in listize(pipe_def["wires"]):
+def gen_graph(pipe_def: PipeDef) -> Iterator[tuple[str, str]]:
+    for wire in pipe_def["wires"]:
         src_id = pythonise(wire["src"]["moduleid"])
         tgt_id = pythonise(wire["tgt"]["moduleid"])
         yield (src_id, tgt_id)
 
 
-def gen_embed_graph(pipe_def: PipeDef):
+def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list]]:
     for module in listize(pipe_def["modules"]):
         module_id = pythonise(module["id"])
         yield (module_id, [])
 
         # make the loop dependent on its embedded module
         if module["type"] == "loop":
-            embed = module["conf"]["embed"]["value"]
+            conf = cast_type(LoopConf, module["conf"])
+            embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), [module_id])
 
 

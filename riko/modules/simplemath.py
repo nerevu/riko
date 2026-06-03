@@ -20,12 +20,18 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from decimal import Decimal
 import operator
+from typing import Callable
+
+from riko import Objconf
+from riko.cast import CastType, cast
+from riko.types.general import Extraction, NumLike
 
 from . import processor
 import pygogo as gogo
 
-OPTS = {"ftype": "decimal", "ptype": "decimal", "field": "content"}
+OPTS = {"ftype": "decimal", "field": "content"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -37,7 +43,7 @@ def mean(*nums):
         return float("inf")
 
 
-OPS = {
+OPS: dict[str, Callable[..., NumLike]] = {
     "add": operator.add,
     "subtract": operator.sub,
     "multiply": operator.mul,
@@ -49,7 +55,7 @@ OPS = {
 }
 
 
-def parser(num, objconf, skip=False, **kwargs):
+def parser(num: Decimal, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> NumLike:
     """Parsers the pipe content
 
     Args:
@@ -64,14 +70,15 @@ def parser(num, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>> conf = {'op': 'divide', 'other': 4}
         >>> objconf = Objectify(conf)
-        >>> parser(10, objconf, conf=conf)
-        2.5
+        >>> parser(10, None, objconf)
+        Decimal('2.5')
     """
-    operation = OPS[kwargs["conf"]["op"]]
-    return kwargs["stream"] if skip else operation(num, objconf.other)
+    operation = OPS[objconf.op]
+    other = cast(objconf.other, _type=CastType.DECIMAL)
+    return kwargs["stream"] if skip else operation(num, other)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously performs basic arithmetic, such
     as addition and subtraction.

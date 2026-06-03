@@ -11,7 +11,7 @@ from riko.modules.loop import pipe as loop
 from riko.modules.loop import pipe as loop
 
 
-def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -28,71 +28,14 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
             "input",
         ]
 
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_sw_581(item, context=None, _INPUT=None, conf=None, **kwargs):
-        # todo: insert submodule description here
-        return strconcat(
-            item,
-            context=context,
-            conf={
-                "part": [
-                    {"type": "text", "subkey": "firstName"},
-                    {"type": "text", "value": " "},
-                    {"type": "text", "subkey": "Member"},
-                ]
-            },
-            **kwargs
-        )
-
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_sw_408(item, context=None, _INPUT=None, conf=None, **kwargs):
-        # todo: insert submodule description here
-        return strconcat(
-            item,
-            context=context,
-            conf={
-                "part": [
-                    {"type": "text", "value": "Total allowances claimed, inc travel: "},
-                    {"type": "text", "subkey": "TotalAllowancesClaimedIncTravel"},
-                    {
-                        "type": "text",
-                        "value": "<br>Total basic allowances claimed, ex travel: ",
-                    },
-                    {"type": "text", "subkey": "TotalBasicAllowancesExcTravel"},
-                    {"type": "text", "value": "<br>Total Travel claimed: "},
-                    {"type": "text", "subkey": "TotalTravelClaimed"},
-                    {"type": "text", "value": "<br>MP Mileage: "},
-                    {"type": "text", "subkey": "Mileage"},
-                    {"type": "text", "value": "<br>MP Rail Travel: "},
-                    {"type": "text", "subkey": "MPRail"},
-                    {"type": "text", "value": "<br>MP Air Travel: "},
-                    {"type": "text", "subkey": "MPAir"},
-                    {
-                        "type": "text",
-                        "value": "<br>Cost of staying away from main home: ",
-                    },
-                    {"type": "text", "subkey": "CostofStayingAwayFromMainHome"},
-                    {"type": "text", "value": "<br>London Supplement: "},
-                    {"type": "text", "subkey": "LondonSupplement"},
-                    {"type": "text", "value": "<br>Office Running Costs: "},
-                    {"type": "text", "subkey": "OfficeRunningCosts"},
-                    {"type": "text", "value": "<br>Staffing Costs: "},
-                    {"type": "text", "subkey": "StaffingCosts"},
-                ]
-            },
-            **kwargs
-        )
-
     sw_371 = textinput(
         context=context,
         conf={
+            "test": {"type": "bool", "value": "true"},
             "debug": {"type": "text", "value": ""},
             "default": {"type": "text", "value": "Lancaster"},
             "prompt": {"type": "text", "value": "Name"},
             "name": {"type": "text", "value": "name"},
-            "position": {"type": "int", "value": ""},
         },
     )
 
@@ -104,8 +47,8 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
                 "type": "url",
                 "value": get_path("spreadsheets.google.com_pub?key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv"),
             },
-            "skip": {"type": "int", "value": "0"},
-            "col_name": [
+            "skip_rows": {"type": "int", "value": "0"},
+            "col_names": [
                 {"type": "text", "value": "Member"},
                 {"type": "text", "value": "firstName"},
                 {"type": "text", "value": "TotalAllowancesClaimedIncTravel"},
@@ -135,10 +78,7 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
                 {"type": "text", "value": "EmployeeTotal"},
                 {"type": "text", "value": "EmployeeNumOfJourneys"},
             ],
-            "col_row_start": {"type": "int", "value": "1"},
-            "col_mode": {"type": "text", "value": "custom"},
-            "separator": {"type": "text", "value": ","},
-            "col_row_end": {"type": "int", "value": "1"},
+            "delimiter": {"type": "text", "value": ","},
         },
     )
 
@@ -148,7 +88,7 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
         RULE_1_value=sw_371,
         conf={
             "COMBINE": {"type": "text", "value": "and"},
-            "permit": {"type": "bool", "value": True},
+            "PERMIT": {"type": "bool", "value": True},
             "RULE": [
                 {
                     "field": {"type": "text", "value": "Member"},
@@ -159,33 +99,44 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
         },
     )
 
-    sw_385 = rename(
+    sw_385 = loop(
         sw_375,
         context=context,
+        embed=rename,
         conf={
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "Member"},
-                    "op": {"type": "text", "value": "copy"},
-                    "newval": {"type": "text", "value": "title"},
-                }
-            ]
+            "count": {"type": "text", "value": "all"},
+            "embed": {
+                "type": "module",
+                "value": {
+                    "type": "rename",
+                    "emit": True,
+                    "conf": {
+                        "RULE": [
+                            {
+                                "field": {"type": "text", "value": "Member"},
+                                "copy": {"type": "bool", "value": True},
+                                "newval": {"type": "text", "value": "title"},
+                            }
+                        ]
+                    },
+                },
+            },
         },
     )
 
     sw_400 = loop(
         sw_385,
         context=context,
-        embed=pipe_sw_408,
+        embed=strconcat,
         conf={
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "description"},
-            "emit": {"type": "bool", "value": False},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "strconcat",
                     "id": "sw-408",
+                    "assign": "description",
+                    "emit": False,
                     "conf": {
                         "part": [
                             {
@@ -224,23 +175,22 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
                     },
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
     )
 
     sw_573 = loop(
         sw_400,
         context=context,
-        embed=pipe_sw_581,
+        embed=strconcat,
         conf={
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "title"},
-            "emit": {"type": "bool", "value": False},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "strconcat",
                     "id": "sw-581",
+                    "assign": "title",
+                    "emit": False,
                     "conf": {
                         "part": [
                             {"type": "text", "subkey": "firstName"},
@@ -250,7 +200,6 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(context=None, _INPUT=None, conf=None, **kwargs):
                     },
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
     )
 

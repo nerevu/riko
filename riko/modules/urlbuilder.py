@@ -43,35 +43,41 @@ Examples:
         >>> from riko.modules.urlbuilder import pipe
         >>>
         >>> param = {'key': 's', 'value': 'gm'}
-        >>> path = [{'value': 'rss'}, {'value': 'headline'}]
+        >>> path = ['rss', 'headline']
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'param': param}
-        >>> next(pipe(conf=conf))['url']
+        >>> next(pipe(conf=conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+import re
 from typing import Mapping, Sequence
 from urllib.parse import urljoin, urlencode
 
-from meza.fntools import Objectify
-
-from riko.dotdict import DotDict
+from riko import Objconf
+from riko.types.general import BasicArg, ObjconfParam
 
 from . import processor
 
 import pygogo as gogo
 
-from riko.parsers import get_value
-
 OPTS = {"extract": "param", "listize": True, "emit": True}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
+PATTERN = re.compile(r'[<>:"/\\\|\*%]')
 
-def parser(item, param: Sequence[Objectify], skip=False, **kwargs):
+
+def parser(
+    _: BasicArg,
+    param: Sequence[ObjconfParam],
+    objconf: Objconf,
+    skip=False,
+    **kwargs
+) -> str:
     """Parsers the pipe content
 
     Args:
@@ -89,40 +95,38 @@ def parser(item, param: Sequence[Objectify], skip=False, **kwargs):
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = DotDict()
         >>> param = {'key': 's', 'value': 'gm'}
-        >>> path = [{'value': 'rss'}, {'value': 'headline'}]
+        >>> path = ['rss', 'headline']
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'param': param}
-        >>> kwargs = {'stream': item, 'conf': conf}
-        >>> result = parser(item, [Objectify(param)], **kwargs)
-        >>> sorted(result.keys())
-        ['fragment', 'netloc', 'param', 'path', 'query', 'scheme', 'url']
-        >>> result['url']
+        >>> parser({}, [Objectify(param)], Objectify(conf), stream={})
         'http://finance.yahoo.com/rss/headline?s=gm'
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        conf = DotDict(kwargs.pop("conf", {}))
-
-        if (path := conf.get("path")) and isinstance(path, str):
-            paths = [path]
-        elif isinstance(path, Mapping):
-            paths = [get_value(item, path, **kwargs)]
-        elif path:
-            paths = [get_value(item, p, **kwargs) for p in path]
+        if isinstance(objconf.path, str):
+            paths = [objconf.path]
+        elif isinstance(objconf.path, Mapping):
+            print(f"Error: path should be a string or list of strings, not {objconf.path}")
+            paths = []
+        elif objconf.path:
+            paths = objconf.path
         else:
             paths = []
 
-        encoded = urlencode([(p.key, p.value) for p in param])
-        joined = urljoin(conf["base"], "/".join(paths))
+        encoded = urlencode([(p.key, p.value) for p in param if p.key])
+        joined = urljoin(str(objconf.base), "/".join(paths))
         stream = f"{joined}?{encoded}" if encoded else joined
+
+        if objconf.ext:
+            substituted = re.sub(PATTERN, "_", stream)
+            stream = f"{substituted}.{objconf.ext}"
 
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously builds a url.
 
@@ -152,7 +156,7 @@ def async_pipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x))
         ...     param = {'key': 's', 'value': 'gm'}
-        ...     path = [{'value': 'rss'}, {'value': 'headline'}]
+        ...     path = ['rss', 'headline']
         ...     base = 'http://finance.yahoo.com'
         ...     conf = {'base': base, 'path': path, 'param': param}
         ...     d = async_pipe(conf=conf)
@@ -182,7 +186,9 @@ def pipe(*args, **kwargs):
             contain the keys 'param' or 'path'.
 
             base (str): the sever name
+            ext (str): the file extension (for offline files)
             path (str): the resource path
+
             param (dict): can be either a dict or list of dicts. Must contain
                 the keys 'key' and 'value'.
 
@@ -194,13 +200,10 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> param = {'key': 's', 'value': 'gm'}
-        >>> path = [{'value': 'rss'}, {'value': 'headline'}]
+        >>> path = ['rss', 'headline']
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'param': param}
-        >>> result = next(pipe(conf=conf))
-        >>> sorted(result.keys())
-        ['fragment', 'netloc', 'param', 'path', 'query', 'scheme', 'url']
-        >>> result['url']
+        >>> next(pipe(conf=conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
     """
     return parser(*args, **kwargs)

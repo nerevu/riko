@@ -15,29 +15,33 @@ Examples:
         >>> from riko.modules.fetchdata import pipe
         >>>
         >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> next(pipe(conf=conf))['title'] == 'Business System Analyst'
-        True
+        >>> next(pipe(conf=conf))['title']
+        'Business System Analyst'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
 from os import path as p
-from typing import Mapping
+from typing import Iterator, cast
 
 import pygogo as gogo
 
+from riko import Objconf, listize
+from riko.types.general import BasicArg, Extraction, ItemArg, Items
+
 from . import processor
 from riko.bado import coroutine, return_value, io
-from riko.parsers import any2dict
-from riko.utils import fetch
+from riko.parsers import Stringy, any2dict
+from riko.utils import auto_close, fetch
 
 OPTS = {"ftype": "none"}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine
-def async_parser(_, objconf, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -59,10 +63,10 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0]['title'])
+        ...     callback = lambda x: print(next(x)['title'])
         ...     url = get_path('gigs.json')
         ...     objconf = Objectify({'url': url, 'path': 'value.items'})
-        ...     d = async_parser(None, objconf, stream={})
+        ...     d = async_parser(None, None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -76,14 +80,22 @@ def async_parser(_, objconf, skip=False, **kwargs):
         stream = kwargs["stream"]
     else:
         ext = p.splitext(objconf.url)[1].lstrip(".")
-        f = yield io.async_url_open(objconf.url)
-        stream = any2dict(f, ext, objconf.html5, path=objconf.path)
-        f.close()
+        path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
+
+        f = yield io.async_url_open(objconf.url)  # pyright: ignore[reportCallIssue]
+        content = any2dict(f, ext, objconf.html5, path=path)
+        stream = auto_close(content, f)
 
     return_value(stream)
 
 
-def parser(_, objconf, skip=False, **kwargs):
+def parser(
+    _: BasicArg,
+    extraction: Extraction,
+    objconf: Objconf,
+    skip=False,
+    **kwargs
+) -> Items | Iterator[Stringy]:
     """Parses the pipe content
 
     Args:
@@ -104,26 +116,22 @@ def parser(_, objconf, skip=False, **kwargs):
         >>>
         >>> url = get_path('gigs.json')
         >>> objconf = Objectify({'url': url, 'path': 'value.items'})
-        >>> result = parser(None, objconf, stream={})
-        >>> result[0]['title'] == 'Business System Analyst'
-        True
+        >>> result = parser(None, None, objconf, stream={})
+        >>> next(result)['title']
+        'Business System Analyst'
     """
     if skip:
-        stream = kwargs["stream"]
+        yield cast(ItemArg, kwargs["stream"])
     else:
         ext = p.splitext(objconf.url)[1].lstrip(".")
+        path = ".".join(listize(objconf.path))
 
-        with fetch(**objconf) as f:
+        with fetch(**{k: objconf[k] for k in objconf}) as f:
             ext = ext or f.ext
-            stream = any2dict(f, ext, objconf.html5, path=objconf.path)
-
-    if isinstance(stream, (Mapping, str, int)):
-        yield stream
-    else:
-        yield from stream
+            yield from any2dict(f, ext, objconf.html5, path=path)
 
 
-@processor(isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -167,7 +175,7 @@ def async_pipe(*args, **kwargs):
     return async_parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A source that fetches and parses an XML or JSON file to
     return the entries.
@@ -193,18 +201,18 @@ def pipe(*args, **kwargs):
         >>> from riko import get_path
         >>>
         >>> conf = {'url': get_path('gigs.json'), 'path': 'value.items'}
-        >>> next(pipe(conf=conf))['title'] == 'Business System Analyst'
-        True
+        >>> next(pipe(conf=conf))['title']
+        'Business System Analyst'
         >>> path = 'appointment'
         >>> conf = {'url': get_path('places.xml'), 'path': path}
-        >>> next(pipe(conf=conf))['subject'] == 'Bring pizza home'
-        True
+        >>> next(pipe(conf=conf))['subject']
+        'Bring pizza home'
         >>> conf = {'url': get_path('places.xml'), 'path': ''}
         >>> next(pipe(conf=conf))['reminder']
         '15'
         >>> conf = {'url': get_path('schools.xml'), 'path': 'data.row'}
-        >>> next(pipe(conf=conf))['district_name'] == 'Turkana'
-        True
+        >>> next(pipe(conf=conf))['district_name']
+        'Turkana'
 
     """
     return parser(*args, **kwargs)

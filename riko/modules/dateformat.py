@@ -32,7 +32,10 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-from time import strftime
+import datetime
+
+from riko import Objconf
+from riko.types.general import Extraction
 
 from . import processor
 import pygogo as gogo
@@ -42,11 +45,11 @@ DEFAULTS = {"format": "%m/%d/%Y %H:%M:%S"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(date, objconf, skip=False, **kwargs):
+def parser(date: datetime.date, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Obtains the user input
 
     Args:
-        date (dict): Must have key 'date' with a date-like object value
+        date (date): Must have key 'date' with a date-like object value
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't parse the content
 
@@ -58,14 +61,13 @@ def parser(date, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'format': '%m/%d/%Y'})
-        >>> parser({'date': date(2015, 5, 4)}, objconf)
+        >>> parser(date(2015, 5, 4), None, objconf)
         '05/04/2015'
     """
-    timetuple = date["date"].timetuple()
-    return kwargs["stream"] if skip else strftime(objconf.format, timetuple)
+    return kwargs["stream"] if skip else date.strftime(objconf.format)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously formats a date.
 

@@ -11,14 +11,15 @@ Examples:
         >>> from riko.modules.sum import pipe
         >>>
         >>> stream = pipe({'content': x} for x in range(5))
-        >>> next(stream) == {'sum': Decimal('10')}
-        True
+        >>> next(stream)
+        Decimal('10')
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
 import itertools as it
+from typing import Iterator
 import pygogo as gogo
 
 from operator import itemgetter
@@ -31,7 +32,7 @@ DEFAULTS = {"sum_key": "content", "group_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream, objconf, tuples, **kwargs) -> Decimal | int | Iterator[dict[str, Decimal]]:
     """Parses the pipe content
 
     Args:
@@ -61,8 +62,8 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> objconf = Objectify({'sum_key': 'content'})
         >>> tuples = zip(stream, repeat(objconf))
         >>> args = (stream, objconf, tuples)
-        >>> parser(*args, assign='content') == {'content': Decimal('10')}
-        True
+        >>> parser(*args, assign='content')
+        Decimal('10')
         >>> objconf = Objectify({'sum_key': 'amount', 'group_key': 'x'})
         >>> stream = [
         ...     {'amount': 2, 'x': 'one'},
@@ -70,10 +71,10 @@ def parser(stream, objconf, tuples, **kwargs):
         ...     {'amount': 2, 'x': 'two'}]
         >>> tuples = zip(stream, repeat(objconf))
         >>> summed = parser(stream, objconf, tuples)
-        >>> next(summed) == {'one': Decimal('3')}
-        True
-        >>> next(summed) == {'two': Decimal('2')}
-        True
+        >>> next(summed)
+        {'one': Decimal('3')}
+        >>> next(summed)
+        {'two': Decimal('2')}
     """
     _sum = lambda group: sum(Decimal(g[objconf.sum_key]) for g in group)
 
@@ -88,7 +89,7 @@ def parser(stream, objconf, tuples, **kwargs):
     return summed
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously and eagerly sums fields of items
     in a stream. Note that this pipe is not lazy if `group_key` is specified.
@@ -119,7 +120,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x) == {'sum': Decimal('10')})
+        ...     callback = lambda x: print(next(x))
         ...     items = ({'content': x} for x in range(5))
         ...     d = async_pipe(items)
         ...     return d.addCallbacks(callback, logger.error)
@@ -129,7 +130,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        10
     """
     return parser(*args, **kwargs)
 
@@ -162,16 +163,16 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> stream = ({'content': x} for x in range(5))
-        >>> next(pipe(stream)) == {'sum': Decimal('10')}
-        True
+        >>> next(pipe(stream))
+        Decimal('10')
         >>> stream = [
         ...     {'amount': 2, 'x': 'one'},
         ...     {'amount': 1, 'x': 'one'},
         ...     {'amount': 2, 'x': 'two'}]
         >>> summed = pipe(stream, conf={'sum_key': 'amount', 'group_key': 'x'})
-        >>> next(summed) == {'one': Decimal('3')}
-        True
-        >>> next(summed) == {'two': Decimal('2')}
-        True
+        >>> next(summed)
+        {'one': Decimal('3')}
+        >>> next(summed)
+        {'two': Decimal('2')}
     """
     return parser(*args, **kwargs)

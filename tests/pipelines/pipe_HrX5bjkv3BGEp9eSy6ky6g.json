@@ -15,7 +15,7 @@
             ]
         },
         {
-            "id": "sw-165",
+            "id": "sw-157",
             "xy": [
                 177,
                 -66
@@ -46,7 +46,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/edition.cnn.html"
+                    "value": "file://riko/data/edition.cnn.html"
                 }
             },
             "id": "sw-149",
@@ -62,13 +62,34 @@
                     "type": "text",
                     "value": "loop:fetch"
                 },
-                "URL": {
-                    "subkey": "link",
-                    "type": "url"
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "URL": {
+                                "subkey": "link",
+                                "type": "url"
+                            }
+                        },
+                        "id": "sw-165",
+                        "type": "fetch"
+                    }
+                },
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "bool",
+                    "value": false
+                },
+                "field": {
+                    "type": "text",
+                    "value": ""
                 }
             },
-            "id": "sw-165",
-            "type": "fetch"
+            "id": "sw-157",
+            "type": "loop"
         },
         {
             "conf": {
@@ -209,7 +230,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-165"
+            "moduleid": "sw-157"
         },
         {
             "data": {
@@ -393,14 +414,14 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-165"
+                "moduleid": "sw-157"
             }
         },
         {
             "id": "_w1",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-165"
+                "moduleid": "sw-157"
             },
             "tgt": {
                 "id": "_INPUT",

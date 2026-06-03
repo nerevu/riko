@@ -4,11 +4,11 @@ from riko import Context, get_path
 from riko.modules.fetch import pipe as fetch
 from riko.modules.feedautodiscovery import pipe as feedautodiscovery
 from riko.modules.loop import pipe as loop
-from riko.modules.sort import pipe as sort
+from riko.modules.sort import pipe as _sort
 from riko.modules.truncate import pipe as truncate
 
 
-def pipe_HrX5bjkv3BGEp9eSy6ky6g(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_HrX5bjkv3BGEp9eSy6ky6g(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -24,58 +24,51 @@ def pipe_HrX5bjkv3BGEp9eSy6ky6g(context=None, _INPUT=None, conf=None, **kwargs):
             "truncate",
         ]
 
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_sw_165(item=None, context=None, conf=None, **kwargs):
-
-        # todo: insert submodule description here
-        return fetch(
-            item, context=context, conf={"URL": {"type": "url", "subkey": "link"}}, **kwargs
-        )
-
     sw_149 = feedautodiscovery(
-        context=context,
         conf={"URL": {"type": "url", "value": get_path("edition.cnn.html")}},
+        context=context,
     )
 
     sw_157 = loop(
         sw_149,
-        context=context,
-        embed=pipe_sw_165,
-        conf={
+        conf = {
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "loop:fetch"},
-            "emit": {"type": "bool", "value": True},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "fetch",
                     "id": "sw-165",
+                    "emit": True,
+                    "assign": "loop:fetch",
                     "conf": {"URL": {"type": "url", "subkey": "link"}},
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
+        embed=fetch,
+        context=context,
     )
 
-    sw_174 = sort(
+    sw_174 = _sort(
         sw_157,
         context=context,
         conf={
-            "KEY": [
+            "RULE": [
                 {
                     "field": {"type": "text", "value": "pubDate"},
                     "dir": {"type": "text", "value": "ASC"},
+                    "type": "datetime",
                 }
             ]
         },
     )
 
     sw_191 = truncate(
-        sw_174, context=context, conf={"count": {"type": "int", "value": "25"}}
+        sw_174,
+        conf = {"count": {"type": "int", "value": "25"}},
+        context=context,
     )
 
-    return sw_149
+    return sw_191
 
 
 if __name__ == "__main__":

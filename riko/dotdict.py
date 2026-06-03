@@ -5,47 +5,76 @@ riko.dotdict
 ~~~~~~~~~~~~
 Provides a class for creating case insensitive dicts with dot notation access
 """
-from typing import Iterator, Mapping, Optional, Sequence, TypeAlias, TypeGuard, cast as cast_type, Self
+from time import struct_time
+from typing import Iterator, Mapping, Optional, Sequence, TypeGuard, Union
+from typing import cast as cast_type
+from typing_extensions import TypeIs
 import pygogo as gogo
 
 from functools import reduce
 
 from requests.structures import CaseInsensitiveDict
-from riko import replacer
-from riko.cast import CAST_SWITCH, cast as cast_value
-from riko.types import Stream
+from riko import Objectify, replacer
+from riko.cast import CAST_SWITCH, CastType, cast as cast_value
+from riko.types.compile import Wire, WireEndpoint
+from riko.types.general import ComplexArg, BasicValue, ComplexMapping, ComplexSequence, IntermediateValue, Items, StatefulItem, StreamState
+from riko.types.modules import ConfArg, Sentinal
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
-BasicValue: TypeAlias = str | int | None
-BasicMapping: TypeAlias = Mapping[str, "BasicAnyArg"]
-BasicSequence: TypeAlias = Sequence["BasicAnyArg"]
-BasicAnyArg: TypeAlias = BasicMapping | BasicSequence | BasicValue
-
-BasicDict: TypeAlias = dict[str, "BasicAnyReturn"]
-BasicList: TypeAlias = list["BasicAnyReturn"]
-BasicAnyReturn: TypeAlias = BasicDict | BasicList | BasicValue
 
 SENTINALS = ("terminal",)
+TV_KEYS = ("type", "value")
+WIRE_KEYS = ("id", "src", "tgt")
 
 
-def is_mapping_seq(val: BasicSequence) -> TypeGuard[Sequence[BasicDict]]:
-    return isinstance(val[0], Mapping)
+def is_mapping(val: ComplexArg | WireEndpoint) -> TypeIs[Mapping]:
+    return isinstance(val, Mapping)
 
 
-def is_value_seq(val: BasicSequence) -> TypeGuard[Sequence[BasicValue]]:
-    return isinstance(val[0], BasicValue)
+def is_mapping_seq(val: ComplexArg) -> TypeIs[Sequence[Mapping]]:
+    return isinstance(val, Sequence) and isinstance(val[0], Mapping)
 
 
-def is_sentinal(val: BasicAnyArg) -> TypeGuard[dict[str, str]]:
-    return isinstance(val, Mapping) and len(val) == 2 and any(s in val for s in SENTINALS)
+def is_value_seq(val: ComplexArg) -> TypeIs[Sequence[BasicValue]]:
+    return isinstance(val, Sequence) and isinstance(val[0], BasicValue)
 
 
-class DotDict(CaseInsensitiveDict[BasicAnyArg]):
+def is_sentinal(val: ComplexArg) -> TypeIs[Mapping[str | Sentinal, str]]:
+    return is_mapping(val) and len(val) == 2 and any(s in val for s in SENTINALS)
+
+
+def is_type_value(val: ComplexArg) -> TypeGuard[ConfArg]:
+    normal = is_mapping(val) and len(val) == 2 and all(s in val for s in TV_KEYS)
+    shortcut = is_mapping(val) and len(val) == 1 and "value" in val
+    return normal or shortcut
+
+
+def is_wire(val: ComplexArg) -> TypeGuard[Wire]:
+    if is_mapping(val) and len(val) == 3 and all(s in val for s in WIRE_KEYS):
+        success = is_mapping(val["src"]) and is_mapping(val["tgt"])
+    else:
+        success = False
+
+    return success
+
+
+def is_stateful_item(val: ComplexArg) -> TypeGuard[StatefulItem]:
+    if isinstance(val, Mapping) and len(val) == 1 and "state" in val:
+        success = isinstance(val["state"], StreamState)
+    else:
+        success = False
+
+    return success
+
+
+class DotDict(CaseInsensitiveDict[ComplexArg]):
     """A dictionary whose keys can be accessed using dot notation
 
     Examples:
         >>> r = DotDict({'a': {'content': 'value'}})
+        >>> r.get('a')
+        {'content': 'value'}
         >>> r.get('a.content')
         'value'
         >>> r.get('b.content')
@@ -71,16 +100,31 @@ class DotDict(CaseInsensitiveDict[BasicAnyArg]):
         ['KEY']
         >>> [k for k in r]
         ['KEY']
-        >>> r = DotDict({'value': {'terminal': 'attrs_1_value', 'type': 'text'}, 'key': 'title'})
+        >>> data = {
+        ...     "value": {'value': 'the title', 'type': 'text'},
+        ...     "key": 'title',
+        ... }
+        >>> r = DotDict(data)
         >>> list(r)
         ['value', 'key']
         >>> [k for k in r]
         ['value', 'key']
-
+        >>> DotDict({'start': 0, 'count': {'type': 'int', 'value': '5'}})
+        {'start': 0, 'count': 5}
     """
-    def __init__(self, data=None, **kwargs):
-        super().__init__(data, **kwargs)
-        self.update(data)
+    def __init__(self, data: Optional[ComplexMapping] = None, **kwargs):
+        super().__init__()
+
+        if isinstance(data, Objectify):
+            _data = data.iteritems()
+        elif isinstance(data, Mapping):
+            # pyright doesn't like typeddicts
+            _data = cast_type(dict[str, ComplexArg], data)
+        else:
+            _data = None
+
+        if _data is not None:
+            self.update(_data, **kwargs)
 
     def _parse_key(self, key: Optional[str | Mapping[str, str]] = None) -> list[str]:
         if isinstance(key, str):
@@ -92,77 +136,105 @@ class DotDict(CaseInsensitiveDict[BasicAnyArg]):
 
         return keys
 
-    def _parse_sentinel(self, *args: BasicAnyArg, **kwargs: BasicAnyArg) -> BasicAnyArg:
-        value = args[0]
-        default: BasicAnyArg = kwargs.pop("default", None)
+    def _parse_sentinel(
+        self,
+        value: ComplexArg,
+        default: Optional[ComplexArg] = None,
+        **kwargs: ComplexArg
+    ) -> ComplexArg:
 
         if kwargs and is_sentinal(value):
             key = next(s for s in SENTINALS if s in value)
             sentinal = value[key]
             replaced = replacer(sentinal, "")
-            stream = cast_type(Stream, kwargs[replaced])
 
-            if callable(stream):
-                item = next(stream(**kwargs))
-            else:
+            if stream := kwargs.get(replaced):
+                stream = cast_type(Items, stream)
                 item = next(stream)
-
-            if "path" in value:
-                content_path = value["path"]
-            elif isinstance(item, Mapping):
-                content_path = "content"
+                #
+                # if callable(stream):
+                #     item = next(stream(**kwargs))
+                # else:
+                #     item = next(stream)
+                parsed = item
             else:
-                content_path = None
-
-            parsed = item[content_path] if content_path else item
-        elif isinstance(value, Mapping) and set(value) == {"value", "type"}:
+                # logger.warning(f"Sentinal {replaced} not found in {kwargs=}.")
+                parsed = default
+        elif is_type_value(value):
             parsed = value["value"]
-            _type = value["type"]
 
-            if parsed and isinstance(_type, str) and _type in CAST_SWITCH:
-                parsed = cast_value(parsed, _type=_type)
+            if not (_type := value.get("type")):
+                pass
+            elif _type == CastType.LOCATION:
+                logger.warning(f"Location type not supported! Not casting {parsed=}.")
+            elif _type in CAST_SWITCH:
+                _parsed = cast_value(parsed, _type=CastType(_type))
+                parsed = cast_type(IntermediateValue, _parsed)
+            elif _type != "module":
+                logger.warning(f"Invalid cast type={_type}! Not casting {parsed=}.")
+        elif is_stateful_item(value):
+            parsed = value
+        elif isinstance(value, Mapping):
+            parsed = {
+                k: self._parse_sentinel(
+                    cast_type(ComplexArg, v),
+                    cast_type(ComplexArg, v),
+                    **kwargs
+                )
+                for k, v in value.items()
+            }
         else:
             parsed = default
+
         return parsed
 
     def _parse_value(
         self,
-        value: BasicAnyArg,
+        value: ComplexArg,
         key: str | int,
-        default: Optional[BasicValue] = None,
+        default: Optional[ComplexArg] = None,
         **kwargs
-    ) -> BasicAnyArg:
+    ) -> ComplexArg:
         parsed = default
         msg = f"Ignoring unsupported key {key} to access {{0}} value {{1}}."
+        # if kwargs:
+        #     print(f"_parse_value got {value=} with {key=} and {kwargs=}")
 
         if isinstance(value, Mapping) and isinstance(key, str):
-            value = DotDict(value)
+            dd_value = DotDict(value)
 
-            if key in value:
-                parsed = value[key]
-            elif is_sentinal(value):
+            if key in dd_value:
+                parsed = dd_value[key]
+            elif kwargs and is_sentinal(value):
                 parsed = self._parse_sentinel(value, default=default, **kwargs)
-        elif isinstance(value, Mapping):
-            logger.warning(msg.format("mapping", value))
-        elif isinstance(value, (str, int)):
+
+                if key and is_mapping(parsed) and key in parsed:
+                    parsed = parsed[key]
+                elif key:
+                    parsed = default
+        elif isinstance(value, (str, int, struct_time)):
             parsed = value
-        elif isinstance(value, Sequence) and is_mapping_seq(value):
-            if isinstance(key, int):
-                logger.warning(msg.format("submapping", value[0]))
-            else:
-                parsed = [v[key] for v in value]
-        elif isinstance(value, Sequence) and is_value_seq(value):
-            if isinstance(key, str):
-                logger.warning(msg.format("submapping", value[0]))
-            else:
-                parsed = value[key]
+        elif isinstance(value, Mapping):
+            logger.warning(msg.format("Mapping", value))
+        elif isinstance(value, Objectify):
+            logger.warning(msg.format("Objectify", value))
+        elif is_mapping_seq(value) and isinstance(key, str):
+            parsed = [v[key] for v in value]
+        elif is_mapping_seq(value):
+            logger.warning(msg.format("submapping", value[0]))
+        elif is_value_seq(value) and isinstance(key, int):
+            parsed = value[key]
+        elif is_value_seq(value):
+            logger.warning(msg.format("submapping", value[0]))
+        elif isinstance(value, Sequence):
+            parsed = list(value)
         elif value is not None:
-            logger.warning(f"Setting to unsupported value type {type(value)}.")
             parsed = value
 
+        # print(f"_parse_value {value=} with {key=} and {kwargs=} -> {parsed=}.")
         return parsed
 
-    def __getitem__(self, key: str) -> BasicAnyArg:
+    def __getitem__(self, key: str) -> ComplexArg:
         """
         >>> r = DotDict({'key': 'bar'})
         >>> r['key']
@@ -183,17 +255,33 @@ class DotDict(CaseInsensitiveDict[BasicAnyArg]):
                 logger.warning(msg)
 
         value = self._parse_sentinel(value, default=value)
-        result = DotDict(value) if hasattr(value, "keys") else value
+        result = DotDict(value) if isinstance(value, Mapping) else value
+        # print(f"DotDict __getitem__ {keys=} -> {value=} -> {result=}.")
         return result
 
-    def get(self, key=None, default=None, **kwargs) -> BasicAnyArg | Self:
+    def get(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        key: Optional[str | Mapping[str, str]] = None,
+        default: Optional[ComplexArg] = None,
+        **kwargs
+    ) -> Union["DotDict", IntermediateValue, ComplexSequence]:
         """
         >>> r = DotDict({'key': 'bar'})
         >>> r.get('key')
         'bar'
         >>> r.get('KEY')
         'bar'
+        >>> r.get('KEY')
+        'bar'
         >>> r.get('baz')
+        >>> r = DotDict({"terminal": "attrs_1", "type": "text"})
+        >>> r.get()
+        {'terminal': 'attrs_1', 'type': 'text'}
+        >>> r.get(attrs_1=iter(['baz']))
+        'baz'
+        >>> r.get(attrs_1=iter([{'content': 'baz'}]))
+        {'content': 'baz'}
+        >>> r.get('subkey')
         >>> attrs = {
         ...     "value": {"terminal": "attrs_1", "type": "text"},
         ...     "key": {"type": "text", "value": "title"},
@@ -203,13 +291,18 @@ class DotDict(CaseInsensitiveDict[BasicAnyArg]):
         {'value': {'terminal': 'attrs_1', 'type': 'text'}, 'key': 'title'}
         >>> r.get('attrs.key')
         'title'
+        >>> r.get('attrs.value')
+        {'terminal': 'attrs_1', 'type': 'text'}
+        >>> r.get('subkey')
+        >>> r.get('attrs.value', attrs_1=iter([{'content': 'baz'}]))
+        {'content': 'baz'}
         >>> r.get('attrs.value.content', attrs_1=iter([{'content': 'baz'}]))
         'baz'
+        >>> r.get('attrs.value.foo', attrs_1=iter([{'content': 'baz'}]))
         """
         keys = self._parse_key(key)
         # TODO: figure out if the copy is necessary
-        item = DotDict(self.copy())
-
+        item = self.copy()
         if keys:
             for k in keys:
                 try:
@@ -218,18 +311,26 @@ class DotDict(CaseInsensitiveDict[BasicAnyArg]):
                     pass
 
                 item = self._parse_value(item, k, default=default, **kwargs)
+                # print(f"got key={k} -> {item=}.")
         else:
             item = self._parse_sentinel(item, default=item, **kwargs)
 
-        value = DotDict(item) if hasattr(item, "keys") else item
+        if kwargs and is_sentinal(item):
+            item = self._parse_sentinel(item, default=default, **kwargs)
 
+        if isinstance(item, (Mapping, Objectify)):
+            value = DotDict(item)
+        else:
+            value = item
+
+        # print(f"got {keys=} from {item=} with {kwargs=} -> {value=}.")
         return value
 
     def delete(self, key: str):
         reducer = lambda i, k: DotDict(i.get(k))
         keys = self._parse_key(key)
         rest, last = keys[:-1], keys[-1]
-        reduced = reduce(reducer, rest, DotDict(self))
+        reduced = reduce(reducer, rest, self)
 
         try:
             _key = reduced[last]
@@ -239,42 +340,75 @@ class DotDict(CaseInsensitiveDict[BasicAnyArg]):
             del _key
 
     # TODO: does this need to be __setitem__?
-    def set(self, key, value):
+    def set(self, key: str, value: ComplexArg):
         reducer = lambda i, k: i.setdefault(k, {})
         keys = self._parse_key(key)
         item = self.copy()
+        # print(f"set before {keys=}, {item=}, {self=}, {value=}")
         rest, last = keys[:-1], keys[-1]
         reduced = reduce(reducer, rest, item)
         reduced[last] = value
+        # print(f"set during {rest=}, {last=}, {reduced=}")
+        # print(f"set during {item=}, {self=}")
         super().update(item)
+        # print(f"set after {item=}, {self=}")
 
-    def update(self, data=None, **kwargs):
-        _dict = dict(data or {})
+    def update(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        data: Optional[ComplexMapping | Iterator[tuple[str, ComplexArg]]] = None,
+        **kwargs
+    ):
+        if isinstance(data, Objectify):
+            _dict = dict(data.iteritems())
+        elif isinstance(data, Mapping):
+            # pyright doesn't like typeddicts
+            _dict = cast_type(dict[str, ComplexArg], data)
+        elif data:
+            _dict = dict(data)
+        else:
+            _dict: dict[str, ComplexArg] = {}
+
         _dict.update(kwargs)
-        dot_keys = [d for d in _dict if "." in d]
 
-        if dot_keys:
+        # print(f"update {_dict=}")
+        if dot_keys := [d for d in _dict if "." in d]:
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
-            keys = [".".join(self._parse_key(key)[:-1]) for key in dot_keys]
-            items = ((k, v) for k, v in _dict.items() if k not in keys)
+            skip_keys = {".".join(self._parse_key(key)[:-1]) for key in dot_keys}
+            items = list((k, _dict[k]) for k in _dict if k not in skip_keys)
         else:
+            skip_keys = set()
             items = _dict.items()
 
+        # print(f"update {items=}")
+        # print(f"update before {self=}")
         [self.set(key, value) for key, value in items]
+        super().update(self)
+        # print(f"update after {self=}")
 
-    def asdict(self, **kwargs) -> dict[str, BasicAnyArg] | BasicAnyArg:
+    def asdict(self, default_key="self", **kwargs) -> dict[str, ComplexArg]:
         """
-        >>> DotDict({'a': {'value': 'bar'}}).asdict()
-        {'a': {'value': 'bar'}}
-        >>> DotDict({'a': {'value': 'baz', 'type': 'string'}}).asdict()
+        >>> r = DotDict({'a': {'value': 'bar'}})
+        >>> r
+        {'a': 'bar'}
+        >>> r.asdict()
+        {'a': 'bar'}
+        >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
+        >>> r
+        {'a': 'baz'}
+        >>> r.asdict()
         {'a': 'baz'}
         """
         value = self.get(**kwargs)
 
-        if isinstance(value, DotDict):
-            result = {k: DotDict(v).asdict(**kwargs) if hasattr(v, "keys") else v for k, v in value.items()}
+        if isinstance(value, Mapping):
+            result = {
+                k: DotDict(v).get(**kwargs) if isinstance(v, Mapping) else v
+                for k, v in value.items()
+            }
+        elif value:
+            result = {default_key: value}
         else:
-            result = value
+            result: dict[str, ComplexArg] = {}
 
-        return result
+        return dict(result)

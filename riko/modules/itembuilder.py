@@ -28,16 +28,20 @@ Attributes:
     DEFAULTS (dict): The default parser options
 """
 
-from typing import Any, Iterable, Sequence
+from typing import Sequence
+
+from riko import Objconf
+from riko.types.general import ParsedParam
 from . import processor
 import pygogo as gogo
 from riko.dotdict import DotDict
 
 OPTS = {"ftype": "none", "listize": True, "extract": "attrs"}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, attrs: Iterable[DotDict], skip=False, **kwargs) -> DotDict:
+def parser(_, extraction: Sequence[ParsedParam], objconf: Objconf, skip=False, **kwargs) -> DotDict:
     """Parses the pipe content
 
     Args:
@@ -57,14 +61,14 @@ def parser(_, attrs: Iterable[DotDict], skip=False, **kwargs) -> DotDict:
         >>> attrs = [
         ...     {'key': 'title', 'value': 'the title'},
         ...     {'key': 'desc', 'value': 'the desc'}]
-        >>> parser(None, map(DotDict, attrs))
-        >>> {'title': 'the title', 'desc': 'the desc'}
+        >>> parser(None, map(DotDict, attrs), None)
+        {'title': 'the title', 'desc': 'the desc'}
     """
-    item = ((a["key"], a["value"]) for a in attrs)
+    item = dict((a["key"], a["value"]) for a in extraction)
     return kwargs["stream"] if skip else DotDict(item)
 
 
-@processor(isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously builds an item.
 
@@ -108,7 +112,7 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A source that builds an item.
 

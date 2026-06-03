@@ -7,31 +7,36 @@ riko.modules
 from copy import copy
 from functools import partial, wraps
 from itertools import chain
-from typing import Any, Iterator, Mapping, NamedTuple, Sequence, overload
-
-from mezmorize.utils import Optional
-from riko.types import AsyncOperator, AsyncPipeline, AsyncProcessor, Item, Operator, PipeTuples, Processor, Pipeline, Stream, SyncOperator, SyncPipeline, SyncProcessor
+from time import struct_time
+from typing import Callable, Iterable, TypeVar, cast as cast_type, overload
+from typing import Iterator, Mapping, Optional
 
 import pygogo as gogo
 
-from riko import Context
+from riko import Context, Objconf, Objectify, objectify
 from riko.bado import coroutine, return_value
-from riko.cast import cast
-from riko.utils import multiplex, broadcast, dispatch, StreamState
-from riko.types import DispatchFuncs, BroadcastFuncs
-from riko.parsers import parse_conf, get_skip, get_field, get_with
+from riko.cast import CAST_SWITCH, CastType, cast as cast_value, cast_none, cast_pass
+from riko.utils import broadcast, dispatch, StreamState
+from riko.types.general import AsyncOperatorWrapper, AsyncProcessorWrapper, ComplexArg, BasicArg, ComplexValue, Defaults, OperatorItems, OperatorParser, OperatorWrapper, ParsedConf, CastFuncs, ParseFuncs, Dispatched, ProcessorItems, ProcessorParser
+from riko.types.general import AsyncOperatorParser, AsyncProcessorParser
+from riko.types.general import BasicDict, BasicMapping
+from riko.types.general import Casted, ItemArg, Items, ItemsResult
+from riko.types.general import PipeTuples, ProcessorWrapper
+from riko.types.general import SyncOperatorParser, SyncOperatorWrapper, SyncProcessorParser
+from riko.types.general import SyncProcessorWrapper
+from riko.parsers import parse_conf, get_skip, get_field
 from riko.dotdict import DotDict
-from meza.fntools import remove_keys, listize, Objectify
+from riko import listize
 from meza.process import merge
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
-__targets__ = [
+__targets__ = (
     "coroutine",
-]
+)
 
 # Operators
-__aggregators__ = [
+__aggregators__ = (
     "count",
     "sum",
     "timeout",
@@ -39,9 +44,9 @@ __aggregators__ = [
     # 'mean',
     # 'min',
     # 'max',
-]
+)
 
-__composers__ = [
+__composers__ = (
     "filter",
     "join",
     "loop",
@@ -53,10 +58,10 @@ __composers__ = [
     "union",
     "uniq",
     # 'webservice',
-]
+)
 
 # Processors (loopable)
-__sources__ = [
+__sources__ = (
     "csv",
     "feedautodiscovery",
     "fetch",
@@ -74,9 +79,9 @@ __sources__ = [
     # https://github.com/firecrawl/firecrawl
     # "yql",
     "input",  # not loopable
-]
+)
 
-__transformers__ = [
+__transformers__ = (
     "currencyformat",
     "datebuilder",
     "dateformat",
@@ -106,96 +111,67 @@ __transformers__ = [
     "urlbuilder",
     "urlparse",
     # 'yahooshortcuts',
-]
+)
 
-__all__ = __aggregators__ + __composers__ + __sources__ + __transformers__ + __targets__
+# __all__ = __aggregators__ + __composers__ + __sources__ + __transformers__ + __targets__
 
 SENTINELS = {StreamState.DONE}
-CONF_KEYS = {
-    "assign",
-    "attrs",
-    "base",
-    "col_names",
-    "combine",
-    "count",
-    "currency",
-    "default",
-    "delay",
-    "delimiter",
-    "detag",
-    "emit",
-    "encoding",
-    "end",
-    "format",
-    "group_key",
-    "html5",
-    "join_key",
-    "length",
-    "limit",
-    "lower",
-    "max_len",
-    "max_wait",
-    "name",
-    "other",
-    "other_join_key",
-    "param",
-    "parse_key",
-    "part",
-    "path",
-    "permit",
-    "precision",
-    "prompt",
-    "skip_rows",
-    "sort",
-    "start",
-    "stop",
-    "strict",
-    "stringify",
-    "sum_key",
-    "times",
-    "token",
-    "type",
-    "unique_key",
-    "url",
-    "wait",
-    "xpath",
-}
+
+T = TypeVar("T", bound=ComplexArg)
+
+
+def dictize(data: Mapping | T) -> DotDict | T:
+    if isinstance(data, Objectify):
+        result = data
+    elif isinstance(data, Mapping):
+        result = DotDict(data)
+    else:
+        result = data
+
+    return result
 
 
 # TODO: figure out why type checker doesn't like Stream
 def get_assignment(
-    result: Iterator | str | int | Sequence | Mapping,
+    items: ProcessorItems | OperatorItems,
     skip=False,
     count: Optional[str] = None,
-    **kwargs
-) -> tuple[bool, Iterator[Item]]:
-    items: Iterator[Item] = iter(listize(result))
+    **_
+) -> tuple[bool, Iterator[ComplexArg]]:
+    if isinstance(items, (str, int, struct_time)):
+        dictized = iter([items])
+    elif isinstance(items, Mapping):
+        dictized = iter([dictize(items)])
+    elif isinstance(items, Iterable):
+        dictized = map(dictize, items)
+    else:
+        dictized = iter([items])
 
     if skip:
         one = False
-        result = items
+        result = dictized
     else:
         try:
-            first_result = next(items)
+            first_result = next(dictized)
         except StopIteration:
             first_result = None
 
         try:
-            second_result = next(items)
+            second_result = next(dictized)
         except StopIteration:
             # pipe delivers one result, e.g., strconcat
             if first_result is None:
-                items = iter([])
+                result = iter([])
             else:
-                items = chain([first_result], items)
+                result = chain([first_result], dictized)
 
             multiple = False
         else:
             # pipe delivers multiple results, e.g., fetchpage/tokenizer
             if first_result is None:
-                items = chain([], [second_result], items)
+                result = chain([], [second_result], dictized)
             else:
-                items = chain([first_result], [second_result], items)
+                result = chain([first_result], [second_result], dictized)
 
             multiple = True
 
@@ -203,89 +179,125 @@ def get_assignment(
         _all = count == "all"
         one = first or not (multiple or _all)
 
-        if one:
-            result = iter([]) if first_result is None else iter([first_result])
-        else:
-            result = items
+        if one and first_result is not None:
+            result = iter([first_result])
+        elif one:
+            result = iter([])
 
     return one, result
 
 
-def assign(item, assignment, one=False, assign=None, **kwargs):
-    value = next(assignment) if one else assignment
+def gen_assignments(
+    item: Mapping,
+    assignment: ItemsResult,
+    one=False,
+    assign: Optional[str] = None,
+    **kwargs
+) -> Iterator[ComplexArg]:
+    value = next(assignment, None) if one else assignment
 
-    if assign and isinstance(value, (str, int, Mapping)):
-        merged = merge([item, {assign: value}])
-        yield DotDict(merged)
-    elif assign:
-        merged = merge([item, {assign: list(value)}])
-        yield DotDict(merged)
-    elif isinstance(value, (Mapping, str, int)):
+    if assign:
+        if value is None:
+            yield DotDict(item)
+        elif isinstance(value, (str, int, struct_time, Mapping, Objectify)):
+            merged = merge([item, {assign: value}])
+            yield DotDict(merged)
+        elif isinstance(value, Iterable):
+            merged = merge([item, {assign: list(value)}])
+            yield DotDict(merged)
+        else:
+            merged = merge([item, {assign: value}])
+            yield DotDict(merged)
+    elif isinstance(value, (str, int, struct_time)):
         yield value
+    elif isinstance(value, Mapping):
+        yield dictize(value)
+    elif isinstance(value, Iterable):
+        yield from map(dictize, value)
     else:
-        yield from value
-
-
-class Dispatched(NamedTuple):
-    item: Item
-    parsed: list[Any]
+        yield value
 
 
 class Module():
     def __init__(
-        self, defaults=None, isasync=False, pollable=False, debug=False, **opts
+        self,
+        defaults: Optional[Defaults] = None,
+        isasync=False,
+        pollable=False,
+        debug=False,
+        ftype: Optional[str] = "pass",
+        ptype: Optional[str] = "pass",
+        **opts
     ):
-        self.defaults = defaults or {}
-        self.bfuncs = self.dfuncs = self.ftype = None
-        self.combined = DotDict(self.defaults)
-        self.conf = DotDict(self.defaults)
+        # Only called once on pipe import
+        self._defaults = cast_type(dict[str, str | bool | BasicArg], defaults or {})
+        self.opts = {"ftype": ftype, "ptype": ptype, **opts}
+        self.parsers = self.casters = None
+        self.combined = DotDict()
+        self.conf = None
         self.debug = debug
         self.isasync = isasync
-        self.opts = opts or {}
         self.pollable = pollable
         self.types = set([])
-        self.updates = {}
+        self.assign = None
+        self.emit = None
+        self.name = None
+        self.is_source = False
+        self.sub_type = None
 
     def prepare(
         self,
         module_name: str,
-        ftype: Optional[str] = "pass",
-        ptype: Optional[str] = "pass",
-        emit: Optional[bool] = False,
+        conf: Optional[BasicMapping] = None,
         assign: Optional[str] = None,
-        conf=None,
-        **kwargs,
+        emit: Optional[bool] = None,
+        **kwargs
     ):
-        defaults = {
-            "ftype": ftype,
-            "ptype": ptype,
-            "objectify": True,
-            "emit": emit,
-            "assign": assign,
-        }
-        self.conf.update(conf or {})
-        self.combined.update({**self.opts, **defaults, **kwargs})
-        self.ftype = self.combined["ftype"]
-
-        for k in CONF_KEYS:
-            if k in self.combined:
-                self.conf.setdefault(k, self.combined[k])
-
-        extract = self.combined.get("extract")
-        pdictize = self.combined.get("listize") if extract else True
-        self.combined.setdefault("pdictize", pdictize)
-        self.combined.update(self.conf.asdict())
-
-        self.bfuncs = get_broadcast_funcs(self.conf, **self.combined)
-        if self.combined["ptype"] != "none":
-            self.dfuncs = get_dispatch_funcs(**self.combined)
+        # Called on every pipe execution
+        if emit is None:
+            def_emit = self.opts.get("emit")
         else:
-            self.dfuncs = None
+            def_emit = emit
+
+        if assign is None:
+            def_assign = self.opts.get("assign")
+        else:
+            def_assign = assign
+
+        self.name = module_name
+        self.combined = DotDict({**self._defaults, **self.opts})
+        self.combined.setdefault("objectify", self.combined["ptype"] != "none")
+        self.conf = DotDict({**self._defaults, **(conf or {})})
+
+        if "operator" in str(self):
+            self.emit = True if def_emit is None else def_emit
+            self.assign = None if self.emit else def_assign or module_name
+        elif "processor" in str(self):
+            self.combined["ftype"] = self.opts["ftype"]
+            self.is_source = self.opts["ftype"] == "none"
+            self.emit = self.is_source if def_emit is None else def_emit
+            assignment = "content" if self.is_source else module_name
+            self.assign = None if self.emit else def_assign or assignment
+            self.sub_type = "source" if self.is_source else "transformer"
+        else:
+            print(f"Unknown module {self}.")
+
+        _conf = self.conf.asdict()
+        self.combined.update(kwargs)
+        self.combined["emit"] = self.emit
+        self.combined["assign"] = self.assign
+
+        _combined = self.combined.asdict()
+        self.parsers = get_parsers(_conf, **_combined)
+
+        if self.combined["ptype"] == "none":
+            self.casters = None
+        else:
+            self.casters = get_casters(**_combined)
 
 
 class processor(Module):
-    def __init__(
-        self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         """Creates a sync/async pipe that processes individual items. These
         pipes are classified as `type: processor` and as either
         `sub_type: transformer` or `subtype: source`. To be recognized as
@@ -306,10 +318,6 @@ class processor(Module):
 
             listize (bool): Ensure that the value returned from an `extract` is
                 list-like (default: False)
-
-            pdictize (bool): Convert `conf` or an `extract` to a
-                riko.dotdict.DotDict instance (default: True unless
-                `listize` is False and `extract` is True)
 
             objectify (bool): Convert `conf` to a meza.fntools.Objectify
                 instance (default: True unless  `ptype` is 'none').
@@ -339,11 +347,11 @@ class processor(Module):
                 more than one result).
 
             assign (str): Attribute to assign stream (default: 'content' if
-                `ftype` is 'none', pipe name otherwise)
+                `ftype` is 'none', pipe name otherwise). Ignored if `emit` is true.
 
             emit (bool): Return the stream as is and don't assign it to an item
                 attribute (default: True if `ftype` is set to 'none', False
-                otherwise).
+                otherwise). Overrides `assign`.
 
             skip_if (func): A function that takes the `item` and should return
                 True if processing should be skipped, or False otherwise. If
@@ -355,7 +363,7 @@ class processor(Module):
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> @processor()
-            ... def pipe(item, objconf, skip=False, **kwargs):
+            ... def pipe(item, extraction, objconf, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
@@ -368,7 +376,7 @@ class processor(Module):
             >>> # call an async function
             >>> @processor(isasync=True)
             ... @coroutine
-            ... def async_pipe(item, objconf, skip=False, **kwargs):
+            ... def async_pipe(item, extraction, objconf, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
@@ -379,33 +387,32 @@ class processor(Module):
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>> response = {'content': 'say "hello world" three times!'}
-            >>> next(pipe(item, **kwargs)) == response
-            True
+            >>> next(pipe(item, **kwargs))
+            {'content': 'say "hello world" three times!'}
             >>>
             >>> def run(reactor):
-            ...     callback = lambda x: print(next(x) == response)
+            ...     callback = lambda x: print(next(x))
             ...     d = async_pipe(item, **kwargs)
             ...     return d.addCallbacks(callback, logger.error)
             ...
             >>> if _issync:
-            ...     True
+            ...     {'content': 'say "hello world" three times!'}
             ... else:
             ...     try:
             ...         react(run, _reactor=FakeReactor())
             ...     except SystemExit:
             ...         pass
-            True
+            {'content': 'say "hello world" three times!'}
         """
         super().__init__(*args, **kwargs)
 
     @overload
-    def __call__(self, pipe: SyncProcessor) -> SyncPipeline:
-        pass
-    @overload
-    def __call__(self, pipe: AsyncProcessor) -> AsyncPipeline:
-        pass
-    def __call__(self, pipe: Processor) -> Pipeline:
+    def __call__(self, pipe: AsyncProcessorParser) -> AsyncProcessorWrapper:
+        ...
+    @overload  # noqa: E301
+    def __call__(self, pipe: SyncProcessorParser) -> SyncProcessorWrapper:
+        ...
+    def __call__(self, pipe: ProcessorParser) -> ProcessorWrapper:  # noqa: E301
         """Creates a sync/async pipe that processes individual items
 
         Args:
@@ -421,35 +428,32 @@ class processor(Module):
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'pdictize': False, 'emit': True, 'field': 'content',
-            ...     'objectify': False}
+            ...     'emit': True, 'field': 'content', 'objectify': False}
             ...
             >>> @processor(**kwargs)
-            ... def pipe(content, times, skip=False, **kwargs):
+            ... def pipe(content, times, objconf, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
-            ...         value = 'say "%s" %s times!' % (content, times[0])
-            ...         stream = {kwargs['assign']: value}
+            ...         stream = 'say "%s" %s times!' % (content, times[0])
             ...
             ...     return stream
             ...
             >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
             >>> @processor(isasync=True, **kwargs)
-            ... def async_pipe(content, times, skip=False, **kwargs):
+            ... def async_pipe(content, times, objconf, skip=False, **kwargs):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
-            ...         value = 'say "%s" %s times!' % (content, times[0])
-            ...         stream = {kwargs['assign']: value}
+            ...         stream = 'say "%s" %s times!' % (content, times[0])
             ...
             ...     return stream
             ...
             >>> item = {'content': 'hello world'}
             >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
             >>> next(pipe(item, **kwargs))
-            {'content': 'say "hello world" three times!'}
+            'say "hello world" three times!'
             >>>
             >>> def run(reactor):
             ...     callback = lambda x: print(next(x))
@@ -457,68 +461,76 @@ class processor(Module):
             ...     return d.addCallbacks(callback, logger.error)
             ...
             >>> if _issync:
-            ...     True
+            ...     {'content': 'say "hello world" three times!'}
             ... else:
             ...     try:
             ...         react(run, _reactor=FakeReactor())
             ...     except SystemExit:
             ...         pass
-            Attention! Running fake reactor. Some deferreds may not work as intended.
-            {'content': 'say "hello world" three times!'}
+            say "hello world" three times!
         """
         @wraps(pipe)
-        def wrapper(item: Optional[Item | Iterator[Item]] =None, **kwargs):
+        def wrapper(
+            item: Optional[ItemArg] = None,
+            conf: Optional[BasicMapping] = None,
+            **kwargs
+        ) -> ItemsResult:
             module_name = wrapper.__module__.split(".")[-1]
-            self.prepare(module_name, **kwargs)
-            is_source = self.ftype == "none"
-            _assign = None if is_source else module_name
-            self.prepare(module_name, emit=is_source, assign=_assign, **kwargs)
 
-            if isinstance(item, Iterator):
-                items = map(DotDict, item)
-            elif item:
-                items = iter([DotDict(item)])
+            if isinstance(item, (Mapping, str)):
+                _INPUT = dictize(item)
+            elif isinstance(item, Iterator):
+                items = list(item)
+
+                if (item_count := len(items)) > 1:
+                    msg = f"{module_name} received an Iterator of {item_count} items. "
+                    msg += "Did you forget to use a loop? Processing only the first "
+                    msg += "item."
+                    logger.error(msg)
+
+                _INPUT = dictize(items[0])
             else:
-                items = iter([DotDict()])
+                _INPUT = DotDict()
 
-            for _INPUT in items:
-                if skip := get_skip(_INPUT, **self.combined):
-                    self.dfuncs = None
+            self.prepare(module_name, conf=conf, **kwargs)
+            _emit, _assign = self.emit, self.assign
+            _conf = cast_type(ParsedConf, self.conf.asdict())
+            skip = get_skip(_INPUT, **self.combined)
 
-                if self.bfuncs:
-                    orig_item, parsed = _dispatch(_INPUT, self.bfuncs, dfuncs=self.dfuncs)
-                else:
-                    print(f"{module_name} bfuncs missing!")
-                    orig_item, parsed = {}, []
+            args = (_INPUT, self.parsers, self.casters)
+            combined = self.combined.asdict()
+            defaults = cast_type(Defaults, combined.pop("defaults", None))
+            orig_item, casted = _dispatch(*args, defaults=defaults, **combined)
 
-                kwargs.update({"skip": skip, "stream": orig_item})
+            kwargs.update({"skip": skip, "stream": orig_item, "assign": _assign})
 
-                if self.isasync:
-                    _stream = yield pipe(*parsed, **kwargs)
-                else:
-                    _stream = pipe(*parsed, **kwargs)
+            if self.isasync:
+                ___stream = cast_type(AsyncProcessorParser, pipe)(*casted, **kwargs)
+                __stream = yield ___stream  # pyright: ignore[reportReturnType]
+                _stream = cast_type(ItemArg, __stream)
+            else:
+                _stream = cast_type(SyncProcessorParser, pipe)(*casted, **kwargs)
 
-                if callable(_stream):
-                    _stream = _stream()
+            one, assignment = get_assignment(_stream, skip=skip, **_conf)
 
-                one, assignment = get_assignment(_stream, **self.conf)
+            if isinstance(_INPUT, (str, int)) or skip or _emit:
+                stream = assignment
+            else:
+                stream = gen_assignments(_INPUT, assignment, one=one, assign=_assign, **_conf)
 
-                if skip or self.conf.get("emit"):
-                    stream = assignment
-                else:
-                    stream = assign(_INPUT, assignment, one=one, **self.conf)
+            if self.isasync:
+                return_value(stream)
+            else:
+                yield from stream
 
-                if self.isasync:
-                    return_value(stream)
-                else:
-                    yield from stream
+        setattr(wrapper, "type", "processor")
+        setattr(wrapper, "name", pipe.__module__.split(".")[-1])
+        sub_type = "source" if self.opts["ftype"] == "none" else "transformer"
+        setattr(wrapper, "sub_type", sub_type)
+        setattr(wrapper, "pollable", self.pollable)
 
-        is_source = self.ftype == "none"
-        wrapper.__dict__["name"] = wrapper.__module__.split(".")[-1]
-        wrapper.__dict__["type"] = "processor"
-        wrapper.__dict__["sub_type"] = "source" if is_source else "transformer"
-        wrapper.__dict__["pollable"] = self.pollable
-        return coroutine(wrapper) if self.isasync else wrapper
+        result = coroutine(wrapper) if self.isasync else wrapper  # pyright: ignore[reportArgumentType]
+        return cast_type(SyncProcessorWrapper, result)
 
 
 class operator(Module):
@@ -531,17 +543,15 @@ class operator(Module):
             opts (dict): The keyword arguments passed to the wrapper
 
         Kwargs:
-            conf (dict): The pipe configuration
+            conf (dict): The pipe configuration. May contain key embed.
+                embed (dict): Must have key "type". May have key "conf",
+
             extract (str): The key with which to get values from `conf`. If set,
                 the wrapped pipe will receive these value instead of `conf`
                 (default: None).
 
             listize (bool): Ensure that the value returned from an `extract` is
                 list-like (default: False)
-
-            pdictize (bool): Convert `conf` or an `extract` to a
-                riko.dotdict.DotDict instance (default: True if either
-                `extract` is False or both `listize` and `extract` are True)
 
             objectify (bool): Convert `conf` to a meza.fntools.Objectify
                 instance (default: True unless  `ptype` is 'none').
@@ -569,12 +579,12 @@ class operator(Module):
                 None (yield all results, but only return a list if there is
                 more than one result).
 
-            assign (str): Attribute to assign stream (default: the pipe name)
-            embed (dict): Must have key "type". May have key "conf",
-            with (str):
+            assign (str): Attribute to assign stream (default: the pipe name). Ignored
+                if `emit` is true.
 
+            embed (dict): Must have key "type". May have key "conf",
             emit (bool): return the stream as is and don't assign it to an item
-                attribute (default: True).
+                attribute (default: True). Overrides `assign`.
 
         Returns:
             func: A function of 1 arg (items) and a `**kwargs`.
@@ -614,7 +624,8 @@ class operator(Module):
             ...     return _sum(len(item['content'].split()) for item in stream)
             ...
             >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
-            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
+            >>> conf = {'times': 'three'}
+            >>> kwargs = {'conf': conf, 'assign': 'content', 'emit': False}
             >>> next(pipe1(items, **kwargs))
             {'content': 'say "hello world" three times!'}
             >>> next(pipe2(items, **kwargs))
@@ -628,8 +639,8 @@ class operator(Module):
             ...     print(next(r2))
             ...
             >>> if _issync:
-            ...     True
-            ...     True
+            ...     {'content': 'say "hello world" three times!'}
+            ...     {'content': 4}
             ... else:
             ...     try:
             ...         react(run, _reactor=FakeReactor())
@@ -641,12 +652,12 @@ class operator(Module):
         super().__init__(*args, **kwargs)
 
     @overload
-    def __call__(self, pipe: SyncOperator) -> SyncPipeline:
-        pass
+    def __call__(self, pipe: AsyncOperatorParser) -> AsyncOperatorWrapper:
+        ...
     @overload
-    def __call__(self, pipe: AsyncOperator) -> AsyncPipeline:
-        pass
-    def __call__(self, pipe: Operator) -> Pipeline:
+    def __call__(self, pipe: SyncOperatorParser) -> SyncOperatorWrapper:
+        ...
+    def __call__(self, pipe: OperatorParser) -> OperatorWrapper:
         """Creates a wrapper that allows a sync/async pipe to processes a
         stream of items
 
@@ -665,37 +676,35 @@ class operator(Module):
             >>>
             >>> opts = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
-            ...     'pdictize': False, 'emit': True, 'field': 'content',
-            ...     'objectify': False}
-            ...
+            ...     'field': 'content', 'objectify': False
+            ... }
             >>> wrapper = operator(**opts)
+            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
+            >>> conf = {'times': 'three'}
+            >>> kwargs = {'conf': conf, 'assign': 'content', 'emit': False}
             >>>
-            >>> def pipe1(stream, objconf, tuples, **kwargs):
-            ...     for content, times in tuples:
-            ...         value = 'say "{content}" {0} times!'.format(*times, **content)
-            ...         yield {kwargs['assign']: value}
-            ...
-            >>> def pipe2(stream, objconf, tuples, **kwargs):
-            ...     word_cnt = _sum(len(item['content'].split()) for item in stream)
-            ...     return {kwargs['assign']: word_cnt}
+            >>> def pipe1(stream, times, tuples, **kwargs):
+            ...     for content, objconf in tuples:
+            ...         yield 'say "{content}" {0} times!'.format(*times, **content)
             ...
             >>> wrapped_pipe1 = wrapper(pipe1)
-            >>> wrapped_pipe2 = wrapper(pipe2)
-            >>> items = [{'content': 'hello world'}, {'content': 'bye world'}]
-            >>> kwargs = {'conf':  {'times': 'three'}, 'assign': 'content'}
-            >>>
             >>> next(wrapped_pipe1(items, **kwargs))
             {'content': 'say "hello world" three times!'}
+            >>>
+            >>> def pipe2(stream, objconf, tuples, **kwargs):
+            ...     return _sum(len(item['content'].split()) for item in stream)
+            ...
+            >>> wrapped_pipe2 = wrapper(pipe2)
+            >>>
             >>> next(wrapped_pipe2(items, **kwargs))
             {'content': 4}
             >>> async_wrapper = operator(isasync=True, **opts)
             >>>
             >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
-            >>> def async_pipe1(stream, objconf, tuples, **kwargs):
-            ...     for content, times in tuples:
-            ...         value = 'say "{content}" {0} times!'.format(*times, **content)
-            ...         yield {kwargs['assign']: value}
+            >>> def async_pipe1(stream, times, tuples, **kwargs):
+            ...     for content, objconf in tuples:
+            ...         yield 'say "{content}" {0} times!'.format(*times, **content)
             ...
             >>> # this is an admittedly contrived example to show how you would
             >>> # call an async function
@@ -703,7 +712,7 @@ class operator(Module):
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     words = (len(item['content'].split()) for item in stream)
             ...     word_cnt = yield maybeDeferred(_sum, words)
-            ...     return_value({kwargs['assign']: word_cnt})
+            ...     return_value(word_cnt)
             ...
             >>> wrapped_async_pipe1 = async_wrapper(async_pipe1)
             >>> wrapped_async_pipe2 = async_wrapper(async_pipe2)
@@ -723,146 +732,206 @@ class operator(Module):
             ...         react(run, _reactor=FakeReactor())
             ...     except SystemExit:
             ...         pass
-            Attention! Running fake reactor. Some deferreds may not work as intended.
             {'content': 'say "hello world" three times!'}
             {'content': 4}
         """
 
         @wraps(pipe)
-        def wrapper(items=None, **kwargs):
-            items = items or iter([])
-            _INPUT = map(DotDict, items)
+        def wrapper(
+            items: Optional[Items] = None,
+            conf: Optional[BasicMapping] = None,
+            embed: Optional[ProcessorWrapper] = None,
+            **kwargs
+        ) -> ItemsResult:
+            _INPUT = map(dictize, iter(items or []))
             module_name = wrapper.__module__.split(".")[-1]
-            wrapper.__dict__["name"] = module_name
+            # print(f"\n## Wrapping operator {module_name} - {id(wrapper)} ##\n")
+            # print(f"{module_name} {items=}")
+            # print(f"{module_name} {_INPUT=}")
+            self.prepare(module_name, conf=conf, **kwargs)
+            _emit, _assign = self.emit, self.assign
+            embedded_kwargs = cast_type(BasicDict, self.conf.pop("embed", None))
+            _conf = cast_type(ParsedConf, self.conf.asdict())
+            # print(f"{module_name} {kwargs=}")
             context = kwargs.pop("context", Context())
-            self.prepare(module_name, emit=True, assign=module_name, **kwargs)
-
-            # `assign` is stored in `conf`, which means operators can't access both it
-            # (via `tuples`) and `stream` at the same time. Copying it to kwargs resolves
-            # this issue.
-            kwargs["assign"] = self.combined.get("assign")
 
             # - operators can't skip items
-            # - purposely setting both variables to maps of the same iterable
-            #   since only one is intended to be used at any given time
+            # - purposely setting both tuples and orig_stream to maps of the same
+            #   iterable since only one is intended to be used at any given time
             # - `tuples` is an iterator of tuples of the item and second objconf
-            if self.bfuncs:
-                dispatcher = partial(_dispatch, bfuncs=self.bfuncs, dfuncs=self.dfuncs)
-                dispatches = map(dispatcher, _INPUT)
-                tuples: PipeTuples = ((d.item, d.parsed[1]) for d in dispatches)
-                orig_stream = (d.item for d in dispatches)
-                d = dispatcher(DotDict())
-                objconf = d.parsed[1]
-            else:
-                print(f"{module_name} bfuncs missing!")
-                tuples, orig_stream = map(iter, ([], _INPUT))
-                objconf = Objectify({})
+            combined = self.combined.asdict()
+            defaults = cast_type(Defaults, combined.pop("defaults", None))
+            _dispatcher = partial(_dispatch, parsers=self.parsers, casters=self.casters, defaults=defaults)
+            dispatcher = cast_type(Callable[[ItemArg], Dispatched], _dispatcher)
+
+            # Parses conf that can vary per item. Can't handle terminal input.
+            allowed = {"extract", "listize", "defaults", "field"}
+            dkwargs = {k: v for k, v in combined.items() if k in allowed}
+            dispatches = (dispatcher(item, **dkwargs) for item in _INPUT)
+            tuples: PipeTuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
+            orig_stream = (d.item for d in dispatches)
+
+            # Parses conf that doesn't vary per item and may contain terminal input
+            casted = dispatcher(DotDict(), **combined).casted
 
             if context.submodule:
-                context.inputs = objconf
+                context.inputs = kwargs.get("inputs")
 
-            if embedded_pipe := kwargs.pop("embed", None):
-                # Prepare submodule to take parameters from the loop instead the user
-                embedded_kwargs = self.conf.pop("embed").asdict()
+            if embed and getattr(embed, "name") == "input":
+                logger.error("Embedding input pipes is not currently supported.")
+                _stream = _INPUT
+            elif embed and getattr(embed, "type") == "processor":
                 embed_context = copy(context)
                 embed_context.submodule = True
-                _stream = embedded_pipe(items, context=embed_context, **embedded_kwargs)
-            else:
-                args = (orig_stream, objconf, tuples)
+                embedded_kwargs["context"] = embed_context
+                embedder = partial(embed, **embedded_kwargs)
+                # print(f"Embedding {embed.name} with {embedded_kwargs=}")
+                stream_map = map(embedder, _INPUT)
 
                 if self.isasync:
-                    _stream: Stream = yield pipe(*args, **kwargs)
+                    logger.error("Embedding async pipes is not currently supported.")
+                    _stream = _INPUT
                 else:
-                    _stream: Stream = pipe(*args, **kwargs)
+                    sync_stream_map = cast_type(Iterable[Items], stream_map)
+                    _stream = chain.from_iterable(sync_stream_map)
+            elif embed:
+                msg = "Only processor pipes can be embedded."
+                msg = "Got {type} pipe {name}.".format(**embed.__dict__)
+                logger.error(msg)
+                _stream = _INPUT
+            elif module_name == "loop":
+                logger.error("No embedded pipe provided!")
+                _stream = _INPUT
+            else:
+                args = (orig_stream, casted.extraction, tuples)
 
-                if callable(_stream):
-                    _stream = _stream()
+                if self.isasync:
+                    ___stream = cast_type(AsyncOperatorParser, pipe)(*args, **kwargs)  # pyright: ignore[reportArgumentType]
+                    __stream = yield ___stream  # pyright: ignore[reportReturnType]
+                    _stream = cast_type(Items, __stream)
+                else:
+                    _stream = cast_type(SyncOperatorParser, pipe)(*args, **kwargs)
 
-                sub_type = "aggregator" if hasattr(_stream, "keys") else "composer"
-                wrapper.__dict__["sub_type"] = sub_type
+                # if callable(_stream):
+                #     _stream = _stream()
 
+            self.sub_type = "aggregator" if isinstance(_stream, Mapping) else "composer"
+            setattr(wrapper, "sub_type", self.sub_type)
             # operators can only assign one value per item and can't skip items
             # print(f"{module_name} {combined=}")
-            _conf = self.conf.asdict()
-            _, assignment = get_assignment(_stream, **_conf)
+            _, assignment = get_assignment(_stream, skip=False, **_conf)
 
-            if _conf.get("emit"):
+            if _emit:
                 stream = assignment
             else:
                 singles = (iter([v]) for v in assignment)
-                assigned = (assign({}, s, one=True, **_conf) for s in singles)
-                stream = multiplex(assigned)
+                assigned = (gen_assignments({}, s, one=True, assign=_assign, **_conf) for s in singles)
+                stream = chain.from_iterable(assigned)
 
             if self.isasync:
                 return_value(stream)
             else:
                 yield from stream
 
-        wrapper.__dict__["type"] = "operator"
-        return coroutine(wrapper) if self.isasync else wrapper
+            # print(f"\n## Ended operator {module_name} - {id(wrapper)} ##\n")
+            #
+        # wrapper.__dict__["type"] = "operator"
+        setattr(wrapper, "type", "operator")
+        setattr(wrapper, "name", pipe.__module__.split(".")[-1])
+        setattr(wrapper, "sub_type", None)
+        setattr(wrapper, "pollable", self.pollable)
+
+        # https://github.com/python/mypy/issues/15737
+        result = coroutine(wrapper) if self.isasync else wrapper  # pyright: ignore[reportArgumentType]
+        return cast_type(SyncOperatorWrapper, result)
 
 
 def _dispatch(
-    item: Item,
-    bfuncs: BroadcastFuncs,
-    dfuncs: Optional[DispatchFuncs] = None
+    item: ItemArg,
+    parsers: Optional[ParseFuncs] = None,
+    casters: Optional[CastFuncs] = None,
+    defaults: Optional[Defaults] = None,
+    **kwargs,
 ) -> Dispatched:
-    split = broadcast(item, *bfuncs)
-    parsed = dispatch(split, *dfuncs) if dfuncs else split
-    return Dispatched(item, parsed)
-
-
-def get_broadcast_funcs(conf=None, **kwargs) -> BroadcastFuncs:
+    _defaults: Defaults = defaults or {}
     kw = Objectify(kwargs)
-    conf = Objectify(conf or {})
+
+    if parsers:
+        parsed_field, parsed_conf = broadcast(item, *parsers, **kwargs)
+    else:
+        parsed_field, parsed_conf = item, kw.conf
+
+    if isinstance(parsed_conf, Mapping):
+        merged_conf = {**_defaults, **parsed_conf}
+    else:
+        merged_conf = {**_defaults}
 
     if kw.extract:
         try:
-            pieces = next(v for k, v in conf.items() if k.lower() == kw.extract)
+            pieces = next(v for k, v in merged_conf.items() if k.lower() == kw.extract)
         except StopIteration:
-            raise KeyError(f"extract {kw.extract=} not found in {conf=}")
-    else:
-        pieces = conf
+            logger.error(f"{kw.extract=} not found in conf {merged_conf}")
+            pieces = None
+        else:
+            pieces = cast_type(BasicArg, pieces)
 
-    if kw.listize:
-        listed: list[Any] = listize(pieces)
-        piece_defs = map(DotDict, listed) if kw.pdictize else listed
-        parser = partial(parse_conf, conf=conf, **kwargs)
-        pfuncs = [partial(parser, conf=piece_def) for piece_def in piece_defs]
-        conf_func = lambda item: broadcast(item, *pfuncs)
-    elif kw.ptype != "none":
-        _conf = DotDict(pieces) if kw.pdictize and pieces else pieces
-        conf_func = partial(parse_conf, conf=_conf, **kwargs)
+        pieces_or_conf = listize(pieces) if kw.listize else pieces
     else:
-        conf_func = lambda _: None
+        pieces_or_conf = merged_conf
+
+    parsed = (parsed_field, pieces_or_conf, merged_conf)
+    casted = dispatch(parsed, *casters) if casters else parsed
+    return Dispatched(item, Casted(casted[0], casted[1], casted[2]))
+
+
+def get_parsers(conf=None, **kwargs) -> ParseFuncs:
+    conf = conf or {}
+    kw = Objectify(kwargs)
 
     if kw.ftype == "none":
-        field_func = lambda _: None
-    elif kw.ftype == "with":
-        field_func = partial(get_with, **kwargs)
+        field_parser = cast_none
     else:
-        field_func = partial(get_field, **kwargs)
+        field_parser = partial(get_field)
 
-    return BroadcastFuncs(field_func, conf_func)
-
-
-def get_dispatch_funcs(**kwargs) -> DispatchFuncs:
-    # ftype:
-    #     'word': partial(df.maybeDeferred, get_word) if async else get_word,
-    #     'num': partial(df.maybeDeferred, get_num) if async else get_num,
-    #     'pass': passthrough,
-    #     None: lambda _: tu.asyncNone if async else utils.passnone,
-    listize = kwargs.get("listize")
-    pfunc = partial(cast, _type=kwargs["ptype"])
-    objectify = partial(Objectify, func=pfunc)
-    field_dispatch = partial(cast, _type=kwargs["ftype"])
-
-    # TODO: add check to only objectify if extracted value is a dict
-    if listize and kwargs["objectify"] and kwargs["ptype"] != "none":
-        conf_dispatch = lambda confs: [objectify(conf) for conf in confs]
-    elif kwargs["objectify"] and kwargs["ptype"] != "none":
-        conf_dispatch = objectify
+    if kw.ptype == "none":
+        conf_parser = cast_none
     else:
-        conf_dispatch = pfunc
+        conf_parser = partial(parse_conf, conf=conf)
 
-    return DispatchFuncs(field_dispatch, conf_dispatch)
+    return ParseFuncs(field_parser, conf_parser)
+
+
+def get_casters(**kwargs) -> CastFuncs:
+    kw = Objectify(kwargs)
+
+    if kw.ftype in CAST_SWITCH:
+        _field_func = partial(cast_value, _type=CastType(kw.ftype))
+        field_func = cast_type(Callable[[ComplexArg], ComplexValue], _field_func)
+    else:
+        if kw.ftype:
+            print(f"Invalid cast {kw.ftype=}. Ignoring.")
+
+        field_func = cast_pass
+
+    if kw.ptype in CAST_SWITCH:
+        _caster = partial(cast_value, _type=CastType(kw.ptype))
+        caster = cast_type(Callable[[ComplexArg], ComplexValue], _caster)
+    else:
+        if kw.ptype:
+            print(f"Invalid cast {kw.ptype=}. Ignoring.")
+
+        caster = cast_pass
+
+    if kw.ptype == "none":
+        extract_caster = conf_caster = cast_none
+    elif kw.listize and kw.objectify:
+        extract_caster = lambda pieces: [objectify(piece, caster) for piece in pieces]
+        conf_caster = objectify
+    elif kw.objectify:
+        extract_caster = partial(objectify, func=caster)
+        conf_caster = objectify if kw.extract else partial(objectify, func=caster)
+    else:
+        extract_caster = caster
+        conf_caster = cast_pass
+
+    return CastFuncs(field_func, extract_caster, conf_caster)

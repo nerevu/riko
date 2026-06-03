@@ -34,6 +34,7 @@ dependencies = [
     "chardet>=3.0.4,<8.0.0",
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
+    "ijson>=2.6.1,<2.0.0",
     "meza>=0.42.5",
     "mezmorize>=0.27.0",
     "pygogo>=0.12.0,<2.0.0",

@@ -14,14 +14,17 @@ Examples:
         >>> from riko.modules.tokenizer import pipe
         >>>
         >>> item = {'content': 'Once,twice,thrice'}
-        >>> next(pipe(item))['tokenizer'][0] == {'content': 'Once'}
-        True
+        >>> next(pipe(item))['tokenizer'][0]
+        {'content': 'Once'}
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
 import pygogo as gogo
+
+from riko import Objconf
+from riko.types.general import Extraction, Items
 
 from . import processor
 
@@ -31,7 +34,7 @@ DEFAULTS = {"delimiter": ",", "dedupe": False, "sort": False, "token_key": "cont
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content, objconf, skip=False, **kwargs):
+def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Items:
     """Parses the pipe content
 
     Args:
@@ -46,14 +49,14 @@ def parser(content, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>> objconf = Objectify({'delimiter': '//', 'token_key': 'token'})
         >>> content = 'Once//twice//thrice//no more'
-        >>> result = parser(content, objconf)
-        >>> next(result) == {'token': 'Once'}
-        True
+        >>> result = parser(content, None, objconf)
+        >>> next(result)
+        {'token': 'Once'}
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        def keyfunc(s: str): return s.lower()
+        keyfunc = lambda s: s.lower()
         splits = [s.strip() for s in content.split(objconf.delimiter) if s]
         deduped = set(splits) if objconf.dedupe else splits
         chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
@@ -62,7 +65,7 @@ def parser(content, objconf, skip=False, **kwargs):
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously splits a string by a delimiter.
 
@@ -98,9 +101,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     resp = {'content': 'Once'}
-        ...     attr = 'tokenizer'
-        ...     callback = lambda x: print(next(x)[attr][0] == resp)
+        ...     callback = lambda x: print(next(x)['tokenizer'][0])
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     d = async_pipe(item)
         ...     return d.addCallbacks(callback, logger.error)
@@ -110,7 +111,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'content': 'Once'}
     """
     return parser(*args, **kwargs)
 
@@ -149,12 +150,11 @@ def pipe(*args, **kwargs):
         >>> item = {'description': 'Once//twice//thrice//no more'}
         >>> conf = {'delimiter': '//', 'sort': True}
         >>> kwargs = {'field': 'description', 'assign': 'tokens'}
-        >>> resp = {'content': 'no more'}
-        >>> next(pipe(item, conf=conf, **kwargs))['tokens'][0] == resp
-        True
+        >>> next(pipe(item, conf=conf, **kwargs))['tokens'][0]
+        {'content': 'no more'}
         >>> kwargs.update({'emit': True})
         >>> conf.update({'token_key': 'token'})
-        >>> next(pipe(item, conf=conf, **kwargs)) == {'token': 'no more'}
-        True
+        >>> next(pipe(item, conf=conf, **kwargs))
+        {'token': 'no more'}
     """
     return parser(*args, **kwargs)

@@ -15,9 +15,8 @@ Examples:
         >>> from riko.modules.uniq import pipe
         >>>
         >>> items = ({'x': x, 'mod': x % 2} for x in range(5))
-        >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
-        ...     {'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
-        True
+        >>> list(pipe(items, conf={'uniq_key': 'mod'}))
+        [{'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -62,9 +61,8 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> kwargs = {'conf': conf}
         >>> stream = ({'x': x, 'mod': x % 2} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
-        >>> list(parser(stream, objconf, tuples, **kwargs)) == [
-        ...     {'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
-        True
+        >>> list(parser(stream, objconf, tuples, **kwargs))
+        [{'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
     """
     key, limit = objconf.uniq_key, int(objconf.limit)
     seen = deque(maxlen=limit)
@@ -77,7 +75,7 @@ def parser(stream, objconf, tuples, **kwargs):
             yield item
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously filters out non unique items according
     to a specified field.
@@ -143,12 +141,11 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> items = [{'content': x, 'mod': x % 2} for x in range(5)]
-        >>> list(pipe(items, conf={'uniq_key': 'mod'})) == [
-        ...     {'mod': 0, 'content': 0}, {'mod': 1, 'content': 1}]
-        True
+        >>> list(pipe(items, conf={'uniq_key': 'mod'}))
+        [{'content': 0, 'mod': 0}, {'content': 1, 'mod': 1}]
         >>> stream = pipe(items)
-        >>> next(stream) == {'mod': 0, 'content': 0}
-        True
+        >>> next(stream)
+        {'content': 0, 'mod': 0}
         >>> [item['content'] for item in stream]
         [1, 2, 3, 4]
     """

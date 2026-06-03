@@ -20,7 +20,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/feeds.feedburner.com_ouseful.xml"
+                    "value": "file://riko/data/feeds.feedburner.com_ouseful.xml"
                 }
             },
             "id": "sw-478",

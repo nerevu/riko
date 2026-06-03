@@ -46,7 +46,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/news.yahoo.com_rss_topstories.xml"
+                    "value": "file://riko/data/news.yahoo.com_rss_topstories.xml"
                 }
             },
             "id": "sw-123",
@@ -54,7 +54,6 @@
         },
         {
             "conf": {
-                "type": "int",
                 "debug": {
                     "type": "number",
                     "value": ""
@@ -77,7 +76,7 @@
                 }
             },
             "id": "sw-131",
-            "type": "input"
+            "type": "numberinput"
         },
         {
             "conf": {

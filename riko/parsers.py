@@ -6,26 +6,25 @@ riko.parsers
 Provides utility classes and functions
 """
 from itertools import chain
+from json import JSONDecodeError, loads
 import re
 
-from io import StringIO
+from io import BytesIO, StringIO, TextIOBase
 from html.entities import name2codepoint
 from html.parser import HTMLParser
-from typing import Any, Iterable, Mapping, Optional, Sequence
+from time import struct_time
+from typing import TYPE_CHECKING, Callable, Iterable, Iterator, Literal, Mapping, Optional, Sequence, TypeAlias, Union, cast, overload
 from urllib.error import URLError
 
 import feedparser
 import pygogo as gogo
 
-from riko.dotdict import DotDict
-from riko.types import Item
+from riko import Objectify
+from riko.dotdict import DotDict, is_sentinal, is_type_value
+from riko.types.general import ComplexArg, BasicArg, ItemArg, Skip
 from riko.utils import fetch
-from meza.fntools import Objectify, remove_keys, listize
-from meza.process import merge
-from meza.compat import decode
-from ijson import items
-
-logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+from riko import listize
+from ijson import IncompleteJSONError, items
 
 try:
     from lxml import html, etree
@@ -36,27 +35,49 @@ except ImportError:
     try:
         import xml.etree.cElementTree as etree
     except ImportError:
-        logger.debug("xml parser: ElementTree")
+        xml_parser = "ElementTree"
         import xml.etree.ElementTree as etree
         from xml.etree.ElementTree import ElementTree
     else:
-        logger.debug("xml parser: cElementTree")
+        xml_parser = "cElementTree"
         from xml.etree.cElementTree import ElementTree
 else:
     ElementTree = None
-    logger.debug("xml parser: lxml")
+    xml_parser = "lxml"
     from lxml.html import html5parser
 
 try:
     import speedparser3 as speedparser
 except ImportError:
-    logger.debug("rss parser: feedparser")
+    rss_parser = "feedparser"
     speedparser = None
 else:
-    logger.debug("rss parser: speedparser")
+    rss_parser = "speedparser"
 
 rssparser = speedparser or feedparser
 
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import ElementTree as pElementTree
+    from xml.etree.cElementTree import ElementTree as cElementTree
+    from lxml.etree import ElementTree as lElementTree
+
+    from xml.etree.ElementTree import Element as pElement
+    from xml.etree.cElementTree import Element as cElement
+    from lxml.etree import Element as lElement
+
+    from speedparser3.feedparsercompat import FeedParserDict as SpeedParserDict
+    from feedparser import FeedParserDict
+
+StdElementTree: TypeAlias = Union["pElementTree", "cElementTree"]
+AnyElementTree: TypeAlias = Union[StdElementTree, "lElementTree"]
+AnyElement: TypeAlias = Union["pElement", "cElement", "lElement"]
+Stringy: TypeAlias = Union[str, "StringySequence", "StringyMapping"]
+StringyMapping: TypeAlias = Mapping[str, Stringy]
+StringySequence: TypeAlias = Sequence[Stringy]
+
+logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+logger.debug(f"{xml_parser=}")
+logger.debug(f"{rss_parser=}")
 
 NAMESPACES = {
     "owl": "http://www.w3.org/2002/07/owl#",
@@ -65,10 +86,10 @@ NAMESPACES = {
 
 ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 
-SKIP_SWITCH = {
+SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
     "contains": lambda text, value: text.lower() in value.lower(),
-    "intersection": lambda text, value: set(text).intersection(value),
-    "re.search": lambda text, value: re.search(text, value, re.IGNORECASE),
+    "intersection": lambda text, value: bool(set(text).intersection(value)),
+    "re.search": lambda text, value: re.search(text, value, re.IGNORECASE) is not None,
 }
 
 
@@ -76,74 +97,113 @@ class LinkParser(HTMLParser):
     def __init__(
         self,
         *args,
+        external_only=True,
+        strict=True,
         rss_only=False,
-        link_type: Optional[str|Iterable[str]]=None,
+        link_type: Optional[str | Iterable[str]] = None,
         **kwargs
     ):
-        if rss_only:
-            self.link_type = ["rss+xml", "rdf+xml", "atom+xml", "text/xml", "xml"]
-        elif isinstance(link_type, str):
-            self.link_type = [link_type]
-        elif link_type:
-            self.link_type = list(link_type)
-        else:
-            self.link_type = None
-
         super().__init__(*args, **kwargs)
+        self.strict = strict
+        self.external_only = external_only
+
+        if rss_only:
+            self.link_type = ("rss+xml", "atom+xml", "rdf+xml", "text/xml", "xml")
+        elif isinstance(link_type, str):
+            self.link_type = (link_type,)
+        elif link_type:
+            self.link_type = tuple(link_type)
+        else:
+            self.link_type = tuple([])
+
+    def keyfunc(self, entry):
+        # sort according to the order of self.link_type
+        count = len(self.link_type)
+        enumerated = enumerate(self.link_type)
+        pos = (i for i, t in enumerated if entry.get("type", "").endswith(t))
+        return next(pos, count)
 
     def reset(self):
         HTMLParser.reset(self)
         self.entry = iter(())
         self.data = StringIO()
 
-    def handle_starttag(self, tag, attrs):
+    def handle_starttag(self, tag: str, attrs: Sequence[tuple[str, str | None]]):
         entry = dict(attrs)
         link = entry.get("href")
         _type = entry.get("type", "")
-        type_match = (_type.endswith(t) for t in self.link_type)
+        type_match = any(_type.endswith(t) for t in self.link_type)
 
-        if link and (not self.link_type or next(type_match, None)):
+        if link and not self.strict:
+            type_match = type_match or any(link.endswith(t) for t in self.link_type)
+
+        source_match = link and not (self.external_only and link.startswith("/"))
+
+        if source_match and (type_match or not self.link_type):
             entry["link"] = link
             entry["tag"] = tag
             self.entry = chain(self.entry, [entry])
 
-    def handle_data(self, data):
-        self.data.write("%s\n" % decode(data))
+    def handle_data(self, data: str):
+        self.data.write(f"{data}\n")
 
 
-def get_text(html, convert_charrefs=False):
+def get_text(html: str, convert_charrefs=False):
     try:
         parser = LinkParser(convert_charrefs=convert_charrefs)
     except TypeError:
         parser = LinkParser()
 
-    try:
-        parser.feed(html)
-    except TypeError:
-        parser.feed(decode(html))
-
+    parser.feed(html)
     return parser.data.getvalue()
 
 
-def parse_rss(url="", **kwargs):
-    try:
-        f = fetch(decode(url), **kwargs)
-    except (ValueError, URLError):
-        parsed = rssparser.parse(url)
-    else:
-        content = f.read() if speedparser else f
+def parse_rss(url="", **kwargs) -> Union[dict[str, list], "FeedParserDict", "SpeedParserDict"]:
+    parsed = {"parsed": []}
 
-        try:
-            parsed = rssparser.parse(content)
-        finally:
+    try:
+        f = fetch(url, **kwargs)
+    except URLError:
+        # url is an xml string
+        f, content, url = None, url, "content"
+    else:
+        content = f.read() if f.file else ""
+
+    try:
+        parsed = rssparser.parse(content)
+    finally:
+        if f:
             f.close()
+
+    if bozo_exception := parsed.get("bozo_exception"):
+        msg = bozo_exception.getMessage()
+        logger.error(f"Error parsing {url}: {msg}")
+        logger.error(f"Content: {content}")
 
     return parsed
 
 
-def xpath(tree, path="/", pos=0, namespace=None):
+def xpath(
+    tree: AnyElementTree,
+    path="/",
+    pos=0,
+    namespace: Optional[str] = None
+) -> Iterator[AnyElement]:
+    if not namespace:
+        tag = str(getattr(tree, 'tag', '') or str(tree).split(" ")[1])
+
+        if '{' in tag and '}' in tag:
+            ns = tag[tag.find('{') + 1:tag.find('}')]
+            ns_iter = (name for name in NAMESPACES if name in ns)
+            namespace = next(ns_iter, ns)
+
+    ns_path = '/'.join(f'ns:{p}' for p in path.split('/') if p) if namespace else path
+
     try:
-        elements = tree.xpath(path)
+        if namespace:
+            elements = tree.xpath(ns_path, namespaces={'ns': namespace})
+        else:
+            elements = tree.xpath(path)
     except AttributeError:
         stripped = path.lstrip("/")
         tags = stripped.split("/") if stripped else []
@@ -152,16 +212,8 @@ def xpath(tree, path="/", pos=0, namespace=None):
             # TODO: consider replacing with twisted.words.xish.xpath
             elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
         except AttributeError:
-            element_name = str(tree).split(" ")[1]
-
-            if not namespace and {"{", "}"}.issubset(element_name):
-                start, end = element_name.find("{") + 1, element_name.find("}")
-                ns = element_name[start:end]
-                ns_iter = (name for name in NAMESPACES if name in ns)
-                namespace = next(ns_iter, namespace)
-
-            prefix = ("/%s:" % namespace) if namespace else "/"
-            match = "./%s%s" % (prefix, prefix.join(tags[1:]))
+            prefix = (f"/{namespace}:") if namespace else "/"
+            match = f"./{prefix}{prefix.join(tags[1:])}"
             elements = tree.findall(match, NAMESPACES)
         except IndexError:
             elements = [tree]
@@ -172,168 +224,218 @@ def xpath(tree, path="/", pos=0, namespace=None):
     return iter(elements)
 
 
-def xml2etree(f, xml=True, html5=False):
+@overload
+def xml2etree(f: str | BytesIO | StringIO | TextIOBase, xml: Literal[True], html5: bool = ...) -> AnyElementTree:  # noqa: E501
+    ...
+@overload  # noqa: E302
+def xml2etree(f: str | BytesIO | StringIO | TextIOBase, xml: Literal[False], html5: Literal[True]) -> AnyElementTree:
+    ...
+@overload  # noqa: E302
+def xml2etree(f: str | BytesIO | StringIO | TextIOBase, xml: Literal[False], html5: Literal[False] = ...) -> StdElementTree:
+    ...
+def xml2etree(  # noqa: E302
+    f: str | BytesIO | StringIO | TextIOBase,
+    xml: bool = True,
+    html5: bool = False,
+) -> Optional[AnyElementTree]:
     if xml:
         element_tree = etree.parse(f)
     elif html5 and html5parser:
         element_tree = html5parser.parse(f)
-    elif html5parser:
+    elif xml_parser == "lxml":
         element_tree = html.parse(f)
-    elif ElementTree:
+    else:
+        if html5 and not html5parser:
+            logger.warning("lxml parser not found. Using html5lib instead.")
+
         # html5lib's parser returns an Element, so we must convert it into an
         # ElementTree
         element_tree = ElementTree(html.parse(f))
-    else:
-        logger.error("No suitable HTML parser found. Please install lxml or html5lib.")
-        element_tree = None
 
     return element_tree
 
 
-def _make_content(i, value=None, tag="content", append=True, strip=False):
-    content = i.get(tag)
+def _make_content(
+    i: StringyMapping,
+    value: Optional[Stringy] = None,
+    tag="content",
+    append=True,
+    strip=False
+) -> StringyMapping:
+    content: Stringy = i.get(tag, "")
 
-    try:
-        value = value.strip() if value and strip else value
-    except AttributeError:
-        pass
+    if value and isinstance(value, str) and strip:
+        value = value.strip()
 
     if content and value and append:
-        content = listize(content)
+        content = list(listize(content))
         content.append(value)
-    elif content and value:
+    elif content and value and isinstance(content, str) and isinstance(value, str):
         content = "".join([content, value])
+    elif content and value:
+        msg = f"got non-string content or value: ({type(content)=}), ({type(value)=})"
+        msg += " Try again setting append=True."
+        logger.warning(msg)
     elif value:
         content = value
 
     return {tag: content} if content else {}
 
 
-def etree2dict(element):
+def etree2dict(element: AnyElement) -> Stringy:
     """Convert an element tree into a dict imitating how Yahoo Pipes does it."""
-    i = dict(element.items())
-    i.update(_make_content(i, element.text, strip=True))
+    i: StringyMapping = dict(element.items())
+    content = _make_content(i, element.text, strip=True)
+    i.update(content)
 
     for child in element:
-        tag = child.tag
-        # tag = child.tag.split("}", 1)[-1]
+        tag = child.tag.split("}", 1)[-1]
         value = etree2dict(child)
-        i.update(_make_content(i, value, tag))
+        content = _make_content(i, value, tag)
+        i.update(content)
 
     if element.text and not set(i).difference(["content"]):
         # element is leaf node and doesn't have attributes
-        i = i.get("content")
+        result = i["content"]
+    else:
+        result = i
 
-    return i
+    return result
 
 
-def any2dict(f, ext="xml", html5=False, path=None):
+def any2dict(
+    f: StringIO | TextIOBase | Stringy,
+    ext: Optional[str] = "xml",
+    html5=False,
+    path: Optional[str] = None
+) -> Iterator[Stringy]:
     path = path or ""
 
-    if ext in {"xml", "html"}:
+    if isinstance(f, (int, Mapping, struct_time)):
+        yield f
+    elif isinstance(f, Sequence) and not isinstance(f, str):
+        yield from f
+    elif ext and ext in {"xml", "html"}:
         xml = ext == "xml"
         root = xml2etree(f, xml, html5).getroot()
-        replaced = "/".join(path.split("."))
-        tree = next(xpath(root, replaced)) if replaced else root
-        content = etree2dict(tree)
+
+        if path:
+            replaced = "/".join(path.split("."))
+
+            for tree in xpath(root, replaced):
+                value = etree2dict(tree)
+                yield from any2dict(value, ext=None)
+        else:
+            yield etree2dict(root)
     elif ext == "json":
-        content = next(items(f, path))
+        if isinstance(f, str):
+            try:
+                json = loads(f)
+            except JSONDecodeError as e:
+                logger.error(e)
+            else:
+                value = DotDict(json).get(path, "")
+                yield from any2dict(value, ext=None)
+        else:
+            objects = items(f, f"{path}.item")
+
+            try:
+                yield next(objects)
+            except IncompleteJSONError as e:
+                logger.error(e)
+                f.seek(0)
+                objects = items(f, path)
+
+                try:
+                    yield next(objects)
+                except IncompleteJSONError as e:
+                    logger.error(e)
+                    logger.warning("Loading file into memory")
+                    f.seek(0)
+                    yield from any2dict(f.read(), ext="json", path=path)
+                else:
+                    yield from objects
+            else:
+                yield from objects
+    elif ext:
+        raise TypeError(f"Invalid file type: '{ext}'")
+    elif isinstance(f, str):
+        yield f
     else:
-        raise TypeError("Invalid file type: '%s'" % ext)
-
-    return content
+        raise TypeError("No file type provided!")
 
 
-def get_value(
-    item: Item,
-    subconf: Optional[Mapping[str, Any] | Sequence[Any]] = None,
-    default=None,
+def parse_conf(
+    item: Optional[ItemArg] = None,
+    conf: Optional[BasicArg] = None,
     **kwargs
-) -> Any:
+) -> ComplexArg:
     """
-    param = {
-        "key": {"type": "text", "value": "q"},
-        "value": {"type": "text", "subkey": "title"}
-    }
-
-    item = {"title": "the title"}
-    get_value(item, subconf=param, objectify=True)
-    "the title"
-
-    params = [
-        {
-            "key": {"type": "text", "value": "q"},
-            "value": {"type": "text", "subkey": "title"}
-        },
-        {
-            "key": {"type": "text", "value": "v"},
-            "value": {"type": "text", "value": "1.0"}
-        }
-    ]
-
-    get_value(item, subconf=param, objectify=True)
-    [{"q": "the title"}, {"v": "1.0"}]
+    Examples
+    >>> param = {
+    ...     "key": {"type": "text", "value": "q"},
+    ...     "value": {"type": "text", "subkey": "title"}
+    ... }
+    >>> params = [
+    ...     param,
+    ...     {
+    ...         "key": {"type": "text", "value": "v"},
+    ...         "value": {"type": "text", "value": "1.0"}
+    ...     }
+    ... ]
+    >>> conf = {
+    ...     "count": {"type": "text", "value": "all"},
+    ...     "type": "urlbuilder",
+    ...     "BASE": {"type": "text", "value": "http://example.com"},
+    ...     "PARAM": params
+    ... }
+    >>> item = {"title": "the title"}
+    >>> parsed = parse_conf(item, conf=conf, objectify=True)
+    >>> parsed["count"], parsed["base"]
+    ('all', 'http://example.com')
+    >>> parsed["param"]
+    [{'key': 'q', 'value': 'the title'}, {'key': 'v', 'value': '1.0'}]
+    >>> conf = DotDict({"terminal": "attrs_1", "type": "text"})
+    >>> conf.get(attrs_1=iter([{'content': 'baz'}]))
+    {'content': 'baz'}
     """
-    value = default
-    dd_item = DotDict(item or {})
+    kw = Objectify(kwargs)
+    parsed = kw.default
 
-    if isinstance(subconf, Mapping):
-        subconf = DotDict(subconf)
-
-        if subvalue := subconf.get("subkey"):
-            value = dd_item.get(subvalue, **kwargs)
-        elif subconf:
-            value = subconf.get(default=default, **kwargs)
-    elif subconf is not None:
-        value = subconf
-
-    return value
-
-
-def parse_conf(item: Item, conf=None, **kwargs):
-    """
-    conf = {
-            "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "url"},
-            "BASE": {"type": "text", "value": "http://example.com"},
-            "PARAM": [
-                {
-                    "key": {"type": "text", "value": "q"},
-                    "value": {"type": "text", "subkey": "title"}
-                },
-                {
-                    "key": {"type": "text", "value": "v"},
-                    "value": {"type": "text", "value": "1.0"}
-                }
-            ]
-        },
-        "type": "urlbuilder"
-    }
-
-    item = {"title": "the title"}
-    parse_conf(item, conf=conf, objectify=True)
-    {
-        "count": "all",
-        "assign": "url",
-        "base": "http://example.com",
-        "param": [{"q": "the title"}, {"v": "1.0"}]
-    }
-    """
-
-    kw = Objectify(kwargs, defaults={})
+    if isinstance(item, Mapping):
+        dd_item = DotDict(item)
+    elif item:
+        dd_item = None
+    else:
+        dd_item = DotDict()
 
     if isinstance(conf, Mapping):
-        conf = Objectify(conf)
-        parsed = {k.lower(): get_value(item, v, **kwargs) for k, v in conf.items()}
-        result = merge([kw.defaults, parsed])
-        objectified = Objectify(result) if kw.objectify else result
-    else:
-        objectified = get_value(item, conf, **kwargs)
+        dd_conf = DotDict(conf)
 
-    return objectified
+        if dd_item is not None and (subkey := dd_conf.get("subkey")):
+            parsed = dd_item.get(cast(str, subkey), **kwargs)
+        elif is_sentinal(dd_conf):
+            parsed = dd_conf.get(**kwargs)
+        elif is_type_value(dd_conf):
+            parsed = cast(DotDict, dd_conf).get()
+        else:
+            parsed = {
+                k.lower(): parse_conf(item, v, **kwargs)
+                for k, v in conf.items()
+            }
+    elif isinstance(conf, (str, int)):
+        parsed = conf
+    elif isinstance(conf, Sequence):
+        parsed = [parse_conf(item, c, **kwargs) for c in conf]
+
+    return parsed
 
 
-def get_skip(item, skip_if=None, **kwargs):
+def get_skip(
+    item: ItemArg,
+    skip_if: Optional[Callable[[ItemArg], bool] | Skip | Iterable[Callable[[ItemArg], bool]] | Iterable[Skip]] = None,
+    **_
+) -> bool:
     """Determine whether or not to skip an item
 
     Args:
@@ -363,18 +465,22 @@ def get_skip(item, skip_if=None, **kwargs):
         True
     """
     item = item or {}
+    skip = False
 
     for _skip in listize(skip_if):
         if callable(_skip):
             skip = _skip(item)
-        elif _skip:
-            value = item.get(_skip["field"], "")
-            text = _skip.get("text")
-            op = _skip.get("op", "contains")
-            match = not SKIP_SWITCH[op](text, value) if text else value
-            skip = match if _skip.get("include") else not match
-        else:
-            skip = False
+        elif isinstance(item, Mapping):
+            _skip = cast(Skip, _skip)
+            field = _skip["field"]
+            value = str(item.get(field, ""))
+
+            if text := str(_skip.get("text")):
+                op = str(_skip.get("op", "contains"))
+                match = not SKIP_SWITCH[op](text, value)
+                skip = match if _skip.get("include") else not match
+            else:
+                skip = bool(value) if _skip.get("include") else not value
 
         if skip:
             break
@@ -382,32 +488,24 @@ def get_skip(item, skip_if=None, **kwargs):
     return skip
 
 
-def get_field(item: Item, field="", **kwargs) -> Any:
-    try:
-        value = item.get(field, **kwargs) if field else item
-    except TypeError:
-        value = item.get(field) if field else item
+def get_field(item: Optional[ItemArg] = None, field="", **kwargs) -> ComplexArg:
+    value = item
+
+    if field and isinstance(item, Mapping):
+        try:
+            value = item.get(field, **kwargs)
+        except TypeError:
+            value = item.get(field)
 
     return value
 
 
-def get_with(item: Item, **kwargs) -> Any:
-    loop_with = kwargs.pop('with', None)
-
-    try:
-        value = item.get(loop_with, **kwargs) if loop_with else item
-    except TypeError:
-        value = item.get(loop_with) if loop_with else item
-
-    return value
-
-
-def text2entity(text):
+def text2entity(text: str) -> str:
     """Convert HTML/XML special chars to entity references"""
     return ESCAPE.get(text, text)
 
 
-def entity2text(entitydef):
+def entity2text(entitydef: str) -> str:
     """Convert an HTML entity reference into unicode.
     http://stackoverflow.com/a/58125/408556
     """

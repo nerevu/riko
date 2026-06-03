@@ -15,8 +15,8 @@ Examples:
         >>> from riko.modules.split import pipe
         >>>
         >>> stream1, stream2 = pipe({'x': x} for x in range(5))
-        >>> next(stream1) == {'x': 0}
-        True
+        >>> next(stream1)
+        {'x': 0}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -24,6 +24,9 @@ Attributes:
 """
 
 from copy import deepcopy
+from typing import Iterator
+
+from riko.types.general import Items
 
 from . import operator
 import pygogo as gogo
@@ -33,7 +36,7 @@ DEFAULTS = {"splits": 2}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, splits, tuples, **kwargs):
+def parser(stream: Items, splits: int, tuples, **kwargs) -> Iterator[Items]:
     """Parses the pipe content
 
     Args:
@@ -58,19 +61,18 @@ def parser(stream, splits, tuples, **kwargs):
         >>> conf = {'splits': 3}
         >>> kwargs = {'conf': conf}
         >>> stream = (({'x': x}) for x in range(5))
-        >>> tuples = zip(stream, repeat(conf['splits']))
-        >>> streams = parser(stream, conf['splits'], tuples, **kwargs)
-        >>> next(next(streams)) == {'x': 0}
-        True
+        >>> tuples = zip(stream, repeat(conf))
+        >>> stream1, stream2, stream3 = parser(stream, conf['splits'], tuples, **kwargs)
+        >>> next(stream1)
+        {'x': 0}
     """
     source = list(stream)
 
-    # deepcopy so that each split is independent
-    for num in range(splits):
+    for _ in range(splits):
         yield map(deepcopy, source)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously and eagerly splits a stream into identical
     copies. Note that this pipe is not lazy.
@@ -92,7 +94,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(next(x)) == {'x': 0})
+        ...     callback = lambda x: print(next(next(x)))
         ...     d = async_pipe({'x': x} for x in range(5))
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -101,13 +103,13 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'x': 0}
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Iterator[Items]:
     """An operator that eagerly splits a stream into identical copies.
     Note that this pipe is not lazy.
 
@@ -126,8 +128,10 @@ def pipe(*args, **kwargs):
     Examples:
         >>> items = [{'x': x} for x in range(5)]
         >>> stream1, stream2 = pipe(items)
-        >>> next(stream1) == {'x': 0}
-        True
+        >>> next(stream1)
+        {'x': 0}
+        >>> next(stream2)
+        {'x': 0}
         >>> len(list(pipe(items, conf={'splits': '3'})))
         3
     """

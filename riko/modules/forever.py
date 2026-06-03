@@ -13,13 +13,17 @@ Examples:
         >>> from riko.modules.forever import pipe
         >>>
         >>> next(pipe())
-        True
+        {'forever': True}
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Iterator
 import pygogo as gogo
+
+from riko import Objconf
+from riko.types.general import BasicArg, Extraction
 
 from . import processor
 from itertools import takewhile, repeat
@@ -31,7 +35,7 @@ DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, objconf, skip=False, **kwargs):
+def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[dict[str, bool]]:
     """Parses the pipe content
 
     Args:
@@ -48,13 +52,14 @@ def parser(_, objconf, skip=False, **kwargs):
         Iter[dict]: The stream of items
 
     Examples:
-        >>> result = parser(None, None, stream={})
+        >>> result = parser(None, None, None, stream={})
         >>> next(result)
+        {'forever': True}
     """
     return kwargs["stream"] if skip else forever
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously fetches and parses a feed to return the
     entries.
@@ -89,7 +94,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'forever': True}
     """
     return parser(*args, **kwargs)
 
@@ -117,5 +122,6 @@ def pipe(*args, **kwargs):
         >>> from riko import get_path
         >>>
         >>> next(pipe())
+        {'forever': True}
     """
     return parser(*args, **kwargs)

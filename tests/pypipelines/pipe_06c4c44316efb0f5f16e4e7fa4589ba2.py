@@ -8,7 +8,7 @@ from riko.modules.tail import pipe as tail
 
 
 def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
-    context=None, _INPUT=None, conf=None, **kwargs
+    context=None, conf=None
 ):
     # todo: insert pipeline description here
     conf = conf or {}
@@ -25,7 +25,7 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
         ]
 
     if context and context.describe_dependencies:
-        return ["fetch", "numberinput", "output", "sort", "tail"]
+        return ["fetch", "numberinput", "sort", "tail"]
 
     sw_123 = fetch(
         context=context,
@@ -41,7 +41,7 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
         sw_123,
         context=context,
         conf={
-            "KEY": [
+            "RULE": [
                 {
                     "field": {"type": "text", "value": "title"},
                     "dir": {"type": "text", "value": "DESC"},
@@ -53,6 +53,7 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
     sw_131 = numberinput(
         context=context,
         conf={
+            "test": {"type": "bool", "value": "true"},
             "debug": {"type": "int", "value": ""},
             "default": {"type": "int", "value": "5"},
             "prompt": {
@@ -60,7 +61,6 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
                 "value": "How many items do you want in the feed?",
             },
             "name": {"type": "text", "value": "numberinput1"},
-            "position": {"type": "int", "value": ""},
         },
     )
 

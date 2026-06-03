@@ -15,13 +15,13 @@ Examples:
         >>>
         >>> target = receiver(conf={'name': 'receiver1'}, func=noop)
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
         >>> source = sender(stream, others=['receiver1'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
 
@@ -31,13 +31,16 @@ Attributes:
     DEFAULTS (dict): The default parser options
 """
 
-from collections import deque
 from time import sleep
+from typing import Callable, Iterator, Mapping, Optional
 
 import pygogo as gogo
 
+from riko.types.general import ComplexArg, BasicMapping, Extraction, StatefulItem, StreamState
+
 from . import operator
-from riko.utils import actor, StreamState, _registry, _receive_queue, close
+from riko import Objconf
+from riko.utils import actor, _registry, _receive_queue, close
 from meza.fntools import dfilter
 
 
@@ -46,7 +49,13 @@ DEFAULTS = {"wait": 1, "max_wait": 5}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, objconf, tuples, **kwargs):
+def parser(
+    _: BasicMapping,
+    objconf: Objconf,
+    tuples,
+    func: Optional[Callable[[Mapping], ComplexArg]] = None,
+    **kwargs
+) -> Iterator[dict[str, StreamState] | ComplexArg]:
     """Parses the pipe content
     Args:
         objconf (obj): the item independent configuration (an Objectify
@@ -72,7 +81,7 @@ def parser(_, objconf, tuples, **kwargs):
         >>> conf = {'wait': 1, 'max_wait': 5, 'name': 'receiver2'}
         >>> target = parser(None, Objectify(conf), None, func=noop)
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
         >>> source = sender(stream, others=['receiver2'])
         >>> next(source)
@@ -85,18 +94,23 @@ def parser(_, objconf, tuples, **kwargs):
     max_wait = objconf.max_wait
     total_waited = 0
 
+    # See https://github.com/ICRAR/ijson#push-interfaces
     if name not in _registry:
-        func = kwargs.get("func")
-        fkwargs = dfilter(kwargs, ["func", "conf", "assign", "stream"])
+        fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
 
-        @actor(registry_name=name, maxlen=objconf.maxlen)
+        @actor(registry_name=name, maxlen=objconf.max_len)
         def receiver():
             while True:
-                item = (yield)
+                item: Mapping = (yield)
 
                 if item is not None:
                     state = item.get("state")
-                    result = func(item, **fkwargs) if func else item
+
+                    try:
+                        result = func(item, **fkwargs) if func else item
+                    except TypeError:
+                        result = func(item)
+
                     _receive_queue[name].append((state, result))
 
         receiver()
@@ -145,12 +159,12 @@ def pipe(*args, **kwargs):
         >>>
         >>> target = pipe(conf={'name': 'receiver3'}, func=noop)
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> source = sender([{'x': 0}], others=['receiver3'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <Stream.PENDING: 1>}
+        {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
     """

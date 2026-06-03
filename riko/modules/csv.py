@@ -12,20 +12,23 @@ Examples:
         >>> from riko.modules.csv import pipe
         >>>
         >>> url = get_path('spreadsheet.csv')
-        >>> next(pipe(conf={'url': url}))['mileage'] == '7213'
-        True
+        >>> next(pipe(conf={'url': url}))['mileage']
+        '7213'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Iterator, cast
 import pygogo as gogo
 
 from meza.io import read_csv
 from meza.process import merge
 
+from riko.types.general import BasicArg, Extraction, IntermediateMapping
+
 from . import processor
-from riko import ENCODING
+from riko import ENCODING, Objconf
 from riko.bado import coroutine, return_value, io
 from riko.utils import fetch, auto_close
 
@@ -35,7 +38,7 @@ DEFAULTS = {
     "quotechar": '"',
     "encoding": ENCODING,
     "skip_rows": 0,
-    "sanitize": True,
+    "sanitize": False,
     "dedupe": True,
     "col_names": None,
     "has_header": True,
@@ -44,8 +47,8 @@ DEFAULTS = {
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine
-def async_parser(_, objconf, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -73,7 +76,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         ...         'url': url, 'sanitize': True, 'skip_rows': 0,
         ...         'encoding': ENCODING}
         ...     objconf = Objectify(conf)
-        ...     d = async_parser(None, objconf, stream={})
+        ...     d = async_parser(None, None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -86,16 +89,17 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        r = yield io.async_url_open(objconf.url, decode=True, encoding=objconf.encoding)
+        r = yield io.async_url_open(objconf.url, encoding=objconf.encoding)  # pyright: ignore[reportCallIssue]
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {"first_row": first_row, "custom_header": custom_header}
-        rkwargs = merge([objconf, renamed])
-        stream = auto_close(read_csv(r, **rkwargs), r)
+        rkwargs = merge([dict(objconf.iteritems()), renamed])
+        content = cast(Iterator[IntermediateMapping], read_csv(r, **rkwargs))
+        stream = auto_close(content, r)
 
     return_value(stream)
 
 
-def parser(_, objconf, skip=False, **kwargs):
+def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[IntermediateMapping]:
     """Parses the pipe content
 
     Args:
@@ -115,9 +119,9 @@ def parser(_, objconf, skip=False, **kwargs):
         ...     'url': url, 'sanitize': True, 'skip_rows': 0,
         ...     'encoding': ENCODING}
         >>> objconf = Objectify(conf)
-        >>> result = parser(None, objconf, stream={})
-        >>> next(result)['mileage'] == '7213'
-        True
+        >>> result = parser(None, None, objconf, stream={})
+        >>> next(result)['mileage']
+        '7213'
     """
     if skip:
         stream = kwargs["stream"]
@@ -125,14 +129,15 @@ def parser(_, objconf, skip=False, **kwargs):
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {"first_row": first_row, "custom_header": custom_header}
 
-        f = fetch(decode=True, **objconf)
-        rkwargs = merge([objconf, renamed])
-        stream = auto_close(read_csv(f, **rkwargs), f)
+        f = fetch(**{k: objconf[k] for k in objconf})
+        rkwargs = merge([dict(objconf.iteritems()), renamed])
+        content = cast(Iterator[IntermediateMapping], read_csv(f, **rkwargs))
+        stream = auto_close(content, f)
 
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given web site as
     a string.
@@ -216,7 +221,7 @@ def pipe(*args, **kwargs):
     Examples:
         >>> from riko import get_path
         >>> url = get_path('spreadsheet.csv')
-        >>> next(pipe(conf={'url': url}))['mileage'] == '7213'
-        True
+        >>> next(pipe(conf={'url': url}))['mileage']
+        '7213'
     """
     return parser(*args, **kwargs)

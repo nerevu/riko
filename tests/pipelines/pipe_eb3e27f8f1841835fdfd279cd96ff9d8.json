@@ -53,14 +53,13 @@
     "modules": [
         {
             "conf": {
-                "type": "url",
                 "debug": {
                     "type": "url",
                     "value": ""
                 },
                 "default": {
                     "type": "url",
-                    "value": "file://data/rsc-ne-scotland.org.uk_mashe_ititle_xml_jisc10bean.xml"
+                    "value": "file://riko/data/rsc-ne-scotland.org.uk_mashe_ititle_xml_jisc10bean.xml"
                 },
                 "name": {
                     "type": "text",
@@ -76,7 +75,7 @@
                 }
             },
             "id": "sw-521",
-            "type": "input"
+            "type": "urlinput"
         },
         {
             "conf": {},
@@ -103,7 +102,7 @@
                     "type": "text",
                     "value": "and"
                 },
-                "permit": {
+                "PERMIT": {
                     "type": "bool",
                     "value": true
                 },
@@ -139,9 +138,9 @@
                             "type": "text",
                             "value": "ctime"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "copy"
+                        "copy": {
+                            "type": "bool",
+                            "value": true
                         }
                     },
                     {
@@ -153,9 +152,9 @@
                             "type": "text",
                             "value": "title"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "copy"
+                        "copy": {
+                            "type": "bool",
+                            "value": true
                         }
                     }
                 ]
@@ -187,7 +186,6 @@
         },
         {
             "conf": {
-                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": ""

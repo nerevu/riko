@@ -7,9 +7,7 @@ from riko.modules.count import pipe as count
 from riko.modules.truncate import pipe as truncate
 
 
-def pipe_404411a8d22104920f3fc1f428f33642(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_404411a8d22104920f3fc1f428f33642(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -17,7 +15,7 @@ def pipe_404411a8d22104920f3fc1f428f33642(
         return []
 
     if context and context.describe_dependencies:
-        return ["count", "fetch", "output", "truncate"]
+        return ["count", "fetch", "truncate"]
 
     sw_502 = fetch(
         context=context,

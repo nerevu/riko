@@ -69,7 +69,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/rss.sueddeutsche.de_rss_Topthemen.xml"
+                    "value": "file://riko/data/rss.sueddeutsche.de_rss_Topthemen.xml"
                 }
             },
             "id": "sw-135",
@@ -101,7 +101,7 @@
                     "type": "text",
                     "value": "or"
                 },
-                "permit": {
+                "PERMIT": {
                     "type": "bool",
                     "value": false
                 },
@@ -162,16 +162,16 @@
                 "RULE": [
                     {
                         "casematch": {
-                            "type": "text",
-                            "value": "8"
+                            "type": "bool",
+                            "value": true
                         },
                         "field": {
                             "type": "text",
                             "value": "description"
                         },
-                        "globalmatch": {
-                            "type": "text",
-                            "value": "1"
+                        "singlematch": {
+                            "type": "bool",
+                            "value": false
                         },
                         "match": {
                             "type": "text",
@@ -182,8 +182,8 @@
                             "value": ""
                         },
                         "singlelinematch": {
-                            "type": "text",
-                            "value": "2"
+                            "type": "bool",
+                            "value": true
                         }
                     },
                     {
@@ -217,9 +217,9 @@
                             "type": "text",
                             "value": "link"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "copy"
+                        "copy": {
+                            "type": "bool",
+                            "value": true
                         }
                     }
                 ]
@@ -231,7 +231,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/rss.sueddeutsche.de_rss_Politik.xml"
+                    "value": "file://riko/data/rss.sueddeutsche.de_rss_Politik.xml"
                 }
             },
             "id": "sw-233",

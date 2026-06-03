@@ -13,8 +13,8 @@ Examples:
         >>> items = ({'x': 'foo', 'sum': x} for x in range(5))
         >>> other = ({'x': 'foo', 'count': x + 5} for x in range(5))
         >>> joined = pipe(items, other=other)
-        >>> next(joined) == {'x': 'foo', 'sum': 0, 'count': 5}
-        True
+        >>> next(joined)
+        {'x': 'foo', 'sum': 0, 'count': 5}
         >>> len(list(joined))
         24
 
@@ -67,8 +67,8 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> objconf = Objectify({})
         >>> tuples = zip(stream, repeat(objconf))
         >>> joined = parser(stream, objconf, tuples, other=other)
-        >>> next(joined) == {'x': 'foo', 'sum': 0, 'count': 5}
-        True
+        >>> next(joined)
+        {'x': 'foo', 'sum': 0, 'count': 5}
         >>> len(list(joined))
         24
         >>> objconf = Objectify({'join_key': 'x', 'other_join_key': 'y'})
@@ -76,8 +76,8 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> other = ({'y': 'foo-%s' % x, 'count': x + 5} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
         >>> joined = parser(stream, objconf, tuples, other=other)
-        >>> next(joined) == {'count': 5, 'x': 'foo-0', 'sum': 0, 'y': 'foo-0'}
-        True
+        >>> next(joined)
+        {'x': 'foo-0', 'sum': 0, 'y': 'foo-0', 'count': 5}
         >>> len(list(joined))
         4
     """
@@ -103,7 +103,7 @@ def parser(stream, objconf, tuples, **kwargs):
     return joined
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously merges multiple source streams together.
 
@@ -132,8 +132,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     joined = {'x': 'foo', 'sum': 0, 'count': 5}
-        ...     callback = lambda x: print(next(x) == joined)
+        ...     callback = lambda x: print(next(x))
         ...     items = ({'x': 'foo', 'sum': x} for x in range(5))
         ...     other = ({'x': 'foo', 'count': x + 5} for x in range(5))
         ...     d = async_pipe(items, conf={'join_key': 'x'}, other=other)
@@ -144,7 +143,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'x': 'foo', 'sum': 0, 'count': 5}
     """
     return parser(*args, **kwargs)
 
@@ -177,16 +176,16 @@ def pipe(*args, **kwargs):
         >>> other = ({'y': 'foo-%s' % x, 'count': x + 5} for x in range(5))
         >>> conf = {'join_key': 'x', 'other_join_key': 'y'}
         >>> joined = pipe(items, conf=conf, other=other)
-        >>> next(joined) == {'count': 5, 'x': 'foo-0', 'sum': 0, 'y': 'foo-0'}
-        True
-        >>> next(joined) == {'count': 6, 'x': 'foo-1', 'sum': 1, 'y': 'foo-1'}
-        True
+        >>> next(joined)
+        {'x': 'foo-0', 'sum': 0, 'y': 'foo-0', 'count': 5}
+        >>> next(joined)
+        {'x': 'foo-1', 'sum': 1, 'y': 'foo-1', 'count': 6}
         >>> other = ({'y': 'FOO-%s' % x, 'count': x + 5} for x in range(5))
         >>> conf = {'join_key': 'x', 'other_join_key': 'y', 'lower': True}
         >>> joined = pipe(items, conf=conf, other=other)
-        >>> next(joined) == {'count': 5, 'x': 'foo-0', 'sum': 0, 'y': 'FOO-0'}
-        True
-        >>> next(joined) == {'count': 6, 'x': 'foo-1', 'sum': 1, 'y': 'FOO-1'}
-        True
+        >>> next(joined)
+        {'x': 'foo-0', 'sum': 0, 'y': 'FOO-0', 'count': 5}
+        >>> next(joined)
+        {'x': 'foo-1', 'sum': 1, 'y': 'FOO-1', 'count': 6}
     """
     return parser(*args, **kwargs)

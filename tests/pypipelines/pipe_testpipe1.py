@@ -5,12 +5,15 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
 
 
-def pipe_testpipe1(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_testpipe1(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
-    if context and (context.describe_input or context.describe_dependencies):
+    if context and context.describe_input:
         return []
+
+    if context and context.describe_dependencies:
+        return ["fetch", "filter"]
 
     sw_90 = fetch(
         context=context, conf={"URL": {"type": "url", "value": get_path("feed.xml")}}
@@ -21,12 +24,12 @@ def pipe_testpipe1(context=None, _INPUT=None, conf=None, **kwargs):
         context=context,
         conf={
             "COMBINE": {"type": "text", "value": "and"},
-            "EMIT": {"type": "bool", "value": True},
+            "PERMIT": {"type": "bool", "value": True},
             "RULE": [
                 {
-                    "field": {"type": "text", "value": "description"},
-                    "value": {"type": "text", "value": "the"},
+                    "field": {"type": "text", "value": "summary"},
                     "op": {"type": "text", "value": "contains"},
+                    "value": {"type": "text", "value": "the"},
                 }
             ],
         },

@@ -8,9 +8,7 @@ from riko.modules.rename import pipe as rename
 from riko.modules.regex import pipe as regex
 
 
-def pipe_e65397e116d7754da0dd23425f1f0af1(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_e65397e116d7754da0dd23425f1f0af1(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -26,49 +24,21 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
             "urlbuilder",
         ]
 
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_sw_634(item=None, context=None, conf=None, **kwargs):
-        # todo: insert submodule description here
-        return urlbuilder(
-            item,
-            context=context,
-            conf={
-                "PATH": {"type": "text", "value": ""},
-                "BASE": {"type": "text", "value": ""},
-                "PARAM": [
-                    {
-                        "value": {"type": "text", "value": "qr"},
-                        "key": {"type": "text", "value": "cht"},
-                    },
-                    {
-                        "value": {"type": "text", "value": "200x200"},
-                        "key": {"type": "text", "value": "chs"},
-                    },
-                    {
-                        "value": {"type": "text", "subkey": "link"},
-                        "key": {"type": "text", "value": "chl"},
-                    },
-                ],
-            },
-            **kwargs
-        )
-
-    sw_565 = fetch(context, conf={"URL": {"type": "url", "value": ""}})
+    sw_565 = fetch(context=context, conf={"URL": {"type": "url", "value": ""}})
 
     sw_626 = loop(
         sw_565,
         context=context,
-        embed=pipe_sw_634,
+        embed=urlbuilder,
         conf={
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "media:content.url"},
-            "emit": {"type": "bool", "value": False},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "urlbuilder",
                     "id": "sw-634",
+                    "assign": "media:content.url",
+                    "emit": False,
                     "conf": {
                         "PATH": {"type": "text", "value": ""},
                         "BASE": {"type": "text", "value": ""},
@@ -89,38 +59,51 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
                     },
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
     )
 
-    sw_592 = rename(
+    sw_592 = loop(
         sw_626,
+        embed=rename,
         context=context,
         conf={
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "media:content.url"},
-                    "op": {"type": "text", "value": "copy"},
-                    "newval": {"type": "text", "value": "description"},
-                }
-            ]
+            "count": "all",
+            "embed": {
+                "emit": True,
+                "conf": {
+                    "RULE": [
+                        {
+                            "field": {"type": "text", "value": "media:content.url"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "description"},
+                        }
+                    ]
+                },
+            },
         },
     )
 
-    sw_636 = regex(
+    sw_636 = loop(
         sw_592,
+        embed=regex,
         context=context,
         conf={
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "description"},
-                    "match": {"type": "text", "value": "(.*)"},
-                    "replace": {
-                        "type": "text",
-                        "value": '<img src="$1" alt="QRcode" /><br/>${title}',
-                    },
-                }
-            ]
+            "count": "all",
+            "embed": {
+                "emit": True,
+                "conf": {
+                    "RULE": [
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "match": {"type": "text", "value": "(.*)"},
+                            "replace": {
+                                "type": "text",
+                                "value": '<img src="$1" alt="QRcode" /><br/>${title}',
+                            },
+                        }
+                    ]
+                },
+            },
         },
     )
 

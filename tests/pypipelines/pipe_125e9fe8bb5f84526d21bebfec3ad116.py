@@ -6,13 +6,10 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.urlbuilder import pipe as urlbuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.fetchdata import pipe as fetchdata
-from riko.modules.loopy import pipe as loopy
 from riko.modules.rename import pipe as rename
 
 
-def pipe_125e9fe8bb5f84526d21bebfec3ad116(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_125e9fe8bb5f84526d21bebfec3ad116(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -24,7 +21,6 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
             "fetchdata",
             "itembuilder",
             "loop",
-            "loopy",
             "rename",
             "input",
             "urlbuilder",
@@ -38,7 +34,6 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
             "default": {"type": "text", "value": "defunkt"},
             "prompt": {"type": "text", "value": "Enter Text"},
             "name": {"type": "text", "value": "textinput1"},
-            "position": {"type": "int", "value": ""},
         },
     )
 
@@ -61,17 +56,17 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
         embed=urlbuilder,
         conf={
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "api"},
-            "emit": {"type": "bool", "value": "false"},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "urlbuilder",
                     "id": "sw-72",
+                    "assign": "api",
+                    "emit": False,
                     "conf": {
                         "BASE": {
                             "type": "text",
-                            "value": "https://api.github.com/search/users",
+                            "value": "api.github.com_search_users",
                         },
                         "PARAM": [
                             {
@@ -79,10 +74,10 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
                                 "key": {"type": "text", "value": "q"},
                             }
                         ],
+                        "ext": "json",
                     },
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
     )
 
@@ -90,10 +85,10 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
         sw_61,
         context=context,
         embed=fetchdata,
+        assign="info",
+        emit=False,
         conf={
             "count": {"type": "text", "value": "first"},
-            "assign": {"type": "text", "value": "info"},
-            "emit": {"type": "bool", "value": "false"},
             "embed": {
                 "type": "module",
                 "value": {
@@ -105,13 +100,11 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
                     },
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
     )
 
-    sw_351 = rename(
-        sw_142,
-        context=context,
+    sw_467 = rename(
+        next(sw_142),
         conf={
             "RULE": [
                 {
@@ -121,9 +114,10 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
                 }
             ]
         },
+        context=context,
     )
 
-    return sw_351
+    return sw_467
 
 
 if __name__ == "__main__":

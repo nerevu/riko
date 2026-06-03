@@ -5,7 +5,7 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
 
 
-def pipe_testpipe1(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_testpipe1(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -21,7 +21,7 @@ def pipe_testpipe1(context=None, _INPUT=None, conf=None, **kwargs):
         context=context,
         conf={
             "COMBINE": {"type": "text", "value": "and"},
-            "EMIT": {"type": "bool", "value": True},
+            "PERMIT": {"type": "bool", "value": True},
             "RULE": [
                 {
                     "field": {"type": "text", "value": "description"},

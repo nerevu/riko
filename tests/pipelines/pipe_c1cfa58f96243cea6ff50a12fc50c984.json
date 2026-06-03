@@ -52,7 +52,7 @@
                 "URL": [
                     {
                         "type": "url",
-                        "value": "file://data/www.slideshare.net_rss_user_psychemedia.xml"
+                        "value": "file://riko/data/www.slideshare.net_rss_user_psychemedia.xml"
                     },
                     {
                         "type": "url",
@@ -60,7 +60,7 @@
                     },
                     {
                         "type": "url",
-                        "value": "file://data/feeds.delicious.com_v2_rss_psychemedia?count=15.xml"
+                        "value": "file://riko/data/feeds.delicious.com_v2_rss_psychemedia?count=15.xml"
                     }
                 ]
             },
@@ -78,7 +78,7 @@
                     "type": "text",
                     "value": "or"
                 },
-                "permit": {
+                "PERMIT": {
                     "type": "bool",
                     "value": true
                 },

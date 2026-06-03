@@ -1,7 +1,7 @@
 {
     "layout": [
         {
-            "id": "sw-298",
+            "id": "sw-138",
             "xy": [
                 204,
                 210
@@ -40,27 +40,48 @@
                     "type": "text",
                     "value": "title"
                 },
-                "part": [
-                    {
-                        "subkey": "headline",
-                        "type": "text"
-                    },
-                    {
-                        "type": "text",
-                        "value": " ("
-                    },
-                    {
-                        "subkey": "severity",
-                        "type": "text"
-                    },
-                    {
-                        "type": "text",
-                        "value": ")"
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "part": [
+                                {
+                                    "subkey": "headline",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": " ("
+                                },
+                                {
+                                    "subkey": "severity",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": ")"
+                                }
+                            ]
+                        },
+                        "id": "sw-298",
+                        "type": "strconcat"
                     }
-                ]
+                },
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "bool",
+                    "value": true
+                },
+                "field": {
+                    "type": "text",
+                    "value": ""
+                }
             },
-            "id": "sw-298",
-            "type": "strconcat"
+            "id": "sw-138",
+            "type": "loop"
         },
         {
             "conf": {},
@@ -79,9 +100,9 @@
                             "type": "text",
                             "value": "pubDate"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "rename"
+                        "copy": {
+                            "type": "bool",
+                            "value": false
                         }
                     }
                 ]
@@ -93,7 +114,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/capnorth.oes.ca.gov_89509.xml"
+                    "value": "file://riko/data/capnorth.oes.ca.gov_89509.xml"
                 },
                 "path": {
                     "type": "text",
@@ -189,7 +210,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-298"
+            "moduleid": "sw-138"
         },
         {
             "data": {
@@ -368,7 +389,7 @@
             "id": "_w0",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-298"
+                "moduleid": "sw-138"
             },
             "tgt": {
                 "id": "_INPUT",
@@ -394,7 +415,7 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-298"
+                "moduleid": "sw-138"
             }
         }
     ]

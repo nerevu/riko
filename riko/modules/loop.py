@@ -8,33 +8,26 @@ Provides functions for creating submodules from existing pipes
     http://pipes.yahoo.com/pipes/docs?doc=operators#Loop
 
 loop(
-    context,
-    sw_637,
-    embed=pipe_sw_696,
+    source,
+    embed=itembuilder,
     conf={
-        "count": {"type": "text", "value": "all"},
-        "assign": {"type": "text", "value": "loop:itembuilder"},
-        "emit": {"type": "bool", "value": True},
+        "count": "all",
         "embed": {
-            "type": "module",
-            "value": {
-                "type": "itembuilder",
-                "id": "sw-696",
-                "conf": {
-                    "attrs": [
-                        {
-                            "value": {"type": "text", "value": "NEWTITLE"},
-                            "key": {"type": "text", "value": "newtitle"},
-                        },
-                        {
-                            "value": {"type": "text", "subkey": "title"},
-                            "key": {"type": "text", "value": "title"},
-                        },
-                    ]
-                },
+            "assign": "loop:itembuilder",
+            "emit": False,
+            "conf": {
+                "attrs": [
+                    {
+                        "value": {"type": "text", "value": "NEWTITLE"},
+                        "key": {"type": "text", "value": "newtitle"},
+                    },
+                    {
+                        "value": {"type": "text", "subkey": "title"},
+                        "key": {"type": "text", "value": "title"},
+                    },
+                ]
             },
         },
-        "with": {"type": "text", "value": ""},
     },
 )
 
@@ -45,7 +38,7 @@ Examples:
         >>>
         >>> items = [{"content": "b"}, {"content": "a"}, {"content": "c"}]
         >>> next(pipe(items))
-        True
+        {'content': 'b'}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -53,17 +46,9 @@ Attributes:
 """
 import pygogo as gogo
 
-from copy import copy
-from functools import partial
-from itertools import chain, starmap
+from . import operator
 
-from . import get_broadcast_funcs, operator
-from riko.bado import itertools as ait, coroutine, return_value
-from riko.bado.itertools import async_starmap
-from riko.bado.util import async_none
-from riko.utils import def_itemgetter as itemgetter
-
-OPTS = {"ftype": "with", "listize": False, "parse": False}
+OPTS = {"listize": False, "parse": False}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -97,19 +82,19 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly sorts a stream according to a specified
-    key. Note that this pipe is not lazy.
+    """An operator that creates submodules from existing pipes.
 
     Args:
         items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        embed : the submodule. processor modules, with the exception of *input can be
+        embed: the submodule. processor modules, with the exception of *input can be
             sub-modules.
 
-        conf (dict): The pipe configuration. May contain
-            "with": {"value": <looped field name or blank>},
-            "embed": {"value": {"conf": <module conf>}}
+        conf (dict): The loop configuration. May contain
+            "count":
+            "field": <looped field name or blank>,
+            "embed": {"conf": <module conf>}
     """
     return parser(*args, **kwargs)

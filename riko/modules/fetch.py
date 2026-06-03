@@ -15,16 +15,20 @@ Examples:
         >>> from riko.modules.fetch import pipe
         >>>
         >>> url = get_path('feed.xml')
-        >>> next(pipe(conf={'url': url}))['title'] == 'Donations'
-        True
+        >>> next(pipe(conf={'url': url}))['title']
+        'Donations'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Iterator
 import pygogo as gogo
 
+from riko.types.general import BasicArg, BasicMapping, Extraction, ItemArg, Items
+
 from . import processor
+from riko import Objconf
 from riko.bado import coroutine, return_value, io
 from riko.parsers import parse_rss
 from riko.utils import gen_entries
@@ -32,24 +36,25 @@ from riko.utils import gen_entries
 OPTS = {"ftype": "none"}
 DEFAULTS = {"delay": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
-intersection = [
+keys = {
     "author",
-    "author.name",
-    "author.uri",
     "dc:creator",
     "id",
     "link",
     "pubDate",
     "summary",
     "title",
-    "y:id",
-    "y:published",
-    "y:title",
-]
+}
 
 
-@coroutine
-def async_parser(_, objconf, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(
+    _: BasicArg,
+    extraction: Extraction,
+    objconf: Objconf,
+    skip=False,
+    **kwargs
+):
     """Asynchronously parses the pipe content
 
     Args:
@@ -74,7 +79,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
         ...     objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
-        ...     d = async_parser(None, objconf, stream={})
+        ...     d = async_parser(None, None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -85,16 +90,16 @@ def async_parser(_, objconf, skip=False, **kwargs):
         Donations
     """
     if skip:
-        stream = kwargs["stream"]
+        stream: Items = kwargs["stream"]
     else:
-        content = yield io.async_url_read(objconf.url, delay=objconf.delay)
+        content: str = yield io.async_url_read(objconf.url, delay=objconf.delay)  # pyright: ignore[reportCallIssue]
         parsed = parse_rss(content)
-        stream = gen_entries(parsed)
+        stream = gen_entries(parsed["entries"]) if parsed else iter([])
 
     return_value(stream)
 
 
-def parser(_, objconf, skip=False, **kwargs):
+def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg | Iterator[BasicMapping]:
     """Parses the pipe content
 
     Args:
@@ -115,20 +120,20 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
-        >>> result = parser(None, objconf, stream={})
-        >>> next(result)['title'] == 'Donations'
-        True
+        >>> result = parser(None, None, objconf, stream={})
+        >>> next(result)['title']
+        'Donations'
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        parsed = parse_rss(**objconf)
-        stream = gen_entries(parsed)
+        parsed = parse_rss(**{k: objconf[k] for k in objconf})
+        stream = gen_entries(parsed["entries"]) if parsed else iter([])
 
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously fetches and parses a feed to return the
     entries.
@@ -154,10 +159,8 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> i = intersection
-        >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(set(next(x).keys()).issuperset(i))
+        ...     callback = lambda x: print(sorted(keys.intersection(next(x))))
         ...     d = async_pipe(conf={'url': get_path('feed.xml')})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -166,7 +169,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
     """
     return async_parser(*args, **kwargs)
 
@@ -194,12 +197,12 @@ def pipe(*args, **kwargs):
         >>> from riko import get_path
         >>>
         >>> url = get_path('feed.xml')
-        >>> keys = next(pipe(conf={'url': url})).keys()
-        >>> set(keys).issuperset(intersection)
-        True
+        >>> item = next(pipe(conf={'url': url}))
+        >>> sorted(keys.intersection(item))
+        ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
         >>>
-        >>> keys = next(pipe(conf={'url': url, 'memoize': True})).keys()
-        >>> set(keys).issuperset(intersection)
-        True
+        >>> item = next(pipe(conf={'url': url, 'memoize': True}))
+        >>> sorted(keys.intersection(item))
+        ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
     """
     return parser(*args, **kwargs)

@@ -10,13 +10,17 @@ Examples:
 
         >>> from riko.modules.datebuilder import pipe
         >>>
-        >>> next(pipe({'content': '12/2/2014'}))['datebuilder']
+        >>> next(pipe({'content': '12/2/2014'}))['datebuilder'].tm_year
+        2014
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
 from datetime import timedelta, datetime as dt
+
+from riko import Objconf
+from riko.types.general import Extraction
 
 from . import processor
 from riko.dates import parse_date
@@ -37,7 +41,7 @@ DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(text, _, skip=False, **kwargs):
+def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Parsers the pipe content
 
     Args:
@@ -54,12 +58,10 @@ def parser(text, _, skip=False, **kwargs):
         dict: The item
 
     Examples:
-        >>> from meza.fntools import Objectify
-        >>>
         >>> item = {'content': '12/2/2014'}
         >>> kwargs = {'stream': item}
-        >>> parser(item['content'], None, **kwargs)
-        True
+        >>> parser(item['content'], None, None, stream=item).tm_year
+        2014
     """
     if skip:
         stream = kwargs["stream"]
@@ -84,7 +86,7 @@ def parser(text, _, skip=False, **kwargs):
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously converts a text string into a datetime.
 
@@ -104,7 +106,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['datebuilder'])
+        ...     callback = lambda x: print(next(x)['datebuilder'].tm_year)
         ...     d = async_pipe({'content': '12/2/2014'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -113,12 +115,12 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        2014
     """
     return parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A processor that converts a text string into a datetime.
 
@@ -134,6 +136,7 @@ def pipe(*args, **kwargs):
         dict: an item with date timetuples
 
     Examples:
-        >>> next(pipe({'content': '12/2/2014'}))['datebuilder']
+        >>> next(pipe({'content': '12/2/2014'}))['datebuilder'].tm_year
+        2014
     """
     return parser(*args, **kwargs)

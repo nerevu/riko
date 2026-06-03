@@ -15,7 +15,7 @@
             ]
         },
         {
-            "id": "sw-515",
+            "id": "sw-507",
             "xy": [
                 "177",
                 "-188"
@@ -110,24 +110,44 @@
                     "type": "text",
                     "value": "description"
                 },
-                "part": [
-                    {
-                        "type": "text",
-                        "value": "<img src=\""
-                    },
-                    {
-                        "subkey": "img.src",
-                        "type": "text"
-                    },
-                    {
-                        "type": "text",
-                        "value": "\">"
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "part": [
+                                {
+                                    "type": "text",
+                                    "value": "<img src=\""
+                                },
+                                {
+                                    "subkey": "img.src",
+                                    "type": "text"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": "\">"
+                                }
+                            ]
+                        },
+                        "id": "sw-515",
+                        "type": "strconcat"
                     }
-                ]
+                },
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "bool",
+                    "value": true
+                },
+                "field": {
+                    "type": "text",
+                    "value": ""
+                }
             },
-            "id": "sw-515",
-            "type": "strconcat"
-
+            "id": "sw-507",
+            "type": "loop"
         },
         {
             "conf": {
@@ -180,7 +200,7 @@
             "id": "_w5",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-515"
+                "moduleid": "sw-507"
             },
             "tgt": {
                 "id": "_INPUT",
@@ -195,7 +215,7 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-515"
+                "moduleid": "sw-507"
             }
         },
         {

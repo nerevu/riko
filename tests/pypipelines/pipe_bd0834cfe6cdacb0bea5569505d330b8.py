@@ -6,9 +6,7 @@ from riko.modules.urlbuilder import pipe as urlbuilder
 from riko.modules.fetchdata import pipe as fetchdata
 
 
-def pipe_bd0834cfe6cdacb0bea5569505d330b8(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_bd0834cfe6cdacb0bea5569505d330b8(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -16,16 +14,16 @@ def pipe_bd0834cfe6cdacb0bea5569505d330b8(
         return [("", "gid", "MP Guardian ID", "text", "1276")]
 
     if context and context.describe_dependencies:
-        return ["fetchdata", "output", "input", "urlbuilder"]
+        return ["fetchdata", "input", "urlbuilder"]
 
     sw_606 = textinput(
         context=context,
         conf={
+            "test": {"type": "bool", "value": "true"},
             "debug": {"type": "text", "value": ""},
             "default": {"type": "text", "value": "1276"},
             "prompt": {"type": "text", "value": "MP Guardian ID"},
             "name": {"type": "text", "value": "gid"},
-            "position": {"type": "int", "value": ""},
         },
     )
 

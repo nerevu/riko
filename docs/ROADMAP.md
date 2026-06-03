@@ -459,7 +459,6 @@ used by other source pipes (e.g., `csv.py`, `itembuilder.py`):
 from . import processor
 import pygogo as gogo
 
-OPTS = {"ftype": "none", "emit": True}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -468,7 +467,7 @@ def parser(_, objconf, skip=False, **kwargs):
     return stream
 
 
-@processor(**OPTS)
+@processor(ftype=None, emit=True)
 def pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 ```

@@ -32,7 +32,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/www.caltrain.com_Fares_farechart.html"
+                    "value": "file://riko/data/www.caltrain.com_Fares_farechart.html"
                 },
                 "from": {
                     "type": "text",

@@ -39,6 +39,7 @@ pip-log.txt
 *.noseids
 *.ropeproject
 .coverage
+.coverage*
 .tox
 .noseids
 .cache/*

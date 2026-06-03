@@ -117,7 +117,6 @@
         },
         {
             "conf": {
-                "type": "int",
                 "debug": {
                     "type": "number",
                     "value": ""
@@ -140,11 +139,10 @@
                 }
             },
             "id": "sw-576",
-            "type": "input"
+            "type": "numberinput"
         },
         {
             "conf": {
-                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": "The debug is not private so can be left in?"
@@ -171,11 +169,10 @@
                 }
             },
             "id": "sw-580",
-            "type": "input"
+            "type": "privateinput"
         },
         {
             "conf": {
-                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": "does debeug text appear anywhere?"
@@ -202,14 +199,13 @@
         },
         {
             "conf": {
-                "type": "url",
                 "debug": {
                     "type": "url",
                     "value": ""
                 },
                 "default": {
                     "type": "url",
-                    "value": "file://data/example.html"
+                    "value": "file:///Users/reubano/Documents/Projects/riko/riko/data/example.html"
                 },
                 "name": {
                     "type": "text",
@@ -225,7 +221,7 @@
                 }
             },
             "id": "sw-588",
-            "type": "input"
+            "type": "urlinput"
         },
         {
             "conf": {

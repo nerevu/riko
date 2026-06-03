@@ -87,7 +87,6 @@
         },
         {
             "conf": {
-                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": "yhoo"
@@ -118,7 +117,7 @@
                     "type": "text",
                     "value": "and"
                 },
-                "permit": {
+                "PERMIT": {
                     "type": "bool",
                     "value": true
                 },
@@ -144,7 +143,6 @@
         },
         {
             "conf": {
-                "type": "text",
                 "debug": {
                     "type": "text",
                     "value": ""

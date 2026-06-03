@@ -6,9 +6,7 @@ from riko.modules.fetchsitefeed import pipe as fetchsitefeed
 from riko.modules.truncate import pipe as truncate
 
 
-def pipe_551507461cbcb19a828165daad5fe007(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_551507461cbcb19a828165daad5fe007(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -24,16 +22,16 @@ def pipe_551507461cbcb19a828165daad5fe007(
         ]
 
     if context and context.describe_dependencies:
-        return ["fetchsitefeed", "output", "truncate", "urlinput"]
+        return ["fetchsitefeed", "truncate", "urlinput"]
 
     sw_242 = urlinput(
         context=context,
         conf={
+            "test": {"type": "bool", "value": "true"},
             "debug": {"type": "url", "value": get_path("www.bbc.co.uk_news.html")},
             "default": {"type": "url", "value": get_path("www.bbc.co.uk_news.html")},
             "prompt": {"type": "text", "value": "Enter a URL"},
             "name": {"type": "text", "value": "urlinput1"},
-            "position": {"type": "int", "value": ""},
         },
     )
 

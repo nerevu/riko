@@ -10,8 +10,8 @@ Examples:
 
         >>> from riko.modules.currencyformat import pipe
         >>>
-        >>> next(pipe({'content': '100'}))['currencyformat'] == '$100.00'
-        True
+        >>> next(pipe({'content': '100'}))['currencyformat']
+        '$100.00'
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -19,6 +19,9 @@ Attributes:
 """
 from decimal import Decimal
 from babel.numbers import format_currency
+
+from riko import Objconf
+from riko.types.general import Extraction
 
 from . import processor
 import pygogo as gogo
@@ -30,7 +33,7 @@ NaN = Decimal("NaN")
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(amount, objconf, skip=False, **kwargs):
+def parser(amount, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Parsers the pipe content
 
     Args:
@@ -46,8 +49,8 @@ def parser(amount, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'currency': 'USD'})
-        >>> parser(Decimal('10.33'), objconf) == '$10.33'
-        True
+        >>> parser(Decimal('10.33'), None, objconf)
+        '$10.33'
     """
     if skip:
         parsed = kwargs["stream"]
@@ -62,7 +65,7 @@ def parser(amount, objconf, skip=False, **kwargs):
     return parsed
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously formats a number to a given
     currency string.
@@ -128,11 +131,11 @@ def pipe(*args, **kwargs):
         dict: an item with formatted date string
 
     Examples:
-        >>> next(pipe({'content': '10.33'}))['currencyformat'] == '$10.33'
-        True
+        >>> next(pipe({'content': '10.33'}))['currencyformat']
+        '$10.33'
         >>> conf = {'currency': 'GBP'}
         >>> result = next(pipe({'content': '100'}, conf=conf))
-        >>> result['currencyformat'] == '£100.00'
-        True
+        >>> result['currencyformat']
+        '£100.00'
     """
     return parser(*args, **kwargs)

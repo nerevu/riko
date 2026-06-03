@@ -148,7 +148,7 @@ def test(where=None, stop=None, **kwargs):
     opts += " --cov=riko" if kwargs.get("cover") else " --no-cov"
     opts += "" if kwargs.get("capture") else " -s"
     opts += " --last-failed" if kwargs.get("failed") else ""
-    opts += " --tb=long -ra" if kwargs.get("verbose") else " --tb=short -ra"
+    opts += " -vv --tb=long -ra" if kwargs.get("verbose") else " --tb=short -ra"
 
     if kwargs.get("watch") and kwargs.get("capture"):
         opts += " --looponfail"

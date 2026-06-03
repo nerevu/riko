@@ -15,14 +15,14 @@
             ]
         },
         {
-            "id": "sw-603",
+            "id": "sw-595",
             "xy": [
                 245,
                 -186
             ]
         },
         {
-            "id": "sw-692",
+            "id": "sw-619",
             "xy": [
                 655,
                 167
@@ -55,7 +55,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/www.theguardian.com_politics_api_general_election_2010_results_json.json"
+                    "value": "file://riko/data/www.theguardian.com_politics_api_general_election_2010_results_json.json"
                 },
                 "path": {
                     "type": "text",
@@ -80,13 +80,34 @@
                     "type": "text",
                     "value": "mpdetails"
                 },
-                "gid": {
-                    "subkey": "result.winning-mp.aristotle-id",
-                    "type": "text"
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "gid": {
+                                "subkey": "result.winning-mp.aristotle-id",
+                                "type": "text"
+                            }
+                        },
+                        "id": "sw-603",
+                        "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
+                    }
+                },
+                "count": {
+                    "type": "text",
+                    "value": "first"
+                },
+                "assign": {
+                    "type": "bool",
+                    "value": true
+                },
+                "field": {
+                    "type": "text",
+                    "value": ""
                 }
             },
-            "id": "sw-603",
-            "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
+            "id": "sw-595",
+            "type": "loop"
         },
         {
             "conf": {
@@ -98,13 +119,34 @@
                     "type": "text",
                     "value": "y:location"
                 },
-                "LOCATION": {
-                    "subkey": "mpdetails.university",
-                    "type": "text"
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "LOCATION": {
+                                "subkey": "mpdetails.university",
+                                "type": "text"
+                            }
+                        },
+                        "id": "sw-692",
+                        "type": "locationbuilder"
+                    }
+                },
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "bool",
+                    "value": true
+                },
+                "field": {
+                    "type": "text",
+                    "value": ""
                 }
             },
-            "id": "sw-692",
-            "type": "locationbuilder"
+            "id": "sw-619",
+            "type": "loop"
         },
         {
             "conf": {
@@ -112,7 +154,7 @@
                     "type": "text",
                     "value": "and"
                 },
-                "permit": {
+                "PERMIT": {
                     "type": "bool",
                     "value": true
                 },
@@ -148,9 +190,9 @@
                             "type": "text",
                             "value": "title"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "copy"
+                        "copy": {
+                            "type": "bool",
+                            "value": true
                         }
                     },
                     {
@@ -162,9 +204,9 @@
                             "type": "text",
                             "value": "description"
                         },
-                        "op": {
-                            "type": "text",
-                            "value": "copy"
+                        "copy": {
+                            "type": "bool",
+                            "value": true
                         }
                     }
                 ]
@@ -708,7 +750,7 @@
                 "_type": "item"
             },
             "id": "_OUTPUT",
-            "moduleid": "sw-603"
+            "moduleid": "sw-595"
         },
         {
             "data": {
@@ -1914,14 +1956,14 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-603"
+                "moduleid": "sw-595"
             }
         },
         {
             "id": "_w1",
             "src": {
                 "id": "_OUTPUT",
-                "moduleid": "sw-603"
+                "moduleid": "sw-595"
             },
             "tgt": {
                 "id": "_INPUT",

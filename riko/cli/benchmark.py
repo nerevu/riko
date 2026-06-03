@@ -96,13 +96,13 @@ def async_pipeline():
 
 
 def async_pipe(conf=None):
-    asyncCallable = lambda conf: AsyncPipe("fetch", conf=conf).list
+    asyncCallable = lambda conf: AsyncPipe("fetch", conf=conf).alist
     d = async_map(asyncCallable, confs)
     d.addCallbacks(list, print)
 
 
 def async_collection():
-    return AsyncCollection(sources, sleep=DELAY).list
+    return AsyncCollection(sources, sleep=DELAY).alist
 
 
 def parse_results(results):

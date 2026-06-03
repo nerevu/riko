@@ -9,7 +9,10 @@ Word Count
 
     >>> import itertools as it
     >>> from riko import get_path
-    >>> from riko.modules import fetchpage, strreplace, tokenizer, count
+    >>> from riko.modules.fetchpage import pipe as fetchpage
+    >>> from riko.modules.strreplace import pipe as strreplace
+    >>> from riko.modules.tokenizer import pipe as tokenizer
+    >>> from riko.modules.count import pipe as count
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -34,16 +37,16 @@ Word Count
     >>> #
     >>> # Note: because `fetchpage` and `strreplace` each return an iterator of
     >>> # just one item, we can safely call `next` without fear of loosing data
-    >>> page = next(fetchpage.pipe(conf=fetch_conf))
-    >>> replaced = next(strreplace.pipe(page, **replace_kwargs))
-    >>> words = tokenizer.pipe(replaced, **token_kwargs)
-    >>> counts = count.pipe(words, conf={'count_key': 'content'})
-    >>> next(counts) == {'$': 2}
-    True
-    >>> next(counts) == {'$Date:': 1}
-    True
-    >>> next(counts) == {'$Revision:': 1}
-    True
+    >>> page = next(fetchpage(conf=fetch_conf))
+    >>> replaced = next(strreplace(page, **replace_kwargs))
+    >>> words = tokenizer(replaced, **token_kwargs)
+    >>> counts = count(words, conf={'count_key': 'content'})
+    >>> next(counts)
+    {'$': 2}
+    >>> next(counts)
+    {'$Date:': 1}
+    >>> next(counts)
+    {'$Revision:': 1}
 
     >>> ### Alternatively, create a SyncPipe workflow ###
     >>> #
@@ -54,33 +57,34 @@ Word Count
     >>> stream = (SyncPipe('fetchpage', conf=fetch_conf)
     ...     .strreplace(conf=replace_conf, assign='content')
     ...     .tokenizer(conf={'delimiter': ' '}, emit=True)
-    ...     .count(conf={'count_key': 'content'})
-    ...     .output)
+    ...     .count(conf={'count_key': 'content'}))
     >>>
-    >>> next(stream) == {'$': 2}
-    True
+    >>> next(stream)
+    {'$': 2}
 
 
 Fetching feeds
 
     >>> from itertools import chain
     >>> from riko import get_path
-    >>> from riko.modules import (
-    ...     fetch, fetchdata, fetchsitefeed, feedautodiscovery)
+    >>> from riko.modules.fetch import pipe as fetch
+    >>> from riko.modules.fetchdata import pipe as fetchdata
+    >>> from riko.modules.fetchsitefeed import pipe as fetchsitefeed
+    >>> from riko.modules.feedautodiscovery import pipe as feedautodiscovery
     >>>
     >>> ### Fetch a url ###
-    >>> stream = fetchdata.pipe(conf={'url': 'http://site.com/file.xml'})
+    >>> stream = fetchdata(conf={'url': 'http://site.com/file.xml'})
     >>>
     >>> ### Fetch a filepath ###
     >>> #
     >>> # Note: `get_path` just looks up files in the `data` directory
     >>> # to simplify testing
     >>> conf = {'url': get_path('quote.json')}
-    >>> stream = fetchdata.pipe(conf=conf)
+    >>> stream = fetchdata(conf=conf)
     >>>
     >>> # Same thing, but now memoize the url response
     >>> conf['memoize'] = True
-    >>> stream = fetchdata.pipe(conf=conf)
+    >>> stream = fetchdata(conf=conf)
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
@@ -88,18 +92,17 @@ Fetching feeds
     True
 
     >>> ### Fetch an rss feed ###
-    >>> stream = fetch.pipe(conf={'url': get_path('feed.xml')})
+    >>> stream = fetch(conf={'url': get_path('feed.xml')})
     >>>
     >>> ### Fetch the first rss feed found ###
-    >>> stream = fetchsitefeed.pipe(conf={'url': get_path('cnn.html')})
+    >>> stream = fetchsitefeed(conf={'url': get_path('cnn.html')})
     >>>
     >>> ### Find all rss links and fetch the feeds ###
     >>> url = get_path('bbc.html')
-    >>> entries = feedautodiscovery.pipe(conf={'url': url})
+    >>> entries = feedautodiscovery(conf={'url': url})
     >>> urls = [e['link'] for e in entries]
     >>>
-    >>> stream = chain.from_iterable(
-    ...     fetch.pipe(conf={'url': url}) for url in urls)
+    >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
     >>> ### Alternatively, create a SyncCollection ###
     >>> #
@@ -120,19 +123,23 @@ Fetching feeds
     >>> item = next(stream)
     >>> set(item).issuperset(intersection)
     True
-    >>> item['title'] == 'Using NFC tags in the car'
-    True
-    >>> item['author'] == 'Liam Green-Hughes'
-    True
-    >>> item['link'] == 'http://www.greenhughes.com/content/using-nfc-tags-car'
-    True
+    >>> item['title']
+    'Using NFC tags in the car'
+    >>> item['author']
+    'Liam Green-Hughes'
+    >>> item['link']
+    'http://www.greenhughes.com/content/using-nfc-tags-car'
 
 
 Synchronous processing
 
     >>> from itertools import chain
     >>> from riko import get_path
-    >>> from riko.modules import fetch, filter, subelement, regex, sort
+    >>> from riko.modules.fetch import pipe as fetch
+    >>> from riko.modules.filter import pipe as filter
+    >>> from riko.modules.subelement import pipe as subelement
+    >>> from riko.modules.regex import pipe as regex
+    >>> from riko.modules.sort import pipe as sort
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -146,7 +153,7 @@ Synchronous processing
     >>> match = r'(.*href=")([\\w:/.@]+)(".*)'
     >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
     >>> regex_conf = {'rule': regex_rule}
-    >>> sort_conf = {'rule': {'sort_key': 'content', 'sort_dir': 'desc'}}
+    >>> sort_conf = {'rule': {'field': 'content', 'dir': 'desc'}}
     >>>
     >>> ### Create a workflow ###
     >>> #
@@ -159,15 +166,15 @@ Synchronous processing
     >>> #   5. reverse sort the items by the replaced url
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> stream = fetch.pipe(conf=fetch_conf)
-    >>> filtered = filter.pipe(stream, conf={'rule': filter_rule})
-    >>> extracted = (subelement.pipe(i, **sub_kwargs) for i in filtered)
+    >>> stream = fetch(conf=fetch_conf)
+    >>> filtered = filter(stream, conf={'rule': filter_rule})
+    >>> extracted = (subelement(i, **sub_kwargs) for i in filtered)
     >>> flat_extract = chain.from_iterable(extracted)
-    >>> matched = (regex.pipe(i, conf=regex_conf) for i in flat_extract)
+    >>> matched = (regex(i, conf=regex_conf) for i in flat_extract)
     >>> flat_match = chain.from_iterable(matched)
-    >>> sorted_match = sort.pipe(flat_match, conf=sort_conf)
-    >>> next(sorted_match) == {'content': 'mailto:mail@writetoreply.org'}
-    True
+    >>> sorted_match = sort(flat_match, conf=sort_conf)
+    >>> next(sorted_match)
+    {'content': 'mailto:mail@writetoreply.org'}
 
     >>> ### Alternatively, create a SyncPipe workflow ###
     >>> #
@@ -180,11 +187,10 @@ Synchronous processing
     ...     .filter(conf={'rule': filter_rule})
     ...     .subelement(conf=sub_conf, emit=True)
     ...     .regex(conf={'rule': regex_rule})
-    ...     .sort(conf=sort_conf)
-    ...     .output)
+    ...     .sort(conf=sort_conf))
     >>>
-    >>> next(stream) == {'content': 'mailto:mail@writetoreply.org'}
-    True
+    >>> next(stream)
+    {'content': 'mailto:mail@writetoreply.org'}
 
 
 Parallel processing
@@ -283,8 +289,8 @@ Design Principles
     >>> from riko.modules.reverse import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(stream)) == {'title': 'riko pt. 2'}
-    True
+    >>> next(pipe(stream))
+    {'title': 'riko pt. 2'}
 
     # a transformer
     >>> import ctypes
@@ -293,42 +299,39 @@ Design Principles
     >>> _hash = ctypes.c_uint(hash('riko pt. 1')).value
     >>> item = {'title': 'riko pt. 1'}
     >>> stream = pipe(item, field='title')
-    >>> next(stream) == {'title': 'riko pt. 1', 'hash': _hash}
-    True
+    >>> next(stream)
+    {'title': 'riko pt. 1', 'hash': _hash}
     >>> from riko.modules.tokenizer import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
     >>> tokenizer_conf = {'delimiter': ' '}
     >>> stream = pipe(item, conf=tokenizer_conf, field='title')
-    >>> next(stream) == {
-    ...     'title': 'riko pt. 1',
-    ...     'tokenizer': [
-    ...         {'content': 'riko'},
-    ...         {'content': 'pt.'},
-    ...         {'content': '1'}]}
-    True
+    >>> next(stream)
+    {'title': 'riko pt. 1',
+     'tokenizer': [{'content': 'riko'}, {'content': 'pt.'}, {'content': '1'}]}
+
     >>> # In this case, if we just want the result, we can `emit` it instead
     >>> stream = pipe(item, conf=tokenizer_conf, field='title', emit=True)
-    >>> next(stream) == {'content': 'riko'}
-    True
+    >>> next(stream)
+    {'content': 'riko'}
 
     # an aggregator
     >>> from riko.modules.count import pipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(stream)) == {'count': 2}
-    True
+    >>> next(pipe(stream))
+    {'count': 2}
 
     # a source
     >>> from riko.modules.itembuilder import pipe
     >>>
     >>> attrs = {'key': 'title', 'value': 'riko pt. 1'}
-    >>> next(pipe(conf={'attrs': attrs})) == {'title': 'riko pt. 1'}
-    True
-
+    >>> next(pipe(conf={'attrs': attrs}))
+    {'title': 'riko pt. 1'}
 
     # check metadata
-    >>> from riko.modules import fetchpage, count
+    >>> from riko.modules.fetchpage import pipe as fetchpage
+    >>> from riko.modules.count import pipe as count
     >>>
     >>> if _isasync:
     ...     async_resp = ('processor', 'fetchpage', 'source')
@@ -340,10 +343,9 @@ Design Principles
     True
     >>> async_pdict.get('sub_type') == async_resp[2]
     True
-    >>> pdict = count.pipe.__dict__
-    >>> sync_resp = ('operator', 'count', 'aggregator')
-    >>> (pdict['type'], pdict['name'], pdict['sub_type']) == sync_resp
-    True
+    >>> pdict = count.__dict__
+    >>> (pdict['type'], pdict['name'], pdict['sub_type'])
+    ('operator', 'count', 'aggregator')
 
     # SyncPipe usage
     >>> from riko.collections import SyncPipe
@@ -353,11 +355,8 @@ Design Principles
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}]
     >>> sync_pipe = SyncPipe('itembuilder', conf={'attrs': attrs})
-    >>> sync_pipe.hash().list[0] == {
-    ...     'title': 'riko pt. 1',
-    ...     'content': "Let's talk about riko!",
-    ...     'hash': _hash}
-    True
+    >>> sync_pipe.hash().list[0]
+    {'title': 'riko pt. 1', 'content': "Let's talk about riko!", 'hash': _hash}
 
     # Alternate conf usage
     >>> from riko import get_path
@@ -384,7 +383,9 @@ ib_conf = {"attrs": attrs}
 
 
 def pipe(test=False):
-    flow = SyncPipe("itembuilder", conf=ib_conf, test=test).hash()
+    return SyncPipe("itembuilder", conf=ib_conf, test=test).hash()
 
-    for i in flow.output:
-        pprint(i)
+
+if __name__ == "__main__":
+    for i in pipe():
+        print(i)

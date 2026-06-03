@@ -11,9 +11,7 @@ from riko.modules.filter import pipe as _filter
 from riko.modules.rename import pipe as rename
 
 
-def pipe_975789b47f17690a21e89b10a702bcbd(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_975789b47f17690a21e89b10a702bcbd(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -33,17 +31,10 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
             "input",
         ]
 
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_sw_478(item=None, context=None, conf=None, **kwargs):
-        # todo: insert submodule description here
-        return tokenizer(
-            item, context=context, conf={"to-str": {"type": "text", "value": " "}}, **kwargs
-        )
-
     sw_417 = textinput(
         context=context,
         conf={
+            "test": {"type": "bool", "value": "true"},
             "debug": {"type": "text", "value": ""},
             "default": {
                 "type": "text",
@@ -51,7 +42,6 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
             },
             "prompt": {"type": "text", "value": "Status update"},
             "name": {"type": "text", "value": "q"},
-            "position": {"type": "int", "value": ""},
         },
     )
 
@@ -73,7 +63,7 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
         context=context,
         conf={
             "COMBINE": {"type": "text", "value": "and"},
-            "permit": {"type": "bool", "value": True},
+            "PERMIT": {"type": "bool", "value": True},
             "RULE": [
                 {
                     "field": {"type": "text", "value": "title"},
@@ -84,43 +74,51 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
         },
     )
 
-    sw_447 = regex(
+    sw_447 = loop(
         sw_436,
+        embed=regex,
         context=context,
         conf={
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "title"},
-                    "globalmatch": {"type": "text", "value": "1"},
-                    "match": {"type": "text", "value": " [^#]*"},
-                    "replace": {"type": "text", "value": " "},
+            "count": "all",
+            "embed": {
+                "emit": True,
+                "conf": {
+                    "RULE": [
+                        {
+                            "field": {"type": "text", "value": "title"},
+                            "singlematch": {"type": "bool", "value": False},
+                            "match": {"type": "text", "value": " [^#]*"},
+                            "replace": {"type": "text", "value": " "},
+                        },
+                        {
+                            "field": {"type": "text", "value": "title"},
+                            "match": {"type": "text", "value": "^[^#]*"},
+                            "replace": {"type": "text", "value": ""},
+                        },
+                    ]
                 },
-                {
-                    "field": {"type": "text", "value": "title"},
-                    "match": {"type": "text", "value": "^[^#]*"},
-                    "replace": {"type": "text", "value": ""},
-                },
-            ]
+            },
         },
     )
 
     sw_470 = loop(
         sw_447,
         context=context,
-        embed=pipe_sw_478,
+        embed=tokenizer,
         conf={
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "loop:tokenizer"},
-            "emit": {"type": "bool", "value": True},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "tokenizer",
                     "id": "sw-478",
-                    "conf": {"to-str": {"type": "text", "value": " "}},
+                    "emit": True,
+                    "assign": "loop:tokenizer",
+                    "field": "title",
+                    "conf": {"delimiter": {"type": "text", "value": " "}},
                 },
             },
-            "with": {"type": "text", "value": "title"},
+            "field": {"type": "text", "value": "title"},
         },
     )
 
@@ -129,7 +127,7 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
         context=context,
         conf={
             "COMBINE": {"type": "text", "value": "and"},
-            "permit": {"type": "bool", "value": True},
+            "PERMIT": {"type": "bool", "value": True},
             "RULE": [
                 {
                     "field": {"type": "text", "value": "content"},
@@ -140,17 +138,24 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
         },
     )
 
-    sw_501 = rename(
+    sw_501 = loop(
         sw_490,
+        embed=rename,
         context=context,
         conf={
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "content"},
-                    "op": {"type": "text", "value": "rename"},
-                    "newval": {"type": "text", "value": "title"},
-                }
-            ]
+            "count": "all",
+            "embed": {
+                "emit": True,
+                "conf": {
+                    "RULE": [
+                        {
+                            "field": {"type": "text", "value": "content"},
+                            "copy": {"type": "bool", "value": False},
+                            "newval": {"type": "text", "value": "title"},
+                        }
+                    ]
+                },
+            },
         },
     )
 

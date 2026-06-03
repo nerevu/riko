@@ -32,30 +32,30 @@
    License: see LICENSE file
 """
 
-from functools import partial
 from json import dumps, JSONEncoder
 from codecs import open
 from itertools import chain
 from collections import defaultdict
 from importlib import import_module
 from pprint import PrettyPrinter
-from typing import Any, Callable, Iterable, Iterator, Optional
+from typing import Iterable, Iterator, Mapping, Optional
 
 from jinja2 import Environment, PackageLoader
 
-from riko import utils
+from riko import Context, utils
 from riko.modules.forever import pipe as forever
 from riko.pprint2 import Id, repr_args, str_args
 from riko.topsort import topological_sort
-from riko.types import ParsedPipeDef, PipeDef, Step, Steps, SyncPipeline
+from riko.types.compile import Wire
+from riko.types.general import Items, ParsedPipeDef, PipeDef, Step, Steps, SyncPipeline
 
 
 class MyPrettyPrinter(PrettyPrinter):
-    def format(self, object, maxlevels, level, **kwargs):
-        if isinstance(object, unicode):
-            return (object.encode("utf8"), True, False)
-        else:
-            return PrettyPrinter.format(self, object, maxlevels, level, **kwargs)
+    def format(self, object, *args, **kwargs):
+        if isinstance(object, bytes):
+            object = object.decode("utf8")
+
+        return PrettyPrinter.format(self, object, *args, **kwargs)
 
 
 class CustomEncoder(JSONEncoder):
@@ -68,7 +68,8 @@ class CustomEncoder(JSONEncoder):
         return JSONEncoder.default(self, o)
 
 
-get_module_id = partial(utils.pythonise, key="src.moduleid")
+def get_module_id(wire: Wire):
+    return utils.pythonise(wire, key="src.moduleid")
 
 
 def write_file(data, path, pretty=False):
@@ -92,21 +93,22 @@ def write_file(data, path, pretty=False):
 
 
 def _gen_string_modules(
-    parsed_pipe_def: dict[str, Any],
+    parsed_pipe_def: ParsedPipeDef,
     module_ids: Iterable[str],
     module_names: Iterable[str],
     pipe_names: Iterable[str],
-    context=None,
+    context: Optional[Context] = None,
     **kwargs
 ):
     zipped = zip(module_ids, module_names, pipe_names)
-    verbose = kwargs.get("verbose") or (context and context.verbose)
+    context = context or Context(**kwargs)
 
     for module_id, module_name, pipe_name in zipped:
+        print(f"{module_name=}")
         pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
         pykwargs = dict(_gen_pykwargs(parsed_pipe_def, module_id, **kwargs))
 
-        if verbose:
+        if context.verbose:
             # con_args = filter(lambda x: x != Id("context"), pyargs):
             nconf_kwargs = filter(lambda x: x[0] != "conf", pykwargs.items())
             conf_kwargs = filter(lambda x: x[0] == "conf", pykwargs.items())
@@ -116,19 +118,22 @@ def _gen_string_modules(
         yield {
             "args": repr_args(chain([pyarg], pykwargs.items())),
             "id": module_id,
-            "sub_pipe": module_name.startswith("pipe_"),
+            # "sub_pipe": module_name.startswith("pipe_"),
+            "sub_pipe": module_id in parsed_pipe_def["embed"],
             "name": module_name,
             "pipe_name": pipe_name,
         }
 
 
 def _get_pyarg(
-    parsed_pipe_def: dict[str, Any],
+    parsed_pipe_def: ParsedPipeDef,
     module_id: str,
     steps: Optional[Steps] = None,
+    context: Optional[Context] = None,
     **kwargs
 ):
-    describe = kwargs.get("describe_input") or kwargs.get("describe_dependencies")
+    context = context or Context(**kwargs)
+    describe = context.describe_input or context.describe_dependencies
 
     # find the default input of this module
     input_module = _get_input_module(parsed_pipe_def, module_id, steps)
@@ -140,21 +145,19 @@ def _get_pyarg(
 
 
 def _gen_pykwargs(
-    parsed_pipe_def: dict[str, Any],
+    parsed_pipe_def: ParsedPipeDef,
     module_id: str,
-    steps=None,
-    context=None,
+    steps: Optional[Mapping] = None,
+    context: Optional[Context] = None,
     **kwargs
 ):
     module = parsed_pipe_def["modules"][module_id]
     yield ("conf", module["conf"])
 
-    if context:
-        yield ("context", context)
+    context = context or Context(**kwargs)
+    yield ("context", context)
 
-    cdescribe = context and (context.describe_input or context.describe_dependencies)
-    kdescribe = kwargs.get("describe_input") or kwargs.get("describe_dependencies")
-    describe = cdescribe or kdescribe
+    describe = context.describe_input or context.describe_dependencies
 
     if describe and steps:
         print("You must not specify both describe and steps. Assuming steps.")
@@ -226,7 +229,7 @@ def _gen_steps(
 
 
 def _get_input_module(
-    parsed_pipe_def: dict[str, Any],
+    parsed_pipe_def: ParsedPipeDef,
     module_id: str,
     steps: Optional[Steps] = None
 ):
@@ -273,7 +276,7 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
 
     return {
         "name": utils.pythonise(pipe_name),
-        "modules": dict(utils.gen_modules(pipe_def)),
+        "modules": modules,
         "embed": embed,
         "graph": dict(utils.gen_parented_graph(graph)),
         "wires": dict(utils.gen_wires(pipe_def)),
@@ -281,25 +284,27 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
 
 
 def build_pipeline(
-    parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, context=None, **kwargs
-) -> Iterator[Any]:
+    parsed_pipe_def: ParsedPipeDef,
+    pipe_def: PipeDef,
+    context: Optional[Context] = None,
+    **kwargs
+) -> Items:
     """Convert a pipe into an executable Python pipeline
 
     If describe_input or describe_dependencies then just
     return that instead of the pipeline
     """
+    context = context or Context(**kwargs)
+
     module_ids = topological_sort(parsed_pipe_def["graph"])
     pydeps = utils.extract_dependencies(pipe_def=pipe_def)
     pyinput = utils.extract_input(pipe_def=pipe_def)
 
-    describe_input = kwargs.get("describe_input") or context and context.describe_input
-    describe_dependencies = kwargs.get("describe_dependencies") or context and context.describe_dependencies
-
-    if describe_input and describe_dependencies:
+    if context.describe_input and context.describe_dependencies:
         pipeline = [{"inputs": pyinput, "dependencies": pydeps}]
-    elif describe_input:
+    elif context.describe_input:
         pipeline = pyinput
-    elif describe_dependencies:
+    elif context.describe_dependencies:
         pipeline = pydeps
     else:
         updates = {
@@ -310,13 +315,15 @@ def build_pipeline(
         }
 
         steps = dict(_gen_steps(parsed_pipe_def, **kwargs, **updates))
-        pipeline = steps[module_ids[-1]]
+        _module_id = module_ids[-1]
+        module_id = _module_id if isinstance(_module_id, str) else _module_id[-1]
+        pipeline = steps[module_id]
 
     yield from pipeline
 
 
 def stringify_pipe(
-    parsed_pipe_def: dict[str, Any], pipe_def: PipeDef, context=None, **kwargs
+    parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, **kwargs
 ) -> str:
     """Convert a pipe into Python script"""
     module_ids = topological_sort(parsed_pipe_def["graph"])
@@ -324,12 +331,12 @@ def stringify_pipe(
     updates = {
         "module_ids": module_ids,
         "module_names": utils.gen_names(module_ids, parsed_pipe_def),
-        "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
+        "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, ntype="pipe"),
     }
 
     env = Environment(loader=PackageLoader("riko"))
     template = env.get_template("pypipe.txt")
-    modules = list(_gen_string_modules(parsed_pipe_def, context=context, **kwargs, **updates))
+    modules = list(_gen_string_modules(parsed_pipe_def, **kwargs, **updates))
     keys = ["sub_pipe", "name", "pipe_name"]
     uniq_modules = set(tuple(m[k] for k in keys) for m in modules)
 

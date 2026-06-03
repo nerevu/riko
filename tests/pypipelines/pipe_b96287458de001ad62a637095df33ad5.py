@@ -7,9 +7,7 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.union import pipe as union
 
 
-def pipe_b96287458de001ad62a637095df33ad5(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_b96287458de001ad62a637095df33ad5(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -17,7 +15,7 @@ def pipe_b96287458de001ad62a637095df33ad5(
         return []
 
     if context and context.describe_dependencies:
-        return ["itembuilder", "output", "strconcat", "union"]
+        return ["itembuilder", "strconcat", "union"]
 
     sw_632 = itembuilder(
         context=context,
@@ -35,7 +33,11 @@ def pipe_b96287458de001ad62a637095df33ad5(
         },
     )
 
-    sw_605 = strconcat(context, conf={"part": {"type": "text", "value": "extVal"}})
+    sw_605 = strconcat(
+        context=context,
+        emit=True,
+        conf={"part": {"type": "text", "value": "extVal"}},
+    )
 
     sw_551 = itembuilder(
         context=context,
@@ -62,7 +64,7 @@ def pipe_b96287458de001ad62a637095df33ad5(
         },
     )
 
-    sw_613 = union(sw_551, context=context, _OTHER1=sw_632, conf={})
+    sw_613 = union(sw_551, context=context, OTHERS=[sw_632], conf={})
 
     return sw_613
 

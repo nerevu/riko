@@ -88,7 +88,7 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://data/www.sciencedaily.com_rss_computers_math.html"
+                    "value": "file://riko/data/www.sciencedaily.com_rss_computers_math.html"
                 }
             },
             "id": "sw-224",

@@ -21,8 +21,8 @@ Examples:
         >>>
         >>> items = ({'x': x} for x in range(5))
         >>> rule = {'field': 'x', 'op': 'is', 'value': 3}
-        >>> next(pipe(items, conf={'rule': rule})) == {'x': 3}
-        True
+        >>> next(pipe(items, conf={'rule': rule}))
+        {'x': 3}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -32,11 +32,15 @@ import re
 import operator as op
 
 from decimal import Decimal, InvalidOperation
+from time import struct_time
+from typing import Mapping, Optional, Sequence
 
+from dateutil.parser import ParserError
 import pygogo as gogo
 
+from riko.types.general import BasicArg, BasicMapping, DateLike, ObjconfRule
+
 from . import operator
-from riko.parsers import parse_conf
 from riko.cast import cast_date
 
 OPTS = {"listize": True, "extract": "rule"}
@@ -65,47 +69,57 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 is_iterable = lambda item: ITER_ATTRS.intersection(dir(item))
 
 
-def _parse_x_y(_x, _y):
-    try:
-        x = Decimal(_x)
-        y = Decimal(_y)
-    except (InvalidOperation, TypeError, ValueError):
+def _parse_arg(arg: Optional[BasicArg | DateLike]):
+    if isinstance(arg, Mapping):
+        value = arg
+    elif isinstance(arg, int):
+        value = Decimal(arg)
+    elif isinstance(arg, str):
         try:
-            x = cast_date(_x)["date"]
-            y = cast_date(_y)["date"]
-        except (ValueError, KeyError, IndexError, TypeError):
-            x, y = _x, _y
+            value = Decimal(arg)
+        except (InvalidOperation):
+            try:
+                value = cast_date(arg)
+            except (IndexError, ParserError, KeyError):  # TODO: figure out which exceptions cast_date can raise
+                value = arg
+    elif isinstance(arg, struct_time):
+        value = cast_date(arg)
+    elif isinstance(arg, Sequence):
+        value = arg
+    elif arg:
+        value = cast_date(arg)
+    else:
+        value = arg
 
-    return x, y
+    return value
 
 
-def parse_rule(rule, item, **kwargs):
+def parse_rule(rule: ObjconfRule, item: BasicMapping, **kwargs):
     truthy_like = rule.op in {"truthy", "falsy"}
     _x, _y = item.get(rule.field, **kwargs), rule.value
     has_value = _y is not None
+    result = False
 
     if has_value and not truthy_like:
-        x, y = _parse_x_y(_x, _y)
+        x, y = _parse_arg(_x), _parse_arg(_y)
     else:
         x, y = _x, _y
 
     if has_value or truthy_like:
         operation = SWITCH.get(rule.op)
 
-    if truthy_like:
-        result = operation(x)
-    elif has_value:
-        try:
-            result = operation(x, y)
-        except AttributeError:
-            result = False
-    else:
-        result = False
+        if truthy_like:
+            result = operation(x)
+        elif has_value:
+            try:
+                result = operation(x, y)
+            except AttributeError:
+                pass
 
     return result
 
 
-def parser(stream, rules, tuples, **kwargs):
+def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
     """Parses the pipe content
 
     Args:
@@ -133,37 +147,30 @@ def parser(stream, rules, tuples, **kwargs):
         >>> conf = DotDict({'permit': True, 'combine': 'and'})
         >>> kwargs = {'conf': conf}
         >>> rule = {'field': 'ex', 'op': 'greater', 'value': 3}
+        >>> objconf = Objectify(conf)
         >>> objrule = Objectify(rule)
         >>> stream = (DotDict({'ex': x}) for x in range(5))
-        >>> tuples = zip(stream, repeat(objrule))
-        >>> next(parser(stream, [objrule], tuples, **kwargs)) == {'ex': 4}
-        True
+        >>> tuples = zip(stream, repeat(objconf))
+        >>> next(parser(stream, [objrule], tuples, **kwargs))
+        {'ex': 4}
     """
-    conf = kwargs["conf"]
-
-    # TODO: add terminal check
-    dynamic = any("subkey" in v for v in conf.values() if is_iterable(v))
-    objconf = None if dynamic else parse_conf({}, conf=conf, objectify=True)
-
-    for item in stream:
-        if dynamic:
-            objconf = parse_conf(item, conf=conf, objectify=True)
-
-        results = (parse_rule(rule, item, **kwargs) for rule in rules)
+    for item, objconf in tuples:
+        results = (parse_rule(rule, item, **kwargs) for rule in extract)
 
         try:
-            result = COMBINE_BOOLEAN[objconf.combine](results)
+            func = COMBINE_BOOLEAN[objconf.combine]
         except KeyError:
-            msg = "Invalid combine: %s. (Expected 'and' or 'or')"
-            raise Exception(msg % objconf.combine)
+            print(f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')")
+        else:
+            result = func(results)
 
-        if (result and objconf.permit) or not (result or objconf.permit):
-            yield item
-        elif objconf.stop:
-            break
+            if (result and objconf.permit) or not (result or objconf.permit):
+                yield item
+            elif objconf.stop:
+                break
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously filters for source items matching
     the given rules.
@@ -204,9 +211,8 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     title = 'Website Developer'
-        ...     callback = lambda x: print(next(x)['title'] == title)
-        ...     items = [{'title': 'Good job!'}, {'title': title}]
+        ...     callback = lambda x: print(next(x)['title'])
+        ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
         ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
         ...     d = async_pipe(items, conf={'rule': rule})
         ...     return d.addCallbacks(callback, logger.error)
@@ -216,7 +222,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        Website Developer
     """
     return parser(*args, **kwargs)
 
@@ -260,18 +266,17 @@ def pipe(*args, **kwargs):
         dict: the filtered items
 
     Examples:
-        >>> title = 'Website Developer'
-        >>> items = [{'title': 'Good job!'}, {'title': title}]
+        >>> items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
         >>> rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
-        >>> next(pipe(items, conf={'rule': rule})) == {'title': title}
-        True
+        >>> next(pipe(items, conf={'rule': rule}))
+        {'title': 'Website Developer'}
         >>> rule['value'] = 'kjhlked'
         >>> any(pipe(items, conf={'rule': [rule]}))
         False
         >>> items = ({'x': x} for x in range(5))
         >>> rule = {'field': 'x', 'op': 'less', 'value': 2}
         >>> result = pipe(items, conf={'rule': rule, 'stop': True})
-        >>> len(list(result)) == 2
-        True
+        >>> len(list(result))
+        2
     """
     return parser(*args, **kwargs)

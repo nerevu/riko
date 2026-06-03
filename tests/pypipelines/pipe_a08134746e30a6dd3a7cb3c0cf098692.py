@@ -8,9 +8,7 @@ from riko.modules.rename import pipe as rename
 # from riko.modules.createrss import pipe as createrss
 
 
-def pipe_a08134746e30a6dd3a7cb3c0cf098692(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_a08134746e30a6dd3a7cb3c0cf098692(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -26,23 +24,6 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
             "xpathfetchpage",
         ]
 
-    # We need to wrap submodules (used by loops) so we can pass the
-    # input at runtime (as we can to subpipelines)
-    def pipe_sw_515(item=None, context=None, conf=None, **kwargs):
-        # todo: insert submodule description here
-        return strconcat(
-            item,
-            context=context,
-            conf={
-                "part": [
-                    {"type": "text", "value": '<img src="'},
-                    {"type": "text", "subkey": "img.src"},
-                    {"type": "text", "value": '">'},
-                ]
-            },
-            **kwargs
-        )
-
     sw_327 = xpathfetchpage(
         context=context,
         conf={
@@ -54,16 +35,16 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
     sw_507 = loop(
         sw_327,
         context=context,
-        embed=pipe_sw_515,
+        embed=strconcat,
         conf={
             "count": {"type": "text", "value": "all"},
-            "assign": {"type": "text", "value": "description"},
-            "emit": {"type": "bool", "value": False},
             "embed": {
                 "type": "module",
                 "value": {
                     "type": "strconcat",
                     "id": "sw-515",
+                    "assign": "description",
+                    "emit": False,
                     "conf": {
                         "part": [
                             {"type": "text", "value": '<img src="'},
@@ -73,19 +54,25 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
                     },
                 },
             },
-            "with": {"type": "text", "value": ""},
         },
     )
 
-    sw_303 = rename(
+    sw_303 = loop(
         sw_507,
+        embed=rename,
         context=context,
         conf={
-            "RULE": {
-                "field": {"type": "text", "value": "href"},
-                "op": {"type": "text", "value": "rename"},
-                "newval": {"type": "text", "value": "link"},
-            }
+            "count": "all",
+            "embed": {
+                "emit": True,
+                "conf": {
+                    "RULE": {
+                        "field": {"type": "text", "value": "href"},
+                        "copy": {"type": "bool", "value": False},
+                        "newval": {"type": "text", "value": "link"},
+                    }
+                },
+            },
         },
     )
 
@@ -109,7 +96,7 @@ def pipe_a08134746e30a6dd3a7cb3c0cf098692(
     #     },
     # )
 
-    return sw_303
+    return sw_327
 
 
 if __name__ == "__main__":

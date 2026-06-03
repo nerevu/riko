@@ -6,9 +6,7 @@ from riko.modules.urlbuilder import pipe as urlbuilder
 from riko.modules.fetch import pipe as fetch
 
 
-def pipe_e519dd393f943315f7e4128d19db2eac(
-    context=None, _INPUT=None, conf=None, **kwargs
-):
+def pipe_e519dd393f943315f7e4128d19db2eac(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -16,16 +14,16 @@ def pipe_e519dd393f943315f7e4128d19db2eac(
         return [("", "q", "Search term:", "text", "enterprise mashup")]
 
     if context and context.describe_dependencies:
-        return ["fetch", "output", "input", "urlbuilder"]
+        return ["fetch", "input", "urlbuilder"]
 
     sw_552 = textinput(
         context=context,
         conf={
+            "test": {"type": "bool", "value": "true"},
             "debug": {"type": "text", "value": ""},
             "default": {"type": "text", "value": "enterprise mashup"},
             "prompt": {"type": "text", "value": "Search term:"},
             "name": {"type": "text", "value": "q"},
-            "position": {"type": "int", "value": ""},
         },
     )
 
@@ -34,31 +32,24 @@ def pipe_e519dd393f943315f7e4128d19db2eac(
         PARAM_5_value=sw_552,
         conf={
             "PATH": {"type": "text", "value": ""},
-            "BASE": {"type": "text", "value": "http://news.google.com/news"},
+            "BASE": {"type": "text", "value": "news.google.com/rss"},
+            "EXT": {"type": "text", "value": "xml"},
             "PARAM": [
                 {
-                    "value": {"type": "text", "value": "1"},
-                    "key": {"type": "text", "value": "pz"},
-                },
-                {
-                    "value": {"type": "text", "value": "all"},
-                    "key": {"type": "text", "value": "cf"},
-                },
-                {
-                    "value": {"type": "text", "value": "uk"},
-                    "key": {"type": "text", "value": "ned"},
-                },
-                {
-                    "value": {"type": "text", "value": "en"},
+                    "value": {"type": "text", "value": "en-US"},
                     "key": {"type": "text", "value": "hl"},
+                },
+                {
+                    "value": {"type": "text", "value": "US"},
+                    "key": {"type": "text", "value": "gl"},
+                },
+                {
+                    "value": {"type": "text", "value": "US:en"},
+                    "key": {"type": "text", "value": "ceid"},
                 },
                 {
                     "value": {"terminal": "PARAM_5_value", "type": "text"},
                     "key": {"type": "text", "value": "q"},
-                },
-                {
-                    "value": {"type": "text", "value": "rss"},
-                    "key": {"type": "text", "value": "output"},
                 },
             ],
         },
@@ -67,7 +58,7 @@ def pipe_e519dd393f943315f7e4128d19db2eac(
     sw_481 = fetch(
         context=context,
         _1_URL=sw_492,
-        conf={"URL": {"terminal": "1_URL", "type": "url"}},
+        conf={"URL": {"terminal": "1_URL", "type": "url"}, "offline": True},
     )
 
     return sw_481

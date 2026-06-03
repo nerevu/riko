@@ -8,7 +8,7 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
 
 
-def pipe_1LNyRuNS3BGdkTKaAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
+def pipe_1LNyRuNS3BGdkTKaAsqenA(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -29,22 +29,22 @@ def pipe_1LNyRuNS3BGdkTKaAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
     sw_131 = textinput(
         context=context,
         conf={
+            "test": {"type": "bool", "value": "true"},
             "debug": {"type": "text", "value": ""},
             "default": {"type": "text", "value": ""},
             "prompt": {"type": "text", "value": "Search Term:"},
             "name": {"type": "text", "value": "textinput2"},
-            "position": {"type": "int", "value": ""},
         },
     )
 
     sw_116 = textinput(
         context=context,
         conf={
+            "test": {"type": "bool", "value": "true"},
             "debug": {"type": "text", "value": "yhoo"},
             "default": {"type": "text", "value": "yhoo"},
             "prompt": {"type": "text", "value": "Stock Symbol:"},
             "name": {"type": "text", "value": "textinput1"},
-            "position": {"type": "int", "value": ""},
         },
     )
 
@@ -75,7 +75,7 @@ def pipe_1LNyRuNS3BGdkTKaAsqenA(context=None, _INPUT=None, conf=None, **kwargs):
         RULE_1_value=sw_131,
         conf={
             "COMBINE": {"type": "text", "value": "and"},
-            "EMIT": {"type": "bool", "value": True},
+            "PERMIT": {"type": "bool", "value": True},
             "RULE": [
                 {
                     "field": {"type": "text", "value": "description"},
