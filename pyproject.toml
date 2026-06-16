@@ -34,7 +34,7 @@ dependencies = [
     "chardet>=3.0.4,<8.0.0",
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
-    "ijson>=2.6.1,<2.0.0",
+    "ijson>=2.6.1,<3.0.0",
     "meza>=0.42.5",
     "mezmorize>=0.27.0",
     "pygogo>=0.12.0,<2.0.0",
@@ -93,6 +93,16 @@ extend-select = [
 ]
 
 ignore = [
+    # docs
+    "D103", # undocumented-public-function
+    "D102", # undocumented-public-method
+    "D101", # undocumented-public-class
+    "D417", # undocumented-param
+    "D401", # non-imperative-mood
+    "D107", # undocumented-public-init
+    "D105", # undocumented-magic-method
+
+    # stylistic
     "E731", # do not assign a lambda expression, use a def
     "E501",  # line too long
 
