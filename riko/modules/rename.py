@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.rename
-~~~~~~~~~~~~~~~~~~~
 Provides functions for renaming, copying, and deleting elements of an item.
 
 There are several cases when this is useful, for example when the input data is

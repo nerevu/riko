@@ -1,8 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-tests.test_examples
-~~~~~~~~~~~~~~~~~~~
-
 Provides example pipeline tests.
 """
 
@@ -14,7 +11,7 @@ import pytest
 
 class TestExamples:
     def _get_pipeline(self, pipe_name):
-        module = import_module("examples.%s" % pipe_name)
+        module = import_module(f"examples.{pipe_name}")
         pipeline = module.pipe(test=True)
         return pipeline
 
@@ -116,8 +113,7 @@ class TestExamples:
         }
 
         length = len(pipeline)
-        msg = "Pipeline %s has length %i, not 1"
-        assert length == 49, msg % (pipe_name, length)
+        assert length == 49, f"Pipeline {pipe_name} has length {length}, not 49"
         assert example == pipeline[-1]
 
     def test_simple1(self):
@@ -125,8 +121,7 @@ class TestExamples:
         pipe_name = "simple1"
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
-        msg = "Pipeline %s has length %i, not 1"
-        assert length == 1, msg % (pipe_name, length)
+        assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
         assert {"url": "farechart"} == pipeline[-1]
 
     def test_simple2(self):
@@ -136,8 +131,7 @@ class TestExamples:
         example = {"author": "ABC", "link": "www.google.com", "title": "google"}
 
         length = len(pipeline)
-        msg = "Pipeline %s has length %i, not 1"
-        assert length == 1, msg % (pipe_name, length)
+        assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
         assert example == pipeline[-1]
 
     # FIXME: dateformat no longer returns a struct_time
@@ -148,8 +142,7 @@ class TestExamples:
         pipeline = self._get_pipeline(pipe_name)
         example = {"date": "December 02, 2014", "year": 2014}
         length = len(pipeline)
-        msg = "Pipeline %s has length %i, not 1"
-        assert length == 1, msg % (pipe_name, length)
+        assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
         assert example == pipeline[-1]
 
     # FIXME: dateformat no longer returns a struct_time
@@ -159,6 +152,5 @@ class TestExamples:
         pipe_name = "wired"
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
-        msg = "Pipeline %s has length %i, not 1"
-        assert length == 1, msg % (pipe_name, length)
+        assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
         assert {"date": "May 04, 1982"} == pipeline[-1]

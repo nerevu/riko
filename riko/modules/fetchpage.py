@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.fetchpage
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for fetching web pages.
 
 Fetches the source of a given web site as a string. This data can then be
@@ -33,7 +31,7 @@ from riko import Objconf
 from riko.bado import coroutine, io, return_value
 from riko.parsers import get_text
 from riko.types.general import BasicMapping, Extraction
-from riko.utils import betwix, fetch
+from riko.utils import Fetch, betwix
 
 from . import processor
 
@@ -137,7 +135,7 @@ def parser(
     if skip:
         stream = kwargs["stream"]
     else:
-        with fetch(**{k: objconf[k] for k in objconf}) as f:
+        with Fetch(**{k: objconf[k] for k in objconf}) as f:
             sliced = betwix(f, objconf.start, objconf.end, True)
             content = "\n".join(sliced)
 

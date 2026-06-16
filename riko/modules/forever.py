@@ -1,10 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-    riko.modules.forever
-    ~~~~~~~~~~~~~~~~~~~~
-    Provides methods for mocking an input source. This enables other modules,
-    e.g. date builder, to be called so they can continue to consume values from
-    indirect terminal inputs. Loopable.
+Provides methods for mocking an input source. This enables other modules,
+e.g. date builder, to be called so they can continue to consume values from
+indirect terminal inputs. Loopable.
 
 Examples:
     basic usage::

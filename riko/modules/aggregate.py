@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.aggregate
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for performing an arbitrary (user-defined) function on stream
 items.
 

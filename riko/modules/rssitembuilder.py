@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.rssitembuilder
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for creating a single-item RSS data source
 
 Can be used to create a single new RSS item from scratch, or reformat and

@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.itembuilder
-~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for creating a single-item data source
 
 With the Item Builder module, you can create a single-item data source by
@@ -70,7 +68,7 @@ def parser(
         {'title': 'the title', 'desc': 'the desc'}
 
     """
-    item = dict((a["key"], a["value"]) for a in extraction)
+    item = {a["key"]: a["value"] for a in extraction}
     return kwargs["stream"] if skip else DotDict(item)
 
 

@@ -128,7 +128,7 @@ def tt_to_datedict(tt: struct_time, normal: date) -> DateDict:
     day_of_w = 0 if tt[6] == 6 else tt[6] + 1
     isdst = None if tt[8] == -1 else bool(tt[8])
     result = {"utime": timegm(tt), "timezone": "UTC", "date": normal}
-    result.update(zip(TT_KEYS, tt))  # pylint: disable=W1637
+    result.update(zip(TT_KEYS, tt, strict=False))  # pylint: disable=W1637
     result.update({"day_of_week": day_of_w, "daylight_savings": isdst})
     return result
 

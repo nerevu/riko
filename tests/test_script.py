@@ -1,9 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 
 """
-tests.test_script
-~~~~~~~~~~~~~~~~~
-
 Tests riko runpipe CLI functionality.
 """
 
@@ -53,8 +50,7 @@ def run_command(script: str, argument: str, *opts: str) -> str:
     result = subprocess.run(
         cmd,
         cwd=PARENT_DIR,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

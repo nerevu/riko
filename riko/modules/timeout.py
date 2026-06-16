@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.timeout
-~~~~~~~~~~~~~~~~~~~~
 Provides functions for returning items from a stream until a certain amount of
 time has passed.
 

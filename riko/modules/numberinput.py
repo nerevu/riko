@@ -1,7 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.numberinput
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for obtaining user input and parsing to a number.
 
 http://pipes.yahoo.com/pipes/docs?doc=user_inputs#Number
 """

@@ -7,6 +7,7 @@ Provides misc helper functions
 
 import logging
 import pdb
+import sys
 from json.decoder import JSONDecodeError
 from logging import Formatter
 from traceback import format_exception
@@ -64,7 +65,7 @@ def log(message=None, ok=True, r=None, exit_on_completion=False, **_):
         logger.error(message)
 
     if exit_on_completion:
-        exit(0 if ok else 1)
+        sys.exit(0 if ok else 1)
     else:
         return ok
 

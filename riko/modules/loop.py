@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.loop
-~~~~~~~~~~~~~~~~~
 Provides functions for creating submodules from existing pipes
 
     http://pipes.yahoo.com/pipes/docs?doc=operators#Loop

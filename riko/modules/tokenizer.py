@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.tokenizer
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for splitting a string into an array of strings.
 
 A delimiter string (often just a single character) tells the module where to

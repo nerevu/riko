@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.refind
-~~~~~~~~~~~~~~~~~~~
 Provides functions for finding text located before, after, at, or between
 substrings using regular expressions, a powerful type of pattern matching.
 

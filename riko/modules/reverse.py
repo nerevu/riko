@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.reverse
-~~~~~~~~~~~~~~~~~~~~
 Provides functions for flipping the order of all items in a stream.
 
 Examples:

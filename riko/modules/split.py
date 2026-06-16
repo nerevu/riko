@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.split
-~~~~~~~~~~~~~~~~~~
 Provides functions for splitting a stream into identical copies
 
 Use split when you want to perform different operations on data from the same

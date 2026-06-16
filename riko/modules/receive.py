@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.receive
-~~~~~~~~~~~~~~~~~~~~
 Provides functions for receiving items of a stream to a function using generator based
 coroutines.
 

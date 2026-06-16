@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.dateformat
-~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for formatting dates.
 
 A wide range of format specifiers can be used to create the output text string.

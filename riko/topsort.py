@@ -64,8 +64,8 @@ def scc_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> list[tuple[T, ...
     >>> scc_sort(graph)
     [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
     """
-    G = nx.DiGraph(graph)
-    components: Iterable[set[T]] = nx.strongly_connected_components(G)
+    digraph = nx.DiGraph(graph)
+    components: Iterable[set[T]] = nx.strongly_connected_components(digraph)
     order = [tuple(c) for c in components]
     return order if reverse else order[::-1]
 

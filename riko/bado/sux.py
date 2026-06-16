@@ -62,7 +62,8 @@ class ParseError(Exception):
         self.message = message
 
     def __str__(self):
-        return "%s:%s:%s: %s" % (self.filename, self.line, self.col, self.message)
+        msg = "{0}:{1}:{2}: {3}"
+        return msg.format(self.filename, self.line, self.col, self.message)
 
 
 class XMLParser(Protocol):
@@ -179,7 +180,7 @@ class XMLParser(Protocol):
         # state doesn't make sense if there's an exception..
         self.state = curState
 
-    def connectionLost(self, reason):
+    def connectionLost(self, *_):
         """
         End the last state we were in.
         """
@@ -196,12 +197,12 @@ class XMLParser(Protocol):
             self._leadingBodyData = byte
             return "bodydata"
         elif byte != "<":
-            msg = "First char of document [%r] wasn't <" % (byte,)
+            msg = f"First char of document [{byte!r}] wasn't <"
             self._raise_parse_error(msg)
 
         return "tagstart"
 
-    def begin_comment(self, byte):
+    def begin_comment(self, *_):
         self.commentbuf = ""
 
     def do_comment(self, byte):
@@ -211,7 +212,7 @@ class XMLParser(Protocol):
             self.gotComment(self.commentbuf[:-3])
             return "bodydata"
 
-    def begin_tagstart(self, byte):
+    def begin_tagstart(self, *_):
         self.tagName = ""  # name of the tag
         self.tagAttributes = {}  # attributes of the tag
         self.termtag = 0  # is the tag self-terminating
@@ -240,7 +241,7 @@ class XMLParser(Protocol):
             val = switch[byte]
 
         if not (self.lenient or val or is_good):
-            self._raise_parse_error("Invalid tag character: %r" % byte)
+            self._raise_parse_error(f"Invalid tag character: {byte!r}")
 
         return val
 
@@ -264,7 +265,7 @@ class XMLParser(Protocol):
             self._raise_parse_error("Whitespace before tag-name")
         elif byte in "!?" and self.tagName and self.strict:
             self._raise_parse_error("Invalid character in tag-name")
-        elif byte == "[" and not self.tagName == "!":
+        elif byte == "[" and self.tagName != "!":
             self._raise_parse_error("Invalid '[' in tag-name")
 
         val = self._get_val(byte)
@@ -338,7 +339,7 @@ class XMLParser(Protocol):
             # <foo bar="baz"">
             return
 
-        self._raise_parse_error("Unexpected character: %r" % byte)
+        self._raise_parse_error(f"Unexpected character: {byte!r}")
 
     def begin_doctype(self, byte):
         self.doctype = byte
@@ -384,7 +385,7 @@ class XMLParser(Protocol):
         if byte.isalnum() or byte in IDENTCHARS:
             self.attrname += byte
         elif self.strict and not (byte.isspace() or byte == "="):
-            msg = "Invalid attribute name: %r %r" % (self.attrname, byte)
+            msg = f"Invalid attribute name: {self.attrname!r} {byte!r}"
             self._raise_parse_error(msg)
         elif byte in LENIENT_IDENTCHARS or byte.isalnum():
             self.attrname += byte
@@ -418,13 +419,13 @@ class XMLParser(Protocol):
             # <font size=\"3\"><sup>SM</sup></font>
             pass
         else:
-            msg = "Invalid initial attribute value: %r; " % byte
+            msg = f"Invalid initial attribute value: {byte!r}; "
             msg += "Attribute values must be quoted."
             self._raise_parse_error(msg)
 
         return val
 
-    def begin_beforeeq(self, byte):
+    def begin_beforeeq(self, *_):
         self._beforeeq_termtag = 0
 
     def do_beforeeq(self, byte):
@@ -494,7 +495,7 @@ class XMLParser(Protocol):
         if self.attrval:
             self.tagAttributes[self.attrname] = self.attrval
 
-    def begin_afterslash(self, byte):
+    def begin_afterslash(self, *_):
         self._after_slash_closed = 0
 
     def do_afterslash(self, byte):
@@ -515,7 +516,7 @@ class XMLParser(Protocol):
         # any javascript code after a <script/>... we'll see :(
         return "bodydata"
 
-    def begin_bodydata(self, byte):
+    def begin_bodydata(self, *_):
         if self._leadingBodyData:
             self.bodydata = self._leadingBodyData
             del self._leadingBodyData
@@ -538,7 +539,7 @@ class XMLParser(Protocol):
             return "waitscriptendtag"
         self.bodydata += byte
 
-    def begin_waitscriptendtag(self, byte):
+    def begin_waitscriptendtag(self, *_):
         self.temptagdata = ""
         self.tagName = ""
         self.endtag = 0
@@ -583,7 +584,7 @@ class XMLParser(Protocol):
             self.bodydata += "<" + self.temptagdata
             return "waitforendscript"
 
-    def begin_entityref(self, byte):
+    def begin_entityref(self, *_):
         self.erefbuf = ""
         self.erefextra = ""  # extra bit for lenient mode
 
@@ -613,7 +614,7 @@ class XMLParser(Protocol):
 
     # hacky support for space after & in entityref in lenient
     # state should only happen in that case
-    def begin_spacebodydata(self, byte):
+    def begin_spacebodydata(self, *_):
         self.bodydata = self.erefextra
         self.erefextra = None
 
@@ -644,7 +645,7 @@ class XMLParser(Protocol):
 
         Default behaviour is to print.
         """
-        print("entityRef: &%s;" % entityRef)
+        print(f"entityRef: &{entityRef};")
 
     def gotComment(self, comment):
         """

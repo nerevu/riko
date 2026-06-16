@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
@@ -11,7 +12,7 @@ io_error = FileNotFoundError
 
 
 def load_file(name, src):
-    location = "examples/%s.py" % src
+    location = f"examples/{src}.py"
     spec = spec_from_file_location(name, location)
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -58,13 +59,13 @@ def run():
     args = parser.parse_args()
 
     try:
-        name = file2name("%s.py" % args.pipeid)
+        name = file2name(f"{args.pipeid}.py")
         module = load_file(name, args.pipeid)
     except io_error:
         try:
-            module = import_module("examples.%s" % args.pipeid)
+            module = import_module(f"examples.{args.pipeid}")
         except ImportError:
-            exit("Pipe examples.%s not found!" % args.pipeid)
+            sys.exit(f"Pipe examples.{args.pipeid} not found!")
 
     if args.isasync:
         pipeline = module.async_pipe

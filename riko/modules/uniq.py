@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.uniq
-~~~~~~~~~~~~~~~~~
 Provides functions for filtering out non unique items from a stream according
 to a specified field.
 

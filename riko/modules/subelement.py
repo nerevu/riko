@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.subelement
-~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for extracting sub-elements from an item
 
 Sometimes the data you need from a stream is buried deep in its hierarchy. You

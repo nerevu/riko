@@ -95,7 +95,7 @@ def async_starmap(async_func, iterable):
 
 
 def async_dispatch(split, *async_funcs, **kwargs):
-    return async_starmap(lambda item, f: f(item), zip(split, async_funcs))
+    return async_starmap(lambda item, f: f(item), zip(split, async_funcs, strict=False))
 
 
 def async_broadcast(item, *async_funcs, **kwargs):

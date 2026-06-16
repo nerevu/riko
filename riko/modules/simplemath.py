@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.simplemath
-~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for performing simple mathematical operations, e.g.,
 addition, subtraction, multiplication, division, modulo, averages, etc.
 

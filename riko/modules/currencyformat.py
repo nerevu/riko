@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.currencyformat
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for formatting numbers to currency strings.
 
 Examples:

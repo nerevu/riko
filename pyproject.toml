@@ -93,17 +93,28 @@ extend-select = [
 ]
 
 ignore = [
+    # temp
+    "D400",  # missing-trailing-period
+    "D415",  # missing-terminal-punctuation
+    "D205",  # missing-blank-line-after-summary
+    "D200",  # unnecessary-multiline-docstring
+
     # docs
-    "D103", # undocumented-public-function
-    "D102", # undocumented-public-method
-    "D101", # undocumented-public-class
-    "D417", # undocumented-param
-    "D401", # non-imperative-mood
-    "D107", # undocumented-public-init
-    "D105", # undocumented-magic-method
+    "D100",  # Missing docstring in public module
+    "D101",  # undocumented-public-class
+    "D102",  # undocumented-public-method
+    "D103",  # undocumented-public-function
+    "D105",  # undocumented-magic-method
+    "D107",  # undocumented-public-init
+    "D401",  # non-imperative-mood
+    "D417",  # undocumented-param
+
+    # misc
+    "T201",  # print
+    "T203",  # p-print
 
     # stylistic
-    "E731", # do not assign a lambda expression, use a def
+    "E731",  # do not assign a lambda expression, use a def
     "E501",  # line too long
 
      # this is incompatible with D211 no-blank-line-before-class
@@ -134,6 +145,11 @@ known-first-party = ["riko"]
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/**/*" = [
     "S101",   # Use of `assert` detected
+]
+
+"tests/pypipelines/*" = [
+    "N999",  # Invalid module name
+    "N802",  # Function name
 ]
 
 [tool.pyright]

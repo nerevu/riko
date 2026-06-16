@@ -61,9 +61,9 @@ class MyPrettyPrinter(PrettyPrinter):
 
 class CustomEncoder(JSONEncoder):
     def default(self, o):
-        if set(["quantize", "year", "tm_hour"]).intersection(dir(o)):
+        if {"quantize", "year", "tm_hour"}.intersection(dir(o)):
             return str(o)
-        elif set(["next", "union"]).intersection(dir(o)):
+        elif {"next", "union"}.intersection(dir(o)):
             return list(o)
 
         return JSONEncoder.default(self, o)
@@ -101,7 +101,7 @@ def _gen_string_modules(
     context: Context | None = None,
     **kwargs,
 ):
-    zipped = zip(module_ids, module_names, pipe_names)
+    zipped = zip(module_ids, module_names, pipe_names, strict=False)
     context = context or Context(**kwargs)
 
     for module_id, module_name, pipe_name in zipped:
@@ -206,7 +206,7 @@ def _gen_steps(
     pipe_names: Iterable[str],
     **kwargs,
 ) -> Iterator[Step]:
-    zipped = zip(module_ids, module_names, pipe_names)
+    zipped = zip(module_ids, module_names, pipe_names, strict=False)
     kwargs.setdefault("steps", {})
 
     for module_id, module_name, pipe_name in zipped:
@@ -343,10 +343,10 @@ def stringify_pipe(parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, **kwargs) 
     template = env.get_template("pypipe.txt")
     modules = list(_gen_string_modules(parsed_pipe_def, **kwargs, **updates))
     keys = ["sub_pipe", "name", "pipe_name"]
-    uniq_modules = set(tuple(m[k] for k in keys) for m in modules)
+    uniq_modules = {tuple(m[k] for k in keys) for m in modules}
 
     data = {
-        "uniq_modules": [dict(zip(keys, m)) for m in uniq_modules],
+        "uniq_modules": [dict(zip(keys, m, strict=False)) for m in uniq_modules],
         "modules": modules,
         "pipe_name": parsed_pipe_def["name"],
         "inputs": utils.extract_input(pipe_def=pipe_def),

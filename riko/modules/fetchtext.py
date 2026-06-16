@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.fetchtext
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for fetching text data sources.
 
 Accesses and extracts data from text sources on the web. This data can then be
@@ -30,7 +28,7 @@ import pygogo as gogo
 from riko import ENCODING, Objconf
 from riko.bado import coroutine, io, return_value
 from riko.types.general import BasicArg, Extraction, ItemArg
-from riko.utils import auto_close, fetch
+from riko.utils import Fetch, auto_close
 
 from . import processor
 
@@ -121,7 +119,7 @@ def parser(
     if skip:
         stream = kwargs["stream"]
     else:
-        f = fetch(**{k: objconf[k] for k in objconf})
+        f = Fetch(**{k: objconf[k] for k in objconf})
         _stream = (line.strip() for line in f)
         stream = auto_close(_stream, f)
 

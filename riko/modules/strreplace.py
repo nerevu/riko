@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.strreplace
-~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for string search-and-replace.
 
 You provide the module with the text string to search for, and what to replace

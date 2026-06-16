@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.datebuilder
-~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for converting a text string into a datetime. Loopable.
 
 Examples:
@@ -70,10 +68,10 @@ def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
     if skip:
         stream = kwargs["stream"]
     else:
-        if text.endswith(" day") or text.endswith(" days"):
+        if text.endswith((" day", " days")):
             count = int(text.split(" ")[0])
             new_date = dt.today() + timedelta(days=count)
-        elif text.endswith(" year") or text.endswith(" years"):
+        elif text.endswith((" year", " years")):
             count = int(text.split(" ")[0])
             new_date = dt.today().replace(year=dt.today().year + count)
         else:
@@ -83,7 +81,7 @@ def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
             new_date = parse_date(text)
 
         if not new_date:
-            raise Exception("Unrecognized date string: %s" % text)
+            raise Exception(f"Unrecognized date string: {text}")
 
         stream = new_date.timetuple()
 

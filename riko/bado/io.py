@@ -70,11 +70,11 @@ class FileReader(AccumulatingProtocol):
             return
 
     def connectionLost(self, reason):
-        self.logger.debug("connectionLost: %s", reason)
+        self.logger.debug(f"connectionLost: {reason}")
         self.cleanup()
 
     def connectionMade(self):
-        self.logger.debug("Connection made from %s", self.transport.getPeer())
+        self.logger.debug(f"Connection made from {self.transport.getPeer()}")
         args = (self.f, self.transport, self.transform)
         self.d = self.closedDeferred = self.producer.beginFileTransfer(*args)
 

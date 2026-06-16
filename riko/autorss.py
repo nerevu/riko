@@ -15,7 +15,7 @@ from twisted.internet.defer import Deferred
 from riko.bado import coroutine, microdom, return_value
 from riko.bado.io import async_url_open
 from riko.parsers import LinkParser
-from riko.utils import fetch
+from riko.utils import Fetch
 
 TIMEOUT = 10
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -32,8 +32,7 @@ def file2entries(
     for line in f:
         parser.feed(decode(line))
 
-        for entry in parser.entry:
-            yield entry
+        yield from parser.entry
 
 
 def doc2entries(document) -> Iterator[dict]:
@@ -78,7 +77,7 @@ def get_rss(
         parser = RSSLinkParser(**kwargs)
 
     try:
-        f = fetch(url, timeout=TIMEOUT)
+        f = Fetch(url, timeout=TIMEOUT)
     except ValueError:
         f = filter(None, url.splitlines())
 

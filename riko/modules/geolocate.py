@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.geolocate
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for obtaining the geo location of an ip address, street
 address, currency code, or lat/lon coordinates.
 

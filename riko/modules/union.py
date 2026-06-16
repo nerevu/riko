@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.union
-~~~~~~~~~~~~~~~~~~
 Provides functions for merging separate sources into a single stream of items.
 
 Examples:

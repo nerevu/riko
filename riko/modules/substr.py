@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.substr
-~~~~~~~~~~~~~~~~~~~
 Provides functions for obtaining a portion of a string.
 
 You enter two numbers to tell the module the starting character position and

@@ -163,7 +163,7 @@ class Node:
         if len(self.childNodes) != len(other.childNodes):
             return False
 
-        for a, b in zip(self.childNodes, other.childNodes):
+        for a, b in zip(self.childNodes, other.childNodes, strict=False):
             if not a.isEqualToNode(b):
                 return False
 
@@ -418,7 +418,7 @@ class Text(CharacterData):
         return stream.write(val)
 
     def __repr__(self):
-        return "Text(%s" % repr(self.nodeValue) + ")"
+        return f"Text({self.nodeValue!r}" + ")"
 
 
 class CDATASection(CharacterData):
@@ -645,7 +645,7 @@ class Element(Node):
             # namespace.  Nothing extra to do here.
             begin.extend(self.tagName)
 
-        prefixes = ("p%s" % str(i) for i in it.count())
+        prefixes = (f"p{i}" for i in it.count())
 
         for attr, val in sorted(self.attributes.items()):
             if val and isinstance(attr, tuple):
@@ -665,7 +665,7 @@ class Element(Node):
     def _write_child(self, stream, newl, newindent, **kwargs):
         for child in self.childNodes:
             if self.tag_is_blockelement and self.tag_is_nice_format:
-                stream.write("".join((newl, newindent)))
+                stream.write(f"{newl}{newindent}")
 
             child.writexml(stream, newl=newl, newindent=newindent, **kwargs)
 
@@ -726,25 +726,25 @@ class Element(Node):
             self._write_child(stream, newl, newindent, **kwargs)
 
             if self.tag_is_blockelement:
-                stream.write("".join((newl, indent)))
+                stream.write(f"{newl}{indent}")
 
-            stream.write("".join(("</", endTagName, ">")))
+            stream.write(f"</{endTagName}>")
         elif not self.tag_is_singleton:
-            stream.write("".join(("></", endTagName, ">")))
+            stream.write(f"></{endTagName}>")
         else:
             stream.write(" />")
 
     def __repr__(self):
-        rep = "Element(%s" % repr(self.nodeName)
+        rep = f"Element({self.nodeName!r}"
 
         if self.attributes:
-            rep += ", attributes=%r" % (self.attributes,)
+            rep += f", attributes={self.attributes!r}"
 
         if self._filename:
-            rep += ", filename=%r" % (self._filename,)
+            rep += f", filename={self._filename!r}"
 
         if self._markpos:
-            rep += ", markpos=%r" % (self._markpos,)
+            rep += f", markpos={self._markpos!r}"
 
         return rep + ")"
 
@@ -758,16 +758,16 @@ class Element(Node):
             rep += repr(self._filename)
 
         if self._markpos:
-            rep += " line %s column %s" % self._markpos
+            rep += " line {} column {}".format(*self._markpos)
 
         if self._filename or self._markpos:
             rep += ")"
 
         for item in self.attributes.items():
-            rep += " %s=%r" % item
+            rep += " {}={!r}".format(*item)
 
         if self.hasChildNodes():
-            rep += " >...</%s>" % self.nodeName
+            rep += f" >...</{self.nodeName}>"
         else:
             rep += " />"
 
@@ -833,7 +833,7 @@ class MicroDOMParser(XMLParser):
     def _fixScriptElement(self, el):
         # this deals with case where there is comment or CDATA inside
         # <script> tag and we want to do the right thing with it
-        if self.strict or not len(el.childNodes) == 1:
+        if self.strict or len(el.childNodes) != 1:
             return
 
         c = el.firstChild()
@@ -854,7 +854,7 @@ class MicroDOMParser(XMLParser):
 
             # now see if contents are actual node and comment or CDATA
             try:
-                e = parseString("<a>%s</a>" % oldvalue).childNodes[0]
+                e = parseString(f"<a>{oldvalue}</a>").childNodes[0]
             except (ParseError, MismatchedTags):
                 return
 
@@ -914,7 +914,6 @@ class MicroDOMParser(XMLParser):
                 yield (k, v)
 
     def gotTagStart(self, name, attributes):
-        # logger.debug('%s<%s>', ' ' * self.indentlevel, name)
         self.indentlevel += 2
         parent = self._getparent()
         parent = self._check_parent(parent, name)
@@ -976,7 +975,7 @@ class MicroDOMParser(XMLParser):
         nsplit = name.split(":", 1)
 
         if len(nsplit) == 2:
-            pfx, newname = nsplit
+            pfx, _newname = nsplit
             ns = pfxdix.get(pfx, None)
 
             if (el.namespace != ns) and ns and self.strict:
@@ -1018,7 +1017,6 @@ class MicroDOMParser(XMLParser):
 
     def gotTagEnd(self, name):
         self.indentlevel -= 2
-        # logger.debug('%s</%s>', ' ' * self.indentlevel, name)
 
         if self.lenient and not self.elementstack:
             return

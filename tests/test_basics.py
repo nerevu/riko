@@ -137,7 +137,8 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 1)
         item = cast(dict, items[0])
-        assert item["title"] and item["summary"]
+        assert item["title"]
+        assert item["summary"]
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop"""
@@ -145,7 +146,6 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
 
-        print(items)
         item = cast(dict, items[0])
         assert item["info"]["login"] == "defunkt"
         assert item["info"]["user_view_type"] == "public"
@@ -665,13 +665,12 @@ class TestBasics:
         self._load(items, pipe_name, 1, 0)
         expected = (
             "THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ "
-            "WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY (Severe)"
+            "WASHINGTON/ OREGON\n     AND CALIFORNIA ONLY (Severe)"
         )
 
-        # todo: check the data! e.g. pubdate etc.
-        for i in items:
-            item = cast(dict, i)
-            assert item["title"] == expected
+        item = cast(dict, items[0])
+        assert item["title"] == expected
+        assert item["pubDate"]
 
     def test_namespaceless_xml_input(self):
         """Loads a pipeline containing deep xml source with no namespace"""

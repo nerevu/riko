@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.sort
-~~~~~~~~~~~~~~~~~
 Provides functions for sorting a stream by an item field.
 
 Examples:

@@ -40,7 +40,6 @@ from time import struct_time
 from typing import (
     Any,
     Literal,
-    Optional,
     TypeVar,
     overload,
 )
@@ -88,7 +87,7 @@ ENCODING = "utf-8"
 
 
 def get_path(name: str):
-    if name.startswith("http") or name.startswith("file:"):
+    if name.startswith(("http", "file:")):
         url = name
     else:
         url = f"file://{p.join(PARENT_DIR, 'data', name)}"
@@ -97,17 +96,17 @@ def get_path(name: str):
 
 
 def get_abspath(url: str, offline=False):
-    if url.startswith("http") or url.startswith("file:///"):
+    if url.startswith(("http", "file:///")):
         pass
     elif url.startswith("file://"):
         parent = p.dirname(p.dirname(__file__))
         rel_path = url[7:]
         abspath = p.abspath(p.join(parent, rel_path))
-        url = "file://%s" % abspath
+        url = f"file://{abspath}"
     elif offline:
         url = get_path(url)
     else:
-        url = "http://%s" % url if url and "://" not in url else url
+        url = f"http://{url}" if url and "://" not in url else url
 
     return compat.decode(url)
 
@@ -220,7 +219,6 @@ class Objconf(Objectify):
     max_wait: int
     multi: bool
     name: str
-    name: str
     other: str
     op: str
     other_join_key: str
@@ -230,7 +228,6 @@ class Objconf(Objectify):
     path: str | list[str]
     permit: bool
     precision: int
-    prompt: str
     prompt: str
     rule: ObjconfRule | Sequence[ObjconfRule]
     skip_rows: int

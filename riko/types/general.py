@@ -43,6 +43,7 @@ NumLike: TypeAlias = float | int | Decimal
 IntermediateValue: TypeAlias = BasicValue | DateLike | NumLike | bool | None
 ComplexValue: TypeAlias = IntermediateValue | AnyLocation
 Caster: TypeAlias = Callable[[str | int], ComplexValue]
+NumericCaster: TypeAlias = Callable[[str | int | float | Decimal], NumLike]
 
 
 class PreCaster(TypedDict):

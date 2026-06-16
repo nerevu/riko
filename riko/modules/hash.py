@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.hash
-~~~~~~~~~~~~~~~~~
 Provides functions for hashing text.
 
 Note: If the PYTHONHASHSEED environment variable is set to an integer value,

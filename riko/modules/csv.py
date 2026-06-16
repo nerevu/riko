@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.csv
-~~~~~~~~~~~~~~~~
 Provides functions for fetching csv files.
 
 Examples:
@@ -30,7 +28,7 @@ from meza.process import merge
 from riko import ENCODING, Objconf
 from riko.bado import coroutine, io, return_value
 from riko.types.general import BasicArg, Extraction, IntermediateMapping
-from riko.utils import auto_close, fetch
+from riko.utils import Fetch, auto_close
 
 from . import processor
 
@@ -139,7 +137,7 @@ def parser(
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {"first_row": first_row, "custom_header": custom_header}
 
-        f = fetch(**{k: objconf[k] for k in objconf})
+        f = Fetch(**{k: objconf[k] for k in objconf})
         rkwargs = merge([dict(objconf.iteritems()), renamed])
         content = cast(Iterator[IntermediateMapping], read_csv(f, **rkwargs))
         stream = auto_close(content, f)

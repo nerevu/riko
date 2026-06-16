@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.regex
-~~~~~~~~~~~~~~~~~~
 Provides functions for modifying the content of a field of an item using
 regular expressions, a powerful type of pattern matching.
 

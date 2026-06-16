@@ -384,7 +384,7 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
             skip_keys = {".".join(self._parse_key(key)[:-1]) for key in dot_keys}
-            items = list((k, _dict[k]) for k in _dict if k not in skip_keys)
+            items = [(k, _dict[k]) for k in _dict if k not in skip_keys]
         else:
             skip_keys = set()
             items = _dict.items()

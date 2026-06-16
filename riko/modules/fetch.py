@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.fetch
-~~~~~~~~~~~~~~~~~~
 Provides functions for fetching RSS feeds.
 
 Lets you specify an RSS news feed as input. This module understands feeds in

@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.sum
-~~~~~~~~~~~~~~~~
 Provides functions for summing the items in a stream.
 
 Examples:

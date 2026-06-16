@@ -100,7 +100,7 @@ def default_user_agent(name="riko"):
     Return a string representing the default user agent.
     :rtype: str
     """
-    return "%s/%s" % (name, __version__)
+    return f"{name}/{__version__}"
 
 
 class Chainable:
@@ -168,16 +168,13 @@ def get_response_encoding(response, def_encoding=ENCODING):
             ctype = content_type.split("=")[1]
             encoding = ctype.strip().strip('"').strip("'")
 
-    extracted = encoding or def_encoding
-    assert extracted
-    return extracted
+    return encoding or def_encoding
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
 def auto_close(stream: Iterable[T], f) -> Iterator[T]:
     try:
-        for record in stream:
-            yield record
+        yield from stream
     finally:
         f.close()
 
@@ -239,7 +236,7 @@ def get_opener(memoize=False, **kwargs) -> Opener:
     return current_opener
 
 
-class fetch(TextIOBase):
+class Fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
     def __init__(self, url: str, memoize=False, **kwargs):
         # TODO: need to use separate timeouts for memoize and urlopen
@@ -327,7 +324,7 @@ def def_itemgetter(
                 msg += ". Returning value without casting."
                 logger.warning(msg)
                 casted = value
-            elif isinstance(value, (Mapping, Objectify)) or isinstance(value, Sequence):
+            elif isinstance(value, (Mapping, Objectify, Sequence)):
                 msg += ". Returning default value."
                 logger.warning(msg)
                 casted = default
@@ -454,7 +451,7 @@ def betwix(iterable, start=None, stop=None, inc=False):
 def dispatch(
     split: Sequence[ComplexArg], *funcs: SyncAnyFunc
 ) -> tuple[ComplexArg, ...]:
-    """
+    r"""
     Takes a tuple of items and delivers each one to a different function
 
     Differs from `map` which applies multiple items to the same function.
@@ -462,8 +459,8 @@ def dispatch(
            /--> item1 --> double(item1) -----> \
           /                                     \
     split ----> item2 --> oct(item2) ------->   _OUTPUT
-          \\                                     /
-           \\--> item3 --> max(item3) --------> /
+          \                                     /
+           \--> item3 --> max(item3) --------> /
 
     One way to construct such a flow in code would be::
 
@@ -480,11 +477,11 @@ def dispatch(
     #     v = func(item)
     #     print(f"dispatch: {func}({item}) = {v}")
 
-    return tuple(func(item) for item, func in zip(split, funcs))
+    return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
 def broadcast(item: ItemArg, *funcs: SyncItemFunc, **kwargs) -> tuple[ComplexArg, ...]:
-    """
+    r"""
     Delivers the same item to different functions.
 
     Differs from `map` which applies multiple items to the same function.
@@ -492,8 +489,8 @@ def broadcast(item: ItemArg, *funcs: SyncItemFunc, **kwargs) -> tuple[ComplexArg
            /--> item --> len(item) --------> \
           /                                   \
     item -----> item --> hash(item) ------->  split
-          \\                                   /
-           \\--> item --> sorted(item) -----> /
+          \                                   /
+           \--> item --> sorted(item) -----> /
 
     One way to construct such a flow in code would be::
 
@@ -530,7 +527,7 @@ def multi_substitute(word: str, rules):
 
     # Create a combined regex from the rules
     tuples = ((p, r["match"]) for p, r in enumerate(rules))
-    regexes = ("(?P<match_%i>%s)" % (p, r) for p, r in tuples)
+    regexes = (f"(?P<match_{p}>{r})" for p, r in tuples)
     pattern = "|".join(regexes)
     regex = re.compile(pattern, flags)
     resplit = re.compile("\\$(\\d+)")
@@ -803,7 +800,7 @@ def extract_input(
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return sorted(list(pyinput))
+    return sorted(pyinput)
 
 
 def pythonise(

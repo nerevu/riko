@@ -49,7 +49,7 @@ def repr_args(args):
         if isinstance(x, tuple) and len(x) == 2:
             key, value = x
             # todo: exclude this key if value is its default
-            res += ["%s=%s" % (key, repr_arg(value))]
+            res += [f"{key}={repr_arg(value)}"]
         else:
             res += [repr_arg(x)]
     return ", ".join(res)
@@ -116,16 +116,16 @@ def str_arg(d):
         if len(d) == 2 and d.get("type") == "text" and "value" in d:
             return str_arg(d["value"])
         if len(d) == 2 and d.get("type") == "text" and "subkey" in d:
-            return ".%s" % d["subkey"]
+            return ".{subkey}".format(**d)
         if d.get("type") == "module":
             return None
-        return "{%s}" % str_args(d.items())
+        return f"{0}".format(str_args(d.items()))
     elif isinstance(d, str):
-        return '"%s"' % d
+        return f'"{d}"'
     elif isinstance(d, Sequence):
         if len(d) == 1:
             return str_arg(d[0])
 
-        return "[%s]" % ", ".join(str_arg(elem) for elem in d)
+        return "[{}]".format(", ".join(str_arg(elem) for elem in d))
 
     return repr(d)

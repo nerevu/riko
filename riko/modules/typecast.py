@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.typecast
-~~~~~~~~~~~~~~~~~~~~~
 Provides functions for casting fields into specific types.
 
 Examples:

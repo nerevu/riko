@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.truncate
-~~~~~~~~~~~~~~~~~~~~~
 Provides functions for returning a specified number of items from a stream.
 
 Contrast this with the tail module, which also limits the number of items,

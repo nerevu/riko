@@ -1,16 +1,13 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.xpathfetchpage
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Provides functions for fetching the source of a given web site as DOM nodes or a
+string.
 
 ##################################################################################
 # WARNING! this module may return an xml namespace in the keys, e.g.,
 # `{http://www.w3.org/1999/xhtml}` without the `lxml` parser (`pip install riko[xml]`)
 # See https://github.com/nerevu/riko/issues/20 for more info
 ##################################################################################
-
-Provides functions for fetching the source of a given web site as DOM nodes or a
-string.
 
 This module fetches the source of a given web site as DOM nodes or a string.
 This data can then be converted into a RSS/JSON feed or merged with other data
@@ -58,7 +55,7 @@ from riko import Objconf
 from riko.bado import coroutine, io, return_value, util
 from riko.parsers import Stringy, any2dict, xpath
 from riko.types.general import BasicArg, BasicMapping, Extraction, ItemArg, Items
-from riko.utils import fetch
+from riko.utils import Fetch
 
 from . import processor
 
@@ -183,7 +180,7 @@ def parser(
         if objconf.url.startswith("http") and not ext:
             ext = "html"
 
-        with fetch(**{k: objconf[k] for k in objconf}) as f:
+        with Fetch(**{k: objconf[k] for k in objconf}) as f:
             yield from any2dict(f, ext, objconf.html5, path=objconf.xpath)
 
 

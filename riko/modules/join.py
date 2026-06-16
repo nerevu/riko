@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.join
-~~~~~~~~~~~~~~~~~
 Provides functions for performing SQL like joins on separate sources.
 
 Examples:
@@ -73,8 +71,8 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> len(list(joined))
         24
         >>> objconf = Objectify({'join_key': 'x', 'other_join_key': 'y'})
-        >>> stream = ({'x': 'foo-%s' % x, 'sum': x} for x in range(5))
-        >>> other = ({'y': 'foo-%s' % x, 'count': x + 5} for x in range(5))
+        >>> stream = ({'x': f'foo-{x}', 'sum': x} for x in range(5))
+        >>> other = ({'y': f'foo-{x}', 'count': x + 5} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
         >>> joined = parser(stream, objconf, tuples, other=other)
         >>> next(joined)
@@ -177,15 +175,15 @@ def pipe(*args, **kwargs):
         dict: a merged stream item
 
     Examples:
-        >>> items = [{'x': 'foo-%s' % x, 'sum': x} for x in range(5)]
-        >>> other = ({'y': 'foo-%s' % x, 'count': x + 5} for x in range(5))
+        >>> items = [{'x': f'foo-{x}', 'sum': x} for x in range(5)]
+        >>> other = ({'y': f'foo-{x}', 'count': x + 5} for x in range(5))
         >>> conf = {'join_key': 'x', 'other_join_key': 'y'}
         >>> joined = pipe(items, conf=conf, other=other)
         >>> next(joined)
         {'x': 'foo-0', 'sum': 0, 'y': 'foo-0', 'count': 5}
         >>> next(joined)
         {'x': 'foo-1', 'sum': 1, 'y': 'foo-1', 'count': 6}
-        >>> other = ({'y': 'FOO-%s' % x, 'count': x + 5} for x in range(5))
+        >>> other = ({'y': f'FOO-{x}', 'count': x + 5} for x in range(5))
         >>> conf = {'join_key': 'x', 'other_join_key': 'y', 'lower': True}
         >>> joined = pipe(items, conf=conf, other=other)
         >>> next(joined)

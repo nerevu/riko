@@ -19,22 +19,22 @@ def pipe_gigs(item=None, context=None, conf=None, **kwargs):
         "https://www.elance.com/r/rss/jobs/cat-it-programming/fxd-true/o-1/bgt-gt500-ns1/sct-database-development-10217-data-analysis-14174-database-administration-14177-business-intelligence-14173-data-engineering-14175-system-administration-10219-other-data-science-14178-technical-support-10218-other-it-programming-12350-software-application-10216-website-design-10225-web-programming-10224/tls-1/s-timelistedSort",
     ]
 
-    URL = [{"type": "url", "value": url} for url in urls]
+    url = [{"type": "url", "value": url} for url in urls]
 
-    sw_68 = fetch(context=context, conf={"URL": URL})
+    sw_68 = fetch(context=context, conf={"URL": url})
 
     sw_90 = uniq(
         sw_68, context=context, conf={"field": {"type": "text", "value": "link"}}
     )
 
-    COMBINE = {"type": "text", "value": "or"}
-    MODE = {"type": "text", "value": "block"}
+    combine = {"type": "text", "value": "or"}
+    mode = {"type": "text", "value": "block"}
     field = {"type": "text", "value": "title"}
     value = {"type": "text", "value": "php"}
     op = {"type": "text", "value": "contains"}
-    RULE = [{"field": field, "value": value, "op": op}]
+    rule = [{"field": field, "value": value, "op": op}]
     sw_87 = _filter(
-        sw_90, context=context, conf={"COMBINE": COMBINE, "MODE": MODE, "RULE": RULE}
+        sw_90, context=context, conf={"COMBINE": combine, "MODE": mode, "RULE": rule}
     )
 
     field = {"type": "text", "value": "pubDate"}

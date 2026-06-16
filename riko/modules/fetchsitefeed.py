@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.fetchsitefeed
-~~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for fetching the first RSS or Atom feed discovered in a web
 site.
 

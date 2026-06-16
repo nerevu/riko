@@ -9,7 +9,7 @@ from copy import copy
 from functools import partial, wraps
 from itertools import chain
 from time import struct_time
-from typing import Optional, TypeVar, overload
+from typing import TypeVar, overload
 from typing import cast as cast_type
 
 import pygogo as gogo
@@ -257,7 +257,7 @@ class Module:
         self.debug = debug
         self.isasync = isasync
         self.pollable = pollable
-        self.types = set([])
+        self.types = set()
         self.assign = None
         self.emit = None
         self.name = None
@@ -388,7 +388,7 @@ class processor(Module):
             ...         stream = kwargs['stream']
             ...     else:
             ...         content = item['content']
-            ...         stream = 'say "%s" %s times!' % (content, objconf.times)
+            ...         stream = f'say "{content}" {objconf.times} times!'
             ...
             ...     return stream
             ...
@@ -401,7 +401,7 @@ class processor(Module):
             ...         stream = kwargs['stream']
             ...     else:
             ...         content = yield util.async_return(item['content'])
-            ...         stream = 'say "%s" %s times!' % (content, objconf.times)
+            ...         stream = f'say "{content}" {objconf.times} times!'
             ...
             ...     return_value(stream)
             ...
@@ -455,7 +455,7 @@ class processor(Module):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
-            ...         stream = 'say "%s" %s times!' % (content, times[0])
+            ...         stream = f'say "{content}" {times[0]} times!'
             ...
             ...     return stream
             ...
@@ -466,7 +466,7 @@ class processor(Module):
             ...     if skip:
             ...         stream = kwargs['stream']
             ...     else:
-            ...         stream = 'say "%s" %s times!' % (content, times[0])
+            ...         stream = f'say "{content}" {times[0]} times!'
             ...
             ...     return stream
             ...
@@ -623,8 +623,8 @@ class operator(Module):
             >>> @operator(emit=False)
             ... def pipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in tuples:
-            ...         s = 'say "%s" %s times!'
-            ...         yield s % (item['content'], objconf.times)
+            ...         s = 'say "{content}" {0} times!'
+            ...         yield s.format(objconf.times, **item)
             ...
             >>> @operator(emit=False)
             ... def pipe2(stream, objconf, tuples, **kwargs):
@@ -637,7 +637,7 @@ class operator(Module):
             ... def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in tuples:
             ...         content = yield util.async_return(item['content'])
-            ...         value = 'say "%s" %s times!' % (content, objconf.times)
+            ...         value = f'say "{content}" {objconf.times} times!'
             ...         return_value(value)
             ...
             >>> # async pipes don't have to return a deferred,

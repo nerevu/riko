@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.send
-~~~~~~~~~~~~~~~~~
 Provides functions for pushing items of a stream to a function using generator based
 coroutines.
 

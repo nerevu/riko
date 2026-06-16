@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.filter
-~~~~~~~~~~~~~~~~~~~
 Provides functions for filtering (including or excluding) items from a stream.
 
 With Filter you create rules that compare item elements to values you specify.

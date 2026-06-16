@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.urlbuilder
-~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for building a url from parts
 
 Many URLs are long and complex. Modules like Fetch Feed let you provide a URL

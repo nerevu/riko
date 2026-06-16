@@ -115,7 +115,7 @@ def add_budget(source, fixed_text="", hourly_text="", double=True):
     first_num_rule = {"find": r"\d+", "location": "at"}
     last_num_rule = {"find": r"\d+", "location": "at", "param": "last"}
     cur_rule = {"find": r"\b[A-Z]{3}\b", "location": "at"}
-    sym_rule = {"find": "[%s]" % codes, "location": "at"}
+    sym_rule = {"find": f"[{codes}]", "location": "at"}
 
     # make_regex('k:budget_raw', r'[(),.\s]', ''),
     invalid_budgets = [

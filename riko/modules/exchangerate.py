@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.exchangerate
-~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for querying currency exchange rates
 
 Examples:
@@ -32,7 +30,7 @@ from riko import Objconf
 from riko.bado import coroutine, io, return_value
 from riko.bado import requests as treq
 from riko.types.general import Extraction
-from riko.utils import fetch
+from riko.utils import Fetch
 
 from . import processor
 
@@ -72,7 +70,7 @@ def get_rate(currency, **rates: Decimal) -> Decimal:
     rate = rates.get(currency, Decimal("nan"))
 
     if not rate:
-        logger.warning("rate USD/%s not found in rates" % currency)
+        logger.warning(f"rate USD/{currency} not found in rates")
 
     return rate
 
@@ -195,7 +193,7 @@ def parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
     elif base == objconf.currency:
         rate = Decimal(1)
     else:
-        with fetch(**{k: objconf[k] for k in objconf}) as f:
+        with Fetch(**{k: objconf[k] for k in objconf}) as f:
             json = load(f)
 
             if rates := json.get("rates", {}):

@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.strfind
-~~~~~~~~~~~~~~~~~~~~
 Provides functions for finding text located before, after, at, or between
 substrings.
 

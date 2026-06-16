@@ -1,17 +1,15 @@
 # vim: sw=4:ts=4:expandtab
 """
-tests.test_examples
-~~~~~~~~~~~~~~~~~~~
-
-Provides example pipeline tests.
+Provides pipeline collection tests.
 """
 
 from operator import itemgetter
 
 import pytest
 
-from riko.bado import _issync
-from riko.collections import SyncPipe
+from riko.bado import _issync, coroutine, react
+from riko.bado.mock import FakeReactor
+from riko.collections import AsyncPipe, SyncPipe
 from riko.utils import StreamState, noop
 
 value = "once is 1x,twice is 2x,thrice is 3x"
@@ -158,9 +156,6 @@ class TestCollections:
     @pytest.mark.skipif(_issync, reason="async support not available")
     def test_astream(self, capsys):
         """Tests a asynchronous stream pipeline."""
-        from riko.bado import coroutine, react
-        from riko.bado.mock import FakeReactor
-        from riko.collections import AsyncPipe
 
         @coroutine  # pyright: ignore[reportArgumentType]
         def run(reactor):

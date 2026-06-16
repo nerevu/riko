@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.fetchdata
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for fetching XML and JSON data sources.
 
 Accesses and extracts data from XML and JSON data sources on the web. This data
@@ -33,7 +31,7 @@ from riko import Objconf, listize
 from riko.bado import coroutine, io, return_value
 from riko.parsers import Stringy, any2dict
 from riko.types.general import BasicArg, Extraction, ItemArg, Items
-from riko.utils import auto_close, fetch
+from riko.utils import Fetch, auto_close
 
 from . import processor
 
@@ -130,7 +128,7 @@ def parser(
         ext = p.splitext(objconf.url)[1].lstrip(".")
         path = ".".join(listize(objconf.path))
 
-        with fetch(**{k: objconf[k] for k in objconf}) as f:
+        with Fetch(**{k: objconf[k] for k in objconf}) as f:
             ext = ext or f.ext
             yield from any2dict(f, ext, objconf.html5, path=path)
 

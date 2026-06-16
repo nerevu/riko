@@ -44,6 +44,7 @@ from riko.types.general import (
     DateLike,
     IPAddress,
     Location,
+    NumericCaster,
     PreCaster,
 )
 
@@ -78,8 +79,8 @@ def literal_parse(content: BasicValue | bool) -> BasicArg:
     return parsed
 
 
-def cast_url(url: str) -> str:
-    url = "http://%s" % url if "://" not in url else url
+def cast_url(url: str | int) -> str:
+    url = f"http://{url}" if "://" not in str(url) else url
     quoted = url_quote(url)
     parsed = urlparse(quoted)
     return parsed.geturl()
@@ -101,7 +102,7 @@ def lookup_street_address(_: str) -> Location:
     return location
 
 
-def lookup_ip_address(address: str) -> IPAddress:
+def lookup_ip_address(_: str) -> IPAddress:
     location = {
         "country": "United States",
         "admin1": "state",
@@ -162,17 +163,17 @@ def cast_location(address: BasicValue, loc_type="street_address") -> AnyLocation
 
 
 @overload
-def cast_datetime(value: DateLike) -> dt | None: ...
+def cast_datetime(value: DateLike) -> dt | None: ...  # noqa: E704
 @overload
 def cast_datetime(value: DateLike, as_date: Literal[True]) -> date | None: ...
 @overload
-def cast_datetime(value: DateLike, as_date: Literal[False]) -> dt | None: ...
+def cast_datetime(value: DateLike, as_date: Literal[False]) -> dt | None: ...  # noqa: E704
 @overload
-def cast_datetime(
+def cast_datetime(  # noqa: E704
     value: DateLike, as_date: Literal[True], as_datedict: Literal[True]
 ) -> DateDict | None: ...
 @overload
-def cast_datetime(
+def cast_datetime(  # noqa: E704
     value: DateLike, as_date: Literal[False], as_datedict: Literal[True]
 ) -> DateDict | None: ...
 def cast_datetime(
@@ -263,12 +264,20 @@ class CastType(StrEnum):
 
 @overload
 def cast(content: ComplexArg) -> str: ...
+
+
 @overload
 def cast(content: T, _type: Literal[CastType.PASS], **kwargs) -> T: ...
+
+
 @overload
 def cast(content: ComplexArg, _type: Literal[CastType.NONE], **kwargs) -> None: ...
+
+
 @overload
 def cast(content: ComplexArg, _type: Literal[CastType.TEXT], **kwargs) -> str: ...
+
+
 @overload
 def cast(content: ComplexArg, _type: Literal[CastType.FLOAT], **kwargs) -> float: ...
 @overload
@@ -356,7 +365,7 @@ def cast(content: T, _type: CastType = CastType.TEXT, **kwargs) -> T | ComplexVa
         CastType.FLOAT,
         CastType.DECIMAL,
     }:
-        caster = precaster["func"]
+        caster = cast_type(NumericCaster, precaster["func"])
         value = caster(content)
     elif isinstance(content, (struct_time, dt, date)) and _type == CastType.DATE:
         value = cast_date(content)

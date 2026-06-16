@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.urlparse
-~~~~~~~~~~~~~~~~~~~~~
 Provides functions for parsing a URL into its six components.
 
 Examples:

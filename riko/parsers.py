@@ -16,6 +16,7 @@ from time import struct_time
 from typing import (
     TYPE_CHECKING,
     Literal,
+    Optional,
     TypeAlias,
     Union,
     cast,
@@ -30,7 +31,7 @@ from ijson import IncompleteJSONError, items
 from riko import Objectify, listize
 from riko.dotdict import DotDict, is_sentinal, is_type_value
 from riko.types.general import BasicArg, ComplexArg, ItemArg, Skip
-from riko.utils import fetch
+from riko.utils import Fetch
 
 try:
     from lxml import etree, html
@@ -38,10 +39,10 @@ except ImportError:
     xml_parser = "ElementTree"
     html5parser = None
 
-    import html5lib as html
     import xml.etree.ElementTree as etree
-
     from xml.etree.ElementTree import ElementTree
+
+    import html5lib as html
 else:
     ElementTree = None
     xml_parser = "lxml"
@@ -76,11 +77,6 @@ logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{xml_parser=}")
 logger.debug(f"{rss_parser=}")
 
-NAMESPACES = {
-    "owl": "http://www.w3.org/2002/07/owl#",
-    "xhtml": "http://www.w3.org/1999/xhtml",
-}
-
 ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 
 SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
@@ -111,7 +107,7 @@ class LinkParser(HTMLParser):
         elif link_type:
             self.link_type = tuple(link_type)
         else:
-            self.link_type = tuple([])
+            self.link_type = ()
 
     def keyfunc(self, entry):
         # sort according to the order of self.link_type
@@ -161,7 +157,7 @@ def parse_rss(
     parsed = {"parsed": []}
 
     try:
-        f = fetch(url, **kwargs)
+        f = Fetch(url, **kwargs)
     except URLError:
         # url is an xml string
         f, content, url = None, url, "content"
@@ -182,59 +178,76 @@ def parse_rss(
     return parsed
 
 
-def xpath(
-    tree: AnyElementTree, path="/", pos=0, namespace: str | None = None
-) -> Iterator[AnyElement]:
-    if not namespace:
-        tag = str(getattr(tree, "tag", "") or str(tree).split(" ")[1])
+def extract_namespace(tree: AnyElementTree) -> str | None:
+        tag = getattr(tree, "tag", None) or ""
+
+        if not isinstance(tag, str):  # lxml uses QName objects sometimes
+            tag = str(tag)
 
         if "{" in tag and "}" in tag:
-            ns = tag[tag.find("{") + 1 : tag.find("}")]
-            ns_iter = (name for name in NAMESPACES if name in ns)
-            namespace = next(ns_iter, ns)
+            namespace = tag[tag.find("{") + 1: tag.find("}")]
+        else:
+            namespace = None
 
-    ns_path = "/".join(f"ns:{p}" for p in path.split("/") if p) if namespace else path
+        return namespace
+
+
+def xpath(
+    tree: AnyElementTree,
+    path="/",
+    pos: Optional[int] = None,
+    namespace: str | None = None,
+    ns_prefix="ns",
+) -> Iterator[AnyElement]:
+    if pos is None:
+        pos = 1 if path.startswith("/") else 0
+
+    namespace = namespace or extract_namespace(tree)
+    stripped = path.strip("/")
+    tags = stripped.split("/") if stripped else []
+    ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
 
     try:
         if namespace:
-            elements = tree.xpath(ns_path, namespaces={"ns": namespace})
+            elements = tree.xpath(ns_path, namespaces={ns_prefix: namespace})
         else:
             elements = tree.xpath(path)
     except AttributeError:
-        stripped = path.lstrip("/")
-        tags = stripped.split("/") if stripped else []
-
         try:
             # TODO: consider replacing with twisted.words.xish.xpath
             elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
-        except AttributeError:
-            prefix = (f"/{namespace}:") if namespace else "/"
-            match = f"./{prefix}{prefix.join(tags[1:])}"
-            elements = tree.findall(match, NAMESPACES)
         except IndexError:
-            elements = [tree]
+            yield tree
+        except AttributeError:
+            if namespace:
+                namespaces = {ns_prefix: namespace}
+                elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
+            else:
+                elements = tree.findall(".//" + "/".join(tags[pos:]))
+
+            yield from elements
         else:
             for element in elements:
-                return xpath(element, path, pos + 1)
-
-    return iter(elements)
+                yield from xpath(element, path, pos + 1)
+    else:
+        yield from elements
 
 
 @overload
 def xml2etree(  # noqa: E704
     f: str | BytesIO | StringIO | TextIOBase, xml: Literal[True], html5: bool = ...
 ) -> AnyElementTree: ...
-@overload  # noqa: E302
+@overload
 def xml2etree(  # noqa: E704
     f: str | BytesIO | StringIO | TextIOBase, xml: Literal[False], html5: Literal[True]
 ) -> AnyElementTree: ...
-@overload  # noqa: E302
+@overload
 def xml2etree(  # noqa: E704
     f: str | BytesIO | StringIO | TextIOBase,
     xml: Literal[False],
     html5: Literal[False] = ...,
 ) -> "nativeElementTree": ...
-def xml2etree(  # noqa: E302
+def xml2etree(
     f: str | BytesIO | StringIO | TextIOBase,
     xml: bool = True,
     html5: bool = False,
@@ -272,7 +285,7 @@ def _make_content(
         content = list(listize(content))
         content.append(value)
     elif content and value and isinstance(content, str) and isinstance(value, str):
-        content = "".join([content, value])
+        content = f"{content}{value}"
     elif content and value:
         msg = f"got non-string content or value: ({type(content)=}), ({type(value)=})"
         msg += " Try again setting append=True."

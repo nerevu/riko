@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.input
-~~~~~~~~~~~~~~~~~~
 Provides functions for obtaining and parsing user input.
 
 Use this module any time you need to obtain and parse user input to wire into

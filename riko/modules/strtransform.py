@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.strtransform
-~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for performing string transformations on text, e.g.,
 capitalize, uppercase, etc.
 
@@ -58,7 +56,7 @@ def reducer(word, rule):
         args = rule.args.split(",") if rule.args else []
         result = getattr(word, rule.transform)(*args)
     else:
-        logger.warning("Invalid transformation: %s", rule.transform)
+        logger.warning(f"Invalid transformation: {rule.transform}")
         result = word
 
     return result

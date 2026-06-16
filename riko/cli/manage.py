@@ -86,6 +86,12 @@ def check():
 @manager.command()
 @click.option("-w", "--where", help="Modules to check")
 @click.option("-f", "--fix", help="Fix errors", is_flag=True)
+@click.option(
+    "-F",
+    "--unsafe-fixes",
+    help="View unsafe fixes (Applies unsafe fixes if --fix is also specified)",
+    is_flag=True,
+)
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
 @click.option(
     "-p",
@@ -93,11 +99,18 @@ def check():
     help="Run linter in parallel in multiple processes",
     is_flag=True,
 )
-def lint(where=None, fix=False, strict=False, parallel=False):
+def lint(where=None, fix=False, unsafe_fixes=False, strict=False, parallel=False):
     """Check style with linters"""
     args = "pylint --rcfile=tests/standard.rc -rn -fparseable riko"
     args += " -j 0" if parallel else ""
-    r_args = "ruff check --fix" if fix else "ruff check"
+    r_args = "ruff check"
+
+    if fix:
+        r_args += " --fix"
+
+    if unsafe_fixes:
+        r_args += " --unsafe-fixes"
+
     r_args += f" {where}" if where else ""
 
     try:
@@ -178,7 +191,7 @@ def test(where=None, stop=None, **kwargs):
         elif kwargs.get("detox"):
             pass
         else:
-            params = ("pytest %s" % opts).split(" ")
+            params = (f"pytest {opts}").split(" ")
 
             if kwargs.get("parallel"):
                 params += ["-n", "auto"]

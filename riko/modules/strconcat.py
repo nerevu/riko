@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.strconcat
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for concatenating strings (aka stringbuilder).
 
 Useful when you need to build a string from multiple substrings, some coded

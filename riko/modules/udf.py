@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.udf
-~~~~~~~~~~~~~~~~
 Provides functions for performing an arbitrary (user-defined) function on an
 item.
 
