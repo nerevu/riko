@@ -59,19 +59,20 @@ from urllib.parse import urlencode, urljoin
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import BasicArg, ObjconfParam
+from riko.types.general import Defaults, ItemArg, Opts
+from riko.types.modules import ObjconfParam
 
 from . import processor
 
-OPTS = {"extract": "param", "listize": True, "emit": True}
-DEFAULTS = {}
+OPTS: Opts = {"extract": "param", "listize": True, "emit": True}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 PATTERN = re.compile(r'[<>:"/\\\|\*%]')
 
 
 def parser(
-    _: BasicArg, param: Sequence[ObjconfParam], objconf: Objconf, skip=False, **kwargs
+    _: ItemArg, param: Sequence[ObjconfParam], objconf: Objconf, **kwargs
 ) -> str:
     """
     Parsers the pipe content
@@ -79,7 +80,6 @@ def parser(
     Args:
         item (obj): The entry to process (a DotDict instance)
         param (List[Objectify]): Query parameters
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -95,38 +95,33 @@ def parser(
         >>> path = ['rss', 'headline']
         >>> base = 'http://finance.yahoo.com'
         >>> conf = {'base': base, 'path': path, 'param': param}
-        >>> parser({}, [Objectify(param)], Objectify(conf), stream={})
+        >>> parser({}, [Objectify(param)], Objectify(conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
 
     """
-    if skip:
-        stream = kwargs["stream"]
+    if isinstance(objconf.path, str):
+        paths = [objconf.path]
+    elif isinstance(objconf.path, Mapping):
+        logger.error(f"Path should be a string or list of strings, not {objconf.path}")
+        paths = []
+    elif objconf.path:
+        paths = objconf.path
     else:
-        if isinstance(objconf.path, str):
-            paths = [objconf.path]
-        elif isinstance(objconf.path, Mapping):
-            print(
-                f"Error: path should be a string or list of strings, not {objconf.path}"
-            )
-            paths = []
-        elif objconf.path:
-            paths = objconf.path
-        else:
-            paths = []
+        paths = []
 
-        encoded = urlencode([(p.key, p.value) for p in param if p.key])
-        joined = urljoin(str(objconf.base), "/".join(paths))
-        stream = f"{joined}?{encoded}" if encoded else joined
+    encoded = urlencode([(p.key, p.value) for p in param if p.key])
+    joined = urljoin(str(objconf.base), "/".join(paths))
+    stream = f"{joined}?{encoded}" if encoded else joined
 
-        if objconf.ext:
-            substituted = re.sub(PATTERN, "_", stream)
-            stream = f"{substituted}.{objconf.ext}"
+    if objconf.ext:
+        substituted = re.sub(PATTERN, "_", stream)
+        stream = f"{substituted}.{objconf.ext}"
 
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> str:
     """
     A source that asynchronously builds a url.
 
@@ -153,18 +148,16 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     param = {'key': 's', 'value': 'gm'}
         ...     path = ['rss', 'headline']
         ...     base = 'http://finance.yahoo.com'
         ...     conf = {'base': base, 'path': path, 'param': param}
-        ...     d = async_pipe(conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(conf=conf)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
-        ...     pass
         ... except SystemExit:
         ...     pass
         ...
@@ -175,7 +168,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> str:
     """
     A source that builds a url.
 

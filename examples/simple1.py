@@ -1,6 +1,6 @@
+from collections.abc import Mapping
 from pprint import pprint
 
-from riko.bado import coroutine, return_value
 from riko.collections import AsyncPipe, SyncPipe
 
 p1_conf = {
@@ -11,19 +11,16 @@ p2_conf = {"rule": {"field": "url", "match": {"subkey": "url"}, "replace": "fare
 
 
 def pipe(test=False):
-    stream = SyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf).list
-    return stream
+    stream = SyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf)
+    return list(stream)
 
 
-@coroutine
-def async_pipe(_, test=False):
-    stream = yield (
-        AsyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf).alist
-    )
+async def async_pipe(_, test=False):
+    stream = await AsyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf)
 
-    return_value(stream)
+    return list(stream)
 
 
 if __name__ == "__main__":
     for i in pipe():
-        pprint(str(i["url"]))
+        pprint(i["url"] if isinstance(i, Mapping) else i)

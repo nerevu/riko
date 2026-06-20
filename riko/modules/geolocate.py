@@ -23,34 +23,31 @@ Attributes:
 import pygogo as gogo
 
 from riko import Objconf
-from riko.cast import CastType, cast
-from riko.types.general import AnyLocation, Extraction, ItemArg
+from riko.cast import BasicCastType, CastType, cast
+from riko.types.general import Defaults, Extraction, Opts
+from riko.types.values import AnyLocation
 
 from . import processor
 
-OPTS = {"ftype": "text", "field": "content"}
-DEFAULTS = {"type": "street_address"}
+OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
+DEFAULTS: Defaults = {"type": "street_address"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    address: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> ItemArg | AnyLocation:
+    address: str, extraction: Extraction, objconf: Objconf, **kwargs
+) -> AnyLocation:
     """
     Parses the pipe content
 
     Args:
         address (str): The address to lookup
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
         assign (str): Attribute to assign parsed content (default: geolocate)
         stream (dict): The original item
-
-    Returns:
-        Tuple(dict, bool): Tuple of (item, skip)
 
     Examples:
         >>> from riko import get_path
@@ -63,16 +60,11 @@ def parser(
         'United Kingdom'
 
     """
-    if skip:
-        location = kwargs["stream"]
-    else:
-        location = cast(address, CastType.LOCATION, loc_type=objconf.type)
-
-    return location
+    return cast(address, CastType.LOCATION, loc_type=objconf.type)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> AnyLocation:
     """
     A processor module that asynchronously obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.
@@ -99,11 +91,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['geolocate']['country'])
+        >>> async def run(reactor):
         ...     conf = {'type': 'currency'}
-        ...     d = async_pipe({'content': 'GBP'}, conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe({'content': 'GBP'}, conf=conf)
+        ...     print(next(result)['geolocate']['country'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -117,7 +108,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> AnyLocation:
     """
     A processor module that obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.

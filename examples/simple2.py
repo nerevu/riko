@@ -1,6 +1,5 @@
 from pprint import pprint
 
-from riko.bado import coroutine, return_value
 from riko.collections import AsyncPipe, SyncPipe
 
 p232_conf = {
@@ -15,24 +14,19 @@ p421_conf = {"rule": [{"find": "empty", "param": "first", "replace": "ABC"}]}
 
 
 def pipe(test=False):
-    stream = (
-        SyncPipe("itembuilder", conf=p232_conf, test=test)
-        .strreplace(conf=p421_conf, field="author", assign="author")
-        .list
+    stream = SyncPipe("itembuilder", conf=p232_conf, test=test).strreplace(
+        conf=p421_conf, field="author", assign="author"
     )
 
-    return stream
+    return list(stream)
 
 
-@coroutine
-def async_pipe(reactor, test=False):
-    stream = yield (
-        AsyncPipe("itembuilder", conf=p232_conf, test=test)
-        .strreplace(conf=p421_conf, field="author", assign="author")
-        .alist
+async def async_pipe(reactor, test=False):
+    stream = await AsyncPipe("itembuilder", conf=p232_conf, test=test).strreplace(
+        conf=p421_conf, field="author", assign="author"
     )
 
-    return_value(stream)
+    return list(stream)
 
 
 if __name__ == "__main__":

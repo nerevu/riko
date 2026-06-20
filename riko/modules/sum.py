@@ -20,20 +20,23 @@ Attributes:
 import itertools as it
 from collections.abc import Iterator
 from decimal import Decimal
-from operator import itemgetter
 
 import pygogo as gogo
 
+from riko import Objconf
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.utils import def_itemgetter
+
 from . import operator
 
-OPTS = {}
-DEFAULTS = {"sum_key": "content", "group_key": None}
+OPTS = Opts()
+DEFAULTS: Defaults = {"sum_key": "content", "group_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream, objconf, tuples, **kwargs
-) -> Decimal | int | Iterator[dict[str, Decimal]]:
+    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
+) -> Decimal | int | Iterator[dict[str, Decimal | int]]:
     """
     Parses the pipe content
 
@@ -82,18 +85,18 @@ def parser(
     _sum = lambda group: sum(Decimal(g[objconf.sum_key]) for g in group)
 
     if objconf.group_key:
-        keyfunc = itemgetter(objconf.group_key)
+        keyfunc = def_itemgetter(objconf.group_key)
         sorted_stream = sorted(stream, key=keyfunc)
         grouped = it.groupby(sorted_stream, keyfunc)
-        summed = ({key: _sum(group)} for key, group in grouped)
+        summed = ({str(key): _sum(group)} for key, group in grouped)
     else:
         summed = _sum(stream)
 
     return summed
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Decimal | int | Iterator[dict[str, Decimal | int]]:
     """
     An operator that asynchronously and eagerly sums fields of items
     in a stream. Note that this pipe is not lazy if `group_key` is specified.
@@ -123,11 +126,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     items = ({'content': x} for x in range(5))
-        ...     d = async_pipe(items)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -141,7 +143,7 @@ def async_pipe(*args, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Decimal | int | Iterator[dict[str, Decimal | int]]:
     """
     An operator that eagerly sums fields of items in a stream.
     Note that this pipe is not lazy if `group_key` is specified.

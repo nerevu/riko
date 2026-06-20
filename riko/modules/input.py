@@ -6,6 +6,9 @@ Use this module any time you need to obtain and parse user input to wire into
 another pipe. Supported parsers are 'text', 'int', 'float', 'bool', 'url', and
 'date'. Not loopable.
 
+http://pipes.yahoo.com/pipes/docs?doc=user_inputs#Number
+http://pipes.yahoo.com/pipes/docs?doc=user_inputs#URL
+
 Valid Date Values
 
 Obvious date formats:
@@ -50,19 +53,24 @@ Attributes:
 import pygogo as gogo
 
 from riko import Objconf
-from riko.cast import CastType, cast
-from riko.types.general import BasicArg, ComplexArg, Defaults, Extraction
+from riko.cast import BasicCastType, CastType, cast
+from riko.types.general import Defaults, Extraction, ItemArg, Opts
 
 from . import processor
 
-OPTS = {"ftype": "none"}
-DEFAULTS: Defaults = {"type": "text", "field": "content", "default": "", "test": False}
+OPTS: Opts = {"ftype": BasicCastType.NONE}
+DEFAULTS: Defaults = {
+    "type": "text",
+    "default": "",
+    "test": False,
+    "input_key": "content",
+}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> ComplexArg:
+    _: ItemArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> ItemArg:
     """
     Obtains the user input
 
@@ -78,14 +86,14 @@ def parser(
         >>> from meza.fntools import Objectify
         >>>
         >>> inputs = {'age': '30'}
-        >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'field': 'age'}
+        >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'input_key': 'age'}
         >>> objconf = Objectify(conf)
         >>> parser(None, None, objconf, inputs=inputs)
         30
 
     """
     if kwargs.get("inputs"):
-        value = kwargs["inputs"].get(objconf.field, objconf.default)
+        value = kwargs["inputs"].get(objconf.input_key, objconf.default)
     elif objconf.test or skip:
         value = objconf.default
     else:
@@ -95,8 +103,8 @@ def parser(
     return cast(value, CastType(objconf.type)) if objconf.type else value
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> ItemArg:
     """
     A processor module that asynchronously prompts for text and parses it
     into a variety of different types, e.g., int, bool, date, etc.
@@ -114,7 +122,7 @@ def async_pipe(*args, **kwargs):
             type (str): Expected value type. Must be one of 'text', 'int',
                 'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
 
-            field (str): Attribute to assign parsed content (default: content)
+            input_key (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values to be used in place of prompting the user e.g.
             {'name': 'value1'}
@@ -129,11 +137,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     conf = {'prompt': 'How old are you?', 'type': 'int'}
-        ...     d = async_pipe(conf=conf, inputs={'content': '30'})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(conf=conf, inputs={'content': '30'})
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -147,7 +154,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> ComplexArg:
+def pipe(*args, **kwargs) -> ItemArg:
     """
     A processor module that prompts for text and parses it into a variety of
     different types, e.g., int, bool, date, etc.
@@ -158,14 +165,14 @@ def pipe(*args, **kwargs) -> ComplexArg:
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'prompt',
-            'default', 'type'.
+            'default', 'type', 'input_key'.
 
             prompt (str): User command line prompt
             default (scalar): Default value
             type (str): Expected value type. Must be one of 'text', 'int',
                 'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
 
-            field (str): Attribute to assign parsed content (default: content)
+            input_key (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values to be used in place of prompting the user e.g.
             {'name': 'value1'}

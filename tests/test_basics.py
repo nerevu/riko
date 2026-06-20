@@ -17,13 +17,9 @@ import pytest
 
 from riko import Context, get_path, listize
 from riko.compile import build_pipeline, parse_pipe_def
-from riko.types.general import (
-    ComplexArg,
-    PipelineDependencies,
-    StreamState,
-    SyncPipeline,
-)
-from riko.utils import extract_dependencies
+from riko.types.general import PipelineDependencies, SyncPipeParser
+from riko.types.values import ComplexArg, StreamState
+from riko.utils import extract_dependencies, truncate_content
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -47,7 +43,7 @@ class TestBasics:
             parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
             stream = build_pipeline(parsed_pipe_def, pipe_def, context=self.context)
         else:
-            pipeline: SyncPipeline = getattr(module, pipe_name)
+            pipeline: SyncPipeParser = getattr(module, pipe_name)
             stream = pipeline(context=self.context)
 
         return list(listize(stream))
@@ -81,9 +77,11 @@ class TestBasics:
         msg = f"pipeline length {actual} {value}, but expected {desired} {value}. Got "
 
         try:
-            msg += f"{len(items)} items. First item is {items[0]}"
+            first = items[0]
         except IndexError:
-            msg += f"{items}"
+            msg += f"{type(items)=}"
+        else:
+            msg += f"{len(items)} items. First item is {truncate_content(first)}"
 
         assert compared == _check, msg
 
@@ -205,7 +203,7 @@ class TestBasics:
         item = cast(dict, items[0])
 
         for k, v in example.items():
-            assert v == item.get(k), f"Expected {v} for key {k}, but got {item.get(k)}"
+            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
 
         assert item["k:content"].startswith(" With this specification sheet we")
         assert item["k:content"].endswith("for implementing a website for a german...")
@@ -234,7 +232,7 @@ class TestBasics:
         item = cast(dict, items[0])
 
         for k, v in example.items():
-            assert v == item.get(k), f"Expected {v} for key {k}, but got {item.get(k)}"
+            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
 
         assert item["k:content"].startswith("<p>Hello, I need to fix an application")
         assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
@@ -289,7 +287,7 @@ class TestBasics:
         item = cast(dict, items[0])
 
         for k, v in example.items():
-            assert v == item.get(k), f"Expected {v} for key {k}, but got {item.get(k)}"
+            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
 
         assert item["summary"].startswith("<span><b>Description:</b> With this spe")
         assert item["summary"].endswith("ancer Location:</b> Worldwide<br></span>")
@@ -534,16 +532,11 @@ class TestBasics:
         self.context.describe_dependencies = True
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 8, 0)
+        self._load(items, pipe_name, 3, 0)
         assert items == [
-            "dateinput",
             "input",
-            "locationinput",
-            "numberinput",
             "output",
-            "privateinput",
             "rssitembuilder",
-            "urlinput",
         ]
 
     def test_describe_both(self):
@@ -570,14 +563,9 @@ class TestBasics:
         ]
 
         dependencies = [
-            "dateinput",
             "input",
-            "locationinput",
-            "numberinput",
             "output",
-            "privateinput",
             "rssitembuilder",
-            "urlinput",
         ]
 
         item = cast(dict, items[0])

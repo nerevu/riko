@@ -228,16 +228,15 @@ Parallel processing
     ...     .strtransform(conf=strtransform_conf)
     ...     .uniq(conf={'uniq_key': 'strtransform'})
     ...     .fetch(conf={'url': {'subkey': 'strtransform'}})
-    ...     .list)
     >>>
-    >>> len(stream)
+    >>> len(list(stream))
     25
 
 
 Asynchronous processing
 
     >>> from riko import get_path
-    >>> from riko.bado import coroutine, react, _issync, _isasync
+    >>> from riko.bado import react, _issync, _isasync
     >>> from riko.bado.mock import FakeReactor
     >>> from riko.collections import AsyncPipe
     >>>
@@ -259,18 +258,17 @@ Asynchronous processing
     >>> ### Create an AsyncPipe workflow ###
     >>> #
     >>> # See `Parallel processing` above for the steps this performs
-    >>> @coroutine
     ... def run(reactor):
-    ...     stream = yield (AsyncPipe('fetch', conf={'url': url})
+    ...     stream = await (AsyncPipe('fetch', conf={'url': url})
     ...         .subelement(conf=sub_conf, emit=True)
     ...         .regex(conf={'rule': regex_rule})
     ...         .filter(conf={'rule': filter_rule})
     ...         .strtransform(conf=strtransform_conf)
     ...         .uniq(conf={'uniq_key': 'strtransform'})
     ...         .fetch(conf={'url': {'subkey': 'strtransform'}})
-    ...         .list)
+    ...     )
     ...
-    ...     print(len(stream))
+    ...     print(len(list(stream)))
     ...
     >>> if _issync:
     ...     25
@@ -354,7 +352,7 @@ Design Principles
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}]
     >>> sync_pipe = SyncPipe('itembuilder', conf={'attrs': attrs})
-    >>> sync_pipe.hash().list[0]
+    >>> next(sync_pipe.hash())
     {'title': 'riko pt. 1', 'content': "Let's talk about riko!", 'hash': _hash}
 
     # Alternate conf usage

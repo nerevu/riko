@@ -12,6 +12,8 @@ Examples:
 
 """
 
+from typing import override
+
 import pygogo as gogo
 
 from . import reactor
@@ -20,7 +22,6 @@ try:
     from twisted.internet.testing import MemoryReactorClock
 except ImportError:
     MemoryReactorClock = object
-    FakeReactor = lambda _: lambda: None
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -63,6 +64,7 @@ class FakeReactor(MemoryReactorClock):
         super().__init__()
         reactor.fake = True
 
+    @override
     def callLater(self, when, what, *args, **kwargs):
         """Schedule a unit of work to be done later."""
         delayed = super().callLater(when, what, *args, **kwargs)

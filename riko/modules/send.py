@@ -12,13 +12,13 @@ Examples:
         >>>
         >>> target = receiver(conf={'name': 'receiver1'}, func=noop)
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
         >>> source = sender(stream, others=['receiver1'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
 
@@ -26,16 +26,18 @@ Examples:
 
 import pygogo as gogo
 
+from riko import Objconf
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from riko.utils import send
 
 from . import operator
 
-OPTS = {"pollable": True, "emit": True}
-DEFAULTS = {}
+OPTS: Opts = {"pollable": True, "emit": True}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -67,14 +69,14 @@ def parser(stream, objconf, tuples, **kwargs):
         >>>
         >>> target = receiver(conf={'name': 'receiver2'}, func=noop)
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(None))
         >>> source = parser(stream, None, tuples, others=['receiver2'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
 
@@ -87,7 +89,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that pushes items of a stream to a function using generator based
     coroutines.
@@ -111,12 +113,12 @@ def pipe(*args, **kwargs):
         >>>
         >>> target = receiver(conf={'name': 'receiver3'}, func=noop)
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> source = pipe([{'x': 0}], others=['receiver3'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
 

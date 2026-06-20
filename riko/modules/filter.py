@@ -30,19 +30,25 @@ Attributes:
 import operator as op
 import re
 from collections.abc import Mapping, Sequence
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from time import struct_time
+from typing import Literal, TypeAlias
 
 import pygogo as gogo
 from dateutil.parser import ParserError
 
+from riko import Objectify
 from riko.cast import cast_date
-from riko.types.general import BasicArg, BasicMapping, DateLike, ObjconfRule
+from riko.dotdict import DotDict
+from riko.types.general import Defaults, ItemArg, Opts, PipeTuples, Stream
+from riko.types.modules import FilterConfRule
+from riko.types.values import ComplexMapping, ComplexSequence
 
 from . import operator
 
-OPTS = {"listize": True, "extract": "rule"}
-DEFAULTS = {"combine": "and", "permit": True}
+OPTS: Opts = {"listize": True, "extract": "rule"}
+DEFAULTS: Defaults = {"combine": "and", "permit": True}
 ITER_ATTRS = {"__next__", "next", "__iter__"}
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
@@ -65,12 +71,17 @@ SWITCH = {
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 is_iterable = lambda item: ITER_ATTRS.intersection(dir(item))
+Result: TypeAlias = str | ComplexMapping | Decimal | date | ComplexSequence | None
 
 
-def _parse_arg(arg: BasicArg | DateLike | None):
-    if isinstance(arg, Mapping):
+def _parse_arg(arg: ItemArg) -> Result:
+    if isinstance(arg, Decimal):
         value = arg
-    elif isinstance(arg, int):
+    elif isinstance(arg, DotDict):
+        value = arg.asdict()
+    elif isinstance(arg, (Mapping, Objectify)):
+        value = arg
+    elif isinstance(arg, (int, float)):
         value = Decimal(arg)
     elif isinstance(arg, str):
         try:
@@ -96,9 +107,17 @@ def _parse_arg(arg: BasicArg | DateLike | None):
     return value
 
 
-def parse_rule(rule: ObjconfRule, item: BasicMapping, **kwargs):
+def parse_rule(
+    rule: FilterConfRule, item: ItemArg, **kwargs
+) -> Result | Literal[False]:
     truthy_like = rule.op in {"truthy", "falsy"}
-    _x, _y = item.get(rule.field, **kwargs), rule.value
+    _y = rule.value
+
+    if isinstance(item, Mapping):
+        _x = item.get(rule.field, **kwargs)
+    else:
+        raise TypeError(f"Item is not a mapping: {item!r}.")
+
     has_value = _y is not None
     result = False
 
@@ -121,7 +140,9 @@ def parse_rule(rule: ObjconfRule, item: BasicMapping, **kwargs):
     return result
 
 
-def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
+def parser(
+    stream: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 
@@ -164,7 +185,8 @@ def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
         try:
             func = COMBINE_BOOLEAN[objconf.combine]
         except KeyError:
-            print(f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')")
+            msg = f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')"
+            logger.error(msg)
         else:
             result = func(results)
 
@@ -174,8 +196,8 @@ def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
                 break
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously filters for source items matching
     the given rules.
@@ -215,12 +237,11 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['title'])
+        >>> async def run(reactor):
         ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
         ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
-        ...     d = async_pipe(items, conf={'rule': rule})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items, conf={'rule': rule})
+        ...     print(next(result)['title'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -234,7 +255,7 @@ def async_pipe(*args, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that extracts items matching the given rules.
 

@@ -1,6 +1,6 @@
 [flake8]
 max-line-length = 88
-max-complexity = 10
+max-complexity = 11
 ignore =
     # do not assign a lambda expression, use a def
     E731,
@@ -15,3 +15,10 @@ ignore =
     # incompatible with D213 multi-line-summary-second-line
     ## multi-line-summary-first-line
     D212,
+
+    # incompatible with ruff
+    ## line break before binary operator
+    W503,
+
+    ## whitespace before ':'
+    E203,

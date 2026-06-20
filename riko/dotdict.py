@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.dotdict
-~~~~~~~~~~~~
 Provides a class for creating case insensitive dicts with dot notation access
 """
 
@@ -19,17 +17,17 @@ from riko import Objectify, replacer
 from riko.cast import CAST_SWITCH, CastType
 from riko.cast import cast as cast_value
 from riko.types.compile import Wire, WireEndpoint
-from riko.types.general import (
+from riko.types.general import Stream
+from riko.types.modules import ConfArg, Sentinal
+from riko.types.values import (
     BasicValue,
     ComplexArg,
     ComplexMapping,
     ComplexSequence,
     IntermediateValue,
-    Items,
     StatefulItem,
     StreamState,
 )
-from riko.types.modules import ConfArg, Sentinal
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -40,7 +38,7 @@ WIRE_KEYS = ("id", "src", "tgt")
 
 
 def is_mapping(val: ComplexArg | WireEndpoint) -> TypeIs[Mapping]:
-    return isinstance(val, Mapping)
+    return isinstance(val, (dict, CaseInsensitiveDict))
 
 
 def is_mapping_seq(val: ComplexArg) -> TypeIs[Sequence[Mapping]]:
@@ -52,13 +50,22 @@ def is_value_seq(val: ComplexArg) -> TypeIs[Sequence[BasicValue]]:
 
 
 def is_sentinal(val: ComplexArg) -> TypeIs[Mapping[str | Sentinal, str]]:
-    return is_mapping(val) and len(val) == 2 and any(s in val for s in SENTINALS)
+    return (
+        isinstance(val, (dict, CaseInsensitiveDict))
+        and len(val) == 2
+        and "terminal" in val
+    )
 
 
 def is_type_value(val: ComplexArg) -> TypeGuard[ConfArg]:
-    normal = is_mapping(val) and len(val) == 2 and all(s in val for s in TV_KEYS)
-    shortcut = is_mapping(val) and len(val) == 1 and "value" in val
-    return normal or shortcut
+    if not isinstance(val, (dict, CaseInsensitiveDict)):
+        result = False
+    else:
+        n = len(val)
+        double = n == 2 and "type" in val and "value" in val
+        result = double or (n == 1 and "value" in val)
+
+    return result
 
 
 def is_wire(val: ComplexArg) -> TypeGuard[Wire]:
@@ -71,7 +78,11 @@ def is_wire(val: ComplexArg) -> TypeGuard[Wire]:
 
 
 def is_stateful_item(val: ComplexArg) -> TypeGuard[StatefulItem]:
-    if isinstance(val, Mapping) and len(val) == 1 and "state" in val:
+    if (
+        isinstance(val, (dict, CaseInsensitiveDict))
+        and len(val) == 1
+        and "state" in val
+    ):
         success = isinstance(val["state"], StreamState)
     else:
         success = False
@@ -124,9 +135,19 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         >>> DotDict({'start': 0, 'count': {'type': 'int', 'value': '5'}})
         {'start': 0, 'count': 5}
 
+    Warning:
+        Do NOT pass data as keyword arguments.
+
+            >>> DotDict(**{'a': 1, 'b': 2})
+            Traceback (most recent call last):
+                ...
+            TypeError: DotDict.__init__() got an unexpected keyword argument 'a'
+            >>> DotDict({'a': 1, 'b': 2})
+            {'a': 1, 'b': 2}
+
     """
 
-    def __init__(self, data: ComplexMapping | None = None, **kwargs):
+    def __init__(self, data: ComplexMapping | None = None):
         super().__init__()
 
         if isinstance(data, Objectify):
@@ -135,14 +156,19 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
             # pyright doesn't like typeddicts
             _data = cast_type(dict[str, ComplexArg], data)
         else:
-            _data = None
+            _data = data
 
-        if _data is not None:
-            self.update(_data, **kwargs)
+        if _data:
+            self.update(_data)
 
     def _parse_key(self, key: str | Mapping[str, str] | None = None) -> list[str]:
         if isinstance(key, str):
-            keys = key.rstrip(".").split(".") if key else []
+            if not key:
+                keys = []
+            elif "." not in key:
+                keys = [key]
+            else:
+                keys = key.rstrip(".").split(".")
         elif key and "subkey" in key:
             keys = [key["subkey"]]
         else:
@@ -153,23 +179,18 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
     def _parse_sentinel(
         self, value: ComplexArg, default: ComplexArg | None = None, **kwargs: ComplexArg
     ) -> ComplexArg:
-
-        if kwargs and is_sentinal(value):
+        if not isinstance(value, (dict, CaseInsensitiveDict)):
+            parsed = default
+        elif kwargs and is_sentinal(value):
             key = next(s for s in SENTINALS if s in value)
             sentinal = value[key]
             replaced = replacer(sentinal, "")
 
             if stream := kwargs.get(replaced):
-                stream = cast_type(Items, stream)
+                stream = cast_type(Stream, stream)
                 item = next(stream)
-                #
-                # if callable(stream):
-                #     item = next(stream(**kwargs))
-                # else:
-                #     item = next(stream)
                 parsed = item
             else:
-                # logger.warning(f"Sentinal {replaced} not found in {kwargs=}.")
                 parsed = default
         elif is_type_value(value):
             parsed = value["value"]
@@ -185,7 +206,7 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
                 logger.warning(f"Invalid cast type={_type}! Not casting {parsed=}.")
         elif is_stateful_item(value):
             parsed = value
-        elif isinstance(value, Mapping):
+        elif isinstance(value, (dict, CaseInsensitiveDict)):
             parsed = {
                 k: self._parse_sentinel(
                     cast_type(ComplexArg, v), cast_type(ComplexArg, v), **kwargs
@@ -206,11 +227,9 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
     ) -> ComplexArg:
         parsed = default
         msg = f"Ignoring unsupported key {key} to access {{0}} value {{1}}."
-        # if kwargs:
-        #     print(f"_parse_value got {value=} with {key=} and {kwargs=}")
 
         if isinstance(value, Mapping) and isinstance(key, str):
-            dd_value = DotDict(value)
+            dd_value = value if isinstance(value, DotDict) else DotDict(value)
 
             if key in dd_value:
                 parsed = dd_value[key]
@@ -240,7 +259,6 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         elif value is not None:
             parsed = value
 
-        # print(f"_parse_value {value=} with {key=} and {kwargs=} -> {parsed=}.")
         return parsed
 
     def __getitem__(self, key: str) -> ComplexArg:
@@ -252,7 +270,7 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         'bar'
         """
         keys = self._parse_key(key)
-        value = super().__getitem__(keys[0])
+        value = CaseInsensitiveDict.__getitem__(self, keys[0])
 
         if len(keys) > 1:
             key = ".".join(keys[1:])
@@ -263,9 +281,16 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
             else:
                 logger.warning(msg)
 
-        value = self._parse_sentinel(value, default=value)
-        result = DotDict(value) if isinstance(value, Mapping) else value
-        # print(f"DotDict __getitem__ {keys=} -> {value=} -> {result=}.")
+        if isinstance(value, (dict, CaseInsensitiveDict)):
+            value = self._parse_sentinel(value, default=value)
+            result = (
+                DotDict(value)
+                if isinstance(value, (dict, CaseInsensitiveDict))
+                else value
+            )
+        else:
+            result = value
+
         return result
 
     def get(  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -310,8 +335,7 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         >>> r.get('attrs.value.foo', attrs_1=iter([{'content': 'baz'}]))
         """
         keys = self._parse_key(key)
-        # TODO: figure out if the copy is necessary
-        item = self.copy()
+        item = self
         if keys:
             for k in keys:
                 try:
@@ -320,7 +344,6 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
                     pass
 
                 item = self._parse_value(item, k, default=default, **kwargs)
-                # print(f"got key={k} -> {item=}.")
         else:
             item = self._parse_sentinel(item, default=item, **kwargs)
 
@@ -332,7 +355,6 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         else:
             value = item
 
-        # print(f"got {keys=} from {item=} with {kwargs=} -> {value=}.")
         return value
 
     def delete(self, key: str):
@@ -349,25 +371,30 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
             del _key
 
     # TODO: does this need to be __setitem__?
-    def set(self, key: str, value: ComplexArg):
+    def __setitem__(self, key: str, value: ComplexArg):
         reducer = lambda i, k: i.setdefault(k, {})
         keys = self._parse_key(key)
-        item = self.copy()
-        # print(f"set before {keys=}, {item=}, {self=}, {value=}")
-        rest, last = keys[:-1], keys[-1]
-        reduced = reduce(reducer, rest, item)
-        reduced[last] = value
-        # print(f"set during {rest=}, {last=}, {reduced=}")
-        # print(f"set during {item=}, {self=}")
-        super().update(item)
-        # print(f"set after {item=}, {self=}")
+
+        if len(keys) == 1:
+            CaseInsensitiveDict.__setitem__(self, key, value)
+        else:
+            item = self.copy()
+            rest, last = keys[:-1], keys[-1]
+            reduced = reduce(reducer, rest, item)
+            reduced[last] = value
+            CaseInsensitiveDict.update(self, item)
 
     def update(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         data: ComplexMapping | Iterator[tuple[str, ComplexArg]] | None = None,
         **kwargs,
     ):
-        if isinstance(data, Objectify):
+        if not kwargs and isinstance(data, dict) and not any("." in k for k in data):
+            for key, value in data.items():
+                CaseInsensitiveDict.__setitem__(self, key, value)
+
+            return
+        elif isinstance(data, Objectify):
             _dict = dict(data.iteritems())
         elif isinstance(data, Mapping):
             # pyright doesn't like typeddicts
@@ -379,21 +406,14 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
 
         _dict.update(kwargs)
 
-        # print(f"update {_dict=}")
         if dot_keys := [d for d in _dict if "." in d]:
-            # skip key if a subkey redefines it
-            # i.e., 'author.name' has precedence over 'author'
             skip_keys = {".".join(self._parse_key(key)[:-1]) for key in dot_keys}
             items = [(k, _dict[k]) for k in _dict if k not in skip_keys]
         else:
-            skip_keys = set()
             items = _dict.items()
 
-        # print(f"update {items=}")
-        # print(f"update before {self=}")
-        [self.set(key, value) for key, value in items]
-        super().update(self)
-        # print(f"update after {self=}")
+        for key, value in items:
+            self[key] = value
 
     def asdict(self, default_key="self", **kwargs) -> dict[str, ComplexArg]:
         """
@@ -408,16 +428,32 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         >>> r.asdict()
         {'a': 'baz'}
         """
-        value = self.get(**kwargs)
+        if kwargs:
+            value = self.get(**kwargs)
 
-        if isinstance(value, Mapping):
-            result = {
-                k: DotDict(v).get(**kwargs) if isinstance(v, Mapping) else v
-                for k, v in value.items()
-            }
-        elif value:
-            result = {default_key: value}
+            if isinstance(value, Mapping):
+                result = {
+                    k: DotDict(v).get(**kwargs) if isinstance(v, Mapping) else v
+                    for k, v in value.items()
+                }
+            elif value:
+                result = {default_key: value}
+            else:
+                result: dict[str, ComplexArg] = {}
         else:
-            result: dict[str, ComplexArg] = {}
+            result = {}
+
+            for k in self:
+                raw = CaseInsensitiveDict.__getitem__(self, k)
+
+                if isinstance(raw, (dict, CaseInsensitiveDict)):
+                    processed = self._parse_sentinel(raw, default=raw)
+                    result[k] = (
+                        DotDict(processed).asdict()
+                        if isinstance(processed, (dict, CaseInsensitiveDict))
+                        else processed
+                    )
+                else:
+                    result[k] = raw
 
         return dict(result)

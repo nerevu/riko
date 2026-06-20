@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.utils
-~~~~~~~~~~~~~~
 Provides utility classes and functions
 """
 
@@ -11,7 +9,15 @@ import itertools as it
 import re
 import sys
 from collections import deque
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from collections.abc import (
+    Callable,
+    Generator,
+    ItemsView,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
 from decimal import Decimal
 from functools import partial, reduce, wraps
 from http.client import HTTPResponse
@@ -20,10 +26,7 @@ from math import isnan
 from operator import itemgetter
 from os import O_NONBLOCK
 from time import struct_time
-from typing import (
-    TypeVar,
-    overload,
-)
+from typing import TypeVar, cast, overload
 from typing import cast as cast_type
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -47,36 +50,39 @@ from riko import (
 )
 from riko.cast import CAST_SWITCH, CastType
 from riko.cast import cast as cast_value
+from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
-from riko.types.compile import Module, Wire
-from riko.types.general import (
+from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
+from riko.types.general import ItemArg, Opener, PipelineDependencies, SyncItemFunc
+from riko.types.modules import (
+    EmbeddedModule,
+    InputRawConf,
+    LoopRawConf,
+    RegexConfRule,
+    RegexRule,
+)
+from riko.types.values import (
     BasicArg,
     BasicMapping,
     BasicValue,
     ComplexArg,
-    DateLike,
+    ComplexValue,
+    FeedParserRSSEntry,
     IntermediateValue,
-    ItemArg,
-    NumLike,
-    ObjconfRegexRule,
-    Opener,
-    ParsedPipeDef,
-    PipeDef,
-    PipelineDependencies,
+    RSSEntry,
+    SortableValue,
     StatefulItem,
     StreamState,
-    SyncAnyFunc,
-    SyncItemFunc,
 )
-from riko.types.modules import EmbeddedModule, InputConf, LoopConf
 
-_registry: dict[str, Generator[StatefulItem, StatefulItem, StatefulItem]] = {}
+NON_SORTABLE = (Mapping, Objectify, Sequence)
+
+_registry: dict[str, Generator[None, ItemArg | StatefulItem, None]] = {}
 _receive_queue: dict[str, deque[tuple[StreamState | None, ComplexArg]]] = {}
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
 
-DEF_NS = "https://github.com/nerevu/riko"
 T = TypeVar("T", bound=ComplexArg)
 
 
@@ -194,16 +200,16 @@ def opener(
     r = None
 
     if url.startswith("http") and params:
-        r = requests.get(url, params=params, stream=True)
+        r = requests.get(url, params=params, stream=True, timeout=timeout)
         r.raw.decode_content = True
         response = r.text if memoize else r.raw
     else:
-        req = Request(url, headers={"User-Agent": default_user_agent()})
+        req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
 
         if delay:
             logger.debug("Request delaying not currently implemented.")
 
-        if r := urlopen(req, timeout=timeout):
+        if r := urlopen(req, timeout=timeout):  # noqa: S310
             r = cast_type(HTTPResponse, r)
             text = r.read() if memoize else None
             encoding = get_response_encoding(r, encoding)
@@ -212,11 +218,10 @@ def opener(
                 response = cast_type(str, compat.decode(text, encoding))
             else:
                 reencoded = reencode(r.fp, encoding, decode=True)
-                content: str = reencoded.read()
-
-                # FIXME: this is a band-aid for the fact that reencode objects don't
-                # support seek
-                response = StringIO(content)
+                # reencode doesn't support seek so buffer into StringIO
+                content = reencoded.read()
+                # reencode isn't properly typed for when decode=True
+                response = StringIO(cast(str, content))
         else:
             response = ""
 
@@ -237,21 +242,32 @@ def get_opener(memoize=False, **kwargs) -> Opener:
 
 
 class Fetch(TextIOBase):
-    # http://stackoverflow.com/a/22836333/408556
-    def __init__(self, url: str, memoize=False, **kwargs):
+    # The overloads are so I can call Fetch(**kwargs) without Pyright complaining.
+    # https://stackoverflow.com/q/79673094
+    @overload
+    def __init__(  # noqa: E704
+        self, url: str, memoize: bool = ..., **kwargs: BasicArg
+    ) -> None: ...
+    @overload
+    def __init__(self, url: str, **kwargs: BasicArg) -> None: ...  # noqa: E704
+    @overload
+    def __init__(self, **kwargs: BasicArg) -> None: ...  # noqa: E704
+    def __init__(  # noqa: E301
+        self, url: BasicArg = "", memoize: BasicArg = False, **kwargs: BasicArg
+    ):
         # TODO: need to use separate timeouts for memoize and urlopen
         self.content_type = None
         self.file = None
 
-        if memoize:
-            opener = LocalProxy(partial(get_opener, memoize=True, **kwargs))
-            self.opener = cast_type(Opener, opener)
-            response, self.content_type = self.opener(url)
+        if url and memoize:
+            _opener = LocalProxy(partial(get_opener, memoize=True, **kwargs))
+            self.opener = cast_type(Opener, _opener)
+            response, self.content_type = self.opener(str(url))
         else:
-            self.opener = get_opener(**kwargs)
+            self.opener = get_opener(memoize=False, **kwargs)
 
             try:
-                response, self.content_type = self.opener(url)
+                response, self.content_type = self.opener(str(url))
             except URLError as e:
                 if "File name too long" in str(e.reason):
                     raise
@@ -270,6 +286,7 @@ class Fetch(TextIOBase):
             self.readline = self.file.readline
             self.seek = self.file.seek
 
+    # http://stackoverflow.com/a/22836333/408556
     def __enter__(self):
         return self
 
@@ -290,66 +307,78 @@ class Fetch(TextIOBase):
         return ext
 
 
-# TODO add strict option to opt into sortability
-def def_itemgetter(
-    attr: str, default: IntermediateValue | None = None, _type: str | None = None
-) -> Callable[[ItemArg], BasicValue | DateLike | NumLike | bool]:
-    # like operator.itemgetter but fills in missing keys with a default value
-    _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
-    invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
-
-    if invalid_type and default is None:
-        msg = f"Invalid cast type={_type}. Setting default to empty string."
+def _resolve_uncastable(
+    value: ComplexArg,
+    msg: str,
+    default: SortableValue,
+) -> SortableValue | None:
+    if isinstance(value, (str, int, struct_time)):
+        msg += ". Returning value without casting."
         logger.warning(msg)
+        casted = value
+    elif isinstance(value, (Mapping, Objectify, Sequence)):
+        msg += ". Returning default value."
+        logger.warning(msg)
+        casted = default
+    else:
+        msg += ". Returning value without casting."
+        logger.warning(msg)
+        casted = value
+
+    return casted
+
+
+def _warn_and_default(type_name: str, default: SortableValue) -> SortableValue:
+    msg = f"Received non-sortable {type_name} value. Returning default instead."
+    logger.warning(msg)
+    return default
+
+
+def _resolve_default(
+    _type: str | None, invalid_type: bool | None, default: ComplexValue | None
+) -> SortableValue:
+    if invalid_type and default is None:
+        logger.warning(f"Invalid cast type={_type}. Setting default to empty string.")
     elif _type and default is None:
         _default = CAST_SWITCH[_type].get("default")
         default = cast_type(IntermediateValue, _default)
+    elif isinstance(default, Mapping):
+        logger.warning(f"Invalid {default=}. Setting to empty string.")
+        default = None
 
-    if default is None:
-        default = ""
+    return default if default is not None else ""
+
+
+def def_itemgetter(
+    attr: str, default: ComplexValue | None = None, _type: str | None = None
+) -> Callable[[ItemArg], SortableValue]:
+    # like operator.itemgetter but fills in missing keys with a default value
+    _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
+    invalid_type = bool(_invalid_type or (_type and _type not in CAST_SWITCH))
+    default = _resolve_default(_type, invalid_type, default)
 
     _invalid_type = _type in {CastType.LOCATION, CastType.PASS, CastType.NONE}
     invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
 
-    def keyfunc(item: ItemArg) -> BasicValue | DateLike | NumLike | bool:
+    def keyfunc(item: ItemArg) -> SortableValue:
         if isinstance(item, Mapping):
             value = item.get(attr, default)
+        elif isinstance(item, Objectify):
+            value = dict(item.iteritems()).get(attr, default)
         else:
             value = item
 
         msg = f"Invalid cast type={_type} for key '{attr}'."
 
         if invalid_type:
-            if isinstance(value, (str, int, struct_time)):
-                msg += ". Returning value without casting."
-                logger.warning(msg)
-                casted = value
-            elif isinstance(value, (Mapping, Objectify, Sequence)):
-                msg += ". Returning default value."
-                logger.warning(msg)
-                casted = default
-            else:
-                msg += ". Returning value without casting."
-                logger.warning(msg)
-                casted = value
+            casted = _resolve_uncastable(value, msg, default)
         elif _type:
-            # pyright: ignore[reportCallIssue,reportArgumentType]
             _casted = cast_value(value, CastType(_type))
             casted = cast_type(IntermediateValue, _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
-        elif isinstance(value, Mapping):
-            msg = "Received non-sortable Mapping value. Returning default instead."
-            logger.warning(msg)
-            casted = default
-        elif isinstance(value, Objectify):
-            msg = "Received non-sortable Objectify value. Returning default instead."
-            logger.warning(msg)
-            casted = default
-        elif isinstance(value, Sequence):
-            msg = "Received non-sortable Sequence value. Returning default instead."
-            logger.warning(msg)
-            casted = default
+        elif isinstance(value, NON_SORTABLE):
+            casted = _warn_and_default(type(value).__name__, default)
         elif value is not None:
             casted = value
         else:
@@ -364,23 +393,28 @@ def def_itemgetter(
 
 
 # TODO: move this to meza.process.group
-def group_by(content: Iterable[Mapping[str, str]], attr: str, default=None):
+def group_by(content: Iterable[T], attr: str, default=None) -> ItemsView[str, list[T]]:
     keyfunc = def_itemgetter(attr, default)
-    data = list(content)
-    uniq = unique_everseen(data, keyfunc)
-    sorted_iterable = sorted(data, key=keyfunc)
-    grouped = it.groupby(sorted_iterable, keyfunc)
-    groups = {str(k): list(v) for k, v in grouped}
+    groups: dict[str, list[T]] = {}
 
-    # return groups in original order
-    return ((key, groups[key]) for key in uniq)
+    for item in content:
+        if isinstance(item, (Mapping, str, int)):
+            key = str(keyfunc(item))
+        else:
+            key = str(item)
+
+        groups.setdefault(key, []).append(item)
+
+    return groups.items()
 
 
 @overload
-def unique_everseen(content: Iterable[T]) -> Iterator[T]: ...
-@overload
-def unique_everseen(content: Iterable[T], keyfunc: Callable) -> Iterator[str]: ...
-def unique_everseen(
+def unique_everseen(content: Iterable[T]) -> Iterator[T]: ...  # noqa: E704
+@overload  # noqa: E302
+def unique_everseen(  # noqa: E704
+    content: Iterable[T], keyfunc: Callable
+) -> Iterator[str]: ...
+def unique_everseen(  # noqa: E302
     content: Iterable[T], keyfunc: Callable | None = None
 ) -> Iterator[str | T]:
     # List unique elements, preserving order. Remember all elements ever seen
@@ -449,7 +483,7 @@ def betwix(iterable, start=None, stop=None, inc=False):
 
 
 def dispatch(
-    split: Sequence[ComplexArg], *funcs: SyncAnyFunc
+    split: Sequence[ComplexArg], *funcs: SyncItemFunc
 ) -> tuple[ComplexArg, ...]:
     r"""
     Takes a tuple of items and delivers each one to a different function
@@ -624,7 +658,7 @@ def substitute(word: str, rule):
 
 
 # @memoize(TIMEOUT)
-def get_new_rule(rule: ObjconfRegexRule, recompile=False) -> dict[str, str | int]:
+def get_regex_rule(rule: RegexConfRule, recompile=False) -> RegexRule:
     flags = 0 if rule.casematch else re.IGNORECASE
 
     if not rule.singlelinematch:
@@ -634,24 +668,24 @@ def get_new_rule(rule: ObjconfRegexRule, recompile=False) -> dict[str, str | int
     count: int = 1 if rule.singlelinematch else 0
 
     if recompile and "$" in rule.replace:
-        replace = re.sub(r"\$(\d+)", r"\\\1", rule.replace, 0)
+        replace = re.sub(r"\$(\d+)", r"\\\1", rule.replace, count=0)
     else:
         replace = rule.replace
 
     match = re.compile(rule.match, flags) if recompile else rule.match
 
     nrule = {
-        "match": match,
-        "replace": replace,
+        "count": count,
         "default": rule.default,
         "field": rule.field,
-        "count": count,
         "flags": flags,
-        "series": rule.seriesmatch,
+        "match": match,
         "offset": rule.offset or 0,
+        "replace": replace,
+        "series": rule.seriesmatch,
     }
 
-    return nrule
+    return RegexRule(**nrule)
 
 
 def multiplex(sources: Iterable[Iterable[T]]) -> Iterable[T]:
@@ -659,9 +693,8 @@ def multiplex(sources: Iterable[Iterable[T]]) -> Iterable[T]:
     return it.chain.from_iterable(sources)
 
 
-def gen_entries(entries: Iterable[Mapping]):
-    for _entry in entries:
-        entry = dict(_entry)
+def gen_entries(entries: Iterable[FeedParserRSSEntry]) -> Iterator[RSSEntry]:
+    for entry in entries:
         published = updated = None
 
         # prevent feedparser deprecation warnings
@@ -676,13 +709,17 @@ def gen_entries(entries: Iterable[Mapping]):
 
         entry.setdefault("updated_parsed", updated)
         entry.setdefault("pubDate", published)
-        entry["y:published"] = entry["pubDate"]
-        entry["dc:creator"] = entry.get("author")
-        entry["author.uri"] = entry.get("author_detail", {}).get("href")
+        pub_date = entry.get("pubDate")
+        updated_date = entry.get("updated_parsed")
+
+        entry["updated_parsed"] = ensure_tzinfo(updated_date)
         entry["author.name"] = entry.get("author_detail", {}).get("name")
-        entry["y:title"] = entry.get("title")
+        entry["author.uri"] = entry.get("author_detail", {}).get("href")
+        entry["dc:creator"] = entry.get("author")
         entry["y:id"] = entry.get("id")
-        yield entry
+        entry["y:published"] = entry["pubDate"] = ensure_tzinfo(pub_date)
+        entry["y:title"] = entry.get("title")
+        yield cast(RSSEntry, entry)
 
 
 def gen_items(
@@ -709,11 +746,11 @@ def close(name: str):
         gen.close()
 
 
-def actor(registry_name: str | None = None, maxlen=256):
+def coroutine(registry_name: str | None = None, maxlen=256):
     """Decorator for generator-based coroutines."""
 
     def decorator(
-        func: Callable[..., Generator[StatefulItem, StatefulItem, StatefulItem]],
+        func: Callable[..., Generator[None, ItemArg | StatefulItem, None]],
     ):
         name = registry_name or func.__name__
 
@@ -765,7 +802,7 @@ def gen_input(pipe_def: PipeDef) -> Iterator[tuple[str]]:
             yield tuple(module_confs)
 
 
-def get_input(conf: InputConf, **kwargs):
+def get_input(conf: InputRawConf, **kwargs):
     """
     Gets a user parameter, either from the console or from an outer
      submodule/system
@@ -856,12 +893,12 @@ def gen_names(
 
 def gen_modules(
     pipe_def: PipeDef, embedded=False
-) -> Iterator[tuple[str, Module] | tuple[str, EmbeddedModule]]:
+) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
         yield (pythonise(module["id"]), module)
 
         if embedded and module["type"] == "loop":
-            conf = cast_type(LoopConf, module["conf"])
+            conf = cast_type(LoopRawConf, module["conf"])
             embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), embed)
 
@@ -885,7 +922,7 @@ def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list]]:
 
         # make the loop dependent on its embedded module
         if module["type"] == "loop":
-            conf = cast_type(LoopConf, module["conf"])
+            conf = cast_type(LoopRawConf, module["conf"])
             embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), [module_id])
 
@@ -895,3 +932,18 @@ def gen_parented_graph(graph):
     for node, value in graph.items():
         if value or any(node in v for v in graph.values()):
             yield (node, value)
+
+
+def truncate_content(content: T | object, length: int = 20) -> T:
+    if isinstance(content, str):
+        truncated = content[:length] + "…" if len(content) > length else content
+    elif isinstance(content, Objectify):
+        truncated = {k: truncate_content(v) for k, v in content.iteritems()}
+    elif isinstance(content, Mapping):
+        truncated = {k: truncate_content(v) for k, v in content.items()}
+    elif isinstance(content, Sequence):
+        truncated = [truncate_content(v) for v in content]
+    else:
+        truncated = content
+
+    return cast(T, truncated)

@@ -2,6 +2,7 @@
 
 """A script to manage development tasks"""
 
+import shutil
 import sys
 from functools import partial
 from os import environ
@@ -16,6 +17,13 @@ from riko.helpers import exception_hook
 BASEDIR = p.dirname(p.dirname(p.dirname(p.abspath(__file__))))
 
 sys.excepthook = partial(exception_hook, debug=False)
+
+uv = shutil.which("uv")
+tox = shutil.which("tox")
+detox = shutil.which("detox")
+pytest = shutil.which("pytest")
+ruff = shutil.which("ruff")
+pylint = shutil.which("pylint")
 
 
 def parse_verbosity(verbose=0, quiet=None):
@@ -64,17 +72,23 @@ def _clean():
 
 def _build():
     """Build riko package"""
-    check_call("uv build", shell=True)
+    if uv:
+        check_call([uv, "build"])
+    else:
+        raise RuntimeError("uv not found")
 
 
 def _publish(dry_run=False):
     """Publish riko to PyPI"""
     if dry_run:
-        cmd = 'uv run --with riko --no-project -- python -c "import riko"'
+        cmd = 'run --with riko --no-project -- python -c "import riko"'
     else:
-        cmd = "uv publish"
+        cmd = "publish"
 
-    check_call(cmd, shell=True)
+    if uv:
+        check_call([uv] + cmd.split(" "))
+    else:
+        raise RuntimeError("uv not found")
 
 
 @manager.command()
@@ -101,40 +115,77 @@ def check():
 )
 def lint(where=None, fix=False, unsafe_fixes=False, strict=False, parallel=False):
     """Check style with linters"""
-    args = "pylint --rcfile=tests/standard.rc -rn -fparseable riko"
-    args += " -j 0" if parallel else ""
-    r_args = "ruff check"
+    where = where or ""
+    r_args = ["check"]
 
     if fix:
-        r_args += " --fix"
+        r_args.append("--fix")
 
     if unsafe_fixes:
-        r_args += " --unsafe-fixes"
+        r_args.append("--unsafe-fixes")
 
-    r_args += f" {where}" if where else ""
+    if where:
+        r_args.extend(where.split(" "))
 
-    try:
-        check_call(r_args.split(" "))
-        check_call(args.split(" ")) if strict else None
-    except CalledProcessError as e:
-        exit(e.returncode)
+    if ruff:
+        try:
+            check_call([ruff] + r_args)
+        except CalledProcessError as e:
+            exit(e.returncode)
+    else:
+        raise RuntimeError("ruff not found")
+
+    if strict and pylint:
+        args = [pylint, "--rcfile=tests/standard.rc", "-rn", "-fparseable", "riko"]
+
+        if parallel:
+            args.extend(["-j", "0"])
+
+        try:
+            check_call(args)
+        except CalledProcessError as e:
+            exit(e.returncode)
+    elif strict:
+        raise RuntimeError("pylint not found")
 
 
 @manager.command()
-@click.option("-w", "--where", help="Modules to check")
+@click.option("-w", "--where", help="Modules to check", default=None)
 @click.option("-s", "--sort", help="Sort module imports", is_flag=True)
-def prettify(where, sort=False):
+def prettify(where=None, sort=False):
     """Prettify code with ruff"""
-    extra = where.split(" ") if where else []
+    where = where or ""
+    return_code = 0
 
-    try:
-        args = ["ruff", "check", "--select", "I", "--fix"]
-        check_call(args + extra) if sort else None
-        check_call(["ruff", "format"] + extra)
-    except CalledProcessError as e:
-        return_code = e.returncode
-    else:
-        return_code = 0
+    if sort and ruff:
+        cmd = [ruff, "check", "--select", "I", "--fix"]
+
+        if where:
+            cmd.extend(where.split(" "))
+
+        try:
+            check_call(cmd)
+        except CalledProcessError as e:
+            return_code = e.returncode
+        else:
+            return_code = 0
+    elif sort:
+        raise RuntimeError("ruff not found")
+
+    if ruff and not return_code:
+        cmd = [ruff, "format"]
+
+        if where:
+            cmd.extend(where.split(" "))
+
+        try:
+            check_call(cmd)
+        except CalledProcessError as e:
+            return_code = e.returncode
+        else:
+            return_code = 0
+    elif not return_code:
+        raise RuntimeError("ruff not found")
 
     exit(return_code)
 
@@ -168,7 +219,7 @@ def prettify(where, sort=False):
     help="Run tests in parallel in multiple processes",
     is_flag=True,
 )
-def test(where=None, stop=None, **kwargs):
+def test(where=None, stop=None, **kwargs):  # noqa: PT028
     """Run pytest, tox, and script tests"""
     opts = "-xv" if stop else "-v"
     opts += " --cov=riko" if kwargs.get("cover") else " --no-cov"
@@ -184,19 +235,26 @@ def test(where=None, stop=None, **kwargs):
     opts += f" {where}" if where else ""
 
     try:
-        if kwargs.get("tox") and kwargs.get("parallel"):
-            check_call(["tox", "-p", "auto"])
+        if tox and kwargs.get("tox") and kwargs.get("parallel"):
+            check_call([tox, "-p", "auto"])
+        elif tox and kwargs.get("tox"):
+            check_call([tox])
         elif kwargs.get("tox"):
-            check_call("tox", shell=True)
-        elif kwargs.get("detox"):
+            raise RuntimeError("tox not found")
+        elif detox and kwargs.get("detox"):
             pass
-        else:
-            params = (f"pytest {opts}").split(" ")
+        elif kwargs.get("detox"):
+            raise RuntimeError("detox not found")
+        elif pytest:
+            cmd = opts
 
             if kwargs.get("parallel"):
-                params += ["-n", "auto"]
+                cmd += " -n auto"
 
-            check_call(params)
+            check_call([pytest] + cmd.split(" "))
+        else:
+            raise RuntimeError("pytest not found")
+
     except CalledProcessError as e:
         exit(e.returncode)
 

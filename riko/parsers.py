@@ -1,46 +1,56 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.parsers
-~~~~~~~~~~~~
 Provides utility classes and functions
 """
 
+import dataclasses
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from dataclasses import asdict, is_dataclass
 from html.entities import name2codepoint
 from html.parser import HTMLParser
 from io import BytesIO, StringIO, TextIOBase
 from itertools import chain
 from json import JSONDecodeError, loads
-from time import struct_time
 from typing import (
     TYPE_CHECKING,
     Literal,
-    Optional,
     TypeAlias,
     Union,
     cast,
     overload,
 )
 from urllib.error import URLError
+from xml.sax import SAXParseException  # noqa: S406
 
 import feedparser
 import pygogo as gogo
 from ijson import IncompleteJSONError, items
+from requests.structures import CaseInsensitiveDict
 
 from riko import Objectify, listize
+from riko.bado.io import NamedTextIOWrapper
 from riko.dotdict import DotDict, is_sentinal, is_type_value
-from riko.types.general import BasicArg, ComplexArg, ItemArg, Skip
-from riko.utils import Fetch
+from riko.types.general import ComplexArg, ItemArg, SkipFunc, SkipIf
+from riko.types.modules import AnyModuleConf, ConfValues, Skip
+from riko.types.values import (
+    BasicArg,
+    ComplexMapping,
+    ComplexSequence,
+    IntermediateValue,
+    RSSParseResult,
+    StrictDate,
+)
+from riko.utils import Fetch, truncate_content
 
 try:
-    from lxml import etree, html
+    from lxml import etree, html  # type: ignore[import-untyped]
 except ImportError:
     xml_parser = "ElementTree"
     html5parser = None
 
-    import xml.etree.ElementTree as etree
-    from xml.etree.ElementTree import ElementTree
+    import xml.etree.ElementTree as etree  # noqa: N813, S405
+    from xml.etree.ElementTree import ElementTree  # noqa: S405
 
     import html5lib as html
 else:
@@ -62,10 +72,8 @@ if TYPE_CHECKING:
     from xml.etree.ElementTree import Element as nativeElement
     from xml.etree.ElementTree import ElementTree as nativeElementTree
 
-    from feedparser import FeedParserDict
     from lxml.etree import Element as lxmlElement
     from lxml.etree import ElementTree as lxmlElementTree
-    from speedparser3.feedparsercompat import FeedParserDict as SpeedParserDict
 
 AnyElementTree: TypeAlias = Union["nativeElementTree", "lxmlElementTree"]
 AnyElement: TypeAlias = Union["nativeElement", "lxmlElement"]
@@ -151,13 +159,17 @@ def get_text(html: str, convert_charrefs=False):
     return parser.data.getvalue()
 
 
-def parse_rss(
-    url="", **kwargs
-) -> Union[dict[str, list], "FeedParserDict", "SpeedParserDict"]:
-    parsed = {"parsed": []}
+# The overloads are so I can call parse_rss(**kwargs) with Pyright complaining.
+# https://stackoverflow.com/q/79673094
+@overload
+def parse_rss(url: str, **kwargs: BasicArg) -> RSSParseResult: ...  # noqa: E704
+@overload
+def parse_rss(**kwargs: BasicArg) -> RSSParseResult: ...  # noqa: E704
+def parse_rss(url: BasicArg = "", **kwargs: BasicArg) -> RSSParseResult:  # noqa: E302
+    parsed: RSSParseResult = {"entries": []}
 
     try:
-        f = Fetch(url, **kwargs)
+        f = Fetch(str(url), **kwargs)
     except URLError:
         # url is an xml string
         f, content, url = None, url, "content"
@@ -165,95 +177,232 @@ def parse_rss(
         content = f.read() if f.file else ""
 
     try:
-        parsed = rssparser.parse(content)
+        parsed = cast(RSSParseResult, rssparser.parse(content))
     finally:
         if f:
             f.close()
 
-    if bozo_exception := parsed.get("bozo_exception"):
-        msg = bozo_exception.getMessage()
-        logger.error(f"Error parsing {url}: {msg}")
-        logger.error(f"Content: {content}")
+    bozo = parsed.get("bozo")
+    entry_count = len(parsed.get("entries", []))
+
+    if bozo is False and not entry_count:
+        logger.warning(f"Parsed {url} successfully but no entries were found.")
+    elif (bozo is False) or (entry_count > 3):
+        pass
+    elif bozo_exception := parsed.get("bozo_exception"):
+        if isinstance(bozo_exception, SAXParseException):
+            msg = bozo_exception.getMessage()
+            logger.warning(f"Error parsing {url}: {msg}")
+        else:
+            msg = str(bozo_exception)
+            logger.error(f"Error parsing {url}: {msg}")
+
+        logger.warning(f"Content: {truncate_content(content)}")
 
     return parsed
 
 
 def extract_namespace(tree: AnyElementTree) -> str | None:
-        tag = getattr(tree, "tag", None) or ""
+    """
+    Extracts the XML namespace URI from an element's tag.
 
-        if not isinstance(tag, str):  # lxml uses QName objects sometimes
-            tag = str(tag)
+    Args:
+        tree (AnyElementTree): An element whose tag may contain a Clark-notation
+            namespace, e.g. ``{http://example.com/ns}root``.
 
-        if "{" in tag and "}" in tag:
-            namespace = tag[tag.find("{") + 1: tag.find("}")]
-        else:
-            namespace = None
+    Returns:
+        str | None: The namespace URI, or ``None`` if the tag has no namespace.
 
-        return namespace
+    Examples:
+        >>> from xml.etree.ElementTree import fromstring
+        >>> tree = fromstring('<root xmlns="http://example.com/ns"/>')
+        >>> extract_namespace(tree)
+        'http://example.com/ns'
+        >>> extract_namespace(fromstring('<root/>'))
+
+    """
+    tag = getattr(tree, "tag", None) or ""
+
+    if not isinstance(tag, str):  # lxml uses QName objects sometimes
+        tag = str(tag)
+
+    if "{" in tag and "}" in tag:
+        namespace = tag[tag.find("{") + 1 : tag.find("}")]
+    else:
+        namespace = None
+
+    return namespace
+
+
+def verify_pos(tree: AnyElementTree, pos: int, *tags: str) -> int:
+    """
+    Adjusts *pos* when *tree* IS the element at ``tags[pos]``.
+
+    Descendant-search methods such as ``findall`` and ``getElementsByTagName``
+    do not match *self*, so the position must be incremented when the root
+    element is already the one described at that level of the path.
+    Namespace prefixes (Clark notation ``{uri}localname``) are stripped before
+    the comparison.
+
+    Args:
+        tree (AnyElementTree): The root element to inspect.
+        pos (int): Current position in *tags*.
+        *tags (str): Ordered tag names derived from the XPath expression.
+
+    Returns:
+        int: ``pos + 1`` if the local tag of *tree* equals ``tags[pos]``,
+            otherwise *pos* unchanged.
+
+    Examples:
+        >>> from xml.etree.ElementTree import fromstring
+        >>> rss = fromstring('<rss/>')
+        >>> verify_pos(rss, 0, 'rss', 'channel', 'item')
+        1
+        >>> verify_pos(rss, 1, 'rss', 'channel', 'item')
+        1
+        >>> channel = fromstring('<channel/>')
+        >>> verify_pos(channel, 1, 'rss', 'channel', 'item')
+        2
+        >>> ns_rss = fromstring('<rss xmlns="http://purl.org/rss/1.0/"/>')
+        >>> verify_pos(ns_rss, 0, 'rss', 'channel')
+        1
+
+    """
+    tag = getattr(tree, "tag", None) or ""
+
+    if not isinstance(tag, str):
+        tag = str(tag)
+
+    tree_local = tag.split("}")[-1] if "}" in tag else tag
+
+    if tags and pos < len(tags) and tree_local == tags[pos]:
+        pos += 1
+
+    return pos
 
 
 def xpath(
     tree: AnyElementTree,
     path="/",
-    pos: Optional[int] = None,
+    pos: int | None = None,
     namespace: str | None = None,
     ns_prefix="ns",
 ) -> Iterator[AnyElement]:
-    if pos is None:
+    """
+    Yields elements matching *path* from *tree* across multiple XML backends.
+
+    Three backends are tried in order:
+
+    1. **lxml** — ``tree.xpath(...)`` with an optional namespace mapping.
+    2. **ElementTree** — ``tree.findall(".//...")`` (stdlib fallback).
+
+    When *pos* is ``None`` (the default) the function calls
+    :func:`verify_pos` to detect whether *tree* is already the element at
+    the first level of *path*, incrementing *pos* automatically so
+    descendant searches start at the correct level.
+
+    Args:
+        tree (AnyElementTree): The root element to search.
+        path (str): An XPath-like expression. A leading ``/`` indicates an
+            absolute path (sets initial *pos* to 1). Defaults to ``"/"``.
+        pos (int | None): Starting index into the tag list. ``None`` triggers
+            automatic detection via :func:`verify_pos`.
+        namespace (str | None): Namespace URI for prefixed searches.
+            Auto-detected from *tree* when ``None``.
+        ns_prefix (str): Prefix token used in namespace-qualified path
+            segments. Defaults to ``"ns"``.
+
+    Yields:
+        AnyElement: Each matched element.
+
+    Examples:
+        >>> from xml.etree.ElementTree import fromstring
+        >>> xml = '<rss><channel><item>a</item><item>b</item></channel></rss>'
+        >>> tree = fromstring(xml)
+
+        Absolute path from the rss root:
+
+        >>> [el.text for el in xpath(tree, '/rss/channel/item')]
+        ['a', 'b']
+
+        Relative path when tree is the channel element:
+
+        >>> channel = tree.find('channel')
+        >>> [el.text for el in xpath(channel, 'item')]
+        ['a', 'b']
+
+        Relative path when tree IS the top-level tag in the path:
+
+        >>> [el.text for el in xpath(tree, 'rss/channel/item')]
+        ['a', 'b']
+
+        With a namespace:
+
+        >>> NS = 'http://purl.org/rss/1.0/'
+        >>> xml_ns = f'<rss xmlns="{NS}"><channel><item>x</item></channel></rss>'
+        >>> tree_ns = fromstring(xml_ns)
+        >>> [el.text for el in xpath(tree_ns, '/rss/channel/item')]
+        ['x']
+
+    """
+    namespace = namespace or extract_namespace(tree) or ""
+    auto_pos = pos is None
+
+    if auto_pos:
         pos = 1 if path.startswith("/") else 0
 
-    namespace = namespace or extract_namespace(tree)
     stripped = path.strip("/")
     tags = stripped.split("/") if stripped else []
+
+    if auto_pos:
+        pos = verify_pos(tree, pos, *tags)
+
     ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
+    namespaces = {ns_prefix: namespace}
 
     try:
         if namespace:
-            elements = tree.xpath(ns_path, namespaces={ns_prefix: namespace})
+            elements = tree.xpath(  # type: ignore[attr-defined]
+                ns_path, namespaces=namespaces
+            )
         else:
-            elements = tree.xpath(path)
+            elements = tree.xpath(path)  # type: ignore[attr-defined]
     except AttributeError:
-        try:
-            # TODO: consider replacing with twisted.words.xish.xpath
-            elements = tree.getElementsByTagName(tags[pos]) if tags else [tree]
-        except IndexError:
-            yield tree
-        except AttributeError:
-            if namespace:
-                namespaces = {ns_prefix: namespace}
-                elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
-            else:
-                elements = tree.findall(".//" + "/".join(tags[pos:]))
-
-            yield from elements
+        if namespace:
+            elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
         else:
-            for element in elements:
-                yield from xpath(element, path, pos + 1)
+            elements = tree.findall(".//" + "/".join(tags[pos:]))
+
+        yield from elements
     else:
         yield from elements
 
 
 @overload
 def xml2etree(  # noqa: E704
-    f: str | BytesIO | StringIO | TextIOBase, xml: Literal[True], html5: bool = ...
+    f: str | BytesIO | StringIO | NamedTextIOWrapper | TextIOBase,
+    xml: Literal[True],
+    html5: bool = ...,
 ) -> AnyElementTree: ...
-@overload
+@overload  # noqa: E302
 def xml2etree(  # noqa: E704
-    f: str | BytesIO | StringIO | TextIOBase, xml: Literal[False], html5: Literal[True]
+    f: str | BytesIO | StringIO | NamedTextIOWrapper | TextIOBase,
+    xml: Literal[False],
+    html5: Literal[True],
 ) -> AnyElementTree: ...
-@overload
+@overload  # noqa: E302
 def xml2etree(  # noqa: E704
-    f: str | BytesIO | StringIO | TextIOBase,
+    f: str | BytesIO | StringIO | NamedTextIOWrapper | TextIOBase,
     xml: Literal[False],
     html5: Literal[False] = ...,
 ) -> "nativeElementTree": ...
-def xml2etree(
-    f: str | BytesIO | StringIO | TextIOBase,
+def xml2etree(  # noqa: E302
+    f: str | BytesIO | StringIO | NamedTextIOWrapper | TextIOBase,
     xml: bool = True,
     html5: bool = False,
 ) -> AnyElementTree | None:
     if xml:
-        element_tree = etree.parse(f)
+        element_tree = etree.parse(f)  # noqa: S314
     elif html5 and html5parser:
         element_tree = html5parser.parse(f)
     elif xml_parser == "lxml":
@@ -318,20 +467,33 @@ def etree2dict(element: AnyElement) -> Stringy:
 
 
 def any2dict(
-    f: StringIO | TextIOBase | Stringy,
+    content: NamedTextIOWrapper
+    | TextIOBase
+    | Stringy
+    | IntermediateValue
+    | DotDict
+    | ComplexSequence,
     ext: str | None = "xml",
     html5=False,
     path: str | None = None,
-) -> Iterator[Stringy]:
+) -> Iterator[
+    Stringy | float | ComplexMapping | StrictDate | Sequence[ComplexArg]
+]:
     path = path or ""
 
-    if isinstance(f, (int, Mapping, struct_time)):
-        yield f
-    elif isinstance(f, Sequence) and not isinstance(f, str):
-        yield from f
+    if content is None:
+        pass
+    elif isinstance(content, DotDict):
+        yield content.asdict()
+    elif isinstance(content, (dict, CaseInsensitiveDict, Mapping)):
+        yield content
+    elif isinstance(content, list):
+        for item in content:
+            if item is not None:
+                yield item
     elif ext and ext in {"xml", "html"}:
         xml = ext == "xml"
-        root = xml2etree(f, xml, html5).getroot()
+        root = xml2etree(content, xml, html5).getroot()
 
         if path:
             replaced = "/".join(path.split("."))
@@ -342,45 +504,46 @@ def any2dict(
         else:
             yield etree2dict(root)
     elif ext == "json":
-        if isinstance(f, str):
+        if isinstance(content, str):
             try:
-                json = loads(f)
+                json = loads(content)
             except JSONDecodeError as e:
                 logger.error(e)
             else:
                 value = DotDict(json).get(path, "")
                 yield from any2dict(value, ext=None)
         else:
-            objects = items(f, f"{path}.item")
+            objects = items(content, f"{path}.item")
 
             try:
                 yield next(objects)
             except IncompleteJSONError as e:
                 logger.error(e)
-                f.seek(0)
-                objects = items(f, path)
+                content.seek(0)
+                objects = items(content, path)
 
                 try:
                     yield next(objects)
                 except IncompleteJSONError as e:
                     logger.error(e)
                     logger.warning("Loading file into memory")
-                    f.seek(0)
-                    yield from any2dict(f.read(), ext="json", path=path)
+                    content.seek(0)
+                    yield from any2dict(content.read(), ext="json", path=path)
                 else:
                     yield from objects
             else:
                 yield from objects
     elif ext:
         raise TypeError(f"Invalid file type: '{ext}'")
-    elif isinstance(f, str):
-        yield f
+    elif isinstance(content, str):
+        yield {"content": content}
     else:
+        print(f"{content=}, {ext=}, {html5=}, {path=}")
         raise TypeError("No file type provided!")
 
 
 def parse_conf(
-    item: ItemArg | None = None, conf: BasicArg | None = None, **kwargs
+    item: ItemArg = None, conf: AnyModuleConf | ConfValues | None = None, **kwargs
 ) -> ComplexArg:
     """
     Examples
@@ -416,24 +579,24 @@ def parse_conf(
     kw = Objectify(kwargs)
     parsed = kw.default
 
-    if isinstance(item, Mapping):
-        dd_item = DotDict(item)
-    elif item:
-        dd_item = None
-    else:
-        dd_item = DotDict()
+    if is_dataclass(conf) and not isinstance(conf, type):
+        conf = asdict(conf)
 
     if isinstance(conf, Mapping):
         dd_conf = DotDict(conf)
 
-        if dd_item is not None and (subkey := dd_conf.get("subkey")):
+        if subkey := dd_conf.get("subkey"):
+            dd_item = DotDict(item) if isinstance(item, Mapping) else DotDict()
             parsed = dd_item.get(cast(str, subkey), **kwargs)
         elif is_sentinal(dd_conf):
             parsed = dd_conf.get(**kwargs)
         elif is_type_value(dd_conf):
             parsed = cast(DotDict, dd_conf).get()
         else:
-            parsed = {k.lower(): parse_conf(item, v, **kwargs) for k, v in conf.items()}
+            parsed = {
+                k.lower(): parse_conf(item, cast(ConfValues, v), **kwargs)
+                for k, v in conf.items()
+            }
     elif isinstance(conf, (str, int)):
         parsed = conf
     elif isinstance(conf, Sequence):
@@ -442,15 +605,7 @@ def parse_conf(
     return parsed
 
 
-def get_skip(
-    item: ItemArg,
-    skip_if: Callable[[ItemArg], bool]
-    | Skip
-    | Iterable[Callable[[ItemArg], bool]]
-    | Iterable[Skip]
-    | None = None,
-    **_,
-) -> bool:
+def get_skip(item: ItemArg, skip_if: SkipIf | None = None, **_) -> bool:
     """
     Determine whether or not to skip an item
 
@@ -484,7 +639,9 @@ def get_skip(
     item = item or {}
     skip = False
 
-    for _skip in listize(skip_if):
+    for __skip in listize(skip_if):
+        _skip = cast(SkipFunc | Skip, __skip)
+
         if callable(_skip):
             skip = _skip(item)
         elif isinstance(item, Mapping):
@@ -505,7 +662,7 @@ def get_skip(
     return skip
 
 
-def get_field(item: ItemArg | None = None, field="", **kwargs) -> ComplexArg:
+def get_field(item: ItemArg = None, field="", **kwargs) -> ComplexArg:
     value = item
 
     if field and isinstance(item, Mapping):

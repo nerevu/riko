@@ -1,14 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.pprint2
-~~~~~~~~~~~~
 Provides function pretty printing
 """
 
 from collections.abc import Mapping, Sequence
 from functools import total_ordering
 
-from riko.types.general import BasicArg
+from riko.types.values import BasicArg
 
 
 def cmp(a, b):

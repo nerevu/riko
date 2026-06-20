@@ -5,7 +5,6 @@ from functools import partial
 from pprint import pprint
 
 from riko import get_path
-from riko.bado import coroutine, return_value
 from riko.collections import AsyncPipe, SyncPipe
 
 BR = {"find": "<br>"}
@@ -535,11 +534,11 @@ def parse_freelancer(source):
 def pipe(test=False, parallel=False, threads=False):
     kwargs = {"parallel": parallel, "threads": threads}
 
-    Pipe = partial(SyncPipe, "fetchdata", **kwargs)
-    odesk_source = Pipe(conf=odesk_conf)
-    guru_source = Pipe(conf=guru_conf)
-    freelancer_source = Pipe(conf=freelancer_conf)
-    elance_source = Pipe(conf=elance_conf)
+    pipe = partial(SyncPipe, "fetchdata", **kwargs)
+    odesk_source = pipe(conf=odesk_conf)
+    guru_source = pipe(conf=guru_conf)
+    freelancer_source = pipe(conf=freelancer_conf)
+    elance_source = pipe(conf=elance_conf)
 
     odesk_pipe = parse_odesk(odesk_source)  # 10
     guru_stream = parse_guru(guru_source)  # 75
@@ -547,26 +546,24 @@ def pipe(test=False, parallel=False, threads=False):
     elance_stream = parse_elance(elance_source)  # 75
 
     others = [guru_stream, freelancer_stream, elance_stream]
-    return odesk_pipe.union(others=others).list
-    # return elance_stream.list
+    return list(odesk_pipe.union(others=others))
 
 
-@coroutine
-def async_pipe(reactor, test=None):
-    Pipe = partial(AsyncPipe, "fetchdata")
-    odesk_source = Pipe(conf=odesk_conf)
-    guru_source = Pipe(conf=guru_conf)
-    freelancer_source = Pipe(conf=freelancer_conf)
-    elance_source = Pipe(conf=elance_conf)
+async def async_pipe(reactor, test=None):
+    pipe = partial(AsyncPipe, "fetchdata")
+    odesk_source = pipe(conf=odesk_conf)
+    guru_source = pipe(conf=guru_conf)
+    freelancer_source = pipe(conf=freelancer_conf)
+    elance_source = pipe(conf=elance_conf)
 
-    odesk_pipe = yield parse_odesk(odesk_source)
-    guru_stream = yield parse_guru(guru_source)
-    elance_stream = yield parse_elance(elance_source)
-    freelancer_stream = yield parse_freelancer(freelancer_source)
+    odesk_pipe = await parse_odesk(odesk_source)
+    guru_stream = await parse_guru(guru_source)
+    elance_stream = await parse_elance(elance_source)
+    freelancer_stream = await parse_freelancer(freelancer_source)
 
     others = [guru_stream, freelancer_stream, elance_stream]
-    stream = odesk_pipe.union(others=others).list
-    return_value(stream)
+    stream = odesk_pipe.union(others=others)
+    return list(stream)
 
 
 if __name__ == "__main__":

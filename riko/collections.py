@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.collections
-~~~~~~~~~~~~~~~~
 Provides functions for creating (a)synchronous riko flows and streams
 
 Examples:
@@ -15,32 +13,28 @@ Examples:
         >>> str_kwargs = {'field': 'description', 'emit': True}
         >>> sort_conf = {'rule': {'field': 'title'}}
         >>>
-        >>> (SyncPipe('fetchdata', conf=fconf)
+        >>> list(SyncPipe('fetchdata', conf=fconf)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
-        ...     .list
         ... )
         [169]
-        >>> (SyncPipe('fetchdata', conf=fconf)
+        >>> list(SyncPipe('fetchdata', conf=fconf)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count(emit=False)
-        ...     .list
         ... )
         [{'count': 169}]
-        >>> (SyncPipe('fetchdata', conf=fconf, parallel=True)
+        >>> list(SyncPipe('fetchdata', conf=fconf, parallel=True)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
-        ...     .list
         ... )
         [169]
-        >>> (SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
+        >>> list(SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
-        ...     .list
         ... )
         [169]
         >>> fconf['type'] = 'fetchdata'
@@ -50,15 +44,13 @@ Examples:
         'Donations'
         >>> len(list(stream))
         55
-        >>> len(SyncCollection(sources).list)
-        56
-        >>> len(SyncCollection(sources, parallel=True).list)
+        >>> len(list(SyncCollection(sources, parallel=True)))
         56
 
     async usage::
 
         >>> from riko import get_path
-        >>> from riko.bado import coroutine, react, _issync
+        >>> from riko.bado import react, _issync
         >>> from riko.bado.mock import FakeReactor
         >>> from riko.collections import AsyncPipe, AsyncCollection
         >>>
@@ -67,16 +59,14 @@ Examples:
         >>> str_kwargs = {'field': 'description', 'emit': True}
         >>> sort_conf = {'rule': {'field': 'title'}}
         >>>
-        >>> @coroutine
-        ... def run(reactor):
-        ...     d = yield (AsyncPipe('fetchdata', conf=fconf)
+        >>> async def run(reactor):
+        ...     d = await (AsyncPipe('fetchdata', conf=fconf)
         ...         .sort(conf=sort_conf)
         ...         .tokenizer(conf=str_conf, **str_kwargs)
         ...         .count()
-        ...         .alist
         ...     )
         ...
-        ...     print(d)
+        ...     print(list(d))
         ...
         >>> if _issync:
         ...     [169]
@@ -86,11 +76,11 @@ Examples:
         ...     except SystemExit:
         ...         pass
         [169]
-        >>> @coroutine
-        ... def run(reactor):
+        >>> async def run(reactor):
         ...     fconf['type'] = 'fetchdata'
         ...     sources = [{'url': get_path('feed.xml')}, fconf]
-        ...     d = yield AsyncCollection(sources).alist
+        ...     s = await AsyncCollection(sources)
+        ...     d = list(s)
         ...     print(d[0]['title'])
         ...     print(len(d))
         ...
@@ -107,7 +97,16 @@ Examples:
 
 """
 
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
 from functools import partial
 from importlib import import_module
 from io import StringIO
@@ -116,54 +115,54 @@ from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import length_hint
-from typing import (
-    TYPE_CHECKING,
-    Literal,
-    TypeAlias,
-    Union,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, Union, cast, overload
 
 import pygogo as gogo
-from twisted.internet.defer import Deferred
 
 from riko import listize
-from riko.types.modules import ConfArg
+from riko.types.modules import AnyModuleConf
 
 try:
-    from csv2ofx.mappings.default import mapping
     from csv2ofx.ofx import OFX
-    from csv2ofx.qif import QIF
-    from csv2ofx.utils import gen_data
 except ModuleNotFoundError:
     mapping = OFX = QIF = gen_data = None
+else:
+    from csv2ofx.mappings.default import mapping
+    from csv2ofx.qif import QIF
+    from csv2ofx.utils import gen_data
 
 from meza import convert as cv
 from meza import io
 from meza.process import merge
 
 from riko import Context
-from riko.bado import coroutine, return_value
-from riko.bado import itertools as ait
+from riko.bado.itertools import async_map
 from riko.bado.util import async_return
 from riko.types.general import (
-    BasicDict,
-    BasicMapping,
-    BasicValue,
-    ComplexArg,
+    AsyncPipeParser,
     ConversionFunc,
     ItemArg,
     Items,
-    SyncPipeline,
+    Stream,
+    SyncPipeParser,
 )
-from riko.utils import StreamState, send
+from riko.types.values import (
+    BasicDict,
+    BasicMapping,
+    BasicSequence,
+    BasicValue,
+    ComplexArg,
+    StreamState,
+)
+from riko.utils import send
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
     from multiprocessing.pool import Pool as CPUPoolType
 
 AnyPool: TypeAlias = Union["ThreadPoolType", "CPUPoolType"]
+VT_call: TypeAlias = BasicValue | float | BasicMapping | Callable | BasicSequence
+VT_init: TypeAlias = VT_call | Context | AnyModuleConf
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -202,28 +201,32 @@ CONVERSION_FUNCS: dict[str, ConversionFunc] = {
 
 
 @overload
-def export(items) -> list[ItemArg]: ...
+def export(items) -> list[ItemArg]: ...  # noqa: E704
 @overload
-def export(items, **kwargs) -> list[ItemArg]: ...
-@overload
-def export(items, _type: Literal["list"], **kwargs) -> list[ItemArg]: ...
-@overload
-def export(items, _type: Literal["tuple"], **kwargs) -> tuple[ItemArg]: ...
-@overload
-def export(
+def export(items, **kwargs) -> list[ItemArg]: ...  # noqa: E704
+@overload  # noqa: E302
+def export(  # noqa: E704
+    items, _type: Literal["list"], **kwargs
+) -> list[ItemArg]: ...
+@overload  # noqa: E302
+def export(  # noqa: E704
+    items, _type: Literal["tuple"], **kwargs
+) -> tuple[ItemArg]: ...
+@overload  # noqa: E302
+def export(  # noqa: E704
     items, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
 ) -> int: ...
-@overload
-def export(
+@overload  # noqa: E302
+def export(  # noqa: E704
     items, _type: Literal["csv", "json", "geojson"], f: None = ..., **kwargs
 ) -> StringIO: ...
-@overload
-def export(
+@overload  # noqa: E302
+def export(  # noqa: E704
     items, _type: str = ..., **kwargs
-) -> StringIO | Iterable[ItemArg] | None: ...
-def export(
-    items: Items, _type: str = "list", f: str | None = None, **kwargs
-) -> int | StringIO | Iterable[ItemArg] | None:
+) -> StringIO | Items | None: ...
+def export(  # noqa: E302
+    items: Stream, _type: str = "list", f: str | None = None, **kwargs
+) -> int | StringIO | Items | None:
     result = None
 
     if converter := CONVERSION_FUNCS.get(_type):
@@ -261,20 +264,23 @@ class PyPipe:
         parallel=False,
         inputs: BasicDict | None = None,
         context: Context | None = None,
-        **kwargs: BasicValue | BasicMapping | Context,
+        conf: AnyModuleConf | None = None,
+        **kwargs: VT_init,
     ):
         self.name = name
         self.parallel = parallel
         self.inputs = inputs or {}
         self.verbose = kwargs.get("verbose")
         self.test = kwargs.get("test")
+        self.conf = conf or {}
         self.context = context or Context(**kwargs)
         self.describe_input = self.context.describe_input
         self.describe_dependencies = self.context.describe_dependencies
         self.kwargs = kwargs
-        self.kwargs.update({"inputs": self.inputs, "context": self.context})
+        updates = {"conf": self.conf, "inputs": self.inputs, "context": self.context}
+        self.kwargs.update(updates)
 
-    def __call__(self, **kwargs: BasicValue | BasicMapping):
+    def __call__(self, **kwargs: VT_call):
         self.kwargs.update(kwargs)
         return self
 
@@ -285,6 +291,10 @@ class SyncPipe(PyPipe):
     def __init__(
         self,
         name: str | None = None,
+        parallel: bool = False,
+        inputs: BasicDict | None = None,
+        context: Context | None = None,
+        conf: AnyModuleConf | None = None,
         source: Items | None = None,
         workers: int | None = None,
         chunksize: int | None = None,
@@ -292,20 +302,23 @@ class SyncPipe(PyPipe):
         reuse_pool: bool | None = True,
         pool: AnyPool | None = None,
         ordered: bool | None = False,
-        **kwargs: BasicValue | BasicMapping | Context,
+        **kwargs: VT_init,
     ):
-        super().__init__(name, **kwargs)  # pyright: ignore[reportArgumentType]
+        super().__init__(
+            name, parallel=parallel, inputs=inputs, context=context, conf=conf, **kwargs
+        )
         self.source = source
         self.threads = threads
         self.reuse_pool = reuse_pool
-        self._iter: Items | None = None
-        self.map: Callable[..., Iterator[Items]]
+        self._iter: Stream | None = None
+        self.map: Callable[..., Iterator[Stream]]
         self.pool = pool
 
         if self.name:
-            self.pipe: SyncPipeline = import_module(f"riko.modules.{self.name}").pipe
-            self.is_processor = bool(self.pipe.type == "processor")
-            self.pollable: bool = self.pipe.pollable
+            self.pipe: SyncPipeParser = import_module(f"riko.modules.{self.name}").pipe
+            pipe_type = getattr(self.pipe, "type")  # noqa: B009
+            self.is_processor = bool(pipe_type == "processor")
+            self.pollable: bool = getattr(self.pipe, "pollable")  # noqa: B009
             self.mapify = self.is_processor and self.source is not None
             self.parallelize: bool = self.parallel and self.mapify
         else:
@@ -326,41 +339,41 @@ class SyncPipe(PyPipe):
             self.map = map
 
     def __getattr__(self, name: str):
-        if name in {"keys", "values", "items", "get"}:
-            raise AttributeError
-        else:
-            kwargs = {
-                "parallel": self.parallel,
-                "threads": self.threads,
-                "pool": self.pool if self.reuse_pool else None,
-                "reuse_pool": self.reuse_pool,
-                "workers": self.workers,
-            }
+        if name.startswith("_") or name in {"keys", "values", "items", "get"}:
+            raise AttributeError(name)
 
-            attr = SyncPipe(name, source=self, **kwargs)
+        kwargs = {
+            "parallel": self.parallel,
+            "threads": self.threads,
+            "pool": self.pool if self.reuse_pool else None,
+            "reuse_pool": self.reuse_pool,
+            "workers": self.workers,
+        }
 
-        return attr
+        return SyncPipe(name, source=self, **kwargs)
 
-    def __iter__(self) -> Items:
+    def __iter__(self) -> Stream:
         if self._iter is None:
-            self._iter = self.fetch()
+            self._iter = self._stream()
 
         return self._iter
 
     def __next__(self) -> ItemArg:
         if self._iter is None:
-            self._iter = self.fetch()
+            self._iter = self._stream()
 
         try:
             return next(self._iter)
         except StopIteration:
+            self._iter = None
+
             if self.name == "send":
                 others = cast(list[str], self.kwargs.get("others", []))
                 [send(target, {"state": StreamState.DONE}) for target in others]
 
             raise
 
-    def fetch(self) -> Items:
+    def _stream(self) -> Stream:
         pipeline = partial(self.pipe, **self.kwargs)
 
         if self.parallelize and self.source:
@@ -377,24 +390,23 @@ class SyncPipe(PyPipe):
             self.pool.join()
 
         self._mapped = mapped
-        pipeline = partial(self.pipe, **self.kwargs)
-        yield from (
-            chain.from_iterable(self._mapped) if self._mapped else pipeline(self.source)
-        )
+
+        if self._mapped:
+            yield from chain.from_iterable(self._mapped)
+        else:
+            yield from pipeline(self.source)
 
     @overload
-    def export(self) -> list[ItemArg]: ...
-    @overload
-    def export(
+    def export(self) -> list[ItemArg]: ...  # noqa: E704
+    @overload  # noqa: E301
+    def export(  # noqa: E704
         self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
     ) -> int: ...
-    def export(self, *args, **kwargs) -> int | StringIO | Iterable[ItemArg] | None:
-        return export(self, *args, **kwargs)
-
-    @property
-    def list(self) -> list[ItemArg]:
+    def export(  # noqa: E301
+        self, *args, **kwargs
+    ) -> int | StringIO | Items | None:
         try:
-            result = self.export()
+            result = export(self, *args, **kwargs)
         except AttributeError as e:
             # Reraise as TypeError to avoid confusion with missing SyncPipe attributes
             raise TypeError(f"Erred while exporting: {e}") from e
@@ -408,10 +420,10 @@ class PyCollection:
     def __init__(
         self,
         sources: Iterable[BasicMapping],
-        conf: ConfArg | None = None,
+        conf: AnyModuleConf | None = None,
         parallel=False,
         workers=None,
-        **kwargs,
+        **kwargs: VT_init,
     ):
         # sources_1 = [{"url": "site.com/a"}, {"url": "site.com/b"}]
         # sources_2 = [
@@ -419,7 +431,7 @@ class PyCollection:
         #     {"url": "site.com/d", "type": "xpathfetchpage"},
         # ]
         self.parallel = parallel
-        self.conf = conf or cast(ConfArg, {})
+        self.conf = conf or cast(AnyModuleConf, {})
         self.sources = sources
         self.length = length_hint(self.sources)
         self.workers = workers or get_worker_cnt(self.length)
@@ -428,11 +440,11 @@ class PyCollection:
 class SyncCollection(PyCollection):
     """A synchronous PyCollection object"""
 
-    def __init__(self, *args, threads: bool | None = True, **kwargs):
+    def __init__(self, *args, threads: bool | None = True, **kwargs: VT_init):
         super().__init__(*args, **kwargs)
         self.threads = threads
-        self._iter: Items | None = None
-        self.map: Callable[..., Iterator[Iterator[Items]]]
+        self._iter: Stream | None = None
+        self.map: Callable[..., Iterator[Stream]]
 
         if self.parallel:
             self.chunksize = get_chunksize(self.length, self.workers)
@@ -443,19 +455,19 @@ class SyncCollection(PyCollection):
         else:
             self.map = map
 
-    def __iter__(self) -> Items:
+    def __iter__(self) -> Stream:
         if self._iter is None:
-            self._iter = self.fetch()
+            self._iter = self._stream()
 
         return self._iter
 
     def __next__(self) -> ItemArg:
         if self._iter is None:
-            self._iter = self.fetch()
+            self._iter = self._stream()
 
         return next(self._iter)
 
-    def fetch(self) -> Items:
+    def _stream(self) -> Stream:
         """Fetch all source urls"""
         zargs = zip(self.sources, repeat(self.conf))
 
@@ -464,31 +476,22 @@ class SyncCollection(PyCollection):
         else:
             mapped = self.map(fetch_source, zargs)
 
-        for items in chain.from_iterable(mapped):
-            yield from items
+        yield from chain.from_iterable(mapped)
 
     def pipe(self, **kwargs):
         """Return a SyncPipe primed with the source feed"""
-        return SyncPipe(source=self.fetch(), **kwargs)
+        return SyncPipe(source=self._stream(), **kwargs)
 
     @overload
-    def export(self) -> list[ItemArg]: ...
-    @overload
-    def export(
+    def export(self) -> list[ItemArg]: ...  # noqa: E704
+    @overload  # noqa: E301
+    def export(  # noqa: E704
         self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
     ) -> int: ...
-    def export(self, *args, **kwargs) -> int | StringIO | Iterable[ItemArg] | None:
+    def export(  # noqa: E301
+        self, *args, **kwargs
+    ) -> int | StringIO | Items | None:
         return export(self, *args, **kwargs)
-
-    @property
-    def list(self):
-        try:
-            result = self.export()
-        except AttributeError as e:
-            # Reraise as TypeError to avoid confusion with missing SyncCollection attributes
-            raise TypeError(f"Erred while exporting: {e}") from e
-
-        return result
 
 
 class AsyncPipe(PyPipe):
@@ -497,103 +500,128 @@ class AsyncPipe(PyPipe):
     def __init__(
         self,
         name: str | None = None,
-        source: Deferred[Items] | None = None,
+        parallel: bool = False,
+        inputs: BasicDict | None = None,
+        context: Context | None = None,
+        conf: AnyModuleConf | None = None,
+        source: Awaitable[Items] | None = None,
         connections=16,
-        **kwargs: BasicValue | BasicMapping | Context,
+        **kwargs: VT_init,
     ):
-        super().__init__(name, **kwargs)  # pyright: ignore[reportArgumentType]
+        super().__init__(
+            name, parallel=parallel, inputs=inputs, context=context, conf=conf, **kwargs
+        )
         self.source = source
         self.connections = connections
-        self._iter: Deferred[Items] | None = None
+        self._aiter: AsyncIterator[ItemArg] | None = None
 
         if self.name:
             self.module = import_module(f"riko.modules.{self.name}")
-            self.async_pipe = self.module.async_pipe
-            self.is_processor = self.async_pipe.type == "processor"
-            self.mapify = self.is_processor and self.source
+            self.async_pipe: AsyncPipeParser = self.module.async_pipe
+            pipe_type = getattr(self.async_pipe, "type")  # noqa: B009
+            self.is_processor = bool(pipe_type == "processor")
+            self.mapify = self.is_processor
         else:
             self.async_pipe = lambda source, **kw: async_return(source)
             self.mapify = False
 
+    async def _await_stream(self) -> Stream:
+        """Converts the AsyncIterator stream to an Awaitable"""
+        return iter([item async for item in self._stream()])
+
     def __getattr__(self, name):
-        if name in {}:
-            raise AttributeError
-        else:
-            attr = AsyncPipe(name, source=self.afetch(), connections=self.connections)
+        if name.startswith("_"):
+            raise AttributeError(name)
 
-        return attr
+        kwargs = {"source": self._await_stream(), "connections": self.connections}
+        return AsyncPipe(name, **kwargs)
 
-    def __iter__(self) -> Deferred[Items]:
-        if self._iter is None:
-            self._iter = self.afetch()
+    def __await__(self) -> Generator[Any, None, Stream]:
+        return self._await_stream().__await__()
 
-        return self._iter
+    def __aiter__(self) -> AsyncIterator[ItemArg]:
+        if self._aiter is None:
+            self._aiter = self._stream()
 
-    @coroutine  # pyright: ignore[reportArgumentType]
-    def afetch(self) -> Generator[Deferred[Items], Items, None]:
-        if self.source:
-            source = yield self.source
-        else:
-            source = None
+        return self._aiter
 
+    async def __anext__(self) -> ItemArg:
+        if self._aiter is None:
+            self._aiter = self._stream()
+
+        try:
+            return await anext(self._aiter)
+        except StopAsyncIteration:
+            self._aiter = None
+            raise
+
+    async def _stream(self) -> AsyncIterator[ItemArg]:
+        source = await self.source if self.source else None
         async_pipeline = partial(self.async_pipe, **self.kwargs)
 
-        if self.mapify:
-            args = (async_pipeline, source, self.connections)
-            mapped = yield ait.async_map(*args)  # pyright: ignore[reportCallIssue]
-            output = chain.from_iterable(mapped)
+        if self.mapify and source:
+            mapped = await async_map(async_pipeline, source, self.connections)
+
+            for stream in mapped:
+                for item in stream:
+                    yield item
         else:
-            output = yield async_pipeline(source)
+            result = await async_pipeline(source)
 
-        return_value(output)
-
-    @property  # pyright: ignore[reportArgumentType]
-    @coroutine  # pyright: ignore[reportArgumentType]
-    def alist(self) -> Generator[Deferred[list[ItemArg]], list[ItemArg], None]:
-        output = yield self.afetch()
-        return_value(list(output))
+            for item in result:
+                yield item
 
 
 class AsyncCollection(PyCollection):
     """An asynchronous PyCollection object"""
 
-    def __init__(self, sources, connections=16, **kwargs):
-        super().__init__(sources, **kwargs)
+    def __init__(
+        self,
+        sources,
+        connections=16,
+        conf: AnyModuleConf | None = None,
+        parallel: bool = False,
+        **kwargs: VT_init,
+    ):
+        super().__init__(sources, conf=conf, parallel=parallel, **kwargs)
         self.connections = connections
-        self._iter: Deferred[Items] | None = None
+        self._aiter: AsyncIterator[ItemArg] | None = None
 
-    @coroutine
-    def __iter__(self) -> Items:
-        if self._iter is None:
-            self._iter = yield self.afetch()
+    async def _await_stream(self) -> Stream:
+        """Converts the AsyncIterator stream to an Awaitable"""
+        return iter([item async for item in self._stream()])
 
-        return_value(self._iter)
+    def __await__(self) -> Generator[Any, None, Stream]:
+        return self._await_stream().__await__()
 
-    @coroutine
-    def __next__(self) -> ItemArg:
-        if self._iter is None:
-            self._iter = yield self.afetch()
+    def __aiter__(self) -> AsyncIterator[ItemArg]:
+        if self._aiter is None:
+            self._aiter = self._stream()
 
-        return_value(next(self._iter))
+        return self._aiter
 
-    # pyright: ignore[reportArgumentType]
-    @coroutine
-    def afetch(self):
+    async def __anext__(self) -> ItemArg:
+        if self._aiter is None:
+            self._aiter = self._stream()
+
+        try:
+            return await anext(self._aiter)
+        except StopAsyncIteration:
+            self._aiter = None
+            raise
+
+    async def _stream(self) -> AsyncIterator[ItemArg]:
         """Fetch all source urls"""
-        zargs = zip(self.sources, repeat(self.conf))
-        mapped = yield ait.async_map(afetch_source, zargs, self.connections)  # pyright: ignore[reportCallIssue]
-        chained = chain.from_iterable(mapped)
-        return_value(chained)
+        zargs = iter(zip(self.sources, repeat(self.conf)))
+        mapped = await async_map(afetch_source, zargs, self.connections)
+
+        for stream in mapped:
+            for item in stream:
+                yield item
 
     def async_pipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""
-        return AsyncPipe(source=self.afetch(), **kwargs)
-
-    @property  # pyright: ignore[reportArgumentType]
-    @coroutine  # pyright: ignore[reportArgumentType]
-    def alist(self):
-        result = yield self.afetch()
-        return_value(list(result))
+        return AsyncPipe(source=self._await_stream(), **kwargs)
 
 
 def get_chunksize(length: int, workers: int) -> int:
@@ -606,7 +634,7 @@ def get_worker_cnt(length: int, threads: bool | None = True) -> int:
 
 
 def listpipe(
-    args: tuple[ItemArg, SyncPipeline],
+    args: tuple[ItemArg, SyncPipeParser],
     **kwargs: BasicValue,
     # Mapping[str, StreamState] doesn't work with pyright for some reason
 ) -> Sequence[Mapping[str, object] | ComplexArg]:
@@ -616,27 +644,19 @@ def listpipe(
 
 
 def fetch_source(
-    args: tuple[Mapping[str, str], ConfArg],
-    pipe: type[SyncPipe] | None = SyncPipe,
-) -> Iterator[Callable[..., SyncPipe]]:
-    source, conf = args
+    args: tuple[Mapping[str, str], AnyModuleConf], pipe: type[SyncPipe] = SyncPipe
+) -> Stream:
+    source, _conf = args
+    conf = merge([_conf, source])
     pipe_name = source.get("type", "fetch")
-    result = pipe(pipe_name, conf=merge([conf, source]))
-    return iter(listize(result))
+    primed_pipe = pipe(pipe_name, conf=cast(AnyModuleConf, conf))
+    return iter(primed_pipe)
 
 
-def afetch_source(
-    args: tuple[Mapping[str, str], ConfArg],
-    pipe: type[AsyncPipe] | None = AsyncPipe,
-) -> Iterable[Callable[..., AsyncPipe]]:
-    source, conf = args
-    pipe_name = source.get("type", "fetch")
-    result = pipe(pipe_name, conf=merge([conf, source]))
-    return result.alist
-
-
-@coroutine
-def alistpipe(args):
-    source, async_pipeline = args
-    output = yield async_pipeline(source)
-    return_value(list(output))
+async def afetch_source(
+    args: tuple[BasicMapping, AnyModuleConf], pipe: type[AsyncPipe] = AsyncPipe
+) -> Stream:
+    source, _conf = args
+    conf = merge([_conf, source])
+    pipe_name = str(source.get("type", "fetch"))
+    return await pipe(pipe_name, conf=cast(AnyModuleConf, conf))

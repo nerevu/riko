@@ -26,15 +26,17 @@ from collections.abc import Iterator
 import pygogo as gogo
 
 from riko import Objconf
-from riko.bado import coroutine, io, return_value
+from riko.bado import io
+from riko.cast import BasicCastType
 from riko.parsers import parse_rss
-from riko.types.general import BasicArg, BasicMapping, Extraction, ItemArg, Items
+from riko.types.general import Defaults, Extraction, ItemArg, Opts
+from riko.types.values import RSSEntry
 from riko.utils import gen_entries
 
 from . import processor
 
-OPTS = {"ftype": "none"}
-DEFAULTS = {"delay": 0}
+OPTS: Opts = {"ftype": BasicCastType.NONE}
+DEFAULTS: Defaults = {"delay": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 keys = {
     "author",
@@ -47,17 +49,15 @@ keys = {
 }
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[RSSEntry]:
     """
     Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -73,11 +73,10 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['title'])
+        >>> async def run(reactor):
         ...     objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
-        ...     d = async_parser(None, None, objconf, stream={})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(None, None, objconf)
+        ...     print(next(result)['title'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -87,26 +86,21 @@ def async_parser(
         Donations
 
     """
-    if skip:
-        stream: Items = kwargs["stream"]
-    else:
-        content: str = yield io.async_url_read(objconf.url, delay=objconf.delay)  # pyright: ignore[reportCallIssue]
-        parsed = parse_rss(content)
-        stream = gen_entries(parsed["entries"]) if parsed else iter([])
-
-    return_value(stream)
+    content: str = await io.async_url_read(objconf.url, delay=objconf.delay)
+    parsed = parse_rss(content)
+    stream = gen_entries(parsed["entries"]) if parsed else iter([])
+    return stream
 
 
 def parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> ItemArg | Iterator[BasicMapping]:
+    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[RSSEntry]:
     """
     Parses the pipe content
 
     Args:
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -121,22 +115,18 @@ def parser(
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
-        >>> result = parser(None, None, objconf, stream={})
+        >>> result = parser(None, None, objconf)
         >>> next(result)['title']
         'Donations'
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        parsed = parse_rss(**{k: objconf[k] for k in objconf})
-        stream = gen_entries(parsed["entries"]) if parsed else iter([])
-
+    parsed = parse_rss(**{k: objconf[k] for k in objconf})
+    stream = gen_entries(parsed["entries"]) if parsed else iter([])
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
     """
     A source that asynchronously fetches and parses a feed to return the
     entries.
@@ -162,10 +152,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(sorted(keys.intersection(next(x))))
-        ...     d = async_pipe(conf={'url': get_path('feed.xml')})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe(conf={'url': get_path('feed.xml')})
+        ...     print(sorted(keys.intersection(next(result))))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -175,11 +164,12 @@ def async_pipe(*args, **kwargs):
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
 
     """
-    return async_parser(*args, **kwargs)
+    parsed = await async_parser(*args, **kwargs)
+    return parsed
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Iterator[RSSEntry]:
     """
     A source that fetches and parses a feed to return the entries.
 

@@ -24,14 +24,20 @@ from collections import deque
 
 import pygogo as gogo
 
+from riko import Objconf
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, ItemArg, Opts, PipeTuples, Stream
+
 from . import operator
 
-OPTS = {"ptype": "int"}
-DEFAULTS = {}
+OPTS: Opts = {"ptype": BasicCastType.INT}
+DEFAULTS = Defaults({})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(
+    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
+) -> deque[ItemArg]:
     """
     Parses the pipe content
 
@@ -64,11 +70,11 @@ def parser(stream, objconf, tuples, **kwargs):
         {'x': 3}
 
     """
-    return deque(stream, objconf.count)
+    return deque(stream, int(objconf.count))
 
 
-@operator(isasync=True, **OPTS)
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> deque[ItemArg]:
     """
     An operator that asynchronously truncates a stream to the last N items.
 
@@ -88,11 +94,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     items = ({'x': x} for x in range(5))
-        ...     d = async_pipe(items, conf={'count': 2})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items, conf={'count': 2})
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -105,8 +110,8 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@operator(**OPTS)
-def pipe(*args, **kwargs):
+@operator(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs) -> deque[ItemArg]:
     """
     An operator that truncates a stream to the last N items.
 

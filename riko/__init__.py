@@ -37,25 +37,22 @@ from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Se
 from importlib.metadata import metadata, version
 from os import path as p
 from time import struct_time
-from typing import (
-    Any,
-    Literal,
-    TypeVar,
-    overload,
-)
+from typing import Any, Literal, TypeVar, overload
 from typing import cast as cast_type
 
 from meza import compat
 from meza.fntools import Objectify as _Objectify
 
-from riko.types.general import (
+from riko.types.general import SyncItemFunc
+from riko.types.modules import AnyConfRule, ObjconfParam
+from riko.types.values import (
     BasicArg,
+    BasicMapping,
+    BasicSequence,
     ComplexArg,
     ComplexMapping,
     IntermediateValue,
-    ObjconfParam,
-    ObjconfRule,
-    SyncItemFunc,
+    IntermediateValueType,
 )
 
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
@@ -84,6 +81,9 @@ __copyright__ = "Copyright 2015 Reuben Cummings"
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
 ENCODING = "utf-8"
+
+T = TypeVar("T", bound=ComplexArg)
+KT = TypeVar("KT")
 
 
 def get_path(name: str):
@@ -197,7 +197,7 @@ class Objconf(Objectify):
     base: str
     col_names: Sequence[str]
     combine: Literal["and", "or"]
-    count: str
+    count: str | int
     currency: str
     debug: bool
     default: BasicArg
@@ -229,11 +229,11 @@ class Objconf(Objectify):
     permit: bool
     precision: int
     prompt: str
-    rule: ObjconfRule | Sequence[ObjconfRule]
+    rule: AnyConfRule | Sequence[AnyConfRule]
     skip_rows: int
     sort: int
-    start: int
-    stop: str
+    start: str | int
+    stop: str | int
     strict: bool
     stringify: bool
     sum_key: str
@@ -241,13 +241,25 @@ class Objconf(Objectify):
     token: str
     token_key: str
     type: str
-    unique_key: str
+    uniq_key: str
     url: str
     wait: int
     xpath: str
 
 
-def objectify(
+@overload
+def objectify(  # noqa: E704
+    data: Mapping, func: SyncItemFunc | None = None, **defaults
+) -> Objectify: ...
+@overload  # noqa: E302
+def objectify(  # noqa: E704
+    data: Sequence, func: SyncItemFunc, **defaults
+) -> list[ComplexArg]: ...
+@overload  # noqa: E302
+def objectify(  # noqa: E704
+    data: ComplexArg, func: SyncItemFunc | None = None, **defaults
+) -> ComplexArg: ...
+def objectify(  # noqa: E302
     data: ComplexArg, func: SyncItemFunc | None = None, **defaults
 ) -> ComplexArg:
     if isinstance(data, Mapping):
@@ -266,27 +278,31 @@ def objectify(
 
 
 # TODO: move back to meza
-K = TypeVar("K")
-T = TypeVar("T")
-
-
 @overload
-def listize(value: Mapping[K, T]) -> list[Mapping[K, T]]: ...
+def listize(value: BasicMapping) -> list[BasicMapping]: ...  # noqa: E704
 @overload
-def listize(value: Callable[..., T]) -> list[Callable[..., T]]: ...
+def listize(value: Mapping[KT, T]) -> list[Mapping[KT, T]]: ...  # noqa: E704
 @overload
-def listize(value: IntermediateValue) -> list[IntermediateValue]: ...
+def listize(value: Callable[..., T]) -> list[Callable[..., T]]: ...  # noqa: E704
 @overload
-def listize(value: list[T]) -> list[T]: ...
+def listize(value: IntermediateValue) -> list[IntermediateValue]: ...  # noqa: E704
 @overload
-def listize(value: Sequence[T]) -> Sequence[T]: ...
+def listize(value: BasicSequence) -> BasicSequence: ...  # noqa: E704
 @overload
-def listize(value: Generator[T, None, None]) -> Generator[T, None, None]: ...
+def listize(value: list[T]) -> list[T]: ...  # noqa: E704
 @overload
-def listize(value: Iterator[T]) -> Iterator[T]: ...
+def listize(value: Sequence[T]) -> Sequence[T]: ...  # noqa: E704
+@overload  # noqa: E302
+def listize(  # noqa: E704
+    value: Generator[T, None, None],
+) -> Generator[T, None, None]: ...
 @overload
-def listize(value: Iterable[T]) -> Iterable[T]: ...
-def listize(
+def listize(value: Iterator[T]) -> Iterator[T]: ...  # noqa: E704
+@overload
+def listize(value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
+@overload
+def listize(value: Any) -> list[Any] | Iterable | Sequence: ...  # noqa: E704
+def listize(  # noqa: E302
     value: Any,
 ) -> list[Mapping | IntermediateValue | Callable] | Iterable | Sequence:
     """

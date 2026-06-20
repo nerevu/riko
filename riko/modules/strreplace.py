@@ -29,14 +29,20 @@ from functools import reduce
 import pygogo as gogo
 
 from riko import Objconf
-from riko.bado import coroutine, return_value
 from riko.bado import itertools as ait
-from riko.types.general import ItemArg, ObjconfRule
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Opts
+from riko.types.modules import StrReplaceConfRule
 
 from . import processor
 
-OPTS = {"ftype": "text", "listize": True, "field": "content", "extract": "rule"}
-DEFAULTS = {}
+OPTS: Opts = {
+    "ftype": BasicCastType.TEXT,
+    "listize": True,
+    "field": "content",
+    "extract": "rule",
+}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 OPS = {
@@ -50,17 +56,15 @@ def reducer(word, rule):
     return OPS.get(rule.param, OPS["every"])(word, rule)
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    word: str, rules: Sequence[StrReplaceConfRule], objconf: Objconf, **kwargs
+) -> str:
     """
     Asynchronously parses the pipe content
 
     Args:
         word (str): The string to transform
         rules (List[obj]): the parsed rules (Objectify instances).
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -75,12 +79,12 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
+        >>> async def run(reactor):
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         ...     rule = Objectify(conf['rule'])
-        ...     d = async_parser(item['content'], [rule], None, stream=item)
-        ...     return d.addCallbacks(print, logger.error)
+        ...     result = await async_parser(item['content'], [rule], None, stream=item)
+        ...     print(result)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -90,24 +94,19 @@ def async_parser(
         bye world
 
     """
-    if skip:
-        value = kwargs["stream"]
-    else:
-        value = yield ait.coop_reduce(reducer, rules, word)  # pyright: ignore[reportCallIssue]
-
-    return_value(value)
+    value = await ait.coop_reduce(reducer, rules, word)
+    return value
 
 
 def parser(
-    word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
-) -> ItemArg:
+    word: str, rules: Sequence[StrReplaceConfRule], objconf: Objconf, **kwargs
+) -> str:
     """
     Parses the pipe content
 
     Args:
         word (str): The string to transform
         rules (List[obj]): the parsed rules (Objectify instances).
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -127,11 +126,11 @@ def parser(
         'bye world'
 
     """
-    return kwargs["stream"] if skip else reduce(reducer, rules, word)
+    return reduce(reducer, rules, word)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> str:
     """
     A processor module that asynchronously replaces the text of a field of
     an item.
@@ -161,11 +160,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['strreplace'])
+        >>> async def run(reactor):
         ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        ...     d = async_pipe({'content': 'hello world'}, conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
+        ...     print(next(result)['strreplace'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -175,11 +173,12 @@ def async_pipe(*args, **kwargs):
         bye world
 
     """
-    return async_parser(*args, **kwargs)
+    parsed = await async_parser(*args, **kwargs)
+    return parsed
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> str:
     """
     A processor that replaces the text of a field of an item.
 

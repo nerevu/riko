@@ -17,28 +17,32 @@ Attributes:
 
 """
 
+from collections.abc import Sequence
 from functools import reduce
 
 import pygogo as gogo
 
-from riko.bado import itertools as ait
-from riko.types.general import ItemArg, ItemsArg, ObjconfRule
+from riko.bado.itertools import async_reduce
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.types.modules import SortConfRule
 from riko.utils import def_itemgetter as itemgetter
 
 from . import operator
 
-OPTS = {"listize": True, "extract": "rule"}
-DEFAULTS = {"rule": {"dir": "asc", "field": "content"}}
+OPTS: Opts = {"listize": True, "extract": "rule"}
+DEFAULTS: Defaults = {"rule": SortConfRule(dir="asc", field="content")}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def reducer(stream: ItemsArg, rule: ObjconfRule) -> list[ItemArg]:
+def reducer(stream: Stream, rule: SortConfRule) -> Stream:
     reverse = rule.dir.lower() == "desc" if rule.dir else False
     keyfunc = itemgetter(rule.field, _type=rule.type)
-    return sorted(stream, key=keyfunc, reverse=reverse)
+    return iter(sorted(stream, key=keyfunc, reverse=reverse))
 
 
-def async_parser(stream, rules, tuples, **kwargs):
+async def async_parser(
+    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Asynchronously parses the pipe content
 
@@ -67,14 +71,13 @@ def async_parser(stream, rules, tuples, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(x[0])
+        >>> async def run(reactor):
         ...     kwargs = {'field': 'content', 'dir': 'desc'}
         ...     rule = Objectify(kwargs)
-        ...     stream = ({'content': x} for x in range(5))
+        ...     stream = ({'content': result} for result in range(5))
         ...     tuples = zip(stream, repeat(rule))
-        ...     d = async_parser(stream, [rule], tuples, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(stream, [rule], tuples, **kwargs)
+        ...     print(next(result))
         >>>
         >>> if _issync:
         ...     {'content': 4}
@@ -86,10 +89,12 @@ def async_parser(stream, rules, tuples, **kwargs):
         {'content': 4}
 
     """
-    return ait.async_reduce(reducer, rules, stream)
+    return await async_reduce(reducer, rules, stream)
 
 
-def parser(stream: ItemsArg, extract, tuples, **kwargs) -> ItemsArg:
+def parser(
+    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 
@@ -120,15 +125,15 @@ def parser(stream: ItemsArg, extract, tuples, **kwargs) -> ItemsArg:
         >>> rule = Objectify(kwargs)
         >>> stream = ({'content': x} for x in range(5))
         >>> tuples = zip(stream, repeat(rule))
-        >>> parser(stream, [rule], tuples, **kwargs)[0]
+        >>> next(parser(stream, [rule], tuples, **kwargs))
         {'content': 4}
 
     """
-    return reduce(reducer, extract, stream)
+    return reduce(reducer, rules, stream)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously and eagerly sorts the input source
     according to a specified key. Note that this pipe is not lazy.
@@ -142,11 +147,12 @@ def async_pipe(*args, **kwargs):
 
             rule (dict): The sort configuration, can be either a dict or list
                 of dicts (default: {'dir': 'asc', 'field': 'content'}).
-                Must contain the key 'field'. May contain the key 'dir',
+                Must contain the key 'field'. May contain the key 'dir', 'type'
                     or 'cast'.
 
-                type (str): Expected value type. Must be one of
-                    `CAST_SWITCH` (default: None).
+                type (str): Expected value type. May be one of
+                    'float', 'decimal', 'int', 'text', 'datetime', 'date', 'url',
+                    'bool', 'pass' (default: None).
 
                 field (str): Item attribute on which to sort by (default:
                     'content').
@@ -161,11 +167,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]
-        ...     d = async_pipe(items, conf={'rule': {'field': 'rank'}})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items, conf={'rule': {'field': 'rank'}})
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -179,7 +184,7 @@ def async_pipe(*args, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that eagerly sorts a stream according to a specified
     key. Note that this pipe is not lazy.
@@ -193,11 +198,13 @@ def pipe(*args, **kwargs):
 
             rule (dict): The sort configuration, can be either a dict or list
                 of dicts (default: {'dir': 'asc', 'field': 'content'}).
-                Must contain the key 'field'. May contain the key 'dir',
+                Must contain the key 'field'. May contain the key 'dir', 'type',
                     or 'cast'.
 
-                type (str): Expected value type. Must be one of
-                    `CAST_SWITCH` (default: None).
+                type (str): Expected value type. May be one of
+                    'float', 'decimal', 'int', 'text', 'datetime', 'date', 'url',
+                    'bool', 'pass' (default: None).
+
                 field (str): Item attribute on which to sort by.
                 dir (str): The sort direction. Must be either 'asc' or
                     'desc'.

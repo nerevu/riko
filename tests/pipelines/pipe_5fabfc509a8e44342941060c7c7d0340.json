@@ -68,6 +68,10 @@
                     "type": "datetime",
                     "value": "10/14/2010"
                 },
+                "type": {
+                    "type": "text",
+                    "value": "date"
+                },
                 "name": {
                     "type": "text",
                     "value": "dateinput1"
@@ -82,7 +86,7 @@
                 }
             },
             "id": "sw-565",
-            "type": "dateinput"
+            "type": "input"
         },
         {
             "conf": {},
@@ -99,6 +103,10 @@
                     "type": "location",
                     "value": "isle of wight, uk"
                 },
+                "type": {
+                    "type": "text",
+                    "value": "location"
+                },
                 "name": {
                     "type": "text",
                     "value": "locationinput1"
@@ -113,7 +121,7 @@
                 }
             },
             "id": "sw-572",
-            "type": "locationinput"
+            "type": "input"
         },
         {
             "conf": {
@@ -124,6 +132,10 @@
                 "default": {
                     "type": "number",
                     "value": "12121"
+                },
+                "type": {
+                    "type": "text",
+                    "value": "int"
                 },
                 "name": {
                     "type": "text",
@@ -139,7 +151,7 @@
                 }
             },
             "id": "sw-576",
-            "type": "numberinput"
+            "type": "input"
         },
         {
             "conf": {
@@ -169,7 +181,7 @@
                 }
             },
             "id": "sw-580",
-            "type": "privateinput"
+            "type": "input"
         },
         {
             "conf": {
@@ -207,6 +219,10 @@
                     "type": "url",
                     "value": "file:///Users/reubano/Documents/Projects/riko/riko/data/example.html"
                 },
+                "type": {
+                    "type": "text",
+                    "value": "url"
+                },
                 "name": {
                     "type": "text",
                     "value": "urlinput1"
@@ -221,7 +237,7 @@
                 }
             },
             "id": "sw-588",
-            "type": "urlinput"
+            "type": "input"
         },
         {
             "conf": {

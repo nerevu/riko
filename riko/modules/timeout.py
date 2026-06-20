@@ -27,49 +27,57 @@ Attributes:
 """
 
 import signal
+from collections.abc import Iterable, Iterator
 from datetime import timedelta
+from types import FrameType
+from typing import Self, TypeVar, cast
 
 import pygogo as gogo
 
+from riko import Objconf
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
+
 from . import operator
 
-OPTS = {"ptype": "int"}
-DEFAULTS = {}
+OPTS: Opts = {"ptype": BasicCastType.INT}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 items = ("days", "hours", "microseconds", "milliseconds", "minutes", "seconds", "weeks")
 
+T = TypeVar("T")
 
-class TimeoutIterator:
-    def __init__(self, elements, timeout=0):
-        self.iter = iter(elements)
+
+class TimeoutIterator(Iterator[T]):
+    def __init__(self, elements: Iterable[T], timeout: int = 0) -> None:
+        self.iter: Iterator[T] = iter(elements)
         self.timeout = timeout
-        self.timedout = False
-        self.started = False
+        self.timedout: bool = False
+        self.started: bool = False
 
-    def _handler(self, *_):
+    def _handler(self, _: int, frame: FrameType | None) -> None:
         self.timedout = True
 
-    def __iter__(self):
+    def __iter__(self) -> Self:
         return self
 
-    def __next__(self):
+    def __next__(self) -> T:
         if self.timedout:
             raise StopIteration
         elif not self.started:
             signal.signal(signal.SIGALRM, self._handler)
             signal.alarm(self.timeout)
             self.started = True
-
         try:
             return next(self.iter)
         except StopIteration:
             signal.alarm(0)
             self.timedout = True
-            raise StopIteration
+            raise
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -110,12 +118,13 @@ def parser(stream, objconf, tuples, **kwargs):
 
     """
     # objconf only parses on __getitem__
-    time = int(timedelta(**{k: objconf[k] for k in objconf}).total_seconds())
+    td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
+    time = int(timedelta(**td_kwargs).total_seconds())
     return TimeoutIterator(stream, time)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously returns items from a stream until a
         certain amount of time has passed.
@@ -156,10 +165,9 @@ def async_pipe(*args, **kwargs):
         ...         sleep(1)
         ...         yield {'x': x}
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(len(list(x)))
-        ...     d = async_pipe(gen_items(), conf={'seconds': '3'})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe(gen_items(), conf={'seconds': '3'})
+        ...     print(len(list(result)))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -173,7 +181,7 @@ def async_pipe(*args, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that returns items from a stream until a certain amount of
         time has passed.

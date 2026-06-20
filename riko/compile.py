@@ -47,8 +47,8 @@ from riko import Context, utils
 from riko.modules.forever import pipe as forever
 from riko.pprint2 import Id, repr_args, str_args
 from riko.topsort import topological_sort
-from riko.types.compile import Wire
-from riko.types.general import Items, ParsedPipeDef, PipeDef, Step, Steps, SyncPipeline
+from riko.types.compile import ParsedPipeDef, PipeDef, Wire
+from riko.types.general import Step, Steps, Stream, SyncPipeParser
 
 
 class MyPrettyPrinter(PrettyPrinter):
@@ -105,7 +105,6 @@ def _gen_string_modules(
     context = context or Context(**kwargs)
 
     for module_id, module_name, pipe_name in zipped:
-        print(f"{module_name=}")
         pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
         pykwargs = dict(_gen_pykwargs(parsed_pipe_def, module_id, **kwargs))
 
@@ -216,7 +215,7 @@ def _gen_steps(
             import_name = f"riko.modules.{module_name}"
 
         module = import_module(import_name)
-        pipeline: SyncPipeline = getattr(module, pipe_name)
+        pipeline: SyncPipeParser = getattr(module, pipe_name)
 
         if module_id in parsed_pipe_def["embed"]:
             # We need to wrap submodules (used by loops) so we can pass the
@@ -294,7 +293,7 @@ def build_pipeline(
     pipe_def: PipeDef,
     context: Context | None = None,
     **kwargs,
-) -> Items:
+) -> Stream:
     """
     Convert a pipe into an executable Python pipeline
 
@@ -318,7 +317,7 @@ def build_pipeline(
             "module_ids": module_ids,
             "module_names": utils.gen_names(module_ids, parsed_pipe_def),
             "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
-            "steps": {"forever", forever()},
+            "steps": {"forever": forever(context=context)},
         }
 
         steps = dict(_gen_steps(parsed_pipe_def, **kwargs, **updates))
@@ -339,7 +338,7 @@ def stringify_pipe(parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, **kwargs) 
         "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, ntype="pipe"),
     }
 
-    env = Environment(loader=PackageLoader("riko"))
+    env = Environment(loader=PackageLoader("riko"), autoescape=False)  # noqa: S701
     template = env.get_template("pypipe.txt")
     modules = list(_gen_string_modules(parsed_pipe_def, **kwargs, **updates))
     keys = ["sub_pipe", "name", "pipe_name"]

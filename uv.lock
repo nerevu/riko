@@ -57,6 +57,15 @@ wheels = [
 ]
 
 [[package]]
+name = "backports-asyncio-runner"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8e/ff/70dca7d7cb1cbc0edb2c6cc0c38b65cba36cccc491eca64cabd5fe7f8670/backports_asyncio_runner-1.2.0.tar.gz", hash = "sha256:a5aa7b2b7d8f8bfcaa2b57313f70792df84e32a2a746f585213373f900b42162", size = 69893, upload-time = "2025-07-02T02:27:15.685Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/59/76ab57e3fe74484f48a53f8e337171b4a2349e506eabe136d7e01d059086/backports_asyncio_runner-1.2.0-py3-none-any.whl", hash = "sha256:0da0a936a8aeb554eccb426dc55af3ba63bcdc69fa1a600b5bb305413a4477b5", size = 12313, upload-time = "2025-07-02T02:27:14.263Z" },
+]
+
+[[package]]
 name = "beautifulsoup4"
 version = "4.14.3"
 source = { registry = "https://pypi.org/simple" }
@@ -763,6 +772,15 @@ wheels = [
 ]
 
 [[package]]
+name = "multipart"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8e/d6/9c4f366d6f9bb8f8fb5eae3acac471335c39510c42b537fd515213d7d8c3/multipart-1.3.1.tar.gz", hash = "sha256:211d7cfc1a7a43e75c4d24ee0e8e0f4f61d522f1a21575303ae85333dea687bf", size = 38929, upload-time = "2026-02-27T10:17:13.7Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/19/ed/e1f03200ee1f0bf4a2b9b72709afefbf5319b68df654e0b84b35c65613ee/multipart-1.3.1-py3-none-any.whl", hash = "sha256:a82b59e1befe74d3d30b3d3f70efd5a2eba4d938f845dcff9faace968888ff29", size = 15061, upload-time = "2026-02-27T10:17:11.943Z" },
+]
+
+[[package]]
 name = "networkx"
 version = "3.4.2"
 source = { registry = "https://pypi.org/simple" }
@@ -981,6 +999,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-asyncio"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "backports-asyncio-runner", marker = "python_full_version < '3.11'" },
+    { name = "pytest" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/43/7c/d36d04db312ecf4298932ef77e6e4a9e8ad017906e24e34f0b0c361a2473/pytest_asyncio-1.4.0.tar.gz", hash = "sha256:c6c0d2259945122819f171a32ecea2c349ead889ee28176caaf492143424be42", size = 58514, upload-time = "2026-05-26T09:56:04.083Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/03/e2/08a497ef684b88559c9cc5f4ad53a37e7b99e727094a86d6ea32536d5d3c/pytest_asyncio-1.4.0-py3-none-any.whl", hash = "sha256:933ca923a23075a87fb7070c0ec272a6848489824d887c85c812670932835aa1", size = 16930, upload-time = "2026-05-26T09:56:02.576Z" },
+]
+
+[[package]]
 name = "pytest-cov"
 version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1114,6 +1146,7 @@ dependencies = [
     { name = "mezmorize", version = "0.28.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10.14'" },
     { name = "mezmorize", version = "0.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10.14'" },
     { name = "pygogo" },
+    { name = "pytest-asyncio" },
     { name = "python-dateutil" },
     { name = "pytz" },
     { name = "requests" },
@@ -1152,17 +1185,18 @@ requires-dist = [
     { name = "chardet", specifier = ">=3.0.4,<8.0.0" },
     { name = "feedparser", specifier = ">=5.2.1,<7.0.0" },
     { name = "html5lib", specifier = ">=1.0.1,<2.0.0" },
-    { name = "ijson", specifier = ">=2.6.1,<3.0.0" },
+    { name = "ijson", specifier = ">=2.6.1,<4.0.0" },
     { name = "lxml", marker = "extra == 'perf'", specifier = ">=4.5.0,<7.0.0" },
     { name = "meza", specifier = ">=0.42.5" },
     { name = "mezmorize", specifier = ">=0.27.0" },
     { name = "pygogo", specifier = ">=0.12.0,<2.0.0" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "python-dateutil", specifier = ">=2.8.1,<3.0.0" },
     { name = "pytz", specifier = ">=2019.3" },
     { name = "requests", specifier = ">=2.22.0,<3.0.0" },
     { name = "speedparser3", marker = "extra == 'perf'", specifier = ">=0.3.1" },
-    { name = "treq", marker = "extra == 'twisted'", specifier = ">=18.6.0,<26.0.0" },
-    { name = "twisted", marker = "extra == 'twisted'", specifier = ">=19.10.0,<22.1.0" },
+    { name = "treq", marker = "extra == 'twisted'", specifier = ">=26.0.0,<27.0.0" },
+    { name = "twisted", marker = "extra == 'twisted'", specifier = ">=26.0.0,<27.0.0" },
 ]
 provides-extras = ["perf", "twisted"]
 
@@ -1316,23 +1350,24 @@ wheels = [
 
 [[package]]
 name = "treq"
-version = "22.2.0"
+version = "26.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "hyperlink" },
     { name = "incremental" },
-    { name = "requests" },
+    { name = "multipart" },
     { name = "twisted", extra = ["tls"] },
+    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/c8/b68ab17d994133baf6edbcb5551ba81e1494bdc6d5e21a9d4f3bc4315140/treq-22.2.0.tar.gz", hash = "sha256:df757e3f141fc782ede076a604521194ffcb40fa2645cf48e5a37060307f52ec", size = 72922, upload-time = "2022-02-09T07:29:52.383Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/13/96aceb81d076eea518bf174048db701ac8b139c7aed1082913318a55a7d2/treq-26.7.0.tar.gz", hash = "sha256:43e728e12aca2d897c626cf07dc7b4392749b73de050a7d66e086cb3a6e15da9", size = 81748, upload-time = "2026-07-02T00:07:54.334Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/e0/cf8cc18074911104ef738991eb25676203a5eb591fa4a80a718457334a47/treq-22.2.0-py3-none-any.whl", hash = "sha256:27d95b07c5c14be3e7b280416139b036087617ad5595be913b1f9b3ce981b9b2", size = 64486, upload-time = "2022-02-09T07:29:49.379Z" },
+    { url = "https://files.pythonhosted.org/packages/2a/6f/6396d90267494553b7db6dc6aaaf8a773255eae209d4381428672f52f716/treq-26.7.0-py3-none-any.whl", hash = "sha256:0a56ac4d970f7b1e27a4df4057d225efd84524b1847e123a725c531039702f98", size = 75461, upload-time = "2026-07-02T00:07:52.958Z" },
 ]
 
 [[package]]
 name = "twisted"
-version = "21.7.0"
+version = "26.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -1340,13 +1375,12 @@ dependencies = [
     { name = "constantly" },
     { name = "hyperlink" },
     { name = "incremental" },
-    { name = "twisted-iocpsupport", marker = "sys_platform == 'win32'" },
     { name = "typing-extensions" },
     { name = "zope-interface" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b2/46/ee13d2d8dd4d380132199d5b3526e01103fd9a3c43b613718cd01e179987/Twisted-21.7.0.tar.gz", hash = "sha256:2cd652542463277378b0d349f47c62f20d9306e57d1247baabd6d1d38a109006", size = 3739740, upload-time = "2021-07-28T08:42:26.072Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/97/6e9beb1e78247ae6dc34114f27d538cf2cb183c4afcd3609dfdf2b0439c8/twisted-26.4.0.tar.gz", hash = "sha256:dbfd0fe1ee409d0243fdd7a6a6ff14f4948cec1fd78e0376291f805e1501fae9", size = 3575095, upload-time = "2026-05-11T11:24:51.861Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/0c/7a1a943edce164c77c98f044175d801b572bb36936e9b4d5805a850525e7/Twisted-21.7.0-py3-none-any.whl", hash = "sha256:13c1d1d2421ae556d91e81e66cf0d4f4e4e1e4a36a0486933bee4305c6a4fb9b", size = 3095369, upload-time = "2021-07-28T08:42:23.744Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/57/bcf4e2370dd218c9aa68a9140a65d86729c73f1d529f7e94786c2766fc72/twisted-26.4.0-py3-none-any.whl", hash = "sha256:dc25ea0ebf6511c24f03232ee9f4afa54b291c5d897990e3a39cc4d14a1ef4c0", size = 3230362, upload-time = "2026-05-11T11:24:49.5Z" },
 ]
 
 [package.optional-dependencies]
@@ -1354,21 +1388,6 @@ tls = [
     { name = "idna" },
     { name = "pyopenssl" },
     { name = "service-identity" },
-]
-
-[[package]]
-name = "twisted-iocpsupport"
-version = "1.0.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f3/35/f18bd75e29f7d887e918a9401e0aa66c10634861561fc085d197a738759f/twisted-iocpsupport-1.0.4.tar.gz", hash = "sha256:858096c0d15e33f15ac157f455d8f86f2f2cdd223963e58c0f682a3af8362d89", size = 10022, upload-time = "2023-08-10T10:11:51.307Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/fd/172697cff2cd365e8dd716c28b4fe81dbdb667c3d3a1d9f21c84db1fea2e/twisted_iocpsupport-1.0.4-cp310-cp310-win32.whl", hash = "sha256:afa2b630797f9ed2f27f3d9f55e3f72b4244911e45a8c82756f44babbf0b243e", size = 42123, upload-time = "2023-08-10T10:11:26.65Z" },
-    { url = "https://files.pythonhosted.org/packages/b1/2e/d99419d50e883efe30f8d17c0851307671058561643ba2d73f4f2873af97/twisted_iocpsupport-1.0.4-cp310-cp310-win_amd64.whl", hash = "sha256:0058c963c8957bcd3deda62122e89953c9de1e867a274facc9b15dde1a9f31e8", size = 46809, upload-time = "2023-08-10T10:11:28.29Z" },
-    { url = "https://files.pythonhosted.org/packages/e3/92/06be6fe2600d63bd268b3b6a3f4f4b9e5ff9ee8169b426adb906dabf3fb1/twisted_iocpsupport-1.0.4-cp311-cp311-win32.whl", hash = "sha256:196f7c7ccad4ba4d1783b1c4e1d1b22d93c04275cd780bf7498d16c77319ad6e", size = 42390, upload-time = "2023-08-10T10:11:29.356Z" },
-    { url = "https://files.pythonhosted.org/packages/5b/e4/54819582c7852295188427c49526da79c9b884253ac7ce9d74b51b6be181/twisted_iocpsupport-1.0.4-cp311-cp311-win_amd64.whl", hash = "sha256:4e5f97bcbabdd79cbaa969b63439b89801ea560f11d42b0a387634275c633623", size = 47295, upload-time = "2023-08-10T10:11:30.861Z" },
-    { url = "https://files.pythonhosted.org/packages/e1/9d/b223c791d14a502d8d4c4405add78c6189f68506fdc43f3c2a6183efb7b4/twisted_iocpsupport-1.0.4-cp312-cp312-win32.whl", hash = "sha256:6081bd7c2f4fcf9b383dcdb3b3385d75a26a7c9d2be25b6950c3d8ea652d2d2d", size = 42594, upload-time = "2023-08-10T10:11:31.904Z" },
-    { url = "https://files.pythonhosted.org/packages/f3/9d/3813cd573dff68426e0ab0f9f47c7876dd9d98238e55aefa019c89c400b9/twisted_iocpsupport-1.0.4-cp312-cp312-win_amd64.whl", hash = "sha256:76f7e67cec1f1d097d1f4ed7de41be3d74546e1a4ede0c7d56e775c4dce5dfb0", size = 47608, upload-time = "2023-08-10T10:11:33.531Z" },
-    { url = "https://files.pythonhosted.org/packages/d8/2e/18667b59a33dbe1075922aefcf669ce6ffeab161ed985a4a62fd4457de99/twisted_iocpsupport-1.0.4-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:872747a3b64e2909aee59c803ccd0bceb9b75bf27915520ebd32d69687040fa2", size = 42512, upload-time = "2023-08-10T10:11:45.936Z" },
 ]
 
 [[package]]

@@ -286,7 +286,7 @@ def parse_source(source):
         .strconcat(conf=strconcat4_conf, assign="k:budget_full", skip_if=test4)
     )
 
-    return pipe.list
+    return list(pipe)
 
 
 def print_content(output):

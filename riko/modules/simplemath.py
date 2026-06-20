@@ -26,13 +26,13 @@ from decimal import Decimal
 import pygogo as gogo
 
 from riko import Objconf
-from riko.cast import CastType, cast
-from riko.types.general import Extraction, NumLike
+from riko.cast import BasicCastType, CastType, cast
+from riko.types.general import Defaults, Extraction, NumLike, Opts
 
 from . import processor
 
-OPTS = {"ftype": "decimal", "field": "content"}
-DEFAULTS = {}
+OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -55,16 +55,13 @@ OPS: dict[str, Callable[..., NumLike]] = {
 }
 
 
-def parser(
-    num: Decimal, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> NumLike:
+def parser(num: Decimal, extraction: Extraction, objconf: Objconf, **kwargs) -> NumLike:
     """
     Parsers the pipe content
 
     Args:
         num (Decimal): The first number to operate on
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
 
     Returns:
         dict: The formatted item
@@ -79,11 +76,11 @@ def parser(
     """
     operation = OPS[objconf.op]
     other = cast(objconf.other, _type=CastType.DECIMAL)
-    return kwargs["stream"] if skip else operation(num, other)
+    return operation(num, other)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> NumLike:
     """
     A processor module that asynchronously performs basic arithmetic, such
     as addition and subtraction.
@@ -112,11 +109,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['simplemath'])
+        >>> async def run(reactor):
         ...     conf = {'op': 'divide', 'other': '5'}
-        ...     d = async_pipe({'content': '10'}, conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe({'content': '10'}, conf=conf)
+        ...     print(next(result)['simplemath'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -130,7 +126,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> NumLike:
     """
     A processor module that performs basic arithmetic, such as addition and
     subtraction.

@@ -22,14 +22,16 @@ from collections.abc import Mapping
 from decimal import Decimal
 from json import load, loads
 from os import getenv
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import pygogo as gogo
+from twisted.web.iweb import IResponse
 
 from riko import Objconf
-from riko.bado import coroutine, io, return_value
+from riko.bado import io
 from riko.bado import requests as treq
-from riko.types.general import Extraction
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction, Opts
 from riko.utils import Fetch
 
 from . import processor
@@ -37,8 +39,8 @@ from . import processor
 EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
 
-OPTS = {"ftype": "text", "field": "content"}
-DEFAULTS = {
+OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
+DEFAULTS: Defaults = {
     "currency": "USD",
     "delay": 0,
     "memoize": True,
@@ -54,7 +56,7 @@ class RatesJson(TypedDict):
     rates: Mapping[str, str]
 
 
-def parse_response(rates: Mapping[str, str | float]):
+def parse_response(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
     if rates:
         resp = {k: Decimal(v) for k, v in rates.items() if v}
     else:
@@ -90,17 +92,15 @@ def calc_rate(
     return (Decimal(1) / rate).quantize(places)
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    base: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    base: str, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Decimal:
     """
     Asynchronously parses the pipe content
 
     Args:
         base (str): The base currency (exchanging from)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -116,14 +116,14 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
+        >>> async def run(reactor):
         ...     url = get_path('quote.json')
         ...     conf = {'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': item, 'assign': 'content'}
-        ...     d = async_parser(item['content'], None, objconf, **kwargs)
-        ...     return d.addCallbacks(print, logger.error)
+        ...     result = await async_parser(item['content'], None, objconf, **kwargs)
+        ...     print(result)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -134,35 +134,33 @@ def async_parser(
 
     """
     same_currency = base == objconf.currency
-    rates = rate = None
+    rates = None
+    rate = Decimal(0)
 
-    if skip:
-        rate = kwargs["stream"]
-    elif same_currency:
+    if same_currency:
         rate = Decimal(1)
     elif objconf.url.startswith("http"):
-        r = yield treq.get(objconf.url, param=objconf.param)
-        rates = yield treq.json(r)
+        r = await treq.get(objconf.url, param=objconf.param)
+        rates = await treq.json(cast(IResponse, r))
     else:
-        content = yield io.async_url_read(objconf.url, delay=objconf.delay)  # pyright: ignore[reportCallIssue]
+        content = await io.async_url_read(objconf.url, delay=objconf.delay)
         rates = loads(content).get("rates", {})
 
-    if rates and not (skip or same_currency):
+    if rates and not same_currency:
         places = Decimal(10) ** -objconf.precision
         rates = parse_response(rates)
         rate = calc_rate(base, objconf.currency, places=places, **rates)
 
-    return_value(rate)
+    return rate
 
 
-def parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
+def parser(base: str, extraction: Extraction, objconf: Objconf, **kwargs) -> Decimal:
     """
     Parses the pipe content
 
     Args:
         base (str): The base currency (exchanging from)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -188,9 +186,7 @@ def parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
     rates = None
     rate = Decimal(0)
 
-    if skip:
-        rate = kwargs["stream"]
-    elif base == objconf.currency:
+    if base == objconf.currency:
         rate = Decimal(1)
     else:
         with Fetch(**{k: objconf[k] for k in objconf}) as f:
@@ -204,8 +200,8 @@ def parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
     return rate
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Decimal:
     """
     A processor that asynchronously retrieves the current exchange rate
     for a given currency pair.
@@ -245,11 +241,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['exchangerate'])
+        >>> async def run(reactor):
         ...     url = get_path('quote.json')
-        ...     d = async_pipe({'content': 'GBP'}, conf={'url': url})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe({'content': 'GBP'}, conf={'url': url})
+        ...     print(next(result)['exchangerate'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -259,11 +254,11 @@ def async_pipe(*args, **kwargs):
         1.275201
 
     """
-    return async_parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Decimal:
     """
     A processor that retrieves the current exchange rate for a given
     currency pair.

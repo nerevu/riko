@@ -40,8 +40,9 @@ Fetching feeds
     'http://feeds.gawker.com'
 """
 
+from typing import cast
+
 from riko import get_path
-from riko.bado import coroutine, return_value
 from riko.collections import AsyncPipe, SyncPipe
 
 replace_conf = {"rule": {"find": "\n", "replace": " "}}
@@ -63,24 +64,23 @@ def pipe(test=False):
     return (s1, s2)
 
 
-@coroutine
-def async_pipe(reactor, test=False):
-    s1 = yield AsyncPipe("fetch", test=test, conf={"url": health})
-    s2 = yield (
+async def async_pipe(reactor, test=False):
+    s1 = await AsyncPipe("fetch", test=test, conf={"url": health})
+    s2 = await (
         AsyncPipe("fetchpage", test=test, conf=fetch_conf)
         .strreplace(conf=replace_conf, assign="content")
         .tokenizer(conf={"delimiter": " "}, emit=True)
         .count()
     )
 
-    return_value((s1, s2))
+    return (s1, s2)
 
 
 if __name__ == "__main__":
     s1, s2 = pipe()
 
     if s1:
-        print(next(s1)["title"])
+        print(cast(dict, next(s1))["title"])
 
     if s2:
-        print(next(s2)["count"])
+        print(cast(dict, next(s2))["count"])

@@ -21,18 +21,22 @@ Attributes:
 
 import itertools as it
 from collections.abc import Iterator
-from operator import itemgetter
 
 import pygogo as gogo
 
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.utils import def_itemgetter
+
 from . import operator
 
-OPTS = {"extract": "count_key"}
-DEFAULTS = {"count_key": None}
+OPTS: Opts = {"extract": "count_key"}
+DEFAULTS: Defaults = {"count_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, count_key: str, tuples, **kwargs) -> int | Iterator[dict[str, int]]:
+def parser(
+    stream: Stream, count_key: str, tuples: PipeTuples, **kwargs
+) -> int | Iterator[dict[str, int]]:
     """
     Parses the pipe content
 
@@ -74,17 +78,17 @@ def parser(stream, count_key: str, tuples, **kwargs) -> int | Iterator[dict[str,
 
     """
     if count_key:
-        keyfunc = itemgetter(count_key)
+        keyfunc = def_itemgetter(count_key)
         sorted_stream = sorted(stream, key=keyfunc)
         grouped = it.groupby(sorted_stream, keyfunc)
-        counted = ({key: len(list(group))} for key, group in grouped)
+        counted = ({str(key): len(list(group))} for key, group in grouped)
     else:
         counted = len(list(stream))
 
     return counted
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
+@operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
     """
     An operator that asynchronously and eagerly counts the number of items
@@ -113,11 +117,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     items = ({'x': x} for x in range(5))
-        ...     d = async_pipe(items)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())

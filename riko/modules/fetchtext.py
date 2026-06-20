@@ -26,28 +26,27 @@ from collections.abc import Iterator
 import pygogo as gogo
 
 from riko import ENCODING, Objconf
-from riko.bado import coroutine, io, return_value
-from riko.types.general import BasicArg, Extraction, ItemArg
+from riko.bado import io
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction, ItemArg, Opts
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
-OPTS = {"ftype": "none", "assign": "content"}
-DEFAULTS = {"encoding": ENCODING}
+OPTS: Opts = {"ftype": BasicCastType.NONE, "assign": "content"}
+DEFAULTS: Defaults = {"encoding": ENCODING}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[str]:
     """
     Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -62,12 +61,11 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     url = get_path('lorem.txt')
         ...     objconf = Objectify({'url': url, 'encoding': ENCODING})
-        ...     d = async_parser(None, None, objconf, assign='content')
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(None, None, objconf, assign='content')
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -77,26 +75,20 @@ def async_parser(
         What is Lorem Ipsum?
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        f = yield io.async_url_open(objconf.url)  # pyright: ignore[reportCallIssue]
-        _stream = (line.strip().decode(objconf.encoding) for line in f)
-        stream = auto_close(_stream, f)
-
-    return_value(stream)
+    f = await io.async_url_open(objconf.url)
+    stream = auto_close(map(str.strip, f), f)
+    return stream
 
 
 def parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> ItemArg | Iterator[str]:
+    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[str]:
     """
     Parses the pipe content
 
     Args:
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -116,18 +108,13 @@ def parser(
         'What is Lorem Ipsum?'
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        f = Fetch(**{k: objconf[k] for k in objconf})
-        _stream = (line.strip() for line in f)
-        stream = auto_close(_stream, f)
-
+    f = Fetch(**{k: objconf[k] for k in objconf})
+    stream = auto_close(map(str.strip, f), f)
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Iterator[str]:
     """
     A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -154,11 +141,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     conf = {'url': get_path('lorem.txt')}
-        ...     d = async_pipe(conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(conf=conf)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -168,11 +154,11 @@ def async_pipe(*args, **kwargs):
         What is Lorem Ipsum?
 
     """
-    return async_parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Iterator[str]:
     """
     A source that fetches and parses an XML or JSON file to
     return the entries.

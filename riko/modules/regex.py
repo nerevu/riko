@@ -27,39 +27,37 @@ Attributes:
 
 from collections.abc import Mapping, Sequence
 from functools import reduce
+from typing import cast
 
 import pygogo as gogo
 from meza.process import merge
 
 from riko import Objconf
-from riko.bado import coroutine, return_value
-from riko.bado import itertools as ait
+from riko.bado.itertools import async_reduce, coop_reduce
 from riko.dotdict import DotDict
-from riko.types.general import BasicArg, ComplexArg, ComplexMapping, ObjconfRegexRule
-from riko.utils import get_new_rule, group_by, multi_substitute, substitute
+from riko.types.general import Defaults, ItemArg, Opts
+from riko.types.modules import RegexConfRule, RegexRule
+from riko.utils import get_regex_rule, group_by, multi_substitute, substitute
 
 from . import processor
 
-OPTS = {"listize": True, "extract": "rule", "emit": True}
-DEFAULTS = {"convert": True, "multi": False}
+OPTS: Opts = {"listize": True, "extract": "rule", "emit": True}
+DEFAULTS: Defaults = {"convert": True, "multi": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    item: BasicArg,
-    rules: Sequence[ObjconfRegexRule],
+async def async_parser(
+    item: ItemArg,
+    rules: Sequence[RegexConfRule],
     objconf: Objconf,
-    skip=False,
     **kwargs,
-):
+) -> DotDict | str | None:
     """
     Asynchronously parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
         rules (List[obj]): the parsed rules (Objectify instances).
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -77,15 +75,14 @@ def async_parser(
         >>> match = r'(\\w+)\\s(\\w+)'
         >>> replace = '$2wide'
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(x['content'])
+        >>> async def run(reactor):
         ...     rule = {'field': 'content', 'match': match, 'replace': replace}
         ...     conf = {'rule': rule, 'multi': False, 'convert': True}
         ...     objconf = Objectify(conf)
         ...     rules = [Objectify(rule)]
         ...     kwargs = {'stream': item, 'conf': conf}
-        ...     d = async_parser(item, rules, objconf, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(item, rules, objconf, **kwargs)
+        ...     print(result['content'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -98,42 +95,54 @@ def async_parser(
     multi = objconf.multi
     recompile = not multi
 
-    @coroutine  # pyright: ignore[reportArgumentType]
-    def async_reducer(item, rules):
+    async def async_reducer(
+        item: ItemArg, rules: Sequence[RegexRule]
+    ) -> DotDict | str | None:
         field = rules[0]["field"]
-        word = item.get(field, **kwargs)
-        grouped = group_by(rules, "flags")
-        group_rules = [g[1] for g in grouped] if multi else rules
-        reducer = multi_substitute if multi else substitute
-        replacement = yield ait.coop_reduce(reducer, group_rules, word)  # pyright: ignore[reportCallIssue]
-        combined = merge([item, {field: replacement}])
-        return_value(DotDict(combined))
 
-    if skip:
-        item = kwargs["stream"]
-    else:
-        new_rules = [get_new_rule(r, recompile=recompile) for r in rules]
-        grouped = group_by(new_rules, "field")
-        field_rules = [g[1] for g in grouped]
-        item = yield ait.async_reduce(async_reducer, field_rules, item)
+        if isinstance(item, Mapping):
+            word = str(item.get(field, **kwargs))
+        elif isinstance(item, str):
+            word = item
+        else:
+            msg = f"{item=} is a {type(item)=}, not a mapping or string, skipping"
+            logger.warning(msg)
+            word = None
 
-    return_value(item)
+        if word is None:
+            replacement = None
+        else:
+            grouped = group_by(rules, "flags")
+            group_rules = [g[1] for g in grouped] if multi else rules
+            reducer = multi_substitute if multi else substitute
+            replacement = await coop_reduce(reducer, group_rules, word)
+
+        if isinstance(item, Mapping):
+            result = DotDict(merge([item, {field: replacement}]))
+        else:
+            result = replacement
+
+        return result
+
+    regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
+    grouped = group_by(regex_rules, "field")
+    field_rules = [g[1] for g in grouped]
+    item = await async_reduce(async_reducer, field_rules, item)
+    return cast(DotDict | str | None, item)
 
 
 def parser(
-    item: ComplexMapping,
-    rules: Sequence[ObjconfRegexRule],
+    item: ItemArg,
+    rules: Sequence[RegexConfRule],
     objconf: Objconf,
-    skip=False,
     **kwargs,
-) -> ComplexArg:
+) -> DotDict | str | None:
     """
     Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
         rules (List[obj]): the parsed rules (Objectify instances).
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -163,30 +172,45 @@ def parser(
     multi = objconf.multi
     recompile = not multi
 
-    def meta_reducer(
-        item: ComplexMapping, rules: Sequence[Mapping[str, str]]
-    ) -> DotDict:
-        field = rules[0]["field"]
-        word: str = item.get(field, **kwargs)
-        grouped = group_by(rules, "flags")
-        group_rules = [g[1] for g in grouped] if multi else rules
-        reducer = multi_substitute if multi else substitute
-        replacement = reduce(reducer, group_rules, word)
-        return DotDict(merge([item, {field: replacement}]))
+    def sync_reducer(item: ItemArg, rules: Sequence[RegexRule]) -> DotDict | str | None:
+        field = str(rules[0]["field"])
 
-    if skip:
-        item = kwargs["stream"]
-    else:
-        new_rules = [get_new_rule(r, recompile=recompile) for r in rules]
-        grouped = group_by(new_rules, "field")
-        field_rules = [g[1] for g in grouped]
-        item = reduce(meta_reducer, field_rules, item)
+        if isinstance(item, Mapping):
+            word = str(item.get(field, **kwargs))
+        elif isinstance(item, str):
+            msg = f"{item=} is a {type(item)=}, not a mapping, ignoring {field=} and"
+            msg += "applying regexes to the string itself."
+            logger.warning(msg)
+            word = item
+        else:
+            msg = f"{item=} is a {type(item)=}, not a mapping or string, skipping"
+            logger.warning(msg)
+            word = None
 
-    return item
+        if word is None:
+            replacement = None
+        else:
+            grouped = group_by(rules, "flags")
+            group_rules = [g[1] for g in grouped] if multi else rules
+            reducer = multi_substitute if multi else substitute
+            replacement = reduce(reducer, group_rules, word)
+
+        if isinstance(item, Mapping):
+            result = DotDict(merge([item, {field: replacement}]))
+        else:
+            result = replacement
+
+        return result
+
+    regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
+    grouped = group_by(regex_rules, "field")
+    field_rules = [g[1] for g in grouped]
+    item = reduce(sync_reducer, field_rules, item)
+    return cast(DotDict | str | None, item)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> DotDict | str | None:
     """
     A processor that asynchronously replaces text in fields of an item
     using regexes.
@@ -229,12 +253,11 @@ def async_pipe(*args, **kwargs):
         >>> match = r'(\\w+)\\s(\\w+)'
         >>> replace = '$2wide'
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['content'])
+        >>> async def run(reactor):
         ...     rule = {'field': 'content', 'match': match, 'replace': replace}
         ...     conf = {'rule': rule, 'multi': False, 'convert': True}
-        ...     d = async_pipe(item, conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(item, conf=conf)
+        ...     print(next(result)['content'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -244,11 +267,11 @@ def async_pipe(*args, **kwargs):
         worldwide
 
     """
-    return async_parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> DotDict | str | None:
     """
     A processor that replaces text in fields of an item using regexes.
 

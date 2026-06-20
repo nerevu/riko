@@ -36,25 +36,25 @@ import datetime
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import Extraction
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
-OPTS = {"field": "date", "ftype": "date"}
-DEFAULTS = {"format": "%m/%d/%Y %H:%M:%S"}
+OPTS: Opts = {"field": "date", "ftype": BasicCastType.DATE}
+DEFAULTS: Defaults = {"format": "%m/%d/%Y %H:%M:%S"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    date: datetime.date, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+    date: datetime.date, extraction: Extraction, objconf: Objconf, **kwargs
+) -> str:
     """
     Obtains the user input
 
     Args:
         date (date): Must have key 'date' with a date-like object value
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
 
     Returns:
         dict: The formatted date
@@ -68,11 +68,11 @@ def parser(
         '05/04/2015'
 
     """
-    return kwargs["stream"] if skip else date.strftime(objconf.format)
+    return date.strftime(objconf.format)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> str:
     """
     A processor module that asynchronously formats a date.
 
@@ -101,10 +101,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['dateformat'])
-        ...     d = async_pipe({'date': date(2015, 5, 4)})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe({'date': date(2015, 5, 4)})
+        ...     print(next(result)['dateformat'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -118,7 +117,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> str:
     """
     A processor module that formats a date.
 

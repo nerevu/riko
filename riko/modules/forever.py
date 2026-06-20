@@ -24,19 +24,20 @@ from itertools import repeat, takewhile
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import BasicArg, Extraction
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction, ItemArg, Opts
 
 from . import processor
 
 forever = takewhile(bool, repeat({"forever": True}))
 
-OPTS = {"ftype": "none"}
-DEFAULTS = {}
+OPTS: Opts = {"ftype": BasicCastType.NONE}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
 ) -> Iterator[dict[str, bool]]:
     """
     Parses the pipe content
@@ -44,7 +45,6 @@ def parser(
     Args:
         _ (None): Ignored
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -55,16 +55,16 @@ def parser(
         Iter[dict]: The stream of items
 
     Examples:
-        >>> result = parser(None, None, None, stream={})
+        >>> result = parser(None, None, None)
         >>> next(result)
         {'forever': True}
 
     """
-    return kwargs["stream"] if skip else forever
+    return forever
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Iterator[dict[str, bool]]:
     """
     A source that asynchronously fetches and parses a feed to return the
     entries.
@@ -89,10 +89,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
-        ...     d = async_pipe()
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe()
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -106,7 +105,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Iterator[dict[str, bool]]:
     """
     A source that fetches and parses a feed to return the entries.
 

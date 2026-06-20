@@ -1,12 +1,9 @@
 """
-riko.helpers
-~~~~~~~~~~~~
-
 Provides misc helper functions
 """
 
 import logging
-import pdb
+import pdb  # noqa: T100
 import sys
 from json.decoder import JSONDecodeError
 from logging import Formatter
@@ -26,7 +23,7 @@ RESET = "\x1b[0m"
 # https://flask.palletsprojects.com/en/1.1.x/logging/#injecting-request-information
 class DefaultFormatter(Formatter):
     def format(self, record):
-        FORMATS = {
+        formats = {
             logging.DEBUG: f"{GREY} {self._fmt} {RESET}",
             logging.INFO: f"{GREY} {self._fmt} {RESET}",
             logging.WARNING: f"{YELLOW} {self._fmt} {RESET}",
@@ -34,7 +31,7 @@ class DefaultFormatter(Formatter):
             logging.CRITICAL: f"{BOLD_RED} {self._fmt} {RESET}",
         }
 
-        log_fmt = FORMATS.get(record.levelno)
+        log_fmt = formats.get(record.levelno)
         return Formatter(log_fmt).format(record)
 
 

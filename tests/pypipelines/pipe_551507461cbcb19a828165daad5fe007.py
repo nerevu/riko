@@ -2,8 +2,8 @@
 
 from riko import Context, get_path
 from riko.modules.fetchsitefeed import pipe as fetchsitefeed
+from riko.modules.input import pipe as _input
 from riko.modules.truncate import pipe as truncate
-from riko.modules.urlinput import pipe as urlinput
 
 
 def pipe_551507461cbcb19a828165daad5fe007(context=None, conf=None):
@@ -22,9 +22,9 @@ def pipe_551507461cbcb19a828165daad5fe007(context=None, conf=None):
         ]
 
     if context and context.describe_dependencies:
-        return ["fetchsitefeed", "truncate", "urlinput"]
+        return ["fetchsitefeed", "truncate", "input"]
 
-    sw_242 = urlinput(
+    sw_242 = _input(
         context=context,
         conf={
             "test": {"type": "bool", "value": "true"},

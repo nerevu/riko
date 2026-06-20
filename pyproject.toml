@@ -34,10 +34,11 @@ dependencies = [
     "chardet>=3.0.4,<8.0.0",
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
-    "ijson>=2.6.1,<3.0.0",
+    "ijson>=2.6.1,<4.0.0",
     "meza>=0.42.5",
     "mezmorize>=0.27.0",
     "pygogo>=0.12.0,<2.0.0",
+    "pytest-asyncio>=1.4.0",
     "python-dateutil>=2.8.1,<3.0.0",
     "pytz>=2019.3",
     "requests>=2.22.0,<3.0.0",
@@ -50,8 +51,8 @@ perf = [
 ]
 
 twisted = [
-    "treq>=18.6.0,<26.0.0",
-    "twisted>=19.10.0,<22.1.0",
+    "treq>=26.0.0,<27.0.0",
+    "twisted>=26.0.0,<27.0.0",
 ]
 
 [dependency-groups]
@@ -108,6 +109,7 @@ ignore = [
     "D107",  # undocumented-public-init
     "D401",  # non-imperative-mood
     "D417",  # undocumented-param
+    "D104",  #undocumented-public-package
 
     # misc
     "T201",  # print
@@ -116,12 +118,21 @@ ignore = [
     # stylistic
     "E731",  # do not assign a lambda expression, use a def
     "E501",  # line too long
+    "D301",  #escape-sequence-in-docstring
+
+    # security
+    "S404",
+    "S602",
+    "S603",
 
      # this is incompatible with D211 no-blank-line-before-class
     "D203",  # incorrect-blank-line-before-class
 
      # this is incompatible with D213 multi-line-summary-second-line
     "D212",  # multi-line-summary-first-line
+
+     # this is incompatible with flake8 E302 Expected 2 blank lines...
+    "RUF100",  # unused noqa directive
 ]
 
 exclude = [
@@ -137,7 +148,7 @@ exclude = [
 preview = true
 
 [tool.ruff.lint.mccabe]
-max-complexity = 10
+max-complexity = 11
 
 [tool.ruff.lint.isort]
 known-first-party = ["riko"]

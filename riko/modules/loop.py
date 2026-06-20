@@ -45,14 +45,17 @@ Attributes:
 
 import pygogo as gogo
 
+from riko import Objconf
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
+
 from . import operator
 
-OPTS = {"listize": False, "parse": False}
-DEFAULTS = {}
+OPTS: Opts = {"listize": False, "parse": False}
+DEFAULTS = Defaults({})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -82,7 +85,7 @@ def parser(stream, objconf, tuples, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that creates submodules from existing pipes.
 

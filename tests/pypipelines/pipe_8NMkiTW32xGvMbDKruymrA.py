@@ -6,7 +6,7 @@ from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
 
 
-def pipe_8NMkiTW32xGvMbDKruymrA(context=None, conf=None):
+def pipe_8NMkiTW32xGvMbDKruymrA(context: Context, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 

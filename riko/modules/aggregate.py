@@ -1,7 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for performing an arbitrary (user-defined) function on stream
-items.
+Provides functions for performing an arbitrary (user-defined) function on a stream
 
 Examples:
     basic usage::
@@ -15,14 +14,22 @@ Examples:
 
 """
 
+from collections.abc import Awaitable, Callable
+from inspect import iscoroutinefunction
+from typing import cast
+
 import pygogo as gogo
+
+from riko import Objconf, listize
+from riko.types.general import Defaults, ItemArg, PipeTuples, Stream
 
 from . import operator
 
+DEFAULTS = Defaults()
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -53,36 +60,49 @@ def parser(stream, objconf, tuples, **kwargs):
         {'y': 3}
 
     """
-    # TODO: this should work even when func returns a list
-    return kwargs["func"](stream)
+    func = cast(Callable[[Stream], ItemArg], kwargs["func"])
+    result = func(stream)
+    return iter(listize(result))
 
 
-@operator(isasync=True)
-def async_pipe(*args, **kwargs):
+async def async_parser(
+    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
+) -> Stream:
+    func = cast(
+        Callable[[Stream], ItemArg | Awaitable[ItemArg]],
+        kwargs["func"],
+    )
+
+    if iscoroutinefunction(func):
+        result = await func(stream)
+    else:
+        result = func(stream)
+
+    return iter(listize(result))
+
+
+@operator(DEFAULTS, isasync=True)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously performs an arbitrary (user-defined) function on
-    stream items.
+    a stream.
 
     Args:
         items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        func (callable): User defined function to apply to each stream item.
-
-    Returns:
-        Deferred: twisted.internet.defer.Deferred truncated stream
+        func (callable): User defined function to apply to the stream.
 
     Examples:
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     func = lambda stream: ({'y': item['x'] + 3} for item in stream)
         ...     items = ({'x': x} for x in range(5))
-        ...     d = async_pipe(items, func=func)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items, func=func)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -95,20 +115,17 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@operator()
-def pipe(*args, **kwargs):
+@operator(DEFAULTS)
+def pipe(*args, **kwargs) -> Stream:
     """
-    An operator that performs an arbitrary (user-defined) function on stream items.
+    An operator that performs an arbitrary (user-defined) function on a stream.
 
     Args:
         items (Iter[dict]): The source.
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
-        func (callable): User defined function to apply to each stream item.
-
-    Yields:
-        dict: an item
+        func (callable): User defined function to apply to the stream.
 
     Examples:
         >>> items = [{'x': x} for x in range(5)]

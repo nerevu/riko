@@ -20,29 +20,36 @@ Attributes:
 
 """
 
+from collections.abc import Iterator
+
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import Extraction, Items
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction
 
 from . import processor
 
-OPTS: dict[str, str | bool] = {"ftype": "text", "field": "content"}
-DEFAULTS = {"delimiter": ",", "dedupe": False, "sort": False, "token_key": "content"}
+OPTS: dict[str, str | bool] = {"ftype": BasicCastType.TEXT, "field": "content"}
+DEFAULTS: Defaults = {
+    "delimiter": ",",
+    "dedupe": False,
+    "sort": False,
+    "token_key": "content",
+}
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> Items:
+    content: str, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[dict[str, str]]:
     """
     Parses the pipe content
 
     Args:
         content (str): The content to tokenize
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
 
     Returns:
         Iter[dict]: The stream of items
@@ -56,20 +63,16 @@ def parser(
         {'token': 'Once'}
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        keyfunc = lambda s: s.lower()
-        splits = [s.strip() for s in content.split(objconf.delimiter) if s]
-        deduped = set(splits) if objconf.dedupe else splits
-        chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
-        stream = ({objconf.token_key: chunk} for chunk in chunks)
-
+    keyfunc = lambda s: s.lower()
+    splits = [s.strip() for s in content.split(objconf.delimiter) if s]
+    deduped = set(splits) if objconf.dedupe else splits
+    chunks = sorted(deduped, key=keyfunc) if objconf.sort else deduped
+    stream = ({objconf.token_key: chunk} for chunk in chunks)
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
     """
     A processor module that asynchronously splits a string by a delimiter.
 
@@ -104,11 +107,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['tokenizer'][0])
+        >>> async def run(reactor):
         ...     item = {'content': 'Once,twice,thrice,no more'}
-        ...     d = async_pipe(item)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(item)
+        ...     print(next(result)['tokenizer'][0])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -122,7 +124,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
     """
     A processor that splits a string by a delimiter.
 
