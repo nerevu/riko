@@ -12,6 +12,7 @@ from typing import Annotated, Literal, overload
 from zoneinfo import ZoneInfo, available_timezones
 
 import pytz
+from dateutil import parser
 
 from riko.types.values import DateDict
 
@@ -213,6 +214,10 @@ def ensure_tzinfo(  # noqa: E704
 ) -> None: ...
 @overload  # noqa: E302
 def ensure_tzinfo(  # noqa: E704
+    _date: str, try_local_tz: bool = ..., fallback_tzinfo: tzinfo = ...
+) -> AwareDT: ...
+@overload  # noqa: E302
+def ensure_tzinfo(  # noqa: E704
     _date: AwareDT | NaiveDT, try_local_tz: bool = ..., fallback_tzinfo: tzinfo = ...
 ) -> AwareDT: ...
 @overload  # noqa: E302
@@ -224,13 +229,19 @@ def ensure_tzinfo(  # noqa: E704
     _date: date, try_local_tz: bool = ..., fallback_tzinfo: tzinfo = ...
 ) -> date: ...
 def ensure_tzinfo(  # noqa: E302
-    _date: AwareDT | NaiveDT | AwareST | NaiveST | date | None,
+    _date: AwareDT | NaiveDT | AwareST | NaiveST | date | str | None,
     try_local_tz: bool = True,
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | AwareST | date | None:
     now = dt.now(timezone.utc)
     _tzinfo = None
     new_date = None
+
+    if isinstance(_date, str):
+        try:
+            _date = dt.fromisoformat(_date)
+        except (ValueError, TypeError):
+            _date = parser.parse(_date, tzinfos=TZINFOS)
 
     if get_tzname(_date):
         new_date = _date

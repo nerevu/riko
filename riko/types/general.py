@@ -1,5 +1,6 @@
+from codecs import StreamReader
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
-from io import StringIO
+from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from typing import (
     TYPE_CHECKING,
     Literal,
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from riko import Context, Objconf
     from riko.cast import BasicCastType
     from riko.types.modules import AnyConfRule, AnyModuleConf, Skip
+    from riko.utils import Fetch
 
 
 # Values
@@ -47,7 +49,10 @@ SkipIf: TypeAlias = Union[SkipFunc, "Skip", Iterable[SkipFunc], Iterable["Skip"]
 
 # Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
 # TODO: add type hint overloads to Reencoder with decode=True -> str
-Opener = Callable[[str], tuple[str | StringIO | None, str | None]]
+BinaryFileTypes: TypeAlias = BytesIO | RawIOBase
+StringFileTypes: TypeAlias = StringIO | StreamReader | TextIOBase
+FileTypes: TypeAlias = Union[BinaryFileTypes, StringFileTypes, "Fetch"]
+Opener = Callable[[str], tuple[FileTypes, str | None]]
 
 
 class PreCaster(TypedDict):

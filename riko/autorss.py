@@ -4,13 +4,13 @@ Provides functions for finding RSS feeds from a site's LINK tags
 """
 
 from collections.abc import Iterator
-from io import StringIO
+from typing import cast
 
 import pygogo as gogo
-from meza.compat import decode
 
-from riko.bado.io import async_url_open
+from riko.bado.io import NamedTextIOWrapper, async_url_open
 from riko.parsers import LinkParser
+from riko.types.general import StringFileTypes
 from riko.types.values import BasicMapping
 from riko.utils import Fetch
 
@@ -24,10 +24,10 @@ class RSSLinkParser(LinkParser):
 
 
 def file2entries(
-    f: StringIO | Iterator[str], parser: RSSLinkParser
+    f: StringFileTypes | NamedTextIOWrapper | Iterator[str], parser: RSSLinkParser
 ) -> Iterator[BasicMapping]:
     for line in f:
-        parser.feed(decode(line))
+        parser.feed(line)
         yield from parser.entry
 
 
@@ -85,7 +85,7 @@ def get_rss(
     except ValueError:
         f = filter(None, url.splitlines())
 
-    entries = file2entries(f, parser)
+    entries = file2entries(cast(StringFileTypes, f), parser)
 
     if auto_sort:
         entries = iter(sorted(entries, key=parser.keyfunc))

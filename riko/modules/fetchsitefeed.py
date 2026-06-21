@@ -41,7 +41,7 @@ from riko.cast import BasicCastType
 from riko.parsers import parse_rss
 from riko.types.general import Defaults, Extraction, ItemArg, Opts
 from riko.types.values import RSSEntry
-from riko.utils import gen_entries
+from riko.utils import augment_entries
 
 from . import processor
 
@@ -89,9 +89,8 @@ async def async_parser(
     rss = await autorss.async_get_rss(objconf.url)
     link = str(next(rss)["link"])
     content = await io.async_url_read(link)
-    parsed = parse_rss(content)
-    stream = gen_entries(parsed["entries"])
-    return stream
+    entries = parse_rss(content)
+    return augment_entries(entries)
 
 
 def parser(
@@ -123,9 +122,8 @@ def parser(
     """
     rss = autorss.get_rss(objconf.url)
     link = str(next(rss)["link"])
-    parsed = parse_rss(link)
-    stream = gen_entries(parsed["entries"])
-    return stream
+    entries = parse_rss(link)
+    return augment_entries(entries)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

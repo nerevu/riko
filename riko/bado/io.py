@@ -12,10 +12,10 @@ Examples:
 
 """
 
-from io import TextIOWrapper
+from io import BytesIO, TextIOWrapper
 from os import remove
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Union, override
+from typing import TYPE_CHECKING, Literal, Union, overload, override
 
 import pygogo as gogo
 
@@ -133,13 +133,33 @@ class NamedTextIOWrapper(TextIOWrapper):
         self._name = value
 
 
-async def async_get_file(
+@overload
+async def async_get_file(  # noqa: E704
+    filename: str,
+    transport: "StringTransport",
+    protocol=...,
+    encoding: str = ...,
+    *,
+    binary: Literal[True],
+    **kwargs,
+) -> BytesIO: ...
+@overload  # noqa: E302
+async def async_get_file(  # noqa: E704
+    filename: str,
+    transport: "StringTransport",
+    protocol=...,
+    encoding: str = ...,
+    binary: Literal[False] = ...,
+    **kwargs,
+) -> NamedTextIOWrapper: ...
+async def async_get_file(  # noqa: E302
     filename: str,
     transport: "StringTransport",
     protocol=FileReader,
     encoding=ENCODING,
+    binary: bool = False,
     **kwargs,
-) -> NamedTextIOWrapper:
+) -> BytesIO | NamedTextIOWrapper:
     """
     Raises:
         proto.transport.io.seek
@@ -151,10 +171,20 @@ async def async_get_file(
     await proto.d
     proto.transport.io.seek(0)
     f = proto.transport.io
-    return NamedTextIOWrapper(f, encoding=encoding)
+    return f if binary else NamedTextIOWrapper(f, encoding=encoding)
 
 
-async def async_url_open(url: str, timeout=0, **kwargs) -> NamedTextIOWrapper:
+@overload
+async def async_url_open(  # noqa: E704
+    url: str, timeout: float = ..., *, binary: Literal[True], **kwargs
+) -> BytesIO: ...
+@overload  # noqa: E302
+async def async_url_open(  # noqa: E704
+    url: str, timeout: float = ..., binary: Literal[False] = ..., **kwargs
+) -> NamedTextIOWrapper: ...
+async def async_url_open(  # noqa: E302
+    url: str, timeout: float = 0, binary: bool = False, **kwargs
+) -> BytesIO | NamedTextIOWrapper:
     """
     Raises:
         NamedTemporaryFile
@@ -179,20 +209,23 @@ async def async_url_open(url: str, timeout=0, **kwargs) -> NamedTextIOWrapper:
 
     """
     if url.startswith("http"):
-        page = NamedTemporaryFile(delete=False, mode="w")  # noqa: SIM115
+        mode = "wb" if binary else "w"
+        page = NamedTemporaryFile(delete=False, mode=mode)  # noqa: SIM115
         new_url = page.name
         response = await treq.get(url, timeout=timeout)
-        content = await response.text()
+        content = await (response.content() if binary else response.text())
         page.write(content)
         page.flush()
         file_name = url.split("://")[1] if url.startswith("file") else None
     else:
         page, new_url, file_name = None, url, None
 
-    f = await async_get_file(new_url, testing.StringTransport(), **kwargs)
+    f = await async_get_file(
+        new_url, testing.StringTransport(), binary=binary, **kwargs
+    )
 
     if not hasattr(f, "name") and file_name:
-        f.name = file_name
+        f.name = file_name  # type: ignore[attr-defined]
 
     if page:
         page.close()

@@ -4,7 +4,10 @@ from decimal import Decimal
 from enum import Enum, auto
 from time import struct_time
 from typing import TYPE_CHECKING, NotRequired, TypeAlias, TypedDict, Union
-from xml.sax import SAXParseException  # noqa: S406
+
+# from xml.sax import SAXParseException
+from fastfeedparser import FastFeedParserDict
+from feedparser import FeedParserDict
 
 if TYPE_CHECKING:
     from riko import Objconf, Objectify
@@ -20,21 +23,49 @@ class StreamState(Enum):
     DONE = auto()
 
 
-class AuthorDetail(TypedDict, total=False):
+class EntryContent(TypedDict):
+    type: str
+    value: str
+    language: str
+    base: str
+
+
+class Enclosure(TypedDict):
+    type: str
+    length: int
+    href: str
+
+
+class AuthorDetail(TypedDict):
     href: str
     name: str
     email: str
 
 
-class FeedParserRSSEntry(TypedDict):
+class CommonRSSEntry(TypedDict):
     author: str | None
-    author_detail: AuthorDetail
-    id: str | None
-    pubDate: NotRequired[struct_time | None]
-    published_parsed: NotRequired[struct_time | None]
     title: str | None
-    updated_parsed: NotRequired[struct_time | None]
+    description: str | None
+    link: str
+    content: list[EntryContent]
+    enclosures: list[Enclosure]
+    published: str | None
+    updated: str | None
 
+
+class FeedParserRSSEntry(CommonRSSEntry):
+    id: str | None
+    summary: str | None
+    author_detail: AuthorDetail
+    published_parsed: struct_time | None
+    updated_parsed: struct_time | None
+
+
+class FasterFeedParserRSSEntry(CommonRSSEntry):
+    media_content: list[EntryContent]
+
+
+ParserRSSEntry: TypeAlias = FeedParserRSSEntry | FasterFeedParserRSSEntry
 
 YahooRSSEntry = TypedDict(
     "YahooRSSEntry",
@@ -69,10 +100,7 @@ RSSEntry = TypedDict(
 )
 
 
-class RSSParseResult(TypedDict):
-    entries: list[FeedParserRSSEntry]
-    bozo: NotRequired[bool]
-    bozo_exception: NotRequired[SAXParseException | Exception]
+RSSParseResult: TypeAlias = FeedParserDict | FastFeedParserDict
 
 
 class StatefulItem(TypedDict):

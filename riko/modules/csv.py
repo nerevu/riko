@@ -128,7 +128,7 @@ def parser(
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
 
-    f = Fetch(**{k: objconf[k] for k in objconf})
+    f = Fetch(objconf.url, encoding=objconf.encoding)
     rkwargs = merge([dict(objconf.iteritems()), renamed])
     content = cast(Iterator[IntermediateMapping], read_csv(f, **rkwargs))
     stream = auto_close(content, f)

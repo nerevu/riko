@@ -27,7 +27,7 @@ from typing import TypedDict, cast
 import pygogo as gogo
 from twisted.web.iweb import IResponse
 
-from riko import Objconf
+from riko import ENCODING, Objconf
 from riko.bado import io
 from riko.bado import requests as treq
 from riko.cast import BasicCastType
@@ -47,6 +47,7 @@ DEFAULTS: Defaults = {
     "precision": 6,
     "url": EXCHANGE_API,
     "param": PARAMS,
+    "encoding": ENCODING,
 }
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -189,7 +190,7 @@ def parser(base: str, extraction: Extraction, objconf: Objconf, **kwargs) -> Dec
     if base == objconf.currency:
         rate = Decimal(1)
     else:
-        with Fetch(**{k: objconf[k] for k in objconf}) as f:
+        with Fetch(objconf.url, encoding=objconf.encoding) as f:
             json = load(f)
 
             if rates := json.get("rates", {}):

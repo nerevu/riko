@@ -27,7 +27,7 @@ from collections.abc import Iterator
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko import ENCODING, Objconf
 from riko.bado import io
 from riko.cast import BasicCastType
 from riko.parsers import get_text
@@ -37,7 +37,7 @@ from riko.utils import Fetch, betwix
 from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE}
-DEFAULTS: Defaults = {}
+DEFAULTS = Defaults({"encoding": ENCODING})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -125,7 +125,7 @@ def parser(
         'CNN.com International'
 
     """
-    with Fetch(**{k: objconf[k] for k in objconf}) as f:
+    with Fetch(objconf.url, encoding=objconf.encoding) as f:
         sliced = betwix(f, objconf.start, objconf.end, True)
         content = "\n".join(sliced)
 

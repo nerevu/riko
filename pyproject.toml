@@ -34,7 +34,6 @@ dependencies = [
     "chardet>=3.0.4,<8.0.0",
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
-    "ijson>=2.6.1,<4.0.0",
     "meza>=0.42.5",
     "mezmorize>=0.27.0",
     "pygogo>=0.12.0,<2.0.0",
@@ -46,8 +45,9 @@ dependencies = [
 
 [project.optional-dependencies]
 perf = [
+    "fastfeedparser>=0.6.0",
+    "ijson>=3.4.0,<4.0.0",
     "lxml>=4.5.0,<7.0.0",
-    "speedparser3>=0.3.1",
 ]
 
 twisted = [
@@ -213,6 +213,9 @@ examples = ["examples/*"]
 [tool.uv.build-backend]
 module-name = "riko"
 module-root = ""
+
+[tool.uv.sources]
+meza = { git = "https://github.com/reubano/meza.git", rev = "aa584e56edcd20e038b58379ab833e796dcf92df" }
 
 [build-system]
 requires = ["uv_build>=0.11.3,<0.12.0"]

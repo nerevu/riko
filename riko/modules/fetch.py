@@ -25,18 +25,18 @@ from collections.abc import Iterator
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko import ENCODING, Objconf
 from riko.bado import io
 from riko.cast import BasicCastType
 from riko.parsers import parse_rss
 from riko.types.general import Defaults, Extraction, ItemArg, Opts
 from riko.types.values import RSSEntry
-from riko.utils import gen_entries
+from riko.utils import augment_entries
 
 from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE}
-DEFAULTS: Defaults = {"delay": 0}
+DEFAULTS: Defaults = {"encoding": ENCODING, "delay": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 keys = {
     "author",
@@ -87,9 +87,8 @@ async def async_parser(
 
     """
     content: str = await io.async_url_read(objconf.url, delay=objconf.delay)
-    parsed = parse_rss(content)
-    stream = gen_entries(parsed["entries"]) if parsed else iter([])
-    return stream
+    entries = parse_rss(content)
+    return augment_entries(entries)
 
 
 def parser(
@@ -120,8 +119,8 @@ def parser(
         'Donations'
 
     """
-    parsed = parse_rss(**{k: objconf[k] for k in objconf})
-    stream = gen_entries(parsed["entries"]) if parsed else iter([])
+    entries = parse_rss(objconf.url, encoding=objconf.encoding)
+    stream = augment_entries(entries)
     return stream
 
 

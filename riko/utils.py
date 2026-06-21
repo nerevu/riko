@@ -4,10 +4,11 @@ Provides utility classes and functions
 """
 
 import builtins
+import datetime
 import fcntl
 import itertools as it
 import re
-import sys
+from codecs import StreamReader
 from collections import deque
 from collections.abc import (
     Callable,
@@ -21,20 +22,20 @@ from collections.abc import (
 from decimal import Decimal
 from functools import partial, reduce, wraps
 from http.client import HTTPResponse
-from io import StringIO, TextIOBase
+from io import BytesIO, IOBase, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
 from os import O_NONBLOCK
 from time import struct_time
-from typing import TypeVar, cast, overload
+from typing import Generic, Literal, TypeVar, cast, overload
 from typing import cast as cast_type
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+from urllib.response import addinfourl
 
 import mezmorize
 import pygogo as gogo
 import requests
-from meza import compat
 from meza.io import reencode
 from mezmorize.utils import get_cache_type
 from werkzeug.local import LocalProxy
@@ -48,12 +49,19 @@ from riko import (
     listize,
     replacer,
 )
+from riko.bado.io import NamedTextIOWrapper
 from riko.cast import CAST_SWITCH, CastType
 from riko.cast import cast as cast_value
 from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
 from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
-from riko.types.general import ItemArg, Opener, PipelineDependencies, SyncItemFunc
+from riko.types.general import (
+    FileTypes,
+    ItemArg,
+    Opener,
+    PipelineDependencies,
+    SyncItemFunc,
+)
 from riko.types.modules import (
     EmbeddedModule,
     InputRawConf,
@@ -67,8 +75,8 @@ from riko.types.values import (
     BasicValue,
     ComplexArg,
     ComplexValue,
-    FeedParserRSSEntry,
     IntermediateValue,
+    ParserRSSEntry,
     RSSEntry,
     SortableValue,
     StatefulItem,
@@ -84,6 +92,7 @@ logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
 
 T = TypeVar("T", bound=ComplexArg)
+B = TypeVar("B", Literal[True], Literal[False])
 
 
 def combine_dicts(*dicts: Mapping[str, BasicArg]) -> dict[str, BasicArg]:
@@ -145,85 +154,143 @@ def multi_try(source, zipped, default=None):
     return default
 
 
-def get_response_content_type(response):
-    try:
-        content_type = response.getheader("Content-Type", "")
-    except AttributeError:
-        content_type = response.headers.get("Content-Type", "")
-
+def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) -> str:
+    content_type = r.headers.get("Content-Type", "")
     return content_type.lower()
 
 
-def get_response_encoding(response, def_encoding=ENCODING):
-    info = response.info()
+def get_response_encoding(r: HTTPResponse | addinfourl, def_encoding=ENCODING) -> str:
+    content_type = get_response_content_type(r)
 
-    try:
-        encoding = info.getencoding()
-    except AttributeError:
-        encoding = info.get_charset()
-
-    encoding = None if encoding == "7bit" else encoding
-
-    if not encoding and hasattr(info, "get_content_charset"):
-        encoding = info.get_content_charset()
-
-    if not encoding:
-        content_type = get_response_content_type(response)
-
-        if "charset" in content_type:
-            ctype = content_type.split("=")[1]
-            encoding = ctype.strip().strip('"').strip("'")
+    if "charset=" in content_type:
+        ctype = content_type.split("charset=")[1]
+        encoding = ctype.strip().strip('"').strip("'")
+    else:
+        encoding = None
 
     return encoding or def_encoding
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close(stream: Iterable[T], f) -> Iterator[T]:
+def auto_close(
+    stream: Iterable[T], f: FileTypes | NamedTextIOWrapper | IOBase
+) -> Iterator[T]:
     try:
         yield from stream
     finally:
         f.close()
 
 
-def opener(
+@overload
+def opener(  # noqa: E704
+    url: str,
+    memoize: Literal[True],
+    delay: int = ...,
+    encoding: str = ...,
+    params: dict | None = ...,
+    offline: bool = ...,
+    *,
+    binary: Literal[True],
+    **kwargs,
+) -> tuple[BytesIO, str | None]: ...
+
+
+@overload
+def opener(  # noqa: E704
+    url: str,
+    memoize: Literal[False] = ...,
+    delay: int = ...,
+    encoding: str = ...,
+    params: dict | None = ...,
+    offline: bool = ...,
+    *,
+    binary: Literal[True],
+    **kwargs,
+) -> tuple[RawIOBase, str | None]: ...
+
+
+@overload
+def opener(  # noqa: E704
+    url: str,
+    memoize: Literal[True],
+    delay: int = ...,
+    encoding: str = ...,
+    params: dict | None = ...,
+    offline: bool = ...,
+    binary: Literal[False] = ...,
+    **kwargs,
+) -> tuple[StringIO, str | None]: ...
+
+
+@overload
+def opener(  # noqa: E704
+    url: str,
+    memoize: Literal[False] = ...,
+    delay: int = ...,
+    encoding: str = ...,
+    params: dict | None = ...,
+    offline: bool = ...,
+    binary: Literal[False] = ...,
+    **kwargs,
+) -> tuple[StreamReader, str | None]: ...
+
+
+def opener(  # noqa: E302
     url: str,
     memoize=False,
     delay=0,
     encoding=ENCODING,
     params=None,
     offline=True,
+    binary: bool = False,
     **kwargs,
-) -> tuple[str | StringIO, str | None]:
+) -> tuple[FileTypes, str | None]:
     params = params or {}
     timeout = kwargs.get("timeout")
     url = get_abspath(url, offline=offline)
     r = None
 
     if url.startswith("http") and params:
-        r = requests.get(url, params=params, stream=True, timeout=timeout)
-        r.raw.decode_content = True
-        response = r.text if memoize else r.raw
+        r = requests.get(url, params=params, stream=binary, timeout=timeout)
+        r.raw.decode_content = not binary
+
+        if binary:
+            response = BytesIO(r.content) if memoize else cast(RawIOBase, r.raw)
+        elif memoize:
+            response = StringIO(r.text)
+        else:
+            encoding = r.encoding or encoding
+            reencoded = reencode(r.raw, encoding, decode=True)
+            # TODO: Add self._f = f to Reencoder
+            reencoded._r = r  # pyright: ignore[reportAttributeAccessIssue]
+            response = cast(StreamReader, reencoded)
     else:
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
 
         if delay:
             logger.debug("Request delaying not currently implemented.")
 
-        if r := urlopen(req, timeout=timeout):  # noqa: S310
-            r = cast_type(HTTPResponse, r)
-            text = r.read() if memoize else None
+        if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
+            response = BytesIO(r.read()) if memoize else cast(RawIOBase, r)
+        elif r:
             encoding = get_response_encoding(r, encoding)
 
-            if text:
-                response = cast_type(str, compat.decode(text, encoding))
-            else:
+            if not (binary or encoding):
+                encoding = ENCODING
+
+            if memoize and encoding:
+                response = StringIO(r.read().decode(encoding))
+            elif memoize:
+                response = StringIO(r.read())
+            elif encoding:
                 reencoded = reencode(r.fp, encoding, decode=True)
-                # reencode doesn't support seek so buffer into StringIO
-                content = reencoded.read()
-                # reencode isn't properly typed for when decode=True
-                response = StringIO(cast(str, content))
+                # TODO: Add self._f = f to Reencoder
+                reencoded._r = r  # pyright: ignore[reportAttributeAccessIssue]
+                response = cast(StreamReader, reencoded)
+            else:
+                response = cast(TextIOBase, r)
         else:
-            response = ""
+            response = BytesIO() if binary else StringIO()
 
     content_type = get_response_content_type(r) if r else None
     return (response, content_type)
@@ -241,30 +308,52 @@ def get_opener(memoize=False, **kwargs) -> Opener:
     return current_opener
 
 
-class Fetch(TextIOBase):
-    # The overloads are so I can call Fetch(**kwargs) without Pyright complaining.
-    # https://stackoverflow.com/q/79673094
+class Fetch(Generic[B]):
+    binary: B
+
     @overload
     def __init__(  # noqa: E704
-        self, url: str, memoize: bool = ..., **kwargs: BasicArg
+        self: "Fetch[Literal[True]]",
+        url: BasicArg = ...,
+        *,
+        binary: Literal[True],
+        **kwargs: BasicArg,
     ) -> None: ...
-    @overload
-    def __init__(self, url: str, **kwargs: BasicArg) -> None: ...  # noqa: E704
-    @overload
-    def __init__(self, **kwargs: BasicArg) -> None: ...  # noqa: E704
+    @overload  # noqa: E301
+    def __init__(  # noqa: E704
+        self: "Fetch[Literal[False]]",
+        url: BasicArg = ...,
+        *,
+        binary: Literal[False],
+        **kwargs: BasicArg,
+    ) -> None: ...
+    @overload  # noqa: E301
+    def __init__(  # noqa: E704
+        self: "Fetch[Literal[False]]",
+        url: BasicArg = ...,
+        memoize: BasicArg = ...,
+        binary: bool = False,
+        **kwargs: BasicArg,
+    ) -> None: ...
     def __init__(  # noqa: E301
-        self, url: BasicArg = "", memoize: BasicArg = False, **kwargs: BasicArg
+        self,
+        url: BasicArg = "",
+        memoize: BasicArg = False,
+        binary: bool = False,
+        **kwargs: BasicArg,
     ):
         # TODO: need to use separate timeouts for memoize and urlopen
+        self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]
         self.content_type = None
         self.file = None
 
         if url and memoize:
-            _opener = LocalProxy(partial(get_opener, memoize=True, **kwargs))
+            local = partial(get_opener, memoize=True, binary=binary, **kwargs)
+            _opener = LocalProxy(local)
             self.opener = cast_type(Opener, _opener)
             response, self.content_type = self.opener(str(url))
         else:
-            self.opener = get_opener(memoize=False, **kwargs)
+            self.opener = get_opener(memoize=False, binary=binary, **kwargs)
 
             try:
                 response, self.content_type = self.opener(str(url))
@@ -275,23 +364,62 @@ class Fetch(TextIOBase):
                     logger.error(f"Error opening {url}: {e.reason}")
                     response = None
 
-        if isinstance(response, str):
-            self.file = StringIO(response)
-        elif response:
-            self.file = response
+        self.file = response
 
         if self.file:
             self.close = self.file.close
-            self.read = self.file.read
-            self.readline = self.file.readline
-            self.seek = self.file.seek
 
-    # http://stackoverflow.com/a/22836333/408556
+            if isinstance(self.file, (BytesIO, RawIOBase, StringIO)):
+                self.seek = self.file.seek
+
+            if isinstance(self.file, (BytesIO, RawIOBase)):
+                self.readline = self.file.readline
+
     def __enter__(self):
         return self
 
     def __exit__(self, *_):
         self.close()
+
+    @overload
+    def __iter__(self: "Fetch[Literal[True]]") -> Iterator[bytes]: ...  # noqa: E704
+    @overload
+    def __iter__(self: "Fetch[Literal[False]]") -> Iterator[str]: ...  # noqa: E704
+    def __iter__(self) -> Iterator[bytes | str]:  # noqa: E301
+        if self.file:
+            result = iter(self.file)
+        elif self.binary:
+            result = iter([b""])
+        else:
+            result = iter([""])
+
+        return result
+
+    @overload
+    def __next__(self: "Fetch[Literal[True]]") -> bytes: ...  # noqa: E704
+    @overload
+    def __next__(self: "Fetch[Literal[False]]") -> str: ...  # noqa: E704
+    def __next__(self) -> bytes | str:  # noqa: E301
+        if self.file:
+            return next(self.file)
+
+        raise StopIteration
+
+    @overload
+    def read(self: "Fetch[Literal[True]]", size: int = ...) -> bytes: ...  # noqa: E704
+    @overload
+    def read(self: "Fetch[Literal[False]]", size: int = ...) -> str: ...  # noqa: E704
+    def read(self, size: int | None = None) -> bytes | str:  # noqa: E301
+        if self.file and size is not None:
+            result = self.file.read(size)
+        elif self.file:
+            result = self.file.read()
+        elif self.binary:
+            result = b""
+        else:
+            result = ""
+
+        return result
 
     @property
     def ext(self):
@@ -693,31 +821,41 @@ def multiplex(sources: Iterable[Iterable[T]]) -> Iterable[T]:
     return it.chain.from_iterable(sources)
 
 
-def gen_entries(entries: Iterable[FeedParserRSSEntry]) -> Iterator[RSSEntry]:
+def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
     for entry in entries:
-        published = updated = None
+        pub_date = updated_date = None
 
-        # prevent feedparser deprecation warnings
+        if "summary" not in entry:
+            entry["summary"] = entry["description"]
+
         if "published_parsed" in entry:
-            published = updated = entry["published_parsed"]
-        elif "pubDate" in entry:
-            # TODO: convert this to utc_datetime obj
-            published = updated = entry["pubDate"]
+            pub_date = updated_date = entry["published_parsed"]
+        elif "published" in entry:
+            pub_date = updated_date = entry["published"]
+
+        if pub_date:
+            pub_date = ensure_tzinfo(pub_date)
+
+            if isinstance(pub_date, datetime.datetime):
+                pub_date = pub_date.timetuple()
 
         if "updated_parsed" in entry:
-            updated = entry.get("updated_parsed")
+            updated_date = entry["updated_parsed"]
+        elif "updated" in entry:
+            updated_date = entry["updated"]
 
-        entry.setdefault("updated_parsed", updated)
-        entry.setdefault("pubDate", published)
-        pub_date = entry.get("pubDate")
-        updated_date = entry.get("updated_parsed")
+        if updated_date:
+            updated_date = ensure_tzinfo(updated_date)
 
-        entry["updated_parsed"] = ensure_tzinfo(updated_date)
+            if isinstance(updated_date, datetime.datetime):
+                updated_date = updated_date.timetuple()
+
         entry["author.name"] = entry.get("author_detail", {}).get("name")
         entry["author.uri"] = entry.get("author_detail", {}).get("href")
         entry["dc:creator"] = entry.get("author")
         entry["y:id"] = entry.get("id")
-        entry["y:published"] = entry["pubDate"] = ensure_tzinfo(pub_date)
+        entry["updated_parsed"] = updated_date
+        entry["published_parsed"] = entry["y:published"] = entry["pubDate"] = pub_date
         entry["y:title"] = entry.get("title")
         yield cast(RSSEntry, entry)
 

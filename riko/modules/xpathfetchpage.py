@@ -47,21 +47,22 @@ Attributes:
 from collections.abc import Iterator, Sequence
 from decimal import Decimal
 from os.path import splitext
+from typing import cast
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko import ENCODING, Objconf
 from riko.bado import io
 from riko.cast import BasicCastType
 from riko.parsers import Stringy, any2dict
-from riko.types.general import Defaults, Extraction, ItemArg, Opts
+from riko.types.general import Defaults, Extraction, FileTypes, ItemArg, Opts
 from riko.types.values import ComplexArg, ComplexMapping, StrictDate
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE}
-DEFAULTS: Defaults = {}
+DEFAULTS = Defaults({"encoding": ENCODING})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -154,7 +155,7 @@ async def async_parser(
         logger.error("Filesystem error during fetch of %s: %s", objconf.url, e)
         stream = iter(())
     """
-    f = await io.async_url_open(objconf.url)
+    f = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
     stream = auto_close(content, f)
     return stream
@@ -191,8 +192,9 @@ def parser(
     if objconf.url.startswith("http") and not ext:
         ext = "html"
 
-    with Fetch(**{k: objconf[k] for k in objconf}) as f:
-        yield from any2dict(f, ext, objconf.html5, path=objconf.xpath)
+    with Fetch(objconf.url, encoding=objconf.encoding) as f:
+        content = cast(FileTypes, f)
+        yield from any2dict(content, ext, objconf.html5, path=objconf.xpath)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

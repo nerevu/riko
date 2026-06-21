@@ -91,7 +91,7 @@ async def async_parser(
         7213
 
     """
-    r = await io.async_url_open(objconf.url)
+    r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     rkwargs = merge([dict(objconf.iteritems()), renamed])
@@ -129,7 +129,7 @@ def parser(
     """
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
-    f = Fetch(**{k: objconf[k] for k in objconf})
+    f = Fetch(objconf.url, encoding=objconf.encoding)
     rkwargs = merge([dict(objconf.iteritems()), renamed])
     ext = p.splitext(objconf.url)[1]
     stream = auto_close(read(f, ext, **rkwargs), f)

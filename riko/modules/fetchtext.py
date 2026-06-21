@@ -75,7 +75,7 @@ async def async_parser(
         What is Lorem Ipsum?
 
     """
-    f = await io.async_url_open(objconf.url)
+    f = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     stream = auto_close(map(str.strip, f), f)
     return stream
 
@@ -108,7 +108,7 @@ def parser(
         'What is Lorem Ipsum?'
 
     """
-    f = Fetch(**{k: objconf[k] for k in objconf})
+    f = Fetch(objconf.url, encoding=objconf.encoding)
     stream = auto_close(map(str.strip, f), f)
     return stream
 

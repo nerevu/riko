@@ -28,18 +28,18 @@ from typing import cast
 
 import pygogo as gogo
 
-from riko import Objconf, listize
+from riko import ENCODING, Objconf, listize
 from riko.bado import io
 from riko.cast import BasicCastType
 from riko.parsers import Stringy, any2dict
-from riko.types.general import Defaults, Extraction, ItemArg, Opts
+from riko.types.general import Defaults, Extraction, FileTypes, ItemArg, Opts
 from riko.types.values import ComplexArg, ComplexMapping, StrictDate
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE}
-DEFAULTS: Defaults = {}
+DEFAULTS = Defaults({"encoding": ENCODING})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -84,8 +84,9 @@ async def async_parser(
     """
     ext = p.splitext(objconf.url)[1].lstrip(".")
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
-
-    f = await io.async_url_open(objconf.url)
+    # TODO: Figure out if html/xml files should be parsed as binary too.
+    binary = ext == "json"
+    f = await io.async_url_open(objconf.url, encoding=objconf.encoding, binary=binary)
     content = any2dict(f, ext, objconf.html5, path=path)
     stream = auto_close(content, f)
     return stream
@@ -125,9 +126,10 @@ def parser(
     paths = cast(list[str], listize(objconf.path))
     path = ".".join(paths)
 
-    with Fetch(**{k: objconf[k] for k in objconf}) as f:
+    with Fetch(objconf.url, encoding=objconf.encoding, binary=(ext == "json")) as f:
         ext = ext or f.ext
-        yield from any2dict(f, ext, objconf.html5, path=path)
+        content = cast(FileTypes, f)
+        yield from any2dict(content, ext, objconf.html5, path=path)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -3,15 +3,14 @@
 Provides utility classes and functions
 """
 
-import dataclasses
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import asdict, is_dataclass
 from html.entities import name2codepoint
 from html.parser import HTMLParser
-from io import BytesIO, StringIO, TextIOBase
+from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from itertools import chain
-from json import JSONDecodeError, loads
+from json import JSONDecodeError, load, loads
 from time import struct_time
 from typing import (
     TYPE_CHECKING,
@@ -26,20 +25,20 @@ from xml.sax import SAXParseException  # noqa: S406
 
 import feedparser
 import pygogo as gogo
-from ijson import IncompleteJSONError, items
+from ijson import items
 from requests.structures import CaseInsensitiveDict
 
 from riko import Objectify, listize
 from riko.bado.io import NamedTextIOWrapper
 from riko.dotdict import DotDict, is_sentinal, is_type_value
-from riko.types.general import ComplexArg, ItemArg, SkipFunc, SkipIf
+from riko.types.general import ComplexArg, FileTypes, ItemArg, SkipFunc, SkipIf
 from riko.types.modules import AnyModuleConf, ConfValues, Skip
 from riko.types.values import (
     BasicArg,
     ComplexMapping,
     ComplexSequence,
     IntermediateValue,
-    RSSParseResult,
+    ParserRSSEntry,
     StrictDate,
 )
 from riko.utils import Fetch, truncate_content
@@ -47,27 +46,36 @@ from riko.utils import Fetch, truncate_content
 try:
     from lxml import etree, html  # type: ignore[import-untyped]
 except ImportError:
-    xml_parser = "ElementTree"
     html5parser = None
 
     import xml.etree.ElementTree as etree  # noqa: N813, S405
     from xml.etree.ElementTree import ElementTree  # noqa: S405
 
     import html5lib as html
+
+    IS_LXML = False
 else:
-    ElementTree = None
-    xml_parser = "lxml"
     from lxml.html import html5parser
 
-try:
-    import speedparser3 as speedparser
-except ImportError:
-    rss_parser = "feedparser"
-    speedparser = None
-else:
-    rss_parser = "speedparser"
+    ElementTree = None
+    IS_LXML = True
 
-rssparser = speedparser or feedparser
+try:
+    import fastfeedparser
+except ImportError:
+    rss_parser = feedparser
+    IS_FASTFEEDPARSER = False
+else:
+    rss_parser = fastfeedparser
+    IS_FASTFEEDPARSER = True
+
+try:
+    import ijson
+except ImportError:
+    ijson = None
+    IJSON_IS_NATIVE = False
+else:
+    IJSON_IS_NATIVE = ijson.backend != "python"
 
 if TYPE_CHECKING:
     from xml.etree.ElementTree import Element as nativeElement
@@ -76,6 +84,7 @@ if TYPE_CHECKING:
     from lxml.etree import Element as lxmlElement
     from lxml.etree import ElementTree as lxmlElementTree
 
+STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 AnyElementTree: TypeAlias = Union["nativeElementTree", "lxmlElementTree"]
 AnyElement: TypeAlias = Union["nativeElement", "lxmlElement"]
 Stringy: TypeAlias = Union[str, "StringySequence", "StringyMapping"]
@@ -83,8 +92,8 @@ StringyMapping: TypeAlias = Mapping[str, Stringy]
 StringySequence: TypeAlias = Sequence[Stringy]
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
-logger.debug(f"{xml_parser=}")
-logger.debug(f"{rss_parser=}")
+logger.debug(f"{IS_LXML=}")
+logger.debug(f"{IS_FASTFEEDPARSER=}")
 
 ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 
@@ -163,28 +172,34 @@ def get_text(html: str, convert_charrefs=False):
 # The overloads are so I can call parse_rss(**kwargs) with Pyright complaining.
 # https://stackoverflow.com/q/79673094
 @overload
-def parse_rss(url: str, **kwargs: BasicArg) -> RSSParseResult: ...  # noqa: E704
+def parse_rss(url: str, **kwargs: BasicArg) -> list[ParserRSSEntry]: ...  # noqa: E704
 @overload
-def parse_rss(**kwargs: BasicArg) -> RSSParseResult: ...  # noqa: E704
-def parse_rss(url: BasicArg = "", **kwargs: BasicArg) -> RSSParseResult:  # noqa: E302
-    parsed: RSSParseResult = {"entries": []}
+def parse_rss(**kwargs: BasicArg) -> list[ParserRSSEntry]: ...  # noqa: E704
+def parse_rss(url: BasicArg = "", **kwargs: BasicArg) -> list[ParserRSSEntry]:  # noqa: E302
+    f = None
 
     try:
-        f = Fetch(str(url), **kwargs)
+        f = Fetch(str(url), binary=True, **kwargs)
     except URLError:
-        # url is an xml string
-        f, content, url = None, url, "content"
+        source, url = str(url), "content"
     else:
-        content = f.read() if f.file else ""
+        if f.file and IS_FASTFEEDPARSER:
+            # include_content=True, include_tags=True, include_media=True,
+            # include_enclosures=True
+            source = f.read()
+        elif f.file:
+            source = f.file
+        else:
+            source = b""
 
     try:
-        parsed = cast(RSSParseResult, rssparser.parse(content))
+        parsed = rss_parser.parse(source)  # pyright: ignore[reportArgumentType]
     finally:
         if f:
             f.close()
 
     bozo = parsed.get("bozo")
-    entry_count = len(parsed.get("entries", []))
+    entry_count = len(parsed.entries)
 
     if bozo is False and not entry_count:
         logger.warning(f"Parsed {url} successfully but no entries were found.")
@@ -198,9 +213,9 @@ def parse_rss(url: BasicArg = "", **kwargs: BasicArg) -> RSSParseResult:  # noqa
             msg = str(bozo_exception)
             logger.error(f"Error parsing {url}: {msg}")
 
-        logger.warning(f"Content: {truncate_content(content)}")
+        logger.warning(f"Content: {truncate_content(source)}")
 
-    return parsed
+    return cast(list[ParserRSSEntry], parsed.entries)
 
 
 def extract_namespace(tree: AnyElementTree) -> str | None:
@@ -381,24 +396,24 @@ def xpath(
 
 @overload
 def xml2etree(  # noqa: E704
-    f: str | BytesIO | StringIO | NamedTextIOWrapper | TextIOBase,
+    f: str | FileTypes | NamedTextIOWrapper | TextIOBase,
     xml: Literal[True],
     html5: bool = ...,
 ) -> AnyElementTree: ...
 @overload  # noqa: E302
 def xml2etree(  # noqa: E704
-    f: str | BytesIO | StringIO | NamedTextIOWrapper | TextIOBase,
+    f: str | FileTypes | NamedTextIOWrapper | TextIOBase,
     xml: Literal[False],
     html5: Literal[True],
 ) -> AnyElementTree: ...
 @overload  # noqa: E302
 def xml2etree(  # noqa: E704
-    f: str | BytesIO | StringIO | NamedTextIOWrapper | TextIOBase,
+    f: str | FileTypes | NamedTextIOWrapper | TextIOBase,
     xml: Literal[False],
     html5: Literal[False] = ...,
 ) -> "nativeElementTree": ...
 def xml2etree(  # noqa: E302
-    f: str | BytesIO | StringIO | NamedTextIOWrapper | TextIOBase,
+    f: str | FileTypes | NamedTextIOWrapper | TextIOBase,
     xml: bool = True,
     html5: bool = False,
 ) -> AnyElementTree | None:
@@ -406,7 +421,7 @@ def xml2etree(  # noqa: E302
         element_tree = etree.parse(f)  # noqa: S314
     elif html5 and html5parser:
         element_tree = html5parser.parse(f)
-    elif xml_parser == "lxml":
+    elif IS_LXML:
         element_tree = html.parse(f)
     else:
         if html5 and not html5parser:
@@ -468,7 +483,8 @@ def etree2dict(element: AnyElement) -> Stringy:
 
 
 def any2dict(
-    content: NamedTextIOWrapper
+    content: FileTypes
+    | NamedTextIOWrapper
     | TextIOBase
     | Stringy
     | IntermediateValue
@@ -505,7 +521,19 @@ def any2dict(
         else:
             yield etree2dict(root)
     elif ext == "json":
-        if isinstance(content, str):
+        if not IJSON_IS_NATIVE:
+            use_ijson = False
+        elif isinstance(content, BytesIO):
+            size = content.seek(0, 2)
+            content.seek(0)
+            use_ijson = size >= STREAMING_THRESHOLD
+        else:
+            use_ijson = isinstance(content, RawIOBase)
+
+        if use_ijson:
+            prefix = path if path.endswith(".item") else f"{path}.item"
+            yield from items(content, prefix, use_float=True)
+        elif isinstance(content, str):
             try:
                 json = loads(content)
             except JSONDecodeError as e:
@@ -514,26 +542,13 @@ def any2dict(
                 value = DotDict(json).get(path, "")
                 yield from any2dict(value, ext=None)
         else:
-            objects = items(content, f"{path}.item")
-
             try:
-                yield next(objects)
-            except IncompleteJSONError as e:
+                json_obj = load(content)
+            except (JSONDecodeError, ValueError) as e:
                 logger.error(e)
-                content.seek(0)
-                objects = items(content, path)
-
-                try:
-                    yield next(objects)
-                except IncompleteJSONError as e:
-                    logger.error(e)
-                    logger.warning("Loading file into memory")
-                    content.seek(0)
-                    yield from any2dict(content.read(), ext="json", path=path)
-                else:
-                    yield from objects
             else:
-                yield from objects
+                value = DotDict(json_obj).get(path, "") if path else json_obj
+                yield from any2dict(value, ext=None)
     elif ext:
         raise TypeError(f"Invalid file type: '{ext}'")
     elif isinstance(content, str):
