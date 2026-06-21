@@ -362,6 +362,20 @@ wheels = [
 ]
 
 [[package]]
+name = "csv2ofx"
+version = "0.34.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "meza" },
+    { name = "python-dateutil" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/30/98a6f509edee721c5d4bff1f3f02c38aeeda3ca075a1d3bd6a95f78f2e61/csv2ofx-0.34.2.tar.gz", hash = "sha256:b94fe6bb6ca1d3dc7822173b62ea032081fe36c6ed3cd405492650abaae5b4cb", size = 4135053, upload-time = "2026-03-08T15:26:51.156Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/54/03bcadafd679541c2e1ce41e95ee15559d8f300be1246fcbe93357eb4313/csv2ofx-0.34.2-py3-none-any.whl", hash = "sha256:3446da587869c0f4536a75c5e5a4f94444b3b6cfedb28db40e85ac2897b9e25a", size = 40738, upload-time = "2026-03-08T15:26:49.578Z" },
+]
+
+[[package]]
 name = "dbfread"
 version = "2.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1153,6 +1167,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+finance = [
+    { name = "csv2ofx" },
+]
 perf = [
     { name = "lxml" },
     { name = "speedparser3" },
@@ -1183,6 +1200,7 @@ dev = [
 requires-dist = [
     { name = "babel", specifier = ">=2.8.0,<3.0.0" },
     { name = "chardet", specifier = ">=3.0.4,<8.0.0" },
+    { name = "csv2ofx", marker = "extra == 'finance'", specifier = ">=0.24.0" },
     { name = "feedparser", specifier = ">=5.2.1,<7.0.0" },
     { name = "html5lib", specifier = ">=1.0.1,<2.0.0" },
     { name = "ijson", specifier = ">=2.6.1,<4.0.0" },
@@ -1198,7 +1216,7 @@ requires-dist = [
     { name = "treq", marker = "extra == 'twisted'", specifier = ">=26.0.0,<27.0.0" },
     { name = "twisted", marker = "extra == 'twisted'", specifier = ">=26.0.0,<27.0.0" },
 ]
-provides-extras = ["perf", "twisted"]
+provides-extras = ["perf", "twisted", "finance"]
 
 [package.metadata.requires-dev]
 dev = [

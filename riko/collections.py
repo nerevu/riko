@@ -174,7 +174,7 @@ def records2ofx(items, **_) -> Iterable[str]:
     trxns = ofx.gen_trxns(groups)
     cleaned_trxns = ofx.clean_trxns(trxns)
     data = gen_data(cleaned_trxns)
-    return chain([ofx.header(), ofx.gen_body(data), ofx.footer()])
+    return chain(ofx.header(), ofx.gen_body(data), ofx.footer())
 
 
 def records2qif(items, **_) -> Iterable[str]:
@@ -183,7 +183,7 @@ def records2qif(items, **_) -> Iterable[str]:
     trxns = qif.gen_trxns(groups)
     cleaned_trxns = qif.clean_trxns(trxns)
     data = gen_data(cleaned_trxns)
-    return chain([qif.header(), qif.gen_body(data), qif.footer()])
+    return chain(qif.gen_body(data), qif.footer())
 
 
 CONVERSION_FUNCS: dict[str, ConversionFunc] = {
@@ -195,10 +195,12 @@ CONVERSION_FUNCS: dict[str, ConversionFunc] = {
     "json": cv.records2json,
     # 'kml': cv.records2kml,
     "list": lambda items, **kw: list(items),
-    "ofx": cast(ConversionFunc, records2ofx),
-    "qif": cast(ConversionFunc, records2qif),
     "tuple": lambda items, **kw: tuple(items),
 }
+
+if OFX is not None:
+    CONVERSION_FUNCS["ofx"] = cast(ConversionFunc, records2ofx)
+    CONVERSION_FUNCS["qif"] = cast(ConversionFunc, records2qif)
 
 
 @overload
