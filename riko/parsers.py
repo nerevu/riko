@@ -41,7 +41,7 @@ from riko.types.values import (
     ParserRSSEntry,
     StrictDate,
 )
-from riko.utils import Fetch, truncate_content
+from riko.utils import Fetch, repr_cache, truncate_content
 
 try:
     from lxml import etree, html  # type: ignore[import-untyped]
@@ -85,9 +85,6 @@ if TYPE_CHECKING:
     from lxml.etree import ElementTree as lxmlElementTree
 
 STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
-_CONF_DYNAMIC_CACHE: dict[str, bool] = {}
-_PARSE_CONF_CACHE: dict[tuple, ComplexArg] = {}
-_CACHE_MISS = "CACHE_MISS"
 
 AnyElementTree: TypeAlias = Union["nativeElementTree", "lxmlElementTree"]
 AnyElement: TypeAlias = Union["nativeElement", "lxmlElement"]
@@ -562,50 +559,89 @@ def any2dict(
         raise TypeError("No file type provided!")
 
 
-def conf_is_dynamic(conf: ComplexArg) -> bool:
+def _conf_is_dynamic_uncached(conf: ComplexArg) -> bool:
     is_dynamic = False
 
     if isinstance(conf, Mapping):
         if "subkey" in conf or is_sentinal(conf):
             is_dynamic = True
         else:
-            is_dynamic = any(map(conf_is_dynamic, conf.values()))
+            is_dynamic = any(map(_conf_is_dynamic_uncached, conf.values()))
     elif isinstance(conf, Sequence) and not isinstance(conf, str):
-        is_dynamic = any(map(conf_is_dynamic, conf))
+        is_dynamic = any(map(_conf_is_dynamic_uncached, conf))
 
     return is_dynamic
 
 
-def parse_conf(
+@repr_cache
+def _conf_is_dynamic_cached(conf: ComplexArg) -> bool:
+    return _conf_is_dynamic_uncached(conf)
+
+
+def conf_is_dynamic(conf: ComplexArg, memoize=False) -> bool:
+    """
+    Examples:
+        >>> _conf_is_dynamic_cached.cache_clear()
+        >>> conf_is_dynamic({'type': 'text', 'value': 'hello'}, True)
+        False
+        >>> conf_is_dynamic({'type': 'text', 'subkey': 'title'}, True)
+        True
+        >>> _ = conf_is_dynamic({'type': 'text', 'value': 'hello'}, True)
+        >>> _conf_is_dynamic_cached.cache_info().hits
+        1
+
+    """
+    func = _conf_is_dynamic_cached if memoize else _conf_is_dynamic_uncached
+    return func(conf)
+
+
+def _parse_conf_uncached(
     item: ItemArg = None,
     conf: AnyModuleConf | ConfValues | None = None,
+    default=None,
     **kwargs,
 ) -> ComplexArg:
-    conf_repr = repr(conf)
+    parsed = default
 
-    if conf_repr not in _CONF_DYNAMIC_CACHE:
-        _CONF_DYNAMIC_CACHE[conf_repr] = conf_is_dynamic(conf)
+    if is_dataclass(conf) and not isinstance(conf, type):
+        conf = asdict(conf)
 
-    is_dynamic = _CONF_DYNAMIC_CACHE[conf_repr]
-    cache_key = None if is_dynamic else (conf_repr, repr(kwargs))
+    if isinstance(conf, Mapping):
+        dd_conf = DotDict(conf)
 
-    if cache_key:
-        cached = _PARSE_CONF_CACHE.get(cache_key, _CACHE_MISS)
-    else:
-        cached = _CACHE_MISS
-
-    if cached is _CACHE_MISS:
-        parsed = _parse_conf(item, conf, **kwargs)
-
-        if cache_key is not None:
-            _PARSE_CONF_CACHE[cache_key] = parsed
-    else:
-        parsed = cached
+        if subkey := dd_conf.get("subkey"):
+            dd_item = DotDict(item) if isinstance(item, Mapping) else DotDict()
+            parsed = dd_item.get(cast(str, subkey), **kwargs)
+        elif is_sentinal(dd_conf):
+            parsed = dd_conf.get(**kwargs)
+        elif is_type_value(dd_conf):
+            parsed = cast(DotDict, dd_conf).get()
+        else:
+            parsed = {
+                k.lower(): parse_conf(item, cast(ConfValues, v), **kwargs)
+                for k, v in conf.items()
+            }
+    elif isinstance(conf, (str, struct_time)):
+        parsed = conf
+    elif isinstance(conf, Sequence):
+        parsed = [parse_conf(item, c, **kwargs) for c in conf]
+    elif conf is not None:
+        parsed = conf
 
     return parsed
 
 
-def _parse_conf(
+@repr_cache
+def _parse_conf_cached(
+    item: ItemArg = None,
+    conf: AnyModuleConf | ConfValues | None = None,
+    default=None,
+    **kwargs,
+) -> ComplexArg:
+    return _parse_conf_uncached(item, conf, default=default, **kwargs)
+
+
+def parse_conf(
     item: ItemArg = None,
     conf: AnyModuleConf | ConfValues | None = None,
     default=None,
@@ -640,36 +676,18 @@ def _parse_conf(
     >>> conf = DotDict({"terminal": "attrs_1", "type": "text"})
     >>> conf.get(attrs_1=iter([{'content': 'baz'}]))
     {'content': 'baz'}
+    >>> _parse_conf_cached.cache_clear()
+    >>> parse_conf(conf={'type': 'text', 'value': 'hello'})
+    'hello'
+    >>> _parse_conf_cached.cache_info().hits
+    0
+    >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'})
+    >>> _parse_conf_cached.cache_info().hits
+    1
 
     """
-    parsed = default
-
-    if is_dataclass(conf) and not isinstance(conf, type):
-        conf = asdict(conf)
-
-    if isinstance(conf, Mapping):
-        dd_conf = DotDict(conf)
-
-        if subkey := dd_conf.get("subkey"):
-            dd_item = DotDict(item) if isinstance(item, Mapping) else DotDict()
-            parsed = dd_item.get(cast(str, subkey), **kwargs)
-        elif is_sentinal(dd_conf):
-            parsed = dd_conf.get(**kwargs)
-        elif is_type_value(dd_conf):
-            parsed = cast(DotDict, dd_conf).get()
-        else:
-            parsed = {
-                k.lower(): parse_conf(item, cast(ConfValues, v), **kwargs)
-                for k, v in conf.items()
-            }
-    elif isinstance(conf, (str, struct_time)):
-        parsed = conf
-    elif isinstance(conf, Sequence):
-        parsed = [parse_conf(item, c, **kwargs) for c in conf]
-    elif conf is not None:
-        parsed = conf
-
-    return parsed
+    func = _parse_conf_uncached if conf_is_dynamic(conf) else _parse_conf_cached
+    return func(item, conf, default=default, **kwargs)
 
 
 def get_skip(item: ItemArg, skip_if: SkipIf | None = None, **_) -> bool:

@@ -7,6 +7,7 @@ from calendar import timegm
 from collections.abc import Callable, Iterator
 from datetime import UTC, date, timedelta, timezone, tzinfo
 from datetime import datetime as dt
+from functools import cache
 from time import strptime, struct_time
 from typing import Annotated, Literal, cast, overload
 from zoneinfo import ZoneInfo, available_timezones
@@ -22,8 +23,6 @@ NOW = dt.now(timezone.utc)
 TODAY = NOW.date()
 EPOCH_DATETIME = dt(1970, 1, 1, 0, 0, 0, tzinfo=UTC)
 EPOCH_DATE = date(EPOCH_DATETIME.year, EPOCH_DATETIME.month, EPOCH_DATETIME.day)
-
-_DATE_PARSE_CACHE: dict[str, dt | BaseException] = {}
 
 TT_KEYS = (
     "year",
@@ -43,14 +42,40 @@ AwareST = Annotated[struct_time, "timezone-aware"]
 NaiveST = Annotated[struct_time, "timezone-naive"]
 
 
-def parse_date_string(value: str) -> dt:
-    if value not in _DATE_PARSE_CACHE:
-        try:
-            _DATE_PARSE_CACHE[value] = parser.parse(value, tzinfos=TZINFOS)
-        except Exception as e:  # noqa: BLE001
-            _DATE_PARSE_CACHE[value] = e
+@cache
+def _parse_date_cached(value: str) -> dt | BaseException:
+    # cache doesn't work with exceptions, so we return the exception and raise it in the
+    # caller
+    try:
+        return parser.parse(value, tzinfos=TZINFOS)
+    except Exception as e:  # noqa: BLE001
+        return e
 
-    result = _DATE_PARSE_CACHE[value]
+
+def parse_date_string(value: str) -> dt:
+    """
+    Examples:
+        >>> _parse_date_cached.cache_clear()
+        >>> from datetime import datetime
+        >>> isinstance(parse_date_string('2021-01-01'), datetime)
+        True
+        >>> _ = parse_date_string('2021-01-01')
+        >>> _parse_date_cached.cache_info().hits
+        1
+        >>> _parse_date_cached.cache_clear()
+        >>> isinstance(parse_date_string('foo'), datetime)
+        Traceback (most recent call last):
+            ...
+        dateutil.parser._parser.ParserError: Unknown string format: foo
+        >>> _ = parse_date_string('foo')
+        Traceback (most recent call last):
+            ...
+        dateutil.parser._parser.ParserError: Unknown string format: foo
+        >>> _parse_date_cached.cache_info().hits
+        1
+
+    """
+    result = _parse_date_cached(value)
 
     if isinstance(result, BaseException):
         raise result

@@ -8,26 +8,40 @@ import datetime
 import fcntl
 import itertools as it
 import re
+import sys
 from codecs import StreamReader
 from collections import deque
 from collections.abc import (
     Callable,
     Generator,
+    Hashable,
     ItemsView,
     Iterable,
     Iterator,
     Mapping,
     Sequence,
 )
+from dataclasses import asdict, fields, is_dataclass
 from decimal import Decimal
-from functools import partial, reduce, wraps
+from functools import cache, partial, reduce, wraps
 from http.client import HTTPResponse
 from io import BytesIO, IOBase, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
 from os import O_NONBLOCK
 from time import struct_time
-from typing import Generic, Literal, TypeVar, cast, overload
+from typing import (
+    Generic,
+    Literal,
+    Protocol,
+    TypeVar,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
+    overload,
+)
 from typing import cast as cast_type
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -38,8 +52,8 @@ import pygogo as gogo
 import requests
 from meza.io import reencode
 from mezmorize.utils import get_cache_type
-from werkzeug.local import LocalProxy
 
+import riko.cast as cast_module
 from riko import (
     ENCODING,
     Context,
@@ -92,7 +106,121 @@ logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
 
 T = TypeVar("T", bound=ComplexArg)
+R = TypeVar("R")
+R_co = TypeVar("R_co", covariant=True)
 B = TypeVar("B", Literal[True], Literal[False])
+
+
+class ReprCacheWrapper(Protocol[R_co]):
+    def __call__(  # noqa: E704
+        self, *args: ComplexArg, **kwargs: ComplexArg
+    ) -> R_co: ...
+    def cache_clear(self) -> None: ...  # noqa: E704
+    def cache_info(self) -> object: ...  # noqa: E704
+
+
+def fromdict(cls, **d):
+    module = sys.modules[cls.__module__]
+    localns = {**vars(module), **vars(cast_module)}
+    hints = get_type_hints(cls, localns=localns, include_extras=True)
+
+    for f in fields(cls):
+        if f.name not in d:
+            continue
+
+        ftype = hints[f.name]
+        val = d[f.name]
+        origin = get_origin(ftype)
+
+        if origin is Union:
+            args = [a for a in get_args(ftype) if a is not type(None)]
+            ftype = args[0] if args else ftype
+            origin = get_origin(ftype)
+
+        if origin is Literal:
+            valid = get_args(ftype)
+
+            if val not in valid:
+                raise ValueError(f"Invalid {f.name}={val!r}, expected one of {valid}")
+        elif is_dataclass(ftype) and isinstance(ftype, type) and isinstance(val, dict):
+            val = fromdict(ftype, **val)
+
+        d[f.name] = val
+
+    return cls(**d)
+
+
+def _to_hashable(obj: ComplexArg) -> Hashable:
+    hashed = None
+
+    if obj is None:
+        pass
+    elif type(obj) in frozenset([int, float, bool, bytes, str, struct_time]):
+        hashed = obj
+    elif isinstance(obj, DotDict):
+        inner = sorted((k, _to_hashable(v)) for k, v in obj._store.values())
+        hashed = (DotDict, tuple(inner))
+    elif isinstance(obj, Objectify):
+        inner = tuple(sorted((k, _to_hashable(v)) for k, v in obj.iteritems()))
+        hashed = (Objectify, inner)
+    elif isinstance(obj, Mapping):
+        inner = sorted((k, _to_hashable(cast(ComplexArg, v))) for k, v in obj.items())
+        hashed = (dict, tuple(inner))
+    elif isinstance(obj, Sequence):
+        hashed = (list, tuple(_to_hashable(v) for v in obj))
+    elif is_dataclass(obj):
+        items = asdict(obj).items()
+        inner = tuple(sorted((k, _to_hashable(cast(ComplexArg, v))) for k, v in items))
+        hashed = ("dataclass", (type(obj), inner))
+    else:
+        logger.error(f"Unsupported {type(obj)=}")
+
+    return hashed
+
+
+def _from_hashable(obj: Hashable) -> ComplexArg:
+    if isinstance(obj, tuple) and len(obj) == 2:
+        typ, inner = obj
+
+        if typ == "dataclass":
+            cls, inner = inner
+        else:
+            cls = None
+
+        if typ in (Objectify, DotDict, dict, "dataclass"):
+            arg = {k: _from_hashable(v) for k, v in inner}
+
+            if (typ is Objectify) or (typ is DotDict):
+                arg = typ(arg)
+            elif cls and typ == "dataclass":
+                arg = fromdict(cls, **arg)
+        elif typ is list:
+            arg = [_from_hashable(v) for v in inner]
+        else:
+            arg = cast(ComplexArg, obj)
+    else:
+        arg = cast(ComplexArg, obj)
+
+    return arg
+
+
+def repr_cache(fn: Callable[..., R]) -> ReprCacheWrapper[R]:
+    @cache
+    def _cached(hashable_args: tuple, hashable_kwargs: tuple) -> R:
+        args = tuple(_from_hashable(a) for a in hashable_args)
+        kwargs = {k: _from_hashable(v) for k, v in hashable_kwargs}
+        return fn(*args, **kwargs)
+
+    @wraps(fn)
+    def wrapper(*args: ComplexArg, **kwargs: ComplexArg) -> R:
+        return _cached(
+            tuple(_to_hashable(a) for a in args),
+            tuple(sorted((k, _to_hashable(v)) for k, v in kwargs.items())),
+        )
+
+    setattr(wrapper, "cache_clear", _cached.cache_clear)  # noqa: B010
+    setattr(wrapper, "cache_info", _cached.cache_info)  # noqa: B010
+    return cast(ReprCacheWrapper[R], wrapper)
 
 
 def combine_dicts(*dicts: Mapping[str, BasicArg]) -> dict[str, BasicArg]:
@@ -297,14 +425,31 @@ def opener(  # noqa: E302
     return (response, content_type)
 
 
+@repr_cache
 def get_opener(memoize=False, **kwargs) -> Opener:
+    """
+    Examples:
+        >>> get_opener.cache_clear()
+        >>> o1 = get_opener()
+        >>> o1 is get_opener()
+        True
+        >>> o1 is get_opener(encoding='utf-8')
+        False
+        >>> get_opener.cache_info().hits
+        1
+        >>> o2 = get_opener(memoize=True)
+        >>> o2 is get_opener(memoize=True)
+        True
+        >>> get_opener.cache_info().hits
+        2
+
+    """
     wrapper = partial(opener, memoize=memoize, **kwargs)
     current_opener = wraps(opener)(wrapper)
 
     if memoize:
         kwargs.setdefault("cache_type", get_cache_type(spread=False))
-        memoizer = mezmorize.memoize(**kwargs)
-        current_opener = memoizer(current_opener)
+        return mezmorize.memoize(**kwargs)(current_opener)
 
     return current_opener
 
@@ -347,26 +492,14 @@ class Fetch(Generic[B]):
         self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]
         self.content_type = None
         self.file = None
+        opener = get_opener(memoize=bool(url and memoize), binary=binary, **kwargs)
 
-        if url and memoize:
-            local = partial(get_opener, memoize=True, binary=binary, **kwargs)
-            _opener = LocalProxy(local)
-            self.opener = cast_type(Opener, _opener)
-            response, self.content_type = self.opener(str(url))
-        else:
-            self.opener = get_opener(memoize=False, binary=binary, **kwargs)
-
-            try:
-                response, self.content_type = self.opener(str(url))
-            except URLError as e:
-                if "File name too long" in str(e.reason):
-                    raise
-                else:
-                    logger.error(f"Error opening {url}: {e.reason}")
-                    response = None
-
-        self.file = response
-
+        try:
+            self.file, self.content_type = opener(str(url))
+        except URLError as e:
+            if "File name too long" in str(e.reason):
+                raise
+            logger.error(f"Error opening {url}: {e.reason}")
         if self.file:
             self.close = self.file.close
 
