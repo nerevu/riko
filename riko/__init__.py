@@ -37,8 +37,7 @@ from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Se
 from importlib.metadata import metadata, version
 from os import path as p
 from time import struct_time
-from typing import Any, Literal, TypeVar, overload
-from typing import cast as cast_type
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 from meza import compat
 from meza.fntools import Objectify as _Objectify
@@ -177,18 +176,12 @@ class Objectify(_Objectify):
         _data = {k.lower(): v for k, v in data.items()}
         super().__init__(_data, *args, **kwargs)
 
-    def __getattribute__(self, name: str) -> BasicArg:
-        return super().__getattribute__(name)
+    if TYPE_CHECKING:
 
-    def __getitem__(self, name: str) -> BasicArg:
-        item = super().__getitem__(name)
-        return cast_type(BasicArg, item)
-
-    def __iter__(self) -> Iterator[str]:
-        return super().__iter__()
-
-    def iteritems(self) -> Iterator[tuple[str, BasicArg]]:
-        return super().iteritems()
+        def __getattribute__(self, name: str) -> BasicArg: ...  # noqa: E704
+        def __getitem__(self, name: str) -> BasicArg: ...  # noqa: E704
+        def __iter__(self) -> Iterator[str]: ...  # noqa: E704
+        def iteritems(self) -> Iterator[tuple[str, BasicArg]]: ...  # noqa: E704
 
 
 class Objconf(Objectify):

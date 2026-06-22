@@ -28,7 +28,7 @@ import pygogo as gogo
 from ijson import items
 from requests.structures import CaseInsensitiveDict
 
-from riko import Objectify, listize
+from riko import listize
 from riko.bado.io import NamedTextIOWrapper
 from riko.dotdict import DotDict, is_sentinal, is_type_value
 from riko.types.general import ComplexArg, FileTypes, ItemArg, SkipFunc, SkipIf
@@ -85,6 +85,10 @@ if TYPE_CHECKING:
     from lxml.etree import ElementTree as lxmlElementTree
 
 STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
+_CONF_DYNAMIC_CACHE: dict[str, bool] = {}
+_PARSE_CONF_CACHE: dict[tuple, ComplexArg] = {}
+_CACHE_MISS = "CACHE_MISS"
+
 AnyElementTree: TypeAlias = Union["nativeElementTree", "lxmlElementTree"]
 AnyElement: TypeAlias = Union["nativeElement", "lxmlElement"]
 Stringy: TypeAlias = Union[str, "StringySequence", "StringyMapping"]
@@ -558,8 +562,54 @@ def any2dict(
         raise TypeError("No file type provided!")
 
 
+def conf_is_dynamic(conf: ComplexArg) -> bool:
+    is_dynamic = False
+
+    if isinstance(conf, Mapping):
+        if "subkey" in conf or is_sentinal(conf):
+            is_dynamic = True
+        else:
+            is_dynamic = any(map(conf_is_dynamic, conf.values()))
+    elif isinstance(conf, Sequence) and not isinstance(conf, str):
+        is_dynamic = any(map(conf_is_dynamic, conf))
+
+    return is_dynamic
+
+
 def parse_conf(
-    item: ItemArg = None, conf: AnyModuleConf | ConfValues | None = None, **kwargs
+    item: ItemArg = None,
+    conf: AnyModuleConf | ConfValues | None = None,
+    **kwargs,
+) -> ComplexArg:
+    conf_repr = repr(conf)
+
+    if conf_repr not in _CONF_DYNAMIC_CACHE:
+        _CONF_DYNAMIC_CACHE[conf_repr] = conf_is_dynamic(conf)
+
+    is_dynamic = _CONF_DYNAMIC_CACHE[conf_repr]
+    cache_key = None if is_dynamic else (conf_repr, repr(kwargs))
+
+    if cache_key:
+        cached = _PARSE_CONF_CACHE.get(cache_key, _CACHE_MISS)
+    else:
+        cached = _CACHE_MISS
+
+    if cached is _CACHE_MISS:
+        parsed = _parse_conf(item, conf, **kwargs)
+
+        if cache_key is not None:
+            _PARSE_CONF_CACHE[cache_key] = parsed
+    else:
+        parsed = cached
+
+    return parsed
+
+
+def _parse_conf(
+    item: ItemArg = None,
+    conf: AnyModuleConf | ConfValues | None = None,
+    default=None,
+    **kwargs,
 ) -> ComplexArg:
     """
     Examples
@@ -592,8 +642,7 @@ def parse_conf(
     {'content': 'baz'}
 
     """
-    kw = Objectify(kwargs)
-    parsed = kw.default
+    parsed = default
 
     if is_dataclass(conf) and not isinstance(conf, type):
         conf = asdict(conf)

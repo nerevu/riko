@@ -21,7 +21,7 @@ from riko.bado.itertools import async_map
 from riko.cast import CAST_SWITCH, BasicCastType, CastType, cast_none, cast_pass
 from riko.cast import cast as cast_value
 from riko.dotdict import DotDict
-from riko.parsers import get_field, get_skip, parse_conf
+from riko.parsers import conf_is_dynamic, get_field, get_skip, parse_conf
 from riko.types.general import (
     AsyncOperatorParser,
     AsyncOperatorWrapper,
@@ -69,7 +69,7 @@ from riko.utils import broadcast, dispatch
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
-_FRAMEWORK_KEYS = frozenset(
+FRAMEWORK_KEYS = frozenset(
     {"isasync", "pollable", "debug", "ftype", "ptype", "assign", "emit"}
 )
 
@@ -158,7 +158,7 @@ T = TypeVar("T", bound=ComplexArg)
 
 
 def dictize(data: Mapping | T) -> DotDict | T:
-    if isinstance(data, Objectify):
+    if isinstance(data, (DotDict, Objectify)):
         result = data
     elif isinstance(data, Mapping):
         result = DotDict(data)
@@ -257,6 +257,36 @@ def gen_assignments(
         yield value
 
 
+def get_pieces_or_conf(
+    parsed_conf: ComplexArg, defaults: Defaults, opts: Opts
+) -> tuple[
+    BasicArg | AnyModuleConf | list[BasicArg] | Defaults | None,
+    AnyModuleConf | Defaults,
+]:
+    if isinstance(parsed_conf, Mapping):
+        merged_conf = cast_type(AnyModuleConf, {**defaults, **parsed_conf})
+    else:
+        merged_conf = defaults
+
+    if extract := opts.get("extract"):
+        try:
+            pieces = next(v for k, v in merged_conf.items() if k.lower() == extract)
+        except StopIteration:
+            logger.error(f"{extract=} not found in conf {merged_conf}")
+            pieces = None
+        else:
+            pieces = cast_type(BasicArg, pieces)
+
+        if pieces and opts.get("listize"):
+            pieces_or_conf = cast_type(list[BasicArg], listize(pieces))
+        else:
+            pieces_or_conf = pieces
+    else:
+        pieces_or_conf = merged_conf
+
+    return pieces_or_conf, merged_conf
+
+
 class Module:
     def __init__(
         self,
@@ -287,6 +317,7 @@ class Module:
         self.is_source = False
         self.sub_type = None
         self._prepare_key: tuple | None = None
+        self._static_casted: tuple | None = None
 
     def prepare(
         self,
@@ -340,8 +371,18 @@ class Module:
 
         if self.opts.get("ptype") == "none":
             self.casters = None
+            self._static_casted = None
         else:
             self.casters = get_casters(self.opts)
+
+            if self.casters and not conf_is_dynamic(_conf):
+                parsed_conf = parse_conf(None, conf=_conf)
+                args = (parsed_conf, self.defaults, self.opts)
+                parsed = get_pieces_or_conf(*args)
+                casted = dispatch(parsed, *self.casters[1:])
+                self._static_casted = (self.casters[0], *casted)
+            else:
+                self._static_casted = None
 
 
 class processor(Module):  # noqa: N801
@@ -445,9 +486,7 @@ class processor(Module):  # noqa: N801
         super().__init__(*args, **kwargs)
 
     def parse(self, item: ItemArg, module_name: str) -> DotDict | DateLike | NumLike:
-        if isinstance(item, NumLikeType):
-            parsed = item
-        if isinstance(item, DateLikeType):
+        if isinstance(item, (NumLikeType, DateLikeType, DotDict)):
             parsed = item
         elif isinstance(item, Objectify):
             parsed = DotDict(dict(item.iteritems()))
@@ -471,19 +510,27 @@ class processor(Module):  # noqa: N801
     def setup(
         self, _input: DotDict | DateLike | NumLike, **kwargs
     ) -> tuple[ItemArg, Casted, bool]:
-        dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in _FRAMEWORK_KEYS}
-        _conf = cast_type(AnyModuleConf, self.conf.asdict())
+        dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in FRAMEWORK_KEYS}
         skip = get_skip(_input, skip_if=self.opts.get("skip_if"))
 
-        orig_item, casted = _dispatch(
-            _input,
-            self.opts,
-            conf=_conf,
-            parsers=self.parsers,
-            casters=self.casters,
-            defaults=Defaults(self.defaults),
-            **dispatch_kwargs,
-        )
+        if self._static_casted:
+            field_func, pre_casted_extract, pre_casted_conf = self._static_casted
+            field = dispatch_kwargs.pop("field", None) or self.opts.get("field") or ""
+            parsed_field = get_field(_input, field=field, **dispatch_kwargs)
+            casted_field = field_func(parsed_field)
+            orig_item = _input
+            casted = Casted(casted_field, pre_casted_extract, pre_casted_conf)
+        else:
+            _conf = cast_type(AnyModuleConf, self.conf.asdict())
+            args = (_input, self.opts, _conf)
+            orig_item, casted = _dispatch(
+                *args,
+                parsers=self.parsers,
+                casters=self.casters,
+                defaults=Defaults(self.defaults),
+                **dispatch_kwargs,
+            )
+
         return orig_item, casted, skip
 
     def process(
@@ -571,10 +618,14 @@ class processor(Module):  # noqa: N801
         ) -> Stream:
             _input = self.parse(item, module_name)
             self.prepare(module_name, conf=conf, **kwargs)
-            _conf = cast_type(AnyModuleConf, self.conf.asdict())
             emit = bool(self.emit)
             assign = self.assign or ""
             orig_item, casted, skip = self.setup(_input, **kwargs)
+
+            if self._static_casted:
+                _conf = cast_type(AnyModuleConf, self._static_casted[2])
+            else:
+                _conf = cast_type(AnyModuleConf, self.conf.asdict())
 
             if skip:
                 stream = orig_item
@@ -592,10 +643,14 @@ class processor(Module):  # noqa: N801
         ) -> Stream:
             _input = self.parse(item, module_name)
             self.prepare(module_name, conf=conf, **kwargs)
-            _conf = cast_type(AnyModuleConf, self.conf.asdict())
             emit = bool(self.emit)
             assign = self.assign or ""
             orig_item, casted, skip = self.setup(_input, **kwargs)
+
+            if self._static_casted:
+                _conf = cast_type(AnyModuleConf, self._static_casted[2])
+            else:
+                _conf = cast_type(AnyModuleConf, self.conf.asdict())
 
             if skip:
                 stream = orig_item
@@ -731,28 +786,39 @@ class operator(Module):  # noqa: N801
         super().__init__(*args, **kwargs)
 
     def setup(self, _input, **kwargs) -> tuple[PipeTuples, Stream, Casted]:
-        dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in _FRAMEWORK_KEYS}
-        _conf = cast_type(AnyModuleConf, self.conf.asdict())
-        _dispatcher = partial(
-            _dispatch,
-            conf=_conf,
-            parsers=self.parsers,
-            casters=self.casters,
-            defaults=Defaults(self.defaults),
-        )
-        # Parses conf that can vary per item. Can't handle terminal input
-        dispatcher = cast_type(Callable[[ItemArg, Opts], Dispatched], _dispatcher)
-        dispatches = (dispatcher(item, self.opts) for item in _input)
+        if self._static_casted:
+            _, pre_casted_extract, pre_casted_conf = self._static_casted
+            objconf = cast_type(Objconf, pre_casted_conf)
+            casted = Casted({}, pre_casted_extract, pre_casted_conf)
+            tuples = ((item, objconf) for item in _input)
+            orig_stream = _input
+        else:
+            dispatch_kwargs = {
+                k: v for k, v in kwargs.items() if k not in FRAMEWORK_KEYS
+            }
 
-        # - operators can't skip items
-        # - purposely setting both tuples and orig_stream to maps of the same
-        #   iterable since only one is intended to be used at any given time
-        # - `tuples` is an iterator of tuples of the item and full objconf
-        tuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
+            conf = cast_type(AnyModuleConf, self.conf.asdict())
+            _dispatcher = partial(
+                _dispatch,
+                conf=conf,
+                parsers=self.parsers,
+                casters=self.casters,
+                defaults=Defaults(self.defaults),
+            )
+            # Parses conf that can vary per item. Can't handle terminal input
+            dispatcher = cast_type(Callable[[ItemArg, Opts], Dispatched], _dispatcher)
+            dispatches = (dispatcher(item, self.opts) for item in _input)
 
-        # Parses conf that doesn't vary per item and may contain terminal input
-        orig_stream = (d.item for d in dispatches)
-        casted = dispatcher(DotDict(), self.opts, **dispatch_kwargs).casted
+            # - operators can't skip items
+            # - purposely setting both tuples and orig_stream to maps of the same
+            #   iterable since only one is intended to be used at any given time
+            # - `tuples` is an iterator of tuples of the item and full objconf
+            tuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
+
+            # Parses conf that doesn't vary per item and may contain terminal input
+            orig_stream = (d.item for d in dispatches)
+            casted = dispatcher(DotDict(), self.opts, **dispatch_kwargs).casted
+
         return (tuples, orig_stream, casted)
 
     def process(self, stream, emit: bool, assign: str, conf: AnyModuleConf) -> Stream:
@@ -961,7 +1027,7 @@ class operator(Module):  # noqa: N801
 
 class splitter(Module):  # noqa: N801
     def setup(self, _input, **kwargs) -> tuple[PipeTuples, Stream, Casted]:
-        dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in _FRAMEWORK_KEYS}
+        dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in FRAMEWORK_KEYS}
         conf = cast_type(AnyModuleConf, self.conf.asdict())
         _dispatcher = partial(
             _dispatch,
@@ -1031,7 +1097,6 @@ def _dispatch(
     **kwargs,
 ) -> Dispatched:
     defaults = defaults or Defaults({})
-    extract = opts.get("extract")
     field = field or opts.get("field")
 
     if parsers:
@@ -1039,27 +1104,7 @@ def _dispatch(
     else:
         parsed_field, parsed_conf = item, conf
 
-    if isinstance(parsed_conf, Mapping):
-        merged_conf = cast_type(AnyModuleConf, {**defaults, **parsed_conf})
-    else:
-        merged_conf = defaults
-
-    if extract:
-        try:
-            pieces = next(v for k, v in merged_conf.items() if k.lower() == extract)
-        except StopIteration:
-            logger.error(f"{extract=} not found in conf {merged_conf}")
-            pieces = None
-        else:
-            pieces = cast_type(BasicArg, pieces)
-
-        if pieces and opts.get("listize"):
-            pieces_or_conf = cast_type(list[BasicArg], listize(pieces))
-        else:
-            pieces_or_conf = pieces
-    else:
-        pieces_or_conf = merged_conf
-
+    pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
     conf = cast_type(AnyModuleConf, casted[2])
@@ -1076,8 +1121,11 @@ def get_parsers(opts: Opts, conf: AnyModuleConf) -> ParseFuncs:
 
     if opts.get("ptype") == "none":
         conf_parser = cast_none
-    else:
+    elif conf_is_dynamic(conf):
         conf_parser = partial(parse_conf, conf=conf)
+    else:
+        pre_parsed = parse_conf(None, conf=conf)
+        conf_parser = lambda _, **__: pre_parsed
 
     return ParseFuncs(field_parser, conf_parser)
 
