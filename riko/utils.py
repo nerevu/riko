@@ -500,14 +500,15 @@ class Fetch(Generic[B]):
             if "File name too long" in str(e.reason):
                 raise
             logger.error(f"Error opening {url}: {e.reason}")
+
+    def __getattr__(self, name: str):
+        if self.file is not None:
+            return getattr(self.file, name)
+        raise AttributeError(name)
+
+    def close(self):
         if self.file:
-            self.close = self.file.close
-
-            if isinstance(self.file, (BytesIO, RawIOBase, StringIO)):
-                self.seek = self.file.seek
-
-            if isinstance(self.file, (BytesIO, RawIOBase)):
-                self.readline = self.file.readline
+            self.file.close()
 
     def __enter__(self):
         return self
@@ -543,15 +544,13 @@ class Fetch(Generic[B]):
     def read(self: "Fetch[Literal[True]]", size: int = ...) -> bytes: ...  # noqa: E704
     @overload
     def read(self: "Fetch[Literal[False]]", size: int = ...) -> str: ...  # noqa: E704
-    def read(self, size: int | None = None) -> bytes | str:  # noqa: E301
-        if self.file and size is not None:
-            result = self.file.read(size)
-        elif self.file:
+    def read(self, size: int = -1) -> bytes | str:  # noqa: E301
+        if self.file and size < 0:
             result = self.file.read()
-        elif self.binary:
-            result = b""
+        elif self.file:
+            result = self.file.read(size)
         else:
-            result = ""
+            result = b"" if self.binary else ""
 
         return result
 
