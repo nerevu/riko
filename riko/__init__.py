@@ -39,7 +39,6 @@ from os import path as p
 from time import struct_time
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
-from meza import compat
 from meza.fntools import Objectify as _Objectify
 
 from riko.types.general import SyncItemFunc
@@ -94,7 +93,7 @@ def get_path(name: str):
     return url
 
 
-def get_abspath(url: str, offline=False):
+def get_abspath(url: str, offline=False) -> str:
     if url.startswith(("http", "file:///")):
         pass
     elif url.startswith("file://"):
@@ -107,7 +106,7 @@ def get_abspath(url: str, offline=False):
     else:
         url = f"http://{url}" if url and "://" not in url else url
 
-    return compat.decode(url)
+    return url
 
 
 def replacer(content: str, old: str, new="_") -> str:

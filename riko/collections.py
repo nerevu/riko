@@ -355,27 +355,6 @@ class SyncPipe(PyPipe):
 
         return SyncPipe(name, source=self, **kwargs)
 
-    def __iter__(self) -> Stream:
-        if self._iter is None:
-            self._iter = self._stream()
-
-        return self._iter
-
-    def __next__(self) -> ItemArg:
-        if self._iter is None:
-            self._iter = self._stream()
-
-        try:
-            return next(self._iter)
-        except StopIteration:
-            self._iter = None
-
-            if self.name == "send":
-                others = cast(list[str], self.kwargs.get("others", []))
-                [send(target, {"state": StreamState.DONE}) for target in others]
-
-            raise
-
     def _stream(self) -> Stream:
         pipeline = partial(self.pipe, **self.kwargs)
 
@@ -398,6 +377,27 @@ class SyncPipe(PyPipe):
             yield from chain.from_iterable(self._mapped)
         else:
             yield from pipeline(self.source)
+
+    def __iter__(self) -> Stream:
+        if self._iter is None:
+            self._iter = self._stream()
+
+        return self._iter
+
+    def __next__(self) -> ItemArg:
+        if self._iter is None:
+            self._iter = self._stream()
+
+        try:
+            return next(self._iter)
+        except StopIteration:
+            self._iter = None
+
+            if self.name == "send":
+                others = cast(list[str], self.kwargs.get("others", []))
+                [send(target, {"state": StreamState.DONE}) for target in others]
+
+            raise
 
     def split(self, **kwargs) -> SplitterItems:
         pipe_kwargs = {
@@ -607,6 +607,15 @@ class AsyncCollection(PyCollection):
         self.connections = connections
         self._aiter: AsyncIterator[ItemArg] | None = None
 
+    async def _stream(self) -> AsyncIterator[ItemArg]:
+        """Fetch all source urls"""
+        zargs = zip(self.sources, repeat(self.conf))
+        mapped = await async_map(afetch_source, zargs, self.connections)
+
+        for stream in mapped:
+            for item in stream:
+                yield item
+
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""
         return iter([item async for item in self._stream()])
@@ -629,15 +638,6 @@ class AsyncCollection(PyCollection):
         except StopAsyncIteration:
             self._aiter = None
             raise
-
-    async def _stream(self) -> AsyncIterator[ItemArg]:
-        """Fetch all source urls"""
-        zargs = iter(zip(self.sources, repeat(self.conf)))
-        mapped = await async_map(afetch_source, zargs, self.connections)
-
-        for stream in mapped:
-            for item in stream:
-                yield item
 
     def async_pipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""

@@ -142,16 +142,17 @@ def invert_dict(d):
 
 
 def multi_try(source, zipped, default=None):
-    value = None
-
     for func, error in zipped:
         try:
             value = func(source)
         except error:
             pass
         else:
-            return value
-    return default
+            break
+    else:
+        value = default
+
+    return value
 
 
 def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) -> str:

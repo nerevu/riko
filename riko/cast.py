@@ -18,7 +18,6 @@ from typing import cast as cast_type
 from urllib.parse import quote, urlparse
 
 import pygogo as gogo
-from meza.compat import decode
 
 from riko.currencies import CURRENCY_CODES
 from riko.dates import (
@@ -281,7 +280,7 @@ CAST_SWITCH: dict[str, PreCaster] = {
     "float": {"default": float("nan"), "func": float},
     "decimal": {"default": Decimal("NaN"), "func": Decimal},
     "int": {"default": 0, "func": lambda i: int(float(i))},
-    "text": {"default": "", "func": decode},
+    "text": {"default": "", "func": str},
     "datetime": {"default": EPOCH_DATETIME, "func": cast_datetime},
     "date": {"default": EPOCH_DATE, "func": cast_date},
     "url": {"default": {}, "func": cast_url},

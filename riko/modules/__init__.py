@@ -63,7 +63,6 @@ from riko.types.values import (
     DateLikeType,
     NumLike,
     NumLikeType,
-    StreamState,
 )
 from riko.utils import broadcast, dispatch
 
@@ -151,8 +150,6 @@ __transformers__ = (
 )
 
 # __all__ = __aggregators__ + __composers__ + __sources__ + __transformers__
-
-SENTINELS = {StreamState.DONE}
 
 T = TypeVar("T", bound=ComplexArg)
 
@@ -345,7 +342,6 @@ class Module:
             def_assign = assign
 
         self.name = module_name
-
         self.opts = Opts(self._opts)
         self.opts.setdefault("objectify", self._opts.get("ptype") != "none")
         self.conf = DotDict(self.defaults)
