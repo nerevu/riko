@@ -9,15 +9,16 @@ but returns items based on a count.
 Examples:
     basic usage::
 
+        >>> from itertools import count
         >>> from time import sleep
         >>> from riko.modules.timeout import pipe
         >>>
-        >>> def gen_items():
-        ...     for x in range(50):
+        >>> def gen_stream():
+        ...     for x in count():
         ...         sleep(1)
         ...         yield {'x': x}
         >>>
-        >>> len(list(pipe(gen_items(), conf={'seconds': '3'})))
+        >>> len(list(pipe(gen_stream(), conf={'seconds': '3'})))
         3
 
 Attributes:
@@ -27,7 +28,14 @@ Attributes:
 """
 
 import signal
-from collections.abc import Iterable, Iterator
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterable,
+    AsyncIterator,
+    Generator,
+    Iterable,
+    Iterator,
+)
 from datetime import timedelta
 from types import FrameType
 from typing import Self, TypeVar, cast
@@ -35,8 +43,11 @@ from typing import Self, TypeVar, cast
 import pygogo as gogo
 
 from riko import Objconf
+from riko.bado.itertools import ensure_deferred
+from riko.bado.util import async_sleep
 from riko.cast import BasicCastType
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.types.values import ComplexArg
 
 from . import operator
 
@@ -46,7 +57,45 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 items = ("days", "hours", "microseconds", "milliseconds", "minutes", "seconds", "weeks")
 
-T = TypeVar("T")
+T = TypeVar("T", bound=ComplexArg)
+
+
+class AsyncTimeoutIterator(AsyncIterator[T]):
+    def __init__(
+        self, elements: AsyncIterable[T] | Iterable[T], timeout: int = 0
+    ) -> None:
+        if isinstance(elements, AsyncIterable):
+            self.aiter = aiter(elements)
+        else:
+            self.aiter = self._async_iter_sync(elements)
+
+        self.timeout = timeout
+        self.timed_out = False
+        ensure_deferred(self._expire())
+
+    async def _async_iter_sync(self, elements: Iterable[T]) -> AsyncGenerator[T, None]:
+        for item in elements:
+            await async_sleep(0)
+            yield item
+
+    async def _expire(self) -> None:
+        await async_sleep(self.timeout)
+        self.timed_out = True
+
+    async def _collect(self) -> Iterator[T]:
+        return iter([item async for item in self])
+
+    def __await__(self) -> Generator[None, None, Iterator[T]]:
+        return self._collect().__await__()
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> T:
+        if self.timed_out:
+            raise StopAsyncIteration
+        else:
+            return await anext(self.aiter)
 
 
 class TimeoutIterator(Iterator[T]):
@@ -56,7 +105,7 @@ class TimeoutIterator(Iterator[T]):
         self.timedout: bool = False
         self.started: bool = False
 
-    def _handler(self, _: int, frame: FrameType | None) -> None:
+    def _expire(self, _: int, frame: FrameType | None) -> None:
         self.timedout = True
 
     def __iter__(self) -> Self:
@@ -66,15 +115,70 @@ class TimeoutIterator(Iterator[T]):
         if self.timedout:
             raise StopIteration
         elif not self.started:
-            signal.signal(signal.SIGALRM, self._handler)
+            signal.signal(signal.SIGALRM, self._expire)
             signal.alarm(self.timeout)
             self.started = True
+
         try:
             return next(self.iter)
         except StopIteration:
             signal.alarm(0)
             self.timedout = True
             raise
+
+
+async def async_parser(
+    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
+) -> Stream:
+    """
+    Asynchronously parses the pipe content
+
+    Args:
+        stream (Iter[dict]): The source. Note: this shares the `tuples`
+            iterator, so consuming it will consume `tuples` as well.
+
+        objconf (obj): the item independent configuration (an Objectify
+            instance).
+
+        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
+            `item` is an element in the source stream and `objconf` is the item
+            configuration (an Objectify instance). Note: this shares the
+            `stream` iterator, so consuming it will consume `stream` as well.
+
+        kwargs (dict): Keyword arguments.
+
+    Returns:
+        Iter(dict): The output stream
+
+    Examples:
+        >>> from itertools import count
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado.util import async_sleep
+        >>> from meza.fntools import Objectify
+        >>>
+        >>> objconf = Objectify({'seconds': 3})
+        >>>
+        >>> async def paginated_api():
+        ...     # Paginated API feed — collect records until timeout:
+        ...     for page in count():
+        ...         await async_sleep(1)
+        ...         yield {'page': page, 'data': f'result_{page}'}
+        >>>
+        >>> async def run(reactor):
+        ...     result = await async_parser(paginated_api(), objconf, iter([]))
+        ...     print(len(list(result)))
+        >>>
+        >>> try:
+        ...     react(run, _reactor=FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        3
+
+    """
+    td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
+    time = int(timedelta(**td_kwargs).total_seconds())
+    return await AsyncTimeoutIterator(stream, time)
 
 
 def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
@@ -101,19 +205,16 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
     Examples:
         >>> from time import sleep
         >>> from meza.fntools import Objectify
-        >>> from itertools import repeat, count
+        >>> from itertools import count
         >>>
-        >>> kwargs = {'seconds': 3}
-        >>> objconf = Objectify(kwargs)
+        >>> objconf = Objectify({'seconds': 3})
         >>>
         >>> def gen_stream():
         ...     for x in count():
         ...         sleep(1)
         ...         yield {'x': x}
         >>>
-        >>> stream = gen_stream()
-        >>> tuples = zip(stream, repeat(objconf))
-        >>> len(list(parser(stream, objconf, tuples, **kwargs)))
+        >>> len(list(parser(gen_stream(), objconf, iter([]))))
         3
 
     """
@@ -124,7 +225,7 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously returns items from a stream until a
         certain amount of time has passed.
@@ -156,28 +257,23 @@ def async_pipe(*args, **kwargs) -> Stream:
         Deferred: twisted.internet.defer.Deferred stream
 
     Examples:
-        >>> from time import sleep
+        >>> from itertools import count
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def gen_items():
-        ...     for x in range(50):
-        ...         sleep(1)
-        ...         yield {'x': x}
-        >>>
         >>> async def run(reactor):
-        ...     result = await async_pipe(gen_items(), conf={'seconds': '3'})
+        ...     items = ({'x': x} for x in count())
+        ...     result = await async_pipe(items, conf={'seconds': '3'})
         ...     print(len(list(result)))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
-        ...
         3
 
     """
-    return parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
@@ -213,14 +309,15 @@ def pipe(*args, **kwargs) -> Stream:
         dict: an item
 
     Examples:
+        >>> from itertools import count
         >>> from time import sleep
         >>>
-        >>> def gen_items():
-        ...     for x in range(50):
+        >>> def gen_stream():
+        ...     for x in count():
         ...         sleep(1)
         ...         yield {'x': x}
         >>>
-        >>> len(list(pipe(gen_items(), conf={'seconds': '3'})))
+        >>> len(list(pipe(gen_stream(), conf={'seconds': '3'})))
         3
 
     """

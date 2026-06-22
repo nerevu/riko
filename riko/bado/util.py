@@ -11,33 +11,17 @@ Examples:
 
 """
 
-from functools import partial
 from os import environ
 from sys import executable
 
-try:
-    from twisted.internet.defer import Deferred
-    from twisted.internet.defer import maybeDeferred as maybe_deferred  # noqa: N813
-except ImportError:
-    maybe_deferred = lambda *_: None
-    get_process_output = None
-    Deferred = None
-    reactor = None
-else:
-    from twisted.internet import defer, reactor
-    from twisted.internet.utils import (
-        getProcessOutput as get_process_output,  # noqa: N813
-    )
-
-    async_none = defer.succeed(None)
-    async_return = partial(defer.succeed)
-    async_partial = lambda f, **kwargs: partial(maybe_deferred, f, **kwargs)
+from riko import bado
+from riko.bado import defer, get_process_output
 
 
 async def async_sleep(seconds: float):
-    d = Deferred()
+    d = defer.Deferred()
     # IDelayedCall stub missing delay param
-    reactor.callLater(seconds, d.callback, None)  # type: ignore[arg-type]
+    bado.reactor.callLater(seconds, d.callback, None)  # type: ignore[arg-type]
     await d
 
 

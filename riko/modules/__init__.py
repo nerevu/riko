@@ -449,7 +449,7 @@ class processor(Module):  # noqa: N801
                 input `item`.
 
         Examples:
-            >>> from riko.bado import react, util, _issync
+            >>> from riko.bado import react, async_return, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> @processor()
@@ -461,7 +461,7 @@ class processor(Module):  # noqa: N801
             >>> # call an async function
             >>> @processor(isasync=True)
             ... async def async_pipe(item, extraction, objconf, **kwargs):
-            ...     content = await util.async_return(item['content'])
+            ...     content = await async_return(item['content'])
             ...     return f'say "{content}" {objconf.times} times!'
             ...
             >>> item = {'content': 'hello world'}
@@ -727,7 +727,7 @@ class operator(Module):  # noqa: N801
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import react, util, _issync
+            >>> from riko.bado import react, async_return, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
             >>> # emit is True by default
@@ -748,7 +748,7 @@ class operator(Module):  # noqa: N801
             >>> @operator(isasync=True, emit=False)
             ... async def async_pipe1(stream, objconf, tuples, **kwargs):
             ...     for item, objconf in tuples:
-            ...         content = await util.async_return(item['content'])
+            ...         content = await async_return(item['content'])
             ...         return f'say "{content}" {objconf.times} times!'
             ...
             >>> # async pipes don't have to return a deferred,

@@ -28,8 +28,7 @@ import pygogo as gogo
 from twisted.web.iweb import IResponse
 
 from riko import ENCODING, Objconf
-from riko.bado import io
-from riko.bado import requests as treq
+from riko.bado import async_get, async_json, io
 from riko.cast import BasicCastType
 from riko.types.general import Defaults, Extraction, Opts
 from riko.utils import Fetch
@@ -141,8 +140,8 @@ async def async_parser(
     if same_currency:
         rate = Decimal(1)
     elif objconf.url.startswith("http"):
-        r = await treq.get(objconf.url, param=objconf.param)
-        rates = await treq.json(cast(IResponse, r))
+        r = await async_get(objconf.url, param=objconf.param)
+        rates = await async_json(cast(IResponse, r))
     else:
         content = await io.async_url_read(objconf.url, delay=objconf.delay)
         rates = loads(content).get("rates", {})

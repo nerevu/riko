@@ -19,21 +19,8 @@ from typing import TYPE_CHECKING, Literal, Union, overload, override
 
 import pygogo as gogo
 
-from riko import ENCODING, get_abspath
-
-try:
-    from twisted.internet import testing
-except ImportError:
-    testing = None
-    failure = None
-    reactor = None
-    FileSender = None
-    treq = None
-else:
-    import treq
-    from twisted.internet import reactor
-    from twisted.protocols.basic import FileSender
-    from twisted.python import failure
+from riko import ENCODING, bado, get_abspath
+from riko.bado import FileSender, async_get, failure, testing
 
 if TYPE_CHECKING:
     from twisted.internet.defer import Deferred
@@ -85,7 +72,7 @@ class FileReader(testing.AccumulatingProtocol):
             if self.deferred and self.delay:
                 # IDelayedCall stub missing delay param
                 args = (self.delay, self.deferred.callback, self.lastSent)
-                reactor.callLater(*args)  # type: ignore[arg-type]
+                bado.reactor.callLater(*args)  # type: ignore[arg-type]
             elif self.deferred:
                 self.deferred.callback(self.lastSent)
 
@@ -191,7 +178,7 @@ async def async_url_open(  # noqa: E302
             OSError / PermissionError — no write permission in the temp directory
             FileNotFoundError — temp dir doesn't exist (rare but possible in containers)
 
-        await treq.get
+        await async_get
             twisted.internet.error.ConnectionRefusedError — server actively refused
             twisted.internet.error.DNSLookupError — hostname doesn't resolve
             twisted.internet.error.TimeoutError — connection timed out
@@ -212,7 +199,7 @@ async def async_url_open(  # noqa: E302
         mode = "wb" if binary else "w"
         page = NamedTemporaryFile(delete=False, mode=mode)  # noqa: SIM115
         new_url = page.name
-        response = await treq.get(url, timeout=timeout)
+        response = await async_get(url, timeout=timeout)
         content = await (response.content() if binary else response.text())
         page.write(content)
         page.flush()
@@ -238,7 +225,7 @@ async def async_url_read(url: str, timeout=0, **kwargs) -> str:
     url = get_abspath(url, offline=True)
 
     if url.startswith("http"):
-        response = await treq.get(url, timeout=timeout)
+        response = await async_get(url, timeout=timeout)
         content = await response.text()
     else:
         content = await async_read_file(url, testing.StringTransport(), **kwargs)

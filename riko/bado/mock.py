@@ -12,16 +12,13 @@ Examples:
 
 """
 
+from collections.abc import Iterable
 from typing import override
 
 import pygogo as gogo
 
-from . import reactor
-
-try:
-    from twisted.internet.testing import MemoryReactorClock
-except ImportError:
-    MemoryReactorClock = object
+from riko import bado
+from riko.bado import MemoryReactorClock
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -59,18 +56,21 @@ class FakeReactor(MemoryReactorClock):
     """
 
     _DELAY = 1
+    fake = True
 
     def __init__(self):
         super().__init__()
-        reactor.fake = True
+        bado.reactor = self
 
     @override
     def callLater(self, when, what, *args, **kwargs):
         """Schedule a unit of work to be done later."""
         delayed = super().callLater(when, what, *args, **kwargs)
-        self.pump()
+        if when <= self._DELAY:
+            self.pump()
+
         return delayed
 
-    def pump(self):
+    def pump(self, timings: Iterable[float] | None = None):
         """Perform scheduled work"""
         self.advance(self._DELAY)

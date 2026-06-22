@@ -136,8 +136,8 @@ from meza import io
 from meza.process import merge
 
 from riko import Context
+from riko.bado import async_return
 from riko.bado.itertools import async_map
-from riko.bado.util import async_return
 from riko.types.general import (
     AsyncPipeParser,
     ConversionFunc,

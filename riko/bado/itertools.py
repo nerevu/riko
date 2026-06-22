@@ -47,20 +47,12 @@ from typing import (
     overload,
 )
 
+from riko import bado
+from riko.bado import defer, gather_results, real_task
+from riko.bado.mock import FakeReactor
 from riko.types.general import Stream, SyncPipeResult
 from riko.types.modules import AnyConfRule
 from riko.types.values import ComplexArg
-
-from . import reactor
-from .mock import FakeReactor
-
-try:
-    from twisted.internet import defer
-except ImportError:
-    real_task = gather_results = defer = None
-else:
-    from twisted.internet import task as real_task
-    from twisted.internet.defer import gatherResults as gather_results  # noqa: N813
 
 if TYPE_CHECKING:
     from twisted.internet.defer import Deferred
@@ -92,7 +84,7 @@ def get_task() -> "Cooperator":
         True
 
     """
-    if reactor.fake:
+    if bado.reactor.fake:
         scheduler = partial(FakeReactor().callLater, FakeReactor._DELAY)
         task = real_task.Cooperator(scheduler=scheduler)
     else:
@@ -378,7 +370,7 @@ async def async_map(
         [0, 2, 4]
 
     """
-    if connections and not reactor.fake:
+    if connections and not bado.reactor.fake:
         results = []
         work = (
             ensure_deferred(func(item, **kwargs)).addCallback(results.append)
