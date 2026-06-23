@@ -370,8 +370,8 @@ class Module:
         else:
             self.casters = get_casters(self.opts)
 
-            if self.casters and not conf_is_dynamic(_conf):
-                parsed_conf = parse_conf(None, conf=_conf)
+            if self.casters and not isinstance(self.parsers.conf_parser, partial):
+                parsed_conf = self.parsers.conf_parser(None)
                 args = (parsed_conf, self.defaults, self.opts)
                 parsed = get_pieces_or_conf(*args)
                 casted = dispatch(parsed, *self.casters[1:])
@@ -1117,9 +1117,9 @@ def get_parsers(opts: Opts, conf: AnyModuleConf) -> ParseFuncs:
     if opts.get("ptype") == "none":
         conf_parser = cast_none
     elif conf_is_dynamic(conf):
-        conf_parser = partial(parse_conf, conf=conf)
+        conf_parser = partial(parse_conf, conf=conf, memoize=False)
     else:
-        pre_parsed = parse_conf(None, conf=conf)
+        pre_parsed = parse_conf(None, conf=conf, memoize=True)
         conf_parser = lambda _, **__: pre_parsed
 
     return ParseFuncs(field_parser, conf_parser)

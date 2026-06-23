@@ -645,6 +645,7 @@ def parse_conf(
     item: ItemArg = None,
     conf: AnyModuleConf | ConfValues | None = None,
     default=None,
+    memoize=None,
     **kwargs,
 ) -> ComplexArg:
     """
@@ -684,9 +685,19 @@ def parse_conf(
     >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'})
     >>> _parse_conf_cached.cache_info().hits
     1
+    >>> parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=False)
+    'hello'
+    >>> _parse_conf_cached.cache_info().hits
+    1
+    >>> _ = parse_conf(conf={'type': 'text', 'value': 'hello'}, memoize=True)
+    >>> _parse_conf_cached.cache_info().hits
+    2
 
     """
-    func = _parse_conf_uncached if conf_is_dynamic(conf) else _parse_conf_cached
+    if memoize is None:
+        memoize = not conf_is_dynamic(conf)
+
+    func = _parse_conf_cached if memoize else _parse_conf_uncached
     return func(item, conf, default=default, **kwargs)
 
 
