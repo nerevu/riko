@@ -29,10 +29,8 @@ Attributes:
 
 import operator as op
 import re
-from collections.abc import Mapping, Sequence
-from datetime import date
+from collections.abc import Sequence
 from decimal import Decimal, InvalidOperation
-from time import struct_time
 from typing import Literal, TypeAlias
 
 import pygogo as gogo
@@ -43,16 +41,18 @@ from riko.cast import cast_date
 from riko.dotdict import DotDict
 from riko.types.general import Defaults, ItemArg, Opts, PipeTuples, Stream
 from riko.types.modules import FilterConfRule
-from riko.types.values import ComplexMapping, ComplexSequence
+from riko.types.values import ComplexArg, ComplexSequence
+from riko.utils import repr_cache
 
 from . import operator
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"combine": "and", "permit": True}
-ITER_ATTRS = {"__next__", "next", "__iter__"}
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
 SWITCH = {
+    # TODO: add support for all containment semantics
+    # 2 in [1, 2, 3]  or "a" in {"a": 1}
     "contains": lambda x, y: x and y.lower() in x.lower(),
     "doesnotcontain": lambda x, y: x and y.lower() not in x.lower(),
     "matches": lambda x, y: re.search(y, x),
@@ -69,51 +69,64 @@ SWITCH = {
     "atmost": op.le,
 }
 
+NUMERIC_OPS = {"atmost", "atleast"}
+STRING_OPS = {"contains", "doesnotcontain", "matches"}
+DATE_OPS = {"after", "before"}
+STRING_OPS = {"matches"}
+PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
+TRUTHINESS_OPS = {"truthy", "falsy"}
+
 logger = gogo.Gogo(__name__, monolog=True).logger
-is_iterable = lambda item: ITER_ATTRS.intersection(dir(item))
-Result: TypeAlias = str | ComplexMapping | Decimal | date | ComplexSequence | None
+Result: TypeAlias = ComplexArg | ComplexSequence
 
 
-def _parse_arg(arg: ItemArg) -> Result:
-    if isinstance(arg, Decimal):
+def _parse_arg_uncached(arg: Result, op: str) -> Result:
+    if op in PASSTHROUGH_OPS:
         value = arg
-    elif isinstance(arg, DotDict):
-        value = arg.asdict()
-    elif isinstance(arg, (Mapping, Objectify)):
-        value = arg
-    elif isinstance(arg, (int, float)):
-        value = Decimal(arg)
-    elif isinstance(arg, str):
+    elif op in STRING_OPS:
+        value = str(arg)
+    elif op in DATE_OPS:
         try:
+            value = cast_date(arg)  # pyright: ignore[reportArgumentType]
+        except (IndexError, ParserError, KeyError):
+            value = None
+    elif op in NUMERIC_OPS or isinstance(arg, (int, float)):
+        if isinstance(arg, Decimal):
+            value = arg
+        elif isinstance(arg, int):
             value = Decimal(arg)
-        except InvalidOperation:
+        elif isinstance(arg, float):
+            value = Decimal(str(arg))
+        else:
             try:
-                value = cast_date(arg)
-            except (
-                IndexError,
-                ParserError,
-                KeyError,
-            ):  # TODO: figure out which exceptions cast_date can raise
-                value = arg
-    elif isinstance(arg, struct_time):
-        value = cast_date(arg)
-    elif isinstance(arg, Sequence):
-        value = arg
-    elif arg:
-        value = cast_date(arg)
+                value = Decimal(arg)  # pyright: ignore[reportArgumentType]
+            except (InvalidOperation, ValueError):
+                value = None
     else:
         value = arg
 
     return value
 
 
+@repr_cache
+def _parse_arg_cached(arg: Result, op: str) -> Result:
+    return _parse_arg_uncached(arg, op)
+
+
+def parse_arg(arg: Result, op: str, memoize=False) -> Result:
+    func = _parse_arg_cached if memoize else _parse_arg_uncached
+    return func(arg, op)
+
+
 def parse_rule(
     rule: FilterConfRule, item: ItemArg, **kwargs
 ) -> Result | Literal[False]:
-    truthy_like = rule.op in {"truthy", "falsy"}
+    truthiness = rule.op in TRUTHINESS_OPS
     _y = rule.value
 
-    if isinstance(item, Mapping):
+    if isinstance(item, Objectify):
+        _x = getattr(item, rule.field)
+    elif isinstance(item, (dict, DotDict)):
         _x = item.get(rule.field, **kwargs)
     else:
         raise TypeError(f"Item is not a mapping: {item!r}.")
@@ -121,15 +134,18 @@ def parse_rule(
     has_value = _y is not None
     result = False
 
-    if has_value and not truthy_like:
-        x, y = _parse_arg(_x), _parse_arg(_y)
+    if has_value and not truthiness:
+        x = parse_arg(_x, rule.op)
+        y = parse_arg(_y, rule.op, memoize=True)
     else:
         x, y = _x, _y
 
-    if has_value or truthy_like:
+    has_value = y is not None
+
+    if has_value or truthiness:
         operation = SWITCH.get(rule.op)
 
-        if truthy_like:
+        if truthiness:
             result = operation(x)
         elif has_value:
             try:
@@ -179,6 +195,13 @@ def parser(
         {'ex': 4}
 
     """
+    for rule in extract:
+        truthiness = rule.op in TRUTHINESS_OPS
+        has_value = rule.value is not None
+
+        if has_value and not truthiness:
+            parse_arg(rule.value, rule.op, memoize=True)
+
     for item, objconf in tuples:
         results = (parse_rule(rule, item, **kwargs) for rule in extract)
 
