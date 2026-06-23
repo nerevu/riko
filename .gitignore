@@ -71,3 +71,5 @@ build/*
 callgraph.svg
 ttyrecord
 *.local.json
+.serena/memories
+memory
