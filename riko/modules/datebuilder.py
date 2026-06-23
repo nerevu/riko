@@ -20,12 +20,11 @@ from datetime import datetime as dt
 from datetime import timedelta, timezone
 from time import struct_time
 
-import dateutil
 import pygogo as gogo
 
 from riko import Objconf
 from riko.cast import BasicCastType
-from riko.dates import NOW, TODAY, TZINFOS
+from riko.dates import NOW, TODAY, parse_date_string
 from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
@@ -81,7 +80,7 @@ def parser(
         new_date = SWITCH.get(text)
 
     if not new_date:
-        new_date = dateutil.parser.parse(text, tzinfos=TZINFOS)
+        new_date = parse_date_string(text)
 
     if not new_date:
         raise ValueError(f"Unrecognized date string: {text}")

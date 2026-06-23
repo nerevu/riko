@@ -18,7 +18,6 @@ from typing import cast as cast_type
 from urllib.parse import quote, urlparse
 
 import pygogo as gogo
-from dateutil import parser
 from meza.compat import decode
 
 from riko.currencies import CURRENCY_CODES
@@ -26,10 +25,10 @@ from riko.dates import (
     EPOCH_DATE,
     EPOCH_DATETIME,
     TODAY,
-    TZINFOS,
     date_to_tt,
     ensure_tzinfo,
     get_date,
+    parse_date_string,
     tt_to_datedict,
     tt_to_datetime,
 )
@@ -256,7 +255,7 @@ def cast_datetime(  # noqa: E302
         elif value in DATES:
             _date = DATES.get(value)
         else:
-            _date = parser.parse(value, tzinfos=TZINFOS)
+            _date = parse_date_string(value)
 
         if isinstance(_date, dt) and as_date:
             _date = _date.date()
@@ -284,7 +283,6 @@ CAST_SWITCH: dict[str, PreCaster] = {
     "int": {"default": 0, "func": lambda i: int(float(i))},
     "text": {"default": "", "func": decode},
     "datetime": {"default": EPOCH_DATETIME, "func": cast_datetime},
-    # TODO: make this return date without time
     "date": {"default": EPOCH_DATE, "func": cast_date},
     "url": {"default": {}, "func": cast_url},
     "location": {"default": {}, "func": cast_location},

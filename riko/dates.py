@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator
 from datetime import UTC, date, timedelta, timezone, tzinfo
 from datetime import datetime as dt
 from time import strptime, struct_time
-from typing import Annotated, Literal, overload
+from typing import Annotated, Literal, cast, overload
 from zoneinfo import ZoneInfo, available_timezones
 
 import pytz
@@ -22,6 +22,8 @@ NOW = dt.now(timezone.utc)
 TODAY = NOW.date()
 EPOCH_DATETIME = dt(1970, 1, 1, 0, 0, 0, tzinfo=UTC)
 EPOCH_DATE = date(EPOCH_DATETIME.year, EPOCH_DATETIME.month, EPOCH_DATETIME.day)
+
+_DATE_PARSE_CACHE: dict[str, dt | BaseException] = {}
 
 TT_KEYS = (
     "year",
@@ -39,6 +41,21 @@ AwareDT = Annotated[dt, "timezone-aware"]
 NaiveDT = Annotated[dt, "timezone-naive"]
 AwareST = Annotated[struct_time, "timezone-aware"]
 NaiveST = Annotated[struct_time, "timezone-naive"]
+
+
+def parse_date_string(value: str) -> dt:
+    if value not in _DATE_PARSE_CACHE:
+        try:
+            _DATE_PARSE_CACHE[value] = parser.parse(value, tzinfos=TZINFOS)
+        except Exception as e:  # noqa: BLE001
+            _DATE_PARSE_CACHE[value] = e
+
+    result = _DATE_PARSE_CACHE[value]
+
+    if isinstance(result, BaseException):
+        raise result
+
+    return cast(dt, result)
 
 
 def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
@@ -241,7 +258,7 @@ def ensure_tzinfo(  # noqa: E302
         try:
             _date = dt.fromisoformat(_date)
         except (ValueError, TypeError):
-            _date = parser.parse(_date, tzinfos=TZINFOS)
+            _date = parse_date_string(_date)
 
     if get_tzname(_date):
         new_date = _date
