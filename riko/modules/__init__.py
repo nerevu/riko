@@ -234,10 +234,9 @@ def gen_assignments(
     if assign:
         if value is None:
             yield DotDict(item)
-        elif isinstance(value, (str, int, struct_time, Mapping, Objectify)):
-            merged = {**item, assign: value}
-            yield DotDict(merged)
-        elif isinstance(value, Iterable):
+        elif isinstance(value, Iterable) and not isinstance(
+            value, (str, Mapping, Objectify, struct_time)
+        ):
             merged = {**item, assign: list(value)}
             yield DotDict(merged)
         else:
