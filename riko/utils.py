@@ -178,6 +178,7 @@ def _to_hashable(obj: ComplexArg) -> Hashable:
     return hashed
 
 
+@cache
 def _from_hashable(obj: Hashable) -> ComplexArg:
     if isinstance(obj, tuple) and len(obj) == 2:
         typ, inner = obj
