@@ -55,7 +55,7 @@ class FakeReactor(MemoryReactorClock):
 
     """
 
-    _DELAY = 1
+    _DELAY = 0.1
     fake = True
 
     def __init__(self):

@@ -208,7 +208,7 @@ class Objconf(Objectify):
     limit: int
     lower: bool
     max_len: int
-    max_wait: int
+    max_wait: float
     multi: bool
     name: str
     other: str
@@ -235,7 +235,7 @@ class Objconf(Objectify):
     type: str
     uniq_key: str
     url: str
-    wait: int
+    wait: float
     xpath: str
 
 

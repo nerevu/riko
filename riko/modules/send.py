@@ -10,7 +10,7 @@ Examples:
         >>> from riko.modules.send import pipe as sender
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver1'}, func=noop)
+        >>> target = receiver(conf={'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}, func=noop)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
@@ -67,7 +67,7 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver2'}, func=noop)
+        >>> target = receiver(conf={'name': 'receiver2', 'wait': 0.01, 'max_wait': 2}, func=noop)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
@@ -111,7 +111,7 @@ def pipe(*args, **kwargs) -> Stream:
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver3'}, func=noop)
+        >>> target = receiver(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2}, func=noop)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> source = pipe([{'x': 0}], others=['receiver3'])

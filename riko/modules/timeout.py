@@ -15,10 +15,10 @@ Examples:
         >>>
         >>> def gen_stream():
         ...     for x in count():
-        ...         sleep(1)
+        ...         sleep(0.1)
         ...         yield {'x': x}
         >>>
-        >>> len(list(pipe(gen_stream(), conf={'seconds': '3'})))
+        >>> len(list(pipe(gen_stream(), conf={'milliseconds': '250'})))
         3
 
 Attributes:
@@ -27,7 +27,7 @@ Attributes:
 
 """
 
-import signal
+import threading
 from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
@@ -37,7 +37,6 @@ from collections.abc import (
     Iterator,
 )
 from datetime import timedelta
-from types import FrameType
 from typing import Self, TypeVar, cast
 
 import pygogo as gogo
@@ -62,7 +61,7 @@ T = TypeVar("T", bound=ComplexArg)
 
 class AsyncTimeoutIterator(AsyncIterator[T]):
     def __init__(
-        self, elements: AsyncIterable[T] | Iterable[T], timeout: int = 0
+        self, elements: AsyncIterable[T] | Iterable[T], timeout: float = 0
     ) -> None:
         if isinstance(elements, AsyncIterable):
             self.aiter = aiter(elements)
@@ -99,13 +98,14 @@ class AsyncTimeoutIterator(AsyncIterator[T]):
 
 
 class TimeoutIterator(Iterator[T]):
-    def __init__(self, elements: Iterable[T], timeout: int = 0) -> None:
+    def __init__(self, elements: Iterable[T], timeout: float = 0) -> None:
         self.iter: Iterator[T] = iter(elements)
         self.timeout = timeout
         self.timedout: bool = False
         self.started: bool = False
+        self._timer: threading.Timer | None = None
 
-    def _expire(self, _: int, frame: FrameType | None) -> None:
+    def _expire(self) -> None:
         self.timedout = True
 
     def __iter__(self) -> Self:
@@ -115,14 +115,17 @@ class TimeoutIterator(Iterator[T]):
         if self.timedout:
             raise StopIteration
         elif not self.started:
-            signal.signal(signal.SIGALRM, self._expire)
-            signal.alarm(self.timeout)
+            if self.timeout:
+                self._timer = threading.Timer(self.timeout, self._expire)
+                self._timer.daemon = True
+                self._timer.start()
             self.started = True
 
         try:
             return next(self.iter)
         except StopIteration:
-            signal.alarm(0)
+            if self._timer:
+                self._timer.cancel()
             self.timedout = True
             raise
 
@@ -157,12 +160,12 @@ async def async_parser(
         >>> from riko.bado.util import async_sleep
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'seconds': 3})
+        >>> objconf = Objectify({'milliseconds': 250})
         >>>
         >>> async def paginated_api():
         ...     # Paginated API feed — collect records until timeout:
         ...     for page in count():
-        ...         await async_sleep(1)
+        ...         await async_sleep(0.1)
         ...         yield {'page': page, 'data': f'result_{page}'}
         >>>
         >>> async def run(reactor):
@@ -177,7 +180,7 @@ async def async_parser(
 
     """
     td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
-    time = int(timedelta(**td_kwargs).total_seconds())
+    time = timedelta(**td_kwargs).total_seconds()
     return await AsyncTimeoutIterator(stream, time)
 
 
@@ -207,11 +210,11 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
         >>> from meza.fntools import Objectify
         >>> from itertools import count
         >>>
-        >>> objconf = Objectify({'seconds': 3})
+        >>> objconf = Objectify({'milliseconds': 250})
         >>>
         >>> def gen_stream():
         ...     for x in count():
-        ...         sleep(1)
+        ...         sleep(0.1)
         ...         yield {'x': x}
         >>>
         >>> len(list(parser(gen_stream(), objconf, iter([]))))
@@ -220,7 +223,7 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
     """
     # objconf only parses on __getitem__
     td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
-    time = int(timedelta(**td_kwargs).total_seconds())
+    time = timedelta(**td_kwargs).total_seconds()
     return TimeoutIterator(stream, time)
 
 
@@ -263,7 +266,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
         >>>
         >>> async def run(reactor):
         ...     items = ({'x': x} for x in count())
-        ...     result = await async_pipe(items, conf={'seconds': '3'})
+        ...     result = await async_pipe(items, conf={'milliseconds': 250})
         ...     print(len(list(result)))
         >>>
         >>> try:
@@ -314,10 +317,10 @@ def pipe(*args, **kwargs) -> Stream:
         >>>
         >>> def gen_stream():
         ...     for x in count():
-        ...         sleep(1)
+        ...         sleep(0.1)
         ...         yield {'x': x}
         >>>
-        >>> len(list(pipe(gen_stream(), conf={'seconds': '3'})))
+        >>> len(list(pipe(gen_stream(), conf={'milliseconds': '250'})))
         3
 
     """

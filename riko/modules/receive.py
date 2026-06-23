@@ -10,7 +10,7 @@ Examples:
         >>> from riko.modules.send import pipe as sender
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver1'}, func=noop)
+        >>> target = receiver(conf={'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}, func=noop)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
@@ -85,7 +85,7 @@ def parser(
         >>> from riko.utils import noop
         >>> from meza.fntools import Objectify
         >>>
-        >>> conf = {'wait': 1, 'max_wait': 5, 'name': 'receiver2'}
+        >>> conf = {'wait': 0.01, 'max_wait': 2, 'name': 'receiver2'}
         >>> target = parser(None, Objectify(conf), None, func=noop)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
@@ -167,7 +167,7 @@ def pipe(*args, **kwargs) -> Stream | Iterator[StatefulItem]:
         >>> from riko.modules.send import pipe as sender
         >>> from riko.utils import noop
         >>>
-        >>> target = pipe(conf={'name': 'receiver3'}, func=noop)
+        >>> target = pipe(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2}, func=noop)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> source = sender([{'x': 0}], others=['receiver3'])

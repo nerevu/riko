@@ -51,9 +51,10 @@ class TestCollections:
         assert next(stream) == {"content": "once is 1x"}
 
     def test_receive(self, capsys):
-        receiver = SyncPipe("receive", conf={"name": "receiver"})
-        changer = SyncPipe("receive", conf={"name": "changer"}, func=len)
-        printer = SyncPipe("receive", conf={"name": "printer"}, func=print)
+        _conf = {"wait": 0.001, "max_wait": 2}
+        receiver = SyncPipe("receive", conf={"name": "receiver", **_conf})
+        changer = SyncPipe("receive", conf={"name": "changer", **_conf}, func=len)
+        printer = SyncPipe("receive", conf={"name": "printer", **_conf}, func=print)
         assert next(receiver) == {"state": StreamState.PENDING}
         assert next(printer) == {"state": StreamState.PENDING}
         assert next(changer) == {"state": StreamState.PENDING}
@@ -88,8 +89,9 @@ class TestCollections:
         assert self.runs == 3
 
     def test_pubsub(self, caplog):
-        receiver1 = SyncPipe("receive", conf={"name": "receiver1"}, func=noop)
-        receiver2 = SyncPipe("receive", conf={"name": "receiver2"}, func=noop)
+        _conf = {"wait": 0.001, "max_wait": 2}
+        receiver1 = SyncPipe("receive", conf={"name": "receiver1", **_conf}, func=noop)
+        receiver2 = SyncPipe("receive", conf={"name": "receiver2", **_conf}, func=noop)
         assert next(receiver1) == {"state": StreamState.PENDING}
 
         stream = (
