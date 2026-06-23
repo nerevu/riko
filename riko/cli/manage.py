@@ -203,7 +203,7 @@ def prettify(where=None, sort=False):
     is_flag=True,
 )
 @click.option("-W", "--watch", help="Rerun tests on file changes", is_flag=True)
-@click.option("-c", "--cover/--no-cover", help="Add coverage report", default=True)
+@click.option("-c", "--cov/--no-cov", help="Add coverage report", default=True)
 @click.option(
     "-C",
     "--capture/--no-capture",
