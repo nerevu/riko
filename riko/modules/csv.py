@@ -23,7 +23,6 @@ from typing import cast
 
 import pygogo as gogo
 from meza.io import read_csv
-from meza.process import merge
 
 from riko import ENCODING, Objconf
 from riko.bado import io
@@ -92,7 +91,7 @@ async def async_parser(
     r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
-    rkwargs = merge([dict(objconf.iteritems()), renamed])
+    rkwargs = {**dict(objconf.iteritems()), **renamed}
     content = cast(Iterator[IntermediateMapping], read_csv(r, **rkwargs))
     stream = auto_close(content, r)
     return stream
@@ -129,7 +128,7 @@ def parser(
     renamed = {"first_row": first_row, "custom_header": custom_header}
 
     f = Fetch(objconf.url, encoding=objconf.encoding)
-    rkwargs = merge([dict(objconf.iteritems()), renamed])
+    rkwargs = {**dict(objconf.iteritems()), **renamed}
     content = cast(Iterator[IntermediateMapping], read_csv(f, **rkwargs))
     stream = auto_close(content, f)
     return stream

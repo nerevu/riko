@@ -25,7 +25,6 @@ from os import path as p
 
 import pygogo as gogo
 from meza.io import read
-from meza.process import merge
 
 from riko import ENCODING, Objconf
 from riko.bado import io
@@ -94,7 +93,7 @@ async def async_parser(
     r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
-    rkwargs = merge([dict(objconf.iteritems()), renamed])
+    rkwargs = {**dict(objconf.iteritems()), **renamed}
     ext = p.splitext(objconf.url)[1]
     stream = auto_close(read(r, ext, **rkwargs), r)
     return stream
@@ -130,7 +129,7 @@ def parser(
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     f = Fetch(objconf.url, encoding=objconf.encoding)
-    rkwargs = merge([dict(objconf.iteritems()), renamed])
+    rkwargs = {**dict(objconf.iteritems()), **renamed}
     ext = p.splitext(objconf.url)[1]
     stream = auto_close(read(f, ext, **rkwargs), f)
     return stream

@@ -133,7 +133,6 @@ else:
 
 from meza import convert as cv
 from meza import io
-from meza.process import merge
 
 from riko import Context
 from riko.bado import async_return
@@ -667,7 +666,7 @@ def fetch_source(
     args: tuple[Mapping[str, str], AnyModuleConf], pipe: type[SyncPipe] = SyncPipe
 ) -> Stream:
     source, _conf = args
-    conf = merge([_conf, source])
+    conf = {**_conf, **source}
     pipe_name = source.get("type", "fetch")
     primed_pipe = pipe(pipe_name, conf=cast(AnyModuleConf, conf))
     return iter(primed_pipe)
@@ -677,6 +676,6 @@ async def afetch_source(
     args: tuple[BasicMapping, AnyModuleConf], pipe: type[AsyncPipe] = AsyncPipe
 ) -> Stream:
     source, _conf = args
-    conf = merge([_conf, source])
+    conf = {**_conf, **source}
     pipe_name = str(source.get("type", "fetch"))
     return await pipe(pipe_name, conf=cast(AnyModuleConf, conf))

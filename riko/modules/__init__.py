@@ -14,7 +14,6 @@ from typing import TypeVar, overload
 from typing import cast as cast_type
 
 import pygogo as gogo
-from meza.process import merge
 
 from riko import Context, Objconf, Objectify, listize, objectify
 from riko.bado.itertools import async_map
@@ -236,13 +235,13 @@ def gen_assignments(
         if value is None:
             yield DotDict(item)
         elif isinstance(value, (str, int, struct_time, Mapping, Objectify)):
-            merged = merge([item, {assign: value}])
+            merged = {**item, assign: value}
             yield DotDict(merged)
         elif isinstance(value, Iterable):
-            merged = merge([item, {assign: list(value)}])
+            merged = {**item, assign: list(value)}
             yield DotDict(merged)
         else:
-            merged = merge([item, {assign: value}])
+            merged = {**item, assign: value}
             yield DotDict(merged)
     elif isinstance(value, (str, int, struct_time)):
         yield value

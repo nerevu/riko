@@ -30,7 +30,6 @@ from functools import reduce
 from typing import cast
 
 import pygogo as gogo
-from meza.process import merge
 
 from riko import Objconf
 from riko.bado.itertools import async_reduce, coop_reduce
@@ -118,7 +117,7 @@ async def async_parser(
             replacement = await coop_reduce(reducer, group_rules, word)
 
         if isinstance(item, Mapping):
-            result = DotDict(merge([item, {field: replacement}]))
+            result = DotDict(cast(dict, {**item, field: replacement}))
         else:
             result = replacement
 
@@ -196,7 +195,7 @@ def parser(
             replacement = reduce(reducer, group_rules, word)
 
         if isinstance(item, Mapping):
-            result = DotDict(merge([item, {field: replacement}]))
+            result = DotDict(cast(dict, {**item, field: replacement}))
         else:
             result = replacement
 
