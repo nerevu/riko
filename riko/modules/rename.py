@@ -38,7 +38,7 @@ from meza.fntools import remove_keys
 from riko import Objconf
 from riko.bado.itertools import coop_reduce
 from riko.dotdict import DotDict
-from riko.types.general import Defaults, ItemArg, Opts
+from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RenameConfRule
 from riko.types.values import ComplexMapping
 
@@ -59,8 +59,8 @@ def reducer(item: ComplexMapping, rule: RenameConfRule) -> DotDict:
 
 
 async def async_parser(
-    item: ItemArg, rules: Sequence[RenameConfRule], objconf: Objconf, **kwargs
-) -> DotDict | ItemArg:
+    item: Item, rules: Sequence[RenameConfRule], objconf: Objconf, **kwargs
+) -> DotDict | Item:
     """
     Asynchronously parses the pipe content
 
@@ -105,8 +105,8 @@ async def async_parser(
 
 
 def parser(
-    item: ItemArg, rules: Sequence[RenameConfRule], objconf: Objconf, **kwargs
-) -> DotDict | ItemArg:
+    item: Item, rules: Sequence[RenameConfRule], objconf: Objconf, **kwargs
+) -> DotDict | Item:
     """
     Parsers the pipe content
 
@@ -142,7 +142,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> DotDict | ItemArg:
+async def async_pipe(*args, **kwargs) -> DotDict | Item:
     """
     A processor module that asynchronously renames or copies fields in an
     item.
@@ -188,7 +188,7 @@ async def async_pipe(*args, **kwargs) -> DotDict | ItemArg:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> DotDict | ItemArg:
+def pipe(*args, **kwargs) -> DotDict | Item:
     """
     A processor that renames or copies fields in an item.
 

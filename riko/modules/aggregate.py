@@ -21,7 +21,7 @@ from typing import cast
 import pygogo as gogo
 
 from riko import Objconf, listize
-from riko.types.general import Defaults, ItemArg, PipeTuples, Stream
+from riko.types.general import Defaults, Item, PipeTuples, Stream
 
 from . import operator
 
@@ -60,7 +60,7 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
         {'y': 3}
 
     """
-    func = cast(Callable[[Stream], ItemArg], kwargs["func"])
+    func = cast(Callable[[Stream], Item], kwargs["func"])
     result = func(stream)
     return iter(listize(result))
 
@@ -69,7 +69,7 @@ async def async_parser(
     stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
 ) -> Stream:
     func = cast(
-        Callable[[Stream], ItemArg | Awaitable[ItemArg]],
+        Callable[[Stream], Item | Awaitable[Item]],
         kwargs["func"],
     )
 

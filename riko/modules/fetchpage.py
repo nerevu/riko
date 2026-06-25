@@ -31,7 +31,7 @@ from riko import ENCODING, Objconf
 from riko.bado import io
 from riko.cast import BasicCastType
 from riko.parsers import get_text
-from riko.types.general import Defaults, Extraction, ItemArg, Opts
+from riko.types.general import Defaults, Extraction, Item, Opts
 from riko.utils import Fetch, betwix
 
 from . import processor
@@ -52,7 +52,7 @@ def get_string(content: str, start: str, end: str) -> str:
 
 
 async def async_parser(
-    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
 ) -> Iterator[str]:
     """
     Asynchronously parses the pipe content
@@ -100,7 +100,7 @@ async def async_parser(
 
 
 def parser(
-    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
 ) -> Iterator[str]:
     """
     Parses the pipe content

@@ -140,7 +140,7 @@ from riko.bado.itertools import async_map
 from riko.types.general import (
     AsyncPipeParser,
     ConversionFunc,
-    ItemArg,
+    Item,
     Items,
     SplitterItems,
     Stream,
@@ -203,17 +203,17 @@ if OFX is not None:
 
 
 @overload
-def export(items) -> list[ItemArg]: ...  # noqa: E704
+def export(items) -> list[Item]: ...  # noqa: E704
 @overload
-def export(items, **kwargs) -> list[ItemArg]: ...  # noqa: E704
+def export(items, **kwargs) -> list[Item]: ...  # noqa: E704
 @overload  # noqa: E302
 def export(  # noqa: E704
     items, _type: Literal["list"], **kwargs
-) -> list[ItemArg]: ...
+) -> list[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
     items, _type: Literal["tuple"], **kwargs
-) -> tuple[ItemArg]: ...
+) -> tuple[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
     items, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
@@ -383,7 +383,7 @@ class SyncPipe(PyPipe):
 
         return self._iter
 
-    def __next__(self) -> ItemArg:
+    def __next__(self) -> Item:
         if self._iter is None:
             self._iter = self._stream()
 
@@ -411,7 +411,7 @@ class SyncPipe(PyPipe):
         return cast(SplitterItems, splits)
 
     @overload
-    def export(self) -> list[ItemArg]: ...  # noqa: E704
+    def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
         self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
@@ -475,7 +475,7 @@ class SyncCollection(PyCollection):
 
         return self._iter
 
-    def __next__(self) -> ItemArg:
+    def __next__(self) -> Item:
         if self._iter is None:
             self._iter = self._stream()
 
@@ -497,7 +497,7 @@ class SyncCollection(PyCollection):
         return SyncPipe(source=self._stream(), **kwargs)
 
     @overload
-    def export(self) -> list[ItemArg]: ...  # noqa: E704
+    def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
         self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
@@ -527,7 +527,7 @@ class AsyncPipe(PyPipe):
         )
         self.source = source
         self.connections = connections
-        self._aiter: AsyncIterator[ItemArg] | None = None
+        self._aiter: AsyncIterator[Item] | None = None
 
         if self.name:
             self.module = import_module(f"riko.modules.{self.name}")
@@ -553,13 +553,13 @@ class AsyncPipe(PyPipe):
     def __await__(self) -> Generator[Any, None, Stream]:
         return self._await_stream().__await__()
 
-    def __aiter__(self) -> AsyncIterator[ItemArg]:
+    def __aiter__(self) -> AsyncIterator[Item]:
         if self._aiter is None:
             self._aiter = self._stream()
 
         return self._aiter
 
-    async def __anext__(self) -> ItemArg:
+    async def __anext__(self) -> Item:
         if self._aiter is None:
             self._aiter = self._stream()
 
@@ -569,7 +569,7 @@ class AsyncPipe(PyPipe):
             self._aiter = None
             raise
 
-    async def _stream(self) -> AsyncIterator[ItemArg]:
+    async def _stream(self) -> AsyncIterator[Item]:
         source = await self.source if self.source else None
         async_pipeline = partial(self.async_pipe, **self.kwargs)
 
@@ -604,9 +604,9 @@ class AsyncCollection(PyCollection):
     ):
         super().__init__(sources, conf=conf, parallel=parallel, **kwargs)
         self.connections = connections
-        self._aiter: AsyncIterator[ItemArg] | None = None
+        self._aiter: AsyncIterator[Item] | None = None
 
-    async def _stream(self) -> AsyncIterator[ItemArg]:
+    async def _stream(self) -> AsyncIterator[Item]:
         """Fetch all source urls"""
         zargs = zip(self.sources, repeat(self.conf))
         mapped = await async_map(afetch_source, zargs, self.connections)
@@ -622,13 +622,13 @@ class AsyncCollection(PyCollection):
     def __await__(self) -> Generator[Any, None, Stream]:
         return self._await_stream().__await__()
 
-    def __aiter__(self) -> AsyncIterator[ItemArg]:
+    def __aiter__(self) -> AsyncIterator[Item]:
         if self._aiter is None:
             self._aiter = self._stream()
 
         return self._aiter
 
-    async def __anext__(self) -> ItemArg:
+    async def __anext__(self) -> Item:
         if self._aiter is None:
             self._aiter = self._stream()
 
@@ -653,7 +653,7 @@ def get_worker_cnt(length: int, threads: bool | None = True) -> int:
 
 
 def listpipe(
-    args: tuple[ItemArg, SyncPipeParser],
+    args: tuple[Item, SyncPipeParser],
     **kwargs: BasicValue,
     # Mapping[str, StreamState] doesn't work with pyright for some reason
 ) -> Sequence[Mapping[str, object] | ComplexArg]:

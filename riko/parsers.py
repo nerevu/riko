@@ -31,7 +31,7 @@ from requests.structures import CaseInsensitiveDict
 from riko import listize
 from riko.bado.io import NamedTextIOWrapper
 from riko.dotdict import DotDict, is_sentinal, is_type_value
-from riko.types.general import ComplexArg, FileTypes, ItemArg, SkipFunc, SkipIf
+from riko.types.general import ComplexArg, FileTypes, Item, SkipFunc, SkipIf
 from riko.types.modules import AnyModuleConf, ConfValues, Skip
 from riko.types.values import (
     BasicArg,
@@ -596,7 +596,7 @@ def conf_is_dynamic(conf: ComplexArg, memoize=False) -> bool:
 
 
 def _parse_conf_uncached(
-    item: ItemArg = None,
+    item: Item = None,
     conf: AnyModuleConf | ConfValues | None = None,
     default=None,
     **kwargs,
@@ -633,7 +633,7 @@ def _parse_conf_uncached(
 
 @repr_cache
 def _parse_conf_cached(
-    item: ItemArg = None,
+    item: Item = None,
     conf: AnyModuleConf | ConfValues | None = None,
     default=None,
     **kwargs,
@@ -642,7 +642,7 @@ def _parse_conf_cached(
 
 
 def parse_conf(
-    item: ItemArg = None,
+    item: Item = None,
     conf: AnyModuleConf | ConfValues | None = None,
     default=None,
     memoize=None,
@@ -701,7 +701,7 @@ def parse_conf(
     return func(item, conf, default=default, **kwargs)
 
 
-def get_skip(item: ItemArg, skip_if: SkipIf | None = None, **_) -> bool:
+def get_skip(item: Item, skip_if: SkipIf | None = None, **_) -> bool:
     """
     Determine whether or not to skip an item
 
@@ -758,7 +758,7 @@ def get_skip(item: ItemArg, skip_if: SkipIf | None = None, **_) -> bool:
     return skip
 
 
-def get_field(item: ItemArg = None, field="", **kwargs) -> ComplexArg:
+def get_field(item: Item = None, field="", **kwargs) -> ComplexArg:
     value = item
 
     if field and isinstance(item, Mapping):

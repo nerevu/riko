@@ -27,7 +27,7 @@ import pygogo as gogo
 from riko import Objconf
 from riko.dates import NOW
 from riko.dotdict import DotDict
-from riko.types.general import Defaults, Extraction, ItemArg, Opts
+from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
 
@@ -56,9 +56,7 @@ rss = {
 RSS = cast(dict[str, str], DotDict(rss))
 
 
-def parser(
-    item: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
-) -> DotDict:
+def parser(item: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> DotDict:
     """
     Parses the pipe content
 

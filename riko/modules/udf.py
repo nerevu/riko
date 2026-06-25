@@ -20,7 +20,7 @@ from typing import cast
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import Defaults, Extraction, ItemArg, Opts
+from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
 
@@ -29,9 +29,7 @@ DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(
-    item: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
-) -> ItemArg:
+def parser(item: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Item:
     """
     Parsers the pipe content
 
@@ -56,13 +54,13 @@ def parser(
         {'y': 3}
 
     """
-    func = cast(Callable[[ItemArg], ItemArg], kwargs["func"])
+    func = cast(Callable[[Item], Item], kwargs["func"])
     return func(item)
 
 
 # TODO: add support for async functions
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> ItemArg:
+def async_pipe(*args, **kwargs) -> Item:
     """
     A processor that asynchronously performs an arbitrary (user-defined)
     function on an item.
@@ -98,7 +96,7 @@ def async_pipe(*args, **kwargs) -> ItemArg:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> ItemArg:
+def pipe(*args, **kwargs) -> Item:
     """
     A processor that performs an arbitrary (user-defined) function
     on an item.

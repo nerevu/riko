@@ -38,13 +38,7 @@ from meza.fntools import dfilter
 
 from riko import Objconf
 from riko.cast import BasicCastType
-from riko.types.general import (
-    Defaults,
-    ItemArg,
-    Opts,
-    PipeTuples,
-    Stream,
-)
+from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 from riko.types.values import StatefulItem, StreamState
 from riko.utils import _receive_queue, _registry, close, coroutine
 
@@ -59,7 +53,7 @@ def parser(
     _: Stream,
     objconf: Objconf,
     tuples: PipeTuples,
-    func: Callable[[ItemArg | StatefulItem], ItemArg] | None = None,
+    func: Callable[[Item | StatefulItem], Item] | None = None,
     **kwargs,
 ) -> Stream | Iterator[StatefulItem]:
     """
@@ -107,7 +101,7 @@ def parser(
         fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
 
         @coroutine(registry_name=name, maxlen=objconf.max_len)
-        def receiver() -> Generator[None, ItemArg | StatefulItem, None]:
+        def receiver() -> Generator[None, Item | StatefulItem, None]:
             while True:
                 item = yield
 

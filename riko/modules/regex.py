@@ -34,7 +34,7 @@ import pygogo as gogo
 from riko import Objconf
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.dotdict import DotDict
-from riko.types.general import Defaults, ItemArg, Opts
+from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RegexConfRule, RegexRule
 from riko.utils import get_regex_rule, group_by, multi_substitute, substitute
 
@@ -46,7 +46,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    item: ItemArg,
+    item: Item,
     rules: Sequence[RegexConfRule],
     objconf: Objconf,
     **kwargs,
@@ -95,7 +95,7 @@ async def async_parser(
     recompile = not multi
 
     async def async_reducer(
-        item: ItemArg, rules: Sequence[RegexRule]
+        item: Item, rules: Sequence[RegexRule]
     ) -> DotDict | str | None:
         field = rules[0]["field"]
 
@@ -131,7 +131,7 @@ async def async_parser(
 
 
 def parser(
-    item: ItemArg,
+    item: Item,
     rules: Sequence[RegexConfRule],
     objconf: Objconf,
     **kwargs,
@@ -171,7 +171,7 @@ def parser(
     multi = objconf.multi
     recompile = not multi
 
-    def sync_reducer(item: ItemArg, rules: Sequence[RegexRule]) -> DotDict | str | None:
+    def sync_reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict | str | None:
         field = str(rules[0]["field"])
 
         if isinstance(item, Mapping):

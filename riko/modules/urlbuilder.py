@@ -59,7 +59,7 @@ from urllib.parse import urlencode, urljoin
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import Defaults, ItemArg, Opts
+from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import ObjconfParam
 
 from . import processor
@@ -71,9 +71,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 PATTERN = re.compile(r'[<>:"/\\\|\*%]')
 
 
-def parser(
-    _: ItemArg, param: Sequence[ObjconfParam], objconf: Objconf, **kwargs
-) -> str:
+def parser(_: Item, param: Sequence[ObjconfParam], objconf: Objconf, **kwargs) -> str:
     """
     Parsers the pipe content
 

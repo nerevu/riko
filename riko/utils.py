@@ -71,7 +71,7 @@ from riko.dotdict import DotDict
 from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
 from riko.types.general import (
     FileTypes,
-    ItemArg,
+    Item,
     Opener,
     PipelineDependencies,
     SyncItemFunc,
@@ -99,7 +99,7 @@ from riko.types.values import (
 
 NON_SORTABLE = (Mapping, Objectify, Sequence)
 
-_registry: dict[str, Generator[None, ItemArg | StatefulItem, None]] = {}
+_registry: dict[str, Generator[None, Item | StatefulItem, None]] = {}
 _receive_queue: dict[str, deque[tuple[StreamState | None, ComplexArg]]] = {}
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
@@ -613,7 +613,7 @@ def _resolve_default(
 
 def def_itemgetter(
     attr: str, default: ComplexValue | None = None, _type: str | None = None
-) -> Callable[[ItemArg], SortableValue]:
+) -> Callable[[Item], SortableValue]:
     # like operator.itemgetter but fills in missing keys with a default value
     _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
     invalid_type = bool(_invalid_type or (_type and _type not in CAST_SWITCH))
@@ -622,7 +622,7 @@ def def_itemgetter(
     _invalid_type = _type in {CastType.LOCATION, CastType.PASS, CastType.NONE}
     invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
 
-    def keyfunc(item: ItemArg) -> SortableValue:
+    def keyfunc(item: Item) -> SortableValue:
         if isinstance(item, Mapping):
             value = item.get(attr, default)
         elif isinstance(item, Objectify):
@@ -776,7 +776,7 @@ def dispatch(
     return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
-def broadcast(item: ItemArg, *funcs: SyncItemFunc, **kwargs) -> tuple[ComplexArg, ...]:
+def broadcast(item: Item, *funcs: SyncItemFunc, **kwargs) -> tuple[ComplexArg, ...]:
     r"""
     Delivers the same item to different functions.
 
@@ -1006,7 +1006,7 @@ def gen_items(
         yield
 
 
-def send(target: str, item: ItemArg | StatefulItem):
+def send(target: str, item: Item | StatefulItem):
     if target in _registry:
         _registry[target].send(item)
     else:
@@ -1022,7 +1022,7 @@ def coroutine(registry_name: str | None = None, maxlen=256):
     """Decorator for generator-based coroutines."""
 
     def decorator(
-        func: Callable[..., Generator[None, ItemArg | StatefulItem, None]],
+        func: Callable[..., Generator[None, Item | StatefulItem, None]],
     ):
         name = registry_name or func.__name__
 

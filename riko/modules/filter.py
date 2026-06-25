@@ -39,7 +39,7 @@ from dateutil.parser import ParserError
 from riko import Objectify
 from riko.cast import cast_date
 from riko.dotdict import DotDict
-from riko.types.general import Defaults, ItemArg, Opts, PipeTuples, Stream
+from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 from riko.types.modules import FilterConfRule
 from riko.types.values import ComplexArg, ComplexSequence
 from riko.utils import repr_cache
@@ -118,9 +118,7 @@ def parse_arg(arg: Result, op: str, memoize=False) -> Result:
     return func(arg, op)
 
 
-def parse_rule(
-    rule: FilterConfRule, item: ItemArg, **kwargs
-) -> Result | Literal[False]:
+def parse_rule(rule: FilterConfRule, item: Item, **kwargs) -> Result | Literal[False]:
     truthiness = rule.op in TRUTHINESS_OPS
     _y = rule.value
 

@@ -32,7 +32,7 @@ from riko.types.general import (
     CastFuncs,
     Defaults,
     Dispatched,
-    ItemArg,
+    Item,
     OperatorItems,
     OperatorParser,
     OperatorWrapper,
@@ -479,7 +479,7 @@ class processor(Module):  # noqa: N801
         """
         super().__init__(*args, **kwargs)
 
-    def parse(self, item: ItemArg, module_name: str) -> DotDict | DateLike | NumLike:
+    def parse(self, item: Item, module_name: str) -> DotDict | DateLike | NumLike:
         if isinstance(item, (NumLikeType, DateLikeType, DotDict)):
             parsed = item
         elif isinstance(item, Objectify):
@@ -503,7 +503,7 @@ class processor(Module):  # noqa: N801
 
     def setup(
         self, _input: DotDict | DateLike | NumLike, **kwargs
-    ) -> tuple[ItemArg, Casted, bool]:
+    ) -> tuple[Item, Casted, bool]:
         dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in FRAMEWORK_KEYS}
         skip = get_skip(_input, skip_if=self.opts.get("skip_if"))
 
@@ -606,7 +606,7 @@ class processor(Module):  # noqa: N801
         module_name = pipe.__module__.split(".")[-1]
 
         async def async_wrapper(
-            item: ItemArg = None,
+            item: Item = None,
             conf: AnyModuleConf | None = None,
             **kwargs,
         ) -> Stream:
@@ -631,7 +631,7 @@ class processor(Module):  # noqa: N801
             return self.process(_input, stream, emit, assign, skip, _conf)
 
         def sync_wrapper(
-            item: ItemArg = None,
+            item: Item = None,
             conf: AnyModuleConf | None = None,
             **kwargs,
         ) -> Stream:
@@ -800,7 +800,7 @@ class operator(Module):  # noqa: N801
                 defaults=Defaults(self.defaults),
             )
             # Parses conf that can vary per item. Can't handle terminal input
-            dispatcher = cast_type(Callable[[ItemArg, Opts], Dispatched], _dispatcher)
+            dispatcher = cast_type(Callable[[Item, Opts], Dispatched], _dispatcher)
             dispatches = (dispatcher(item, self.opts) for item in _input)
 
             # - operators can't skip items
@@ -1030,7 +1030,7 @@ class splitter(Module):  # noqa: N801
             casters=self.casters,
             defaults=Defaults(self.defaults),
         )
-        dispatcher = cast_type(Callable[[ItemArg, Opts], Dispatched], _dispatcher)
+        dispatcher = cast_type(Callable[[Item, Opts], Dispatched], _dispatcher)
         dispatches = (dispatcher(item, self.opts) for item in _input)
         tuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
         orig_stream = (d.item for d in dispatches)
@@ -1081,7 +1081,7 @@ class splitter(Module):  # noqa: N801
 
 
 def _dispatch(
-    item: ItemArg,
+    item: Item,
     opts: Opts,
     conf: AnyModuleConf,
     parsers: ParseFuncs | None = None,
@@ -1131,7 +1131,7 @@ def get_casters(opts: Opts) -> CastFuncs:
 
     if ftype in CAST_SWITCH:
         _field_func = partial(cast_value, _type=CastType(ftype))
-        field_func = cast_type(Callable[[ItemArg], ComplexValue], _field_func)
+        field_func = cast_type(Callable[[Item], ComplexValue], _field_func)
     else:
         if ftype:
             logger.warning(f"Invalid cast {ftype=}. Ignoring.")
@@ -1140,7 +1140,7 @@ def get_casters(opts: Opts) -> CastFuncs:
 
     if ptype in CAST_SWITCH:
         _caster = partial(cast_value, _type=CastType(ptype))
-        caster = cast_type(Callable[[ItemArg], ComplexValue], _caster)
+        caster = cast_type(Callable[[Item], ComplexValue], _caster)
     else:
         if ptype:
             logger.warning(f"Invalid cast {ptype=}. Ignoring.")
@@ -1160,5 +1160,5 @@ def get_casters(opts: Opts) -> CastFuncs:
         extract_caster = caster
         _conf_caster = cast_pass
 
-    conf_caster = cast_type(Callable[[ItemArg], AnyModuleConf], _conf_caster)
+    conf_caster = cast_type(Callable[[Item], AnyModuleConf], _conf_caster)
     return CastFuncs(field_func, extract_caster, conf_caster)

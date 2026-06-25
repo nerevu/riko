@@ -54,7 +54,7 @@ import pygogo as gogo
 
 from riko import Objconf
 from riko.cast import BasicCastType, CastType, cast
-from riko.types.general import Defaults, Extraction, ItemArg, Opts
+from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
 
@@ -69,8 +69,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: ItemArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> ItemArg:
+    _: Item, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> Item:
     """
     Obtains the user input
 
@@ -104,7 +104,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> ItemArg:
+def async_pipe(*args, **kwargs) -> Item:
     """
     A processor module that asynchronously prompts for text and parses it
     into a variety of different types, e.g., int, bool, date, etc.
@@ -154,7 +154,7 @@ def async_pipe(*args, **kwargs) -> ItemArg:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> ItemArg:
+def pipe(*args, **kwargs) -> Item:
     """
     A processor module that prompts for text and parses it into a variety of
     different types, e.g., int, bool, date, etc.

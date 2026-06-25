@@ -31,7 +31,7 @@ from meza.process import join, merge
 
 from riko import Objconf
 from riko.dotdict import is_mapping
-from riko.types.general import Defaults, ItemArg, Opts, PipeTuples, Stream
+from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 from riko.types.values import ComplexMapping
 
 from . import operator
@@ -92,7 +92,7 @@ def parser(
     """
     other = cast(Stream, kwargs["other"])
 
-    def compare(x: ItemArg, y: ItemArg, x_key: str, y_key: str) -> bool:
+    def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
         if isinstance(x, Mapping) and isinstance(y, Mapping):
             x_value, y_value = x.get(x_key, ""), y.get(y_key, "")
 

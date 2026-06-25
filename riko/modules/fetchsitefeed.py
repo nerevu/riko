@@ -39,7 +39,7 @@ from riko import Objconf, autorss
 from riko.bado import io
 from riko.cast import BasicCastType
 from riko.parsers import parse_rss
-from riko.types.general import Defaults, Extraction, ItemArg, Opts
+from riko.types.general import Defaults, Extraction, Item, Opts
 from riko.types.values import RSSEntry
 from riko.utils import augment_entries
 
@@ -51,7 +51,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
 ) -> Iterator[RSSEntry]:
     """
     Asynchronously parses the pipe content
@@ -94,7 +94,7 @@ async def async_parser(
 
 
 def parser(
-    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
 ) -> Iterator[RSSEntry]:
     """
     Parses the pipe content

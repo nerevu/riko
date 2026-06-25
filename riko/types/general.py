@@ -30,21 +30,21 @@ if TYPE_CHECKING:
 
 
 # Values
-ItemArg: TypeAlias = ComplexArg
-Stream: TypeAlias = Iterator[ComplexArg]
-Items: TypeAlias = Iterable[ComplexArg]
+Item: TypeAlias = ComplexArg
+Stream: TypeAlias = Iterator[Item]
+Items: TypeAlias = Iterable[Item]
 
-ProcessorItems: TypeAlias = Stream | ComplexDict | ItemArg
+ProcessorItems: TypeAlias = Stream | ComplexDict | Item
 OperatorItems: TypeAlias = Stream | NumLike | Items | Iterator[StatefulItem]
 SplitterItems: TypeAlias = Iterator[Stream]
-PipeTuple: TypeAlias = tuple[ItemArg, "Objconf"]
+PipeTuple: TypeAlias = tuple[Item, "Objconf"]
 PipeTuples: TypeAlias = Iterator[PipeTuple]
 Objconfs: TypeAlias = Sequence["Objconf"]
 Extraction: TypeAlias = Union["Objconf", Objconfs]
 ConversionFunc: TypeAlias = Callable[..., Items | StringIO]
 Caster: TypeAlias = Callable[[str | int], ComplexValue]
 NumericCaster: TypeAlias = Callable[[str | NumLike], NumLike]
-SkipFunc: TypeAlias = Callable[[ItemArg], bool]
+SkipFunc: TypeAlias = Callable[[Item], bool]
 SkipIf: TypeAlias = Union[SkipFunc, "Skip", Iterable[SkipFunc], Iterable["Skip"]]
 
 # Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
@@ -123,26 +123,26 @@ class Opts(TypedDict, total=False):
 
 
 class Casted(NamedTuple):
-    field: ItemArg
-    extraction: ItemArg
+    field: Item
+    extraction: Item
     conf: "AnyModuleConf"
 
 
 class Dispatched(NamedTuple):
-    item: ItemArg
+    item: Item
     casted: Casted
 
 
-ProcessorParserArgs: TypeAlias = tuple[ItemArg, ItemArg, "AnyModuleConf"]
-OperatorParserArgs: TypeAlias = tuple[Stream, ItemArg, PipeTuples]
+ProcessorParserArgs: TypeAlias = tuple[Item, Item, "AnyModuleConf"]
+OperatorParserArgs: TypeAlias = tuple[Stream, Item, PipeTuples]
 
 # Sync
-SyncItemFunc: TypeAlias = Callable[[ItemArg], ItemArg]
+SyncItemFunc: TypeAlias = Callable[[Item], Item]
 SyncProcessorParser: TypeAlias = Callable[
-    [ItemArg, ItemArg, "AnyModuleConf"], ProcessorItems
+    [Item, Item, "AnyModuleConf"], ProcessorItems
 ]
-SyncOperatorParser: TypeAlias = Callable[[Stream, ItemArg, PipeTuples], OperatorItems]
-SyncSplitterParser: TypeAlias = Callable[[Stream, ItemArg, PipeTuples], SplitterItems]
+SyncOperatorParser: TypeAlias = Callable[[Stream, Item, PipeTuples], OperatorItems]
+SyncSplitterParser: TypeAlias = Callable[[Stream, Item, PipeTuples], SplitterItems]
 
 SyncPipeResult: TypeAlias = ProcessorItems | OperatorItems | SyncSplitterParser
 SyncPipeParser: TypeAlias = Callable[..., SyncPipeResult]
@@ -155,7 +155,7 @@ Steps: TypeAlias = dict[str, SyncPipeResult | SyncPipeParser]
 class SyncProcessorWrapper(Protocol):
     def __call__(  # noqa: E704
         self,
-        item: ItemArg = None,
+        item: Item = None,
         conf: Union["AnyModuleConf", None] = None,
         context: Optional["Context"] = None,
         **kwargs,
@@ -190,18 +190,18 @@ class ParseFuncs(NamedTuple):
 class CastFuncs(NamedTuple):
     field_caster: SyncItemFunc
     extract_caster: SyncItemFunc
-    conf_caster: Callable[[ItemArg], "AnyModuleConf"]
+    conf_caster: Callable[[ComplexArg], "AnyModuleConf"]
 
 
 # Async
 AsyncProcessorParser: TypeAlias = Callable[
-    [ItemArg, ItemArg, "AnyModuleConf"], Awaitable[ProcessorItems]
+    [Item, Item, "AnyModuleConf"], Awaitable[ProcessorItems]
 ]
 AsyncOperatorParser: TypeAlias = Callable[
-    [Stream, ItemArg, PipeTuples], Awaitable[OperatorItems]
+    [Stream, Item, PipeTuples], Awaitable[OperatorItems]
 ]
 AsyncSplitterParser: TypeAlias = Callable[
-    [Stream, ItemArg, PipeTuples], Awaitable[SplitterItems]
+    [Stream, Item, PipeTuples], Awaitable[SplitterItems]
 ]
 AsyncPipeResult: TypeAlias = Awaitable[SyncPipeResult]
 AsyncPipeParser: TypeAlias = Callable[..., AsyncPipeResult]
@@ -210,7 +210,7 @@ AsyncPipeParser: TypeAlias = Callable[..., AsyncPipeResult]
 class AsyncProcessorWrapper(Protocol):
     def __call__(  # noqa: E704
         self,
-        item: ItemArg = None,
+        item: Item = None,
         conf: Union["AnyModuleConf", None] = None,
         context: Optional["Context"] = None,
         **kwargs,

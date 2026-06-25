@@ -32,7 +32,7 @@ from riko import ENCODING, Objconf, listize
 from riko.bado import io
 from riko.cast import BasicCastType
 from riko.parsers import Stringy, any2dict
-from riko.types.general import Defaults, Extraction, FileTypes, ItemArg, Opts
+from riko.types.general import Defaults, Extraction, FileTypes, Item, Opts
 from riko.types.values import ComplexArg, ComplexMapping, StrictDate
 from riko.utils import Fetch, auto_close
 
@@ -44,7 +44,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
 ) -> Iterator[
     Stringy | ComplexMapping | StrictDate | Decimal | float | Sequence[ComplexArg]
 ]:
@@ -93,7 +93,7 @@ async def async_parser(
 
 
 def parser(
-    _: ItemArg, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
 ) -> Iterator[
     Stringy | ComplexMapping | StrictDate | Decimal | float | Sequence[ComplexArg]
 ]:

@@ -11,7 +11,7 @@ from twisted.internet import defer
 from riko.bado import _issync, react
 from riko.bado.mock import FakeReactor
 from riko.collections import AsyncPipe, SyncPipe
-from riko.types.general import ItemArg
+from riko.types.general import Item
 from riko.types.values import StreamState
 from riko.utils import noop
 
@@ -26,7 +26,7 @@ class TestCollections:
     def setup_method(self):
         self.runs = 0
 
-    def udf(self, item: ItemArg) -> ItemArg:
+    def udf(self, item: Item) -> Item:
         self.runs += 1
         return item
 
