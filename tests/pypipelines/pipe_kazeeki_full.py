@@ -1,17 +1,14 @@
 # vim: sw=4:ts=4:expandtab
 
-from itertools import chain
 from os import path as p
 from pprint import pprint
 
 from riko import Context, get_path
 from riko.collections import SyncPipe
+from riko.types.modules import FetchConf, FetchDataConf
+from riko.utils import make_regex_rule
 
 PARENT = p.dirname(p.dirname(p.dirname(__file__)))
-
-make_regex = lambda f, m, r: {"field": f, "match": m, "replace": r}
-cdict = lambda *d: dict(chain.from_iterable(map(dict.items, d)))
-pmatch = {"seriesmatch": False}
 
 
 def make_simplemath(other, op):
@@ -115,59 +112,59 @@ match1_25 = "Under|Upto|Less than"
 match1_26 = "^(?!.*-.*)(.*)"
 
 regex1_rule = [
-    make_regex("title", match1_01, "$1"),
-    make_regex("k:marketplace", match1_02, "$3"),
-    make_regex("k:job_type", match1_03, "hourly"),
-    make_regex("k:job_type", match1_04, "fixed"),
-    make_regex("k:job_type", match1_05, "unknown"),
-    make_regex("k:job_type", ".*hr.*", "hourly"),
-    make_regex("k:job_type", ".*unknown.*", "unknown"),
-    make_regex("k:job_type", "^(?!.*(hourly|unknown).*).*", "fixed"),
-    make_regex("k:content", match1_06, "$1"),
-    make_regex("k:content", match1_07, "$3"),
-    make_regex("k:submissions", match1_08, "$3"),
-    make_regex("k:submissions", match1_09, "unknown"),
-    make_regex("k:author", match1_10, "$3"),
-    make_regex("k:author", match1_11, "unknown"),
-    make_regex("k:work_location", match1_12, "$4"),
-    make_regex("k:work_location", match1_13, "unknown"),
-    make_regex("k:client_location", match1_14, "$4"),
-    make_regex("k:client_location", match1_14b, "unknown"),
-    make_regex("k:tags", match1_15, "$4"),
-    make_regex("k:tags", match1_16, "$4"),
-    make_regex("k:tags", match1_17, "$3"),
-    make_regex("k:tags", match1_18, ""),
-    make_regex("k:tags", match1_19, "$1,"),
-    make_regex("k:tags", match1_20b, ","),
-    make_regex("k:tags", match1_21b, "-"),
-    make_regex("k:tags", "^-|-$", ""),
-    make_regex("k:tags", ",-|-,", ","),
-    make_regex("k:tags", "^,|,$", ""),
-    make_regex("k:due", match1_22, "$1"),
-    make_regex("k:due", match1_23, "unknown"),
-    cdict(pmatch, make_regex("k:budget_raw", match1_24b1, "0")),
-    cdict(pmatch, make_regex("k:budget_raw", match1_24b2, "$5")),
-    make_regex("k:budget_raw", "k", "000"),
-    make_regex("k:budget_raw", match1_25, "0 -"),
-    make_regex("k:budget_raw", "or less", "- 0"),
-    make_regex("k:budget_raw", match1_26, "$1 - $1"),
+    make_regex_rule("title", match1_01, "$1"),
+    make_regex_rule("k:marketplace", match1_02, "$3"),
+    make_regex_rule("k:job_type", match1_03, "hourly"),
+    make_regex_rule("k:job_type", match1_04, "fixed"),
+    make_regex_rule("k:job_type", match1_05, "unknown"),
+    make_regex_rule("k:job_type", ".*hr.*", "hourly"),
+    make_regex_rule("k:job_type", ".*unknown.*", "unknown"),
+    make_regex_rule("k:job_type", "^(?!.*(hourly|unknown).*).*", "fixed"),
+    make_regex_rule("k:content", match1_06, "$1"),
+    make_regex_rule("k:content", match1_07, "$3"),
+    make_regex_rule("k:submissions", match1_08, "$3"),
+    make_regex_rule("k:submissions", match1_09, "unknown"),
+    make_regex_rule("k:author", match1_10, "$3"),
+    make_regex_rule("k:author", match1_11, "unknown"),
+    make_regex_rule("k:work_location", match1_12, "$4"),
+    make_regex_rule("k:work_location", match1_13, "unknown"),
+    make_regex_rule("k:client_location", match1_14, "$4"),
+    make_regex_rule("k:client_location", match1_14b, "unknown"),
+    make_regex_rule("k:tags", match1_15, "$4"),
+    make_regex_rule("k:tags", match1_16, "$4"),
+    make_regex_rule("k:tags", match1_17, "$3"),
+    make_regex_rule("k:tags", match1_18, ""),
+    make_regex_rule("k:tags", match1_19, "$1,"),
+    make_regex_rule("k:tags", match1_20b, ","),
+    make_regex_rule("k:tags", match1_21b, "-"),
+    make_regex_rule("k:tags", "^-|-$", ""),
+    make_regex_rule("k:tags", ",-|-,", ","),
+    make_regex_rule("k:tags", "^,|,$", ""),
+    make_regex_rule("k:due", match1_22, "$1"),
+    make_regex_rule("k:due", match1_23, "unknown"),
+    make_regex_rule("k:budget_raw", match1_24b1, "0", seriesmatch=False),
+    make_regex_rule("k:budget_raw", match1_24b2, "$5", seriesmatch=False),
+    make_regex_rule("k:budget_raw", "k", "000"),
+    make_regex_rule("k:budget_raw", match1_25, "0 -"),
+    make_regex_rule("k:budget_raw", "or less", "- 0"),
+    make_regex_rule("k:budget_raw", match1_26, "$1 - $1"),
 ]
 
 regex2_rule = [
-    make_regex("k:budget_raw1", "(.*) - (.*)", "$1"),
-    make_regex("k:budget_raw2", "(.*) - (.*)", "$2"),
+    make_regex_rule("k:budget_raw1", "(.*) - (.*)", "$1"),
+    make_regex_rule("k:budget_raw2", "(.*) - (.*)", "$2"),
 ]
 
 regex3_rule = [
-    make_regex("k:budget_raw1_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
-    make_regex("k:budget_raw1_sym", "\\s*([$£€₹]).*", "$1"),
-    make_regex("k:budget_raw1_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
-    make_regex("k:budget_raw2_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
-    make_regex("k:budget_raw2_sym", "\\s*([$£€₹]).*", "$1"),
-    make_regex("k:budget_raw2_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
+    make_regex_rule("k:budget_raw1_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
+    make_regex_rule("k:budget_raw1_sym", "\\s*([$£€₹]).*", "$1"),
+    make_regex_rule("k:budget_raw1_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
+    make_regex_rule("k:budget_raw2_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
+    make_regex_rule("k:budget_raw2_sym", "\\s*([$£€₹]).*", "$1"),
+    make_regex_rule("k:budget_raw2_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
 ]
 
-regex4_rule = [make_regex("k:cur_code", "^(?![A-Z]{3}\\b)(.*)", DEF_CUR_CODE)]
+regex4_rule = [make_regex_rule("k:cur_code", "^(?![A-Z]{3}\\b)(.*)", DEF_CUR_CODE)]
 
 strreplace_conf = {
     "RULE": [
@@ -258,8 +255,8 @@ my_item = {
 
 itembuilder_attrs = [{"key": k, "value": v} for k, v in my_item.items()]
 itembuilder_conf = {"attrs": itembuilder_attrs}
-fetch_conf = {"URL": "http://feeds.feedburner.com/guru/all"}
-fetchdata_conf = {"URL": get_path("kazeeki2.json"), "path": "items"}
+fetch_conf = FetchConf({"url": "http://feeds.feedburner.com/guru/all"})
+fetchdata_conf = FetchDataConf({"url": get_path("kazeeki2.json"), "path": "items"})
 
 
 def parse_source(source):

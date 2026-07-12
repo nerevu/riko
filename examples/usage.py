@@ -368,13 +368,14 @@ Design Principles
 """
 
 from riko.collections import SyncPipe
+from riko.types.modules import ItemBuilderConf, ParsedParam
 
 attrs = [
-    {"key": "title", "value": "riko pt. 1"},
-    {"key": "content", "value": "Let's talk about riko!"},
+    ParsedParam({"key": "title", "value": "riko pt. 1"}),
+    ParsedParam({"key": "content", "value": "Let's talk about riko!"}),
 ]
 
-ib_conf = {"attrs": attrs}
+ib_conf = ItemBuilderConf({"attrs": attrs})
 
 
 def pipe(test=False):

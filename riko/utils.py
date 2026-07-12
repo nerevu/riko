@@ -57,6 +57,7 @@ import riko.cast as cast_module
 from riko import (
     ENCODING,
     Context,
+    Objconf,
     Objectify,
     __version__,
     get_abspath,
@@ -919,8 +920,17 @@ def substitute(word: str, rule):
     return replaced
 
 
+def make_regex_rule(
+    f: str, m: str, r: str, seriesmatch: bool = True, default=None
+) -> RegexConfRule:
+    return RegexConfRule(
+        field=f, match=m, replace=r, seriesmatch=seriesmatch, default=default
+    )
+
+
 # @memoize(TIMEOUT)
-def get_regex_rule(rule: RegexConfRule, recompile=False) -> RegexRule:
+def get_regex_rule(rule: Objconf | RegexConfRule, recompile=False) -> RegexRule:
+    rule = rule if is_dataclass(rule) else RegexConfRule(**rule)
     flags = 0 if rule.casematch else re.IGNORECASE
 
     if not rule.singlelinematch:

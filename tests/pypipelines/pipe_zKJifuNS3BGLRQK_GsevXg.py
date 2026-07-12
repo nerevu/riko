@@ -6,6 +6,7 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.simplemath import pipe as simplemath
 from riko.modules.split import pipe as split
 from riko.modules.truncate import pipe as truncate
+from riko.types.modules import FetchRawConf, SimpleMathRawConf
 
 
 def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, conf=None):
@@ -26,12 +27,14 @@ def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, conf=None):
 
     sw_224 = fetch(
         context=context,
-        conf={
-            "URL": {
-                "type": "url",
-                "value": get_path("TheEdTechie.xml"),
+        conf=FetchRawConf(
+            {
+                "url": {
+                    "type": "url",
+                    "value": get_path("TheEdTechie.xml"),
+                }
             }
-        },
+        ),
     )
 
     sw_250, sw_251 = split(sw_224, context=context, conf=None)
@@ -41,10 +44,13 @@ def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, conf=None):
     sw_169 = simplemath(
         sw_243,
         context=context,
-        conf={
-            "OTHER": {"type": "int", "value": "6"},
-            "OP": {"type": "text", "value": "modulo"},
-        },
+        conf=SimpleMathRawConf(
+            {
+                "other": {"type": "int", "value": "6"},
+                "op": {"type": "text", "value": "modulo"},
+            }
+        ),
+        emit=True,
     )
 
     sw_232 = truncate(

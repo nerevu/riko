@@ -10,7 +10,8 @@ Examples:
         >>> from riko.modules.send import pipe as sender
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}, func=noop)
+        >>> conf = {'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}
+        >>> target = receiver(conf=conf, func=noop)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
@@ -30,6 +31,7 @@ Attributes:
 """
 
 from collections.abc import Callable, Generator, Iterator, Mapping
+from random import choice
 from time import sleep
 from typing import cast
 
@@ -45,8 +47,61 @@ from riko.utils import _receive_queue, _registry, close, coroutine
 from . import operator
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
-DEFAULTS: Defaults = {"wait": 1, "max_wait": 5}
+DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5}
 logger = gogo.Gogo(__name__, monolog=True).logger
+
+ONSETS = (
+    "b",
+    "br",
+    "cl",
+    "cr",
+    "d",
+    "dr",
+    "f",
+    "fl",
+    "g",
+    "gr",
+    "k",
+    "m",
+    "n",
+    "p",
+    "pl",
+    "r",
+    "s",
+    "sl",
+    "st",
+    "t",
+    "tr",
+    "v",
+)
+VOWELS = "aeiou"
+CODAS = ("", "l", "m", "n", "r", "s", "th", "nd", "nt", "ck")
+
+ADJECTIVES = [
+    "ancient",
+    "autumn",
+    "bold",
+    "brisk",
+    "calm",
+    "crimson",
+    "gentle",
+    "hidden",
+    "lucky",
+    "misty",
+    "rapid",
+    "silent",
+    "silver",
+    "steady",
+    "wild",
+]
+
+
+def gen_name(count=2) -> Iterator[str]:
+    yield choice(ADJECTIVES)  # noqa: S311
+    yield "-"
+
+    for _ in range(count):
+        yield "".join(map(choice, [ONSETS, VOWELS, CODAS]))  # noqa: S311
 
 
 def parser(
@@ -91,7 +146,7 @@ def parser(
         {'x': 0}
 
     """
-    name = objconf.name
+    name = objconf.name or "".join(gen_name())
     wait = objconf.wait
     max_wait = objconf.max_wait
     total_waited = 0

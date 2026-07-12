@@ -12,14 +12,21 @@ from riko.bado import _issync, react
 from riko.bado.mock import FakeReactor
 from riko.collections import AsyncPipe, SyncPipe
 from riko.types.general import Item
+from riko.types.modules import (
+    ItemBuilderConf,
+    ParsedParam,
+    ReceiveConf,
+    StrReplaceConf,
+    StrReplaceConfRule,
+)
 from riko.types.values import StreamState
 from riko.utils import noop
 
 value = "once is 1x,twice is 2x,thrice is 3x"
-attrs = {"key": "content", "value": value}
-builder_conf = {"attrs": attrs}
+attrs = ParsedParam({"key": "content", "value": value})
+builder_conf = ItemBuilderConf({"attrs": attrs})
 done_conf = {"attrs": {"key": "state", "value": StreamState.DONE}}
-strr_conf = {"rule": {"find": "is", "replace": "was"}}
+strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
 
 
 class TestCollections:
@@ -51,8 +58,8 @@ class TestCollections:
         assert next(stream) == {"content": "once is 1x"}
 
     def test_receive(self, capsys):
-        _conf = {"wait": 0.001, "max_wait": 2}
-        receiver = SyncPipe("receive", conf={"name": "receiver", **_conf})
+        _conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
+        receiver = SyncPipe("receive", conf=ReceiveConf({"name": "receiver", **_conf}))
         changer = SyncPipe("receive", conf={"name": "changer", **_conf}, func=len)
         printer = SyncPipe("receive", conf={"name": "printer", **_conf}, func=print)
         assert next(receiver) == {"state": StreamState.PENDING}
@@ -89,7 +96,7 @@ class TestCollections:
         assert self.runs == 3
 
     def test_pubsub(self, caplog):
-        _conf = {"wait": 0.001, "max_wait": 2}
+        _conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
         receiver1 = SyncPipe("receive", conf={"name": "receiver1", **_conf}, func=noop)
         receiver2 = SyncPipe("receive", conf={"name": "receiver2", **_conf}, func=noop)
         assert next(receiver1) == {"state": StreamState.PENDING}

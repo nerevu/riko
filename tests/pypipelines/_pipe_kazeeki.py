@@ -5,28 +5,33 @@ from os import path as p
 
 from riko import get_path
 from riko.compile import write_file
-from riko.utils import combine_dicts as cdict
+from riko.types.modules import (
+    FetchDataConf,
+    ItemBuilderConf,
+    ParsedParam,
+    RegexConf,
+    RenameConf,
+    RenameConfRule,
+)
+from riko.utils import make_regex_rule
 
 PARENT = p.dirname(p.dirname(p.dirname(__file__)))
-make_regex = lambda f, m, r: {"field": f, "match": m, "replace": r}
 
-
-pmatch = {"seriesmatch": False}
 
 rename_rule = [
-    {"newval": "", "field": "y:title", "copy": False},
-    {"newval": "", "field": "content", "copy": False},
-    {"newval": "k:posted", "field": "y:published", "copy": False},
-    {"newval": "k:job_type", "field": "summary", "copy": True},
-    {"newval": "k:content", "field": "summary", "copy": True},
-    {"newval": "k:work_location", "field": "summary", "copy": True},
-    {"newval": "k:client_location", "field": "summary", "copy": True},
-    {"newval": "k:tags", "field": "summary", "copy": True},
-    {"newval": "k:due", "field": "summary", "copy": True},
-    {"newval": "k:submissions", "field": "summary", "copy": True},
-    {"newval": "k:budget_raw", "field": "summary", "copy": True},
-    {"newval": "k:marketplace", "field": "link", "copy": True},
-    {"newval": "k:author", "field": "title", "copy": True},
+    RenameConfRule(newval="", field="y:title", copy=False),
+    RenameConfRule(newval="", field="content", copy=False),
+    RenameConfRule(newval="k:posted", field="y:published", copy=False),
+    RenameConfRule(newval="k:job_type", field="summary", copy=True),
+    RenameConfRule(newval="k:content", field="summary", copy=True),
+    RenameConfRule(newval="k:work_location", field="summary", copy=True),
+    RenameConfRule(newval="k:client_location", field="summary", copy=True),
+    RenameConfRule(newval="k:tags", field="summary", copy=True),
+    RenameConfRule(newval="k:due", field="summary", copy=True),
+    RenameConfRule(newval="k:submissions", field="summary", copy=True),
+    RenameConfRule(newval="k:budget_raw", field="summary", copy=True),
+    RenameConfRule(newval="k:marketplace", field="link", copy=True),
+    RenameConfRule(newval="k:author", field="title", copy=True),
 ]
 
 match1_01 = "(.*)( - oDesk|\\| Elance Job)"
@@ -63,40 +68,40 @@ match1_25 = "Under|Upto|Less than"
 match1_26 = "^(?!.*-.*)(.*)"
 
 regex_rule = [
-    make_regex("title", match1_01, "$1"),
-    make_regex("k:marketplace", match1_02, "$3"),
-    cdict(pmatch, make_regex("k:job_type", match1_03, "hourly")),
-    cdict(pmatch, make_regex("k:job_type", match1_04, "fixed")),
-    make_regex("k:job_type", match1_05, "unknown"),
-    make_regex("k:content", match1_06, "$1"),
-    make_regex("k:content", match1_07, "$3"),
-    make_regex("k:submissions", match1_08, "$3"),
-    make_regex("k:submissions", match1_09, "unknown"),
-    make_regex("k:author", match1_10, "$3"),
-    make_regex("k:author", match1_11, "unknown"),
-    make_regex("k:work_location", match1_12, "$4"),
-    make_regex("k:work_location", match1_13, "unknown"),
-    make_regex("k:client_location", match1_14, "$4"),
-    make_regex("k:client_location", match1_14b, "unknown"),
-    cdict(pmatch, make_regex("k:tags", match1_15, "$4")),
-    cdict(pmatch, make_regex("k:tags", match1_16, "$4")),
-    cdict(pmatch, make_regex("k:tags", match1_17, "$3")),
-    make_regex("k:tags", match1_18, ","),
-    # make_regex('k:tags', match1_19, '$1,'),
-    make_regex("k:tags", match1_20a, ","),
-    make_regex("k:tags", match1_21a, "-"),
-    make_regex("k:tags", "^-|-$", ""),
-    make_regex("k:tags", ",-", ","),
-    make_regex("k:tags", "-,", ","),
-    make_regex("k:tags", "^,|,$", ""),
-    make_regex("k:due", match1_22, "$1"),
-    make_regex("k:due", match1_23, "unknown"),
-    cdict(pmatch, make_regex("k:budget_raw", match1_24b1, "0")),
-    cdict(pmatch, make_regex("k:budget_raw", match1_24b2, "$5")),
-    make_regex("k:budget_raw", "k", "000"),
-    make_regex("k:budget_raw", match1_25, "0 -"),
-    make_regex("k:budget_raw", "or less", "- 0"),
-    make_regex("k:budget_raw", match1_26, "$1 - $1"),
+    make_regex_rule("title", match1_01, "$1"),
+    make_regex_rule("k:marketplace", match1_02, "$3"),
+    make_regex_rule("k:job_type", match1_03, "hourly", seriesmatch=False),
+    make_regex_rule("k:job_type", match1_04, "fixed", seriesmatch=False),
+    make_regex_rule("k:job_type", match1_05, "unknown"),
+    make_regex_rule("k:content", match1_06, "$1"),
+    make_regex_rule("k:content", match1_07, "$3"),
+    make_regex_rule("k:submissions", match1_08, "$3"),
+    make_regex_rule("k:submissions", match1_09, "unknown"),
+    make_regex_rule("k:author", match1_10, "$3"),
+    make_regex_rule("k:author", match1_11, "unknown"),
+    make_regex_rule("k:work_location", match1_12, "$4"),
+    make_regex_rule("k:work_location", match1_13, "unknown"),
+    make_regex_rule("k:client_location", match1_14, "$4"),
+    make_regex_rule("k:client_location", match1_14b, "unknown"),
+    make_regex_rule("k:tags", match1_15, "$4", seriesmatch=False),
+    make_regex_rule("k:tags", match1_16, "$4", seriesmatch=False),
+    make_regex_rule("k:tags", match1_17, "$3", seriesmatch=False),
+    make_regex_rule("k:tags", match1_18, ","),
+    # make_regex_rule('k:tags', match1_19, '$1,'),
+    make_regex_rule("k:tags", match1_20a, ","),
+    make_regex_rule("k:tags", match1_21a, "-"),
+    make_regex_rule("k:tags", "^-|-$", ""),
+    make_regex_rule("k:tags", ",-", ","),
+    make_regex_rule("k:tags", "-,", ","),
+    make_regex_rule("k:tags", "^,|,$", ""),
+    make_regex_rule("k:due", match1_22, "$1"),
+    make_regex_rule("k:due", match1_23, "unknown"),
+    make_regex_rule("k:budget_raw", match1_24b1, "0", seriesmatch=False),
+    make_regex_rule("k:budget_raw", match1_24b2, "$5", seriesmatch=False),
+    make_regex_rule("k:budget_raw", "k", "000"),
+    make_regex_rule("k:budget_raw", match1_25, "0 -"),
+    make_regex_rule("k:budget_raw", "or less", "- 0"),
+    make_regex_rule("k:budget_raw", match1_26, "$1 - $1"),
 ]
 
 my_item = {
@@ -111,11 +116,11 @@ my_item = {
     "y:title": "Need to fix Ionic Rss Reader Application - oDesk",
 }
 
-itembuilder_attrs = [{"key": k, "value": v} for k, v in my_item.items()]
-itembuilder_conf = {"attrs": itembuilder_attrs}
-fetchdata_conf = {"URL": get_path("kazeeki2.json"), "path": "items"}
-rename_conf = {"RULE": rename_rule}
-regex_conf = {"RULE": regex_rule}
+itembuilder_attrs = [ParsedParam({"key": k, "value": v}) for k, v in my_item.items()]
+itembuilder_conf = ItemBuilderConf({"attrs": itembuilder_attrs})
+fetchdata_conf = FetchDataConf({"url": get_path("kazeeki2.json"), "path": "items"})
+rename_conf = RenameConf({"rule": rename_rule})
+regex_conf = RegexConf({"rule": regex_rule})
 
 
 def write_content(content, pipe_name="kazeeki"):

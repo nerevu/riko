@@ -44,12 +44,15 @@ from typing import cast
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import FetchPageConf
 
 replace_conf = {"rule": {"find": "\n", "replace": " "}}
 health = get_path("health.xml")
 caltrain = get_path("caltrain.html")
 start = '<body id="thebody" class="Level2">'
-fetch_conf = {"url": caltrain, "start": start, "end": "</body>", "detag": True}
+fetch_conf = FetchPageConf(
+    {"url": caltrain, "start": start, "end": "</body>", "detag": True}
+)
 
 
 def pipe(test=False):

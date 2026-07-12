@@ -83,6 +83,7 @@ class Defaults(TypedDict, total=False):
     max_wait: int
     memoize: bool
     multi: bool
+    name: str
     param: dict[str, str | None]
     parse_key: str
     permit: bool

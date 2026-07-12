@@ -6,20 +6,17 @@ from pprint import pprint
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import FetchDataConf
+
+# from riko.utils import make_regex_rule
 
 BR = {"find": "<br>"}
 DEF_CUR_CODE = "USD"
 
-odesk_conf = {"url": get_path("odesk.json"), "path": "items"}
-guru_conf = {"url": get_path("guru.json"), "path": "items"}
-elance_conf = {"url": get_path("elance.json"), "path": "items"}
-freelancer_conf = {"url": get_path("freelancer.json"), "path": "items"}
-
-
-def make_regex(field, match, replace, default=None):
-    result = {"field": field, "match": match, "replace": replace, "default": default}
-
-    return result
+odesk_conf = FetchDataConf({"url": get_path("odesk.json"), "path": "items"})
+guru_conf = FetchDataConf({"url": get_path("guru.json"), "path": "items"})
+elance_conf = FetchDataConf({"url": get_path("elance.json"), "path": "items"})
+freelancer_conf = FetchDataConf({"url": get_path("freelancer.json"), "path": "items"})
 
 
 def make_simplemath(other, op):
@@ -116,7 +113,7 @@ def add_budget(source, fixed_text="", hourly_text="", double=True):
     cur_rule = {"find": r"\b[A-Z]{3}\b", "location": "at"}
     sym_rule = {"find": f"[{codes}]", "location": "at"}
 
-    # make_regex('k:budget_raw', r'[(),.\s]', ''),
+    # make_regex_rule('k:budget_raw', r'[(),.\s]', ''),
     invalid_budgets = [
         {"find": "Less than", "replace": "0-"},
         {"find": "Under", "replace": "0-"},
