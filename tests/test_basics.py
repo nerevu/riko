@@ -264,24 +264,42 @@ class TestBasics:
             # "k:budget_sym": "$",
             "k:budget_w_sym": "$125.00",
             "k:client_location": "unknown",
-            "k:content": " With this specification sheet we want to give you a request for implementing a website for a german...",
+            "k:content": (
+                " With this specification sheet we want to give you a request for "
+                "implementing a website for a german..."
+            ),
             "k:cur_code": "USD",
             "k:due": "unknown",
             "k:job_type": "fixed",
             "k:job_type_code": "1",
             "k:marketplace": "guru.com",
-            "k:posted": "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)",
+            "k:posted": (
+                "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, "
+                "tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)"
+            ),
             # "k:rate": 1.0,
             "k:submissions": "unknown",
             # "k:tags": [{"content": "IT"}, {"content": "Software"}, {"content": "Web"}],
             "k:work_location": " Worldwide",
-            "link": "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595",
+            "link": (
+                "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/"
+                "1099595"
+            ),
             "links": [{}],
-            "pubDate": "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)",
+            "pubDate": (
+                "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, "
+                "tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)"
+            ),
             "title": "Homepage for a germansocial organization",
             "updated": "Tue, 06 Jan 2015 17:13:47 GMT",
-            "updated_parsed": "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)",
-            "y:id": "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595",
+            "updated_parsed": (
+                "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, "
+                "tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)"
+            ),
+            "y:id": (
+                "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/"
+                "1099595"
+            ),
         }
 
         item = cast(dict, items[0])

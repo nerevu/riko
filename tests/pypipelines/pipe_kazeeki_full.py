@@ -38,11 +38,7 @@ def make_loop(field, assign, embed_conf, skip_if=None):
         "skip_if": skip_if,
     }
 
-    kwargs = {
-        "emit": False,
-        "assign": assign,
-    }
-
+    kwargs = {"emit": False, "assign": assign}
     return conf, kwargs
 
 
@@ -107,7 +103,10 @@ match1_20b = "\\/"
 match1_21b = "[^a-zA-Z\\d,]+"
 match1_22 = ".*Time Left.*\\(Ends(.*)\\) <.*?>"
 match1_23 = "(.*)(<b>)(.*)"
-# match1_24a = "(.*)(Fixed Price budget:<.*?>|Hourly budget.*Rate:|Budget:|Type and Budget|Budget<.*?>:)(.*?)(<.*?>|, Jobs:)(.*)"
+# match1_24a = (
+#     "(.*)(Fixed Price budget:<.*?>|Hourly budget.*Rate:|Budget:|Type and Budget|"
+#     "Budget<.*?>:)(.*?)(<.*?>|, Jobs:)(.*)"
+# )
 match1_24b1 = "^((?!(budget|Budget|Hourly budget.*Rate)).)*$"
 match1_24b2 = (
     r"(.*)((budget|Budget|Hourly budget.*Rate):?(<.*?>)?:?)\s*(.*?)(<.*?>|, Jobs:)(.*)"
@@ -221,10 +220,35 @@ test3 = lambda item: item.get("k:cur_code") == DEF_CUR_CODE
 test4 = lambda item: item.get("k:job_type") != "hourly"
 
 my_item = {
-    "content": '<p>Hello, I need to fix an application i am working on. Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>',
-    "link": "https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss",
+    "content": (
+        "<p>Hello, I need to fix an application i am working on. Currently the rss has "
+        "a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i "
+        "need to configure that the news will be read as an ion-list element, and a "
+        "single article will be in a new page. with transition.<br>\n<br>\nThe "
+        "application is in ionic + angular, so only experienced developers are welcome "
+        "to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27"
+        ", 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development "
+        "&gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a "
+        'href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_'
+        '%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>'
+    ),
+    "link": (
+        "https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_"
+        "%7E01d9a84fc5a0a79ddb?source=rss"
+    ),
     "pubDate": "December 27, 2014",
-    "summary": '<p>Hello, I need to fix an application i am working on. Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>',
+    "summary": (
+        "<p>Hello, I need to fix an application i am working on. Currently the rss has "
+        "a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i "
+        "need to configure that the news will be read as an ion-list element, and a "
+        "single article will be in a new page. with transition.<br>\n<br>\nThe "
+        "application is in ionic + angular, so only experienced developers are welcome "
+        "to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27"
+        ", 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development "
+        "&gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a "
+        'href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_'
+        '%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>'
+    ),
     "title": "Need to fix Ionic Rss Reader Application - oDesk",
     "updated": "Sat, 27 Dec 2014 13:32:55 +0000",
     "y:id": None,
