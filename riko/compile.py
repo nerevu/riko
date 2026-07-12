@@ -37,7 +37,6 @@ from codecs import open
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping
 from importlib import import_module
-from itertools import chain
 from json import JSONEncoder, dumps
 from pprint import PrettyPrinter
 
@@ -99,24 +98,22 @@ def _gen_string_modules(
     module_names: Iterable[str],
     pipe_names: Iterable[str],
     context: Context | None = None,
+    steps: Steps | None = None,
     **kwargs,
 ):
     zipped = zip(module_ids, module_names, pipe_names, strict=False)
     context = context or Context(**kwargs)
 
     for module_id, module_name, pipe_name in zipped:
-        pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
-        pykwargs = dict(_gen_pykwargs(parsed_pipe_def, module_id, **kwargs))
+        args = (parsed_pipe_def, module_id)
+        pyarg = _get_pyarg(*args, steps=None, **kwargs)
+        pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
 
         if context.verbose:
-            # con_args = filter(lambda x: x != Id("context"), pyargs):
-            nconf_kwargs = filter(lambda x: x[0] != "conf", pykwargs.items())
-            conf_kwargs = filter(lambda x: x[0] == "conf", pykwargs.items())
-            all_args = chain([pyarg], nconf_kwargs, conf_kwargs)
-            print(f"{module_id} = {pipe_name}({str_args(all_args)})")
+            print(f"{module_id} = {pipe_name}({str_args(pyarg, *pykwargs)})")
 
         yield {
-            "args": repr_args(chain([pyarg], pykwargs.items())),
+            "args": repr_args(pyarg, *pykwargs),
             "id": module_id,
             # "sub_pipe": module_name.startswith("pipe_"),
             "sub_pipe": module_id in parsed_pipe_def["embed"],

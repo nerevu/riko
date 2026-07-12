@@ -36,50 +36,54 @@ class Id:
             return False
 
 
-def repr_args(args):
+def repr_args(*args):
     """
     Formats a list of function arguments prettily but as working code
-
-    (kwargs are tuples (argname, argvalue)
     """
     res = []
-    for x in args:
-        if isinstance(x, tuple) and len(x) == 2:
-            key, value = x
+    for arg in args:
+        if isinstance(arg, struct_time):
+            res += [repr_arg(arg)]
+        elif isinstance(arg, tuple) and len(arg) == 2:
+            key, value = arg
             # todo: exclude this key if value is its default
             res += [f"{key}={repr_arg(value)}"]
         else:
-            res += [repr_arg(x)]
+            res += [repr_arg(arg)]
+
     return ", ".join(res)
 
 
-def repr_arg(d: BasicArg) -> str:
+def repr_arg(arg: BasicArg) -> str:
     """
     Formats a function argument prettily but as working code
 
     unicode encodable as ascii is formatted as str
     """
-    if isinstance(d, Mapping):
-        # if d can be expressed in key=value syntax:
-        joined = ", ".join(f"{repr_arg(k)}: {repr_arg(v)}" for k, v in d.items())
-        value = f"{joined}"
-    elif isinstance(d, str):
+    if isinstance(arg, str):
         try:
-            value = repr(d.encode("ascii"))
+            value = repr(arg.encode("ascii"))
         except (UnicodeEncodeError, AttributeError):
-            value = repr(d)
-    elif isinstance(d, Sequence):
-        value = f"[{', '.join(repr_arg(elem) for elem in d)}]"
-    elif d is not None:
-        print(f"Unsupported type {type(d)} for argument {d}")
-        value = str(d)
+            value = repr(arg)
+    elif isinstance(arg, dict):
+        items = arg.items()
+        joined = ", ".join(f"{repr_arg(k)}: {repr_arg(v)}" for k, v in items)
+        value = f"{joined}"
+    elif isinstance(arg, Mapping):
+        joined = ", ".join(f"{repr_arg(k)}: {repr_arg(v)}" for k, v in arg.items())
+        value = f"{joined}"
+    elif isinstance(arg, Sequence):
+        value = f"[{', '.join(repr_arg(elem) for elem in arg)}]"
+    elif arg is not None:
+        print(f"Unsupported type {type(arg)} for argument {arg}")
+        value = str(arg)
     else:
         value = ""
 
     return value
 
 
-def str_args(args):
+def str_args(*args):
     """
     Formats a list of function arguments prettily not as code
 
@@ -87,43 +91,49 @@ def str_args(args):
     """
     res = []
 
-    for x in args:
-        if isinstance(x, str):
-            res.append(x)
-        elif isinstance(x, Sequence) and len(x) == 2:
-            key, value = x
+    for arg in args:
+        if isinstance(arg, str):
+            res.append(arg)
+        elif isinstance(arg, Sequence) and len(arg) == 2:
+            key, value = arg
 
             if value and (str_value := str_arg(value)):
                 res.append(f"{key}={str_value}")
         else:
-            res.append(str_arg(x))
+            res.append(str_arg(arg))
+
     return ", ".join(res)
 
 
-def str_arg(d):
+def str_arg(arg):
     """
     Formats a function argument prettily not as code
 
     dicts are expressed in {key=value} syntax
     strings are formatted using str in quotes not repr
     """
-    if not d:
-        return None
+    if not arg:
+        res = None
+    elif isinstance(arg, str):
+        res = f'"{arg}"'
+    elif isinstance(arg, Mapping):
+        if len(arg) == 2 and arg.get("type") == "text" and "value" in arg:
+            res = str_arg(arg["value"])
+        elif len(arg) == 2 and arg.get("type") == "text" and "subkey" in arg:
+            res = ".{subkey}".format(**arg)
+        elif arg.get("type") == "module":
+            res = None
+        elif isinstance(arg, dict):
+            items = arg.items()
+            res = f"{0}".format(str_args(*items))
+        else:
+            res = f"{0}".format(str_args(*arg.items()))
+    elif isinstance(arg, Sequence):
+        if len(arg) == 1:
+            res = str_arg(arg[0])
+        else:
+            res = "[{}]".format(", ".join(map(str_arg, arg)))
+    else:
+        res = repr(arg) if arg else None
 
-    if isinstance(d, Mapping):
-        if len(d) == 2 and d.get("type") == "text" and "value" in d:
-            return str_arg(d["value"])
-        if len(d) == 2 and d.get("type") == "text" and "subkey" in d:
-            return ".{subkey}".format(**d)
-        if d.get("type") == "module":
-            return None
-        return f"{0}".format(str_args(d.items()))
-    elif isinstance(d, str):
-        return f'"{d}"'
-    elif isinstance(d, Sequence):
-        if len(d) == 1:
-            return str_arg(d[0])
-
-        return "[{}]".format(", ".join(str_arg(elem) for elem in d))
-
-    return repr(d)
+    return res
