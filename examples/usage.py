@@ -20,8 +20,7 @@ Word Count
     >>> #      testing
     >>> #   - the `detag` option will strip all html tags from the result
     >>> url = get_path('users.jyu.fi.html')
-    >>> fetch_conf = {
-    ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
+    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\\n', 'replace': ' '}}
     >>> replace_kwargs = {'conf': replace_conf, 'assign': 'content'}
     >>> token_kwargs = {'conf': {'delimiter': ' '}, 'emit': True}

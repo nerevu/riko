@@ -188,13 +188,14 @@ dictionaries, aka ``items``.
 
 .. code-block:: python
 
-    >>> from riko.modules import fetch, fetchsitefeed
+    >>> from riko.modules.fetch import pipe as fetch
+    >>> from riko.modules.fetchsitefeed import pipe as fetchsitefeed
     >>>
     >>> ### Fetch an RSS feed ###
-    >>> stream = fetch.pipe(conf={'url': 'https://news.ycombinator.com/rss'})
+    >>> stream = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
     >>> ### Fetch the first RSS feed found ###
-    >>> stream = fetchsitefeed.pipe(conf={'url': 'http://arstechnica.com/rss-feeds/'})
+    >>> stream = fetchsitefeed(conf={'url': 'http://arstechnica.com/rss-feeds/'})
     >>>
     >>> ### View the fetched RSS feed(s) ###
     >>> #

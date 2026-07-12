@@ -25,7 +25,7 @@ import pygogo as gogo
 from riko.bado.itertools import async_reduce
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from riko.types.modules import SortConfRule
-from riko.utils import def_itemgetter as itemgetter
+from riko.utils import def_itemgetter
 
 from . import operator
 
@@ -36,7 +36,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:
     reverse = rule.dir.lower() == "desc" if rule.dir else False
-    keyfunc = itemgetter(rule.field, _type=rule.type)
+    keyfunc = def_itemgetter(rule.field, _type=rule.type)
     return iter(sorted(stream, key=keyfunc, reverse=reverse))
 
 

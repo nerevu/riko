@@ -33,16 +33,18 @@ aka ``items``.
 
     >>> from itertools import chain
     >>> from riko import get_path
-    >>> from riko.modules import (
-    ...     fetch, fetchdata, fetchsitefeed, feedautodiscovery)
+    >>> from riko.modules.fetch import pipe as fetch
+    >>> from riko.modules.fetchdata import pipe as fetchdata
+    >>> from riko.modules.fetchsitefeed import pipe as fetchsitefeed
+    >>> from riko.modules.feedautodiscovery import pipe as feedautodiscovery
     >>>
     >>> ### Fetch a url ###
-    >>> stream = fetchpage.pipe(conf={'url': 'https://news.ycombinator.com'})
+    >>> stream = fetchpage(conf={'url': 'https://news.ycombinator.com'})
     >>>
     >>> ### Fetch a filepath ###
     >>> #
     >>> # Note: `get_path` just looks up a file in the `data` directory
-    >>> stream = fetchdata.pipe(conf={'url': get_path('quote.json')})
+    >>> stream = fetchdata(conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
@@ -50,14 +52,14 @@ aka ``items``.
     'KRW=X'
 
     >>> ### Fetch an rss feed ###
-    >>> stream = fetch.pipe(conf={'url': 'https://news.ycombinator.com/rss'})
+    >>> stream = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
     >>> ### Fetch the first rss feed found ###
-    >>> stream = fetchsitefeed.pipe(conf={'url': 'http://www.bbc.com/news'})
+    >>> stream = fetchsitefeed(conf={'url': 'http://www.bbc.com/news'})
     >>>
     >>> ### Find all rss links and fetch the feeds ###
     >>> url = 'http://edition.cnn.com/services/rss'
-    >>> entries = feedautodiscovery.pipe(conf={'url': url})
+    >>> entries = feedautodiscovery(conf={'url': url})
     >>> urls = (e['link'] for e in entries)
     >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
@@ -126,7 +128,10 @@ style [#]_.
 
     >>> import itertools as it
     >>> from riko import get_path
-    >>> from riko.modules import fetchpage, strreplace, tokenizer, count
+    >>> from riko.modules.fetchpage import pipe as fetchpage
+    >>> from riko.modules.strreplace import pipe as strreplace
+    >>> from riko.modules.tokenizer import pipe as tokenizer
+    >>> from riko.modules.count import pipe as count
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -148,16 +153,20 @@ style [#]_.
     >>> #
     >>> # Note: because `fetchpage` and `strreplace` each return an iterator of
     >>> # just one item, we can safely call `next` without fear of loosing data
-    >>> page = next(fetchpage.pipe(conf=fetch_conf))
-    >>> replaced = next(strreplace.pipe(page, conf=replace_conf, assign='content'))
-    >>> words = tokenizer.pipe(replaced, conf={'delimiter': ' '}, emit=True)
-    >>> counts = count.pipe(words)
+    >>> page = next(fetchpage(conf=fetch_conf))
+    >>> replaced = next(strreplace(page, conf=replace_conf, assign='content'))
+    >>> words = tokenizer(replaced, conf={'delimiter': ' '}, emit=True)
+    >>> counts = count(words)
     >>> next(counts)
     {'count': 70}
 
     >>> from itertools import chain
     >>> from riko import get_path
-    >>> from riko.modules import fetch, filter, subelement, regex, sort
+    >>> from riko.modules.fetch import pipe as fetch
+    >>> from riko.modules.filter import pipe as _filter
+    >>> from riko.modules.subelement import pipe as subelement
+    >>> from riko.modules.regex import pipe as regex
+    >>> from riko.modules.sort import pipe as _sort
     >>>
     >>> ### Set the pipe configurations ###
     >>> #
@@ -182,13 +191,13 @@ style [#]_.
     >>> #   5. reverse sort the items by the replaced url
     >>> #
     >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> stream = fetch.pipe(conf=fetch_conf)
-    >>> filtered = filter.pipe(stream, conf={'rule': filter_rule})
-    >>> extracted = (subelement.pipe(i, conf=sub_conf, emit=True) for i in filtered)
+    >>> stream = fetch(conf=fetch_conf)
+    >>> filtered = _filter(stream, conf={'rule': filter_rule})
+    >>> extracted = (subelement(i, conf=sub_conf, emit=True) for i in filtered)
     >>> flat_extract = chain.from_iterable(extracted)
-    >>> matched = (regex.pipe(i, conf={'rule': regex_rule}) for i in flat_extract)
+    >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
     >>> flat_match = chain.from_iterable(matched)
-    >>> sorted_match = sort.pipe(flat_match, conf=sort_conf)
+    >>> sorted_match = _sort(flat_match, conf=sort_conf)
     >>> next(sorted_match)
     {'content': 'mailto:mail@writetoreply.org'}
 

@@ -184,26 +184,21 @@ def pipe(*args, **kwargs) -> Item:
        dict: item of user input
 
     Examples:
-        >>> # int
+        >>> import datetime
+        >>> from datetime import datetime as dt, UTC
+        >>>
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> next(pipe(conf=conf, inputs={'content': '30'}))
         30
         >>> next(pipe(conf=conf, inputs={'content': '30'}, emit=False))
         {'content': 30}
-
-        >>> # date
-        >>> import datetime
-        >>> from datetime import datetime as dt, UTC
         >>> now = dt.now(UTC)
-        >>>
         >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
         >>> next(pipe(conf=conf, inputs={'content': '5/4/82'})).year
         1982
         >>> stream = pipe(conf={'type': 'date'}, inputs={'content': 'tomorrow'})
         >>> next(stream) > now.date()
         True
-
-        >>> # float, bool, text
         >>> matrix = [
         ...     ('float', '1', 1.0),
         ...     ('bool', 'true', True),
@@ -215,13 +210,9 @@ def pipe(*args, **kwargs) -> Item:
         1.0
         True
         'hello'
-
-        >>> # url
         >>> inputs = {'content': 'google.com'}
         >>> next(pipe(conf={'type': 'url'}, inputs=inputs))
         'http://google.com'
-
-        >>> # location
         >>> inputs = {'content': 'palo alto, ca'}
         >>> result = next(pipe(conf={'type': 'location'}, inputs=inputs))
         >>> sorted(result)[:5]

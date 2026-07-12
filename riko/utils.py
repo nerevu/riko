@@ -938,12 +938,12 @@ def get_regex_rule(rule: RegexConfRule, recompile=False) -> RegexRule:
 
     nrule = {
         "count": count,
-        "default": rule.default,
-        "field": rule.field,
         "flags": flags,
         "match": match,
-        "offset": rule.offset or 0,
         "replace": replace,
+        "default": rule.default,
+        "field": rule.field,
+        "offset": rule.offset or 0,
         "series": rule.seriesmatch,
     }
 

@@ -169,7 +169,7 @@ async def async_parser(
         ...         yield {'page': page, 'data': f'result_{page}'}
         >>>
         >>> async def run(reactor):
-        ...     result = await async_parser(paginated_api(), objconf, iter([]))
+        ...     result = await async_parser(paginated_api(), objconf, iter(()))
         ...     print(len(list(result)))
         >>>
         >>> try:
@@ -217,7 +217,7 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
         ...         sleep(0.1)
         ...         yield {'x': x}
         >>>
-        >>> len(list(parser(gen_stream(), objconf, iter([]))))
+        >>> len(list(parser(gen_stream(), objconf, iter(()))))
         3
 
     """

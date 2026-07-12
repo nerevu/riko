@@ -29,8 +29,6 @@ from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
 
-forever = takewhile(bool, repeat({"forever": True}))
-
 OPTS: Opts = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -60,7 +58,7 @@ def parser(
         {'forever': True}
 
     """
-    return forever
+    return takewhile(bool, repeat({"forever": True}))
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

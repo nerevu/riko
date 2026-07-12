@@ -16,8 +16,8 @@ Attributes:
 
 """
 
+from datetime import UTC, timedelta
 from datetime import datetime as dt
-from datetime import timedelta, timezone
 from time import struct_time
 
 import pygogo as gogo
@@ -68,7 +68,7 @@ def parser(
         2014
 
     """
-    today = dt.now(timezone.utc).date()
+    today = dt.now(UTC).date()
 
     if text.endswith((" day", " days")):
         count = int(text.split(" ")[0])

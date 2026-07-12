@@ -19,7 +19,7 @@ from riko.types.values import DateDict
 
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
-NOW = dt.now(timezone.utc)
+NOW = dt.now(UTC)
 TODAY = NOW.date()
 EPOCH_DATETIME = dt(1970, 1, 1, 0, 0, 0, tzinfo=UTC)
 EPOCH_DATE = date(EPOCH_DATETIME.year, EPOCH_DATETIME.month, EPOCH_DATETIME.day)
@@ -89,7 +89,7 @@ def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
         _tzinfo = ZoneInfo(zone)
 
         try:
-            tzdate = dt.now(timezone.utc).astimezone(_tzinfo)
+            tzdate = dt.now(UTC).astimezone(_tzinfo)
         except pytz.NonExistentTimeError:
             pass
         else:
@@ -275,7 +275,7 @@ def ensure_tzinfo(  # noqa: E302
     try_local_tz: bool = True,
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | AwareST | date | None:
-    now = dt.now(timezone.utc)
+    now = dt.now(UTC)
     _tzinfo = None
     new_date = None
 
