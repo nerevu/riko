@@ -143,6 +143,7 @@ from riko.types.general import (
     ConversionFunc,
     ItemArg,
     Items,
+    SplitterItems,
     Stream,
     SyncPipeParser,
 )
@@ -396,6 +397,18 @@ class SyncPipe(PyPipe):
         else:
             yield from pipeline(self.source)
 
+    def split(self, **kwargs) -> SplitterItems:
+        pipe_kwargs = {
+            "parallel": self.parallel,
+            "threads": self.threads,
+            "pool": self.pool if self.reuse_pool else None,
+            "reuse_pool": self.reuse_pool,
+            "workers": self.workers,
+        }
+
+        splits = SyncPipe("split", source=self, **pipe_kwargs, **kwargs)
+        return cast(SplitterItems, splits)
+
     @overload
     def export(self) -> list[ItemArg]: ...  # noqa: E704
     @overload  # noqa: E301
@@ -570,6 +583,11 @@ class AsyncPipe(PyPipe):
 
             for item in result:
                 yield item
+
+    async def split(self, **kwargs) -> SplitterItems:
+        pipe_kwargs = {"source": self._await_stream(), "connections": self.connections}
+        result = await AsyncPipe("split", **pipe_kwargs, **kwargs)
+        return cast(SplitterItems, result)
 
 
 class AsyncCollection(PyCollection):

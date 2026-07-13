@@ -29,7 +29,7 @@ import pygogo as gogo
 from riko.cast import BasicCastType
 from riko.types.general import Defaults, Opts, Stream
 
-from . import operator
+from . import splitter
 
 OPTS: Opts = {"extract": "splits", "ptype": BasicCastType.INT, "objectify": False}
 DEFAULTS: Defaults = {"splits": 2}
@@ -74,7 +74,7 @@ def parser(stream: Stream, splits: int, tuples, **kwargs) -> Iterator[Stream]:
         yield map(deepcopy, source)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@splitter(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs) -> Iterator[Stream]:
     """
     An operator that asynchronously and eagerly splits a stream into identical
@@ -111,7 +111,7 @@ def async_pipe(*args, **kwargs) -> Iterator[Stream]:
     return parser(*args, **kwargs)
 
 
-@operator(DEFAULTS, **OPTS)
+@splitter(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs) -> Iterator[Stream]:
     """
     An operator that eagerly splits a stream into identical copies.

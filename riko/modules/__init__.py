@@ -27,6 +27,8 @@ from riko.types.general import (
     AsyncOperatorWrapper,
     AsyncProcessorParser,
     AsyncProcessorWrapper,
+    AsyncSplitterParser,
+    AsyncSplitterWrapper,
     Casted,
     CastFuncs,
     Defaults,
@@ -41,11 +43,16 @@ from riko.types.general import (
     ProcessorItems,
     ProcessorParser,
     ProcessorWrapper,
+    SplitterItems,
+    SplitterParser,
+    SplitterWrapper,
     Stream,
     SyncOperatorParser,
     SyncOperatorWrapper,
     SyncProcessorParser,
     SyncProcessorWrapper,
+    SyncSplitterParser,
+    SyncSplitterWrapper,
 )
 from riko.types.modules import AnyModuleConf, Embed
 from riko.types.values import (
@@ -951,6 +958,66 @@ class operator(Module):  # noqa: N801
         setattr(wrapper, "pollable", self.pollable)  # noqa: B010
         return cast_type(OperatorWrapper, wrapper)
 
+
+class splitter(Module):  # noqa: N801
+    def setup(self, _input, **kwargs) -> tuple[PipeTuples, Stream, Casted]:
+        dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in _FRAMEWORK_KEYS}
+        conf = cast_type(AnyModuleConf, self.conf.asdict())
+        _dispatcher = partial(
+            _dispatch,
+            conf=conf,
+            parsers=self.parsers,
+            casters=self.casters,
+            defaults=Defaults(self.defaults),
+        )
+        dispatcher = cast_type(Callable[[ItemArg, Opts], Dispatched], _dispatcher)
+        dispatches = (dispatcher(item, self.opts) for item in _input)
+        tuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
+        orig_stream = (d.item for d in dispatches)
+        casted = dispatcher(DotDict(), self.opts, **dispatch_kwargs).casted
+        return (tuples, orig_stream, casted)
+
+    @overload
+    def __call__(  # noqa: E704
+        self, pipe: AsyncSplitterParser
+    ) -> AsyncSplitterWrapper: ...
+    @overload  # noqa: E301
+    def __call__(  # noqa: E704
+        self, pipe: SyncSplitterParser
+    ) -> SyncSplitterWrapper: ...
+    def __call__(self, pipe: SplitterParser) -> SplitterWrapper:  # noqa: E301
+        op_module_name = pipe.__module__.split(".")[-1]
+
+        async def async_wrapper(
+            items: Stream | None = None,
+            conf: AnyModuleConf | None = None,
+            **kwargs,
+        ) -> SplitterItems:
+            _input = map(dictize, iter(items or []))
+            self.prepare(op_module_name, conf=conf, **kwargs)
+            tuples, orig_stream, casted = self.setup(_input, **kwargs)
+            async_pipe = cast_type(AsyncSplitterParser, pipe)
+            result = async_pipe(orig_stream, casted.extraction, tuples, **kwargs)
+            return (await result) if isawaitable(result) else result
+
+        def sync_wrapper(
+            items: Stream | None = None,
+            conf: AnyModuleConf | None = None,
+            **kwargs,
+        ) -> SplitterItems:
+            _input = map(dictize, iter(items or []))
+            self.prepare(op_module_name, conf=conf, **kwargs)
+            tuples, orig_stream, casted = self.setup(_input, **kwargs)
+            sync_pipe = cast_type(SyncSplitterParser, pipe)
+            streams = sync_pipe(orig_stream, casted.extraction, tuples, **kwargs)
+            yield from streams
+
+        wrapper = wraps(pipe)(async_wrapper if self.isasync else sync_wrapper)
+        setattr(wrapper, "type", "splitter")  # noqa: B010
+        setattr(wrapper, "name", pipe.__module__.split(".")[-1])  # noqa: B010
+        setattr(wrapper, "sub_type", "splitter")  # noqa: B010
+        setattr(wrapper, "pollable", self.pollable)  # noqa: B010
+        return cast_type(SplitterWrapper, wrapper)
 
 
 def _dispatch(

@@ -12,6 +12,7 @@ from html.parser import HTMLParser
 from io import BytesIO, StringIO, TextIOBase
 from itertools import chain
 from json import JSONDecodeError, loads
+from time import struct_time
 from typing import (
     TYPE_CHECKING,
     Literal,
@@ -597,10 +598,12 @@ def parse_conf(
                 k.lower(): parse_conf(item, cast(ConfValues, v), **kwargs)
                 for k, v in conf.items()
             }
-    elif isinstance(conf, (str, int)):
+    elif isinstance(conf, (str, struct_time)):
         parsed = conf
     elif isinstance(conf, Sequence):
         parsed = [parse_conf(item, c, **kwargs) for c in conf]
+    elif conf is not None:
+        parsed = conf
 
     return parsed
 

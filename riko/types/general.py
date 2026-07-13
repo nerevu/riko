@@ -34,6 +34,7 @@ Items: TypeAlias = Iterable[ComplexArg]
 
 ProcessorItems: TypeAlias = Stream | ComplexDict | ItemArg
 OperatorItems: TypeAlias = Stream | NumLike | Items | Iterator[StatefulItem]
+SplitterItems: TypeAlias = Iterator[Stream]
 PipeTuple: TypeAlias = tuple[ItemArg, "Objconf"]
 PipeTuples: TypeAlias = Iterator[PipeTuple]
 Objconfs: TypeAlias = Sequence["Objconf"]
@@ -127,14 +128,18 @@ class Dispatched(NamedTuple):
     casted: Casted
 
 
+ProcessorParserArgs: TypeAlias = tuple[ItemArg, ItemArg, "AnyModuleConf"]
+OperatorParserArgs: TypeAlias = tuple[Stream, ItemArg, PipeTuples]
+
 # Sync
 SyncItemFunc: TypeAlias = Callable[[ItemArg], ItemArg]
 SyncProcessorParser: TypeAlias = Callable[
     [ItemArg, ItemArg, "AnyModuleConf"], ProcessorItems
 ]
 SyncOperatorParser: TypeAlias = Callable[[Stream, ItemArg, PipeTuples], OperatorItems]
+SyncSplitterParser: TypeAlias = Callable[[Stream, ItemArg, PipeTuples], SplitterItems]
 
-SyncPipeResult: TypeAlias = ProcessorItems | OperatorItems
+SyncPipeResult: TypeAlias = ProcessorItems | OperatorItems | SyncSplitterParser
 SyncPipeParser: TypeAlias = Callable[..., SyncPipeResult]
 
 PipelineDependencies: TypeAlias = Callable[..., list[str]]
@@ -163,6 +168,15 @@ class SyncOperatorWrapper(Protocol):
     ) -> OperatorItems: ...
 
 
+class SyncSplitterWrapper(Protocol):
+    def __call__(  # noqa: E704
+        self,
+        items: Stream | None = None,
+        conf: Union["AnyModuleConf", None] = None,
+        **kwargs,
+    ) -> SplitterItems: ...
+
+
 class ParseFuncs(NamedTuple):
     field_parser: SyncItemFunc
     conf_parser: SyncItemFunc
@@ -180,6 +194,9 @@ AsyncProcessorParser: TypeAlias = Callable[
 ]
 AsyncOperatorParser: TypeAlias = Callable[
     [Stream, ItemArg, PipeTuples], Awaitable[OperatorItems]
+]
+AsyncSplitterParser: TypeAlias = Callable[
+    [Stream, ItemArg, PipeTuples], Awaitable[SplitterItems]
 ]
 AsyncPipeResult: TypeAlias = Awaitable[SyncPipeResult]
 AsyncPipeParser: TypeAlias = Callable[..., AsyncPipeResult]
@@ -206,9 +223,20 @@ class AsyncOperatorWrapper(Protocol):
     ) -> Awaitable[OperatorItems]: ...
 
 
+class AsyncSplitterWrapper(Protocol):
+    def __call__(  # noqa: E704
+        self,
+        items: Stream | None = None,
+        conf: Union["AnyModuleConf", None] = None,
+        **kwargs,
+    ) -> Awaitable[SplitterItems]: ...
+
+
 # Both
 ProcessorParser: TypeAlias = SyncProcessorParser | AsyncProcessorParser
 ProcessorWrapper: TypeAlias = SyncProcessorWrapper | AsyncProcessorWrapper
 OperatorParser: TypeAlias = SyncOperatorParser | AsyncOperatorParser
 OperatorWrapper: TypeAlias = SyncOperatorWrapper | AsyncOperatorWrapper
+SplitterParser: TypeAlias = SyncSplitterParser | AsyncSplitterParser
+SplitterWrapper: TypeAlias = SyncSplitterWrapper | AsyncSplitterWrapper
 Pipeline: TypeAlias = SyncPipeParser | AsyncPipeParser
