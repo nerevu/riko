@@ -1,14 +1,35 @@
-from typing import Literal, NotRequired, Sequence, TypeAlias, TypedDict
+from collections.abc import Sequence
+from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 Sentinal: TypeAlias = Literal["terminal"]
 ModuleName = Literal["fetch", "input", "sort", "tail", "itembuilder", "loop"]
-ConfArg = TypedDict("ConfArg", {"type": str, "value": int | str | bool})
-Terminal = TypedDict("Terminal", {"terminal": str, "type": str})
-Subkey = TypedDict("Subkey", {"subkey": str, "type": str})
-Value = ConfArg | Terminal | Subkey
-Param = TypedDict("Param", {"key": ConfArg, "value": Value})
 
-FetchConf = TypedDict("FetchConf", {"URL": Value})
+
+class ConfArg(TypedDict):
+    type: str
+    value: int | str | bool
+
+
+class Terminal(TypedDict):
+    terminal: str
+    type: str
+
+
+class Subkey(TypedDict):
+    subkey: str
+    type: str
+
+
+Value = ConfArg | Terminal | Subkey
+
+
+class Param(TypedDict):
+    key: ConfArg
+    value: Value
+
+
+class FetchConf(TypedDict):
+    URL: Value
 
 
 class SortKey(TypedDict):

@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.fetchpage
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for fetching web pages.
 
 Fetches the source of a given web site as a string. This data can then be
@@ -23,18 +20,20 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from typing import Iterator
+
+from collections.abc import Iterator
 
 import pygogo as gogo
 
+from riko import Objconf
+from riko.bado import coroutine, io, return_value
+from riko.parsers import get_text
 from riko.types.general import BasicMapping, Extraction
+from riko.utils import Fetch, betwix
 
 from . import processor
-from riko import Objconf
-from riko.bado import coroutine, return_value, io
-from riko.parsers import get_text
-from riko.utils import betwix, fetch
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {}
@@ -52,8 +51,11 @@ def get_string(content: str, start: str, end: str) -> str:
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -89,6 +91,7 @@ def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip
         ...     pass
         ...
         CNN.com International - Breaking
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -102,8 +105,11 @@ def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip
     return_value(stream)
 
 
-def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[str]:
-    """Parses the pipe content
+def parser(
+    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> Iterator[str]:
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -124,11 +130,12 @@ def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False
         >>> result = parser(None, None, objconf, **kwargs)
         >>> next(result)[:21]
         'CNN.com International'
+
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        with fetch(**{k: objconf[k] for k in objconf}) as f:
+        with Fetch(**{k: objconf[k] for k in objconf}) as f:
             sliced = betwix(f, objconf.start, objconf.end, True)
             content = "\n".join(sliced)
 
@@ -142,7 +149,8 @@ def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously fetches the content of a given web site as
+    """
+    A source that asynchronously fetches the content of a given web site as
     a string.
 
     Args:
@@ -184,13 +192,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches the content of a given web site as a string.
+    """
+    A source that fetches the content of a given web site as a string.
 
     Args:
         item (dict): The entry to process
@@ -220,5 +230,6 @@ def pipe(*args, **kwargs):
         >>> conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         >>> next(pipe(conf=conf))
         'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
+
     """
     return parser(*args, **kwargs)

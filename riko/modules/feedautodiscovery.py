@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.feedautodiscovery
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for finding the all available RSS and Atom feeds in a web
 site.
 
@@ -40,16 +37,18 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from typing import Iterator
+
+from collections.abc import Iterator
+
 import pygogo as gogo
 
+from riko import Objconf, autorss
+from riko.bado import coroutine, return_value
 from riko.types.general import BasicArg, Extraction
 
 from . import processor
-from riko import autorss, Objconf
-from riko.bado import coroutine, return_value
-
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {"strict": True}
@@ -57,8 +56,11 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -90,6 +92,7 @@ def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=Fal
         ...     pass
         ...
         greenhughes.xml
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -100,8 +103,11 @@ def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=Fal
     return_value(stream)
 
 
-def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[dict]:
-    """Parses the pipe content
+def parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> Iterator[dict]:
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -127,6 +133,7 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
         >>> result = parser(None, None, objconf, stream={})
         >>> next(result)['link']
         'file://riko/data/bbci.co.uk.xml'
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -139,7 +146,8 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on a site.
+    """
+    A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -170,13 +178,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         greenhughes.xml
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on a site.
+    """
+    A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -197,5 +207,6 @@ def pipe(*args, **kwargs):
         >>> conf = {'url': get_path('bbc.html')}
         >>> next(pipe(conf=conf))['link']
         'file://riko/data/bbci.co.uk.xml'
+
     """
     return parser(*args, **kwargs)

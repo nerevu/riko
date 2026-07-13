@@ -1,26 +1,25 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
 from functools import partial
-from multiprocessing.dummy import Pool as ThreadPool
-from multiprocessing import Pool
-from time import time, sleep
 from itertools import chain
+from multiprocessing import Pool
+from multiprocessing.dummy import Pool as ThreadPool
+from time import sleep, time
 
 from riko import get_path
-from riko.bado import coroutine, return_value, react
-from riko.bado.util import async_sleep
+from riko.bado import coroutine, react, return_value
 from riko.bado.itertools import async_map
-from riko.modules.fetch import pipe, async_pipe
+from riko.bado.util import async_sleep
 from riko.collections import (
-    SyncPipe,
-    SyncCollection,
-    AsyncPipe,
     AsyncCollection,
+    AsyncPipe,
+    SyncCollection,
+    SyncPipe,
     get_chunksize,
     get_worker_cnt,
 )
+from riko.modules.fetch import async_pipe, pipe
 
 NUMBER = 1
 LOOPS = 1
@@ -95,7 +94,7 @@ def async_pipeline():
     d.addCallbacks(list, print)
 
 
-def async_pipe(conf=None):
+def async_pipe2(conf=None):
     asyncCallable = lambda conf: AsyncPipe("fetch", conf=conf).alist
     d = async_map(asyncCallable, confs)
     d.addCallbacks(list, print)
@@ -119,8 +118,8 @@ def parse_results(results):
 
 def print_time(test, max_chars, run_time, units):
     padded = test.zfill(max_chars).replace("0", " ")
-    msg = "%s - %i repetitions/loop, best of %i loops: %s %s"
-    print(msg % (padded, NUMBER, LOOPS, run_time, units))
+    msg = "{0} - {1} repetitions/loop, best of {2} loops: {3} {4}"
+    print(msg.format(padded, NUMBER, LOOPS, run_time, units))
 
 
 @coroutine
@@ -128,10 +127,10 @@ def run_async(reactor, tests, max_chars):
     for test in tests:
         results = []
 
-        for i in range(LOOPS):
+        for _i in range(LOOPS):
             loop = 0
 
-            for j in range(NUMBER):
+            for _j in range(NUMBER):
                 start = time()
                 yield test()
                 loop += time() - start
@@ -158,12 +157,12 @@ def main():
         "par_sync_collection",
     ]
 
-    async_tests = [baseline_async, async_pipeline, async_pipe, async_collection]
+    async_tests = [baseline_async, async_pipeline, async_pipe2, async_collection]
     combined_tests = sync_tests + [f.__name__ for f in async_tests]
     max_chars = max(list(map(len, combined_tests)))
 
     for test in sync_tests:
-        results = run("%s()" % test, setup="from riko.cli.benchmark import %s" % test)
+        results = run(f"{test}()", setup=f"from riko.cli.benchmark import {test}")
         run_time, units = parse_results(results)
         print_time(test, max_chars, run_time, units)
 

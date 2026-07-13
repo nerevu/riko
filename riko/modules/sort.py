@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.sort
-~~~~~~~~~~~~~~~~~
 Provides functions for sorting a stream by an item field.
 
 Examples:
@@ -17,16 +14,18 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-import pygogo as gogo
 
 from functools import reduce
 
+import pygogo as gogo
+
+from riko.bado import itertools as ait
 from riko.types.general import ItemArg, ItemsArg, ObjconfRule
+from riko.utils import def_itemgetter as itemgetter
 
 from . import operator
-from riko.bado import itertools as ait
-from riko.utils import def_itemgetter as itemgetter
 
 OPTS = {"listize": True, "extract": "rule"}
 DEFAULTS = {"rule": {"dir": "asc", "field": "content"}}
@@ -40,7 +39,8 @@ def reducer(stream: ItemsArg, rule: ObjconfRule) -> list[ItemArg]:
 
 
 def async_parser(stream, rules, tuples, **kwargs):
-    """Asynchronously parses the pipe content
+    """
+    Asynchronously parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -84,12 +84,14 @@ def async_parser(stream, rules, tuples, **kwargs):
         ...     except SystemExit:
         ...         pass
         {'content': 4}
+
     """
     return ait.async_reduce(reducer, rules, stream)
 
 
 def parser(stream: ItemsArg, extract, tuples, **kwargs) -> ItemsArg:
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -120,13 +122,15 @@ def parser(stream: ItemsArg, extract, tuples, **kwargs) -> ItemsArg:
         >>> tuples = zip(stream, repeat(rule))
         >>> parser(stream, [rule], tuples, **kwargs)[0]
         {'content': 4}
+
     """
     return reduce(reducer, extract, stream)
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously and eagerly sorts the input source
+    """
+    An operator that asynchronously and eagerly sorts the input source
     according to a specified key. Note that this pipe is not lazy.
 
     Args:
@@ -169,13 +173,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'rank': 'a'}
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly sorts a stream according to a specified
+    """
+    An operator that eagerly sorts a stream according to a specified
     key. Note that this pipe is not lazy.
 
     Args:
@@ -213,5 +219,6 @@ def pipe(*args, **kwargs):
         >>> rule = {'field': 'name', 'dir': 'desc'}
         >>> next(pipe(items, conf={'rule': rule}))['name']
         'sue'
+
     """
     return parser(*args, **kwargs)

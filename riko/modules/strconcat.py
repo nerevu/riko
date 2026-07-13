@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.strconcat
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for concatenating strings (aka stringbuilder).
 
 Useful when you need to build a string from multiple substrings, some coded
@@ -21,7 +18,9 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import pygogo as gogo
 
 from riko import Objconf
@@ -34,8 +33,11 @@ DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> str:
-    """Parses the pipe content
+def parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> str:
+    """
+    Parses the pipe content
 
     Args:
         _ (dict): The item (ignored)
@@ -52,6 +54,7 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
     Examples:
         >>> parser(None, ['one', 'two'], None)
         'onetwo'
+
     """
     if skip:
         parsed = kwargs["stream"]
@@ -63,7 +66,8 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously concatenates strings.
+    """
+    A processor module that asynchronously concatenates strings.
 
     Args:
         item (dict): The entry to process
@@ -103,13 +107,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         Hello worlds
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that concatenates strings.
+    """
+    A processor that concatenates strings.
 
     Args:
         item (dict): The entry to process
@@ -140,5 +146,6 @@ def pipe(*args, **kwargs):
         '<img src="http://www.site.com">'
         >>> next(pipe(item, conf=conf, assign='result'))['result']
         '<img src="http://www.site.com">'
+
     """
     return parser(*args, **kwargs)

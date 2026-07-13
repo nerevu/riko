@@ -18,36 +18,43 @@ sample of XML.
 Microdom mainly focuses on working with HTML and XHTML.
 """
 
-from http.client import HTTPResponse
-import re
-from re import Match
 import itertools as it
-
-from io import open, BytesIO, StringIO
+import re
+from collections.abc import Callable, Iterable, Mapping
 from functools import partial
-from typing import Callable, Iterable, Mapping, Optional, Sequence, cast
+from http.client import HTTPResponse
+from io import BytesIO, StringIO
+from re import Match
+from typing import cast
 
-from meza.compat import encode as _encode, decode as _decode
+from meza.compat import decode as _decode
+from meza.compat import encode as _encode
 
 try:
     from twisted.python.util import InsensitiveDict
 except ImportError:
     pass
 
-from .sux import XMLParser, ParseError
-from riko.utils import invert_dict
-from riko.parsers import ESCAPE, entity2text, text2entity
+import builtins
+
 from meza.process import merge
+
+from riko.parsers import ESCAPE, entity2text
+from riko.utils import invert_dict
+
+from .sux import ParseError, XMLParser
 
 HTML_ESCAPE_CHARS = {"&amp;", "&lt;", "&gt;", "&quot;"}
 entity_pattern = re.compile("&(.*?);")
-escape_pattern = re.compile(f"['{"".join(ESCAPE)}']")
+escape_pattern = re.compile(f"['{''.join(ESCAPE)}']")
 
 encode = cast(Callable[[str], bytes], _encode)
 decode = cast(Callable[[bytes], str], _decode)
 
 
-def get_repl(matchobj: Match, escape_chars: Optional[Iterable[str]] = None, parse_all=False) -> str:
+def get_repl(
+    matchobj: Match, escape_chars: Iterable[str] | None = None, parse_all=False
+) -> str:
     match: str = matchobj.group(0)
 
     if parse_all:
@@ -115,9 +122,8 @@ def get_element_by_id(nodes, node_id):
     for node in nodes:
         if node.getAttribute("id") == node_id:
             return node
-    else:
-        for node in nodes:
-            return get_element_by_id(node.childNodes, node_id)
+    for node in nodes:
+        return get_element_by_id(node.childNodes, node_id)
 
 
 class MismatchedTags(Exception):
@@ -138,7 +144,7 @@ class MismatchedTags(Exception):
         return msg % self.__dict__
 
 
-class Node(object):
+class Node:
     nodeName = "Node"
 
     def __init__(self, parentNode=None):
@@ -157,7 +163,7 @@ class Node(object):
         if len(self.childNodes) != len(other.childNodes):
             return False
 
-        for a, b in zip(self.childNodes, other.childNodes):
+        for a, b in zip(self.childNodes, other.childNodes, strict=False):
             if not a.isEqualToNode(b):
                 return False
 
@@ -412,7 +418,7 @@ class Text(CharacterData):
         return stream.write(val)
 
     def __repr__(self):
-        return "Text(%s" % repr(self.nodeValue) + ")"
+        return f"Text({self.nodeValue!r}" + ")"
 
 
 class CDATASection(CharacterData):
@@ -426,7 +432,7 @@ class CDATASection(CharacterData):
 
 
 class _Attr(CharacterData):
-    "Support class for getAttributeNode."
+    """Support class for getAttributeNode."""
 
 
 class Element(Node):
@@ -639,7 +645,7 @@ class Element(Node):
             # namespace.  Nothing extra to do here.
             begin.extend(self.tagName)
 
-        prefixes = ("p%s" % str(i) for i in it.count())
+        prefixes = (f"p{i}" for i in it.count())
 
         for attr, val in sorted(self.attributes.items()):
             if val and isinstance(attr, tuple):
@@ -659,7 +665,7 @@ class Element(Node):
     def _write_child(self, stream, newl, newindent, **kwargs):
         for child in self.childNodes:
             if self.tag_is_blockelement and self.tag_is_nice_format:
-                stream.write("".join((newl, newindent)))
+                stream.write(f"{newl}{newindent}")
 
             child.writexml(stream, newl=newl, newindent=newindent, **kwargs)
 
@@ -720,25 +726,25 @@ class Element(Node):
             self._write_child(stream, newl, newindent, **kwargs)
 
             if self.tag_is_blockelement:
-                stream.write("".join((newl, indent)))
+                stream.write(f"{newl}{indent}")
 
-            stream.write("".join(("</", endTagName, ">")))
+            stream.write(f"</{endTagName}>")
         elif not self.tag_is_singleton:
-            stream.write("".join(("></", endTagName, ">")))
+            stream.write(f"></{endTagName}>")
         else:
             stream.write(" />")
 
     def __repr__(self):
-        rep = "Element(%s" % repr(self.nodeName)
+        rep = f"Element({self.nodeName!r}"
 
         if self.attributes:
-            rep += ", attributes=%r" % (self.attributes,)
+            rep += f", attributes={self.attributes!r}"
 
         if self._filename:
-            rep += ", filename=%r" % (self._filename,)
+            rep += f", filename={self._filename!r}"
 
         if self._markpos:
-            rep += ", markpos=%r" % (self._markpos,)
+            rep += f", markpos={self._markpos!r}"
 
         return rep + ")"
 
@@ -752,16 +758,16 @@ class Element(Node):
             rep += repr(self._filename)
 
         if self._markpos:
-            rep += " line %s column %s" % self._markpos
+            rep += " line {} column {}".format(*self._markpos)
 
         if self._filename or self._markpos:
             rep += ")"
 
         for item in self.attributes.items():
-            rep += " %s=%r" % item
+            rep += " {}={!r}".format(*item)
 
         if self.hasChildNodes():
-            rep += " >...</%s>" % self.nodeName
+            rep += f" >...</{self.nodeName}>"
         else:
             rep += " />"
 
@@ -772,7 +778,7 @@ class MicroDOMParser(XMLParser):
     # <dash> glyph: a quick scan thru the DTD says BODY, AREA, LINK, IMG, HR,
     # P, DT, DD, LI, INPUT, OPTION, THEAD, TFOOT, TBODY, COLGROUP, COL, TR, TH,
     # TD, HEAD, BASE, META, HTML all have optional closing tags
-    def_soon_closers = "area link br img hr input base meta".split()
+    def_soon_closers = ["area", "link", "br", "img", "hr", "input", "base", "meta"]
     def_later_closers = {
         "p": ["p", "dt"],
         "dt": ["dt", "dd"],
@@ -827,7 +833,7 @@ class MicroDOMParser(XMLParser):
     def _fixScriptElement(self, el):
         # this deals with case where there is comment or CDATA inside
         # <script> tag and we want to do the right thing with it
-        if self.strict or not len(el.childNodes) == 1:
+        if self.strict or len(el.childNodes) != 1:
             return
 
         c = el.firstChild()
@@ -844,11 +850,11 @@ class MicroDOMParser(XMLParser):
 
             if match:
                 prefix = match.group()
-                oldvalue = oldvalue[len(prefix):]
+                oldvalue = oldvalue[len(prefix) :]
 
             # now see if contents are actual node and comment or CDATA
             try:
-                e = parseString("<a>%s</a>" % oldvalue).childNodes[0]
+                e = parseString(f"<a>{oldvalue}</a>").childNodes[0]
             except (ParseError, MismatchedTags):
                 return
 
@@ -908,7 +914,6 @@ class MicroDOMParser(XMLParser):
                 yield (k, v)
 
     def gotTagStart(self, name, attributes):
-        # logger.debug('%s<%s>', ' ' * self.indentlevel, name)
         self.indentlevel += 2
         parent = self._getparent()
         parent = self._check_parent(parent, name)
@@ -970,7 +975,7 @@ class MicroDOMParser(XMLParser):
         nsplit = name.split(":", 1)
 
         if len(nsplit) == 2:
-            pfx, newname = nsplit
+            pfx, _newname = nsplit
             ns = pfxdix.get(pfx, None)
 
             if (el.namespace != ns) and ns and self.strict:
@@ -1012,7 +1017,6 @@ class MicroDOMParser(XMLParser):
 
     def gotTagEnd(self, name):
         self.indentlevel -= 2
-        # logger.debug('%s</%s>', ' ' * self.indentlevel, name)
 
         if self.lenient and not self.elementstack:
             return
@@ -1059,7 +1063,7 @@ def parse(f: str | BytesIO | HTTPResponse, *args, **kwargs) -> Document:
     if isinstance(f, HTTPResponse):
         readable = f.fp
     elif isinstance(f, str):
-        readable = open(f, "rb")
+        readable = builtins.open(f, "rb")
     else:
         readable = f
 

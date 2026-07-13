@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.typecast
-~~~~~~~~~~~~~~~~~~~~~
 Provides functions for casting fields into specific types.
 
 Examples:
@@ -17,7 +14,9 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import pygogo as gogo
 
 from riko import Objconf
@@ -31,8 +30,11 @@ DEFAULTS = {"type": "text"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg:
-    """Parsers the pipe content
+def parser(
+    content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> ItemArg:
+    """
+    Parsers the pipe content
 
     Args:
         content (scalar): The content to cast
@@ -55,6 +57,7 @@ def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, *
         >>> kwargs = {'stream': item, 'assign': 'content'}
         >>> parser(item['content'], None, objconf, **kwargs)
         1
+
     """
     if skip:
         value = kwargs["stream"]
@@ -66,7 +69,8 @@ def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, *
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor that asynchronously converts a text string into a variety of
+    """
+    A processor that asynchronously converts a text string into a variety of
     different types, e.g., int, bool, date, etc. Useful as terminal data. Loopable.
 
     Args:
@@ -99,13 +103,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         1
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that converts a text string into a variety of different types, e.g.,
+    """
+    A processor that converts a text string into a variety of different types, e.g.,
     int, bool, date, etc. Useful as terminal data. Loopable.
 
     Args:
@@ -142,6 +148,7 @@ def pipe(*args, **kwargs):
         >>> conf = {'type': 'bool'}
         >>> next(pipe(item, conf=conf, emit=True))
         False
+
     """
     # TODO: add option to specify timezone
     return parser(*args, **kwargs)

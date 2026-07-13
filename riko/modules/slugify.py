@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.slugify
-~~~~~~~~~~~~~~~~~~~~
 Provides functions for slugifying text.
 
 Examples:
@@ -16,12 +13,14 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
-"""
-import pygogo as gogo
 
+"""
+
+import pygogo as gogo
 from slugify import slugify
 
 from riko import Objconf
+
 from . import processor
 
 OPTS = {"ftype": "text", "extract": "separator", "field": "content", "objectify": False}
@@ -30,7 +29,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(word: str, separator: str, objconf: Objconf, skip=False, **kwargs):
-    """Parsers the pipe content
+    """
+    Parsers the pipe content
 
     Args:
         word (str): The string to transform
@@ -51,6 +51,7 @@ def parser(word: str, separator: str, objconf: Objconf, skip=False, **kwargs):
         >>> item = {'content': 'hello world'}
         >>> parser(item['content'], '-', None, stream=item)
         'hello-world'
+
     """
     if skip:
         parsed = kwargs["stream"]
@@ -62,7 +63,8 @@ def parser(word: str, separator: str, objconf: Objconf, skip=False, **kwargs):
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously slugifies the field of an item.
+    """
+    A processor module that asynchronously slugifies the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -90,13 +92,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         hello-world
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that slugifies the field of an item.
+    """
+    A processor that slugifies the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -120,5 +124,6 @@ def pipe(*args, **kwargs):
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
         >>> next(pipe(item, **kwargs))['result']
         'hello_world'
+
     """
     return parser(*args, **kwargs)

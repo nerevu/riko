@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.split
-~~~~~~~~~~~~~~~~~~
 Provides functions for splitting a stream into identical copies
 
 Use split when you want to perform different operations on data from the same
@@ -21,15 +18,17 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
 
+from collections.abc import Iterator
 from copy import deepcopy
-from typing import Iterator
+
+import pygogo as gogo
 
 from riko.types.general import Items
 
 from . import operator
-import pygogo as gogo
 
 OPTS = {"extract": "splits", "ptype": "int", "objectify": False}
 DEFAULTS = {"splits": 2}
@@ -37,7 +36,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream: Items, splits: int, tuples, **kwargs) -> Iterator[Items]:
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source stream. Note: this shares the `tuples`
@@ -65,6 +65,7 @@ def parser(stream: Items, splits: int, tuples, **kwargs) -> Iterator[Items]:
         >>> stream1, stream2, stream3 = parser(stream, conf['splits'], tuples, **kwargs)
         >>> next(stream1)
         {'x': 0}
+
     """
     source = list(stream)
 
@@ -74,7 +75,8 @@ def parser(stream: Items, splits: int, tuples, **kwargs) -> Iterator[Items]:
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously and eagerly splits a stream into identical
+    """
+    An operator that asynchronously and eagerly splits a stream into identical
     copies. Note that this pipe is not lazy.
 
     Args:
@@ -104,13 +106,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'x': 0}
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs) -> Iterator[Items]:
-    """An operator that eagerly splits a stream into identical copies.
+    """
+    An operator that eagerly splits a stream into identical copies.
     Note that this pipe is not lazy.
 
     Args:
@@ -134,5 +138,6 @@ def pipe(*args, **kwargs) -> Iterator[Items]:
         {'x': 0}
         >>> len(list(pipe(items, conf={'splits': '3'})))
         3
+
     """
     return parser(*args, **kwargs)

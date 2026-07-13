@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.bado.io
@@ -10,15 +9,20 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.bado.io import async_url_open
+
 """
-from typing import IO, Generator, cast
+
+import builtins
+from collections.abc import Generator
+from io import StringIO
+from os import remove
+from tempfile import NamedTemporaryFile
+from typing import cast
+
 import pygogo as gogo
 
-from io import StringIO, open
-from tempfile import NamedTemporaryFile
-from os import remove
-
 from riko import ENCODING, get_abspath
+
 from . import coroutine, return_value
 
 try:
@@ -26,11 +30,11 @@ try:
 except ImportError:
     AccumulatingProtocol = callLater = StringTransport = FileSender = treq = object
 else:
+    import treq
     from twisted.internet.defer import Deferred
     from twisted.internet.reactor import callLater
     from twisted.internet.testing import StringTransport
     from twisted.protocols.basic import FileSender
-    import treq
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -40,7 +44,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 # http://stackoverflow.com/a/33708936/408556
 class FileReader(AccumulatingProtocol):
     def __init__(self, filename, transform=None, delay=0, verbose=False):
-        self.f = open(filename, "rb")
+        self.f = builtins.open(filename, "rb")
         self.transform = transform
         self.delay = delay
         self.producer = FileSender()
@@ -66,11 +70,11 @@ class FileReader(AccumulatingProtocol):
             return
 
     def connectionLost(self, reason):
-        self.logger.debug("connectionLost: %s", reason)
+        self.logger.debug(f"connectionLost: {reason}")
         self.cleanup()
 
     def connectionMade(self):
-        self.logger.debug("Connection made from %s", self.transport.getPeer())
+        self.logger.debug(f"Connection made from {self.transport.getPeer()}")
         args = (self.f, self.transport, self.transform)
         self.d = self.closedDeferred = self.producer.beginFileTransfer(*args)
 
@@ -82,7 +86,9 @@ class FileReader(AccumulatingProtocol):
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_read_file(filename: str, transport, protocol=FileReader, encoding=ENCODING, **kwargs) -> Generator[Deferred[str], str, None]:
+def async_read_file(
+    filename: str, transport, protocol=FileReader, encoding=ENCODING, **kwargs
+) -> Generator[Deferred[str], str, None]:
     proto = protocol(filename.replace("file://", ""), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
@@ -91,7 +97,9 @@ def async_read_file(filename: str, transport, protocol=FileReader, encoding=ENCO
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_get_file(filename: str, transport, protocol=FileReader, **kwargs) -> Generator[Deferred[StringIO], StringIO, None]:
+def async_get_file(
+    filename: str, transport, protocol=FileReader, **kwargs
+) -> Generator[Deferred[StringIO], StringIO, None]:
     proto = protocol(filename.replace("file://", ""), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
@@ -101,7 +109,9 @@ def async_get_file(filename: str, transport, protocol=FileReader, **kwargs) -> G
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_url_open(url: str, timeout=0, encoding=ENCODING, **kwargs) -> Generator[Deferred[StringIO], StringIO, None]:
+def async_url_open(
+    url: str, timeout=0, encoding=ENCODING, **kwargs
+) -> Generator[Deferred[StringIO], StringIO, None]:
     if url.startswith("http"):
         page = NamedTemporaryFile(delete=False, mode="w")
         new_url = page.name
@@ -126,7 +136,9 @@ def async_url_open(url: str, timeout=0, encoding=ENCODING, **kwargs) -> Generato
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_url_read(url: str, timeout=0, **kwargs) -> Generator[Deferred[str], str, None]:
+def async_url_read(
+    url: str, timeout=0, **kwargs
+) -> Generator[Deferred[str], str, None]:
     url = get_abspath(url, offline=True)
 
     if url.startswith("http"):

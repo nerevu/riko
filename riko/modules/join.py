@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.join
-~~~~~~~~~~~~~~~~~
 Provides functions for performing SQL like joins on separate sources.
 
 Examples:
@@ -22,12 +19,13 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-import pygogo as gogo
 
 from itertools import product
 
-from meza.process import merge, join
+import pygogo as gogo
+from meza.process import join, merge
 
 from . import operator
 
@@ -37,7 +35,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -72,14 +71,15 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> len(list(joined))
         24
         >>> objconf = Objectify({'join_key': 'x', 'other_join_key': 'y'})
-        >>> stream = ({'x': 'foo-%s' % x, 'sum': x} for x in range(5))
-        >>> other = ({'y': 'foo-%s' % x, 'count': x + 5} for x in range(5))
+        >>> stream = ({'x': f'foo-{x}', 'sum': x} for x in range(5))
+        >>> other = ({'y': f'foo-{x}', 'count': x + 5} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
         >>> joined = parser(stream, objconf, tuples, other=other)
         >>> next(joined)
         {'x': 'foo-0', 'sum': 0, 'y': 'foo-0', 'count': 5}
         >>> len(list(joined))
         4
+
     """
 
     def compare(x, y):
@@ -105,7 +105,8 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously merges multiple source streams together.
+    """
+    An operator that asynchronously merges multiple source streams together.
 
     Args:
         items (Iter[dict]): The source.
@@ -144,13 +145,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'x': 'foo', 'sum': 0, 'count': 5}
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that merges multiple streams together.
+    """
+    An operator that merges multiple streams together.
 
     Args:
         items (Iter[dict]): The source.
@@ -172,20 +175,21 @@ def pipe(*args, **kwargs):
         dict: a merged stream item
 
     Examples:
-        >>> items = [{'x': 'foo-%s' % x, 'sum': x} for x in range(5)]
-        >>> other = ({'y': 'foo-%s' % x, 'count': x + 5} for x in range(5))
+        >>> items = [{'x': f'foo-{x}', 'sum': x} for x in range(5)]
+        >>> other = ({'y': f'foo-{x}', 'count': x + 5} for x in range(5))
         >>> conf = {'join_key': 'x', 'other_join_key': 'y'}
         >>> joined = pipe(items, conf=conf, other=other)
         >>> next(joined)
         {'x': 'foo-0', 'sum': 0, 'y': 'foo-0', 'count': 5}
         >>> next(joined)
         {'x': 'foo-1', 'sum': 1, 'y': 'foo-1', 'count': 6}
-        >>> other = ({'y': 'FOO-%s' % x, 'count': x + 5} for x in range(5))
+        >>> other = ({'y': f'FOO-{x}', 'count': x + 5} for x in range(5))
         >>> conf = {'join_key': 'x', 'other_join_key': 'y', 'lower': True}
         >>> joined = pipe(items, conf=conf, other=other)
         >>> next(joined)
         {'x': 'foo-0', 'sum': 0, 'y': 'FOO-0', 'count': 5}
         >>> next(joined)
         {'x': 'foo-1', 'sum': 1, 'y': 'FOO-1', 'count': 6}
+
     """
     return parser(*args, **kwargs)

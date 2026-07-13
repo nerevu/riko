@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
-"""
+r"""
 README examples
 ~~~~~~~~~~~~~~~
 
@@ -371,7 +370,6 @@ Design Principles
     True
 """
 
-from pprint import pprint
 from riko.collections import SyncPipe
 
 attrs = [

@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.udf
-~~~~~~~~~~~~~~~~
 Provides functions for performing an arbitrary (user-defined) function on an
 item.
 
@@ -14,19 +11,26 @@ Examples:
         >>> func = lambda item: {'y': item['x'] + 3}
         >>> next(pipe({'x': 0}, func=func))
         {'y': 3}
+
 """
-from riko import Objconf
-from riko.types.general import ComplexArg, BasicArg, Extraction
-from . import processor
+
 import pygogo as gogo
+
+from riko import Objconf
+from riko.types.general import BasicArg, ComplexArg, Extraction
+
+from . import processor
 
 OPTS = {"listize": True, "emit": True}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ComplexArg:
-    """Parsers the pipe content
+def parser(
+    item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> ComplexArg:
+    """
+    Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -48,13 +52,15 @@ def parser(item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False,
         >>> item = DotDict({'x': 0})
         >>> parser(item, None, None, stream=item, func=func)
         {'y': 3}
+
     """
     return kwargs["stream"] if skip else kwargs["func"](item)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor that asynchronously performs an arbitrary (user-defined)
+    """
+    A processor that asynchronously performs an arbitrary (user-defined)
     function on an item.
 
     Args:
@@ -83,13 +89,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'y': 3}
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that performs an arbitrary (user-defined) function
+    """
+    A processor that performs an arbitrary (user-defined) function
     on an item.
 
     Args:
@@ -106,5 +114,6 @@ def pipe(*args, **kwargs):
         >>> func = lambda item: {'y': item['x'] + 3}
         >>> next(pipe({'x': 0}, func=func))
         {'y': 3}
+
     """
     return parser(*args, **kwargs)

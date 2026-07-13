@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.rename
-~~~~~~~~~~~~~~~~~~~
 Provides functions for renaming, copying, and deleting elements of an item.
 
 There are several cases when this is useful, for example when the input data is
@@ -28,19 +25,22 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
-"""
-from typing import Mapping, Sequence
-import pygogo as gogo
 
+"""
+
+from collections.abc import Mapping, Sequence
 from functools import reduce
 
+import pygogo as gogo
+from meza.fntools import remove_keys
+
+from riko import Objconf
+from riko.bado import coroutine, return_value
+from riko.bado import itertools as ait
+from riko.dotdict import DotDict
 from riko.types.general import BasicMapping, ItemArg, ObjconfRule
 
 from . import processor
-from riko import Objconf
-from riko.bado import coroutine, return_value, itertools as ait
-from riko.dotdict import DotDict
-from meza.fntools import remove_keys
 
 OPTS = {"extract": "rule", "listize": True, "emit": True}
 DEFAULTS = {}
@@ -54,8 +54,11 @@ def reducer(item: BasicMapping | DotDict, rule: ObjconfRule) -> DotDict:
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(item: ItemArg, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    item: ItemArg, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -88,6 +91,7 @@ def async_parser(item: ItemArg, rules: Sequence[ObjconfRule], objconf: Objconf, 
         ...     pass
         ...
         {'greeting': 'hello world'}
+
     """
     if skip:
         item = kwargs["stream"]
@@ -98,13 +102,10 @@ def async_parser(item: ItemArg, rules: Sequence[ObjconfRule], objconf: Objconf, 
 
 
 def parser(
-    item: ItemArg,
-    rules: Sequence[ObjconfRule],
-    objconf: Objconf,
-    skip=False,
-    **kwargs
+    item: ItemArg, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
 ) -> ItemArg:
-    """Parsers the pipe content
+    """
+    Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -127,6 +128,7 @@ def parser(
         >>> args = [item, [Objectify(rule)], None]
         >>> parser(*args, skip=False, stream=item)
         {'greeting': 'hello world'}
+
     """
     if skip:
         item = kwargs["stream"]
@@ -142,7 +144,8 @@ def parser(
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously renames or copies fields in an
+    """
+    A processor module that asynchronously renames or copies fields in an
     item.
 
     Args:
@@ -181,13 +184,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         hello world
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that renames or copies fields in an item.
+    """
+    A processor that renames or copies fields in an item.
 
     Args:
         item (dict): The entry to process
@@ -221,5 +226,6 @@ def pipe(*args, **kwargs):
         >>> result = pipe({'content': 'hello world'}, conf={'rule': rule})
         >>> sorted(next(result))
         ['content', 'greeting']
+
     """
     return parser(*args, **kwargs)

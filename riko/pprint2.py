@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.pprint2
@@ -6,9 +5,8 @@ riko.pprint2
 Provides function pretty printing
 """
 
-
+from collections.abc import Mapping, Sequence
 from functools import total_ordering
-from typing import Mapping, Sequence
 
 from riko.types.general import BasicArg
 
@@ -18,7 +16,7 @@ def cmp(a, b):
 
 
 @total_ordering
-class Id(object):
+class Id:
     """An object that is not quoted as literal by repr"""
 
     def __init__(self, name):
@@ -40,9 +38,9 @@ class Id(object):
             return False
 
 
-
 def repr_args(args):
-    """formats a list of function arguments prettily but as working code
+    """
+    Formats a list of function arguments prettily but as working code
 
     (kwargs are tuples (argname, argvalue)
     """
@@ -51,14 +49,15 @@ def repr_args(args):
         if isinstance(x, tuple) and len(x) == 2:
             key, value = x
             # todo: exclude this key if value is its default
-            res += ["%s=%s" % (key, repr_arg(value))]
+            res += [f"{key}={repr_arg(value)}"]
         else:
             res += [repr_arg(x)]
     return ", ".join(res)
 
 
 def repr_arg(d: BasicArg) -> str:
-    """formats a function argument prettily but as working code
+    """
+    Formats a function argument prettily but as working code
 
     unicode encodable as ascii is formatted as str
     """
@@ -83,7 +82,8 @@ def repr_arg(d: BasicArg) -> str:
 
 
 def str_args(args):
-    """formats a list of function arguments prettily not as code
+    """
+    Formats a list of function arguments prettily not as code
 
     (kwargs are tuples (argname, argvalue)
     """
@@ -103,10 +103,12 @@ def str_args(args):
 
 
 def str_arg(d):
-    """formats a function argument prettily not as code
+    """
+    Formats a function argument prettily not as code
 
     dicts are expressed in {key=value} syntax
-    strings are formatted using str in quotes not repr"""
+    strings are formatted using str in quotes not repr
+    """
     if not d:
         return None
 
@@ -114,16 +116,16 @@ def str_arg(d):
         if len(d) == 2 and d.get("type") == "text" and "value" in d:
             return str_arg(d["value"])
         if len(d) == 2 and d.get("type") == "text" and "subkey" in d:
-            return ".%s" % d["subkey"]
+            return ".{subkey}".format(**d)
         if d.get("type") == "module":
             return None
-        return "{%s}" % str_args(d.items())
+        return f"{0}".format(str_args(d.items()))
     elif isinstance(d, str):
-        return '"%s"' % d
+        return f'"{d}"'
     elif isinstance(d, Sequence):
         if len(d) == 1:
             return str_arg(d[0])
 
-        return "[%s]" % ", ".join(str_arg(elem) for elem in d)
+        return "[{}]".format(", ".join(str_arg(elem) for elem in d))
 
     return repr(d)

@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
+from itertools import chain
 from os import path as p
 from pprint import pprint
+
 from riko import Context, get_path
 from riko.collections import SyncPipe
-from itertools import chain
 
 PARENT = p.dirname(p.dirname(p.dirname(__file__)))
 
@@ -35,7 +35,7 @@ def make_loop(field, assign, embed_conf, skip_if=None):
         "count": "all",
         "field": field,
         "embed": {"conf": embed_conf},
-        "skip_if": skip_if
+        "skip_if": skip_if,
     }
 
     kwargs = {
@@ -67,7 +67,7 @@ rename1_rule = [
 
 rename2_rule = [
     {"newval": "k:budget_raw1", "field": "k:budget_raw", "copy": True},
-    {"newval": "k:budget_raw2", "field": "k:budget_raw", "copy": True}
+    {"newval": "k:budget_raw2", "field": "k:budget_raw", "copy": True},
 ]
 
 rename3_rule = [
@@ -76,15 +76,15 @@ rename3_rule = [
     {"newval": "k:budget_raw1_code", "field": "k:budget_raw1", "copy": True},
     {"newval": "k:budget_raw2_num", "field": "k:budget_raw2", "copy": True},
     {"newval": "k:budget_raw2_sym", "field": "k:budget_raw2", "copy": True},
-    {"newval": "k:budget_raw2_code", "field": "k:budget_raw2", "copy": True}
+    {"newval": "k:budget_raw2_code", "field": "k:budget_raw2", "copy": True},
 ]
 
-rename4_rule = [
-    {"newval": "k:budget_full", "field": "k:budget_w_sym", "copy": True}
-]
+rename4_rule = [{"newval": "k:budget_full", "field": "k:budget_w_sym", "copy": True}]
 
 match1_01 = "(.*)( - oDesk|\\| Elance Job)"
-match1_02 = "^(http[s]?:\\/\\/)?\\/?([^\\/\\.]+\\.)*([^\\/\\.]+\\.[^:\\/\\s\\.]{2,3})(.*)"
+match1_02 = (
+    "^(http[s]?:\\/\\/)?\\/?([^\\/\\.]+\\.)*([^\\/\\.]+\\.[^:\\/\\s\\.]{2,3})(.*)"
+)
 match1_03 = ".*(Hourly budget:|Budget:<.*?> Hourly).*"
 match1_04 = ".*(Fixed Price budget:|Budget:<.*?> Fixed Price).*"
 match1_05 = "^(?!\\b(hourly|fixed)\\b).*"
@@ -109,7 +109,9 @@ match1_22 = ".*Time Left.*\\(Ends(.*)\\) <.*?>"
 match1_23 = "(.*)(<b>)(.*)"
 # match1_24a = "(.*)(Fixed Price budget:<.*?>|Hourly budget.*Rate:|Budget:|Type and Budget|Budget<.*?>:)(.*?)(<.*?>|, Jobs:)(.*)"
 match1_24b1 = "^((?!(budget|Budget|Hourly budget.*Rate)).)*$"
-match1_24b2 = r"(.*)((budget|Budget|Hourly budget.*Rate):?(<.*?>)?:?)\s*(.*?)(<.*?>|, Jobs:)(.*)"
+match1_24b2 = (
+    r"(.*)((budget|Budget|Hourly budget.*Rate):?(<.*?>)?:?)\s*(.*?)(<.*?>|, Jobs:)(.*)"
+)
 match1_25 = "Under|Upto|Less than"
 match1_26 = "^(?!.*-.*)(.*)"
 
@@ -154,7 +156,7 @@ regex1_rule = [
 
 regex2_rule = [
     make_regex("k:budget_raw1", "(.*) - (.*)", "$1"),
-    make_regex("k:budget_raw2", "(.*) - (.*)", "$2")
+    make_regex("k:budget_raw2", "(.*) - (.*)", "$2"),
 ]
 
 regex3_rule = [
@@ -163,7 +165,7 @@ regex3_rule = [
     make_regex("k:budget_raw1_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
     make_regex("k:budget_raw2_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
     make_regex("k:budget_raw2_sym", "\\s*([$£€₹]).*", "$1"),
-    make_regex("k:budget_raw2_code", ".*(\\b[A-Z]{3}\\b).*", "$1")
+    make_regex("k:budget_raw2_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
 ]
 
 regex4_rule = [make_regex("k:cur_code", "^(?![A-Z]{3}\\b)(.*)", DEF_CUR_CODE)]
@@ -173,7 +175,7 @@ strreplace_conf = {
         {"find": "$", "replace": "USD"},
         {"find": "£", "replace": "GBP"},
         {"find": "€", "replace": "EUR"},
-        {"find": "₹", "replace": "INR"}
+        {"find": "₹", "replace": "INR"},
     ]
 }
 
@@ -182,22 +184,16 @@ regex4_conf = {
     "RULE": [
         {"field": "k:job_type_code", "match": "fixed", "replace": "1"},
         {"field": "k:job_type_code", "match": "hourly", "replace": "2"},
-        {"field": "k:job_type_code", "match": "unknown", "replace": "3"}
+        {"field": "k:job_type_code", "match": "unknown", "replace": "3"},
     ]
 }
 
 strconcat1_conf = {
-    "part": [
-        {"subkey": "k:budget_raw1_code"},
-        {"subkey": "k:budget_raw2_code"}
-    ]
+    "part": [{"subkey": "k:budget_raw1_code"}, {"subkey": "k:budget_raw2_code"}]
 }
 
 strconcat2_conf = {
-    "part": [
-        {"subkey": "k:budget_raw1_sym"},
-        {"subkey": "k:budget_raw2_sym"}
-    ]
+    "part": [{"subkey": "k:budget_raw1_sym"}, {"subkey": "k:budget_raw2_sym"}]
 }
 
 strconcat3_conf = {
@@ -205,7 +201,7 @@ strconcat3_conf = {
         {"subkey": "k:budget_w_sym"},
         " (",
         {"subkey": "k:budget_converted_w_sym"},
-        ")"
+        ")",
     ]
 }
 
@@ -233,7 +229,7 @@ my_item = {
     "updated": "Sat, 27 Dec 2014 13:32:55 +0000",
     "y:id": None,
     "y:published": None,
-    "y:title": "Need to fix Ionic Rss Reader Application - oDesk"
+    "y:title": "Need to fix Ionic Rss Reader Application - oDesk",
 }
 
 itembuilder_attrs = [{"key": k, "value": v} for k, v in my_item.items()]
@@ -244,8 +240,7 @@ fetchdata_conf = {"URL": get_path("kazeeki2.json"), "path": "items"}
 
 def parse_source(source):
     pipe = (
-        source
-        .rename(conf={"RULE": rename1_rule})
+        source.rename(conf={"RULE": rename1_rule})
         .regex(conf={"RULE": regex1_rule})
         .rename(conf={"RULE": rename2_rule})
         .regex(conf={"RULE": regex2_rule})
@@ -257,16 +252,35 @@ def parse_source(source):
         .substr(conf=substring1_conf, field="k:cur_code")
         .strconcat(conf=strconcat2_conf, assign="k:budget_sym")
         .substr(conf=substring2_conf, field="k:budget_sym")
-        .rename(conf={"RULE": {"newval": "k:cur_code", "field": "k:budget_sym", "copy": True}}, skip_if=test1)
+        .rename(
+            conf={
+                "RULE": {"newval": "k:cur_code", "field": "k:budget_sym", "copy": True}
+            },
+            skip_if=test1,
+        )
         .strreplace(conf=strreplace_conf, field="k:cur_code", assign="k:cur_code")
         .regex(conf={"RULE": regex4_rule})
-        .rename(conf={"RULE": {"newval": "k:job_type_code", "field": "k:job_type", "copy": True}})
+        .rename(
+            conf={
+                "RULE": {
+                    "newval": "k:job_type_code",
+                    "field": "k:job_type",
+                    "copy": True,
+                }
+            }
+        )
         .regex(conf=regex4_conf)
         .hash(field="link", assign="id")
-        .currencyformat(conf=currencyformat1_conf, field="k:budget", assign="k:budget_w_sym")
+        .currencyformat(
+            conf=currencyformat1_conf, field="k:budget", assign="k:budget_w_sym"
+        )
         # .exchangerate(conf=exchangerate_conf, field="k:cur_code", assign="k:rate")
         # .simplemath(conf=simplemath2_conf, field="k:budget", assign="k:budget_converted")
-        .currencyformat(conf=currencyformat2_conf, field="k:budget_converted", assign="k:budget_converted_w_sym")
+        .currencyformat(
+            conf=currencyformat2_conf,
+            field="k:budget_converted",
+            assign="k:budget_converted_w_sym",
+        )
         .rename(conf={"RULE": rename4_rule}, skip_if=test2)
         .strconcat(conf=strconcat3_conf, assign="k:budget_full", skip_if=test3)
         .strconcat(conf=strconcat4_conf, assign="k:budget_full", skip_if=test4)

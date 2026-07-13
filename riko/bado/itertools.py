@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.bado.itertools
@@ -10,12 +9,13 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.bado.itertools import coop_reduce
+
 """
-from functools import partial
 
 import itertools as it
+from functools import partial
 
-from . import coroutine, return_value, reactor
+from . import coroutine, reactor, return_value
 from .mock import FakeReactor
 
 try:
@@ -71,7 +71,8 @@ def async_reduce(async_func, iterable, initializer=None):
 
 @coroutine
 def async_map(afunc, iterable, connections=0, **kwargs):
-    """parallel map for deferred callables using cooperative multitasking
+    """
+    Parallel map for deferred callables using cooperative multitasking
     http://stackoverflow.com/a/20376166/408556
     """
     if connections and not reactor.fake:
@@ -94,7 +95,7 @@ def async_starmap(async_func, iterable):
 
 
 def async_dispatch(split, *async_funcs, **kwargs):
-    return async_starmap(lambda item, f: f(item), zip(split, async_funcs))
+    return async_starmap(lambda item, f: f(item), zip(split, async_funcs, strict=False))
 
 
 def async_broadcast(item, *async_funcs, **kwargs):

@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.uniq
-~~~~~~~~~~~~~~~~~
 Provides functions for filtering out non unique items from a stream according
 to a specified field.
 
@@ -21,10 +18,13 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-import pygogo as gogo
 
 from collections import deque
+
+import pygogo as gogo
+
 from . import operator
 
 OPTS = {}
@@ -33,7 +33,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -63,6 +64,7 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> tuples = zip(stream, repeat(objconf))
         >>> list(parser(stream, objconf, tuples, **kwargs))
         [{'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
+
     """
     key, limit = objconf.uniq_key, int(objconf.limit)
     seen = deque(maxlen=limit)
@@ -77,7 +79,8 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously filters out non unique items according
+    """
+    An operator that asynchronously filters out non unique items according
     to a specified field.
 
     Args:
@@ -113,13 +116,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         [0, 1]
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that filters out non unique items according to a specified
+    """
+    An operator that filters out non unique items according to a specified
     field.
 
     Args:
@@ -148,5 +153,6 @@ def pipe(*args, **kwargs):
         {'content': 0, 'mod': 0}
         >>> [item['content'] for item in stream]
         [1, 2, 3, 4]
+
     """
     return parser(*args, **kwargs)

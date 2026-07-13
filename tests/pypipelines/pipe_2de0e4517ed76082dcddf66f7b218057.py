@@ -13,11 +13,10 @@ def pipe_2de0e4517ed76082dcddf66f7b218057(context=None, conf=None):
         return []
 
     if context and context.describe_dependencies:
-        return ['fetch']
+        return ["fetch"]
 
     sw_478 = fetch(
-        context=context,
-        conf={'URL': get_path('feeds.feedburner.com_ouseful.xml')}
+        context=context, conf={"URL": get_path("feeds.feedburner.com_ouseful.xml")}
     )
 
     return sw_478

@@ -1,21 +1,17 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
 """
-tests.test_script
-~~~~~~~~~~~~~~~~~
-
 Tests riko runpipe CLI functionality.
 """
 
-import sys
+import builtins
 import subprocess
+import sys
+from difflib import SequenceMatcher, unified_diff
+from io import StringIO
+from os import path as p
 
 import pytest
-
-from difflib import unified_diff, SequenceMatcher
-from os import path as p
-from io import StringIO, open
 
 try:
     from riko.bado import _issync
@@ -33,12 +29,13 @@ BENCHMARK_TEXTS = [
     "sync_pipeline - 1 repetitions/loop, best of 1 loops",
     "sync_pipe - 1 repetitions/loop, best of 1 loops",
     "sync_collection - 1 repetitions/loop, best of 1 loops",
-    "par_sync_collection - 1 repetitions/loop, best of 1 loops"
+    "par_sync_collection - 1 repetitions/loop, best of 1 loops",
 ]
 
 
 def run_command(script: str, argument: str, *opts: str) -> str:
-    """Run *script* with *opts* and *arguments*, return stdout as a string.
+    """
+    Run *script* with *opts* and *arguments*, return stdout as a string.
 
     Mirrors what scripttest's ``TestFileEnvironment.run`` did:
     - stderr is captured but not checked (``expect_stderr=True`` behavior)
@@ -53,8 +50,7 @@ def run_command(script: str, argument: str, *opts: str) -> str:
     result = subprocess.run(
         cmd,
         cwd=PARENT_DIR,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -66,8 +62,11 @@ def run_command(script: str, argument: str, *opts: str) -> str:
     return result.stdout
 
 
-def assert_output_matches(output: str, *expects, command: str = "", partial=False) -> None:
-    """Assert that *output* matches *expected*.
+def assert_output_matches(
+    output: str, *expects, command: str = "", partial=False
+) -> None:
+    """
+    Assert that *output* matches *expected*.
 
     *expected* can be:
     - ``bool``   – truth-value of the output must match
@@ -85,7 +84,7 @@ def assert_output_matches(output: str, *expects, command: str = "", partial=Fals
         elif p.isfile(expected):
             outlines = r_outlines
 
-            with open(expected, encoding="utf-8") as f:
+            with builtins.open(expected, encoding="utf-8") as f:
                 checklines = f.readlines()
         else:
             outlines = r_outlines

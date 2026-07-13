@@ -1,5 +1,5 @@
 [project]
-version = "0.68.0"
+version = "0.68.1"
 name = "riko"
 authors = [
     {name = "Reuben Cummings", email = "reubano@gmail.com"}
@@ -34,7 +34,7 @@ dependencies = [
     "chardet>=3.0.4,<8.0.0",
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
-    "ijson>=2.6.1,<2.0.0",
+    "ijson>=2.6.1,<3.0.0",
     "meza>=0.42.5",
     "mezmorize>=0.27.0",
     "pygogo>=0.12.0,<2.0.0",
@@ -93,7 +93,28 @@ extend-select = [
 ]
 
 ignore = [
-    "E731", # do not assign a lambda expression, use a def
+    # temp
+    "D400",  # missing-trailing-period
+    "D415",  # missing-terminal-punctuation
+    "D205",  # missing-blank-line-after-summary
+    "D200",  # unnecessary-multiline-docstring
+
+    # docs
+    "D100",  # Missing docstring in public module
+    "D101",  # undocumented-public-class
+    "D102",  # undocumented-public-method
+    "D103",  # undocumented-public-function
+    "D105",  # undocumented-magic-method
+    "D107",  # undocumented-public-init
+    "D401",  # non-imperative-mood
+    "D417",  # undocumented-param
+
+    # misc
+    "T201",  # print
+    "T203",  # p-print
+
+    # stylistic
+    "E731",  # do not assign a lambda expression, use a def
     "E501",  # line too long
 
      # this is incompatible with D211 no-blank-line-before-class
@@ -124,6 +145,11 @@ known-first-party = ["riko"]
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/**/*" = [
     "S101",   # Use of `assert` detected
+]
+
+"tests/pypipelines/*" = [
+    "N999",  # Invalid module name
+    "N802",  # Function name
 ]
 
 [tool.pyright]

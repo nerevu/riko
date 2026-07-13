@@ -1,32 +1,39 @@
-"""Tests basic pipeline module usage
+"""
+Tests basic pipeline module usage
 
-    Note: many of these tests simply make sure the module compiles and runs.
-    We need more extensive tests with stable data feeds!
+Note: many of these tests simply make sure the module compiles and runs.
+We need more extensive tests with stable data feeds!
 """
 
+from collections.abc import Sequence
 from decimal import Decimal
-
+from importlib import import_module
+from itertools import islice
 from json import loads
 from os import path as p
-from importlib import import_module
-from typing import Sequence, cast
-from itertools import islice
+from typing import cast
 
 import pytest
 
-from riko import listize, get_path
-from riko.compile import parse_pipe_def, build_pipeline
-from riko.types.general import ComplexArg, PipelineDependencies, StreamState, SyncPipeline
+from riko import Context, get_path, listize
+from riko.compile import build_pipeline, parse_pipe_def
+from riko.types.general import (
+    ComplexArg,
+    PipelineDependencies,
+    StreamState,
+    SyncPipeline,
+)
 from riko.utils import extract_dependencies
-from riko import Context
 
-COMPARISONS = {Decimal('1'): ">", Decimal('-1'): "<", Decimal('0'): "=="}
+COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
 
 class TestBasics:
     """Test a few sample pipelines"""
 
-    def _get_pipeline(self, pipe_name: str) -> Sequence[ComplexArg | dict[str, StreamState]]:
+    def _get_pipeline(
+        self, pipe_name: str
+    ) -> Sequence[ComplexArg | dict[str, StreamState]]:
         try:
             module = import_module(f"tests.pypipelines.{pipe_name}")
         except ImportError as e:
@@ -45,7 +52,13 @@ class TestBasics:
 
         return list(listize(stream))
 
-    def _load(self, items: Sequence[ComplexArg | dict[str, StreamState]], pipe_name, value=0, check=1):
+    def _load(
+        self,
+        items: Sequence[ComplexArg | dict[str, StreamState]],
+        pipe_name,
+        value=0,
+        check=1,
+    ):
         _check = Decimal(check)
         compared = Decimal(len(items)).compare(Decimal(value))
 
@@ -108,7 +121,8 @@ class TestBasics:
     # Online Tests
     ##############
     def test_feeddiscovery(self):
-        """Loads a pipeline containing a feed auto-discovery module plus
+        """
+        Loads a pipeline containing a feed auto-discovery module plus
         fetch-feed in a loop with emit all
         """
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
@@ -123,7 +137,8 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 1)
         item = cast(dict, items[0])
-        assert item["title"] and item["summary"]
+        assert item["title"]
+        assert item["summary"]
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop"""
@@ -131,14 +146,14 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
 
-        print(items)
         item = cast(dict, items[0])
         assert item["info"]["login"] == "defunkt"
         assert item["info"]["user_view_type"] == "public"
         assert item["description"] == "public"
 
     def test_urlbuilder(self):
-        """Loads the RTW URL Builder test pipeline and compiles and executes it
+        """
+        Loads the RTW URL Builder test pipeline and compiles and executes it
         to check the results
         """
         pipe_name = "pipe_e519dd393f943315f7e4128d19db2eac"
@@ -167,7 +182,7 @@ class TestBasics:
     # Offline Tests
     ###############
     def test_kazeek1(self):
-        """Loads the kazeeki simple test pipeline"""
+        """Loads the kazeeki simple test pipeline."""
         pipe_name = "pipe_kazeeki1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 0)
@@ -196,7 +211,7 @@ class TestBasics:
         assert item["k:content"].endswith("for implementing a website for a german...")
 
     def test_kazeek2(self):
-        """Loads the kazeeki simple test pipeline"""
+        """Loads the kazeeki simple test pipeline."""
         pipe_name = "pipe_kazeeki2"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
@@ -225,14 +240,14 @@ class TestBasics:
         assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
 
     def test_kazeeki_full(self):
-        """Loads the kazeeki simple test pipeline"""
+        """Loads the kazeeki simple test pipeline."""
         pipe_name = "pipe_kazeeki_full"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 0)
 
         example = {
-            "author": {'name': 'riko', 'uri': 'https://github.com/nerevu/riko'},
-            "dc:creator": 'riko',
+            "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
+            "dc:creator": "riko",
             # "id": 474310371,
             "k:author": "Homepage for a germansocial organization",
             "k:budget_raw": "0 - $250",
@@ -280,7 +295,8 @@ class TestBasics:
         assert item["summary"].endswith("ancer Location:</b> Worldwide<br></span>")
 
     def test_simplest(self):
-        """Loads the RTW simple test pipeline and compiles and executes it to
+        """
+        Loads the RTW simple test pipeline and compiles and executes it to
         check the results
         """
         pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
@@ -290,7 +306,8 @@ class TestBasics:
         assert item["title"].startswith("Running “Native” Data Wrangling Applicati")
 
     def test_feed(self):
-        """Loads a simple test pipeline and compiles and executes it to check
+        """
+        Loads a simple test pipeline and compiles and executes it to check
         the results
 
         TODO: have these tests iterate over a number of test pipelines
@@ -306,7 +323,8 @@ class TestBasics:
     # Not compiled
     @pytest.mark.skip
     def test_filtered_multiple_sources(self):
-        """Loads the filter multiple sources pipeline and compiles and executes
+        """
+        Loads the filter multiple sources pipeline and compiles and executes
          it to check the results
         Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
          (assumes its been compiled to a .py file - see test setUp)
@@ -325,8 +343,18 @@ class TestBasics:
         assert first["pubDate"] > last["pubDate"]
 
         cars = (
-            "amg", "aston", "audi", "bmw", "ferrari", "lamborghini", "lotus",
-            "mercedes", "pagani", "porsche", "tvr", "vw"
+            "amg",
+            "aston",
+            "audi",
+            "bmw",
+            "ferrari",
+            "lamborghini",
+            "lotus",
+            "mercedes",
+            "pagani",
+            "porsche",
+            "tvr",
+            "vw",
         )
 
         for i in items:
@@ -383,7 +411,11 @@ class TestBasics:
 
         expected = [
             {
-                "media:thumbnail": {"url": "http://example.com/a.jpg", 'height': '', 'width': ''},
+                "media:thumbnail": {
+                    "url": "http://example.com/a.jpg",
+                    "height": "",
+                    "width": "",
+                },
                 "link": "http://example.com/test.php?this=that",
                 "description": "b",
                 "y:title": "a",
@@ -553,7 +585,8 @@ class TestBasics:
         assert item["dependencies"] == dependencies
 
     def test_union_just_other(self):
-        """Loads a pipeline containing a union with the first input unconnected
+        """
+        Loads a pipeline containing a union with the first input unconnected
         Also tests for empty source string and reference to 'y:id.value'
         """
         pipe_name = "pipe_6e30c269a69baf92cd420900b0645f88"
@@ -562,7 +595,7 @@ class TestBasics:
 
         first, last = cast(dict, items[0]), cast(dict, items[-1])
         assert first["pubDate"] > last["pubDate"]
-        assert first['y:id'] == "http://sz.de/1.2104394"
+        assert first["y:id"] == "http://sz.de/1.2104394"
 
         for i in items:
             item = cast(dict, i)
@@ -599,7 +632,9 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 7, 0)
         item = cast(dict, items[0])
-        assert item["title"] == '[Drugs] Ebola: Questions, answers about an unproven drug'
+        assert (
+            item["title"] == "[Drugs] Ebola: Questions, answers about an unproven drug"
+        )
 
     def test_simplemath_1(self):
         """Loads a pipeline containing simplemath"""
@@ -610,7 +645,8 @@ class TestBasics:
         assert item["title"] == "Open researcher open course"
 
     def test_twitter_caption_search(self):
-        """Loads the Twitter Caption Search pipeline and compiles and
+        """
+        Loads the Twitter Caption Search pipeline and compiles and
         executes it to check the results
         """
         pipe_name = "pipe_eb3e27f8f1841835fdfd279cd96ff9d8"
@@ -620,7 +656,8 @@ class TestBasics:
         assert item["ctime"] == "&time=00:01:41&time="
 
     def test_loop_example(self):
-        """Loads the loop example pipeline and compiles and executes it to
+        """
+        Loads the loop example pipeline and compiles and executes it to
         check the results
         """
         pipe_name = "pipe_dAI_R_FS3BG6fTKsAsqenA"
@@ -628,13 +665,12 @@ class TestBasics:
         self._load(items, pipe_name, 1, 0)
         expected = (
             "THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ "
-            "WASHINGTON/ OREGON\n            AND CALIFORNIA ONLY (Severe)"
+            "WASHINGTON/ OREGON\n     AND CALIFORNIA ONLY (Severe)"
         )
 
-        # todo: check the data! e.g. pubdate etc.
-        for i in items:
-            item = cast(dict, i)
-            assert item["title"] == expected
+        item = cast(dict, items[0])
+        assert item["title"] == expected
+        assert item["pubDate"]
 
     def test_namespaceless_xml_input(self):
         """Loads a pipeline containing deep xml source with no namespace"""
@@ -656,22 +692,24 @@ class TestBasics:
     # FIXME
     @pytest.mark.skip
     def test_xpathfetchpage_1(self):
-        """Loads a pipeline containing xpathfetchpage
         """
-        pipe_name = 'pipe_a08134746e30a6dd3a7cb3c0cf098692'
+        Loads a pipeline containing xpathfetchpage
+        """
+        pipe_name = "pipe_a08134746e30a6dd3a7cb3c0cf098692"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
 
         for i in items:
             item = cast(dict, i)
-            assert 'title' in item
+            assert "title" in item
 
     # FIXME
     @pytest.mark.skip
     def test_urlbuilder_loop(self):
-        """Loads a pipeline containing a URL builder in a loop
         """
-        pipe_name = 'pipe_e65397e116d7754da0dd23425f1f0af1'
+        Loads a pipeline containing a URL builder in a loop
+        """
+        pipe_name = "pipe_e65397e116d7754da0dd23425f1f0af1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
         assert items[0] == "test"
@@ -687,40 +725,43 @@ class TestBasics:
     #######################
     @pytest.mark.skip
     def test_yql(self):
-        """Loads a pipeline containing a yql query
         """
-        pipe_name = 'pipe_ea463d94cd7c63ea003d9b1d0589d9df'
+        Loads a pipeline containing a yql query
+        """
+        pipe_name = "pipe_ea463d94cd7c63ea003d9b1d0589d9df"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
 
         for i in items:
             item = cast(dict, i)
-            assert item['title']
-            assert item['a']['content']
+            assert item["title"]
+            assert item["a"]["content"]
 
     # pipelocationbuilder module not yet implemented
     @pytest.mark.skip
     def test_submodule_loop(self):
-        """Loads a pipeline containing a sub-module in a loop and passes
-            input parameters. Also tests json fetch with nested list, assigns
-            part of loop result, and regexes multi-part reference.
         """
-        pipe_name = 'pipe_b3d43c00f9e1145ff522fb71ea743e99'
+        Loads a pipeline containing a sub-module in a loop and passes
+        input parameters. Also tests json fetch with nested list, assigns
+        part of loop result, and regexes multi-part reference.
+        """
+        pipe_name = "pipe_b3d43c00f9e1145ff522fb71ea743e99"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
-        contains = 'Hywel Francis (University of Wales, Swansea (UWS))'
+        contains = "Hywel Francis (University of Wales, Swansea (UWS))"
 
         for i in islice(items, 3):  # lots of data, so just check some of it
             item = cast(dict, i)
-            assert item['title'] == contains
+            assert item["title"] == contains
 
     # TermExtractor module not yet implemented
     @pytest.mark.skip
     def test_simpletagger(self):
-        """Loads the RTW simple tagger pipeline and compiles and executes it
-             to check the results
         """
-        pipe_name = 'pipe_93abb8500bd41d56a37e8885094c8d10'
+        Loads the RTW simple tagger pipeline and compiles and executes it
+        to check the results
+        """
+        pipe_name = "pipe_93abb8500bd41d56a37e8885094c8d10"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
         assert items[0] == "test"
@@ -732,9 +773,10 @@ class TestBasics:
     # need to compile
     @pytest.mark.skip
     def test_twitter(self):
-        """Loads a pipeline containing a loop, complex regex etc. for twitter
         """
-        pipe_name = 'pipe_21a90f8ebdba0265c136861a49cf3d93'
+        Loads a pipeline containing a loop, complex regex etc. for twitter
+        """
+        pipe_name = "pipe_21a90f8ebdba0265c136861a49cf3d93"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 63, 0)
         assert items[0] == "test"

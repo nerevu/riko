@@ -2,9 +2,9 @@
 
 from riko import Context, get_path
 from riko.modules.fetchdata import pipe as fetchdata
-from riko.modules.strconcat import pipe as strconcat
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
+from riko.modules.strconcat import pipe as strconcat
 
 
 def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, conf=None):
@@ -38,38 +38,39 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, conf=None):
         context=context,
         embed=strconcat,
         conf={
-            "count": {"type": "text", "value": "all"},
+            "count": "all",
             "embed": {
-                "type": "module",
-                "value": {
-                    "type": "strconcat",
-                    "id": "sw-298",
-                    "assign": "title",
-                    "emit": False,
-                    "conf": {
-                        "part": [
-                            {"type": "text", "subkey": "headline"},
-                            {"type": "text", "value": " ("},
-                            {"type": "text", "subkey": "severity"},
-                            {"type": "text", "value": ")"},
-                        ]
-                    },
+                "assign": "title",
+                "emit": False,
+                "conf": {
+                    "part": [
+                        {"type": "text", "subkey": "headline"},
+                        {"type": "text", "value": " ("},
+                        {"type": "text", "subkey": "severity"},
+                        {"type": "text", "value": ")"},
+                    ]
                 },
             },
         },
     )
 
-    sw_180 = rename(
+    sw_180 = loop(
         sw_138,
+        embed=rename,
         context=context,
         conf={
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "expires"},
-                    "copy": {"type": "bool", "value": False},
-                    "newval": {"type": "text", "value": "pubDate"},
-                }
-            ]
+            "count": "all",
+            "embed": {
+                "conf": {
+                    "RULE": [
+                        {
+                            "field": {"type": "text", "value": "expires"},
+                            "copy": {"type": "bool", "value": False},
+                            "newval": {"type": "text", "value": "pubDate"},
+                        }
+                    ]
+                },
+            },
         },
     )
 

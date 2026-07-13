@@ -1,8 +1,11 @@
-from typing import TypedDict, NotRequired
+from typing import NotRequired, TypedDict
 
 from riko.types.modules import AnyModuleConf, ModuleName
 
-XY = TypedDict("XY", {"x": int, "y": int})
+
+class XY(TypedDict):
+    x: int
+    y: int
 
 
 class LayoutItem(TypedDict):
@@ -56,12 +59,12 @@ class ItemAttr(TypedDict, total=False):
     pubDate: TypeCount
     source: TypeCount
     title: TypeCount
-    y_title: TypeCount        # was y:title
-    y_id: FieldWithAttr       # was y:id
+    y_title: TypeCount  # was y:title
+    y_id: FieldWithAttr  # was y:id
     y_published: FieldWithAttr  # was y:published
-    media_content: FieldWithAttr   # was media:content
-    media_credits: FieldWithAttr    # was media:credit
-    media_text: FieldWithAttr      # was media:text
+    media_content: FieldWithAttr  # was media:content
+    media_credits: FieldWithAttr  # was media:credit
+    media_text: FieldWithAttr  # was media:text
     media_thumbnail: FieldWithAttr  # was media:thumbnail
     loop_itembuilder: FieldWithAttr  # was loop:itembuilder
     newtitle: TypeCount

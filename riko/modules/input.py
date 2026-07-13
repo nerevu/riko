@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.input
-~~~~~~~~~~~~~~~~~~
 Provides functions for obtaining and parsing user input.
 
 Use this module any time you need to obtain and parse user input to wire into
@@ -47,22 +44,27 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import pygogo as gogo
 
+from riko import Objconf
 from riko.cast import CastType, cast
-from riko.types.general import ComplexArg, BasicArg, Defaults, Extraction
+from riko.types.general import BasicArg, ComplexArg, Defaults, Extraction
 
 from . import processor
-from riko import Objconf
 
 OPTS = {"ftype": "none"}
 DEFAULTS: Defaults = {"type": "text", "field": "content", "default": "", "test": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ComplexArg:
-    """Obtains the user input
+def parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> ComplexArg:
+    """
+    Obtains the user input
 
     Args:
         _ (None): Ignored
@@ -80,6 +82,7 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
         >>> objconf = Objectify(conf)
         >>> parser(None, None, objconf, inputs=inputs)
         30
+
     """
     if kwargs.get("inputs"):
         value = kwargs["inputs"].get(objconf.field, objconf.default)
@@ -94,7 +97,8 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously prompts for text and parses it
+    """
+    A processor module that asynchronously prompts for text and parses it
     into a variety of different types, e.g., int, bool, date, etc.
 
     Args:
@@ -137,13 +141,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         30
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs) -> ComplexArg:
-    """A processor module that prompts for text and parses it into a variety of
+    """
+    A processor module that prompts for text and parses it into a variety of
     different types, e.g., int, bool, date, etc.
 
     Args:
@@ -215,5 +221,6 @@ def pipe(*args, **kwargs) -> ComplexArg:
         ['admin1', 'admin2', 'admin3', 'city', 'country']
         >>> result['city']
         'city'
+
     """
     return parser(*args, **kwargs)

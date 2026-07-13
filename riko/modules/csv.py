@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.csv
-~~~~~~~~~~~~~~~~
 Provides functions for fetching csv files.
 
 Examples:
@@ -18,19 +15,22 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
-"""
-from typing import Iterator, cast
-import pygogo as gogo
 
+"""
+
+from collections.abc import Iterator
+from typing import cast
+
+import pygogo as gogo
 from meza.io import read_csv
 from meza.process import merge
 
+from riko import ENCODING, Objconf
+from riko.bado import coroutine, io, return_value
 from riko.types.general import BasicArg, Extraction, IntermediateMapping
+from riko.utils import Fetch, auto_close
 
 from . import processor
-from riko import ENCODING, Objconf
-from riko.bado import coroutine, return_value, io
-from riko.utils import fetch, auto_close
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {
@@ -48,8 +48,11 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -85,6 +88,7 @@ def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=Fal
         ...     pass
         ...
         7213
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -99,8 +103,11 @@ def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=Fal
     return_value(stream)
 
 
-def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[IntermediateMapping]:
-    """Parses the pipe content
+def parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> Iterator[IntermediateMapping]:
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -122,6 +129,7 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
         >>> result = parser(None, None, objconf, stream={})
         >>> next(result)['mileage']
         '7213'
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -129,7 +137,7 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
         first_row, custom_header = objconf.skip_rows, objconf.col_names
         renamed = {"first_row": first_row, "custom_header": custom_header}
 
-        f = fetch(**{k: objconf[k] for k in objconf})
+        f = Fetch(**{k: objconf[k] for k in objconf})
         rkwargs = merge([dict(objconf.iteritems()), renamed])
         content = cast(Iterator[IntermediateMapping], read_csv(f, **rkwargs))
         stream = auto_close(content, f)
@@ -139,7 +147,8 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously fetches the content of a given web site as
+    """
+    A source that asynchronously fetches the content of a given web site as
     a string.
 
     Args:
@@ -184,13 +193,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         7213
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses a csv file to yield items.
+    """
+    A source that fetches and parses a csv file to yield items.
 
     Args:
         item (dict): The entry to process
@@ -223,5 +234,6 @@ def pipe(*args, **kwargs):
         >>> url = get_path('spreadsheet.csv')
         >>> next(pipe(conf={'url': url}))['mileage']
         '7213'
+
     """
     return parser(*args, **kwargs)

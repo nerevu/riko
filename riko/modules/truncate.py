@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.truncate
-~~~~~~~~~~~~~~~~~~~~~
 Provides functions for returning a specified number of items from a stream.
 
 Contrast this with the tail module, which also limits the number of items,
@@ -20,11 +17,14 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 from itertools import islice
 
-from . import operator
 import pygogo as gogo
+
+from . import operator
 
 OPTS = {"ptype": "int"}
 DEFAULTS = {"start": 0}
@@ -32,7 +32,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -61,6 +62,7 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> tuples = zip(stream, repeat(objconf))
         >>> len(list(parser(stream, objconf, tuples, **kwargs)))
         4
+
     """
     start = objconf.start
     stop = start + objconf.count
@@ -69,7 +71,8 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously returns a specified number of items
+    """
+    An operator that asynchronously returns a specified number of items
     from a stream.
 
     Args:
@@ -102,13 +105,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         4
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that returns a specified number of items from a stream.
+    """
+    An operator that returns a specified number of items from a stream.
 
     Args:
         items (Iter[dict]): The source.
@@ -131,5 +136,6 @@ def pipe(*args, **kwargs):
         >>> stream = pipe(items, conf={'count': '2', 'start': '2'})
         >>> next(stream)
         {'x': 2}
+
     """
     return parser(*args, **kwargs)

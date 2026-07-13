@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.hash
-~~~~~~~~~~~~~~~~~
 Provides functions for hashing text.
 
 Note: If the PYTHONHASHSEED environment variable is set to an integer value,
@@ -25,10 +22,12 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
-"""
-import ctypes
-from typing import Optional
 
+"""
+
+import ctypes
+
+import pygogo as gogo
 from twisted.internet.defer import Deferred
 
 from riko import Objconf
@@ -36,15 +35,17 @@ from riko.bado import return_value
 from riko.types.general import Extraction, ItemArg
 
 from . import processor
-import pygogo as gogo
 
 OPTS = {"ftype": "text", "ptype": "none", "field": "content"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg:
-    """Parsers the pipe content
+def parser(
+    content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> ItemArg:
+    """
+    Parsers the pipe content
 
     Args:
         word (str): The string to hash
@@ -66,13 +67,15 @@ def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, *
         >>> kwargs = {'stream': item}
         >>> parser(item['content'], None, None, **kwargs)
         1921504423
+
     """
     return kwargs["stream"] if skip else ctypes.c_uint(hash(content)).value
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs) -> Optional[Deferred[ItemArg]]:
-    """A processor module that asynchronously hashes the field of an item.
+def async_pipe(*args, **kwargs) -> Deferred[ItemArg] | None:
+    """
+    A processor module that asynchronously hashes the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -100,6 +103,7 @@ def async_pipe(*args, **kwargs) -> Optional[Deferred[ItemArg]]:
         ...     pass
         ...
         1921504423
+
     """
     # TODO: figure out why print(next(x)) errs
     return_value(parser(*args, **kwargs))
@@ -107,7 +111,8 @@ def async_pipe(*args, **kwargs) -> Optional[Deferred[ItemArg]]:
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs) -> ItemArg:
-    """A processor that hashes the field of an item.
+    """
+    A processor that hashes the field of an item.
 
     Args:
         item (dict): The entry to process
@@ -126,5 +131,6 @@ def pipe(*args, **kwargs) -> ItemArg:
         >>> kwargs = {'field': 'title', 'assign': 'result'}
         >>> next(pipe({'title': 'greeting'}, **kwargs))['result']
         528683593
+
     """
     return parser(*args, **kwargs)

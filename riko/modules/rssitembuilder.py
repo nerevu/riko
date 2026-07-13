@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.rssitembuilder
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for creating a single-item RSS data source
 
 Can be used to create a single new RSS item from scratch, or reformat and
@@ -20,16 +17,19 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 from datetime import datetime as dt
 from typing import cast
 
+import pygogo as gogo
+
+from riko import Objconf
+from riko.dotdict import DotDict
 from riko.types.general import BasicArg, Extraction
 
 from . import processor
-import pygogo as gogo
-from riko import Objconf
-from riko.dotdict import DotDict
 
 OPTS = {"emit": True}
 DEFAULTS = {"pubDate": dt.now().isoformat()}
@@ -56,8 +56,11 @@ rss = {
 RSS = cast(dict[str, str], DotDict(rss))
 
 
-def parser(item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> DotDict:
-    """Parses the pipe content
+def parser(
+    item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> DotDict:
+    """
+    Parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -81,6 +84,7 @@ def parser(item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False,
         >>> kwargs = {'stream': item}
         >>> parser(item, None, objconf, **kwargs)
         {'y:id': 'a1', 'media:thumbnail': {'url': 'image.png'}}
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -93,7 +97,8 @@ def parser(item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False,
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously builds an rss item.
+    """
+    A source that asynchronously builds an rss item.
 
     Args:
         item (dict): The entry to process
@@ -136,13 +141,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'url': 'image.png'}
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that builds an rss item.
+    """
+    A source that builds an rss item.
 
     Args:
         item (dict): The entry to process
@@ -182,5 +189,6 @@ def pipe(*args, **kwargs):
         >>> conf = {'mediaThumbURL': {'subkey': 'thumbnail'}}
         >>> next(pipe(item, conf=conf))['media:thumbnail']
         {'url': 'image.png'}
+
     """
     return parser(*args, **kwargs)

@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.fetchdata
-~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for fetching XML and JSON data sources.
 
 Accesses and extracts data from XML and JSON data sources on the web. This data
@@ -21,19 +18,22 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
+from collections.abc import Iterator
 from os import path as p
-from typing import Iterator, cast
+from typing import cast
 
 import pygogo as gogo
 
 from riko import Objconf, listize
+from riko.bado import coroutine, io, return_value
+from riko.parsers import Stringy, any2dict
 from riko.types.general import BasicArg, Extraction, ItemArg, Items
+from riko.utils import Fetch, auto_close
 
 from . import processor
-from riko.bado import coroutine, return_value, io
-from riko.parsers import Stringy, any2dict
-from riko.utils import auto_close, fetch
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {}
@@ -41,8 +41,11 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -75,6 +78,7 @@ def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=Fal
         ...     pass
         ...
         Business System Analyst
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -90,13 +94,10 @@ def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=Fal
 
 
 def parser(
-    _: BasicArg,
-    extraction: Extraction,
-    objconf: Objconf,
-    skip=False,
-    **kwargs
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
 ) -> Items | Iterator[Stringy]:
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -119,6 +120,7 @@ def parser(
         >>> result = parser(None, None, objconf, stream={})
         >>> next(result)['title']
         'Business System Analyst'
+
     """
     if skip:
         yield cast(ItemArg, kwargs["stream"])
@@ -126,14 +128,15 @@ def parser(
         ext = p.splitext(objconf.url)[1].lstrip(".")
         path = ".".join(listize(objconf.path))
 
-        with fetch(**{k: objconf[k] for k in objconf}) as f:
+        with Fetch(**{k: objconf[k] for k in objconf}) as f:
             ext = ext or f.ext
             yield from any2dict(f, ext, objconf.html5, path=path)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously fetches and parses an XML or JSON file to
+    """
+    A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
 
     Args:
@@ -171,13 +174,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         Business System Analyst
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses an XML or JSON file to
+    """
+    A source that fetches and parses an XML or JSON file to
     return the entries.
 
     Args:

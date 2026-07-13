@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.bado
@@ -10,6 +9,7 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.bado import react
+
 """
 
 try:
@@ -20,13 +20,12 @@ except ImportError:
     returnValue = lambda _: lambda: None
     backend = "empty"
 else:
-    from twisted.internet.defer import inlineCallbacks
-    from twisted.internet.defer import returnValue
+    from twisted.internet.defer import inlineCallbacks, returnValue
 
     backend = "twisted"
 
 
-class Reactor(object):
+class Reactor:
     fake = False
 
 

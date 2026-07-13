@@ -1,49 +1,77 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.utils
 ~~~~~~~~~~~~~~
 Provides utility classes and functions
 """
+
 import builtins
-from collections.abc import Mapping
-from decimal import Decimal
-from http.client import HTTPResponse
+import fcntl
+import itertools as it
 import re
 import sys
-import itertools as it
-import fcntl
-
 from collections import deque
-from math import isnan
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from decimal import Decimal
 from functools import partial, reduce, wraps
+from http.client import HTTPResponse
+from io import StringIO, TextIOBase
+from math import isnan
 from operator import itemgetter
 from os import O_NONBLOCK
-from io import StringIO, TextIOBase
 from time import struct_time
-from typing import Callable, Deque, Generator, Iterable, Iterator, Optional, Sequence, TypeVar, cast as cast_type, overload
+from typing import (
+    TypeVar,
+    overload,
+)
+from typing import cast as cast_type
 from urllib.error import URLError
-from urllib.request import urlopen, Request
-from riko.dotdict import DotDict
+from urllib.request import Request, urlopen
 
-from werkzeug.local import LocalProxy
-
-import requests
-import pygogo as gogo
 import mezmorize
-
+import pygogo as gogo
+import requests
 from meza import compat
 from meza.io import reencode
-from riko import listize
 from mezmorize.utils import get_cache_type
-from riko import ENCODING, Context, Objectify, __version__, get_abspath, replacer
-from riko.cast import CAST_SWITCH, CastType, cast as cast_value
+from werkzeug.local import LocalProxy
+
+from riko import (
+    ENCODING,
+    Context,
+    Objectify,
+    __version__,
+    get_abspath,
+    listize,
+    replacer,
+)
+from riko.cast import CAST_SWITCH, CastType
+from riko.cast import cast as cast_value
+from riko.dotdict import DotDict
 from riko.types.compile import Module, Wire
-from riko.types.general import ComplexArg, BasicArg, BasicValue, DateLike, IntermediateValue, ItemArg, NumLike, ObjconfRegexRule, Opener, ParsedPipeDef, StatefulItem, StreamState, SyncAnyFunc, SyncItemFunc, PipeDef, PipelineDependencies, BasicMapping
+from riko.types.general import (
+    BasicArg,
+    BasicMapping,
+    BasicValue,
+    ComplexArg,
+    DateLike,
+    IntermediateValue,
+    ItemArg,
+    NumLike,
+    ObjconfRegexRule,
+    Opener,
+    ParsedPipeDef,
+    PipeDef,
+    PipelineDependencies,
+    StatefulItem,
+    StreamState,
+    SyncAnyFunc,
+    SyncItemFunc,
+)
 from riko.types.modules import EmbeddedModule, InputConf, LoopConf
 
 _registry: dict[str, Generator[StatefulItem, StatefulItem, StatefulItem]] = {}
-_receive_queue: dict[str, Deque[tuple[Optional[StreamState], ComplexArg]]] = {}
+_receive_queue: dict[str, deque[tuple[StreamState | None, ComplexArg]]] = {}
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
@@ -72,10 +100,10 @@ def default_user_agent(name="riko"):
     Return a string representing the default user agent.
     :rtype: str
     """
-    return "%s/%s" % (name, __version__)
+    return f"{name}/{__version__}"
 
 
-class Chainable(object):
+class Chainable:
     def __init__(self, data, method=None):
         self.data = data
         self.method = method
@@ -108,8 +136,7 @@ def multi_try(source, zipped, default=None):
             pass
         else:
             return value
-    else:
-        return default
+    return default
 
 
 def get_response_content_type(response):
@@ -141,16 +168,13 @@ def get_response_encoding(response, def_encoding=ENCODING):
             ctype = content_type.split("=")[1]
             encoding = ctype.strip().strip('"').strip("'")
 
-    extracted = encoding or def_encoding
-    assert extracted
-    return extracted
+    return encoding or def_encoding
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
 def auto_close(stream: Iterable[T], f) -> Iterator[T]:
     try:
-        for record in stream:
-            yield record
+        yield from stream
     finally:
         f.close()
 
@@ -162,8 +186,8 @@ def opener(
     encoding=ENCODING,
     params=None,
     offline=True,
-    **kwargs
-) -> tuple[str | StringIO, Optional[str]]:
+    **kwargs,
+) -> tuple[str | StringIO, str | None]:
     params = params or {}
     timeout = kwargs.get("timeout")
     url = get_abspath(url, offline=offline)
@@ -212,7 +236,7 @@ def get_opener(memoize=False, **kwargs) -> Opener:
     return current_opener
 
 
-class fetch(TextIOBase):
+class Fetch(TextIOBase):
     # http://stackoverflow.com/a/22836333/408556
     def __init__(self, url: str, memoize=False, **kwargs):
         # TODO: need to use separate timeouts for memoize and urlopen
@@ -268,9 +292,7 @@ class fetch(TextIOBase):
 
 # TODO add strict option to opt into sortability
 def def_itemgetter(
-    attr: str,
-    default: Optional[IntermediateValue] = None,
-    _type: Optional[str] = None
+    attr: str, default: IntermediateValue | None = None, _type: str | None = None
 ) -> Callable[[ItemArg], BasicValue | DateLike | NumLike | bool]:
     # like operator.itemgetter but fills in missing keys with a default value
     _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
@@ -302,11 +324,7 @@ def def_itemgetter(
                 msg += ". Returning value without casting."
                 logger.warning(msg)
                 casted = value
-            elif isinstance(value, (Mapping, Objectify)):
-                msg += ". Returning default value."
-                logger.warning(msg)
-                casted = default
-            elif isinstance(value, Sequence):
+            elif isinstance(value, (Mapping, Objectify, Sequence)):
                 msg += ". Returning default value."
                 logger.warning(msg)
                 casted = default
@@ -359,12 +377,12 @@ def group_by(content: Iterable[Mapping[str, str]], attr: str, default=None):
 
 
 @overload
-def unique_everseen(content: Iterable[T]) -> Iterator[T]:
-    ...
-@overload  # noqa: E302
-def unique_everseen(content: Iterable[T], keyfunc: Callable) -> Iterator[str]:
-    ...
-def unique_everseen(content: Iterable[T], keyfunc: Optional[Callable] = None) -> Iterator[str | T]:  # noqa: E302
+def unique_everseen(content: Iterable[T]) -> Iterator[T]: ...
+@overload
+def unique_everseen(content: Iterable[T], keyfunc: Callable) -> Iterator[str]: ...
+def unique_everseen(
+    content: Iterable[T], keyfunc: Callable | None = None
+) -> Iterator[str | T]:
     # List unique elements, preserving order. Remember all elements ever seen
     # unique_everseen('ABBcCaD', str.lower) --> a b c d
     seen = set()
@@ -378,7 +396,8 @@ def unique_everseen(content: Iterable[T], keyfunc: Optional[Callable] = None) ->
 
 
 def betwix(iterable, start=None, stop=None, inc=False):
-    """Extract selected elements from an iterable. But unlike `islice`,
+    """
+    Extract selected elements from an iterable. But unlike `islice`,
     extract based on the element's value instead of its position.
 
     Args:
@@ -405,6 +424,7 @@ def betwix(iterable, start=None, stop=None, inc=False):
         ['<beta>\\n']
         >>> list(betwix('ABCDEFG', 'C', 'E', True))
         ['C', 'D', 'E']
+
     """
 
     def inc_takewhile(predicate, _iter):
@@ -428,51 +448,57 @@ def betwix(iterable, start=None, stop=None, inc=False):
     return last
 
 
-def dispatch(split: Sequence[ComplexArg], *funcs: SyncAnyFunc) -> tuple[ComplexArg, ...]:
-    """Takes a tuple of items and delivers each one to a different function
+def dispatch(
+    split: Sequence[ComplexArg], *funcs: SyncAnyFunc
+) -> tuple[ComplexArg, ...]:
+    r"""
+    Takes a tuple of items and delivers each one to a different function
 
     Differs from `map` which applies multiple items to the same function.
 
            /--> item1 --> double(item1) -----> \
           /                                     \
     split ----> item2 --> oct(item2) ------->   _OUTPUT
-          \\                                     /
-           \\--> item3 --> max(item3) --------> /
+          \                                     /
+           \--> item3 --> max(item3) --------> /
 
     One way to construct such a flow in code would be::
 
-    Example
+    Example:
     >>> split = (3, 8365641317588141140, ['a', 'b', 'r'])
     >>> double = lambda item: item * 2
     >>> _OUTPUT = dispatch(split, double, oct, max)
     >>> _OUTPUT
     (6, '0o720305647221513002124', 'r')
+
     """
     # split = list(split)
     # for item, func in zip(split, funcs):
     #     v = func(item)
     #     print(f"dispatch: {func}({item}) = {v}")
 
-    return tuple(func(item) for item, func in zip(split, funcs))
+    return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
 def broadcast(item: ItemArg, *funcs: SyncItemFunc, **kwargs) -> tuple[ComplexArg, ...]:
-    """Delivers the same item to different functions.
+    r"""
+    Delivers the same item to different functions.
 
     Differs from `map` which applies multiple items to the same function.
 
            /--> item --> len(item) --------> \
           /                                   \
     item -----> item --> hash(item) ------->  split
-          \\                                   /
-           \\--> item --> sorted(item) -----> /
+          \                                   /
+           \--> item --> sorted(item) -----> /
 
     One way to construct such a flow in code would be::
 
-    Example
+    Example:
     >>> split = broadcast('bar', len, hash, sorted)
     >>> split
     (3, -6516517828960271057, ['a', 'b', 'r'])
+
     """
     return tuple(func(item, **kwargs) for func in funcs)
 
@@ -492,7 +518,8 @@ def _gen_words(match, splits: Iterable[BasicValue]):
 
 
 def multi_substitute(word: str, rules):
-    """Apply multiple regex rules to 'word'
+    """
+    Apply multiple regex rules to 'word'
     http://code.activestate.com/recipes/
     576710-multi-regex-single-pass-replace-of-multiple-regexe/
     """
@@ -500,7 +527,7 @@ def multi_substitute(word: str, rules):
 
     # Create a combined regex from the rules
     tuples = ((p, r["match"]) for p, r in enumerate(rules))
-    regexes = ("(?P<match_%i>%s)" % (p, r) for p, r in tuples)
+    regexes = (f"(?P<match_{p}>{r})" for p, r in tuples)
     pattern = "|".join(regexes)
     regex = re.compile(pattern, flags)
     resplit = re.compile("\\$(\\d+)")
@@ -659,9 +686,7 @@ def gen_entries(entries: Iterable[Mapping]):
 
 
 def gen_items(
-    content: Optional[BasicArg],
-    key: Optional[str] = None,
-    yield_if_none=False
+    content: BasicArg | None, key: str | None = None, yield_if_none=False
 ) -> Iterator[BasicArg | BasicMapping | None]:
     if isinstance(content, (str, int, Mapping)):
         yield {key: content} if key else content
@@ -684,10 +709,12 @@ def close(name: str):
         gen.close()
 
 
-def actor(registry_name: Optional[str] = None, maxlen=256):
+def actor(registry_name: str | None = None, maxlen=256):
     """Decorator for generator-based coroutines."""
 
-    def decorator(func: Callable[..., Generator[StatefulItem, StatefulItem, StatefulItem]]):
+    def decorator(
+        func: Callable[..., Generator[StatefulItem, StatefulItem, StatefulItem]],
+    ):
         name = registry_name or func.__name__
 
         @wraps(func)
@@ -709,8 +736,7 @@ def gen_dependencies(pipe_def: PipeDef) -> Iterator[str]:
 
 
 def extract_dependencies(
-    pipe_def: Optional[PipeDef] = None,
-    pipeline: Optional[PipelineDependencies] = None
+    pipe_def: PipeDef | None = None, pipeline: PipelineDependencies | None = None
 ) -> list[str]:
     """Extract modules used by a pipe"""
     if pipe_def:
@@ -735,12 +761,13 @@ def gen_input(pipe_def: PipeDef) -> Iterator[tuple[str]]:
             pass
         else:
             values = ["type", "value"]
-            module_confs.extend((module["conf"]["default"][x] for x in values))
+            module_confs.extend(module["conf"]["default"][x] for x in values)
             yield tuple(module_confs)
 
 
 def get_input(conf: InputConf, **kwargs):
-    """Gets a user parameter, either from the console or from an outer
+    """
+    Gets a user parameter, either from the console or from an outer
      submodule/system
 
     Assumes conf has name, default, prompt and debug
@@ -763,8 +790,7 @@ def get_input(conf: InputConf, **kwargs):
 
 
 def extract_input(
-    pipe_def: Optional[PipeDef] = None,
-    pipeline: Optional[PipelineDependencies] = None
+    pipe_def: PipeDef | None = None, pipeline: PipelineDependencies | None = None
 ) -> Sequence[str | tuple[str]]:
     """Extract inputs required by a pipe"""
     if pipe_def:
@@ -774,14 +800,14 @@ def extract_input(
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return sorted(list(pyinput))
+    return sorted(pyinput)
 
 
 def pythonise(
     content: str | BasicMapping | Wire,
     encoding="ascii",
     replace: Sequence[str] = ("-", ":", "/", ""),
-    key: Optional[str] = None
+    key: str | None = None,
 ) -> str:
     """Return a Python-friendly id"""
     if not isinstance(content, str):
@@ -801,13 +827,13 @@ def pythonise(
         raise ValueError("Received a key without a dict.")
 
     reduced = reduce(replacer, replace, content)
-    return reduced.encode(encoding, 'replace').decode(encoding)
+    return reduced.encode(encoding, "replace").decode(encoding)
 
 
 def gen_names(
     module_ids: Sequence[str] | Sequence[tuple[str, ...]],
     parsed_pipe_def: ParsedPipeDef,
-    ntype="module"
+    ntype="module",
 ) -> Iterator[str]:
     for module_id in module_ids:
         if isinstance(module_id, str):
@@ -829,8 +855,7 @@ def gen_names(
 
 
 def gen_modules(
-    pipe_def: PipeDef,
-    embedded=False
+    pipe_def: PipeDef, embedded=False
 ) -> Iterator[tuple[str, Module] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
         yield (pythonise(module["id"]), module)

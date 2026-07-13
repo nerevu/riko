@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.locations
@@ -7,7 +6,9 @@ Provides location lookup dictionaries
 
 Attributes:
     LOCATIONS (dict): Location name to info mapping
+
 """
+
 LOCATIONS = {
     "Asia": {"code_2": "AS", "continent": "Asia"},
     "Africa": {"code_2": "AF", "continent": "Africa"},

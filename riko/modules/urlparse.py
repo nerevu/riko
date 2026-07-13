@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.urlparse
-~~~~~~~~~~~~~~~~~~~~~
 Provides functions for parsing a URL into its six components.
 
 Examples:
@@ -17,13 +14,16 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-import pygogo as gogo
 
 from urllib.parse import urlparse
 
+import pygogo as gogo
+
 from riko import Objconf
 from riko.types.general import Extraction
+
 from . import processor
 
 OPTS = {"ftype": "text", "field": "content"}
@@ -32,7 +32,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(url: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Parsers the pipe content
+    """
+    Parsers the pipe content
 
     Args:
         url (str): The link to parse
@@ -54,13 +55,13 @@ def parser(url: str, extraction: Extraction, objconf: Objconf, skip=False, **kwa
         >>> result = parser('http://yahoo.com', None, objconf)
         >>> next(result)
         {'component': 'scheme', 'value': 'http'}
+
     """
     if skip:
         stream = kwargs["stream"]
     else:
         parsed = urlparse(url)
 
-        # noqa pylint: disable=dict-items-not-iterating
         items = parsed._asdict().items()
         stream = ({"component": k, objconf.parse_key: v} for k, v in items)
 
@@ -69,7 +70,8 @@ def parser(url: str, extraction: Extraction, objconf: Objconf, skip=False, **kwa
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously parses a URL into its components.
+    """
+    A processor module that asynchronously parses a URL into its components.
 
     Args:
         item (dict): The entry to process
@@ -97,13 +99,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'component': 'scheme', 'content': 'http'}
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that parses a URL into its components.
+    """
+    A processor that parses a URL into its components.
 
     Args:
         item (dict): The entry to process
@@ -128,5 +132,6 @@ def pipe(*args, **kwargs):
         >>> conf = {'parse_key': 'value'}
         >>> next(pipe(item, conf=conf, emit=True))
         {'component': 'scheme', 'value': 'http'}
+
     """
     return parser(*args, **kwargs)

@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.simplemath
-~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for performing simple mathematical operations, e.g.,
 addition, subtraction, multiplication, division, modulo, averages, etc.
 
@@ -19,17 +16,20 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from decimal import Decimal
+
 import operator
-from typing import Callable
+from collections.abc import Callable
+from decimal import Decimal
+
+import pygogo as gogo
 
 from riko import Objconf
 from riko.cast import CastType, cast
 from riko.types.general import Extraction, NumLike
 
 from . import processor
-import pygogo as gogo
 
 OPTS = {"ftype": "decimal", "field": "content"}
 DEFAULTS = {}
@@ -55,8 +55,11 @@ OPS: dict[str, Callable[..., NumLike]] = {
 }
 
 
-def parser(num: Decimal, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> NumLike:
-    """Parsers the pipe content
+def parser(
+    num: Decimal, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> NumLike:
+    """
+    Parsers the pipe content
 
     Args:
         num (Decimal): The first number to operate on
@@ -72,6 +75,7 @@ def parser(num: Decimal, extraction: Extraction, objconf: Objconf, skip=False, *
         >>> objconf = Objectify(conf)
         >>> parser(10, None, objconf)
         Decimal('2.5')
+
     """
     operation = OPS[objconf.op]
     other = cast(objconf.other, _type=CastType.DECIMAL)
@@ -80,7 +84,8 @@ def parser(num: Decimal, extraction: Extraction, objconf: Objconf, skip=False, *
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously performs basic arithmetic, such
+    """
+    A processor module that asynchronously performs basic arithmetic, such
     as addition and subtraction.
 
     Args:
@@ -119,13 +124,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         2
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor module that performs basic arithmetic, such as addition and
+    """
+    A processor module that performs basic arithmetic, such as addition and
     subtraction.
 
     Args:
@@ -156,5 +163,6 @@ def pipe(*args, **kwargs):
         >>> kwargs = {'conf': conf, 'field': 'num', 'assign': 'result'}
         >>> next(pipe({'num': '10'}, **kwargs))['result']
         Decimal('2')
+
     """
     return parser(*args, **kwargs)

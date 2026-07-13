@@ -2,14 +2,12 @@
 
 from riko import Context, get_path
 from riko.modules.fetch import pipe as fetch
-from riko.modules.sort import pipe as sort
 from riko.modules.input import pipe as numberinput
+from riko.modules.sort import pipe as sort
 from riko.modules.tail import pipe as tail
 
 
-def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
-    context=None, conf=None
-):
+def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
 

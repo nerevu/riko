@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.receive
-~~~~~~~~~~~~~~~~~~~~
 Provides functions for receiving items of a stream to a function using generator based
 coroutines.
 
@@ -29,20 +26,24 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
 
+from collections.abc import Callable, Iterator, Mapping
 from time import sleep
-from typing import Callable, Iterator, Mapping, Optional
 
 import pygogo as gogo
-
-from riko.types.general import ComplexArg, BasicMapping, Extraction, StatefulItem, StreamState
-
-from . import operator
-from riko import Objconf
-from riko.utils import actor, _registry, _receive_queue, close
 from meza.fntools import dfilter
 
+from riko import Objconf
+from riko.types.general import (
+    BasicMapping,
+    ComplexArg,
+    StreamState,
+)
+from riko.utils import _receive_queue, _registry, actor, close
+
+from . import operator
 
 OPTS = {"ftype": "none", "pollable": True}
 DEFAULTS = {"wait": 1, "max_wait": 5}
@@ -53,10 +54,11 @@ def parser(
     _: BasicMapping,
     objconf: Objconf,
     tuples,
-    func: Optional[Callable[[Mapping], ComplexArg]] = None,
-    **kwargs
+    func: Callable[[Mapping], ComplexArg] | None = None,
+    **kwargs,
 ) -> Iterator[dict[str, StreamState] | ComplexArg]:
-    """Parses the pipe content
+    """
+    Parses the pipe content
     Args:
         objconf (obj): the item independent configuration (an Objectify
             instance).
@@ -88,6 +90,7 @@ def parser(
         {'x': 0}
         >>> next(target)
         {'x': 0}
+
     """
     name = objconf.name
     wait = objconf.wait
@@ -101,7 +104,7 @@ def parser(
         @actor(registry_name=name, maxlen=objconf.max_len)
         def receiver():
             while True:
-                item: Mapping = (yield)
+                item: Mapping = yield
 
                 if item is not None:
                     state = item.get("state")
@@ -138,7 +141,8 @@ def parser(
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on a site.
+    """
+    A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -167,5 +171,6 @@ def pipe(*args, **kwargs):
         {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
+
     """
     return parser(*args, **kwargs)

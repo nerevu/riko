@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.sum
-~~~~~~~~~~~~~~~~
 Provides functions for summing the items in a stream.
 
 Examples:
@@ -17,13 +14,15 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
-"""
-import itertools as it
-from typing import Iterator
-import pygogo as gogo
 
-from operator import itemgetter
+"""
+
+import itertools as it
+from collections.abc import Iterator
 from decimal import Decimal
+from operator import itemgetter
+
+import pygogo as gogo
 
 from . import operator
 
@@ -32,8 +31,11 @@ DEFAULTS = {"sum_key": "content", "group_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs) -> Decimal | int | Iterator[dict[str, Decimal]]:
-    """Parses the pipe content
+def parser(
+    stream, objconf, tuples, **kwargs
+) -> Decimal | int | Iterator[dict[str, Decimal]]:
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -75,6 +77,7 @@ def parser(stream, objconf, tuples, **kwargs) -> Decimal | int | Iterator[dict[s
         {'one': Decimal('3')}
         >>> next(summed)
         {'two': Decimal('2')}
+
     """
     _sum = lambda group: sum(Decimal(g[objconf.sum_key]) for g in group)
 
@@ -91,7 +94,8 @@ def parser(stream, objconf, tuples, **kwargs) -> Decimal | int | Iterator[dict[s
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously and eagerly sums fields of items
+    """
+    An operator that asynchronously and eagerly sums fields of items
     in a stream. Note that this pipe is not lazy if `group_key` is specified.
 
     Args:
@@ -131,13 +135,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         10
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly sums fields of items in a stream.
+    """
+    An operator that eagerly sums fields of items in a stream.
     Note that this pipe is not lazy if `group_key` is specified.
 
     Args:
@@ -174,5 +180,6 @@ def pipe(*args, **kwargs):
         {'one': Decimal('3')}
         >>> next(summed)
         {'two': Decimal('2')}
+
     """
     return parser(*args, **kwargs)

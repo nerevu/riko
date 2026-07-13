@@ -1,7 +1,8 @@
 from pprint import pprint
+
 from riko import get_path
 from riko.bado import coroutine, return_value
-from riko.collections import SyncPipe, AsyncPipe
+from riko.collections import AsyncPipe, SyncPipe
 
 p1_conf = {"url": get_path("gigs.json"), "path": "value.items"}
 p2_conf = {"uniq_key": "link"}

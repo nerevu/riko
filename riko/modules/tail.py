@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.tail
-~~~~~~~~~~~~~~~~~
 Provides functions for truncating a stream to the last N items.
 
 Contrast this with the Truncate module, which limits the output to the first N
@@ -20,11 +17,14 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 from collections import deque
 
-from . import operator
 import pygogo as gogo
+
+from . import operator
 
 OPTS = {"ptype": "int"}
 DEFAULTS = {}
@@ -32,7 +32,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -61,13 +62,15 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> tuples = zip(stream, repeat(objconf))
         >>> parser(stream, objconf, tuples, **kwargs)[0]
         {'x': 3}
+
     """
     return deque(stream, objconf.count)
 
 
 @operator(isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously truncates a stream to the last N items.
+    """
+    An operator that asynchronously truncates a stream to the last N items.
 
     Args:
         items (Iter[dict]): The source.
@@ -97,13 +100,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'x': 3}
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(**OPTS)
 def pipe(*args, **kwargs):
-    """An operator that truncates a stream to the last N items.
+    """
+    An operator that truncates a stream to the last N items.
 
     Args:
         items (Iter[dict]): The source.
@@ -121,5 +126,6 @@ def pipe(*args, **kwargs):
         >>> items = [{'x': x} for x in range(5)]
         >>> next(pipe(items, conf={'count': 2}))
         {'x': 3}
+
     """
     return parser(*args, **kwargs)

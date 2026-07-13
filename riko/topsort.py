@@ -1,16 +1,14 @@
 """
-   Tarjan's algorithm and topological sorting implementation in Python
+Tarjan's algorithm and topological sorting implementation in Python
 
-   by Paul Harrison
+by Paul Harrison
 
-   Public domain, do with it as you will
+Public domain, do with it as you will
 """
 
-from graphlib import TopologicalSorter, CycleError
+from collections.abc import Iterable, Mapping, Sequence
+from graphlib import CycleError, TopologicalSorter
 from typing import (
-    Iterable,
-    Mapping,
-    Sequence,
     TypeVar,
 )
 
@@ -27,8 +25,8 @@ T = TypeVar("T", bound=str | int)
 
 
 def scc_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> list[tuple[T, ...]]:
-    """Identify strongly connected components in a graph using
-    Tarjan's algorithm.
+    """
+    Identify strongly connected components in a graph using Tarjan's algorithm.
 
     graph should be a dictionary mapping node names to an
     sequence of successor nodes.
@@ -66,8 +64,8 @@ def scc_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> list[tuple[T, ...
     >>> scc_sort(graph)
     [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
     """
-    G = nx.DiGraph(graph)
-    components: Iterable[set[T]] = nx.strongly_connected_components(G)
+    digraph = nx.DiGraph(graph)
+    components: Iterable[set[T]] = nx.strongly_connected_components(digraph)
     order = [tuple(c) for c in components]
     return order if reverse else order[::-1]
 
@@ -119,8 +117,7 @@ def native_topological_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> li
 
 
 def topological_sort(
-    graph: Mapping[T, Sequence[T]],
-    **kwargs
+    graph: Mapping[T, Sequence[T]], **kwargs
 ) -> list[T] | list[tuple[T, ...]]:
     """
     # A --> B --> C --> D

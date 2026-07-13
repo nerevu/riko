@@ -1,6 +1,7 @@
 # vim: sw=4:ts=4:expandtab
 
-""" A script to manage development tasks """
+"""A script to manage development tasks"""
+
 import sys
 from functools import partial
 from os import environ
@@ -85,6 +86,12 @@ def check():
 @manager.command()
 @click.option("-w", "--where", help="Modules to check")
 @click.option("-f", "--fix", help="Fix errors", is_flag=True)
+@click.option(
+    "-F",
+    "--unsafe-fixes",
+    help="View unsafe fixes (Applies unsafe fixes if --fix is also specified)",
+    is_flag=True,
+)
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
 @click.option(
     "-p",
@@ -92,11 +99,18 @@ def check():
     help="Run linter in parallel in multiple processes",
     is_flag=True,
 )
-def lint(where=None, fix=False, strict=False, parallel=False):
+def lint(where=None, fix=False, unsafe_fixes=False, strict=False, parallel=False):
     """Check style with linters"""
     args = "pylint --rcfile=tests/standard.rc -rn -fparseable riko"
     args += " -j 0" if parallel else ""
-    r_args = "ruff check --fix" if fix else "ruff check"
+    r_args = "ruff check"
+
+    if fix:
+        r_args += " --fix"
+
+    if unsafe_fixes:
+        r_args += " --unsafe-fixes"
+
     r_args += f" {where}" if where else ""
 
     try:
@@ -128,11 +142,23 @@ def prettify(where, sort=False):
 @manager.command()
 @click.option("-w", "--where", help="test path", default=None)
 @click.option("-x", "--stop", help="Stop after first error", is_flag=True)
-@click.option("-f", "--failed", help="Run failed tests (overrides --debug)", is_flag=True)
-@click.option("-D", "--debug", help="Drop into pdb on failure (overridden by --failed)", is_flag=True)
+@click.option(
+    "-f", "--failed", help="Run failed tests (overrides --debug)", is_flag=True
+)
+@click.option(
+    "-D",
+    "--debug",
+    help="Drop into pdb on failure (overridden by --failed)",
+    is_flag=True,
+)
 @click.option("-W", "--watch", help="Rerun tests on file changes", is_flag=True)
 @click.option("-c", "--cover/--no-cover", help="Add coverage report", default=True)
-@click.option("-C", "--capture/--no-capture", help="Capture stdout/sdterr (disables --watch)", default=True)
+@click.option(
+    "-C",
+    "--capture/--no-capture",
+    help="Capture stdout/sdterr (disables --watch)",
+    default=True,
+)
 @click.option("-t", "--tox", help="Run tox tests", is_flag=True)
 @click.option("-d", "--detox", help="Run detox tests", is_flag=True)
 @click.option("-v", "--verbose", help="Use detailed errors", is_flag=True)
@@ -165,7 +191,7 @@ def test(where=None, stop=None, **kwargs):
         elif kwargs.get("detox"):
             pass
         else:
-            params = ("pytest %s" % opts).split(" ")
+            params = (f"pytest {opts}").split(" ")
 
             if kwargs.get("parallel"):
                 params += ["-n", "auto"]
@@ -195,7 +221,12 @@ def build():
 
 
 @manager.command()
-@click.option("-d", "--dry-run", help="Test that the package can be installed and imported", is_flag=True)
+@click.option(
+    "-d",
+    "--dry-run",
+    help="Test that the package can be installed and imported",
+    is_flag=True,
+)
 def publish(dry_run=False):
     """Publish riko to PyPI"""
     try:
@@ -204,9 +235,13 @@ def publish(dry_run=False):
         exit(e.returncode)
 
 
-
 @manager.command()
-@click.option("-d", "--dry-run", help="Test that the package can be installed and imported", is_flag=True)
+@click.option(
+    "-d",
+    "--dry-run",
+    help="Test that the package can be installed and imported",
+    is_flag=True,
+)
 def release(dry_run=False):
     """Build and publish new riko version"""
     try:

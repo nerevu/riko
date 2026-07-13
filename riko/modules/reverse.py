@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.reverse
-~~~~~~~~~~~~~~~~~~~~
 Provides functions for flipping the order of all items in a stream.
 
 Examples:
@@ -16,10 +13,12 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
 
-from . import operator
 import pygogo as gogo
+
+from . import operator
 
 OPTS = {}
 DEFAULTS = {}
@@ -27,7 +26,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -54,13 +54,15 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> tuples = zip(stream, repeat(None))
         >>> next(parser(stream, None, tuples, **kwargs))
         {'x': 4}
+
     """
     return reversed(list(stream))
 
 
 @operator(isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously reverses the order of source items in
+    """
+    An operator that asynchronously reverses the order of source items in
     a stream. Note that this pipe is not lazy.
 
     Args:
@@ -87,13 +89,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'x': 4}
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(**OPTS)
 def pipe(*args, **kwargs):
-    """An operator that eagerly reverses the order of source items in a stream.
+    """
+    An operator that eagerly reverses the order of source items in a stream.
 
     Args:
         items (Iter[dict]): The source.
@@ -106,5 +110,6 @@ def pipe(*args, **kwargs):
         >>> items = ({'x': x} for x in range(5))
         >>> next(pipe(items))
         {'x': 4}
+
     """
     return parser(*args, **kwargs)

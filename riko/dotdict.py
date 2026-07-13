@@ -1,23 +1,34 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.dotdict
 ~~~~~~~~~~~~
 Provides a class for creating case insensitive dicts with dot notation access
 """
-from time import struct_time
-from typing import Iterator, Mapping, Optional, Sequence, TypeGuard, Union
-from typing import cast as cast_type
-from typing_extensions import TypeIs
-import pygogo as gogo
 
+from collections.abc import Iterator, Mapping, Sequence
 from functools import reduce
+from time import struct_time
+from typing import TypeGuard, Union
+from typing import cast as cast_type
 
+import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
+from typing_extensions import TypeIs
+
 from riko import Objectify, replacer
-from riko.cast import CAST_SWITCH, CastType, cast as cast_value
+from riko.cast import CAST_SWITCH, CastType
+from riko.cast import cast as cast_value
 from riko.types.compile import Wire, WireEndpoint
-from riko.types.general import ComplexArg, BasicValue, ComplexMapping, ComplexSequence, IntermediateValue, Items, StatefulItem, StreamState
+from riko.types.general import (
+    BasicValue,
+    ComplexArg,
+    ComplexMapping,
+    ComplexSequence,
+    IntermediateValue,
+    Items,
+    StatefulItem,
+    StreamState,
+)
 from riko.types.modules import ConfArg, Sentinal
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -69,7 +80,8 @@ def is_stateful_item(val: ComplexArg) -> TypeGuard[StatefulItem]:
 
 
 class DotDict(CaseInsensitiveDict[ComplexArg]):
-    """A dictionary whose keys can be accessed using dot notation
+    """
+    A dictionary whose keys can be accessed using dot notation
 
     Examples:
         >>> r = DotDict({'a': {'content': 'value'}})
@@ -111,8 +123,10 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         ['value', 'key']
         >>> DotDict({'start': 0, 'count': {'type': 'int', 'value': '5'}})
         {'start': 0, 'count': 5}
+
     """
-    def __init__(self, data: Optional[ComplexMapping] = None, **kwargs):
+
+    def __init__(self, data: ComplexMapping | None = None, **kwargs):
         super().__init__()
 
         if isinstance(data, Objectify):
@@ -126,7 +140,7 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         if _data is not None:
             self.update(_data, **kwargs)
 
-    def _parse_key(self, key: Optional[str | Mapping[str, str]] = None) -> list[str]:
+    def _parse_key(self, key: str | Mapping[str, str] | None = None) -> list[str]:
         if isinstance(key, str):
             keys = key.rstrip(".").split(".") if key else []
         elif key and "subkey" in key:
@@ -137,10 +151,7 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         return keys
 
     def _parse_sentinel(
-        self,
-        value: ComplexArg,
-        default: Optional[ComplexArg] = None,
-        **kwargs: ComplexArg
+        self, value: ComplexArg, default: ComplexArg | None = None, **kwargs: ComplexArg
     ) -> ComplexArg:
 
         if kwargs and is_sentinal(value):
@@ -177,9 +188,7 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         elif isinstance(value, Mapping):
             parsed = {
                 k: self._parse_sentinel(
-                    cast_type(ComplexArg, v),
-                    cast_type(ComplexArg, v),
-                    **kwargs
+                    cast_type(ComplexArg, v), cast_type(ComplexArg, v), **kwargs
                 )
                 for k, v in value.items()
             }
@@ -192,8 +201,8 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         self,
         value: ComplexArg,
         key: str | int,
-        default: Optional[ComplexArg] = None,
-        **kwargs
+        default: ComplexArg | None = None,
+        **kwargs,
     ) -> ComplexArg:
         parsed = default
         msg = f"Ignoring unsupported key {key} to access {{0}} value {{1}}."
@@ -261,9 +270,9 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
 
     def get(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
-        key: Optional[str | Mapping[str, str]] = None,
-        default: Optional[ComplexArg] = None,
-        **kwargs
+        key: str | Mapping[str, str] | None = None,
+        default: ComplexArg | None = None,
+        **kwargs,
     ) -> Union["DotDict", IntermediateValue, ComplexSequence]:
         """
         >>> r = DotDict({'key': 'bar'})
@@ -355,8 +364,8 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
 
     def update(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
-        data: Optional[ComplexMapping | Iterator[tuple[str, ComplexArg]]] = None,
-        **kwargs
+        data: ComplexMapping | Iterator[tuple[str, ComplexArg]] | None = None,
+        **kwargs,
     ):
         if isinstance(data, Objectify):
             _dict = dict(data.iteritems())
@@ -375,7 +384,7 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
             skip_keys = {".".join(self._parse_key(key)[:-1]) for key in dot_keys}
-            items = list((k, _dict[k]) for k in _dict if k not in skip_keys)
+            items = [(k, _dict[k]) for k in _dict if k not in skip_keys]
         else:
             skip_keys = set()
             items = _dict.items()

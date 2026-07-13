@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-riko.modules.urlbuilder
-~~~~~~~~~~~~~~~~~~~~~~~
 Provides functions for building a url from parts
 
 Many URLs are long and complex. Modules like Fetch Feed let you provide a URL
@@ -52,17 +49,19 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import re
-from typing import Mapping, Sequence
-from urllib.parse import urljoin, urlencode
+from collections.abc import Mapping, Sequence
+from urllib.parse import urlencode, urljoin
+
+import pygogo as gogo
 
 from riko import Objconf
 from riko.types.general import BasicArg, ObjconfParam
 
 from . import processor
-
-import pygogo as gogo
 
 OPTS = {"extract": "param", "listize": True, "emit": True}
 DEFAULTS = {}
@@ -72,13 +71,10 @@ PATTERN = re.compile(r'[<>:"/\\\|\*%]')
 
 
 def parser(
-    _: BasicArg,
-    param: Sequence[ObjconfParam],
-    objconf: Objconf,
-    skip=False,
-    **kwargs
+    _: BasicArg, param: Sequence[ObjconfParam], objconf: Objconf, skip=False, **kwargs
 ) -> str:
-    """Parsers the pipe content
+    """
+    Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -101,6 +97,7 @@ def parser(
         >>> conf = {'base': base, 'path': path, 'param': param}
         >>> parser({}, [Objectify(param)], Objectify(conf), stream={})
         'http://finance.yahoo.com/rss/headline?s=gm'
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -108,7 +105,9 @@ def parser(
         if isinstance(objconf.path, str):
             paths = [objconf.path]
         elif isinstance(objconf.path, Mapping):
-            print(f"Error: path should be a string or list of strings, not {objconf.path}")
+            print(
+                f"Error: path should be a string or list of strings, not {objconf.path}"
+            )
             paths = []
         elif objconf.path:
             paths = objconf.path
@@ -128,7 +127,8 @@ def parser(
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously builds a url.
+    """
+    A source that asynchronously builds a url.
 
     Args:
         item (dict): The entry to process
@@ -169,13 +169,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         http://finance.yahoo.com/rss/headline?s=gm
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that builds a url.
+    """
+    A source that builds a url.
 
     Args:
         item (dict): The entry to process
@@ -205,5 +207,6 @@ def pipe(*args, **kwargs):
         >>> conf = {'base': base, 'path': path, 'param': param}
         >>> next(pipe(conf=conf))
         'http://finance.yahoo.com/rss/headline?s=gm'
+
     """
     return parser(*args, **kwargs)

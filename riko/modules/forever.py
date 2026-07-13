@@ -1,11 +1,8 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    riko.modules.forever
-    ~~~~~~~~~~~~~~~~~~~~
-    Provides methods for mocking an input source. This enables other modules,
-    e.g. date builder, to be called so they can continue to consume values from
-    indirect terminal inputs. Loopable.
+Provides methods for mocking an input source. This enables other modules,
+e.g. date builder, to be called so they can continue to consume values from
+indirect terminal inputs. Loopable.
 
 Examples:
     basic usage::
@@ -18,25 +15,31 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from typing import Iterator
+
+from collections.abc import Iterator
+from itertools import repeat, takewhile
+
 import pygogo as gogo
 
 from riko import Objconf
 from riko.types.general import BasicArg, Extraction
 
 from . import processor
-from itertools import takewhile, repeat
 
-forever = takewhile(bool, repeat({'forever': True}))
+forever = takewhile(bool, repeat({"forever": True}))
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[dict[str, bool]]:
-    """Parses the pipe content
+def parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> Iterator[dict[str, bool]]:
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -55,13 +58,15 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
         >>> result = parser(None, None, None, stream={})
         >>> next(result)
         {'forever': True}
+
     """
     return kwargs["stream"] if skip else forever
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously fetches and parses a feed to return the
+    """
+    A source that asynchronously fetches and parses a feed to return the
     entries.
 
     Args:
@@ -95,13 +100,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'forever': True}
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses a feed to return the entries.
+    """
+    A source that fetches and parses a feed to return the entries.
 
     Args:
         item (dict): The entry to process
@@ -123,5 +130,6 @@ def pipe(*args, **kwargs):
         >>>
         >>> next(pipe())
         {'forever': True}
+
     """
     return parser(*args, **kwargs)
