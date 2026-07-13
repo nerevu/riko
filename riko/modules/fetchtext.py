@@ -15,18 +15,21 @@ Examples:
         >>> from riko.modules.fetchtext import pipe
         >>>
         >>> conf = {'url': get_path('lorem.txt')}
-        >>> next(pipe(conf=conf))['content'] == 'What is Lorem Ipsum?'
-        True
+        >>> next(pipe(conf=conf))
+        'What is Lorem Ipsum?'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Iterator
 import pygogo as gogo
 
+from riko.types.general import BasicArg, Extraction, ItemArg
+
 from . import processor
-from riko import ENCODING
-from riko.utils import fetch, auto_close, get_abspath
+from riko import ENCODING, Objconf
+from riko.utils import fetch, auto_close
 from riko.bado import coroutine, return_value, io
 
 OPTS = {"ftype": "none", "assign": "content"}
@@ -34,8 +37,8 @@ DEFAULTS = {"encoding": ENCODING}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine
-def async_parser(_, objconf, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -57,10 +60,10 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['content'])
+        ...     callback = lambda x: print(next(x))
         ...     url = get_path('lorem.txt')
         ...     objconf = Objectify({'url': url, 'encoding': ENCODING})
-        ...     d = async_parser(None, objconf, assign='content')
+        ...     d = async_parser(None, None, objconf, assign='content')
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -73,17 +76,14 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        f = yield io.async_url_open(url)
-        assign = kwargs["assign"]
-        encoding = objconf.encoding
-        _stream = ({assign: line.strip().decode(encoding)} for line in f)
+        f = yield io.async_url_open(objconf.url)  # pyright: ignore[reportCallIssue]
+        _stream = (line.strip().decode(objconf.encoding) for line in f)
         stream = auto_close(_stream, f)
 
     return_value(stream)
 
 
-def parser(_, objconf, skip=False, **kwargs):
+def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg | Iterator[str]:
     """Parses the pipe content
 
     Args:
@@ -104,21 +104,21 @@ def parser(_, objconf, skip=False, **kwargs):
         >>>
         >>> url = get_path('lorem.txt')
         >>> objconf = Objectify({'url': url, 'encoding': ENCODING})
-        >>> result = parser(None, objconf, assign='content')
-        >>> next(result)['content'] == 'What is Lorem Ipsum?'
-        True
+        >>> result = parser(None, None, objconf, assign='content')
+        >>> next(result)
+        'What is Lorem Ipsum?'
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        f = fetch(decode=True, **objconf)
-        _stream = ({kwargs["assign"]: line.strip()} for line in f)
+        f = fetch(**{k: objconf[k] for k in objconf})
+        _stream = (line.strip() for line in f)
         stream = auto_close(_stream, f)
 
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -146,7 +146,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['content'])
+        ...     callback = lambda x: print(next(x))
         ...     conf = {'url': get_path('lorem.txt')}
         ...     d = async_pipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -186,7 +186,7 @@ def pipe(*args, **kwargs):
         >>> from riko import get_path
         >>>
         >>> conf = {'url': get_path('lorem.txt')}
-        >>> next(pipe(conf=conf))['content'] == 'What is Lorem Ipsum?'
-        True
+        >>> next(pipe(conf=conf))
+        'What is Lorem Ipsum?'
     """
     return parser(*args, **kwargs)

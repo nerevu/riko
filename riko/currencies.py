@@ -10,6 +10,10 @@ Attributes:
     CURRENCY_SYMBOLS (dict): Currency symbol to code mapping
     CURRENCY_CODES (dict): Currency symbol to info mapping
 """
+
+from riko.types.general import CurrencyCode
+
+
 CURRENCY_SYMBOLS = {
     "$": "USD",
     "£": "GBP",
@@ -20,7 +24,7 @@ CURRENCY_SYMBOLS = {
     "\u20b9": "INR",
 }
 
-CURRENCY_CODES = {
+CURRENCY_CODES: dict[str, CurrencyCode] = {
     "AED": {
         "code": "AED",
         "decimal_digits": 2,

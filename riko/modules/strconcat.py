@@ -14,9 +14,9 @@ Examples:
         >>> from riko.modules.strconcat import pipe
         >>>
         >>> item = {'word': 'hello'}
-        >>> part = [{'subkey': 'word'}, {'value': ' world'}]
-        >>> next(pipe(item, conf={'part': part}))['strconcat'] == 'hello world'
-        True
+        >>> part = [{'subkey': 'word', 'type': 'text'}, ' world']
+        >>> next(pipe(item, conf={'part': part}))['strconcat']
+        'hello world'
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -24,13 +24,17 @@ Attributes:
 """
 import pygogo as gogo
 
+from riko import Objconf
+from riko.types.general import BasicArg, Extraction
+
 from . import processor
 
 OPTS = {"listize": True, "extract": "part"}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, parts, skip=False, **kwargs):
+def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> str:
     """Parses the pipe content
 
     Args:
@@ -46,18 +50,18 @@ def parser(_, parts, skip=False, **kwargs):
         str: The concatenated string
 
     Examples:
-        >>> parser(None, ['one', 'two']) == 'onetwo'
-        True
+        >>> parser(None, ['one', 'two'], None)
+        'onetwo'
     """
     if skip:
         parsed = kwargs["stream"]
     else:
-        parsed = "".join(str(p) for p in parts if p)
+        parsed = "".join(str(p) for p in extraction if p)
 
     return parsed
 
 
-@processor(isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously concatenates strings.
 
@@ -68,10 +72,9 @@ def async_pipe(*args, **kwargs):
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'part'.
 
-            part (dict): can be either a dict or list of dicts. Must contain
-                one of the following keys: 'value', 'subkey', or 'terminal'.
+            part (dict): can be either a str/dict or list of strs/dicts. If dict, Must
+                contain one of the following keys: 'subkey' or 'terminal'.
 
-                value (str): The substring value
                 subkey (str): The item attribute from which to obtain a
                     substring
 
@@ -90,7 +93,7 @@ def async_pipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['strconcat'])
         ...     item = {'title': 'Hello world'}
-        ...     part = [{'subkey': 'title'}, {'value': 's'}]
+        ...     part = [{'subkey': 'title', 'type': 'text'}, 's']
         ...     d = async_pipe(item, conf={'part': part})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -104,7 +107,7 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A processor that concatenates strings.
 
@@ -115,10 +118,9 @@ def pipe(*args, **kwargs):
     Kwargs:
         conf (dict): The pipe configuration. Must contain the key 'part'.
 
-            part (dict): can be either a dict or list of dicts. Must contain
-                one of the following keys: 'value', 'subkey', or 'terminal'.
+            part (dict): can be either a str/dict or list of strs/dicts. If dict, Must
+                contain one of the following keys: 'subkey' or 'terminal'.
 
-                value (str): The substring value
                 subkey (str): The item attribute from which to obtain a
                     substring
 
@@ -132,14 +134,11 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> item = {'img': {'src': 'http://www.site.com'}}
-        >>> part = [
-        ...     {'value': '<img src="'}, {'subkey': 'img.src'}, {'value': '">'}
-        ... ]
+        >>> part = ['<img src="', {'subkey': 'img.src', 'type': 'text'}, '">']
         >>> conf = {'part': part}
-        >>> resp = '<img src="http://www.site.com">'
-        >>> next(pipe(item, conf=conf))['strconcat'] == resp
-        True
-        >>> next(pipe(item, conf=conf, assign='result'))['result'] == resp
-        True
+        >>> next(pipe(item, conf=conf))['strconcat']
+        '<img src="http://www.site.com">'
+        >>> next(pipe(item, conf=conf, assign='result'))['result']
+        '<img src="http://www.site.com">'
     """
     return parser(*args, **kwargs)

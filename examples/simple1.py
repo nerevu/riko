@@ -1,5 +1,5 @@
 from pprint import pprint
-from riko.bado import coroutine
+from riko.bado import coroutine, return_value
 from riko.collections import SyncPipe, AsyncPipe
 
 p1_conf = {
@@ -11,18 +11,19 @@ p2_conf = {"rule": {"field": "url", "match": {"subkey": "url"}, "replace": "fare
 
 def pipe(test=False):
     stream = SyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf).list
-
-    for i in stream:
-        pprint(str(i["url"]))
-
     return stream
 
 
 @coroutine
-def async_pipe(reactor, test=False):
+def async_pipe(_, test=False):
     stream = yield (
-        AsyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf).list
+        AsyncPipe("itembuilder", conf=p1_conf, test=test).regex(conf=p2_conf).alist
     )
 
-    for i in stream:
+    return_value(stream)
+
+
+if __name__ == "__main__":
+    for i in pipe():
         pprint(str(i["url"]))
+

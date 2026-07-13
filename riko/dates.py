@@ -5,35 +5,63 @@ riko.dates
 ~~~~~~~~~~
 Provides date and time helpers
 """
-from datetime import timedelta, datetime as dt
-from time import strptime
+from calendar import timegm
+from datetime import timedelta, datetime as dt, UTC, tzinfo, date, timezone
+from zoneinfo import ZoneInfo, available_timezones
+from time import strptime, struct_time
+from typing import Iterator, Optional
 
 import pytz
 
-from pytz import utc
-from dateutil.tz import gettz, tzoffset
+from riko.types.general import DateDict
 
 DATE_FORMAT = "%m/%d/%Y"
 DATETIME_FORMAT = "{0} %H:%M:%S".format(DATE_FORMAT)
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
-TODAY = dt.utcnow()
+TODAY = dt.now(UTC)
+EPOCH_DATETIME = dt(1970, 1, 1, 0, 0, 0, tzinfo=UTC)
+EPOCH_DATE = date(EPOCH_DATETIME.year, EPOCH_DATETIME.month, EPOCH_DATETIME.day)
+ALTERNATIVE_DATE_FORMATS = (
+    "%m-%d-%Y",
+    "%m/%d/%y",
+    "%m/%d/%Y",
+    "%m-%d-%y",
+    "%Y-%m-%dt%H:%M:%Sz",
+    # todo more: whatever Yahoo can accept
+)
+TT_KEYS = (
+    "year",
+    "month",
+    "day",
+    "hour",
+    "minute",
+    "second",
+    "day_of_week",
+    "day_of_year",
+    "daylight_savings",
+)
 
 
-def gen_tzinfos():
+def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
+    # TODO: replace with tzdata
     for zone in pytz.common_timezones:
+        _tzinfo = ZoneInfo(zone)
+
         try:
-            tzdate = pytz.timezone(zone).localize(dt.utcnow(), is_dst=None)
+            tzdate = dt.now(UTC).astimezone(_tzinfo)
         except pytz.NonExistentTimeError:
             pass
         else:
-            tzinfo = gettz(zone)
+            tzname = tzdate.tzname()
 
-            if tzinfo:
-                yield tzdate.tzname(), tzinfo
+            if _tzinfo and tzname:
+                yield tzname, _tzinfo
+
+TZINFOS = dict(gen_tzinfos())
 
 
-def get_date(unit, count, op):
+def get_date(unit: str, count: int, op: callable) -> dt:
     new_month = op(TODAY.month, count) % 12 or 12
 
     DATES = {
@@ -49,41 +77,63 @@ def get_date(unit, count, op):
     return DATES[unit]
 
 
-def normalize_date(date):
+def parse_date(content: str) -> Optional[date | dt]:
+    # TODO: see how I do this in csv2ofx`
+    parsed = None
+
     try:
-        # See if date is a `time.struct_time`
-        # if so, convert it and account for leapseconds
-        tt, date = date, dt(*date[:5] + (min(date[5], 59),))
-    except TypeError:
-        pass
+        month, day, year = map(int, content.split("/"))
+    except ValueError:
+        for date_format in ALTERNATIVE_DATE_FORMATS:
+            try:
+                parsed = dt.strptime(content, date_format)
+            except ValueError:
+                pass
+            else:
+                break
     else:
-        is_dst = None if tt[8] == -1 else tt[8]
+        parsed = date(year, month, day)
 
-        try:
-            tm_zone = tt.tm_zone
-        except AttributeError:
-            tm_zone = None
-            tm_gmtoff = None
-        else:
-            tm_gmtoff = tt.tm_gmtoff
-
-        if tm_zone:
-            date = pytz.timezone(tm_zone).localize(date, is_dst=is_dst)
-        elif tm_gmtoff:
-            offset = tzoffset(None, tm_gmtoff)
-            date.replace(tzinfo=offset)
-
-    # Set timezone to UTC
-    try:
-        tzdate = date.astimezone(utc) if date.tzinfo else utc.localize(date)
-    except AttributeError:
-        tzdate = date
-
-    return tzdate
+    return parsed
 
 
-def get_tt(date):
-    formatted = "".join(date.isoformat().rsplit(":", 1))
+def tzinfo_from_tt(tt: struct_time) -> Optional[ZoneInfo | tzinfo| timezone]:
+    """
+    Try to get a ZoneInfo from struct_time's tm_zone name,
+    falling back to a fixed-offset timezone from tm_gmtoff.
+    """
+    if tt.tm_zone and tt.tm_zone in available_timezones():
+        _tzinfo = ZoneInfo(tt.tm_zone)
+    elif tt.tm_zone and tt.tm_zone in TZINFOS:
+        _tzinfo = TZINFOS[tt.tm_zone]
+    elif tt.tm_gmtoff is not None:
+        _tzinfo = timezone(timedelta(seconds=tt.tm_gmtoff), name=tt.tm_zone or '')
+    else:
+        _tzinfo = None
+
+    return _tzinfo
+
+
+
+def tt_to_datetime(tt: struct_time, as_date=False) -> date | dt:
+    # convert and account for leapseconds
+    _tzinfo = tzinfo_from_tt(tt)
+    result = dt(*tt[:5] + (min(tt[5], 59),), tzinfo=_tzinfo)
+    return result.date() if as_date else result
+
+
+def tt_to_datedict(tt: struct_time, normal: date) -> DateDict:
+    # Make Sunday the first day of the week
+    day_of_w = 0 if tt[6] == 6 else tt[6] + 1
+    isdst = None if tt[8] == -1 else bool(tt[8])
+    result = {"utime": timegm(tt), "timezone": "UTC", "date": normal}
+    result.update(zip(TT_KEYS, tt))  # pylint: disable=W1637
+    result.update({"day_of_week": day_of_w, "daylight_savings": isdst})
+    return result
+
+
+def date_to_tt(content: date | dt) -> struct_time:
+    formatted = "".join(content.isoformat().rsplit(":", 1))
     sformat = "%Y-%m-%d" if len(formatted) == 10 else "%Y-%m-%dT%H:%M:%S%z"
 
     try:

@@ -11,25 +11,26 @@ Examples:
         >>> from riko import get_path
         >>> from riko.bado.io import async_url_open
 """
+from typing import IO, Generator, cast
 import pygogo as gogo
 
-from io import open
+from io import StringIO, open
 from tempfile import NamedTemporaryFile
 from os import remove
 
-from meza.compat import encode
-
+from riko import ENCODING, get_abspath
 from . import coroutine, return_value
 
 try:
-    from twisted.test.proto_helpers import AccumulatingProtocol
+    from twisted.internet.testing import AccumulatingProtocol
 except ImportError:
-    AccumulatingProtocol = object
+    AccumulatingProtocol = callLater = StringTransport = FileSender = treq = object
 else:
+    from twisted.internet.defer import Deferred
     from twisted.internet.reactor import callLater
+    from twisted.internet.testing import StringTransport
     from twisted.protocols.basic import FileSender
-    from twisted.web.client import getPage, downloadPage
-    from twisted.test.proto_helpers import StringTransport
+    import treq
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -57,7 +58,7 @@ class FileReader(AccumulatingProtocol):
             self.consumer.unregisterProducer()
 
             if self.deferred and self.delay:
-                callLater(self.delay, self.deferred.callback, self.lastSent)
+                callLater(self.delay, self.deferred.callback, self.lastSent)  # pyright: ignore[reportCallIssue]
             elif self.deferred:
                 self.deferred.callback(self.lastSent)
 
@@ -80,37 +81,42 @@ class FileReader(AccumulatingProtocol):
         self.d.addBoth(self.cleanup)
 
 
-@coroutine
-def async_read_file(filename, transport, protocol=FileReader, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_read_file(filename: str, transport, protocol=FileReader, encoding=ENCODING, **kwargs) -> Generator[Deferred[str], str, None]:
     proto = protocol(filename.replace("file://", ""), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
-    # return_value(proto.data)
-    return_value(proto.transport.value())
+    value: bytes = proto.transport.value()
+    return_value(value.decode(encoding))
 
 
-@coroutine
-def async_get_file(filename, transport, protocol=FileReader, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_get_file(filename: str, transport, protocol=FileReader, **kwargs) -> Generator[Deferred[StringIO], StringIO, None]:
     proto = protocol(filename.replace("file://", ""), **kwargs)
     proto.makeConnection(transport)
     yield proto.d
     proto.transport.io.seek(0)
-    return_value(proto.transport.io)
+    f = cast(StringIO, proto.transport.io)
+    return_value(f)
 
 
-@coroutine
-def async_url_open(url, timeout=0, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_url_open(url: str, timeout=0, encoding=ENCODING, **kwargs) -> Generator[Deferred[StringIO], StringIO, None]:
     if url.startswith("http"):
-        page = NamedTemporaryFile(delete=False)
+        page = NamedTemporaryFile(delete=False, mode="w")
         new_url = page.name
-        yield downloadPage(encode(url), page, timeout=timeout)
+        response = yield treq.get(url)  # pyright: ignore[reportAttributeAccessIssue]
+        content = yield response.text()  # pyright: ignore[reportAttributeAccessIssue]
+        page.write(cast(str, content))
+        page.flush()
+        file_name = url.split("://")[1] if url.startswith("file") else None
     else:
-        page, new_url = None, url
+        page, new_url, file_name = None, url, None
 
-    f = yield async_get_file(new_url, StringTransport(), **kwargs)
+    f = yield async_get_file(new_url, StringTransport(), **kwargs)  # pyright: ignore[reportCallIssue]
 
-    if not hasattr(f, "name") and url.startswith("file"):
-        f.name = url.split("://")[1]
+    if not hasattr(f, "name") and file_name:
+        f.name = file_name
 
     if page:
         page.close()
@@ -119,10 +125,14 @@ def async_url_open(url, timeout=0, **kwargs):
     return_value(f)
 
 
-def async_url_read(url, timeout=0, **kwargs):
-    if url.startswith("http"):
-        content = getPage(encode(url), timeout=timeout)
-    else:
-        content = async_read_file(url, StringTransport(), **kwargs)
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_url_read(url: str, timeout=0, **kwargs) -> Generator[Deferred[str], str, None]:
+    url = get_abspath(url, offline=True)
 
-    return content
+    if url.startswith("http"):
+        response = yield treq.get(url)  # pyright: ignore[reportAttributeAccessIssue]
+        content = yield response.text()  # pyright: ignore[reportAttributeAccessIssue]
+    else:
+        content = yield async_read_file(url, StringTransport(), **kwargs)  # pyright: ignore[reportReturnType, reportCallIssue]
+
+    return_value(content)

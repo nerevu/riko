@@ -11,10 +11,10 @@ Examples:
 
         >>> from riko.modules.geolocate import pipe
         >>>
-        >>> address = '123 Bakersville St., London'
+        >>> address = '123 Bakersville St., USA'
         >>> geolocate = next(pipe({'content': address}))['geolocate']
-        >>> geolocate['country'] == 'United States'
-        True
+        >>> geolocate['country']
+        'United States'
 
 
 Attributes:
@@ -23,16 +23,18 @@ Attributes:
 """
 import pygogo as gogo
 
-from . import processor
-from riko.utils import cast
+from riko import Objconf
+from riko.cast import CastType, cast
+from riko.types.general import BasicArg, Extraction, ItemArg, AnyLocation
 
+from . import processor
 
 OPTS = {"ftype": "text", "field": "content"}
 DEFAULTS = {"type": "street_address"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(address, objconf, skip=False, **kwargs):
+def parser(address: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg | AnyLocation:
     """Parses the pipe content
 
     Args:
@@ -55,65 +57,21 @@ def parser(address, objconf, skip=False, **kwargs):
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify({'type': 'currency'})
         >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> country = 'United Kingdom'
-        >>> parser(item['content'], objconf, **kwargs)['country'] == country
-        True
+        >>> parser(item['content'], None, objconf, **kwargs)['country']
+        'United Kingdom'
     """
     if skip:
         location = kwargs["stream"]
     else:
-        location = cast(address, "location", loc_type=objconf.type)
+        location = cast(address, CastType.LOCATION, loc_type=objconf.type)
 
     return location
 
 
-# @processor(DEFAULTS, isasync=True, **OPTS)
-# def async_pipe(*args, **kwargs):
-#     """A processor module that asynchronously performs basic arithmetic, such
-#     as addition and subtraction.
-
-#     Args:
-#         item (dict): The entry to process
-#         kwargs (dict): The keyword arguments passed to the wrapper
-
-#     Kwargs:
-#         conf (dict): The pipe configuration. May contain the key 'type'.
-
-#             type (str): The type of geolocation to perform. Must be one of
-#                 'coordinates', 'street_address', 'ip_address', or 'currency'
-#                 (default: 'street_address').
-
-#         assign (str): Attribute to assign parsed content (default: geolocate)
-#         field (str): Item attribute from which to obtain the first address to
-#             operate on (default: 'content')
-
-#     Returns:
-#         Deferred: twisted.internet.defer.Deferred item with formatted currency
-
-#     Examples:
-#         >>> from riko.bado import react
-#         >>> from riko.bado.mock import FakeReactor
-#         >>>
-#         >>> def run(reactor):
-#         ...     callback = lambda x: print(next(x)['geolocate']['country'])
-#         ...     conf = {'type': 'currency'}
-#         ...     d = async_pipe({'content': 'GBP'}, conf=conf)
-#         ...     return d.addCallbacks(callback, logger.error)
-#         >>>
-#         >>> try:
-#         ...     react(run, _reactor=FakeReactor())
-#         ... except SystemExit:
-#         ...     pass
-#         ...
-#         United Kingdom
-#     """
-#     return parser(*args, **kwargs)
-
-
-@processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
-    """A processor module that performs basic arithmetic, such as addition and
-    subtraction.
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
+def async_pipe(*args, **kwargs):
+    """A processor module that asynchronously obtains the geo location of an ip address, street
+    address, currency code, or lat/lon coordinates.
 
     Args:
         item (dict): The entry to process
@@ -131,17 +89,60 @@ def pipe(*args, **kwargs):
             operate on (default: 'content')
 
     Returns:
-        dict: an item with math result
+        Deferred: twisted.internet.defer.Deferred item with formatted location
+
+    Examples:
+        >>> from riko.bado import react
+        >>> from riko.bado.mock import FakeReactor
+        >>>
+        >>> def run(reactor):
+        ...     callback = lambda x: print(next(x)['geolocate']['country'])
+        ...     conf = {'type': 'currency'}
+        ...     d = async_pipe({'content': 'GBP'}, conf=conf)
+        ...     return d.addCallbacks(callback, logger.error)
+        >>>
+        >>> try:
+        ...     react(run, _reactor=FakeReactor())
+        ... except SystemExit:
+        ...     pass
+        ...
+        United Kingdom
+    """
+    return parser(*args, **kwargs)
+
+
+@processor(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs):
+    """A processor module that obtains the geo location of an ip address, street
+    address, currency code, or lat/lon coordinates.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        conf (dict): The pipe configuration. May contain the key 'type'.
+
+            type (str): The type of geolocation to perform. Must be one of
+                'coordinates', 'street_address', 'ip_address', or 'currency'
+                (default: 'street_address').
+
+        assign (str): Attribute to assign parsed content (default: geolocate)
+        field (str): Item attribute from which to obtain the first address to
+            operate on (default: 'content')
+
+    Returns:
+        dict: an item with formatted location
 
     Examples:
         >>> conf = {'type': 'currency'}
         >>> geolocate = next(pipe({'content': 'INR'}, conf=conf))['geolocate']
-        >>> geolocate['country'] == 'India'
-        True
-        >>> address = '123 Bakersville St., London'
+        >>> geolocate['country']
+        'India'
+        >>> address = '123 Bakersville St., USA'
         >>> kwargs = {'field': 'address', 'assign': 'result'}
         >>> geolocate = next(pipe({'address': address}, **kwargs))['result']
-        >>> geolocate['country'] == 'United States'
-        True
+        >>> geolocate['country']
+        'United States'
     """
     return parser(*args, **kwargs)

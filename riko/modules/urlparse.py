@@ -11,9 +11,8 @@ Examples:
         >>> from riko.modules.urlparse import pipe
         >>>
         >>> item = {'content': 'http://yahoo.com'}
-        >>> scheme = {'component': 'scheme', 'content': 'http'}
-        >>> next(pipe(item))['urlparse'][0] == scheme
-        True
+        >>> next(pipe(item))['urlparse'][0]
+        {'component': 'scheme', 'content': 'http'}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -22,6 +21,9 @@ Attributes:
 import pygogo as gogo
 
 from urllib.parse import urlparse
+
+from riko import Objconf
+from riko.types.general import Extraction
 from . import processor
 
 OPTS = {"ftype": "text", "field": "content"}
@@ -29,7 +31,7 @@ DEFAULTS = {"parse_key": "content"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(url, objconf, skip=False, **kwargs):
+def parser(url: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Parsers the pipe content
 
     Args:
@@ -49,9 +51,9 @@ def parser(url, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'parse_key': 'value'})
-        >>> result = parser('http://yahoo.com', objconf)
-        >>> next(result) == {'component': 'scheme', 'value': 'http'}
-        True
+        >>> result = parser('http://yahoo.com', None, objconf)
+        >>> next(result)
+        {'component': 'scheme', 'value': 'http'}
     """
     if skip:
         stream = kwargs["stream"]
@@ -65,7 +67,7 @@ def parser(url, objconf, skip=False, **kwargs):
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously parses a URL into its components.
 
@@ -84,10 +86,8 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> scheme = {'component': 'scheme', 'content': 'http'}
-        >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['urlparse'][0] == scheme)
+        ...     callback = lambda x: print(next(x)['urlparse'][0])
         ...     d = async_pipe({'content': 'http://yahoo.com'})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -96,7 +96,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'component': 'scheme', 'content': 'http'}
     """
     return parser(*args, **kwargs)
 
@@ -123,12 +123,10 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> item = {'content': 'http://yahoo.com'}
-        >>> scheme = {'component': 'scheme', 'content': 'http'}
-        >>> next(pipe(item))['urlparse'][0] == scheme
-        True
+        >>> next(pipe(item))['urlparse'][0]
+        {'component': 'scheme', 'content': 'http'}
         >>> conf = {'parse_key': 'value'}
-        >>> next(pipe(item, conf=conf, emit=True)) == {
-        ...     'component': 'scheme', 'value': 'http'}
-        True
+        >>> next(pipe(item, conf=conf, emit=True))
+        {'component': 'scheme', 'value': 'http'}
     """
     return parser(*args, **kwargs)

@@ -19,72 +19,78 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
-import traceback
+from typing import Mapping, TypedDict
 
 import pygogo as gogo
 
-from json import loads
+from json import loads, load
 from decimal import Decimal
 from os import getenv
 
-from ijson import items
 from meza.compat import decode
+
+from riko import Objconf
+from riko.types.general import Extraction
 
 from . import processor
 from riko.bado import coroutine, return_value, requests as treq, io
-from riko.utils import fetch, get_abspath
+from riko.utils import fetch
 
 EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
-PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_APP_ID")}
+PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
 
-OPTS = {"field": "content", "ftype": "text"}
+OPTS = {"ftype": "text", "field": "content"}
 DEFAULTS = {
     "currency": "USD",
     "delay": 0,
     "memoize": True,
     "precision": 6,
     "url": EXCHANGE_API,
-    "params": PARAMS,
+    "param": PARAMS,
 }
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parse_response(json):
-    if "rates" in json:
-        resp = {k: Decimal(v) for k, v in json["rates"].items() if v}
+RatesJson = TypedDict("RatesJson", {"rates": Mapping[str, str]})
+
+
+def parse_response(rates: Mapping[str, str | float]):
+    if rates:
+        resp = {k: Decimal(v) for k, v in rates.items() if v}
     else:
         # TODO: make sure this log shows up in console
         logger.warning("invalid json response:")
-        logger.warning(json)
+        logger.warning(rates)
         resp = {}
 
     return resp
 
 
-def calc_rate(from_cur, to_cur, rates, places=Decimal("0.0001")):
-    def get_rate(currency):
-        rate = rates.get(currency, Decimal("nan"))
+def get_rate(currency, **rates: Decimal) -> Decimal:
+    rate = rates.get(currency, Decimal("nan"))
 
-        if not rate:
-            logger.warning("rate USD/%s not found in rates" % currency)
+    if not rate:
+        logger.warning("rate USD/%s not found in rates" % currency)
 
-        return rate
+    return rate
 
+
+def calc_rate(from_cur: str, to_cur: str, places=Decimal("0.0001"), **rates: Decimal) -> Decimal:
     if from_cur == to_cur:
         rate = Decimal(1)
     elif to_cur == "USD":
-        rate = get_rate(from_cur)
+        rate = get_rate(from_cur, **rates)
     else:
-        usd_to_given = get_rate(from_cur)
-        usd_to_default = get_rate(to_cur)
+        usd_to_given = get_rate(from_cur, **rates)
+        usd_to_default = get_rate(to_cur, **rates)
         rate = usd_to_given / usd_to_default
 
     return (Decimal(1) / rate).quantize(places)
 
 
-@coroutine
-def async_parser(base, objconf, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -108,12 +114,11 @@ def async_parser(base, objconf, skip=False, **kwargs):
         >>>
         >>> def run(reactor):
         ...     url = get_path('quote.json')
-        ...     conf = {
-        ...         'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
+        ...     conf = {'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': item, 'assign': 'content'}
-        ...     d = async_parser(item['content'], objconf, **kwargs)
+        ...     d = async_parser(item['content'], None, objconf, **kwargs)
         ...     return d.addCallbacks(print, logger.error)
         >>>
         >>> try:
@@ -124,28 +129,28 @@ def async_parser(base, objconf, skip=False, **kwargs):
         1.275201
     """
     same_currency = base == objconf.currency
+    rates = rate = None
 
     if skip:
         rate = kwargs["stream"]
     elif same_currency:
         rate = Decimal(1)
     elif objconf.url.startswith("http"):
-        r = yield treq.get(objconf.url, params=objconf.params)
-        json = yield treq.json(r)
+        r = yield treq.get(objconf.url, param=objconf.param)
+        rates = yield treq.json(r)
     else:
-        url = get_abspath(objconf.url)
-        content = yield io.async_url_read(url, delay=objconf.delay)
-        json = loads(decode(content))
+        content = yield io.async_url_read(objconf.url, delay=objconf.delay)  # pyright: ignore[reportCallIssue]
+        rates = loads(content).get("rates", {})
 
-    if not (skip or same_currency):
+    if rates and not (skip or same_currency):
         places = Decimal(10) ** -objconf.precision
-        rates = parse_response(json)
-        rate = calc_rate(base, objconf.currency, rates, places=places)
+        rates = parse_response(rates)
+        rate = calc_rate(base, objconf.currency, places=places, **rates)
 
     return_value(rate)
 
 
-def parser(base, objconf, skip=False, **kwargs):
+def parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Parses the pipe content
 
     Args:
@@ -170,39 +175,29 @@ def parser(base, objconf, skip=False, **kwargs):
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> parser(item['content'], objconf, **kwargs)
+        >>> parser(item['content'], None, objconf, **kwargs)
         Decimal('1.275201')
     """
-    same_currency = base == objconf.currency
+    rates = None
+    rate = Decimal(0)
 
     if skip:
         rate = kwargs["stream"]
-    elif same_currency:
+    elif base == objconf.currency:
         rate = Decimal(1)
     else:
-        decode = objconf.url.startswith("http")
+        with fetch(**{k: objconf[k] for k in objconf}) as f:
+            json = load(f)
 
-        with fetch(decode=decode, **objconf) as f:
-            try:
-                json = next(items(f, ""))
-            except Exception as e:
-                f.seek(0)
-                logger.error("Error parsing {url}".format(**objconf))
-                logger.debug(f.read())
-                logger.error(e)
-                logger.error(traceback.format_exc())
-                skip = True
-                rate = 0
-
-    if not (skip or same_currency):
-        places = Decimal(10) ** -objconf.precision
-        rates = parse_response(json)
-        rate = calc_rate(base, objconf.currency, rates, places=places)
+            if rates := json.get("rates", {}):
+                places = Decimal(10) ** -objconf.precision
+                rates = parse_response(rates)
+                rate = calc_rate(base, objconf.currency, places=places, **rates)
 
     return rate
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor that asynchronously retrieves the current exchange rate
     for a given currency pair.
@@ -213,12 +208,12 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'delay', 'memoize', or 'field'.
+            'param', 'currency', 'delay', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
 
-            params (dict): The API url parameters (default: {'format': 'json'})
+            param (dict): The API url parameters (default: {'format': 'json'})
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
 
@@ -269,12 +264,12 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'params', 'currency', 'delay', 'memoize', or 'field'.
+            'param', 'currency', 'delay', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
 
-            params (dict): The API url parameters (default: {'format': 'json'})
+            param (dict): The API url parameters (default: {'format': 'json'})
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
 
@@ -300,9 +295,8 @@ def pipe(*args, **kwargs):
         >>> rate = next(pipe({'content': 'GBP'}, conf=conf))['exchangerate']
         >>> rate
         Decimal('1.275201')
-        >>> msg = 'There are 1.28 GBPs per USD'
-        >>> 'There are %#.2f GBPs per USD' % rate == msg
-        True
+        >>> f'There are {rate:#.2f} GBPs per USD'
+        'There are 1.28 GBPs per USD'
         >>> conf = {'url': url, 'currency': 'TZS', 'precision': 3}
         >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
         Decimal('2282.466')

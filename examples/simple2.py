@@ -1,5 +1,5 @@
 from pprint import pprint
-from riko.bado import coroutine
+from riko.bado import coroutine, return_value
 from riko.collections import SyncPipe, AsyncPipe
 
 p232_conf = {
@@ -20,9 +20,6 @@ def pipe(test=False):
         .list
     )
 
-    for i in stream:
-        pprint(i)
-
     return stream
 
 
@@ -31,8 +28,12 @@ def async_pipe(reactor, test=False):
     stream = yield (
         AsyncPipe("itembuilder", conf=p232_conf, test=test)
         .strreplace(conf=p421_conf, field="author", assign="author")
-        .list
+        .alist
     )
 
-    for i in stream:
+    return_value(stream)
+
+
+if __name__ == "__main__":
+    for i in pipe():
         pprint(i)

@@ -11,7 +11,7 @@ Examples:
         >>> from riko.modules.typecast import pipe
         >>>
         >>> conf = {'type': 'date'}
-        >>> next(pipe({'content': '5/4/82'}, conf=conf))['typecast']['year']
+        >>> next(pipe({'content': '5/4/82'}, conf=conf))['typecast'].year
         1982
 
 Attributes:
@@ -20,15 +20,18 @@ Attributes:
 """
 import pygogo as gogo
 
+from riko import Objconf
+from riko.cast import CastType, cast
+from riko.types.general import Extraction, ItemArg
+
 from . import processor
-from riko.utils import cast
 
 OPTS = {"field": "content"}
 DEFAULTS = {"type": "text"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content, objconf, skip=False, **kwargs):
+def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg:
     """Parsers the pipe content
 
     Args:
@@ -50,15 +53,21 @@ def parser(content, objconf, skip=False, **kwargs):
         >>> item = {'content': '1.0'}
         >>> objconf = Objectify({'type': 'int'})
         >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> parser(item['content'], objconf, **kwargs)
+        >>> parser(item['content'], None, objconf, **kwargs)
         1
     """
-    return kwargs["stream"] if skip else cast(content, objconf.type)
+    if skip:
+        value = kwargs["stream"]
+    else:
+        value = cast(content, CastType(objconf.type)) if objconf.type else content
+
+    return value
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously parses a URL into its components.
+    """A processor that asynchronously converts a text string into a variety of
+    different types, e.g., int, bool, date, etc. Useful as terminal data. Loopable.
 
     Args:
         item (dict): The entry to process
@@ -66,7 +75,8 @@ def async_pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the key 'type'.
-            type (str): The object type to cast to (default: text)
+            type (str): The object type to cast to. Must be one of 'text', 'int',
+            'float', 'bool', 'url', 'location', or 'date' (default: text).
 
         assign (str): Attribute to assign parsed content (default: typecast)
         field (str): Item attribute to operate on (default: 'content')
@@ -95,7 +105,8 @@ def async_pipe(*args, **kwargs):
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that parses a URL into its components.
+    """A processor that converts a text string into a variety of different types, e.g.,
+    int, bool, date, etc. Useful as terminal data. Loopable.
 
     Args:
         item (dict): The entry to process
@@ -103,7 +114,8 @@ def pipe(*args, **kwargs):
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the key 'type'.
-            type (str): The object type to cast to (default: text)
+            type (str): The object type to cast to. Must be one of 'text', 'int',
+            'float', 'bool', 'url', 'location', or 'date' (default: text).
 
         assign (str): Attribute to assign parsed content (default: typecast)
         field (str): Item attribute to operate on (default: 'content')
@@ -116,17 +128,20 @@ def pipe(*args, **kwargs):
         >>> next(pipe({'content': '1.0'}, conf={'type': 'int'}))['typecast']
         1
         >>> item = {'content': '5/4/82'}
-        >>> conf = {'type': 'date'}
-        >>> date = next(pipe(item, conf=conf, emit=True))['date']
-        >>> date.isoformat() == '1982-05-04T00:00:00+00:00'
-        True
+        >>> conf = {'type': 'datetime'}
+        >>> date = next(pipe(item, conf=conf, emit=True))
+        >>> date.isoformat()
+        '1982-05-04T00:00:00-05:00'
         >>> item = {'content': dt(1982, 5, 4).timetuple()}
-        >>> date = next(pipe(item, conf=conf, emit=True))['date']
-        >>> date.isoformat() == '1982-05-04T00:00:00+00:00'
-        True
-        >>> item = {'content': 'False'}
+        >>> date = next(pipe(item, conf=conf, emit=True))
+        >>> date.isoformat()
+        '1982-05-04T00:00:00-05:00'
+        >>> item = {'content': None}
+        >>> next(pipe(item, emit=True))
+        ''
         >>> conf = {'type': 'bool'}
         >>> next(pipe(item, conf=conf, emit=True))
         False
     """
+    # TODO: add option to specify timezone
     return parser(*args, **kwargs)

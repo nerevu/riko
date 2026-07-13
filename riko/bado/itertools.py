@@ -21,7 +21,7 @@ from .mock import FakeReactor
 try:
     from twisted.internet.task import Cooperator
 except ImportError:
-    pass
+    Cooperator = real_task = gatherResults = None
 else:
     from twisted.internet import task as real_task
     from twisted.internet.defer import gatherResults
@@ -70,17 +70,18 @@ def async_reduce(async_func, iterable, initializer=None):
 
 
 @coroutine
-def async_map(async_func, iterable, connections=0):
+def async_map(afunc, iterable, connections=0, **kwargs):
     """parallel map for deferred callables using cooperative multitasking
     http://stackoverflow.com/a/20376166/408556
     """
     if connections and not reactor.fake:
         results = []
-        work = (async_func(x).addCallback(results.append) for x in iterable)
+        work = (afunc(x, **kwargs).addCallback(results.append) for x in iterable)
         deferreds = [get_task().coiterate(work) for _ in range(connections)]
         yield gatherResults(deferreds, consumeErrors=True)
     else:
-        deferreds = map(async_func, iterable)
+        afunc = partial(afunc, **kwargs)
+        deferreds = map(afunc, iterable)
         results = yield gatherResults(deferreds, consumeErrors=True)
 
     return_value(results)

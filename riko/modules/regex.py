@@ -19,18 +19,23 @@ Examples:
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['content'] == 'worldwide'
-        True
+        >>> next(pipe(item, conf=conf))['content']
+        'worldwide'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Mapping, Sequence
+
 import pygogo as gogo
 
 from functools import reduce
 
+from riko.types.general import ComplexArg, BasicArg, ComplexMapping, ObjconfRegexRule
+
 from . import processor
+from riko import Objconf
 from riko.utils import get_new_rule, substitute, multi_substitute, group_by
 from riko.bado import coroutine, return_value, itertools as ait
 from riko.dotdict import DotDict
@@ -41,8 +46,8 @@ DEFAULTS = {"convert": True, "multi": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine
-def async_parser(item, rules, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(item: BasicArg, rules: Sequence[ObjconfRegexRule], objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parsers the pipe content
 
     Args:
@@ -70,9 +75,10 @@ def async_parser(item, rules, skip=False, **kwargs):
         ...     callback = lambda x: print(x['content'])
         ...     rule = {'field': 'content', 'match': match, 'replace': replace}
         ...     conf = {'rule': rule, 'multi': False, 'convert': True}
+        ...     objconf = Objectify(conf)
         ...     rules = [Objectify(rule)]
         ...     kwargs = {'stream': item, 'conf': conf}
-        ...     d = async_parser(item, rules, **kwargs)
+        ...     d = async_parser(item, rules, objconf, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -82,17 +88,17 @@ def async_parser(item, rules, skip=False, **kwargs):
         ...
         worldwide
     """
-    multi = kwargs["conf"]["multi"]
+    multi = objconf.multi
     recompile = not multi
 
-    @coroutine
+    @coroutine  # pyright: ignore[reportArgumentType]
     def async_reducer(item, rules):
         field = rules[0]["field"]
         word = item.get(field, **kwargs)
         grouped = group_by(rules, "flags")
         group_rules = [g[1] for g in grouped] if multi else rules
         reducer = multi_substitute if multi else substitute
-        replacement = yield ait.coop_reduce(reducer, group_rules, word)
+        replacement = yield ait.coop_reduce(reducer, group_rules, word)  # pyright: ignore[reportCallIssue]
         combined = merge([item, {field: replacement}])
         return_value(DotDict(combined))
 
@@ -107,7 +113,7 @@ def async_parser(item, rules, skip=False, **kwargs):
     return_value(item)
 
 
-def parser(item, rules, skip=False, **kwargs):
+def parser(item: ComplexMapping, rules: Sequence[ObjconfRegexRule], objconf: Objconf, skip=False, **kwargs) -> ComplexArg:
     """Parsers the pipe content
 
     Args:
@@ -129,21 +135,22 @@ def parser(item, rules, skip=False, **kwargs):
         >>> match = r'(\\w+)\\s(\\w+)'
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
+        >>> objconf = Objectify(conf)
         >>> rules = [Objectify(rule)]
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> regexed = parser(item, rules, **kwargs)
-        >>> regexed == {'content': 'worldwide', 'title': 'greeting'}
-        True
+        >>> regexed = parser(item, rules, objconf, **kwargs)
+        >>> regexed
+        {'content': 'worldwide', 'title': 'greeting'}
         >>> conf['multi'] = True
-        >>> parser(item, rules, **kwargs) == regexed
-        True
+        >>> parser(item, rules, objconf, **kwargs)
+        {'content': 'worldwide', 'title': 'greeting'}
     """
-    multi = kwargs["conf"]["multi"]
+    multi = objconf.multi
     recompile = not multi
 
-    def meta_reducer(item, rules):
+    def meta_reducer(item: ComplexMapping, rules: Sequence[Mapping[str, str]]) -> DotDict:
         field = rules[0]["field"]
-        word = item.get(field, **kwargs)
+        word: str = item.get(field, **kwargs)
         grouped = group_by(rules, "flags")
         group_rules = [g[1] for g in grouped] if multi else rules
         reducer = multi_substitute if multi else substitute
@@ -161,7 +168,7 @@ def parser(item, rules, skip=False, **kwargs):
     return item
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor that asynchronously replaces text in fields of an item
     using regexes.
@@ -242,6 +249,8 @@ def pipe(*args, **kwargs):
                 default (str): Default if search pattern isn't found (
                     default: None, i.e, return the original string)
 
+                seriesmatch (bool): Search with rule in series (not parallel with other
+                    rules) (default: True)
                 singlematch (bool): Stop after first match (default: False)
                 singlelinematch (bool): Don't search across newlines with '^',
                     '$', or '.' (default: False)
@@ -262,20 +271,20 @@ def pipe(*args, **kwargs):
         >>> rule = {'field': 'content', 'match': match, 'replace': '$2wide'}
         >>> conf = {'rule': rule, 'multi': False, 'convert': True}
         >>> result = next(pipe(item, conf=conf))
-        >>> result == {'content': 'worldwide', 'title': 'greeting'}
-        True
+        >>> result
+        {'content': 'worldwide', 'title': 'greeting'}
         >>> # multiple regex mode
         >>> conf['multi'] = True
-        >>> next(pipe(item, conf=conf)) == result
-        True
+        >>> next(pipe(item, conf=conf))
+        {'content': 'worldwide', 'title': 'greeting'}
         >>> # case insensitive matching
         >>> item = {'content': 'Hello hello'}
         >>> rule.update({'match': r'hello.*', 'replace': 'bye'})
-        >>> next(pipe(item, conf=conf))['content'] == 'bye'
-        True
+        >>> next(pipe(item, conf=conf))['content']
+        'bye'
         >>> # case sensitive matching
         >>> rule['casematch'] = True
-        >>> next(pipe(item, conf=conf))['content'] == 'Hello bye'
-        True
+        >>> next(pipe(item, conf=conf))['content']
+        'Hello bye'
     """
     return parser(*args, **kwargs)

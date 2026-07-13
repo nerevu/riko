@@ -1,0 +1,348 @@
+{
+    "layout": [
+        {
+            "id": "sw-61",
+            "xy": [
+                177,
+                394
+            ]
+        },
+        {
+            "id": "_OUTPUT",
+            "xy": [
+                293,
+                1001
+            ]
+        },
+        {
+            "id": "sw-142",
+            "xy": [
+                177,
+                655
+            ]
+        },
+        {
+            "id": "sw-467",
+            "xy": [
+                236.5,
+                276
+            ]
+        },
+        {
+            "id": "sw-479",
+            "xy": [
+                288,
+                85
+            ]
+        },
+        {
+            "id": "sw-351",
+            "xy": [
+                196.5,
+                881
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "conf": {
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "text",
+                    "value": "api"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "BASE": {
+                                "type": "text",
+                                "value": "https://api.github.com/search/users"
+                            },
+                            "PARAM": [
+                                {
+                                    "key": {
+                                        "type": "text",
+                                        "value": "q"
+                                    },
+                                    "value": {
+                                        "subkey": "title",
+                                        "type": "text"
+                                    }
+                                }
+                            ]
+                        },
+                        "id": "sw-72",
+                        "type": "urlbuilder"
+                    }
+                },
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "bool",
+                    "value": true
+                },
+                "field": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-61",
+            "type": "loop"
+        },
+        {
+            "conf": {},
+            "id": "_OUTPUT",
+            "type": "output"
+        },
+        {
+            "conf": {
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "text",
+                    "value": "language"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "conf": {
+                            "URL": {
+                                "subkey": "api",
+                                "type": "url"
+                            },
+                            "path": {
+                                "type": "text",
+                                "value": "items"
+                            }
+                        },
+                        "id": "sw-150",
+                        "type": "fetchdata"
+                    }
+                },
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "assign": {
+                    "type": "bool",
+                    "value": true
+                },
+                "field": {
+                    "type": "text",
+                    "value": ""
+                }
+            },
+            "id": "sw-142",
+            "type": "loop"
+        },
+        {
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "terminal": "attrs_1_value",
+                            "type": "text"
+                        }
+                    }
+                ]
+            },
+            "id": "sw-467",
+            "type": "itembuilder"
+        },
+        {
+            "conf": {
+                "debug": {
+                    "type": "text",
+                    "value": ""
+                },
+                "default": {
+                    "type": "text",
+                    "value": "defunkt"
+                },
+                "name": {
+                    "type": "text",
+                    "value": "textinput1"
+                },
+                "position": {
+                    "type": "number",
+                    "value": ""
+                },
+                "prompt": {
+                    "type": "text",
+                    "value": "Enter Text"
+                }
+            },
+            "id": "sw-479",
+            "type": "input"
+        },
+        {
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "info.user_view_type"
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        }
+                    }
+                ]
+            },
+            "id": "sw-351",
+            "type": "rename"
+        }
+    ],
+    "terminaldata": [
+        {
+            "data": {
+                "_attr": {
+                    "api": {
+                        "_count": "1",
+                        "_type": "url"
+                    },
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-61"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "api": {
+                        "_count": "1",
+                        "_type": "url"
+                    },
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-142"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-467"
+        },
+        {
+            "data": {
+                "_count": "1",
+                "_type": "text"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-479"
+        },
+        {
+            "data": {
+                "_attr": {
+                    "description": {
+                        "_count": "1",
+                        "_type": "text"
+                    },
+                    "api": {
+                        "_count": "1",
+                        "_type": "url"
+                    },
+                    "title": {
+                        "_count": "1",
+                        "_type": "text"
+                    }
+                },
+                "_type": "item"
+            },
+            "id": "_OUTPUT",
+            "moduleid": "sw-351"
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w0",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-61"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-142"
+            }
+        },
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-142"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-351"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-467"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-61"
+            }
+        },
+        {
+            "id": "_w3",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-479"
+            },
+            "tgt": {
+                "id": "attrs_1_value",
+                "moduleid": "sw-467"
+            }
+        },
+        {
+            "id": "_w4",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-351"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

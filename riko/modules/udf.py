@@ -3,65 +3,62 @@
 """
 riko.modules.udf
 ~~~~~~~~~~~~~~~~
-Provides functions for performing an arbitrary (user-defined) function on stream
-items.
+Provides functions for performing an arbitrary (user-defined) function on an
+item.
 
 Examples:
     basic usage::
 
         >>> from riko.modules.udf import pipe
         >>>
-        >>> items = [{'x': x} for x in range(5)]
         >>> func = lambda item: {'y': item['x'] + 3}
-        >>> next(pipe(items, func=func))
+        >>> next(pipe({'x': 0}, func=func))
         {'y': 3}
 """
-from . import operator
+from riko import Objconf
+from riko.types.general import ComplexArg, BasicArg, Extraction
+from . import processor
 import pygogo as gogo
 
+OPTS = {"listize": True, "emit": True}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+def parser(item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ComplexArg:
+    """Parsers the pipe content
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        item (obj): The entry to process (a DotDict instance)
+        objconf (obj): The pipe configuration (an Objectify instance)
+        skip (bool): Don't parse the content
+        kwargs (dict): Keyword arguments
 
-        objconf (obj): the item independent configuration (an Objectify
-            instance).
-
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
-
-        kwargs (dict): Keyword arguments.
+    Kwargs:
+        stream (dict): The original item
 
     Returns:
-        Iter(dict): The output stream
+        dict: The item
 
     Examples:
-        >>> from meza.fntools import Objectify
+        >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
         >>>
         >>> func = lambda item: {'y': item['x'] + 3}
-        >>> stream = ({'x': x} for x in range(5))
-        >>> tuples = zip(stream, repeat(None))
-        >>> next(parser(stream, None, tuples, func=func))
+        >>> item = DotDict({'x': 0})
+        >>> parser(item, None, None, stream=item, func=func)
         {'y': 3}
     """
-    return map(kwargs["func"], stream)
+    return kwargs["stream"] if skip else kwargs["func"](item)
 
 
-@operator(isasync=True)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously performs an arbitrary (user-defined) function on
-    items of a stream.
+    """A processor that asynchronously performs an arbitrary (user-defined)
+    function on an item.
 
     Args:
-        items (Iter[dict]): The source.
+        item (dict): The entry to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -77,8 +74,7 @@ def async_pipe(*args, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x))
         ...     func = lambda item: {'y': item['x'] + 3}
-        ...     items = ({'x': x} for x in range(5))
-        ...     d = async_pipe(items, func=func)
+        ...     d = async_pipe({'x': 0}, func=func)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -91,13 +87,13 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@operator()
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that performs an arbitrary (user-defined) function on items of a
-    stream.
+    """A processor that performs an arbitrary (user-defined) function
+    on an item.
 
     Args:
-        items (Iter[dict]): The source.
+        item (dict): The entry to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -107,9 +103,8 @@ def pipe(*args, **kwargs):
         dict: an item
 
     Examples:
-        >>> items = [{'x': x} for x in range(5)]
         >>> func = lambda item: {'y': item['x'] + 3}
-        >>> next(pipe(items, func=func))
+        >>> next(pipe({'x': 0}, func=func))
         {'y': 3}
     """
     return parser(*args, **kwargs)

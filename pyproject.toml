@@ -1,3 +1,178 @@
+[project]
+version = "0.68.0"
+name = "riko"
+authors = [
+    {name = "Reuben Cummings", email = "reubano@gmail.com"}
+]
+maintainers = [
+    {name = "Reuben Cummings", email = "reubano@gmail.com"}
+]
+description = "A stream processing engine modeled after Yahoo! Pipes."
+readme = "README.rst"
+license = "MIT"
+license-files = ["LICENSE*"]
+classifiers=[
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Environment :: Console",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+]
+requires-python = ">=3.10, <3.13"
+dependencies = [
+    "babel>=2.8.0,<3.0.0",
+    "chardet>=3.0.4,<8.0.0",
+    "feedparser>=5.2.1,<7.0.0",
+    "html5lib>=1.0.1,<2.0.0",
+    "ijson>=2.6.1,<2.0.0",
+    "meza>=0.42.5",
+    "mezmorize>=0.27.0",
+    "pygogo>=0.12.0,<2.0.0",
+    "python-dateutil>=2.8.1,<3.0.0",
+    "pytz>=2019.3",
+    "requests>=2.22.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+perf = [
+    "lxml>=4.5.0,<7.0.0",
+    "speedparser3>=0.3.1",
+]
+
+twisted = [
+    "treq>=18.6.0,<26.0.0",
+    "twisted>=19.10.0,<22.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "click>=8.4.0",
+    "coverage>=4.3.4,<8.0.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=7.0.0,<8.0.0",
+    "pylint>=4.0.5,<5.0.0",
+    "ruff>=0.13.1",
+    "pytest-xdist>=3.8.0",
+    "pytest-timeout>=2.4.0",
+    "jinja2>=3.1.6",
+    "ipython>=8.39.0",
+    "networkx>=3.4.2",
+]
+
+[project.scripts]
+manage = "riko.cli.manage:manager"
+runpipe = "riko.cli.runpipe:run"
+benchmark = "riko.cli.benchmark:main"
+
+[tool.ruff.lint]
+extend-select = [
+    "E",    # pycodestyle errors
+    "E302", # pycodestyle: Two blank lines before top-level defs
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+    "I",    # isort
+    "B",    # flake8-bugbear: opinionated warnings
+    "Q",    # flake8-quotes: enforce consistent quote style)
+    "C4",   # flake8-comprehensions
+    "N",    # pep8-naming
+    "D",    # pydocstyle
+    "S",    # flake8-bandit
+    "T20",  # flake8-print
+    "PT",   # flake8-pytest-style
+    "PLC0415", # Import not at top of file
+]
+
+ignore = [
+    "E731", # do not assign a lambda expression, use a def
+    "E501",  # line too long
+
+     # this is incompatible with D211 no-blank-line-before-class
+    "D203",  # incorrect-blank-line-before-class
+
+     # this is incompatible with D213 multi-line-summary-second-line
+    "D212",  # multi-line-summary-first-line
+]
+
+exclude = [
+    "**/pycache",
+    ".cache",
+    ".ruff_cache",
+    ".tox/*",
+    "tmp",
+    "build/*",
+    "dist/*",
+]
+
+preview = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+known-first-party = ["riko"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*" = [
+    "S101",   # Use of `assert` detected
+]
+
+[tool.pyright]
+exclude = [
+    "**/pycache",
+    ".cache",
+    ".ruff_cache",
+    ".tox/*",
+    "tmp",
+    "build/*",
+    "dist/*",
+]
+
+[tool.pytest.ini_options]
+addopts = ["--doctest-modules", "--cov=riko", "--tb=short"]
+testpaths = ["tests", "riko"]
+doctest_optionflags = ["ELLIPSIS"]
+timeout = 300
+
+[tool.pylint.format]
+max-line-length=88
+
+[tool.pylint.messages_control]
+disable = [
+    # handled by black/ruff
+    "C0330",           # bad-continuation
+    "C0326",           # bad-whitespace
+    "format",
+    "bad-continuation",
+    "bad-whitespace",
+    # external dependencies graph report
+    "RP0401",
+]
+
+[tool.setuptools]
+packages = ["riko"]
+platforms = ["MacOS X", "Windows", "Linux"]
+
+[tool.setuptools.package-data]
+data = ["riko/data/*"]
+helpers = ["helpers/*"]
+tests = ["tests/*"]
+docs = ["*.rst", "docs/*"]
+examples = ["examples/*"]
+
+[tool.uv.build-backend]
+module-name = "riko"
+module-root = ""
+
 [build-system]
-requires = ["setuptools>=42.0.2", "pkutils>=3.0.0,<4.0.0"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.11.3,<0.12.0"]
+build-backend = "uv_build"

@@ -5,12 +5,13 @@ riko.autorss
 ~~~~~~~~~~~~
 Provides functions for finding RSS feeds from a site's LINK tags
 """
+from io import StringIO, TextIOBase
+from typing import Generator, Iterator
 import pygogo as gogo
 
-from itertools import chain
-from html.parser import HTMLParser
-
 from meza.compat import decode
+from twisted.internet.defer import Deferred
+from riko.parsers import LinkParser
 from riko.utils import fetch
 from riko.bado import coroutine, return_value, microdom
 from riko.bado.io import async_url_open
@@ -19,23 +20,12 @@ TIMEOUT = 10
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-class LinkParser(HTMLParser):
-    def reset(self):
-        HTMLParser.reset(self)
-        self.entry = iter([])
-
-    def handle_starttag(self, tag, attrs):
-        entry = dict(attrs)
-        alternate = entry.get("rel") == "alternate"
-        rss = "rss" in entry.get("type", "")
-
-        if (alternate or rss) and "href" in entry:
-            entry["link"] = entry["href"]
-            entry["tag"] = tag
-            self.entry = chain(self.entry, [entry])
+class RSSLinkParser(LinkParser):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, rss_only=True, **kwargs)
 
 
-def file2entries(f, parser):
+def file2entries(f: StringIO | Iterator[str] | TextIOBase, parser: RSSLinkParser) -> Iterator[dict]:
     for line in f:
         parser.feed(decode(line))
 
@@ -43,7 +33,7 @@ def file2entries(f, parser):
             yield entry
 
 
-def doc2entries(document):
+def doc2entries(document) -> Iterator[dict]:
     for node in document.childNodes:
         if hasattr(node, "attributes") and node.attributes:
             entry = node.attributes
@@ -51,6 +41,7 @@ def doc2entries(document):
             rss = "rss" in entry.get("type", "")
         else:
             alternate = rss = None
+            entry = {}
 
         if (alternate or rss) and "href" in entry:
             entry["link"] = entry["href"]
@@ -62,10 +53,10 @@ def doc2entries(document):
             yield entry
 
 
-@coroutine
-def async_get_rss(url, convert_charrefs=False):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_get_rss(url: str, **kwargs) -> Generator[Deferred[Iterator[dict]], Iterator[dict], None]:
     try:
-        f = yield async_url_open(url, timeout=TIMEOUT)
+        f = yield async_url_open(url, timeout=TIMEOUT)  # pyright: ignore[reportCallIssue]
     except ValueError:
         f = filter(None, url.splitlines())
 
@@ -73,15 +64,20 @@ def async_get_rss(url, convert_charrefs=False):
     return_value(doc2entries(document))
 
 
-def get_rss(url, convert_charrefs=False):
+def get_rss(url: str, convert_charrefs=False, auto_sort=False, **kwargs) -> Iterator[dict]:
     try:
-        parser = LinkParser(convert_charrefs=convert_charrefs)
+        parser = RSSLinkParser(convert_charrefs=convert_charrefs, **kwargs)
     except TypeError:
-        parser = LinkParser()
+        parser = RSSLinkParser(**kwargs)
 
     try:
         f = fetch(url, timeout=TIMEOUT)
     except ValueError:
         f = filter(None, url.splitlines())
 
-    return file2entries(f, parser)
+    entries = file2entries(f, parser)
+
+    if auto_sort:
+        entries = iter(sorted(entries, key=parser.keyfunc))
+
+    return entries

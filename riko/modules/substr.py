@@ -20,13 +20,16 @@ Examples:
         >>>
         >>> conf = {'start': '3', 'length': '4'}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['substr'] == 'lo w'
-        True
+        >>> next(pipe(item, conf=conf))['substr']
+        'lo w'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+
+from riko import Objconf
+from riko.types.general import Extraction, ItemArg
 
 from . import processor
 import pygogo as gogo
@@ -36,7 +39,7 @@ DEFAULTS = {"start": 0, "length": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word, objconf, skip=False, **kwargs):
+def parser(word: str, _: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg:
     """Parses the pipe content
 
     Args:
@@ -57,16 +60,14 @@ def parser(word, objconf, skip=False, **kwargs):
         >>>
         >>> item = {'content': 'hello world'}
         >>> conf = {'start': 3, 'length': 4}
-        >>> args = item['content'], Objectify(conf)
-        >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(*args, **kwargs) == 'lo w'
-        True
+        >>> parser(item['content'], None, Objectify(conf), stream=item)
+        'lo w'
     """
     end = objconf.start + objconf.length if objconf.length else None
-    return kwargs["stream"] if skip else word[objconf.start : end]
+    return kwargs["stream"] if skip else word[objconf.start: end]
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously returns a substring of a field
     of an item.
@@ -108,7 +109,7 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A processor that returns a substring of a field of an item.
 
@@ -132,11 +133,11 @@ def pipe(*args, **kwargs):
     Examples:
         >>> conf = {'start': '3', 'length': '4'}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['substr'] == 'lo w'
-        True
+        >>> next(pipe(item, conf=conf))['substr']
+        'lo w'
         >>> conf = {'start': '3'}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result'] == 'etings'
-        True
+        >>> next(pipe({'title': 'Greetings'}, **kwargs))['result']
+        'etings'
     """
     return parser(*args, **kwargs)

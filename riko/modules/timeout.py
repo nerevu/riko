@@ -38,6 +38,8 @@ OPTS = {"ptype": "int"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
+items = ("days", "hours", "microseconds", "milliseconds", "minutes", "seconds", "weeks")
+
 
 class TimeoutIterator(object):
     def __init__(self, elements, timeout=0):
@@ -46,7 +48,7 @@ class TimeoutIterator(object):
         self.timedout = False
         self.started = False
 
-    def _handler(self, signum, frame):
+    def _handler(self, *_):
         self.timedout = True
 
     def __iter__(self):
@@ -106,11 +108,12 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> len(list(parser(stream, objconf, tuples, **kwargs)))
         3
     """
-    time = int(timedelta(**objconf).total_seconds())
+    # objconf only parses on __getitem__
+    time = int(timedelta(**{k: objconf[k] for k in objconf}).total_seconds())
     return TimeoutIterator(stream, time)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously returns items from a stream until a
         certain amount of time has passed.

@@ -39,6 +39,7 @@ pip-log.txt
 *.noseids
 *.ropeproject
 .coverage
+.coverage*
 .tox
 .noseids
 .cache/*
@@ -69,4 +70,4 @@ build/*
 .vscode
 callgraph.svg
 ttyrecord
-
+*.local.json

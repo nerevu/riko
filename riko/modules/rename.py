@@ -22,18 +22,22 @@ Examples:
         >>>
         >>> conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf)) == {'greeting': 'hello world'}
-        True
+        >>> next(pipe(item, conf=conf))
+        {'greeting': 'hello world'}
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Mapping, Sequence
 import pygogo as gogo
 
 from functools import reduce
 
+from riko.types.general import BasicMapping, ItemArg, ObjconfRule
+
 from . import processor
+from riko import Objconf
 from riko.bado import coroutine, return_value, itertools as ait
 from riko.dotdict import DotDict
 from meza.fntools import remove_keys
@@ -43,14 +47,14 @@ DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def reducer(item, rule):
+def reducer(item: BasicMapping | DotDict, rule: ObjconfRule) -> DotDict:
     new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
     old_dict = item if rule.copy else remove_keys(item, rule.field)
     return DotDict({**old_dict, **new_dict})
 
 
-@coroutine
-def async_parser(item, rules, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(item: ItemArg, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -72,11 +76,10 @@ def async_parser(item, rules, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x == {'greeting': 'hello world'})
+        ...     callback = lambda x: print(x)
         ...     item = DotDict({'content': 'hello world'})
         ...     rule = {'field': 'content', 'newval': 'greeting'}
-        ...     kwargs = {'stream': item}
-        ...     d = async_parser(item, [Objectify(rule)], **kwargs)
+        ...     d = async_parser(item, [Objectify(rule)], None, stream=item)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -84,17 +87,23 @@ def async_parser(item, rules, skip=False, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'greeting': 'hello world'}
     """
     if skip:
         item = kwargs["stream"]
-    else:
-        item = yield ait.coop_reduce(reducer, rules, item)
+    elif isinstance(item, Mapping):
+        item = yield ait.coop_reduce(reducer, rules, item)  # pyright: ignore[reportCallIssue]
 
     return_value(item)
 
 
-def parser(item, rules, skip=False, **kwargs):
+def parser(
+    item: ItemArg,
+    rules: Sequence[ObjconfRule],
+    objconf: Objconf,
+    skip=False,
+    **kwargs
+) -> ItemArg:
     """Parsers the pipe content
 
     Args:
@@ -115,15 +124,23 @@ def parser(item, rules, skip=False, **kwargs):
         >>>
         >>> item = DotDict({'content': 'hello world'})
         >>> rule = {'field': 'content', 'newval': 'greeting'}
-        >>> kwargs = {'stream': item}
-        >>> args = [item, [Objectify(rule)], False]
-        >>> parser(*args, **kwargs) == {'greeting': 'hello world'}
-        True
+        >>> args = [item, [Objectify(rule)], None]
+        >>> parser(*args, skip=False, stream=item)
+        {'greeting': 'hello world'}
     """
-    return kwargs["stream"] if skip else reduce(reducer, rules, item)
+    if skip:
+        item = kwargs["stream"]
+    elif isinstance(item, Mapping):
+        item = reduce(reducer, rules, item)
+    else:
+        msg = f"{item=} is a {type(item)=}, not a mapping, skipping processing."
+        logger.warning(msg)
+        item = kwargs["stream"]
+
+    return item
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously renames or copies fields in an
     item.
@@ -153,7 +170,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['greeting'] == 'hello world')
+        ...     callback = lambda x: print(next(x)['greeting'])
         ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
         ...     d = async_pipe({'content': 'hello world'}, conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
@@ -163,12 +180,12 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        hello world
     """
     return async_parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A processor that renames or copies fields in an item.
 
@@ -195,14 +212,14 @@ def pipe(*args, **kwargs):
     Examples:
         >>> rule = {'field': 'content', 'newval': 'greeting'}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf={'rule': rule})) == {'greeting': 'hello world'}
-        True
+        >>> next(pipe(item, conf={'rule': rule}))
+        {'greeting': 'hello world'}
         >>> conf = {'rule': {'field': 'content'}}
         >>> next(pipe({'content': 'hello world'}, conf=conf))
         {}
         >>> rule['copy'] = True
         >>> result = pipe({'content': 'hello world'}, conf={'rule': rule})
-        >>> sorted(next(result).keys()) == ['content', 'greeting']
-        True
+        >>> sorted(next(result))
+        ['content', 'greeting']
     """
     return parser(*args, **kwargs)

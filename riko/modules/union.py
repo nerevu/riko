@@ -20,15 +20,19 @@ Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Iterable
+
 import pygogo as gogo
 
 from itertools import chain
 
-from . import operator
-from riko.utils import multiplex
+from riko.dotdict import DotDict
+from riko.types.general import BasicDict
 
-# disable `dictize` since we do not need to access the configuration
-OPTS = {"dictize": False}
+from . import operator
+
+OPTS = {}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -66,10 +70,12 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> len(list(parser(stream, None, tuples, **kwargs)))
         15
     """
-    return chain(stream, multiplex(kwargs["others"]))
+    kwargs = DotDict(kwargs)
+    others: Iterable[Iterable[BasicDict]] = kwargs["others"]
+    return chain(stream, chain.from_iterable(others))
 
 
-@operator(isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously merges multiple source streams together.
 
@@ -105,7 +111,7 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@operator(**OPTS)
+@operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """An operator that merges multiple streams together.
 

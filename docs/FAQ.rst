@@ -18,6 +18,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | Pipe name            | Pipe type | Pipe sub-type | Pipe description                                                                             |
 +======================+===========+===============+==============================================================================================+
+| `aggregate`_         | operator  | aggregator    | performs an arbitrary (user-defined) function on a stream                                    |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `count`_             | operator  | aggregator    | counts the number of items in a feed                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `csv`_               | processor | source        | parses a csv file to yield items                                                             |
@@ -89,6 +91,8 @@ riko's available pipes are outlined below [#]_:
 | `tokenizer`_         | processor | transformer   | splits a string by a delimiter                                                               |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `truncate`_          | operator  | composer      | returns a specified number of items from a feed                                              |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `udf`_               | processor | transformer   | performs an arbitrary (user-defined) function on an item                                     |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `union`_             | operator  | composer      | merges multiple feeds together                                                               |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
@@ -193,6 +197,7 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
 .. _Alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#synchronous-processing
 
+.. _aggregate: https://github.com/nerevu/riko/blob/master/riko/modules/aggregate.py
 .. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py
 .. _count: https://github.com/nerevu/riko/blob/master/riko/modules/count.py
 .. _csv: https://github.com/nerevu/riko/blob/master/riko/modules/csv.py
@@ -230,6 +235,7 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _timeout: https://github.com/nerevu/riko/blob/master/riko/modules/timeout.py
 .. _tokenizer: https://github.com/nerevu/riko/blob/master/riko/modules/tokenizer.py
 .. _truncate: https://github.com/nerevu/riko/blob/master/riko/modules/truncate.py
+.. _udf: https://github.com/nerevu/riko/blob/master/riko/modules/udf.py
 .. _union: https://github.com/nerevu/riko/blob/master/riko/modules/union.py
 .. _uniq: https://github.com/nerevu/riko/blob/master/riko/modules/uniq.py
 .. _urlbuilder: https://github.com/nerevu/riko/blob/master/riko/modules/urlbuilder.py

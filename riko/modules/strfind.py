@@ -13,22 +13,26 @@ Examples:
         >>>
         >>> conf = {'rule': {'find': 'o'}}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['strfind'] == 'hell'
-        True
+        >>> next(pipe(item, conf=conf))['strfind']
+        'hell'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Sequence
+
 import pygogo as gogo
 
 from functools import reduce
 
+from riko import Objconf
+from riko.types.general import ItemArg, ObjconfRule
+
 from . import processor
 from riko.bado import coroutine, return_value, itertools as ait
 
-OPTS = {"listize": True, "ftype": "text", "field": "content", "extract": "rule"}
-
+OPTS = {"ftype": "text", "listize": True, "field": "content", "extract": "rule"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -61,8 +65,8 @@ def reducer(word, rule):
     return OPS.get(rule.location, OPS["before"])(splits, rule).strip()
 
 
-@coroutine
-def async_parser(word, rules, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -87,8 +91,7 @@ def async_parser(word, rules, skip=False, **kwargs):
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'find': 'o'}}
         ...     rule = Objectify(conf['rule'])
-        ...     kwargs = {'stream': item, 'conf': conf}
-        ...     d = async_parser(item['content'], [rule], **kwargs)
+        ...     d = async_parser(item['content'], [rule], None, stream=item)
         ...     return d.addCallbacks(print, logger.error)
         >>>
         >>> try:
@@ -101,12 +104,12 @@ def async_parser(word, rules, skip=False, **kwargs):
     if skip:
         value = kwargs["stream"]
     else:
-        value = yield ait.coop_reduce(reducer, rules, word)
+        value = yield ait.coop_reduce(reducer, rules, word)  # pyright: ignore[reportCallIssue]
 
     return_value(value)
 
 
-def parser(word, rules, skip=False, **kwargs):
+def parser(word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs) -> ItemArg:
     """Parses the pipe content
 
     Args:
@@ -130,13 +133,13 @@ def parser(word, rules, skip=False, **kwargs):
         >>> rule = Objectify(conf['rule'])
         >>> args = item['content'], [rule], False
         >>> kwargs = {'stream': item, 'conf': conf}
-        >>> parser(*args, **kwargs) == 'hell'
-        True
+        >>> parser(*args, **kwargs)
+        'hell'
     """
     return kwargs["stream"] if skip else reduce(reducer, rules, word)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A processor module that asynchronously finds text within the field of an
     item.
@@ -186,7 +189,7 @@ def async_pipe(*args, **kwargs):
     return async_parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A processor that finds text within the field of an item.
 
@@ -218,19 +221,19 @@ def pipe(*args, **kwargs):
     Examples:
         >>> conf = {'rule': {'find': 'o'}}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['strfind'] == 'hell'
-        True
+        >>> next(pipe(item, conf=conf))['strfind']
+        'hell'
         >>> conf = {'rule': {'find': 'w', 'location': 'after'}}
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
         >>> item = {'title': 'hello world'}
-        >>> next(pipe(item, **kwargs))['result'] == 'orld'
-        True
+        >>> next(pipe(item, **kwargs))['result']
+        'orld'
         >>> conf = {
         ...     'rule': [
         ...         {'find': 'o', 'location': 'after', 'param': 'last'},
         ...         {'find': 'l'}]}
         >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['strfind'] == 'r'
-        True
+        >>> next(pipe(item, conf=conf))['strfind']
+        'r'
     """
     return parser(*args, **kwargs)

@@ -1,0 +1,9 @@
+{
+  "venvPath": "/Users/reubano/.virtualenvs/",
+  "venv": "riko",
+  "reportOptionalMemberAccess": false,
+  "reportOptionalCall": false,
+  "reportOptionalIterable": false,
+  "reportGeneralTypeIssues": false,
+  "reportMissingImports": "information"
+}

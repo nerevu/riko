@@ -25,29 +25,32 @@ Examples:
         >>> from riko import get_path
         >>> from riko.modules.fetchsitefeed import pipe
         >>>
-        >>> title = 'Using NFC tags in the car'
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title'] == title
-        True
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
+        "EU sets out 'phased' Brexit strategy"
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Iterator
 import pygogo as gogo
+
+from riko.types.general import BasicMapping, Extraction
 
 from . import processor
 
-from riko import autorss
-from riko.utils import gen_entries, get_abspath
+from riko import autorss, Objconf
+from riko.utils import gen_entries
 from riko.parsers import parse_rss
 from riko.bado import coroutine, return_value, io
 
 OPTS = {"ftype": "none"}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine
-def async_parser(_, objconf, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -71,7 +74,7 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> def run(reactor):
         ...     callback = lambda x: print(next(x)['title'])
         ...     objconf = Objectify({'url': get_path('bbc.html')})
-        ...     d = async_parser(None, objconf, stream={})
+        ...     d = async_parser(None, None, objconf, stream={})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -84,17 +87,16 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        rss = yield autorss.async_get_rss(url)
-        link = get_abspath(next(rss)["link"])
-        content = yield io.async_url_read(link)
+        rss = yield autorss.async_get_rss(objconf.url)  # pyright: ignore[reportCallIssue]
+        link = next(rss)["link"]
+        content = yield io.async_url_read(link)  # pyright: ignore[reportCallIssue]
         parsed = parse_rss(content)
-        stream = gen_entries(parsed)
+        stream = gen_entries(parsed["entries"]) if parsed else iter([])
 
     return_value(stream)
 
 
-def parser(_, objconf, skip=False, **kwargs):
+def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[BasicMapping]:
     """Parses the pipe content
 
     Args:
@@ -114,24 +116,22 @@ def parser(_, objconf, skip=False, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
-        >>> result = parser(None, objconf, stream={})
-        >>> next(result)['title'] == 'Using NFC tags in the car'
-        True
+        >>> result = parser(None, None, objconf, stream={})
+        >>> next(result)['title']
+        "EU sets out 'phased' Brexit strategy"
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        rss = autorss.get_rss(url)
-        objconf.url = get_abspath(next(rss)["link"])
-
-        parsed = parse_rss(**objconf)
-        stream = gen_entries(parsed)
+        rss = autorss.get_rss(objconf.url)
+        link = next(rss)["link"]
+        parsed = parse_rss(link)
+        stream = gen_entries(parsed["entries"]) if parsed else iter([])
 
     return stream
 
 
-@processor(isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that fetches and parses the first feed found on a site.
 
@@ -168,7 +168,7 @@ def async_pipe(*args, **kwargs):
     return async_parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A source that fetches and parses the first feed found on a site.
 
@@ -186,8 +186,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> title = 'Using NFC tags in the car'
-        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title'] == title
-        True
+        >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
+        "EU sets out 'phased' Brexit strategy"
     """
     return parser(*args, **kwargs)

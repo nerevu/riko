@@ -14,44 +14,45 @@ Examples:
 
         >>> from riko.modules.fetchpage import pipe
         >>> from riko import get_path
-        >>> from meza.compat import decode
         >>>
         >>> url = get_path('cnn.html')
         >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
-        >>> resp = next(pipe(conf=conf))['content'][:21]
-        >>> decode(resp) == 'CNN.com International'
-        True
+        >>> next(pipe(conf=conf))[:21]
+        'CNN.com International'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
+from typing import Iterator
+
 import pygogo as gogo
 
-from meza.compat import encode
+from riko.types.general import BasicMapping, Extraction
 
 from . import processor
+from riko import Objconf
 from riko.bado import coroutine, return_value, io
 from riko.parsers import get_text
-from riko.utils import betwix, fetch, get_abspath
+from riko.utils import betwix, fetch
 
 OPTS = {"ftype": "none"}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def get_string(content, start, end):
+def get_string(content: str, start: str, end: str) -> str:
     # TODO: convert relative links to absolute
     # TODO: remove the closing tag if using an HTML tag stripped of HTML tags
     # TODO: clean html with Tidy
-    content = encode(content)
-    start_pos = content.find(encode(start)) if start else 0
+    start_pos = content.find(start) if start else 0
     right = content[start_pos + (len(start) if start else 0) :]
-    end_pos = right[1:].find(encode(end)) + 1 if end else len(right)
+    end_pos = right[1:].find(end) + 1 if end else len(right)
     return right[:end_pos] if end_pos > 0 else right
 
 
-@coroutine
-def async_parser(_, objconf, skip=False, **kwargs):
+@coroutine  # pyright: ignore[reportArgumentType]
+def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
     """Asynchronously parses the pipe content
 
     Args:
@@ -72,15 +73,14 @@ def async_parser(_, objconf, skip=False, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
-        >>> from meza.compat import decode
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(decode(next(x)['content'][:32]))
+        ...     callback = lambda x: print(next(x)[:32])
         ...     url = get_path('cnn.html')
         ...     conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}, 'assign': 'content'}
-        ...     d = async_parser(None, objconf, **kwargs)
+        ...     d = async_parser(None, None, objconf, **kwargs)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -93,17 +93,16 @@ def async_parser(_, objconf, skip=False, **kwargs):
     if skip:
         stream = kwargs["stream"]
     else:
-        url = get_abspath(objconf.url)
-        content = yield io.async_url_read(url)
+        content = yield io.async_url_read(objconf.url)  # pyright: ignore[reportCallIssue]
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
-        splits = detagged.split(objconf.token) if objconf.token else [detagged]
-        stream = ({kwargs["assign"]: chunk} for chunk in splits)
+        split = detagged.split(objconf.token) if objconf.token else [detagged]
+        stream = map(str.strip, split)
 
     return_value(stream)
 
 
-def parser(_, objconf, skip=False, **kwargs):
+def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[str]:
     """Parses the pipe content
 
     Args:
@@ -117,33 +116,31 @@ def parser(_, objconf, skip=False, **kwargs):
     Examples:
         >>> from meza.fntools import Objectify
         >>> from riko import get_path
-        >>> from meza.compat import decode
         >>>
         >>> url = get_path('cnn.html')
         >>> conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': {}, 'assign': 'content'}
-        >>> result = parser(None, objconf, **kwargs)
-        >>> resp = next(result)['content'][:21]
-        >>> decode(resp) == 'CNN.com International'
-        True
+        >>> result = parser(None, None, objconf, **kwargs)
+        >>> next(result)[:21]
+        'CNN.com International'
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        with fetch(decode=True, **objconf) as f:
+        with fetch(**{k: objconf[k] for k in objconf}) as f:
             sliced = betwix(f, objconf.start, objconf.end, True)
             content = "\n".join(sliced)
 
         parsed = get_string(content, objconf.start, objconf.end)
         detagged = get_text(parsed) if objconf.detag else parsed
-        splits = detagged.split(objconf.token) if objconf.token else [detagged]
-        stream = ({kwargs["assign"]: chunk} for chunk in splits)
+        split = detagged.split(objconf.token) if objconf.token else [detagged]
+        stream = map(str.strip, split)
 
     return stream
 
 
-@processor(isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously fetches the content of a given web site as
     a string.
@@ -173,11 +170,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
-        >>> from meza.compat import decode
         >>>
-        >>> resp = 'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
         >>> def run(reactor):
-        ...     callback = lambda x: print(decode(next(x)['content']) == resp)
+        ...     callback = lambda x: print(next(x))
         ...     url, path = get_path('bbc.html'), 'value.items'
         ...     conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         ...     d = async_pipe(conf=conf)
@@ -188,12 +183,12 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "
     """
     return async_parser(*args, **kwargs)
 
 
-@processor(**OPTS)
+@processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
     """A source that fetches the content of a given web site as a string.
 
@@ -220,12 +215,10 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> from riko import get_path
-        >>> from meza.compat import decode
         >>>
         >>> url = get_path('bbc.html')
         >>> conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
-        >>> content = 'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
-        >>> decode(next(pipe(conf=conf))['content']) == content
-        True
+        >>> next(pipe(conf=conf))
+        'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
     """
     return parser(*args, **kwargs)

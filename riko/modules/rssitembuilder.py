@@ -14,17 +14,21 @@ Examples:
         >>> from riko.modules.rssitembuilder import pipe
         >>>
         >>> conf = {'title': 'the title', 'description': 'description'}
-        >>> next(pipe(conf=conf))['y:title'] == 'the title'
-        True
+        >>> next(pipe(conf=conf))['y:title']
+        'the title'
 
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
 """
 from datetime import datetime as dt
+from typing import cast
+
+from riko.types.general import BasicArg, Extraction
 
 from . import processor
 import pygogo as gogo
+from riko import Objconf
 from riko.dotdict import DotDict
 
 OPTS = {"emit": True}
@@ -33,20 +37,26 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 # yahoo style rss items (dots are for sub-levels)
-RSS = {
-    "title": "y:title",
+rss = {
+    "author": "author",
+    "description": "description",
     "guid": "y:id",
-    "mediaThumbURL": "media:thumbnail.url",
-    "mediaThumbHeight": "media:thumbnail.height",
-    "mediaThumbWidth": "media:thumbnail.width",
+    "link": "link",
+    "mediaContentHeight": "media:content.height",
     "mediaContentType": "media:content.type",
     "mediaContentURL": "media:content.url",
-    "mediaContentHeight": "media:content.height",
     "mediaContentWidth": "media:content.width",
+    "mediaThumbHeight": "media:thumbnail.height",
+    "mediaThumbURL": "media:thumbnail.url",
+    "mediaThumbWidth": "media:thumbnail.width",
+    "pubDate": "pubDate",
+    "title": "y:title",
 }
 
+RSS = cast(dict[str, str], DotDict(rss))
 
-def parser(item, objconf, skip=False, **kwargs):
+
+def parser(item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> DotDict:
     """Parses the pipe content
 
     Args:
@@ -69,21 +79,19 @@ def parser(item, objconf, skip=False, **kwargs):
         >>> conf = {'guid': 'a1', 'mediaThumbURL': 'image.png'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item}
-        >>> result = parser(item, objconf, **kwargs)
-        >>> result == {'media:thumbnail': {'url': 'image.png'}, 'y:id': 'a1'}
-        True
+        >>> parser(item, None, objconf, **kwargs)
+        {'y:id': 'a1', 'media:thumbnail': {'url': 'image.png'}}
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        items = objconf.items()
-        rdict = ((RSS.get(k, k), item.get(v, v, **kwargs)) for k, v in items)
+        rdict = {RSS[k]: v for k, v in objconf.iteritems() if k in RSS}
         stream = DotDict(rdict)
 
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """A source that asynchronously builds an rss item.
 
@@ -116,10 +124,8 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     resp = {'url': 'image.png'}
-        ...     callback = lambda x: print(next(x)['media:thumbnail'] == resp)
-        ...     conf = {
-        ...         'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
+        ...     callback = lambda x: print(next(x)['media:thumbnail'])
+        ...     conf = {'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
         ...     d = async_pipe(conf=conf)
         ...     return d.addCallbacks(callback, logger.error)
         >>>
@@ -129,7 +135,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'url': 'image.png'}
     """
     return parser(*args, **kwargs)
 
@@ -166,18 +172,15 @@ def pipe(*args, **kwargs):
         >>> # conf based
         >>> conf = {'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
         >>> rss = next(pipe(conf=conf))
-        >>> rss['media:thumbnail'] == {'url': 'image.png'}
-        True
-        >>> sorted(rss.keys()) == [
-        ...     'media:thumbnail', 'pubDate', 'y:id', 'y:title']
-        True
+        >>> sorted(rss)
+        ['media:thumbnail', 'pubDate', 'y:id', 'y:title']
+        >>> rss['media:thumbnail']
+        {'url': 'image.png'}
         >>>
         >>> # source based
-        >>> # TODO: look into subkey
-        >>> item = {'heading': 'Hi', 'id': 'a1', 'thumbnail': 'image.png'}
-        >>> conf = {
-        ...     'title': 'heading', 'guid': 'id', 'mediaThumbURL': 'thumbnail'}
-        >>> next(pipe(item, conf=conf)) == rss
-        True
+        >>> item = {'thumbnail': 'image.png'}
+        >>> conf = {'mediaThumbURL': {'subkey': 'thumbnail'}}
+        >>> next(pipe(item, conf=conf))['media:thumbnail']
+        {'url': 'image.png'}
     """
     return parser(*args, **kwargs)

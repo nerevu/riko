@@ -10,8 +10,8 @@ Examples:
 
         >>> from riko.modules.reverse import pipe
         >>>
-        >>> next(pipe({'x': x} for x in range(5))) == {'x': 4}
-        True
+        >>> next(pipe({'x': x} for x in range(5)))
+        {'x': 4}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -21,8 +21,8 @@ Attributes:
 from . import operator
 import pygogo as gogo
 
-# disable `dictize` since we do not need to access the configuration
-OPTS = {"dictize": False}
+OPTS = {}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -52,8 +52,8 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> kwargs = {}
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(None))
-        >>> next(parser(stream, None, tuples, **kwargs)) == {'x': 4}
-        True
+        >>> next(parser(stream, None, tuples, **kwargs))
+        {'x': 4}
     """
     return reversed(list(stream))
 
@@ -76,7 +76,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x) == {'x': 4})
+        ...     callback = lambda x: print(next(x))
         ...     items = ({'x': x} for x in range(5))
         ...     d = async_pipe(items)
         ...     return d.addCallbacks(callback, logger.error)
@@ -86,7 +86,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'x': 4}
     """
     return parser(*args, **kwargs)
 
@@ -104,7 +104,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> items = ({'x': x} for x in range(5))
-        >>> next(pipe(items)) == {'x': 4}
-        True
+        >>> next(pipe(items))
+        {'x': 4}
     """
     return parser(*args, **kwargs)

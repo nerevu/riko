@@ -1,17 +1,17 @@
 from pprint import pprint
 from riko import get_path
-from riko.bado import coroutine
+from riko.bado import coroutine, return_value
 from riko.collections import SyncPipe, AsyncPipe
 
 p1_conf = {"url": get_path("gigs.json"), "path": "value.items"}
 p2_conf = {"uniq_key": "link"}
 p3_conf = {
     "combine": "or",
-    "mode": "block",
+    "permit": False,
     "rule": [{"field": "title", "value": "php", "op": "contains"}],
 }
 
-p4_conf = {"rule": [{"sort_key": "pubDate", "sort_dir": "desc"}]}
+p4_conf = {"rule": [{"field": "pubDate", "dir": "desc"}]}
 
 
 def pipe(test=False):
@@ -23,9 +23,6 @@ def pipe(test=False):
         .list
     )
 
-    for i in stream:
-        pprint(i)
-
     return stream
 
 
@@ -36,8 +33,11 @@ def async_pipe(reactor, test=False):
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
-        .output
     )
 
-    for i in stream:
+    return_value(stream)
+
+
+if __name__ == "__main__":
+    for i in pipe():
         pprint(i)

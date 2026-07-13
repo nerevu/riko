@@ -14,8 +14,8 @@ Examples:
         >>> from riko.modules.tail import pipe
         >>>
         >>> items = ({'x': x} for x in range(5))
-        >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
-        True
+        >>> next(pipe(items, conf={'count': 2}))
+        {'x': 3}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -27,6 +27,7 @@ from . import operator
 import pygogo as gogo
 
 OPTS = {"ptype": "int"}
+DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -58,8 +59,8 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> objconf = Objectify(kwargs)
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
-        >>> parser(stream, objconf, tuples, **kwargs)[0] == {'x': 3}
-        True
+        >>> parser(stream, objconf, tuples, **kwargs)[0]
+        {'x': 3}
     """
     return deque(stream, objconf.count)
 
@@ -85,7 +86,7 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x) == {'x': 3})
+        ...     callback = lambda x: print(next(x))
         ...     items = ({'x': x} for x in range(5))
         ...     d = async_pipe(items, conf={'count': 2})
         ...     return d.addCallbacks(callback, logger.error)
@@ -95,7 +96,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'x': 3}
     """
     return parser(*args, **kwargs)
 
@@ -118,7 +119,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> items = [{'x': x} for x in range(5)]
-        >>> next(pipe(items, conf={'count': 2})) == {'x': 3}
-        True
+        >>> next(pipe(items, conf={'count': 2}))
+        {'x': 3}
     """
     return parser(*args, **kwargs)

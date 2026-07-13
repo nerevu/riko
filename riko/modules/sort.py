@@ -11,8 +11,8 @@ Examples:
         >>> from riko.modules.sort import pipe
         >>>
         >>> items = [{'content': 'b'}, {'content': 'a'}, {'content': 'c'}]
-        >>> next(pipe(items)) == {'content': 'a'}
-        True
+        >>> next(pipe(items))
+        {'content': 'a'}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -22,18 +22,20 @@ import pygogo as gogo
 
 from functools import reduce
 
+from riko.types.general import ItemArg, ItemsArg, ObjconfRule
+
 from . import operator
 from riko.bado import itertools as ait
 from riko.utils import def_itemgetter as itemgetter
 
 OPTS = {"listize": True, "extract": "rule"}
-DEFAULTS = {"rule": {"sort_dir": "asc", "sort_key": "content"}}
+DEFAULTS = {"rule": {"dir": "asc", "field": "content"}}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def reducer(stream, rule):
-    reverse = rule.sort_dir == "desc"
-    keyfunc = itemgetter(rule.sort_key, _type=rule.type)
+def reducer(stream: ItemsArg, rule: ObjconfRule) -> list[ItemArg]:
+    reverse = rule.dir.lower() == "desc" if rule.dir else False
+    keyfunc = itemgetter(rule.field, _type=rule.type)
     return sorted(stream, key=keyfunc, reverse=reverse)
 
 
@@ -66,8 +68,8 @@ def async_parser(stream, rules, tuples, **kwargs):
         >>> from meza.fntools import Objectify
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(x[0] == {'content': 4})
-        ...     kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
+        ...     callback = lambda x: print(x[0])
+        ...     kwargs = {'field': 'content', 'dir': 'desc'}
         ...     rule = Objectify(kwargs)
         ...     stream = ({'content': x} for x in range(5))
         ...     tuples = zip(stream, repeat(rule))
@@ -75,18 +77,18 @@ def async_parser(stream, rules, tuples, **kwargs):
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> if _issync:
-        ...     True
+        ...     {'content': 4}
         ... else:
         ...     try:
         ...         react(run, _reactor=FakeReactor())
         ...     except SystemExit:
         ...         pass
-        True
+        {'content': 4}
     """
     return ait.async_reduce(reducer, rules, stream)
 
 
-def parser(stream, rules, tuples, **kwargs):
+def parser(stream: ItemsArg, extract, tuples, **kwargs) -> ItemsArg:
     """Parses the pipe content
 
     Args:
@@ -112,17 +114,17 @@ def parser(stream, rules, tuples, **kwargs):
         >>> from meza.fntools import Objectify
         >>> from itertools import repeat
         >>>
-        >>> kwargs = {'sort_key': 'content', 'sort_dir': 'desc'}
+        >>> kwargs = {'field': 'content', 'dir': 'desc'}
         >>> rule = Objectify(kwargs)
         >>> stream = ({'content': x} for x in range(5))
         >>> tuples = zip(stream, repeat(rule))
-        >>> parser(stream, [rule], tuples, **kwargs)[0] == {'content': 4}
-        True
+        >>> parser(stream, [rule], tuples, **kwargs)[0]
+        {'content': 4}
     """
-    return reduce(reducer, rules, stream)
+    return reduce(reducer, extract, stream)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
     """An operator that asynchronously and eagerly sorts the input source
     according to a specified key. Note that this pipe is not lazy.
@@ -135,17 +137,17 @@ def async_pipe(*args, **kwargs):
         conf (dict): The pipe configuration. May contain the key 'rule'
 
             rule (dict): The sort configuration, can be either a dict or list
-                of dicts (default: {'sort_dir': 'asc', 'sort_key': 'content'}).
-                Must contain the key 'sort_key'. May contain the key 'sort_dir',
+                of dicts (default: {'dir': 'asc', 'field': 'content'}).
+                Must contain the key 'field'. May contain the key 'dir',
                     or 'cast'.
 
                 type (str): Expected value type. Must be one of
                     `CAST_SWITCH` (default: None).
 
-                sort_key (str): Item attribute on which to sort by (default:
+                field (str): Item attribute on which to sort by (default:
                     'content').
 
-                sort_dir (str): The sort direction. Must be either 'asc' or
+                dir (str): The sort direction. Must be either 'asc' or
                     'desc' (default: 'asc').
 
     Returns:
@@ -156,9 +158,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado.mock import FakeReactor
         >>>
         >>> def run(reactor):
-        ...     callback = lambda x: print(next(x) == {'rank': 'a'})
+        ...     callback = lambda x: print(next(x))
         ...     items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]
-        ...     d = async_pipe(items, conf={'rule': {'sort_key': 'rank'}})
+        ...     d = async_pipe(items, conf={'rule': {'field': 'rank'}})
         ...     return d.addCallbacks(callback, logger.error)
         >>>
         >>> try:
@@ -166,7 +168,7 @@ def async_pipe(*args, **kwargs):
         ... except SystemExit:
         ...     pass
         ...
-        True
+        {'rank': 'a'}
     """
     return parser(*args, **kwargs)
 
@@ -184,14 +186,14 @@ def pipe(*args, **kwargs):
         conf (dict): The pipe configuration. May contain the key 'rule'
 
             rule (dict): The sort configuration, can be either a dict or list
-                of dicts (default: {'sort_dir': 'asc', 'sort_key': 'content'}).
-                Must contain the key 'sort_key'. May contain the key 'sort_dir',
+                of dicts (default: {'dir': 'asc', 'field': 'content'}).
+                Must contain the key 'field'. May contain the key 'dir',
                     or 'cast'.
 
                 type (str): Expected value type. Must be one of
                     `CAST_SWITCH` (default: None).
-                sort_key (str): Item attribute on which to sort by.
-                sort_dir (str): The sort direction. Must be either 'asc' or
+                field (str): Item attribute on which to sort by.
+                dir (str): The sort direction. Must be either 'asc' or
                     'desc'.
 
     Yields:
@@ -202,14 +204,14 @@ def pipe(*args, **kwargs):
         ...     {'rank': 'b', 'name': 'adam'},
         ...     {'rank': 'a', 'name': 'sue'},
         ...     {'rank': 'c', 'name': 'bill'}]
-        >>> rule = {'sort_key': 'rank'}
-        >>> next(pipe(items, conf={'rule': rule}))['rank'] == 'a'
-        True
-        >>> rule = {'sort_key': 'name'}
-        >>> next(pipe(items, conf={'rule': rule}))['name'] == 'adam'
-        True
-        >>> rule = {'sort_key': 'name', 'sort_dir': 'desc'}
-        >>> next(pipe(items, conf={'rule': rule}))['name'] == 'sue'
-        True
+        >>> rule = {'field': 'rank'}
+        >>> next(pipe(items, conf={'rule': rule}))['rank']
+        'a'
+        >>> rule = {'field': 'name'}
+        >>> next(pipe(items, conf={'rule': rule}))['name']
+        'adam'
+        >>> rule = {'field': 'name', 'dir': 'desc'}
+        >>> next(pipe(items, conf={'rule': rule}))['name']
+        'sue'
     """
     return parser(*args, **kwargs)
