@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.filter
@@ -27,21 +26,22 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
-"""
-import re
-import operator as op
 
+"""
+
+import operator as op
+import re
+from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from time import struct_time
-from typing import Mapping, Optional, Sequence
 
-from dateutil.parser import ParserError
 import pygogo as gogo
+from dateutil.parser import ParserError
 
+from riko.cast import cast_date
 from riko.types.general import BasicArg, BasicMapping, DateLike, ObjconfRule
 
 from . import operator
-from riko.cast import cast_date
 
 OPTS = {"listize": True, "extract": "rule"}
 DEFAULTS = {"combine": "and", "permit": True}
@@ -69,7 +69,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 is_iterable = lambda item: ITER_ATTRS.intersection(dir(item))
 
 
-def _parse_arg(arg: Optional[BasicArg | DateLike]):
+def _parse_arg(arg: BasicArg | DateLike | None):
     if isinstance(arg, Mapping):
         value = arg
     elif isinstance(arg, int):
@@ -77,10 +77,14 @@ def _parse_arg(arg: Optional[BasicArg | DateLike]):
     elif isinstance(arg, str):
         try:
             value = Decimal(arg)
-        except (InvalidOperation):
+        except InvalidOperation:
             try:
                 value = cast_date(arg)
-            except (IndexError, ParserError, KeyError):  # TODO: figure out which exceptions cast_date can raise
+            except (
+                IndexError,
+                ParserError,
+                KeyError,
+            ):  # TODO: figure out which exceptions cast_date can raise
                 value = arg
     elif isinstance(arg, struct_time):
         value = cast_date(arg)
@@ -120,7 +124,8 @@ def parse_rule(rule: ObjconfRule, item: BasicMapping, **kwargs):
 
 
 def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -153,6 +158,7 @@ def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
         >>> tuples = zip(stream, repeat(objconf))
         >>> next(parser(stream, [objrule], tuples, **kwargs))
         {'ex': 4}
+
     """
     for item, objconf in tuples:
         results = (parse_rule(rule, item, **kwargs) for rule in extract)
@@ -172,7 +178,8 @@ def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously filters for source items matching
+    """
+    An operator that asynchronously filters for source items matching
     the given rules.
 
     Args:
@@ -223,13 +230,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         Website Developer
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that extracts items matching the given rules.
+    """
+    An operator that extracts items matching the given rules.
 
     Args:
         items (Iter[dict]): The source.
@@ -278,5 +287,6 @@ def pipe(*args, **kwargs):
         >>> result = pipe(items, conf={'rule': rule, 'stop': True})
         >>> len(list(result))
         2
+
     """
     return parser(*args, **kwargs)

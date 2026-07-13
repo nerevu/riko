@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.datebuilder
@@ -16,24 +15,27 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from datetime import timedelta, datetime as dt
+
+from datetime import datetime as dt
+from datetime import timedelta
+
+import pygogo as gogo
 
 from riko import Objconf
+from riko.dates import parse_date
 from riko.types.general import Extraction
 
 from . import processor
-from riko.dates import parse_date
-
-import pygogo as gogo
 
 # TODO: make these timezone aware and add more options (e.g. 'next week', 'last month',
 # etc.)
 SWITCH = {
-    'today': dt.today(),
-    'tomorrow': dt.today() + timedelta(days=1),
-    'yesterday': dt.today() + timedelta(days=-1),
-    'now': dt.now(),
+    "today": dt.today(),
+    "tomorrow": dt.today() + timedelta(days=1),
+    "yesterday": dt.today() + timedelta(days=-1),
+    "now": dt.now(),
 }
 
 OPTS = {"ptype": "none", "field": "content"}
@@ -42,7 +44,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Parsers the pipe content
+    """
+    Parsers the pipe content
 
     Args:
         text (str): The text to convert
@@ -62,15 +65,16 @@ def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
         >>> kwargs = {'stream': item}
         >>> parser(item['content'], None, None, stream=item).tm_year
         2014
+
     """
     if skip:
         stream = kwargs["stream"]
     else:
-        if text.endswith(' day') or text.endswith(' days'):
-            count = int(text.split(' ')[0])
+        if text.endswith(" day") or text.endswith(" days"):
+            count = int(text.split(" ")[0])
             new_date = dt.today() + timedelta(days=count)
-        elif text.endswith(' year') or text.endswith(' years'):
-            count = int(text.split(' ')[0])
+        elif text.endswith(" year") or text.endswith(" years"):
+            count = int(text.split(" ")[0])
             new_date = dt.today().replace(year=dt.today().year + count)
         else:
             new_date = SWITCH.get(text)
@@ -79,7 +83,7 @@ def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
             new_date = parse_date(text)
 
         if not new_date:
-            raise Exception('Unrecognized date string: %s' % text)
+            raise Exception("Unrecognized date string: %s" % text)
 
         stream = new_date.timetuple()
 
@@ -88,7 +92,8 @@ def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously converts a text string into a datetime.
+    """
+    A processor module that asynchronously converts a text string into a datetime.
 
     Args:
         item (dict): The entry to process
@@ -116,13 +121,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         2014
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that converts a text string into a datetime.
+    """
+    A processor that converts a text string into a datetime.
 
     Args:
         item (dict): The entry to process
@@ -138,5 +145,6 @@ def pipe(*args, **kwargs):
     Examples:
         >>> next(pipe({'content': '12/2/2014'}))['datebuilder'].tm_year
         2014
+
     """
     return parser(*args, **kwargs)

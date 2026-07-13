@@ -2,13 +2,13 @@
 
 from riko import Context, get_path
 from riko.modules.fetch import pipe as fetch
+from riko.modules.filter import pipe as _filter
 from riko.modules.loop import pipe as loop
+from riko.modules.regex import pipe as regex
+from riko.modules.rename import pipe as rename
+from riko.modules.sort import pipe as sort
 from riko.modules.union import pipe as union
 from riko.modules.uniq import pipe as uniq
-from riko.modules.filter import pipe as _filter
-from riko.modules.rename import pipe as rename
-from riko.modules.regex import pipe as regex
-from riko.modules.sort import pipe as sort
 
 
 def pipe_6e30c269a69baf92cd420900b0645f88(context=None, conf=None):
@@ -51,7 +51,9 @@ def pipe_6e30c269a69baf92cd420900b0645f88(context=None, conf=None):
 
     sw_154 = union(context=context, OTHERS=[sw_233, sw_135], conf={})
 
-    sw_173 = uniq(sw_154, context=context, conf={"uniq_key": {"type": "text", "value": "title"}})
+    sw_173 = uniq(
+        sw_154, context=context, conf={"uniq_key": {"type": "text", "value": "title"}}
+    )
 
     sw_180 = _filter(
         sw_173,

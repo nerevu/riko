@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.itembuilder
@@ -26,23 +25,29 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
 
-from typing import Sequence
+from collections.abc import Sequence
+
+import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import ParsedParam
-from . import processor
-import pygogo as gogo
 from riko.dotdict import DotDict
+from riko.types.general import ParsedParam
+
+from . import processor
 
 OPTS = {"ftype": "none", "listize": True, "extract": "attrs"}
 DEFAULTS = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_, extraction: Sequence[ParsedParam], objconf: Objconf, skip=False, **kwargs) -> DotDict:
-    """Parses the pipe content
+def parser(
+    _, extraction: Sequence[ParsedParam], objconf: Objconf, skip=False, **kwargs
+) -> DotDict:
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -63,6 +68,7 @@ def parser(_, extraction: Sequence[ParsedParam], objconf: Objconf, skip=False, *
         ...     {'key': 'desc', 'value': 'the desc'}]
         >>> parser(None, map(DotDict, attrs), None)
         {'title': 'the title', 'desc': 'the desc'}
+
     """
     item = dict((a["key"], a["value"]) for a in extraction)
     return kwargs["stream"] if skip else DotDict(item)
@@ -70,7 +76,8 @@ def parser(_, extraction: Sequence[ParsedParam], objconf: Objconf, skip=False, *
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously builds an item.
+    """
+    A source that asynchronously builds an item.
 
     Args:
         item (dict): The entry to process
@@ -108,13 +115,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         the title
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that builds an item.
+    """
+    A source that builds an item.
 
     Args:
         item (dict): The entry to process
@@ -138,5 +147,6 @@ def pipe(*args, **kwargs):
         ...     {'key': 'desc.content', 'value': 'the desc'}]
         >>> next(pipe(conf={'attrs': attrs}))
         {'title': 'the title', 'desc': {'content': 'the desc'}}
+
     """
     return parser(*args, **kwargs)

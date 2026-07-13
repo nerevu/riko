@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko
@@ -31,16 +30,34 @@ Examples:
         >>> replaced = strreplace(next(items), conf=sr_conf, field='author')
         >>> next(replaced)['strreplace']
         'Timmy'
+
 """
+
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from importlib.metadata import metadata, version
 from os import path as p
-from importlib.metadata import version, metadata
 from time import struct_time
-from typing import Any, Callable, Generator, Iterable, Iterator, Literal, Mapping, Optional, Sequence, TypeVar, cast as cast_type, overload
+from typing import (
+    Any,
+    Literal,
+    Optional,
+    TypeVar,
+    overload,
+)
+from typing import cast as cast_type
 
 from meza import compat
 from meza.fntools import Objectify as _Objectify
 
-from riko.types.general import ComplexArg, BasicArg, ComplexMapping, IntermediateValue, ObjconfParam, ObjconfRule, SyncItemFunc
+from riko.types.general import (
+    BasicArg,
+    ComplexArg,
+    ComplexMapping,
+    IntermediateValue,
+    ObjconfParam,
+    ObjconfRule,
+    SyncItemFunc,
+)
 
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
 meta = metadata("riko")
@@ -74,15 +91,13 @@ def get_path(name: str):
     if name.startswith("http") or name.startswith("file:"):
         url = name
     else:
-        url = f"file://{p.join(PARENT_DIR, "data", name)}"
+        url = f"file://{p.join(PARENT_DIR, 'data', name)}"
 
     return url
 
 
 def get_abspath(url: str, offline=False):
-    if url.startswith("http"):
-        pass
-    elif url.startswith("file:///"):
+    if url.startswith("http") or url.startswith("file:///"):
         pass
     elif url.startswith("file://"):
         parent = p.dirname(p.dirname(__file__))
@@ -108,24 +123,25 @@ def replacer(content: str, old: str, new="_") -> str:
     return replaced
 
 
-class Context(object):
-    """The context of a pipeline
-        verbose = debug printing during compilation and running
-        describe_input = return pipe input requirements
-        describe_dependencies = return a list of sub-pipelines used
-        test = takes input values from default (skips the console prompt)
-        inputs = a dictionary of values that overrides the defaults
-            e.g. {'name one': 'test value1'}
-        submodule = takes input values from inputs (or default)
+class Context:
+    """
+    The context of a pipeline
+    verbose = debug printing during compilation and running
+    describe_input = return pipe input requirements
+    describe_dependencies = return a list of sub-pipelines used
+    test = takes input values from default (skips the console prompt)
+    inputs = a dictionary of values that overrides the defaults
+        e.g. {'name one': 'test value1'}
+    submodule = takes input values from inputs (or default)
     """
 
     def __init__(self, **kwargs):
-        self.verbose = kwargs.get('verbose', False)
-        self.test = kwargs.get('test', False)
-        self.describe_input = kwargs.get('describe_input', False)
-        self.describe_dependencies = kwargs.get('describe_dependencies', False)
-        self.inputs = kwargs.get('inputs', {})
-        self.submodule = kwargs.get('submodule', False)
+        self.verbose = kwargs.get("verbose", False)
+        self.test = kwargs.get("test", False)
+        self.describe_input = kwargs.get("describe_input", False)
+        self.describe_dependencies = kwargs.get("describe_dependencies", False)
+        self.inputs = kwargs.get("inputs", {})
+        self.submodule = kwargs.get("submodule", False)
 
     def __repr__(self):
         content = f"verbose={self.verbose}, test={self.test}, "
@@ -136,12 +152,14 @@ class Context(object):
 
 
 class Objectify(_Objectify):
-    """Creates an object with dynamically set attributes. Useful
+    """
+    Creates an object with dynamically set attributes. Useful
     for accessing the kwargs of a function as attributes.
     """
 
     def __init__(self, data: ComplexMapping, *args, **kwargs):
-        """Objectify constructor
+        """
+        Objectify constructor
 
         Args:
             data (dict): The attributes to set
@@ -155,6 +173,7 @@ class Objectify(_Objectify):
             'foo'
             >>> kw.get('key')
             'foo'
+
         """
         _data = {k.lower(): v for k, v in data.items()}
         super().__init__(_data, *args, **kwargs)
@@ -231,7 +250,9 @@ class Objconf(Objectify):
     xpath: str
 
 
-def objectify(data: ComplexArg, func: Optional[SyncItemFunc] = None, **defaults) -> ComplexArg:
+def objectify(
+    data: ComplexArg, func: SyncItemFunc | None = None, **defaults
+) -> ComplexArg:
     if isinstance(data, Mapping):
         objectified = Objectify(data, func=func, **defaults)
     elif func:
@@ -253,33 +274,26 @@ T = TypeVar("T")
 
 
 @overload
-def listize(value: Mapping[K, T]) -> list[Mapping[K, T]]:
-    ...
-@overload  # noqa: E302
-def listize(value: Callable[..., T]) -> list[Callable[..., T]]:
-    ...
-@overload  # noqa: E302
-def listize(value: IntermediateValue) -> list[IntermediateValue]:
-    ...
-@overload  # noqa: E302
-def listize(value: list[T]) -> list[T]:
-    ...
-@overload  # noqa: E302
-def listize(value: Sequence[T]) -> Sequence[T]:
-    ...
-@overload  # noqa: E302
-def listize(value: Generator[T, None, None]) -> Generator[T, None, None]:
-    ...
-@overload  # noqa: E302
-def listize(value: Iterator[T]) -> Iterator[T]:
-    ...
-@overload  # noqa: E302
-def listize(value: Iterable[T]) -> Iterable[T]:
-    ...
-def listize(  # noqa: E302
-    value: Any
+def listize(value: Mapping[K, T]) -> list[Mapping[K, T]]: ...
+@overload
+def listize(value: Callable[..., T]) -> list[Callable[..., T]]: ...
+@overload
+def listize(value: IntermediateValue) -> list[IntermediateValue]: ...
+@overload
+def listize(value: list[T]) -> list[T]: ...
+@overload
+def listize(value: Sequence[T]) -> Sequence[T]: ...
+@overload
+def listize(value: Generator[T, None, None]) -> Generator[T, None, None]: ...
+@overload
+def listize(value: Iterator[T]) -> Iterator[T]: ...
+@overload
+def listize(value: Iterable[T]) -> Iterable[T]: ...
+def listize(
+    value: Any,
 ) -> list[Mapping | IntermediateValue | Callable] | Iterable | Sequence:
-    """Create a listlike object from any value
+    """
+    Create a listlike object from any value
 
     Args:
         value: The object to convert
@@ -296,6 +310,7 @@ def listize(  # noqa: E302
     <generator object <genexpr> at 0x...>
     >>> listize(range(3))
     range(0, 3)
+
     """
     if not value:
         result = []

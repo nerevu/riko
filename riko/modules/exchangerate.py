@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.exchangerate
@@ -18,23 +17,24 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from typing import Mapping, TypedDict
+
+from collections.abc import Mapping
+from decimal import Decimal
+from json import load, loads
+from os import getenv
+from typing import TypedDict
 
 import pygogo as gogo
 
-from json import loads, load
-from decimal import Decimal
-from os import getenv
-
-from meza.compat import decode
-
 from riko import Objconf
+from riko.bado import coroutine, io, return_value
+from riko.bado import requests as treq
 from riko.types.general import Extraction
+from riko.utils import fetch
 
 from . import processor
-from riko.bado import coroutine, return_value, requests as treq, io
-from riko.utils import fetch
 
 EXCHANGE_API = "https://openexchangerates.org/api/latest.json"
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
@@ -52,7 +52,8 @@ DEFAULTS = {
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-RatesJson = TypedDict("RatesJson", {"rates": Mapping[str, str]})
+class RatesJson(TypedDict):
+    rates: Mapping[str, str]
 
 
 def parse_response(rates: Mapping[str, str | float]):
@@ -76,7 +77,9 @@ def get_rate(currency, **rates: Decimal) -> Decimal:
     return rate
 
 
-def calc_rate(from_cur: str, to_cur: str, places=Decimal("0.0001"), **rates: Decimal) -> Decimal:
+def calc_rate(
+    from_cur: str, to_cur: str, places=Decimal("0.0001"), **rates: Decimal
+) -> Decimal:
     if from_cur == to_cur:
         rate = Decimal(1)
     elif to_cur == "USD":
@@ -90,8 +93,11 @@ def calc_rate(from_cur: str, to_cur: str, places=Decimal("0.0001"), **rates: Dec
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    base: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         base (str): The base currency (exchanging from)
@@ -127,6 +133,7 @@ def async_parser(base: str, extraction: Extraction, objconf: Objconf, skip=False
         ...     pass
         ...
         1.275201
+
     """
     same_currency = base == objconf.currency
     rates = rate = None
@@ -151,7 +158,8 @@ def async_parser(base: str, extraction: Extraction, objconf: Objconf, skip=False
 
 
 def parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         base (str): The base currency (exchanging from)
@@ -177,6 +185,7 @@ def parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
         >>> kwargs = {'stream': item, 'assign': 'content'}
         >>> parser(item['content'], None, objconf, **kwargs)
         Decimal('1.275201')
+
     """
     rates = None
     rate = Decimal(0)
@@ -199,7 +208,8 @@ def parser(base: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor that asynchronously retrieves the current exchange rate
+    """
+    A processor that asynchronously retrieves the current exchange rate
     for a given currency pair.
 
     Args:
@@ -249,13 +259,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         1.275201
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that retrieves the current exchange rate for a given
+    """
+    A processor that retrieves the current exchange rate for a given
     currency pair.
 
     Args:
@@ -303,5 +315,6 @@ def pipe(*args, **kwargs):
         >>> conf = {'url': url, 'currency': 'XYZ'}
         >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
         Decimal('NaN')
+
     """
     return parser(*args, **kwargs)

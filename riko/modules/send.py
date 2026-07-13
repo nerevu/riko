@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.send
@@ -24,11 +23,14 @@ Examples:
         {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
+
 """
-from . import operator
-from riko.utils import send
 
 import pygogo as gogo
+
+from riko.utils import send
+
+from . import operator
 
 OPTS = {"pollable": True, "emit": True}
 DEFAULTS = {}
@@ -36,7 +38,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -76,6 +79,7 @@ def parser(stream, objconf, tuples, **kwargs):
         {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
+
     """
     others = kwargs["others"]
 
@@ -86,7 +90,8 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that pushes items of a stream to a function using generator based
+    """
+    An operator that pushes items of a stream to a function using generator based
     coroutines.
 
     Args:
@@ -116,5 +121,6 @@ def pipe(*args, **kwargs):
         {'content': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
+
     """
     return parser(*args, **kwargs)

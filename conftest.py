@@ -1,5 +1,6 @@
 import pytest
-from riko.utils import _registry, _receive_queue
+
+from riko.utils import _receive_queue, _registry
 
 
 @pytest.fixture(autouse=True)

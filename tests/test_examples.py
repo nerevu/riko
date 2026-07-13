@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 tests.test_examples
@@ -6,13 +5,14 @@ tests.test_examples
 
 Provides example pipeline tests.
 """
-from importlib import import_module
+
 from decimal import Decimal
+from importlib import import_module
 
 import pytest
 
 
-class TestExamples(object):
+class TestExamples:
     def _get_pipeline(self, pipe_name):
         module = import_module("examples.%s" % pipe_name)
         pipeline = module.pipe(test=True)
@@ -20,7 +20,7 @@ class TestExamples(object):
 
     @pytest.mark.timeout(150)
     def test_kazeeki(self):
-        """Tests the kazeeki pipeline"""
+        """Tests the kazeeki pipeline."""
         pipe_name = "kazeeki"
         pipeline = self._get_pipeline(pipe_name)
         example = {
@@ -76,7 +76,7 @@ class TestExamples(object):
             assert got == v, msg
 
     def test_gigs(self):
-        """Tests the gigs pipeline"""
+        """Tests the gigs pipeline."""
         pipe_name = "gigs"
         pipeline = self._get_pipeline(pipe_name)
 
@@ -95,9 +95,7 @@ class TestExamples(object):
             "title": "Educational Android App",
             "y:id": {
                 "permalink": "false",
-                "value": (
-                    "http://www.guru.com/jobs/educational-android-app/" "1058980"
-                ),
+                "value": ("http://www.guru.com/jobs/educational-android-app/1058980"),
             },
             "y:published": {
                 "day": "5",
@@ -123,7 +121,7 @@ class TestExamples(object):
         assert example == pipeline[-1]
 
     def test_simple1(self):
-        """Tests the simple1 pipeline"""
+        """Tests the simple1 pipeline."""
         pipe_name = "simple1"
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)
@@ -132,7 +130,7 @@ class TestExamples(object):
         assert {"url": "farechart"} == pipeline[-1]
 
     def test_simple2(self):
-        """Tests the simple2 pipeline"""
+        """Tests the simple2 pipeline."""
         pipe_name = "simple2"
         pipeline = self._get_pipeline(pipe_name)
         example = {"author": "ABC", "link": "www.google.com", "title": "google"}
@@ -145,7 +143,7 @@ class TestExamples(object):
     # FIXME: dateformat no longer returns a struct_time
     @pytest.mark.skip
     def test_split(self):
-        """Tests the split pipeline"""
+        """Tests the split pipeline."""
         pipe_name = "split"
         pipeline = self._get_pipeline(pipe_name)
         example = {"date": "December 02, 2014", "year": 2014}
@@ -157,7 +155,7 @@ class TestExamples(object):
     # FIXME: dateformat no longer returns a struct_time
     @pytest.mark.skip
     def test_wired(self):
-        """Tests the wired pipeline"""
+        """Tests the wired pipeline."""
         pipe_name = "wired"
         pipeline = self._get_pipeline(pipe_name)
         length = len(pipeline)

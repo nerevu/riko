@@ -1,13 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
-from os import path as p
+from argparse import ArgumentParser, RawTextHelpFormatter
 from importlib import import_module
-from importlib.util import spec_from_file_location, module_from_spec
-from argparse import RawTextHelpFormatter, ArgumentParser
+from importlib.util import module_from_spec, spec_from_file_location
+from os import path as p
 
 from riko.bado import react
-
 
 io_error = FileNotFoundError
 
@@ -69,10 +67,10 @@ def run():
             exit("Pipe examples.%s not found!" % args.pipeid)
 
     if args.isasync:
-        pipeline = getattr(module, "async_pipe")
+        pipeline = module.async_pipe
         react(pipeline, [args.test])
     else:
-        pipeline = getattr(module, "pipe")
+        pipeline = module.pipe
         pipeline(test=args.test)
 
 

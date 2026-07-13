@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.dateformat
@@ -31,22 +30,28 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import datetime
+
+import pygogo as gogo
 
 from riko import Objconf
 from riko.types.general import Extraction
 
 from . import processor
-import pygogo as gogo
 
 OPTS = {"field": "date", "ftype": "date"}
 DEFAULTS = {"format": "%m/%d/%Y %H:%M:%S"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(date: datetime.date, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Obtains the user input
+def parser(
+    date: datetime.date, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Obtains the user input
 
     Args:
         date (date): Must have key 'date' with a date-like object value
@@ -63,13 +68,15 @@ def parser(date: datetime.date, extraction: Extraction, objconf: Objconf, skip=F
         >>> objconf = Objectify({'format': '%m/%d/%Y'})
         >>> parser(date(2015, 5, 4), None, objconf)
         '05/04/2015'
+
     """
     return kwargs["stream"] if skip else date.strftime(objconf.format)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously formats a date.
+    """
+    A processor module that asynchronously formats a date.
 
     Args:
         item (dict): The entry to process
@@ -107,13 +114,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         05/04/2015 00:00:00
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor module that formats a date.
+    """
+    A processor module that formats a date.
 
     Args:
         item (dict): The entry to process
@@ -144,5 +153,6 @@ def pipe(*args, **kwargs):
         '2015'
         >>> next(pipe({'date': '05/04/2015'}))['dateformat']
         '05/04/2015 00:00:00'
+
     """
     return parser(*args, **kwargs)

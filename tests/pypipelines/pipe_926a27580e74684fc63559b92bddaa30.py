@@ -2,9 +2,9 @@
 
 from riko import Context
 from riko.collections import SyncCollection
-from riko.modules.uniq import pipe as uniq
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
+from riko.modules.uniq import pipe as uniq
 
 
 def pipe_926a27580e74684fc63559b92bddaa30(context=None, conf=None):
@@ -17,11 +17,15 @@ def pipe_926a27580e74684fc63559b92bddaa30(context=None, conf=None):
     sw_68 = SyncCollection(
         [
             {"url": "http://www.guru.com/rss/jobs/c/web-software-it/"},
-            {"url": "https://www.elance.com/r/rss/jobs/cat-it-programming/fxd-true/o-1/bgt-gt500-ns1/sct-database-development-10217-data-analysis-14174-database-administration-14177-business-intelligence-14173-data-engineering-14175-system-administration-10219-other-data-science-14178-technical-support-10218-other-it-programming-12350-software-application-10216-website-design-10225-web-programming-10224/tls-1/s-timelistedSort"},
+            {
+                "url": "https://www.elance.com/r/rss/jobs/cat-it-programming/fxd-true/o-1/bgt-gt500-ns1/sct-database-development-10217-data-analysis-14174-database-administration-14177-business-intelligence-14173-data-engineering-14175-system-administration-10219-other-data-science-14178-technical-support-10218-other-it-programming-12350-software-application-10216-website-design-10225-web-programming-10224/tls-1/s-timelistedSort"
+            },
         ]
     )
 
-    sw_90 = uniq(sw_68, context=context, conf={"field": {"type": "text", "value": "link"}})
+    sw_90 = uniq(
+        sw_68, context=context, conf={"field": {"type": "text", "value": "link"}}
+    )
 
     sw_87 = _filter(
         sw_90,

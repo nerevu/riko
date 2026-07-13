@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 tests.test_examples
@@ -6,13 +5,14 @@ tests.test_examples
 
 Provides example pipeline tests.
 """
+
 from operator import itemgetter
+
 import pytest
 
+from riko.bado import _issync
 from riko.collections import SyncPipe
 from riko.utils import StreamState, noop
-from riko.bado import _issync
-
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = {"key": "content", "value": value}
@@ -21,7 +21,7 @@ done_conf = {"attrs": {"key": "state", "value": StreamState.DONE}}
 strr_conf = {"rule": {"find": "is", "replace": "was"}}
 
 
-class TestCollections(object):
+class TestCollections:
     def setup_method(self):
         self.runs = 0
 
@@ -100,7 +100,9 @@ class TestCollections(object):
 
         assert next(stream) == {"content": "once is 1x"}
         assert next(stream) == {"content": "twice is 2x"}
-        err_msg = "Attempted to send {'content': 'once is 1x'} to non-existent 'receiver2'"
+        err_msg = (
+            "Attempted to send {'content': 'once is 1x'} to non-existent 'receiver2'"
+        )
         assert caplog.records[0].message == err_msg
 
         assert self.runs == 2
@@ -123,7 +125,7 @@ class TestCollections(object):
         assert stream.list == []
 
     def test_stream(self):
-        """Tests a basic stream pipeline"""
+        """Tests a basic stream pipeline."""
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
             .tokenizer(emit=True)
@@ -139,7 +141,7 @@ class TestCollections(object):
 
     @pytest.mark.timeout(30)
     def test_pstream(self):
-        """Tests a parallel stream pipeline"""
+        """Tests a parallel stream pipeline."""
         stream = (
             SyncPipe("itembuilder", conf=builder_conf, parallel=True)
             .tokenizer(emit=True)
@@ -155,7 +157,7 @@ class TestCollections(object):
 
     @pytest.mark.skipif(_issync, reason="async support not available")
     def test_astream(self, capsys):
-        """Tests a asynchronous stream pipeline"""
+        """Tests a asynchronous stream pipeline."""
         from riko.bado import coroutine, react
         from riko.bado.mock import FakeReactor
         from riko.collections import AsyncPipe

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.union
@@ -19,12 +18,13 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from typing import Iterable
+
+from collections.abc import Iterable
+from itertools import chain
 
 import pygogo as gogo
-
-from itertools import chain
 
 from riko.dotdict import DotDict
 from riko.types.general import BasicDict
@@ -37,7 +37,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -69,6 +70,7 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> tuples = zip(stream, repeat(None))
         >>> len(list(parser(stream, None, tuples, **kwargs)))
         15
+
     """
     kwargs = DotDict(kwargs)
     others: Iterable[Iterable[BasicDict]] = kwargs["others"]
@@ -77,7 +79,8 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously merges multiple source streams together.
+    """
+    An operator that asynchronously merges multiple source streams together.
 
     Args:
         items (Iter[dict]): The source.
@@ -107,13 +110,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         15
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that merges multiple streams together.
+    """
+    An operator that merges multiple streams together.
 
     Args:
         items (Iter[dict]): The source.
@@ -131,5 +136,6 @@ def pipe(*args, **kwargs):
         >>> other2 = ({'x': x + 10} for x in range(5))
         >>> len(list(pipe(items, others=[other1, other2])))
         15
+
     """
     return parser(*args, **kwargs)

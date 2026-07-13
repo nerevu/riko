@@ -1,44 +1,45 @@
-"""Compile/Translate Yahoo Pipe into Python
+"""
+Compile/Translate Yahoo Pipe into Python
 
-    Takes a JSON representation of a Yahoo pipe and either:
-     a) translates it into a Python script containing a function
-        (using generators to build the pipeline) or
-     b) compiles it as a pipeline of generators which can be executed
-        in-process
+Takes a JSON representation of a Yahoo pipe and either:
+a) translates it into a Python script containing a function
+(using generators to build the pipeline) or
+b) compiles it as a pipeline of generators which can be executed
+in-process
 
-    Usage:
-     a) python riko/compile.py tests/pipelines/testpipe1.json
-        python riko/pypipelines/testpipe1.py
+Usage:
+a) python riko/compile.py tests/pipelines/testpipe1.json
+python riko/pypipelines/testpipe1.py
 
-     b) from riko import compile
+b) from riko import compile
 
-        pipe_def = json.loads(pjson)
-        parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
-        pipeline = build_pipeline(parsed_pipe_def)
-        print(list(pipeline))
+pipe_def = json.loads(pjson)
+parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
+pipeline = build_pipeline(parsed_pipe_def)
+print(list(pipeline))
 
-    Instead of passing a filename, a pipe id can be passed (-p) to fetch the
-    JSON from Yahoo, e.g.
+Instead of passing a filename, a pipe id can be passed (-p) to fetch the
+JSON from Yahoo, e.g.
 
-        python compile.py -p 2de0e4517ed76082dcddf66f7b218057
+python compile.py -p 2de0e4517ed76082dcddf66f7b218057
 
-    Author: Greg Gaughan
-    Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/
-        starting-to-think-about-a-yahoo-pipes-code-generator)
-    Python generator pipelines inspired by:
-        David Beazely (http://www.dabeaz.com/generators-uk)
-    auto-rss module by Mark Pilgrim
+Author: Greg Gaughan
+Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/
+starting-to-think-about-a-yahoo-pipes-code-generator)
+Python generator pipelines inspired by:
+David Beazely (http://www.dabeaz.com/generators-uk)
+auto-rss module by Mark Pilgrim
 
-   License: see LICENSE file
+License: see LICENSE file
 """
 
-from json import dumps, JSONEncoder
 from codecs import open
-from itertools import chain
 from collections import defaultdict
+from collections.abc import Iterable, Iterator, Mapping
 from importlib import import_module
+from itertools import chain
+from json import JSONEncoder, dumps
 from pprint import PrettyPrinter
-from typing import Iterable, Iterator, Mapping, Optional
 
 from jinja2 import Environment, PackageLoader
 
@@ -97,8 +98,8 @@ def _gen_string_modules(
     module_ids: Iterable[str],
     module_names: Iterable[str],
     pipe_names: Iterable[str],
-    context: Optional[Context] = None,
-    **kwargs
+    context: Context | None = None,
+    **kwargs,
 ):
     zipped = zip(module_ids, module_names, pipe_names)
     context = context or Context(**kwargs)
@@ -128,9 +129,9 @@ def _gen_string_modules(
 def _get_pyarg(
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
-    steps: Optional[Steps] = None,
-    context: Optional[Context] = None,
-    **kwargs
+    steps: Steps | None = None,
+    context: Context | None = None,
+    **kwargs,
 ):
     context = context or Context(**kwargs)
     describe = context.describe_input or context.describe_dependencies
@@ -147,9 +148,9 @@ def _get_pyarg(
 def _gen_pykwargs(
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
-    steps: Optional[Mapping] = None,
-    context: Optional[Context] = None,
-    **kwargs
+    steps: Mapping | None = None,
+    context: Context | None = None,
+    **kwargs,
 ):
     module = parsed_pipe_def["modules"][module_id]
     yield ("conf", module["conf"])
@@ -187,7 +188,11 @@ def _gen_pykwargs(
         yield ("embed", updated)
 
     if module["type"] == "split":
-        filtered = [v for v in parsed_pipe_def["wires"].values() if module_id == get_module_id(v)]
+        filtered = [
+            v
+            for v in parsed_pipe_def["wires"].values()
+            if module_id == get_module_id(v)
+        ]
         count = len(filtered)
         updated = count if steps else Id(count)
         yield ("splits", updated)
@@ -199,7 +204,7 @@ def _gen_steps(
     module_ids: Iterable[str],
     module_names: Iterable[str],
     pipe_names: Iterable[str],
-    **kwargs
+    **kwargs,
 ) -> Iterator[Step]:
     zipped = zip(module_ids, module_names, pipe_names)
     kwargs.setdefault("steps", {})
@@ -229,14 +234,12 @@ def _gen_steps(
 
 
 def _get_input_module(
-    parsed_pipe_def: ParsedPipeDef,
-    module_id: str,
-    steps: Optional[Steps] = None
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps | None = None
 ):
-    input_module = steps.get('forever') if steps else None
+    input_module = steps.get("forever") if steps else None
 
-    if module_id in parsed_pipe_def['embed']:
-        input_module = '_INPUT'
+    if module_id in parsed_pipe_def["embed"]:
+        input_module = "_INPUT"
     else:
         for wire in parsed_pipe_def["wires"].values():
             moduleid = get_module_id(wire)
@@ -258,15 +261,18 @@ def _get_input_module(
 
 
 def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
-    """Parse pipe JSON into internal structures
+    """
+    Parse pipe JSON into internal structures
 
     Parameters
     ----------
     pipe_def -- JSON representation of the pipe
     pipe_name -- a name for the pipe (used for linking pipes)
 
-    Returns:
+    Returns
+    -------
     pipe -- an internal representation of a pipe
+
     """
     graph = defaultdict(list, utils.gen_embed_graph(pipe_def))
     [graph[k].append(v) for k, v in utils.gen_graph(pipe_def)]
@@ -286,10 +292,11 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
 def build_pipeline(
     parsed_pipe_def: ParsedPipeDef,
     pipe_def: PipeDef,
-    context: Optional[Context] = None,
-    **kwargs
+    context: Context | None = None,
+    **kwargs,
 ) -> Items:
-    """Convert a pipe into an executable Python pipeline
+    """
+    Convert a pipe into an executable Python pipeline
 
     If describe_input or describe_dependencies then just
     return that instead of the pipeline
@@ -311,7 +318,7 @@ def build_pipeline(
             "module_ids": module_ids,
             "module_names": utils.gen_names(module_ids, parsed_pipe_def),
             "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
-            "steps": {"forever", forever()}
+            "steps": {"forever", forever()},
         }
 
         steps = dict(_gen_steps(parsed_pipe_def, **kwargs, **updates))
@@ -322,9 +329,7 @@ def build_pipeline(
     yield from pipeline
 
 
-def stringify_pipe(
-    parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, **kwargs
-) -> str:
+def stringify_pipe(parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, **kwargs) -> str:
     """Convert a pipe into Python script"""
     module_ids = topological_sort(parsed_pipe_def["graph"])
 

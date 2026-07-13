@@ -1,6 +1,7 @@
 from pprint import pprint
+
 from riko.bado import coroutine, return_value
-from riko.collections import SyncPipe, AsyncPipe
+from riko.collections import AsyncPipe, SyncPipe
 
 p120_conf = {"type": "text"}
 p120_inputs = {"format": "%B %d, %Y"}
@@ -28,8 +29,9 @@ def pipe(test=False):
 def async_pipe(reactor, test=False):
     s1 = yield AsyncPipe("input", test=test, **p120_kwargs)
     s2 = yield (
-        AsyncPipe("input", conf=p112_conf, test=test)
-        .dateformat(conf=p151_conf, format=s1)
+        AsyncPipe("input", conf=p112_conf, test=test).dateformat(
+            conf=p151_conf, format=s1
+        )
     )
 
     output_kwargs = {"conf": p100_conf, "value": s2, "test": test}

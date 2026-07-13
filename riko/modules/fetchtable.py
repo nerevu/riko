@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.fetchtable
@@ -20,21 +19,22 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
+from collections.abc import Iterator
 from os import path as p
-from typing import Iterator
 
 import pygogo as gogo
-
 from meza.io import read
 from meza.process import merge
 
+from riko import ENCODING, Objconf
+from riko.bado import coroutine, io, return_value
 from riko.types.general import BasicMapping, Extraction
+from riko.utils import auto_close, fetch
 
 from . import processor
-from riko import ENCODING, Objconf
-from riko.bado import coroutine, return_value, io
-from riko.utils import fetch, auto_close
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {
@@ -52,8 +52,11 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -89,6 +92,7 @@ def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip
         ...     pass
         ...
         7213
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -103,8 +107,11 @@ def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip
     return_value(stream)
 
 
-def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[BasicMapping]:
-    """Parses the pipe content
+def parser(
+    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> Iterator[BasicMapping]:
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -126,6 +133,7 @@ def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False
         >>> result = parser(None, None, objconf, stream={})
         >>> next(result)['mileage']
         '7213'
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -142,7 +150,8 @@ def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously fetches a file.
+    """
+    A source that asynchronously fetches a file.
 
     Args:
         item (dict): The entry to process
@@ -186,13 +195,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         7213
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses a file to yield items.
+    """
+    A source that fetches and parses a file to yield items.
 
     Args:
         item (dict): The entry to process
@@ -225,5 +236,6 @@ def pipe(*args, **kwargs):
         >>> url = get_path('spreadsheet.csv')
         >>> next(pipe(conf={'url': url}))['mileage']
         '7213'
+
     """
     return parser(*args, **kwargs)

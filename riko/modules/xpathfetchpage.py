@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.xpathfetchpage
@@ -45,20 +44,23 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import traceback
-from typing import Iterator, cast
+from collections.abc import Iterator
+from os.path import splitext
+from typing import cast
+
 import pygogo as gogo
 
-from os.path import splitext
-
+from riko import Objconf
+from riko.bado import coroutine, io, return_value, util
+from riko.parsers import Stringy, any2dict, xpath
 from riko.types.general import BasicArg, BasicMapping, Extraction, ItemArg, Items
+from riko.utils import fetch
 
 from . import processor
-from riko import Objconf
-from riko.utils import fetch
-from riko.parsers import Stringy, any2dict, xpath
-from riko.bado import coroutine, return_value, util, io
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {}
@@ -71,8 +73,11 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -122,6 +127,7 @@ def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=Fal
         ...
         Running “Native” Data Wrangling Applications
         Help Page -- ScienceDaily
+
     """
     stream = kwargs["stream"]
 
@@ -145,13 +151,10 @@ def async_parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=Fal
 
 
 def parser(
-    _: BasicMapping,
-    extraction: Extraction,
-    objconf: Objconf,
-    skip=False,
-    **kwargs
+    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
 ) -> Items | Iterator[Stringy]:
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -170,6 +173,7 @@ def parser(
         >>> result = parser(None, None, objconf, stream={})
         >>> next(result)['title'][:44]
         'Running “Native” Data Wrangling Applications'
+
     """
     if skip:
         yield cast(ItemArg, kwargs["stream"])
@@ -185,7 +189,8 @@ def parser(
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously fetches the content of a given website as
+    """
+    A source that asynchronously fetches the content of a given website as
     DOM nodes or a string.
 
     Args:
@@ -236,13 +241,15 @@ def async_pipe(*args, **kwargs):
         ...
         http://blog.ouseful.info/?p=12065
         Help Page -- ScienceDaily
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches the content of a given website as DOM nodes or a
+    """
+    A source that fetches the content of a given website as DOM nodes or a
     string.
 
     Args:
@@ -277,6 +284,7 @@ def pipe(*args, **kwargs):
         >>> conf = {'url': url, 'xpath': '/html/head/title'}
         >>> next(pipe(conf=conf))
         'Help Page -- ScienceDaily'
+
     """
     # FIXME
     return parser(*args, **kwargs)

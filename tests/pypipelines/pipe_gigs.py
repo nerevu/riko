@@ -2,9 +2,9 @@
 
 from riko import Context
 from riko.modules.fetch import pipe as fetch
-from riko.modules.uniq import pipe as uniq
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as _sort
+from riko.modules.uniq import pipe as uniq
 
 
 def pipe_gigs(item=None, context=None, conf=None, **kwargs):
@@ -15,30 +15,33 @@ def pipe_gigs(item=None, context=None, conf=None, **kwargs):
         return []
 
     urls = [
-        'http://www.guru.com/rss/jobs/c/web-software-it/',
-        'https://www.elance.com/r/rss/jobs/cat-it-programming/fxd-true/o-1/bgt-gt500-ns1/sct-database-development-10217-data-analysis-14174-database-administration-14177-business-intelligence-14173-data-engineering-14175-system-administration-10219-other-data-science-14178-technical-support-10218-other-it-programming-12350-software-application-10216-website-design-10225-web-programming-10224/tls-1/s-timelistedSort'
-        ]
+        "http://www.guru.com/rss/jobs/c/web-software-it/",
+        "https://www.elance.com/r/rss/jobs/cat-it-programming/fxd-true/o-1/bgt-gt500-ns1/sct-database-development-10217-data-analysis-14174-database-administration-14177-business-intelligence-14173-data-engineering-14175-system-administration-10219-other-data-science-14178-technical-support-10218-other-it-programming-12350-software-application-10216-website-design-10225-web-programming-10224/tls-1/s-timelistedSort",
+    ]
 
-    URL = [{'type': 'url', 'value': url} for url in urls]
+    URL = [{"type": "url", "value": url} for url in urls]
 
-    sw_68 = fetch(context=context, conf={'URL': URL})
+    sw_68 = fetch(context=context, conf={"URL": URL})
 
     sw_90 = uniq(
-        sw_68, context=context, conf={'field': {'type': 'text', 'value': 'link'}})
+        sw_68, context=context, conf={"field": {"type": "text", "value": "link"}}
+    )
 
-    COMBINE = {'type': 'text', 'value': 'or'}
-    MODE = {'type': 'text', 'value': 'block'}
-    field = {'type': 'text', 'value': 'title'}
-    value = {'type': 'text', 'value': 'php'}
-    op = {'type': 'text', 'value': 'contains'}
-    RULE = [{'field': field, 'value': value, 'op': op}]
+    COMBINE = {"type": "text", "value": "or"}
+    MODE = {"type": "text", "value": "block"}
+    field = {"type": "text", "value": "title"}
+    value = {"type": "text", "value": "php"}
+    op = {"type": "text", "value": "contains"}
+    RULE = [{"field": field, "value": value, "op": op}]
     sw_87 = _filter(
-        sw_90, context=context, conf={'COMBINE': COMBINE, 'MODE': MODE, 'RULE': RULE})
+        sw_90, context=context, conf={"COMBINE": COMBINE, "MODE": MODE, "RULE": RULE}
+    )
 
-    field = {'type': 'text', 'value': 'pubDate'}
-    direction = {'type': 'text', 'value': 'DESC'}
+    field = {"type": "text", "value": "pubDate"}
+    direction = {"type": "text", "value": "DESC"}
     sw_101 = _sort(
-        sw_87, context=context, conf={'KEY': [{'field': field, 'dir': direction}]})
+        sw_87, context=context, conf={"KEY": [{"field": field, "dir": direction}]}
+    )
 
     return sw_101
 

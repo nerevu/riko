@@ -1,6 +1,7 @@
 # vim: sw=4:ts=4:expandtab
 
-""" A script to manage development tasks """
+"""A script to manage development tasks"""
+
 import sys
 from functools import partial
 from os import environ
@@ -128,11 +129,23 @@ def prettify(where, sort=False):
 @manager.command()
 @click.option("-w", "--where", help="test path", default=None)
 @click.option("-x", "--stop", help="Stop after first error", is_flag=True)
-@click.option("-f", "--failed", help="Run failed tests (overrides --debug)", is_flag=True)
-@click.option("-D", "--debug", help="Drop into pdb on failure (overridden by --failed)", is_flag=True)
+@click.option(
+    "-f", "--failed", help="Run failed tests (overrides --debug)", is_flag=True
+)
+@click.option(
+    "-D",
+    "--debug",
+    help="Drop into pdb on failure (overridden by --failed)",
+    is_flag=True,
+)
 @click.option("-W", "--watch", help="Rerun tests on file changes", is_flag=True)
 @click.option("-c", "--cover/--no-cover", help="Add coverage report", default=True)
-@click.option("-C", "--capture/--no-capture", help="Capture stdout/sdterr (disables --watch)", default=True)
+@click.option(
+    "-C",
+    "--capture/--no-capture",
+    help="Capture stdout/sdterr (disables --watch)",
+    default=True,
+)
 @click.option("-t", "--tox", help="Run tox tests", is_flag=True)
 @click.option("-d", "--detox", help="Run detox tests", is_flag=True)
 @click.option("-v", "--verbose", help="Use detailed errors", is_flag=True)
@@ -195,7 +208,12 @@ def build():
 
 
 @manager.command()
-@click.option("-d", "--dry-run", help="Test that the package can be installed and imported", is_flag=True)
+@click.option(
+    "-d",
+    "--dry-run",
+    help="Test that the package can be installed and imported",
+    is_flag=True,
+)
 def publish(dry_run=False):
     """Publish riko to PyPI"""
     try:
@@ -204,9 +222,13 @@ def publish(dry_run=False):
         exit(e.returncode)
 
 
-
 @manager.command()
-@click.option("-d", "--dry-run", help="Test that the package can be installed and imported", is_flag=True)
+@click.option(
+    "-d",
+    "--dry-run",
+    help="Test that the package can be installed and imported",
+    is_flag=True,
+)
 def release(dry_run=False):
     """Build and publish new riko version"""
     try:

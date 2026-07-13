@@ -1,6 +1,7 @@
 from pprint import pprint
+
 from riko.bado import coroutine, return_value
-from riko.collections import SyncPipe, AsyncPipe
+from riko.collections import AsyncPipe, SyncPipe
 
 p1_conf = {
     "attrs": [{"value": "http://www.caltrain.com/Fares/farechart.html", "key": "url"}]
@@ -26,4 +27,3 @@ def async_pipe(_, test=False):
 if __name__ == "__main__":
     for i in pipe():
         pprint(str(i["url"]))
-

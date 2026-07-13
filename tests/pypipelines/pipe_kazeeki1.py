@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
 from riko import Context
 from riko.collections import SyncPipe
-from tests.pypipelines._pipe_kazeeki import fetchdata_conf, rename_conf, regex_conf
+from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 
 def pipe_kazeeki1(context: Context):

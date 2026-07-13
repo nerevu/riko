@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.currencies
@@ -9,10 +8,10 @@ Provides currency lookup dictionaries
 Attributes:
     CURRENCY_SYMBOLS (dict): Currency symbol to code mapping
     CURRENCY_CODES (dict): Currency symbol to info mapping
+
 """
 
 from riko.types.general import CurrencyCode
-
 
 CURRENCY_SYMBOLS = {
     "$": "USD",

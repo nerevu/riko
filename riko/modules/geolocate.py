@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.geolocate
@@ -20,12 +19,14 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import pygogo as gogo
 
 from riko import Objconf
 from riko.cast import CastType, cast
-from riko.types.general import BasicArg, Extraction, ItemArg, AnyLocation
+from riko.types.general import AnyLocation, Extraction, ItemArg
 
 from . import processor
 
@@ -34,8 +35,11 @@ DEFAULTS = {"type": "street_address"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(address: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg | AnyLocation:
-    """Parses the pipe content
+def parser(
+    address: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> ItemArg | AnyLocation:
+    """
+    Parses the pipe content
 
     Args:
         address (str): The address to lookup
@@ -59,6 +63,7 @@ def parser(address: str, extraction: Extraction, objconf: Objconf, skip=False, *
         >>> kwargs = {'stream': item, 'assign': 'content'}
         >>> parser(item['content'], None, objconf, **kwargs)['country']
         'United Kingdom'
+
     """
     if skip:
         location = kwargs["stream"]
@@ -70,7 +75,8 @@ def parser(address: str, extraction: Extraction, objconf: Objconf, skip=False, *
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously obtains the geo location of an ip address, street
+    """
+    A processor module that asynchronously obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.
 
     Args:
@@ -107,13 +113,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         United Kingdom
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor module that obtains the geo location of an ip address, street
+    """
+    A processor module that obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.
 
     Args:
@@ -144,5 +152,6 @@ def pipe(*args, **kwargs):
         >>> geolocate = next(pipe({'address': address}, **kwargs))['result']
         >>> geolocate['country']
         'United States'
+
     """
     return parser(*args, **kwargs)

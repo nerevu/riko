@@ -2,9 +2,9 @@
 
 from riko import Context, get_path
 from riko.modules.fetchdata import pipe as fetchdata
-from riko.modules.strconcat import pipe as strconcat
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
+from riko.modules.strconcat import pipe as strconcat
 
 
 def pipe_dAI_R_FS3BG6fTKsAsqenA(context=None, conf=None):

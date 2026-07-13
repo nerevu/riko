@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.strreplace
@@ -23,18 +22,20 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from typing import Sequence
+
+from collections.abc import Sequence
+from functools import reduce
 
 import pygogo as gogo
 
-from functools import reduce
-
 from riko import Objconf
+from riko.bado import coroutine, return_value
+from riko.bado import itertools as ait
 from riko.types.general import ItemArg, ObjconfRule
 
 from . import processor
-from riko.bado import coroutine, return_value, itertools as ait
 
 OPTS = {"ftype": "text", "listize": True, "field": "content", "extract": "rule"}
 DEFAULTS = {}
@@ -52,8 +53,11 @@ def reducer(word, rule):
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         word (str): The string to transform
@@ -86,6 +90,7 @@ def async_parser(word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip
         ...     pass
         ...
         bye world
+
     """
     if skip:
         value = kwargs["stream"]
@@ -95,8 +100,11 @@ def async_parser(word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip
     return_value(value)
 
 
-def parser(word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs) -> ItemArg:
-    """Parses the pipe content
+def parser(
+    word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
+) -> ItemArg:
+    """
+    Parses the pipe content
 
     Args:
         word (str): The string to transform
@@ -119,13 +127,15 @@ def parser(word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False
         >>> rule = Objectify(conf['rule'])
         >>> parser(item['content'], [rule], None, stream=item)
         'bye world'
+
     """
     return kwargs["stream"] if skip else reduce(reducer, rules, word)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously replaces the text of a field of
+    """
+    A processor module that asynchronously replaces the text of a field of
     an item.
 
     Args:
@@ -165,13 +175,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         bye world
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that replaces the text of a field of an item.
+    """
+    A processor that replaces the text of a field of an item.
 
     Args:
         item (dict): The entry to process
@@ -207,5 +219,6 @@ def pipe(*args, **kwargs):
         >>> item = {'title': 'Greetings'}
         >>> next(pipe(item, **kwargs))['result']
         'Meatings'
+
     """
     return parser(*args, **kwargs)

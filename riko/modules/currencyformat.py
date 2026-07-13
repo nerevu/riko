@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.currencyformat
@@ -16,15 +15,18 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 from decimal import Decimal
+
+import pygogo as gogo
 from babel.numbers import format_currency
 
 from riko import Objconf
 from riko.types.general import Extraction
 
 from . import processor
-import pygogo as gogo
 
 OPTS = {"ftype": "decimal", "field": "content"}
 DEFAULTS = {"currency": "USD"}
@@ -34,7 +36,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(amount, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Parsers the pipe content
+    """
+    Parsers the pipe content
 
     Args:
         amount (Decimal): The amount to format
@@ -51,6 +54,7 @@ def parser(amount, extraction: Extraction, objconf: Objconf, skip=False, **kwarg
         >>> objconf = Objectify({'currency': 'USD'})
         >>> parser(Decimal('10.33'), None, objconf)
         '$10.33'
+
     """
     if skip:
         parsed = kwargs["stream"]
@@ -67,7 +71,8 @@ def parser(amount, extraction: Extraction, objconf: Objconf, skip=False, **kwarg
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously formats a number to a given
+    """
+    A processor module that asynchronously formats a number to a given
     currency string.
 
     Args:
@@ -104,13 +109,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         $10.33
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor module that formats a number to a given currency string.
+    """
+    A processor module that formats a number to a given currency string.
 
     Args:
         item (dict): The entry to process
@@ -137,5 +144,6 @@ def pipe(*args, **kwargs):
         >>> result = next(pipe({'content': '100'}, conf=conf))
         >>> result['currencyformat']
         '£100.00'
+
     """
     return parser(*args, **kwargs)

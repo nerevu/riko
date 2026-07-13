@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.bado.util
@@ -10,21 +9,23 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.bado.util import xml2etree
+
 """
+
+from functools import partial
 from os import environ
 from sys import executable
-from functools import partial
 
 from riko.parsers import _make_content, entity2text
 
 try:
-    from twisted.internet.defer import maybeDeferred, Deferred
+    from twisted.internet.defer import Deferred, maybeDeferred
 except ImportError:
     maybeDeferred = lambda *args: None
 else:
     from twisted.internet import defer
-    from twisted.internet.utils import getProcessOutput
     from twisted.internet.reactor import callLater
+    from twisted.internet.utils import getProcessOutput
 
     from . import microdom
     from .microdom import EntityReference
@@ -60,7 +61,8 @@ def xml2etree(f, xml=True):
 
 
 def etree2dict(element, tag="content"):
-    """Convert a microdom element tree into a dict imitating how Yahoo Pipes
+    """
+    Convert a microdom element tree into a dict imitating how Yahoo Pipes
     does it.
 
     TODO: checkout twisted.words.xish

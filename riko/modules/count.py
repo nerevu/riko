@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.count
@@ -19,12 +18,14 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
-"""
-import itertools as it
-from typing import Iterator
-import pygogo as gogo
 
+"""
+
+import itertools as it
+from collections.abc import Iterator
 from operator import itemgetter
+
+import pygogo as gogo
 
 from . import operator
 
@@ -34,7 +35,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, count_key: str, tuples, **kwargs) -> int | Iterator[dict[str, int]]:
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -71,6 +73,7 @@ def parser(stream, count_key: str, tuples, **kwargs) -> int | Iterator[dict[str,
         {'one': 1}
         >>> next(counted)
         {'two': 2}
+
     """
     if count_key:
         keyfunc = itemgetter(count_key)
@@ -85,7 +88,8 @@ def parser(stream, count_key: str, tuples, **kwargs) -> int | Iterator[dict[str,
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously and eagerly counts the number of items
+    """
+    An operator that asynchronously and eagerly counts the number of items
     in a stream. Note that this pipe is not lazy.
 
     Args:
@@ -123,13 +127,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         5
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
-    """An operator that eagerly counts the number of items in a stream.
+    """
+    An operator that eagerly counts the number of items in a stream.
     Note that this pipe is not lazy.
 
     Args:
@@ -164,5 +170,6 @@ def pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
         {'one': 1}
         >>> next(counted)
         {'two': 2}
+
     """
     return parser(*args, **kwargs)

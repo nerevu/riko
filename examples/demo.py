@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
 """
@@ -40,9 +39,10 @@ Fetching feeds
     >>> item['link'][:23]
     'http://feeds.gawker.com'
 """
+
 from riko import get_path
 from riko.bado import coroutine, return_value
-from riko.collections import SyncPipe, AsyncPipe
+from riko.collections import AsyncPipe, SyncPipe
 
 replace_conf = {"rule": {"find": "\n", "replace": " "}}
 health = get_path("health.xml")

@@ -1,6 +1,7 @@
 from pprint import pprint
+
 from riko.bado import coroutine, return_value
-from riko.collections import SyncPipe, AsyncPipe
+from riko.collections import AsyncPipe, SyncPipe
 
 p232_conf = {
     "attrs": [

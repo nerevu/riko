@@ -1,28 +1,51 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.cast
 ~~~~~~~~~
 Provides type casting capabilities
 """
+
+from ast import literal_eval
+from collections.abc import Callable
+from datetime import UTC, date, timedelta
+from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from functools import partial
 from json import loads
 from operator import add, sub
 from time import gmtime, struct_time
-from datetime import date, datetime as dt, timedelta, UTC
-from typing import Callable, Literal, Optional, TypeVar, overload
-from urllib.parse import quote, urlparse
-from ast import literal_eval
+from typing import Literal, TypeVar, overload
 from typing import cast as cast_type
+from urllib.parse import quote, urlparse
 
 from dateutil import parser
 from meza.compat import decode
-from riko.dates import EPOCH_DATE, EPOCH_DATETIME, TODAY, TZINFOS, get_date, tt_to_datedict, tt_to_datetime, date_to_tt
+
 from riko.currencies import CURRENCY_CODES
+from riko.dates import (
+    EPOCH_DATE,
+    EPOCH_DATETIME,
+    TODAY,
+    TZINFOS,
+    date_to_tt,
+    get_date,
+    tt_to_datedict,
+    tt_to_datetime,
+)
 from riko.locations import LOCATIONS
-from riko.types.general import BasicValue, ComplexArg, BasicArg, ComplexValue, DateDict, DateLike, IPAddress, IntermediateArg, Location, AnyLocation, PreCaster
+from riko.types.general import (
+    AnyLocation,
+    BasicArg,
+    BasicValue,
+    ComplexArg,
+    ComplexValue,
+    DateDict,
+    DateLike,
+    IPAddress,
+    Location,
+    PreCaster,
+)
 
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
@@ -64,8 +87,8 @@ def cast_url(url: str) -> str:
 
 def lookup_street_address(_: str) -> Location:
     location = {
-        "lat": 0.,
-        "lon": 0.,
+        "lat": 0.0,
+        "lon": 0.0,
         "country": "United States",
         "admin1": "state",
         "admin2": "county",
@@ -90,15 +113,17 @@ def lookup_ip_address(address: str) -> IPAddress:
     return location
 
 
-def lookup_coordinates(latlon="", lat: Optional[float] = None, lon: Optional[float] = None) -> Location:
+def lookup_coordinates(
+    latlon="", lat: float | None = None, lon: float | None = None
+) -> Location:
     if "," in latlon:
         try:
             lat_str, lon_str = latlon.split(",")
             lat, lon = float(lat_str.strip()), float(lon_str.strip())
         except ValueError:
-            lat, lon = 0., 0.
+            lat, lon = 0.0, 0.0
     else:
-        lat, lon = lat or 0., lon or 0.
+        lat, lon = lat or 0.0, lon or 0.0
 
     location = {
         "lat": lat,
@@ -137,25 +162,24 @@ def cast_location(address: BasicValue, loc_type="street_address") -> AnyLocation
 
 
 @overload
-def cast_datetime(value: DateLike) -> Optional[dt]:
-    ...
-@overload  # noqa: E302
-def cast_datetime(value: DateLike, as_date: Literal[True]) -> Optional[date]:
-    ...
-@overload  # noqa: E302
-def cast_datetime(value: DateLike, as_date: Literal[False]) -> Optional[dt]:
-    ...
-@overload  # noqa: E302
-def cast_datetime(value: DateLike, as_date: Literal[True], as_datedict: Literal[True]) -> Optional[DateDict]:
-    ...
-@overload  # noqa: E302
-def cast_datetime(value: DateLike, as_date: Literal[False], as_datedict: Literal[True]) -> Optional[DateDict]:
-    ...
-def cast_datetime(  # noqa: E302
+def cast_datetime(value: DateLike) -> dt | None: ...
+@overload
+def cast_datetime(value: DateLike, as_date: Literal[True]) -> date | None: ...
+@overload
+def cast_datetime(value: DateLike, as_date: Literal[False]) -> dt | None: ...
+@overload
+def cast_datetime(
+    value: DateLike, as_date: Literal[True], as_datedict: Literal[True]
+) -> DateDict | None: ...
+@overload
+def cast_datetime(
+    value: DateLike, as_date: Literal[False], as_datedict: Literal[True]
+) -> DateDict | None: ...
+def cast_datetime(
     value: DateLike,
     as_date=False,
     as_datedict=False,
-) -> Optional[date | dt | DateDict]:
+) -> date | dt | DateDict | None:
     tt = None
 
     if isinstance(value, date) and as_date:
@@ -202,7 +226,9 @@ def cast_datetime(  # noqa: E302
     return result
 
 
-cast_date = cast_type(Callable[[DateLike], Optional[date]], partial(cast_datetime, as_date=True))
+cast_date = cast_type(
+    Callable[[DateLike], date | None], partial(cast_datetime, as_date=True)
+)
 
 
 CAST_SWITCH: dict[str, PreCaster] = {
@@ -236,46 +262,40 @@ class CastType(StrEnum):
 
 
 @overload
-def cast(content: ComplexArg) -> str:
-    ...
-@overload  # noqa: E302
-def cast(content: T, _type: Literal[CastType.PASS], **kwargs) -> T:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.NONE], **kwargs) -> None:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.TEXT], **kwargs) -> str:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.FLOAT], **kwargs) -> float:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.DECIMAL], **kwargs) -> Decimal:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.INT], **kwargs) -> int:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.DATETIME], **kwargs) -> dt:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.DATE], **kwargs) -> date:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.URL], **kwargs) -> str:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.LOCATION], **kwargs) -> AnyLocation:
-    ...
-@overload  # noqa: E302
-def cast(content: ComplexArg, _type: Literal[CastType.BOOL], **kwargs) -> bool:
-    ...
-@overload  # noqa: E302
-def cast(content: T, _type: CastType, **kwargs) -> T | ComplexValue:
-    ...
+def cast(content: ComplexArg) -> str: ...
+@overload
+def cast(content: T, _type: Literal[CastType.PASS], **kwargs) -> T: ...
+@overload
+def cast(content: ComplexArg, _type: Literal[CastType.NONE], **kwargs) -> None: ...
+@overload
+def cast(content: ComplexArg, _type: Literal[CastType.TEXT], **kwargs) -> str: ...
+@overload
+def cast(content: ComplexArg, _type: Literal[CastType.FLOAT], **kwargs) -> float: ...
+@overload
+def cast(
+    content: ComplexArg, _type: Literal[CastType.DECIMAL], **kwargs
+) -> Decimal: ...
+@overload
+def cast(content: ComplexArg, _type: Literal[CastType.INT], **kwargs) -> int: ...
+@overload
+def cast(content: ComplexArg, _type: Literal[CastType.DATETIME], **kwargs) -> dt: ...
+@overload
+def cast(content: ComplexArg, _type: Literal[CastType.DATE], **kwargs) -> date: ...
+@overload
+def cast(content: ComplexArg, _type: Literal[CastType.URL], **kwargs) -> str: ...
+@overload
+def cast(
+    content: ComplexArg, _type: Literal[CastType.LOCATION], **kwargs
+) -> AnyLocation: ...
+@overload
+def cast(content: ComplexArg, _type: Literal[CastType.BOOL], **kwargs) -> bool: ...
+@overload
+def cast(content: T, _type: CastType, **kwargs) -> T | ComplexValue: ...
+
+
 def cast(content: T, _type: CastType = CastType.TEXT, **kwargs) -> T | ComplexValue:
-    """Convert content from one type to another
+    """
+    Convert content from one type to another
 
     Args:
         content: The entry to convert
@@ -304,6 +324,7 @@ def cast(content: T, _type: CastType = CastType.TEXT, **kwargs) -> T | ComplexVa
         Decimal('NaN')
         >>> cast('foo', 'int')
         0
+
     """
     if _type and _type in CAST_SWITCH:
         precaster = CAST_SWITCH[_type]
@@ -317,9 +338,7 @@ def cast(content: T, _type: CastType = CastType.TEXT, **kwargs) -> T | ComplexVa
 
     if content is None and _type != CastType.NONE:
         value = default
-    elif content is None:
-        value = None
-    elif _type == CastType.NONE:
+    elif content is None or _type == CastType.NONE:
         value = None
     elif _type == CastType.PASS:
         value = content
@@ -332,7 +351,11 @@ def cast(content: T, _type: CastType = CastType.TEXT, **kwargs) -> T | ComplexVa
             value = caster(content)
         except (InvalidOperation, ValueError):
             value = default
-    elif isinstance(content, (int, float, Decimal)) and _type in {CastType.INT, CastType.FLOAT, CastType.DECIMAL}:
+    elif isinstance(content, (int, float, Decimal)) and _type in {
+        CastType.INT,
+        CastType.FLOAT,
+        CastType.DECIMAL,
+    }:
         caster = precaster["func"]
         value = caster(content)
     elif isinstance(content, (struct_time, dt, date)) and _type == CastType.DATE:
@@ -340,7 +363,9 @@ def cast(content: T, _type: CastType = CastType.TEXT, **kwargs) -> T | ComplexVa
     elif isinstance(content, (struct_time, dt, date)) and _type == CastType.DATETIME:
         value = cast_datetime(content)
     else:
-        print(f"Casting a {type(content)} to _type={_type} is not supported. Returning {content=} as is.")
+        print(
+            f"Casting a {type(content)} to _type={_type} is not supported. Returning {content=} as is."
+        )
         value = content
 
     return value

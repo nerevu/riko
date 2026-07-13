@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.bado.mock
@@ -10,7 +9,9 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.bado.mock import FakeReactor
+
 """
+
 import pygogo as gogo
 
 from . import reactor
@@ -25,7 +26,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class FakeReactor(MemoryReactorClock):
-    """A fake reactor to be used in tests. This reactor doesn't actually do
+    """
+    A fake reactor to be used in tests. This reactor doesn't actually do
     much that's useful yet. It accepts TCP connection setup attempts, but
     they will never succeed.
 
@@ -52,17 +54,18 @@ class FakeReactor(MemoryReactorClock):
         ...     os.close(r_fd)
         4
         b'riko'
+
     """
 
     _DELAY = 1
 
     def __init__(self):
-        super(FakeReactor, self).__init__()
+        super().__init__()
         reactor.fake = True
 
     def callLater(self, when, what, *args, **kwargs):
         """Schedule a unit of work to be done later."""
-        delayed = super(FakeReactor, self).callLater(when, what, *args, **kwargs)
+        delayed = super().callLater(when, what, *args, **kwargs)
         self.pump()
         return delayed
 

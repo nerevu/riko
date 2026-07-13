@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.substr
@@ -13,6 +12,7 @@ Notice that the first character in the original string is 0, not 1.
 If you enter too long a length, the module just returns a substring to the end
 of the input string, so if you enter a From of 3 and a length of 100, you'll
 get a result of "DEFG".
+
 Examples:
     basic usage::
 
@@ -26,13 +26,15 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
+import pygogo as gogo
 
 from riko import Objconf
 from riko.types.general import Extraction, ItemArg
 
 from . import processor
-import pygogo as gogo
 
 OPTS = {"ftype": "text", "ptype": "int", "field": "content"}
 DEFAULTS = {"start": 0, "length": 0}
@@ -40,7 +42,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(word: str, _: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg:
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         word (str): The string to parse
@@ -62,14 +65,16 @@ def parser(word: str, _: Extraction, objconf: Objconf, skip=False, **kwargs) -> 
         >>> conf = {'start': 3, 'length': 4}
         >>> parser(item['content'], None, Objectify(conf), stream=item)
         'lo w'
+
     """
     end = objconf.start + objconf.length if objconf.length else None
-    return kwargs["stream"] if skip else word[objconf.start: end]
+    return kwargs["stream"] if skip else word[objconf.start : end]
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously returns a substring of a field
+    """
+    A processor module that asynchronously returns a substring of a field
     of an item.
 
     Args:
@@ -105,13 +110,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         lo w
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that returns a substring of a field of an item.
+    """
+    A processor that returns a substring of a field of an item.
 
     Args:
         item (dict): The entry to process
@@ -139,5 +146,6 @@ def pipe(*args, **kwargs):
         >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
         >>> next(pipe({'title': 'Greetings'}, **kwargs))['result']
         'etings'
+
     """
     return parser(*args, **kwargs)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.bado.requests
@@ -10,6 +9,7 @@ Examples:
 
         >>> from riko import get_path
         >>> from riko.bado import requests as treq
+
 """
 
 try:

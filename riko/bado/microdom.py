@@ -18,36 +18,43 @@ sample of XML.
 Microdom mainly focuses on working with HTML and XHTML.
 """
 
-from http.client import HTTPResponse
-import re
-from re import Match
 import itertools as it
-
-from io import open, BytesIO, StringIO
+import re
+from collections.abc import Callable, Iterable, Mapping
 from functools import partial
-from typing import Callable, Iterable, Mapping, Optional, Sequence, cast
+from http.client import HTTPResponse
+from io import BytesIO, StringIO
+from re import Match
+from typing import cast
 
-from meza.compat import encode as _encode, decode as _decode
+from meza.compat import decode as _decode
+from meza.compat import encode as _encode
 
 try:
     from twisted.python.util import InsensitiveDict
 except ImportError:
     pass
 
-from .sux import XMLParser, ParseError
-from riko.utils import invert_dict
-from riko.parsers import ESCAPE, entity2text, text2entity
+import builtins
+
 from meza.process import merge
+
+from riko.parsers import ESCAPE, entity2text
+from riko.utils import invert_dict
+
+from .sux import ParseError, XMLParser
 
 HTML_ESCAPE_CHARS = {"&amp;", "&lt;", "&gt;", "&quot;"}
 entity_pattern = re.compile("&(.*?);")
-escape_pattern = re.compile(f"['{"".join(ESCAPE)}']")
+escape_pattern = re.compile(f"['{''.join(ESCAPE)}']")
 
 encode = cast(Callable[[str], bytes], _encode)
 decode = cast(Callable[[bytes], str], _decode)
 
 
-def get_repl(matchobj: Match, escape_chars: Optional[Iterable[str]] = None, parse_all=False) -> str:
+def get_repl(
+    matchobj: Match, escape_chars: Iterable[str] | None = None, parse_all=False
+) -> str:
     match: str = matchobj.group(0)
 
     if parse_all:
@@ -115,9 +122,8 @@ def get_element_by_id(nodes, node_id):
     for node in nodes:
         if node.getAttribute("id") == node_id:
             return node
-    else:
-        for node in nodes:
-            return get_element_by_id(node.childNodes, node_id)
+    for node in nodes:
+        return get_element_by_id(node.childNodes, node_id)
 
 
 class MismatchedTags(Exception):
@@ -138,7 +144,7 @@ class MismatchedTags(Exception):
         return msg % self.__dict__
 
 
-class Node(object):
+class Node:
     nodeName = "Node"
 
     def __init__(self, parentNode=None):
@@ -426,7 +432,7 @@ class CDATASection(CharacterData):
 
 
 class _Attr(CharacterData):
-    "Support class for getAttributeNode."
+    """Support class for getAttributeNode."""
 
 
 class Element(Node):
@@ -772,7 +778,7 @@ class MicroDOMParser(XMLParser):
     # <dash> glyph: a quick scan thru the DTD says BODY, AREA, LINK, IMG, HR,
     # P, DT, DD, LI, INPUT, OPTION, THEAD, TFOOT, TBODY, COLGROUP, COL, TR, TH,
     # TD, HEAD, BASE, META, HTML all have optional closing tags
-    def_soon_closers = "area link br img hr input base meta".split()
+    def_soon_closers = ["area", "link", "br", "img", "hr", "input", "base", "meta"]
     def_later_closers = {
         "p": ["p", "dt"],
         "dt": ["dt", "dd"],
@@ -844,7 +850,7 @@ class MicroDOMParser(XMLParser):
 
             if match:
                 prefix = match.group()
-                oldvalue = oldvalue[len(prefix):]
+                oldvalue = oldvalue[len(prefix) :]
 
             # now see if contents are actual node and comment or CDATA
             try:
@@ -1059,7 +1065,7 @@ def parse(f: str | BytesIO | HTTPResponse, *args, **kwargs) -> Document:
     if isinstance(f, HTTPResponse):
         readable = f.fp
     elif isinstance(f, str):
-        readable = open(f, "rb")
+        readable = builtins.open(f, "rb")
     else:
         readable = f
 

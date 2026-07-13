@@ -1,19 +1,28 @@
-
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum, auto
 from io import StringIO
 from time import struct_time
-from typing import Callable, Iterable, Iterator, Literal, Mapping, NamedTuple, NotRequired, Optional, Protocol, Sequence, TypeAlias, TYPE_CHECKING, TypedDict, Union
-from dataclasses import dataclass
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+    NamedTuple,
+    NotRequired,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypedDict,
+    Union,
+)
 
 from twisted.internet.defer import Deferred
 
 from riko.types.compile import LayoutItem, Module, TerminalDataEntry, Wire
 
-
 if TYPE_CHECKING:
-    from riko import Objectify, Context, Objconf
+    from riko import Context, Objconf, Objectify
     from riko.dotdict import DotDict
 
 
@@ -32,22 +41,44 @@ DateLike: TypeAlias = BasicValue | date | datetime | struct_time
 DateDict: TypeAlias = Mapping[str, str | int | date | bool]
 NumLike: TypeAlias = float | int | Decimal
 IntermediateValue: TypeAlias = BasicValue | DateLike | NumLike | bool | None
-ComplexValue: TypeAlias = Union[IntermediateValue, AnyLocation]
+ComplexValue: TypeAlias = IntermediateValue | AnyLocation
 Caster: TypeAlias = Callable[[str | int], ComplexValue]
-PreCaster = TypedDict("PreCaster", {"default": IntermediateValue | Mapping[str, str] | None, "func": Caster})
+
+
+class PreCaster(TypedDict):
+    default: IntermediateValue | Mapping[str, str] | None
+    func: Caster
+
 
 Objconfs: TypeAlias = Sequence["Objconf"]
 Extraction: TypeAlias = Union["Objconf", Objconfs]
-StatefulItem = TypedDict("StatefulItem", {"state": StreamState})
+
+
+class StatefulItem(TypedDict):
+    state: StreamState
+
 
 BasicMapping: TypeAlias = Mapping[str, "BasicArg"]
-IntermediateMapping: TypeAlias = Union[BasicMapping, Mapping[str, "IntermediateArg"], "DotDict"]
-ComplexMapping: TypeAlias = Union[IntermediateMapping, Mapping[str, "ComplexArg"], DateDict, Location, "Objconf", "Objectify", StatefulItem, Wire]
+IntermediateMapping: TypeAlias = Union[
+    BasicMapping, Mapping[str, "IntermediateArg"], "DotDict"
+]
+ComplexMapping: TypeAlias = Union[
+    IntermediateMapping,
+    Mapping[str, "ComplexArg"],
+    DateDict,
+    Location,
+    "Objconf",
+    "Objectify",
+    StatefulItem,
+    Wire,
+]
 BasicSequence: TypeAlias = Sequence["BasicArg"]
 IntermediateSequence: TypeAlias = Sequence["IntermediateArg"]
 ComplexSequence: TypeAlias = Sequence["ComplexArg"]
 BasicArg: TypeAlias = BasicValue | BasicMapping | BasicSequence
-IntermediateArg: TypeAlias = IntermediateValue | IntermediateMapping | IntermediateSequence
+IntermediateArg: TypeAlias = (
+    IntermediateValue | IntermediateMapping | IntermediateSequence
+)
 ComplexArg: TypeAlias = ComplexValue | ComplexMapping | ComplexSequence
 
 BasicDict: TypeAlias = dict[str, "BasicAnyReturn"]
@@ -57,16 +88,20 @@ BasicAnyReturn: TypeAlias = BasicDict | BasicList | BasicValue
 ItemArg: TypeAlias = Union["DotDict", BasicMapping, BasicValue]
 Items: TypeAlias = Iterator[ItemArg]
 ItemsArg: TypeAlias = Iterable[ItemArg]
-ProcessorItems: TypeAlias = Items | ComplexArg | Iterator[BasicArg | BasicMapping | None]
-OperatorItems: TypeAlias = ItemsArg | NumLike | Iterator[dict[str, StreamState] | ComplexArg]
+ProcessorItems: TypeAlias = (
+    Items | ComplexArg | Iterator[BasicArg | BasicMapping | None]
+)
+OperatorItems: TypeAlias = (
+    ItemsArg | NumLike | Iterator[dict[str, StreamState] | ComplexArg]
+)
 PipeTuple: TypeAlias = tuple[ItemArg, "Objconf"]
 PipeTuples: TypeAlias = Iterator[PipeTuple]
 ConversionFunc: TypeAlias = Callable[..., ItemsArg | StringIO]
 
 # Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
 # TODO: add type hint overloads to Reencoder with decode=True -> str
-tuple[Optional[str | StringIO], Optional[str]]
-Opener = Callable[[str], tuple[Optional[str | StringIO], Optional[str]]]
+tuple[str | StringIO | None, str | None]
+Opener = Callable[[str], tuple[str | StringIO | None, str | None]]
 
 
 class Skip(TypedDict):
@@ -104,7 +139,7 @@ class ParsedInputConf(TypedDict):
     param: ParsedParam | Sequence[ParsedParam]
 
 
-class ObjconfParam(object):
+class ObjconfParam:
     key: str
     value: str
 
@@ -113,25 +148,36 @@ class ObjconfParam(object):
 class ObjconfRegexRule:
     field: str
     default: str
-    casematch: Optional[bool]
-    singlelinematch: Optional[bool]
-    offset: Optional[int]
+    casematch: bool | None
+    singlelinematch: bool | None
+    offset: int | None
     match: str
     replace: str = ""
     seriesmatch: bool = True
 
 
-class ObjconfRule(object):
+class ObjconfRule:
     field: str
     value: BasicArg
     op: Literal[
-        'contains', 'doesnotcontain', 'matches', 'is', 'isnot', 'truthy',
-        'falsy', 'greater', 'less', 'after', 'before', 'atleast', 'atmost'
+        "contains",
+        "doesnotcontain",
+        "matches",
+        "is",
+        "isnot",
+        "truthy",
+        "falsy",
+        "greater",
+        "less",
+        "after",
+        "before",
+        "atleast",
+        "atmost",
     ]
-    dir: Optional[str]
-    type: Optional[str]
-    newval: Optional[str]
-    copy: Optional[bool]
+    dir: str | None
+    type: str | None
+    newval: str | None
+    copy: bool | None
 
 
 class Defaults(TypedDict, total=False):
@@ -216,10 +262,12 @@ class Dispatched(NamedTuple):
 
 
 # Sync
-SyncItemFunc: TypeAlias = Callable[[Optional[ItemArg]], ComplexArg]
+SyncItemFunc: TypeAlias = Callable[[ItemArg | None], ComplexArg]
 SyncAnyFunc: TypeAlias = Callable[[ComplexArg], ComplexArg]
 
-SyncProcessorParser: TypeAlias = Callable[[ComplexArg, ComplexArg, ComplexArg], ProcessorItems]
+SyncProcessorParser: TypeAlias = Callable[
+    [ComplexArg, ComplexArg, ComplexArg], ProcessorItems
+]
 SyncOperatorParser: TypeAlias = Callable[[Items, ComplexArg, PipeTuples], OperatorItems]
 
 SyncPipeResult: TypeAlias = ProcessorItems | OperatorItems
@@ -233,24 +281,22 @@ Steps: TypeAlias = dict[str, SyncPipeResult | SyncPipeline]
 class SyncProcessorWrapper(Protocol):
     def __call__(
         self,
-        item: Optional[ItemArg] = None,
-        conf: Optional[BasicMapping] = None,
+        item: ItemArg | None = None,
+        conf: BasicMapping | None = None,
         context: Optional["Context"] = None,
-        **kwargs
-    ) -> Items:
-        ...
+        **kwargs,
+    ) -> Items: ...
 
 
 class SyncOperatorWrapper(Protocol):
     def __call__(
         self,
-        items: Optional[Items] = None,
-        conf: Optional[BasicMapping] = None,
-        embed: Optional[SyncProcessorWrapper] = None,
+        items: Items | None = None,
+        conf: BasicMapping | None = None,
+        embed: SyncProcessorWrapper | None = None,
         context: Optional["Context"] = None,
-        **kwargs
-    ) -> Items:
-        ...
+        **kwargs,
+    ) -> Items: ...
 
 
 class ParseFuncs(NamedTuple):
@@ -265,8 +311,12 @@ class CastFuncs(NamedTuple):
 
 
 # Async
-AsyncProcessorParser: TypeAlias = Callable[[ComplexArg, ComplexArg, ComplexArg], Deferred[ProcessorItems]]
-AsyncOperatorParser: TypeAlias = Callable[[Deferred[Items], ComplexArg, PipeTuples], Deferred[OperatorItems]]
+AsyncProcessorParser: TypeAlias = Callable[
+    [ComplexArg, ComplexArg, ComplexArg], Deferred[ProcessorItems]
+]
+AsyncOperatorParser: TypeAlias = Callable[
+    [Deferred[Items], ComplexArg, PipeTuples], Deferred[OperatorItems]
+]
 
 AsyncPipeResult: TypeAlias = Deferred[ProcessorItems] | Deferred[OperatorItems]
 AsyncPipeline: TypeAlias = Callable[..., AsyncPipeResult]
@@ -275,24 +325,22 @@ AsyncPipeline: TypeAlias = Callable[..., AsyncPipeResult]
 class AsyncProcessorWrapper(Protocol):
     def __call__(
         self,
-        item: Optional[ItemArg] = None,
-        conf: Optional[BasicMapping] = None,
+        item: ItemArg | None = None,
+        conf: BasicMapping | None = None,
         context: Optional["Context"] = None,
-        **kwargs
-    ) -> Deferred[Items]:
-        ...
+        **kwargs,
+    ) -> Deferred[Items]: ...
 
 
 class AsyncOperatorWrapper(Protocol):
     def __call__(
         self,
-        items: Optional[Items] = None,
-        conf: Optional[BasicMapping] = None,
-        embed: Optional[AsyncProcessorWrapper] = None,
+        items: Items | None = None,
+        conf: BasicMapping | None = None,
+        embed: AsyncProcessorWrapper | None = None,
         context: Optional["Context"] = None,
-        **kwargs
-    ) -> Deferred[Items]:
-        ...
+        **kwargs,
+    ) -> Deferred[Items]: ...
 
 
 # Both

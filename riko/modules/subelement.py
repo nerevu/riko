@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.subelement
@@ -51,14 +50,18 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
 
-from typing import Iterator
-from riko.types.general import BasicArg, BasicMapping, Extraction
-from . import processor
-from riko import Objconf
-from riko.utils import gen_items
+from collections.abc import Iterator
+
 import pygogo as gogo
+
+from riko import Objconf
+from riko.types.general import BasicArg, BasicMapping, Extraction
+from riko.utils import gen_items
+
+from . import processor
 
 OPTS = {"emit": True}
 DEFAULTS = {"token_key": "content"}
@@ -66,13 +69,10 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    item: BasicMapping,
-    extraction: Extraction,
-    objconf: Objconf,
-    skip=False,
-    **kwargs
+    item: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
 ) -> Iterator[BasicArg | BasicMapping | None]:
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
@@ -99,6 +99,7 @@ def parser(
         >>> sonnet = {'stanzas': {'verses': 'verse1'}}
         >>> next(parser(DotDict(sonnet), *args))
         {'content': 'verse1'}
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -112,7 +113,8 @@ def parser(
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor that asynchronously extracts sub-elements from an item.
+    """
+    A processor that asynchronously extracts sub-elements from an item.
 
     Args:
         item (dict): The entry to process
@@ -148,13 +150,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'content': 'verse1'}
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that extracts sub-elements from an item.
+    """
+    A processor that extracts sub-elements from an item.
 
     Args:
         item (dict): The entry to process
@@ -193,5 +197,6 @@ def pipe(*args, **kwargs):
         >>> conf.update({'token_key': 'verse'})
         >>> next(pipe(sonnet, conf=conf))
         {'verse': 'st1v1'}
+
     """
     return parser(*args, **kwargs)

@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
-from pprint import pprint
+from collections.abc import Mapping, Sequence
 from functools import partial
-from typing import Mapping, Optional, Sequence
+from pprint import pprint
 
 from riko import get_path
 from riko.bado import coroutine, return_value
-from riko.collections import SyncPipe, AsyncPipe
+from riko.collections import AsyncPipe, SyncPipe
 
 BR = {"find": "<br>"}
 DEF_CUR_CODE = "USD"
@@ -48,7 +47,11 @@ def add_id(source, rule, field="link"):
     return ideed
 
 
-def add_posted(source, rule: Optional[Sequence[Mapping[str, str]] | Mapping[str, str]] = None, field="summary"):
+def add_posted(
+    source,
+    rule: Sequence[Mapping[str, str]] | Mapping[str, str] | None = None,
+    field="summary",
+):
     if rule:
         conf = {"rule": rule}
         source = source.strfind(conf=conf, field=field, assign="k:posted")

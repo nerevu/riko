@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.loop
@@ -43,7 +42,9 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import pygogo as gogo
 
 from . import operator
@@ -54,7 +55,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -76,13 +78,15 @@ def parser(stream, objconf, tuples, **kwargs):
 
     Returns:
         List(dict): The output stream
+
     """
     yield from stream
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that creates submodules from existing pipes.
+    """
+    An operator that creates submodules from existing pipes.
 
     Args:
         items (Iter[dict]): The source.
@@ -96,5 +100,6 @@ def pipe(*args, **kwargs):
             "count":
             "field": <looped field name or blank>,
             "embed": {"conf": <module conf>}
+
     """
     return parser(*args, **kwargs)

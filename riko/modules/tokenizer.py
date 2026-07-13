@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.tokenizer
@@ -20,7 +19,9 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
+
 import pygogo as gogo
 
 from riko import Objconf
@@ -34,8 +35,11 @@ DEFAULTS = {"delimiter": ",", "dedupe": False, "sort": False, "token_key": "cont
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Items:
-    """Parses the pipe content
+def parser(
+    content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> Items:
+    """
+    Parses the pipe content
 
     Args:
         content (str): The content to tokenize
@@ -52,6 +56,7 @@ def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, *
         >>> result = parser(content, None, objconf)
         >>> next(result)
         {'token': 'Once'}
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -67,7 +72,8 @@ def parser(content: str, extraction: Extraction, objconf: Objconf, skip=False, *
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A processor module that asynchronously splits a string by a delimiter.
+    """
+    A processor module that asynchronously splits a string by a delimiter.
 
     Args:
         item (dict): The entry to process
@@ -112,13 +118,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'content': 'Once'}
+
     """
     return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A processor that splits a string by a delimiter.
+    """
+    A processor that splits a string by a delimiter.
 
     Args:
         item (dict): The entry to process
@@ -156,5 +164,6 @@ def pipe(*args, **kwargs):
         >>> conf.update({'token_key': 'token'})
         >>> next(pipe(item, conf=conf, **kwargs))
         {'token': 'no more'}
+
     """
     return parser(*args, **kwargs)

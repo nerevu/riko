@@ -1,14 +1,15 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
-    riko.modules.numberinput
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+riko.modules.numberinput
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    http://pipes.yahoo.com/pipes/docs?doc=user_inputs#Number
+http://pipes.yahoo.com/pipes/docs?doc=user_inputs#Number
 """
 
 from functools import partial
-from riko.modules.input import pipe as _pipe, async_pipe as _async_pipe
+
+from riko.modules.input import async_pipe as _async_pipe
+from riko.modules.input import pipe as _pipe
 from riko.types.general import Defaults
 
 DEFAULTS: Defaults = {"type": "int"}

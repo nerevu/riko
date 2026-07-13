@@ -4,7 +4,6 @@ from riko import Context, get_path
 from riko.collections import SyncCollection
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
-from riko.modules.fetch import pipe as fetch
 
 
 def pipe_8NMkiTW32xGvMbDKruymrA(context=None, conf=None):
@@ -23,7 +22,7 @@ def pipe_8NMkiTW32xGvMbDKruymrA(context=None, conf=None):
             {"url": get_path("feeds.gawker.com_jalopnik_full.xml")},
             {"url": get_path("www.autoblog.com_rss.xml")},
         ],
-        context=context
+        context=context,
     )
 
     sw_54 = _filter(

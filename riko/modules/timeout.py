@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.timeout
@@ -26,13 +25,15 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
-"""
-import signal
 
+"""
+
+import signal
 from datetime import timedelta
 
-from . import operator
 import pygogo as gogo
+
+from . import operator
 
 OPTS = {"ptype": "int"}
 DEFAULTS = {}
@@ -41,7 +42,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 items = ("days", "hours", "microseconds", "milliseconds", "minutes", "seconds", "weeks")
 
 
-class TimeoutIterator(object):
+class TimeoutIterator:
     def __init__(self, elements, timeout=0):
         self.iter = iter(elements)
         self.timeout = timeout
@@ -71,7 +72,8 @@ class TimeoutIterator(object):
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -107,6 +109,7 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> tuples = zip(stream, repeat(objconf))
         >>> len(list(parser(stream, objconf, tuples, **kwargs)))
         3
+
     """
     # objconf only parses on __getitem__
     time = int(timedelta(**{k: objconf[k] for k in objconf}).total_seconds())
@@ -115,7 +118,8 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously returns items from a stream until a
+    """
+    An operator that asynchronously returns items from a stream until a
         certain amount of time has passed.
 
     Args:
@@ -165,13 +169,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         3
+
     """
     return parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """An operator that returns items from a stream until a certain amount of
+    """
+    An operator that returns items from a stream until a certain amount of
         time has passed.
 
     Args:
@@ -210,5 +216,6 @@ def pipe(*args, **kwargs):
         >>>
         >>> len(list(pipe(gen_items(), conf={'seconds': '3'})))
         3
+
     """
     return parser(*args, **kwargs)

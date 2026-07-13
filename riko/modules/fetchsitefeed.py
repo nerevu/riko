@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.fetchsitefeed
@@ -31,18 +30,20 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from typing import Iterator
+
+from collections.abc import Iterator
+
 import pygogo as gogo
 
+from riko import Objconf, autorss
+from riko.bado import coroutine, io, return_value
+from riko.parsers import parse_rss
 from riko.types.general import BasicMapping, Extraction
+from riko.utils import gen_entries
 
 from . import processor
-
-from riko import autorss, Objconf
-from riko.utils import gen_entries
-from riko.parsers import parse_rss
-from riko.bado import coroutine, return_value, io
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {}
@@ -50,8 +51,11 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
-    """Asynchronously parses the pipe content
+def async_parser(
+    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+):
+    """
+    Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -83,6 +87,7 @@ def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip
         ...     pass
         ...
         Using NFC tags in the car
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -96,8 +101,11 @@ def async_parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip
     return_value(stream)
 
 
-def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> Iterator[BasicMapping]:
-    """Parses the pipe content
+def parser(
+    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> Iterator[BasicMapping]:
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -119,6 +127,7 @@ def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False
         >>> result = parser(None, None, objconf, stream={})
         >>> next(result)['title']
         "EU sets out 'phased' Brexit strategy"
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -133,7 +142,8 @@ def parser(_: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on a site.
+    """
+    A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -164,13 +174,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         Using NFC tags in the car
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses the first feed found on a site.
+    """
+    A source that fetches and parses the first feed found on a site.
 
     Args:
         item (dict): The entry to process (not used)
@@ -188,5 +200,6 @@ def pipe(*args, **kwargs):
         >>> from riko import get_path
         >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
         "EU sets out 'phased' Brexit strategy"
+
     """
     return parser(*args, **kwargs)

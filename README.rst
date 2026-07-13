@@ -75,10 +75,9 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     >>> #   3. replace newlines with spaces and assign the result to 'content'
     >>> #   4. tokenize the resulting text using whitespace as the delimeter
     >>> #   5. count the number of times each token appears
-    >>> #   6. obtain the raw stream
-    >>> #   7. extract the first word and its count
-    >>> #   8. extract the second word and its count
-    >>> #   9. extract the third word and its count
+    >>> #   6. extract the first word and its count
+    >>> #   7. extract the second word and its count
+    >>> #   8. extract the third word and its count
     >>> url = 'https://news.ycombinator.com/'
     >>> fetch_conf = {
     ...     'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}  # 1
@@ -94,11 +93,11 @@ In this example, we use several `pipes`_ to count the words on a webpage.
     ...         .tokenizer(conf={'delimiter': ' '}, emit=True)               # 4
     ...         .count(conf={'count_key': 'content'}))                       # 5
     >>>
-    >>> next(flow)                                                         # 7
+    >>> next(flow)                                                           # 6
     {"'sad": 1}
-    >>> next(flow)                                                         # 8
+    >>> next(flow)                                                           # 7
     {'(': 28}
-    >>> next(flow)                                                         # 9
+    >>> next(flow)                                                           # 8
     {'(1999)': 1}
 
 Motivation

@@ -3,7 +3,6 @@
 from riko import Context
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strconcat import pipe as strconcat
-from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.union import pipe as union
 
 

@@ -21,7 +21,6 @@ does not:
 """
 
 import pygogo as gogo
-
 from chardet import detect
 from meza.compat import decode
 
@@ -624,37 +623,47 @@ class XMLParser(Protocol):
     # Sorta SAX-ish API
 
     def gotTagStart(self, name, attributes):
-        """Encountered an opening tag.
+        """
+        Encountered an opening tag.
 
-        Default behaviour is to print."""
+        Default behaviour is to print.
+        """
         print("begin", name, attributes)
 
     def gotText(self, data):
-        """Encountered text
+        """
+        Encountered text
 
-        Default behaviour is to print."""
+        Default behaviour is to print.
+        """
         print("text:", repr(data))
 
     def gotEntityReference(self, entityRef):
-        """Encountered mnemonic entity reference
+        """
+        Encountered mnemonic entity reference
 
-        Default behaviour is to print."""
+        Default behaviour is to print.
+        """
         print("entityRef: &%s;" % entityRef)
 
     def gotComment(self, comment):
-        """Encountered comment.
+        """
+        Encountered comment.
 
-        Default behaviour is to ignore."""
-        pass
+        Default behaviour is to ignore.
+        """
 
     def gotCData(self, cdata):
-        """Encountered CDATA
+        """
+        Encountered CDATA
 
-        Default behaviour is to call the gotText method"""
+        Default behaviour is to call the gotText method
+        """
         self.gotText(cdata)
 
     def gotDoctype(self, doctype):
-        """Encountered DOCTYPE
+        """
+        Encountered DOCTYPE
 
         This is really grotty: it basically just gives you everything between
         '<!DOCTYPE' and '>' as an argument.
@@ -662,7 +671,9 @@ class XMLParser(Protocol):
         print("!DOCTYPE", repr(doctype))
 
     def gotTagEnd(self, name):
-        """Encountered closing tag
+        """
+        Encountered closing tag
 
-        Default behaviour is to print."""
+        Default behaviour is to print.
+        """
         print("end", name)

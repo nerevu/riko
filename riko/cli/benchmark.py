@@ -1,26 +1,25 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 
 from functools import partial
-from multiprocessing.dummy import Pool as ThreadPool
-from multiprocessing import Pool
-from time import time, sleep
 from itertools import chain
+from multiprocessing import Pool
+from multiprocessing.dummy import Pool as ThreadPool
+from time import sleep, time
 
 from riko import get_path
-from riko.bado import coroutine, return_value, react
-from riko.bado.util import async_sleep
+from riko.bado import coroutine, react, return_value
 from riko.bado.itertools import async_map
-from riko.modules.fetch import pipe, async_pipe
+from riko.bado.util import async_sleep
 from riko.collections import (
-    SyncPipe,
-    SyncCollection,
-    AsyncPipe,
     AsyncCollection,
+    AsyncPipe,
+    SyncCollection,
+    SyncPipe,
     get_chunksize,
     get_worker_cnt,
 )
+from riko.modules.fetch import async_pipe, pipe
 
 NUMBER = 1
 LOOPS = 1

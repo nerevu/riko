@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.aggregate
@@ -15,15 +14,19 @@ Examples:
         >>> func = lambda stream: ({'y': item['x'] + 3} for item in stream)
         >>> next(pipe(items, func=func))
         {'y': 3}
+
 """
-from . import operator
+
 import pygogo as gogo
+
+from . import operator
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(stream, objconf, tuples, **kwargs):
-    """Parses the pipe content
+    """
+    Parses the pipe content
 
     Args:
         stream (Iter[dict]): The source. Note: this shares the `tuples`
@@ -50,6 +53,7 @@ def parser(stream, objconf, tuples, **kwargs):
         >>> tuples = zip(stream, repeat(None))
         >>> next(parser(stream, None, tuples, func=func))
         {'y': 3}
+
     """
     # TODO: this should work even when func returns a list
     return kwargs["func"](stream)
@@ -57,7 +61,8 @@ def parser(stream, objconf, tuples, **kwargs):
 
 @operator(isasync=True)
 def async_pipe(*args, **kwargs):
-    """An operator that asynchronously performs an arbitrary (user-defined) function on
+    """
+    An operator that asynchronously performs an arbitrary (user-defined) function on
     stream items.
 
     Args:
@@ -87,13 +92,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         {'y': 3}
+
     """
     return parser(*args, **kwargs)
 
 
 @operator()
 def pipe(*args, **kwargs):
-    """An operator that performs an arbitrary (user-defined) function on stream items.
+    """
+    An operator that performs an arbitrary (user-defined) function on stream items.
 
     Args:
         items (Iter[dict]): The source.
@@ -110,5 +117,6 @@ def pipe(*args, **kwargs):
         >>> func = lambda stream: ({'y': item['x'] + 3} for item in stream)
         >>> next(pipe(items, func=func))
         {'y': 3}
+
     """
     return parser(*args, **kwargs)

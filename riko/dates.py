@@ -1,22 +1,23 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.dates
 ~~~~~~~~~~
 Provides date and time helpers
 """
+
 from calendar import timegm
-from datetime import timedelta, datetime as dt, UTC, tzinfo, date, timezone
-from zoneinfo import ZoneInfo, available_timezones
+from collections.abc import Iterator
+from datetime import UTC, date, timedelta, timezone, tzinfo
+from datetime import datetime as dt
 from time import strptime, struct_time
-from typing import Iterator, Optional
+from zoneinfo import ZoneInfo, available_timezones
 
 import pytz
 
 from riko.types.general import DateDict
 
 DATE_FORMAT = "%m/%d/%Y"
-DATETIME_FORMAT = "{0} %H:%M:%S".format(DATE_FORMAT)
+DATETIME_FORMAT = f"{DATE_FORMAT} %H:%M:%S"
 TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
 TODAY = dt.now(UTC)
@@ -58,6 +59,7 @@ def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
             if _tzinfo and tzname:
                 yield tzname, _tzinfo
 
+
 TZINFOS = dict(gen_tzinfos())
 
 
@@ -77,7 +79,7 @@ def get_date(unit: str, count: int, op: callable) -> dt:
     return DATES[unit]
 
 
-def parse_date(content: str) -> Optional[date | dt]:
+def parse_date(content: str) -> date | dt | None:
     # TODO: see how I do this in csv2ofx`
     parsed = None
 
@@ -97,7 +99,7 @@ def parse_date(content: str) -> Optional[date | dt]:
     return parsed
 
 
-def tzinfo_from_tt(tt: struct_time) -> Optional[ZoneInfo | tzinfo| timezone]:
+def tzinfo_from_tt(tt: struct_time) -> ZoneInfo | tzinfo | timezone | None:
     """
     Try to get a ZoneInfo from struct_time's tm_zone name,
     falling back to a fixed-offset timezone from tm_gmtoff.
@@ -107,12 +109,11 @@ def tzinfo_from_tt(tt: struct_time) -> Optional[ZoneInfo | tzinfo| timezone]:
     elif tt.tm_zone and tt.tm_zone in TZINFOS:
         _tzinfo = TZINFOS[tt.tm_zone]
     elif tt.tm_gmtoff is not None:
-        _tzinfo = timezone(timedelta(seconds=tt.tm_gmtoff), name=tt.tm_zone or '')
+        _tzinfo = timezone(timedelta(seconds=tt.tm_gmtoff), name=tt.tm_zone or "")
     else:
         _tzinfo = None
 
     return _tzinfo
-
 
 
 def tt_to_datetime(tt: struct_time, as_date=False) -> date | dt:

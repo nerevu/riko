@@ -1,13 +1,12 @@
 """
-    riko.helpers
-    ~~~~~~~~~~~~
+riko.helpers
+~~~~~~~~~~~~
 
-    Provides misc helper functions
+Provides misc helper functions
 """
 
 import logging
 import pdb
-
 from json.decoder import JSONDecodeError
 from logging import Formatter
 from traceback import format_exception
@@ -38,9 +37,7 @@ class DefaultFormatter(Formatter):
         return Formatter(log_fmt).format(record)
 
 
-def_format = (
-    "[%(levelname)s %(asctime)s] in %(module)s:%(lineno)s: %(message)s"
-)
+def_format = "[%(levelname)s %(asctime)s] in %(module)s:%(lineno)s: %(message)s"
 def_formatter = DefaultFormatter(def_format, datefmt=DATEFMT)
 
 logger = gogo.Gogo(

@@ -3,11 +3,11 @@
 from riko import Context, get_path
 from riko.collections import SyncCollection
 from riko.modules.fetch import pipe as fetch
-from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.modules.union import pipe as union
+from riko.modules.reverse import pipe as reverse
 from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
-from riko.modules.reverse import pipe as reverse
+from riko.modules.union import pipe as union
+from riko.modules.urlbuilder import pipe as urlbuilder
 
 
 def pipe_58a53262da5a095fe7a0d6d905cc4db6(context=None, conf=None):
@@ -72,7 +72,9 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(context=None, conf=None):
         },
     )
 
-    sw_596 = truncate(sw_565, context=context, conf={"count": {"type": "int", "value": "3"}})
+    sw_596 = truncate(
+        sw_565, context=context, conf={"count": {"type": "int", "value": "3"}}
+    )
 
     sw_625 = reverse(sw_596, context=context, conf={})
 

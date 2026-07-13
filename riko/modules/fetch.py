@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # vim: sw=4:ts=4:expandtab
 """
 riko.modules.fetch
@@ -21,17 +20,20 @@ Examples:
 Attributes:
     OPTS (dict): The default pipe options
     DEFAULTS (dict): The default parser options
+
 """
-from typing import Iterator
+
+from collections.abc import Iterator
+
 import pygogo as gogo
 
+from riko import Objconf
+from riko.bado import coroutine, io, return_value
+from riko.parsers import parse_rss
 from riko.types.general import BasicArg, BasicMapping, Extraction, ItemArg, Items
+from riko.utils import gen_entries
 
 from . import processor
-from riko import Objconf
-from riko.bado import coroutine, return_value, io
-from riko.parsers import parse_rss
-from riko.utils import gen_entries
 
 OPTS = {"ftype": "none"}
 DEFAULTS = {"delay": 0}
@@ -49,13 +51,10 @@ keys = {
 
 @coroutine  # pyright: ignore[reportArgumentType]
 def async_parser(
-    _: BasicArg,
-    extraction: Extraction,
-    objconf: Objconf,
-    skip=False,
-    **kwargs
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
 ):
-    """Asynchronously parses the pipe content
+    """
+    Asynchronously parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -88,6 +87,7 @@ def async_parser(
         ...     pass
         ...
         Donations
+
     """
     if skip:
         stream: Items = kwargs["stream"]
@@ -99,8 +99,11 @@ def async_parser(
     return_value(stream)
 
 
-def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg | Iterator[BasicMapping]:
-    """Parses the pipe content
+def parser(
+    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> ItemArg | Iterator[BasicMapping]:
+    """
+    Parses the pipe content
 
     Args:
         _ (None): Ignored
@@ -123,6 +126,7 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
         >>> result = parser(None, None, objconf, stream={})
         >>> next(result)['title']
         'Donations'
+
     """
     if skip:
         stream = kwargs["stream"]
@@ -135,7 +139,8 @@ def parser(_: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **
 
 @processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
 def async_pipe(*args, **kwargs):
-    """A source that asynchronously fetches and parses a feed to return the
+    """
+    A source that asynchronously fetches and parses a feed to return the
     entries.
 
     Args:
@@ -170,13 +175,15 @@ def async_pipe(*args, **kwargs):
         ...     pass
         ...
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
+
     """
     return async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
 def pipe(*args, **kwargs):
-    """A source that fetches and parses a feed to return the entries.
+    """
+    A source that fetches and parses a feed to return the entries.
 
     Args:
         item (dict): The entry to process
@@ -204,5 +211,6 @@ def pipe(*args, **kwargs):
         >>> item = next(pipe(conf={'url': url, 'memoize': True}))
         >>> sorted(keys.intersection(item))
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
+
     """
     return parser(*args, **kwargs)
