@@ -22,7 +22,7 @@ import pygogo as gogo
 from riko import Objconf
 from riko.cast import CastType, cast
 from riko.types.general import Defaults, Extraction, Opts
-from riko.types.values import ComplexValue
+from riko.types.values import PrimitiveValue
 
 from . import processor
 
@@ -33,7 +33,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(
     content: str, extraction: Extraction, objconf: Objconf, **kwargs
-) -> ComplexValue:
+) -> PrimitiveValue:
     """
     Parsers the pipe content
 
@@ -63,7 +63,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> ComplexValue:
+def async_pipe(*args, **kwargs) -> PrimitiveValue:
     """
     A processor that asynchronously converts a text string into a variety of
     different types, e.g., int, bool, date, etc. Useful as terminal data. Loopable.
@@ -103,7 +103,7 @@ def async_pipe(*args, **kwargs) -> ComplexValue:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> ComplexValue:
+def pipe(*args, **kwargs) -> PrimitiveValue:
     """
     A processor that converts a text string into a variety of different types, e.g.,
     int, bool, date, etc. Useful as terminal data. Loopable.

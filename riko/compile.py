@@ -35,10 +35,11 @@ License: see LICENSE file
 
 from codecs import open
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator
 from importlib import import_module
 from json import JSONEncoder, dumps
 from pprint import PrettyPrinter
+from typing import overload
 
 from jinja2 import Environment, PackageLoader
 
@@ -47,7 +48,8 @@ from riko.modules.forever import pipe as forever
 from riko.pprint2 import Id, repr_args, str_args
 from riko.topsort import topological_sort
 from riko.types.compile import ParsedPipeDef, PipeDef, Wire
-from riko.types.general import Step, Steps, Stream, SyncPipeParser
+from riko.types.general import ParserOutput, Step, Steps, Stream, SyncPipeParser
+from riko.types.modules import AnyModuleRawConf
 
 
 class MyPrettyPrinter(PrettyPrinter):
@@ -122,13 +124,21 @@ def _gen_string_modules(
         }
 
 
-def _get_pyarg(
+@overload  # noqa: E302
+def _get_pyarg(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs
+) -> Id: ...
+@overload  # noqa: E302
+def _get_pyarg(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps, **kwargs
+) -> ParserOutput | SyncPipeParser: ...
+def _get_pyarg(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
     steps: Steps | None = None,
     context: Context | None = None,
     **kwargs,
-):
+) -> ParserOutput | SyncPipeParser | Id:
     context = context or Context(**kwargs)
     describe = context.describe_input or context.describe_dependencies
 
@@ -141,13 +151,25 @@ def _get_pyarg(
     return input_module if steps else Id(input_module)
 
 
-def _gen_pykwargs(
+@overload  # noqa: E302
+def _gen_pykwargs(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs
+) -> Iterator[tuple[str, Id | Context | AnyModuleRawConf]]: ...
+@overload  # noqa: E302
+def _gen_pykwargs(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps, **kwargs
+) -> Iterator[
+    tuple[str, ParserOutput | SyncPipeParser | Context | AnyModuleRawConf]
+]: ...
+def _gen_pykwargs(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
-    steps: Mapping | None = None,
+    steps: Steps | None = None,
     context: Context | None = None,
     **kwargs,
-):
+) -> Iterator[
+    tuple[str, ParserOutput | SyncPipeParser | Id | Context | AnyModuleRawConf]
+]:
     module = parsed_pipe_def["modules"][module_id]
     yield ("conf", module["conf"])
 

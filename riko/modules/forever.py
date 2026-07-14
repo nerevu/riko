@@ -24,12 +24,12 @@ from itertools import repeat, takewhile
 import pygogo as gogo
 
 from riko import Objconf
-from riko.cast import BasicCastType
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.cast import SourceOpts
+from riko.types.general import Defaults, Extraction, Item
 
 from . import processor
 
-OPTS: Opts = {"ftype": BasicCastType.NONE}
+OPTS = SourceOpts
 DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -41,7 +41,8 @@ def parser(
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 

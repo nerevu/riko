@@ -40,30 +40,28 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
-
 import pygogo as gogo
 
 from riko import Objconf, autorss
-from riko.cast import BasicCastType
-from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.types.values import BasicMapping
+from riko.cast import SourceOpts
+from riko.types.general import Defaults, Extraction, Item, Stream
 
 from . import processor
 
-OPTS: Opts = {"ftype": BasicCastType.NONE}
+OPTS = SourceOpts
 DEFAULTS: Defaults = {"strict": True}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
     _: Item, extraction: Extraction, objconf: Objconf, **kwargs
-) -> Iterator[BasicMapping]:
+) -> Stream:
     """
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 
@@ -97,14 +95,13 @@ async def async_parser(
     return stream
 
 
-def parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
-) -> Iterator[BasicMapping]:
+def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 
@@ -136,7 +133,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Iterator[BasicMapping]:
+async def async_pipe(*args, **kwargs) -> Stream:
     """
     A source that fetches and parses the first feed found on a site.
 
@@ -173,7 +170,7 @@ async def async_pipe(*args, **kwargs) -> Iterator[BasicMapping]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[BasicMapping]:
+def pipe(*args, **kwargs) -> Stream:
     """
     A source that fetches and parses the first feed found on a site.
 

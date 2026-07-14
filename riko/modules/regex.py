@@ -25,9 +25,8 @@ Attributes:
 
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from functools import reduce
-from typing import cast
 
 import pygogo as gogo
 
@@ -50,7 +49,7 @@ async def async_parser(
     rules: Sequence[RegexConfRule],
     objconf: Objconf,
     **kwargs,
-) -> DotDict | str | None:
+) -> Item:
     """
     Asynchronously parsers the pipe content
 
@@ -94,19 +93,9 @@ async def async_parser(
     multi = objconf.multi
     recompile = not multi
 
-    async def async_reducer(
-        item: Item, rules: Sequence[RegexRule]
-    ) -> DotDict | str | None:
+    async def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict:
         field = rules[0]["field"]
-
-        if isinstance(item, Mapping):
-            word = str(item.get(field, **kwargs))
-        elif isinstance(item, str):
-            word = item
-        else:
-            msg = f"{item=} is a {type(item)=}, not a mapping or string, skipping"
-            logger.warning(msg)
-            word = None
+        word = item.get(field, **kwargs)
 
         if word is None:
             replacement = None
@@ -114,20 +103,16 @@ async def async_parser(
             grouped = group_by(rules, "flags")
             group_rules = [g[1] for g in grouped] if multi else rules
             reducer = multi_substitute if multi else substitute
-            replacement = await coop_reduce(reducer, group_rules, word)
+            replacement = await coop_reduce(reducer, group_rules, str(word))
 
-        if isinstance(item, Mapping):
-            result = DotDict(cast(dict, {**item, field: replacement}))
-        else:
-            result = replacement
-
+        result = DotDict({**item, field: replacement})
         return result
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")
     field_rules = [g[1] for g in grouped]
-    item = await async_reduce(async_reducer, field_rules, item)
-    return cast(DotDict | str | None, item)
+    item = await async_reduce(reducer, field_rules, item)
+    return item
 
 
 def parser(
@@ -135,7 +120,7 @@ def parser(
     rules: Sequence[RegexConfRule],
     objconf: Objconf,
     **kwargs,
-) -> DotDict | str | None:
+) -> Item:
     """
     Parsers the pipe content
 
@@ -171,20 +156,9 @@ def parser(
     multi = objconf.multi
     recompile = not multi
 
-    def sync_reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict | str | None:
+    def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict:
         field = str(rules[0]["field"])
-
-        if isinstance(item, Mapping):
-            word = str(item.get(field, **kwargs))
-        elif isinstance(item, str):
-            msg = f"{item=} is a {type(item)=}, not a mapping, ignoring {field=} and"
-            msg += "applying regexes to the string itself."
-            logger.warning(msg)
-            word = item
-        else:
-            msg = f"{item=} is a {type(item)=}, not a mapping or string, skipping"
-            logger.warning(msg)
-            word = None
+        word = item.get(field, **kwargs)
 
         if word is None:
             replacement = None
@@ -192,24 +166,20 @@ def parser(
             grouped = group_by(rules, "flags")
             group_rules = [g[1] for g in grouped] if multi else rules
             reducer = multi_substitute if multi else substitute
-            replacement = reduce(reducer, group_rules, word)
+            replacement = reduce(reducer, group_rules, str(word))
 
-        if isinstance(item, Mapping):
-            result = DotDict(cast(dict, {**item, field: replacement}))
-        else:
-            result = replacement
-
+        result = DotDict({**item, field: replacement})
         return result
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")
     field_rules = [g[1] for g in grouped]
-    item = reduce(sync_reducer, field_rules, item)
-    return cast(DotDict | str | None, item)
+    item = reduce(reducer, field_rules, item)
+    return item
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> DotDict | str | None:
+async def async_pipe(*args, **kwargs) -> Item:
     """
     A processor that asynchronously replaces text in fields of an item
     using regexes.
@@ -270,7 +240,7 @@ async def async_pipe(*args, **kwargs) -> DotDict | str | None:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> DotDict | str | None:
+def pipe(*args, **kwargs) -> Item:
     """
     A processor that replaces text in fields of an item using regexes.
 

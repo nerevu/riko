@@ -36,7 +36,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(
     stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
-) -> Decimal | int | Iterator[dict[str, Decimal | int]]:
+) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     Parses the pipe content
 
@@ -82,7 +82,7 @@ def parser(
         {'two': Decimal('2')}
 
     """
-    _sum = lambda group: sum(Decimal(g[objconf.sum_key]) for g in group)
+    _sum = lambda group: sum(Decimal(g[objconf.sum_key]) for g in group) or Decimal(0)
 
     if objconf.group_key:
         keyfunc = def_itemgetter(objconf.group_key)
@@ -96,7 +96,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Decimal | int | Iterator[dict[str, Decimal | int]]:
+def async_pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     An operator that asynchronously and eagerly sums fields of items
     in a stream. Note that this pipe is not lazy if `group_key` is specified.
@@ -143,7 +143,7 @@ def async_pipe(*args, **kwargs) -> Decimal | int | Iterator[dict[str, Decimal | 
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Decimal | int | Iterator[dict[str, Decimal | int]]:
+def pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     An operator that eagerly sums fields of items in a stream.
     Note that this pipe is not lazy if `group_key` is specified.

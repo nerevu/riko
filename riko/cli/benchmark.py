@@ -5,7 +5,7 @@ from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from time import sleep, time
 from timeit import repeat
-from typing import TypeAlias, cast
+from typing import cast
 
 from riko import get_path
 from riko.bado import react
@@ -51,7 +51,7 @@ sources = [{"url": url} for url in urls]
 length = len(files)
 iterable = [DELAY for _ in files]
 
-AsyncFunc: TypeAlias = Callable[..., Awaitable[Iterator[RSSEntry]]]
+type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
 
 
 def baseline_sync():

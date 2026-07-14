@@ -29,9 +29,9 @@ Attributes:
 
 import operator as op
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Literal, TypeAlias
 
 import pygogo as gogo
 from dateutil.parser import ParserError
@@ -41,7 +41,6 @@ from riko.cast import cast_date
 from riko.dotdict import DotDict
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 from riko.types.modules import FilterConfRule
-from riko.types.values import ComplexArg, ComplexSequence
 from riko.utils import repr_cache
 
 from . import operator
@@ -50,7 +49,7 @@ OPTS: Opts = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"combine": "and", "permit": True}
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
-SWITCH = {
+SWITCH: dict[str, Callable[..., bool]] = {
     # TODO: add support for all containment semantics
     # 2 in [1, 2, 3]  or "a" in {"a": 1}
     "contains": lambda x, y: x and y.lower() in x.lower(),
@@ -77,10 +76,9 @@ PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
 TRUTHINESS_OPS = {"truthy", "falsy"}
 
 logger = gogo.Gogo(__name__, monolog=True).logger
-Result: TypeAlias = ComplexArg | ComplexSequence
 
 
-def _parse_arg_uncached(arg: Result, op: str) -> Result:
+def _parse_arg_uncached[VT](arg: VT, op: str) -> str | date | Decimal | VT | None:
     if op in PASSTHROUGH_OPS:
         value = arg
     elif op in STRING_OPS:
@@ -109,16 +107,16 @@ def _parse_arg_uncached(arg: Result, op: str) -> Result:
 
 
 @repr_cache
-def _parse_arg_cached(arg: Result, op: str) -> Result:
+def _parse_arg_cached[VT](arg: VT, op: str) -> str | date | Decimal | VT | None:
     return _parse_arg_uncached(arg, op)
 
 
-def parse_arg(arg: Result, op: str, memoize=False) -> Result:
+def parse_arg[VT](arg: VT, op: str, memoize=False) -> str | date | Decimal | VT | None:
     func = _parse_arg_cached if memoize else _parse_arg_uncached
     return func(arg, op)
 
 
-def parse_rule(rule: FilterConfRule, item: Item, **kwargs) -> Result | Literal[False]:
+def parse_rule(rule: FilterConfRule, item: Item, **kwargs) -> bool:
     truthiness = rule.op in TRUTHINESS_OPS
     _y = rule.value
 
@@ -155,7 +153,7 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs) -> Result | Literal[F
 
 
 def parser(
-    stream: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs
+    _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs
 ) -> Stream:
     """
     Parses the pipe content

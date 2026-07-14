@@ -89,7 +89,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs):
+def async_pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
     """
     An operator that asynchronously and eagerly counts the number of items
     in a stream. Note that this pipe is not lazy.

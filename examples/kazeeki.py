@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from functools import partial
 from pprint import pprint
 
@@ -45,7 +45,7 @@ def add_id(source, rule, field="link"):
 
 def add_posted(
     source,
-    rule: Sequence[Mapping[str, str]] | Mapping[str, str] | None = None,
+    rule: Sequence[dict[str, str]] | dict[str, str] | None = None,
     field="summary",
 ):
     if rule:
@@ -90,7 +90,7 @@ def add_tags(source, rule, field="summary", assign="k:tags"):
     return tagged
 
 
-def add_budget(source, fixed_text="", hourly_text="", double=True):
+def add_budget(source, fixed_text="", hourly_text="", double: bool | str = True):
     codes = "$£€₹"
     no_raw_budget = {"field": "k:budget_raw"}
     has_code = {"field": "k:cur_code", "include": True}

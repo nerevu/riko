@@ -17,8 +17,8 @@ import pytest
 
 from riko import Context, get_path, listize
 from riko.compile import build_pipeline, parse_pipe_def
-from riko.types.general import PipelineDependencies, SyncPipeParser
-from riko.types.values import ComplexArg, StreamState
+from riko.types.general import ParserOutput, PipelineDependencies, SyncPipeParser
+from riko.types.values import StreamState
 from riko.utils import extract_dependencies, truncate_content
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
@@ -29,7 +29,7 @@ class TestBasics:
 
     def _get_pipeline(
         self, pipe_name: str
-    ) -> Sequence[ComplexArg | dict[str, StreamState]]:
+    ) -> list[ParserOutput | dict[str, StreamState]]:
         try:
             module = import_module(f"tests.pypipelines.{pipe_name}")
         except ImportError as e:
@@ -50,7 +50,7 @@ class TestBasics:
 
     def _load(
         self,
-        items: Sequence[ComplexArg | dict[str, StreamState]],
+        items: Sequence[ParserOutput | dict[str, StreamState]],
         pipe_name,
         value=0,
         check=1,

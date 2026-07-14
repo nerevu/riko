@@ -3,18 +3,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum, auto
 from time import struct_time
-from typing import TYPE_CHECKING, NotRequired, TypeAlias, TypedDict, Union
-
-# from xml.sax import SAXParseException
-from fastfeedparser import FastFeedParserDict
-from feedparser import FeedParserDict
+from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
-    from riko import Objconf, Objectify
+    from fastfeedparser import FastFeedParserDict
+    from feedparser import FeedParserDict
+
     from riko.dotdict import DotDict
-    from riko.types.compile import PipeModule, Wire
-    from riko.types.general import Defaults
-    from riko.types.modules import AnyModuleConf, ParsedParam, RegexRule
 
 
 # Misc
@@ -61,11 +56,15 @@ class FeedParserRSSEntry(CommonRSSEntry):
     updated_parsed: struct_time | None
 
 
+class ExpandedRSSEntry(FeedParserRSSEntry):
+    pubDate: struct_time | None
+
+
 class FasterFeedParserRSSEntry(CommonRSSEntry):
     media_content: list[EntryContent]
 
 
-ParserRSSEntry: TypeAlias = FeedParserRSSEntry | FasterFeedParserRSSEntry
+type ParserRSSEntry = FeedParserRSSEntry | FasterFeedParserRSSEntry
 
 YahooRSSEntry = TypedDict(
     "YahooRSSEntry",
@@ -80,97 +79,69 @@ YahooRSSEntry = TypedDict(
 )
 
 
-RSSEntry = TypedDict(
-    "RSSEntry",
-    {
-        "author": str | None,
-        "author.name": str | None,
-        "author.uri": str | None,
-        "author_detail": AuthorDetail,
-        "dc:creator": str | None,
-        "id": str | None,
-        "pubDate": struct_time | None,
-        "published_parsed": NotRequired[struct_time | None],
-        "title": str | None,
-        "updated_parsed": struct_time | None,
-        "y:id": str | None,
-        "y:published": str | struct_time | None,
-        "y:title": str | None,
-    },
-)
-
-
-RSSParseResult: TypeAlias = FeedParserDict | FastFeedParserDict
-
-
 class StatefulItem(TypedDict):
     state: StreamState
 
 
+SentinalValue = "terminal"
+Sentinal = TypedDict("Sentinal", {SentinalValue: str, "type": str})
+
+
+type RSSEntry = ExpandedRSSEntry | YahooRSSEntry
+type RSSParseResult = "FeedParserDict" | "FastFeedParserDict"
+type DateDict = dict[str, str | int | date | bool]
+type Key = str | dict[str, str]
+type Hashable = int | float | str | Decimal | date | struct_time | None
+
+# Leafs
+type BasicValue = str | int
+type NumLike = float | int | Decimal
+type Scalar = str | int | float | Decimal
+type Temporal = date | datetime | struct_time
+type DateLike = str | int | date | datetime | struct_time
+type SortableValue = Scalar | Temporal
+type PrimitiveValue = SortableValue | None
+
+# Geo/currency
+type IPAddress = dict[str, str]
+type Location = IPAddress | dict[str, float]
+type CurrencyCode = Location | dict[str, int]
+type AnyLocation = CurrencyCode | dict[str, float | str]
+
+# Args
+type BasicMapping = Mapping[str, BasicValue]
+type BasicArg = BasicValue | BasicMapping | Sequence[BasicValue]
+
+# Returns
+type BasicDict = (
+    dict[str, str]
+    | dict[str, bool]
+    | dict[str, int]
+    | dict[str, Decimal]
+    | dict[str, float]
+)
+type BasicList = list[str] | list[bool] | list[int] | list[Decimal] | list[float]
+type BasicReturn = BasicValue | BasicDict | BasicList | tuple[BasicValue, ...]
+
+type Stringy = str | "StringyList" | "StringyDict"
+type StringyDict = dict[str, Stringy]
+type StringyList = list[Stringy]
+
+type RikoDict = (
+    BasicDict
+    | StringyDict
+    | dict[str, PrimitiveValue]
+    | dict[str, BasicDict]
+    | dict[str, BasicList]
+    | "DotDict[PrimitiveValue]"
+)
+type RikoList = BasicList | list[BasicDict] | StringyList
+type RikoValue = PrimitiveValue | RikoDict | RikoList
+
 # Instance Types
-StrictDateType = date | datetime | struct_time
+BasicValueType = (str, int)
+TemporalType = (date, datetime, struct_time)
 DateLikeType = (str, int, date, datetime, struct_time)
 NumLikeType = (float, int, Decimal)
-IntermediateValueType = (
-    str,
-    int,
-    float,
-    Decimal,
-    date,
-    datetime,
-    struct_time,
-    bool,
-    type(None),
-)
-
-# Basic
-BasicValue: TypeAlias = str | int
-BasicMapping: TypeAlias = Mapping[str, "BasicArg"]
-BasicSequence: TypeAlias = Sequence["BasicArg"]
-BasicArg: TypeAlias = BasicValue | BasicMapping | BasicSequence
-BasicDict: TypeAlias = dict[str, "BasicAnyReturn"]
-BasicList: TypeAlias = list["BasicAnyReturn"]
-BasicAnyReturn: TypeAlias = BasicDict | BasicList | BasicValue
-
-# Intermediate
-StrictDate: TypeAlias = date | datetime | struct_time
-DateLike: TypeAlias = BasicValue | StrictDate
-NumLike: TypeAlias = float | int | Decimal
-SortableValue: TypeAlias = BasicValue | DateLike | NumLike | bool
-
-IntermediateValue: TypeAlias = SortableValue | None
-IntermediateMapping: TypeAlias = Union[
-    BasicMapping, Mapping[str, "IntermediateArg"], "DotDict"
-]
-IntermediateSequence: TypeAlias = Sequence["IntermediateArg"]
-IntermediateArg: TypeAlias = (
-    IntermediateValue | IntermediateMapping | IntermediateSequence
-)
-
-# Complex
-DateDict: TypeAlias = dict[str, str | int | date | bool]
-ComplexDict: TypeAlias = dict[str, "ComplexArg"]
-Location: TypeAlias = Mapping[str, str | float]
-IPAddress: TypeAlias = Mapping[str, str]
-CurrencyCode: TypeAlias = Mapping[str, str | int | float]
-AnyLocation: TypeAlias = Location | IPAddress | CurrencyCode
-
-ComplexMapping: TypeAlias = Union[
-    "AnyModuleConf",
-    "Objconf",
-    "Objectify",
-    "RegexRule",
-    "Wire",
-    DateDict,
-    IntermediateMapping,
-    Location,
-    Mapping[str, "ComplexArg"],
-    RSSEntry,
-    StatefulItem,
-    "ParsedParam",
-    "PipeModule",
-    "Defaults",
-]
-ComplexValue: TypeAlias = IntermediateValue | AnyLocation
-ComplexSequence: TypeAlias = Sequence["ComplexArg"]
-ComplexArg: TypeAlias = ComplexValue | ComplexMapping | ComplexSequence
+PrimitiveValueType = (str, int, float, Decimal, date, datetime, struct_time)
+HashableType = (str, int, float, Decimal, date, struct_time)

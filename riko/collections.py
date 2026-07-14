@@ -105,7 +105,6 @@ from collections.abc import (
     Iterable,
     Iterator,
     Mapping,
-    Sequence,
 )
 from functools import partial
 from importlib import import_module
@@ -115,12 +114,11 @@ from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import length_hint
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pygogo as gogo
 
 from riko import listize
-from riko.types.modules import AnyModuleConf
 
 try:
     from csv2ofx.ofx import OFX
@@ -139,30 +137,24 @@ from riko.bado import async_return
 from riko.bado.itertools import async_map
 from riko.types.general import (
     AsyncPipeParser,
+    Conf,
     ConversionFunc,
     Item,
     Items,
-    SplitterItems,
+    ParserOutput,
+    SplitterParserOutput,
     Stream,
     SyncPipeParser,
 )
-from riko.types.values import (
-    BasicDict,
-    BasicMapping,
-    BasicSequence,
-    BasicValue,
-    ComplexArg,
-    StreamState,
-)
+from riko.types.values import BasicValue, StreamState
 from riko.utils import send
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
     from multiprocessing.pool import Pool as CPUPoolType
 
-AnyPool: TypeAlias = Union["ThreadPoolType", "CPUPoolType"]
-VT_call: TypeAlias = BasicValue | float | BasicMapping | Callable | BasicSequence
-VT_init: TypeAlias = VT_call | Context | AnyModuleConf
+type AnyPool = "ThreadPoolType" | "CPUPoolType"
+
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -264,10 +256,10 @@ class PyPipe:
         self,
         name: str | None = None,
         parallel=False,
-        inputs: BasicDict | None = None,
+        inputs: Mapping | None = None,
         context: Context | None = None,
-        conf: AnyModuleConf | None = None,
-        **kwargs: VT_init,
+        conf: Conf = None,
+        **kwargs,
     ):
         self.name = name
         self.parallel = parallel
@@ -282,7 +274,7 @@ class PyPipe:
         updates = {"conf": self.conf, "inputs": self.inputs, "context": self.context}
         self.kwargs.update(updates)
 
-    def __call__(self, **kwargs: VT_call):
+    def __call__(self, **kwargs):
         self.kwargs.update(kwargs)
         return self
 
@@ -294,9 +286,9 @@ class SyncPipe(PyPipe):
         self,
         name: str | None = None,
         parallel: bool = False,
-        inputs: BasicDict | None = None,
+        inputs: Mapping | None = None,
         context: Context | None = None,
-        conf: AnyModuleConf | None = None,
+        conf: Conf = None,
         source: Items | None = None,
         workers: int | None = None,
         chunksize: int | None = None,
@@ -304,7 +296,7 @@ class SyncPipe(PyPipe):
         reuse_pool: bool | None = True,
         pool: AnyPool | None = None,
         ordered: bool | None = False,
-        **kwargs: VT_init,
+        **kwargs,
     ):
         super().__init__(
             name, parallel=parallel, inputs=inputs, context=context, conf=conf, **kwargs
@@ -398,7 +390,7 @@ class SyncPipe(PyPipe):
 
             raise
 
-    def split(self, **kwargs) -> SplitterItems:
+    def split(self, **kwargs) -> SplitterParserOutput:
         pipe_kwargs = {
             "parallel": self.parallel,
             "threads": self.threads,
@@ -408,7 +400,7 @@ class SyncPipe(PyPipe):
         }
 
         splits = SyncPipe("split", source=self, **pipe_kwargs, **kwargs)
-        return cast(SplitterItems, splits)
+        return cast(SplitterParserOutput, splits)
 
     @overload
     def export(self) -> list[Item]: ...  # noqa: E704
@@ -433,11 +425,11 @@ class PyCollection:
 
     def __init__(
         self,
-        sources: Iterable[BasicMapping],
-        conf: AnyModuleConf | None = None,
+        sources: Iterable[Mapping[str, str]],
+        conf: Conf = None,
         parallel=False,
         workers=None,
-        **kwargs: VT_init,
+        **kwargs,
     ):
         # sources_1 = [{"url": "site.com/a"}, {"url": "site.com/b"}]
         # sources_2 = [
@@ -445,7 +437,7 @@ class PyCollection:
         #     {"url": "site.com/d", "type": "xpathfetchpage"},
         # ]
         self.parallel = parallel
-        self.conf = conf or cast(AnyModuleConf, {})
+        self.conf = conf or cast(Conf, {})
         self.sources = sources
         self.length = length_hint(self.sources)
         self.workers = workers or get_worker_cnt(self.length)
@@ -454,7 +446,7 @@ class PyCollection:
 class SyncCollection(PyCollection):
     """A synchronous PyCollection object"""
 
-    def __init__(self, *args, threads: bool | None = True, **kwargs: VT_init):
+    def __init__(self, *args, threads: bool | None = True, **kwargs):
         super().__init__(*args, **kwargs)
         self.threads = threads
         self._iter: Stream | None = None
@@ -515,12 +507,12 @@ class AsyncPipe(PyPipe):
         self,
         name: str | None = None,
         parallel: bool = False,
-        inputs: BasicDict | None = None,
+        inputs: Mapping | None = None,
         context: Context | None = None,
-        conf: AnyModuleConf | None = None,
+        conf: Conf = None,
         source: Awaitable[Items] | None = None,
         connections=16,
-        **kwargs: VT_init,
+        **kwargs,
     ):
         super().__init__(
             name, parallel=parallel, inputs=inputs, context=context, conf=conf, **kwargs
@@ -585,10 +577,10 @@ class AsyncPipe(PyPipe):
             for item in result:
                 yield item
 
-    async def split(self, **kwargs) -> SplitterItems:
+    async def split(self, **kwargs) -> SplitterParserOutput:
         pipe_kwargs = {"source": self._await_stream(), "connections": self.connections}
         result = await AsyncPipe("split", **pipe_kwargs, **kwargs)
-        return cast(SplitterItems, result)
+        return cast(SplitterParserOutput, result)
 
 
 class AsyncCollection(PyCollection):
@@ -598,9 +590,9 @@ class AsyncCollection(PyCollection):
         self,
         sources,
         connections=16,
-        conf: AnyModuleConf | None = None,
+        conf: Conf = None,
         parallel: bool = False,
-        **kwargs: VT_init,
+        **kwargs,
     ):
         super().__init__(sources, conf=conf, parallel=parallel, **kwargs)
         self.connections = connections
@@ -653,29 +645,27 @@ def get_worker_cnt(length: int, threads: bool | None = True) -> int:
 
 
 def listpipe(
-    args: tuple[Item, SyncPipeParser],
-    **kwargs: BasicValue,
-    # Mapping[str, StreamState] doesn't work with pyright for some reason
-) -> Sequence[Mapping[str, object] | ComplexArg]:
+    args: tuple[Item, SyncPipeParser], **kwargs: BasicValue
+) -> list[ParserOutput]:
     source, pipeline = args
     result = pipeline(source, **kwargs)
     return list(listize(result))
 
 
 def fetch_source(
-    args: tuple[Mapping[str, str], AnyModuleConf], pipe: type[SyncPipe] = SyncPipe
+    args: tuple[Mapping[str, str], Conf], pipe: type[SyncPipe] = SyncPipe
 ) -> Stream:
     source, _conf = args
     conf = {**_conf, **source}
     pipe_name = source.get("type", "fetch")
-    primed_pipe = pipe(pipe_name, conf=cast(AnyModuleConf, conf))
+    primed_pipe = pipe(pipe_name, conf=cast(Conf, conf))
     return iter(primed_pipe)
 
 
 async def afetch_source(
-    args: tuple[BasicMapping, AnyModuleConf], pipe: type[AsyncPipe] = AsyncPipe
+    args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
 ) -> Stream:
     source, _conf = args
     conf = {**_conf, **source}
     pipe_name = str(source.get("type", "fetch"))
-    return await pipe(pipe_name, conf=cast(AnyModuleConf, conf))
+    return await pipe(pipe_name, conf=cast(Conf, conf))

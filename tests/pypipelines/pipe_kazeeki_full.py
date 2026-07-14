@@ -259,7 +259,7 @@ fetch_conf = FetchConf({"url": "http://feeds.feedburner.com/guru/all"})
 fetchdata_conf = FetchDataConf({"url": get_path("kazeeki2.json"), "path": "items"})
 
 
-def parse_source(source):
+def parse_source(source: SyncPipe):
     pipe = (
         source.rename(conf={"RULE": rename1_rule})
         .regex(conf={"RULE": regex1_rule})

@@ -4,11 +4,12 @@ Provides pipeline collection tests.
 """
 
 from operator import itemgetter
+from typing import cast
 
 import pytest
-from twisted.internet import defer
 
-from riko.bado import _issync, react
+from riko.bado import IReactorCore, _issync, react
+from riko.bado.itertools import ensure_deferred
 from riko.bado.mock import FakeReactor
 from riko.collections import AsyncPipe, SyncPipe
 from riko.types.general import Item
@@ -27,6 +28,7 @@ attrs = ParsedParam({"key": "content", "value": value})
 builder_conf = ItemBuilderConf({"attrs": attrs})
 done_conf = {"attrs": {"key": "state", "value": StreamState.DONE}}
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
+reactor = cast(IReactorCore, FakeReactor())
 
 
 class TestCollections:
@@ -184,7 +186,7 @@ class TestCollections:
             print(next(stream))
 
         try:
-            react(lambda r: defer.ensureDeferred(run(r)), _reactor=FakeReactor())
+            react(lambda r: ensure_deferred(run(r)), _reactor=reactor)
         except SystemExit:
             pass
         else:

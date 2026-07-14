@@ -50,16 +50,13 @@ from typing import (
 from riko import bado
 from riko.bado import defer, gather_results, real_task
 from riko.bado.mock import FakeReactor
-from riko.types.general import Stream, SyncPipeResult
-from riko.types.modules import AnyConfRule
-from riko.types.values import ComplexArg
 
 if TYPE_CHECKING:
     from twisted.internet.defer import Deferred
     from twisted.internet.task import Cooperator
 
-T = TypeVar("T", bound=ComplexArg | Stream)
-S = TypeVar("S", bound=SyncPipeResult | AnyConfRule)
+T = TypeVar("T")
+S = TypeVar("S")
 Ts = TypeVarTuple("Ts")
 
 
@@ -93,10 +90,8 @@ def get_task() -> "Cooperator":
     return task
 
 
-async def coop_reduce(
-    func: Callable[[T, S], T],
-    content: Iterable[S],
-    initial: T | None = None,
+async def coop_reduce[T, S](
+    func: Callable[[T, S], T], content: Iterable[S], initial: T | None = None
 ) -> T:
     """
     Reduces *iterable* with *func* using Twisted cooperative multitasking.
@@ -146,7 +141,7 @@ async def coop_reduce(
     return result["value"]
 
 
-def async_reduce(
+def async_reduce[T, S](
     func: Callable[[T, S], T | Awaitable[T]],
     content: Iterable[S],
     initial: T | None = None,
@@ -200,7 +195,7 @@ def async_reduce(
     return work(func, content, value)
 
 
-async def _wrap(result: Awaitable[S]) -> S:
+async def _wrap[S](result: Awaitable[S]) -> S:
     """
     Awaits a general awaitable and returns its result as a coroutine.
 
@@ -246,11 +241,13 @@ async def _wrap(result: Awaitable[S]) -> S:
 
 @overload
 def ensure_deferred(result: "Deferred[S]") -> "Deferred[S]": ...  # noqa: E704
+@overload  # noqa: E302
+def ensure_deferred[S](  # noqa: E704
+    result: Coroutine[Any, Any, S],
+) -> "Deferred[S]": ...
 @overload
-def ensure_deferred(result: Coroutine[Any, Any, S]) -> "Deferred[S]": ...  # noqa: E704
-@overload
-def ensure_deferred(result: Awaitable[S]) -> "Deferred[S]": ...  # noqa: E704
-def ensure_deferred(  # noqa: E302
+def ensure_deferred[S](result: Awaitable[S]) -> "Deferred[S]": ...  # noqa: E704
+def ensure_deferred[S](  # noqa: E302
     result: Union["Deferred[S]", Coroutine[Any, Any, S], Awaitable[S]],
 ) -> "Deferred[S]":
     """
@@ -325,7 +322,7 @@ def ensure_deferred(  # noqa: E302
     return deferred
 
 
-async def async_map(
+async def async_map[T, S](
     func: Callable[[T], Awaitable[S]],
     content: Iterable[T],
     connections: int = 0,
@@ -386,9 +383,9 @@ async def async_map(
     return cast(list[S], results)
 
 
-def async_starmap(
+def async_starmap[*Ts, S](
     func: Callable[[Unpack[Ts]], Awaitable[S]],
-    content: Iterable[tuple[Unpack[Ts]]],
+    content: Iterable[tuple[*Ts]],
 ) -> Awaitable[list[S]]:
     """
     :func:`itertools.starmap` for async callables.
@@ -429,10 +426,8 @@ def async_starmap(
     return gather_results(deferreds, consumeErrors=True)
 
 
-def async_dispatch(
-    split: Iterable[T],
-    *funcs: Callable[[T], Awaitable[S]],
-    **kwargs: Any,
+def async_dispatch[T, S](
+    split: Iterable[T], *funcs: Callable[[T], Awaitable[S]], **kwargs: Any
 ) -> Awaitable[list[S]]:
     """
     Dispatches each item in *split* to the corresponding function in *async_funcs*.
@@ -475,10 +470,8 @@ def async_dispatch(
     return async_starmap(lambda item, f: f(item), zip(split, funcs, strict=False))
 
 
-def async_broadcast(
-    item: T,
-    *funcs: Callable[[T], Awaitable[S]],
-    **kwargs: Any,
+def async_broadcast[T, S](
+    item: T, *funcs: Callable[[T], Awaitable[S]], **kwargs: Any
 ) -> Awaitable[list[S]]:
     """
     Broadcasts *item* to every function in *async_funcs* concurrently.

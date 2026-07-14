@@ -27,15 +27,15 @@ import pygogo as gogo
 
 from riko import ENCODING, Objconf
 from riko.bado import io
-from riko.cast import BasicCastType
+from riko.cast import SourceOpts
 from riko.parsers import parse_rss
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types.general import Defaults, Extraction, Item
 from riko.types.values import RSSEntry
 from riko.utils import augment_entries
 
 from . import processor
 
-OPTS: Opts = {"ftype": BasicCastType.NONE}
+OPTS = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING, "delay": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 keys = {
@@ -56,7 +56,8 @@ async def async_parser(
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 
@@ -98,7 +99,8 @@ def parser(
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 

@@ -30,7 +30,6 @@ Attributes:
 
 from collections.abc import Mapping, Sequence
 from functools import reduce
-from typing import cast
 
 import pygogo as gogo
 from meza.fntools import remove_keys
@@ -40,7 +39,6 @@ from riko.bado.itertools import coop_reduce
 from riko.dotdict import DotDict
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RenameConfRule
-from riko.types.values import ComplexMapping
 
 from . import processor
 
@@ -49,10 +47,8 @@ DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def reducer(item: ComplexMapping, rule: RenameConfRule) -> DotDict:
-    reduced = DotDict(
-        item if rule.copy else cast(ComplexMapping, remove_keys(item, rule.field))
-    )
+def reducer(item: Mapping, rule: RenameConfRule) -> DotDict:
+    reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
     new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
     reduced.update(new_dict)
     return reduced
@@ -95,13 +91,7 @@ async def async_parser(
         {'greeting': 'hello world'}
 
     """
-    if isinstance(item, Mapping):
-        item = await coop_reduce(reducer, rules, item)
-    else:
-        msg = f"{item=} is a {type(item)=}, not a mapping, skipping processing."
-        logger.warning(msg)
-
-    return item
+    return await coop_reduce(reducer, rules, item)
 
 
 def parser(
@@ -132,13 +122,7 @@ def parser(
         {'greeting': 'hello world'}
 
     """
-    if isinstance(item, Mapping):
-        item = reduce(reducer, rules, item)
-    else:
-        msg = f"{item=} is a {type(item)=}, not a mapping, skipping processing."
-        logger.warning(msg)
-
-    return item
+    return reduce(reducer, rules, item)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

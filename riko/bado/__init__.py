@@ -31,6 +31,8 @@ except ImportError:
     react = lambda _, _reactor=None: None
     reactor = None
     real_task = None
+    implementer = None
+    IReactorCore = None
 
     class Reactor:
         fake = False
@@ -43,6 +45,7 @@ else:
     from twisted.internet.defer import Deferred
     from twisted.internet.defer import gatherResults as gather_results  # noqa: N813
     from twisted.internet.defer import maybeDeferred as maybe_deferred  # noqa: N813
+    from twisted.internet.interfaces import IReactorCore
     from twisted.internet.task import react
     from twisted.internet.testing import MemoryReactorClock
     from twisted.internet.utils import (
@@ -50,6 +53,7 @@ else:
     )
     from twisted.protocols.basic import FileSender
     from twisted.python import failure
+    from zope.interface import implementer
 
     async_none = defer.succeed(None)
     async_return = partial(defer.succeed)
@@ -63,6 +67,7 @@ _isasync = not _issync
 __all__ = [
     "Deferred",
     "FileSender",
+    "IReactorCore",
     "MemoryReactorClock",
     "async_get",
     "async_json",
@@ -71,6 +76,7 @@ __all__ = [
     "failure",
     "gather_results",
     "get_process_output",
+    "implementer",
     "maybe_deferred",
     "react",
     "reactor",

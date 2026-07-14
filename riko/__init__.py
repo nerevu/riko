@@ -33,25 +33,18 @@ Examples:
 
 """
 
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from importlib.metadata import metadata, version
 from os import path as p
 from time import struct_time
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
+from typing import TYPE_CHECKING, Literal, TypeVar, overload
 
 from meza.fntools import Objectify as _Objectify
+from requests.structures import CaseInsensitiveDict
 
-from riko.types.general import SyncItemFunc
+from riko.types.general import ItemOrValue, SyncArgFunc
 from riko.types.modules import AnyConfRule, ObjconfParam
-from riko.types.values import (
-    BasicArg,
-    BasicMapping,
-    BasicSequence,
-    ComplexArg,
-    ComplexMapping,
-    IntermediateValue,
-    IntermediateValueType,
-)
+from riko.types.values import PrimitiveValue, PrimitiveValueType
 
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
 meta = metadata("riko")
@@ -79,9 +72,7 @@ __copyright__ = "Copyright 2015 Reuben Cummings"
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
 ENCODING = "utf-8"
-
-T = TypeVar("T", bound=ComplexArg)
-KT = TypeVar("KT")
+VT = TypeVar("VT")
 
 
 def get_path(name: str):
@@ -148,13 +139,13 @@ class Context:
         return f"Context({content})"
 
 
-class Objectify(_Objectify):
+class Objectify(_Objectify, Mapping[str, VT]):
     """
     Creates an object with dynamically set attributes. Useful
     for accessing the kwargs of a function as attributes.
     """
 
-    def __init__(self, data: ComplexMapping, *args, **kwargs):
+    def __init__(self, data: Mapping[str, VT], *args, **kwargs):
         """
         Objectify constructor
 
@@ -175,24 +166,27 @@ class Objectify(_Objectify):
         _data = {k.lower(): v for k, v in data.items()}
         super().__init__(_data, *args, **kwargs)
 
+    def __len__(self) -> int:
+        return len(self.data)
+
     if TYPE_CHECKING:
 
-        def __getattribute__(self, name: str) -> BasicArg: ...  # noqa: E704
-        def __getitem__(self, name: str) -> BasicArg: ...  # noqa: E704
+        def __getattribute__(self, *_) -> VT: ...  # noqa: E704
+        def __getitem__(self, *_) -> VT: ...  # noqa: E704
         def __iter__(self) -> Iterator[str]: ...  # noqa: E704
-        def iteritems(self) -> Iterator[tuple[str, BasicArg]]: ...  # noqa: E704
+        def iteritems(self) -> Iterator[tuple[str, VT]]: ...  # noqa: E704
 
 
 class Objconf(Objectify):
     assign: str
-    attrs: Sequence[str]
+    attrs: list[str]
     base: str
-    col_names: Sequence[str]
+    col_names: list[str]
     combine: Literal["and", "or"]
     count: str | int
     currency: str
     debug: bool
-    default: BasicArg
+    default: PrimitiveValue
     delay: int
     delimiter: str
     detag: bool
@@ -214,14 +208,14 @@ class Objconf(Objectify):
     other: str
     op: str
     other_join_key: str
-    param: ObjconfParam | Sequence[ObjconfParam]
+    param: ObjconfParam | list[ObjconfParam]
     parse_key: str
     part: str
     path: str | list[str]
     permit: bool
     precision: int
     prompt: str
-    rule: AnyConfRule | Sequence[AnyConfRule]
+    rule: AnyConfRule | list[AnyConfRule]
     skip_rows: int
     sort: int
     start: str | int
@@ -240,21 +234,25 @@ class Objconf(Objectify):
 
 
 @overload
-def objectify(  # noqa: E704
-    data: Mapping, func: SyncItemFunc | None = None, **defaults
+def objectify(data: Mapping) -> Objectify: ...  # noqa: E704
+@overload  # noqa: E302
+def objectify[T](data: T) -> T: ...  # noqa: E704
+@overload  # noqa: E302
+def objectify(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    data: Mapping, func: SyncArgFunc
 ) -> Objectify: ...
 @overload  # noqa: E302
-def objectify(  # noqa: E704
-    data: Sequence, func: SyncItemFunc, **defaults
-) -> list[ComplexArg]: ...
+def objectify[T](  # noqa: E704
+    data: Sequence[T], func: SyncArgFunc
+) -> list[ItemOrValue | Objectify]: ...
 @overload  # noqa: E302
 def objectify(  # noqa: E704
-    data: ComplexArg, func: SyncItemFunc | None = None, **defaults
-) -> ComplexArg: ...
-def objectify(  # noqa: E302
-    data: ComplexArg, func: SyncItemFunc | None = None, **defaults
-) -> ComplexArg:
-    if isinstance(data, Mapping):
+    data: object, func: SyncArgFunc
+) -> ItemOrValue: ...
+def objectify[T](  # noqa: E302
+    data: T, func: SyncArgFunc | None = None, **defaults
+) -> T | ItemOrValue | Objectify | list[T] | list[ItemOrValue | Objectify]:
+    if isinstance(data, (dict, CaseInsensitiveDict, Mapping)):
         objectified = Objectify(data, func=func, **defaults)
     elif func:
         if isinstance(data, (str, struct_time)):
@@ -271,32 +269,26 @@ def objectify(  # noqa: E302
 
 # TODO: move back to meza
 @overload
-def listize(value: BasicMapping) -> list[BasicMapping]: ...  # noqa: E704
-@overload
-def listize(value: Mapping[KT, T]) -> list[Mapping[KT, T]]: ...  # noqa: E704
-@overload
-def listize(value: Callable[..., T]) -> list[Callable[..., T]]: ...  # noqa: E704
-@overload
-def listize(value: IntermediateValue) -> list[IntermediateValue]: ...  # noqa: E704
-@overload
-def listize(value: BasicSequence) -> BasicSequence: ...  # noqa: E704
-@overload
-def listize(value: list[T]) -> list[T]: ...  # noqa: E704
-@overload
-def listize(value: Sequence[T]) -> Sequence[T]: ...  # noqa: E704
+def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
 @overload  # noqa: E302
-def listize(  # noqa: E704
-    value: Generator[T, None, None],
-) -> Generator[T, None, None]: ...
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: dict[str, T],
+) -> list[dict[str, T]]: ...
+@overload  # noqa: E302
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: CaseInsensitiveDict[T],
+) -> list[CaseInsensitiveDict[T]]: ...
 @overload
-def listize(value: Iterator[T]) -> Iterator[T]: ...  # noqa: E704
+def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...  # noqa: E704
+@overload  # noqa: E302
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: Sequence[T],
+) -> Sequence[T]: ...
 @overload
-def listize(value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
+def listize[T](value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
 @overload
-def listize(value: Any) -> list[Any] | Iterable | Sequence: ...  # noqa: E704
-def listize(  # noqa: E302
-    value: Any,
-) -> list[Mapping | IntermediateValue | Callable] | Iterable | Sequence:
+def listize[T](value: T) -> list[T]: ...  # noqa: E704
+def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     """
     Create a listlike object from any value
 
@@ -319,7 +311,7 @@ def listize(  # noqa: E302
     """
     if not value:
         result = []
-    elif isinstance(value, (Mapping, IntermediateValue, Callable)):
+    elif isinstance(value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)):
         result = [value]
     elif isinstance(value, (Iterable, Sequence)):
         result = value

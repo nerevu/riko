@@ -26,7 +26,7 @@ import pygogo as gogo
 
 from riko import Objconf
 from riko.cast import BasicCastType
-from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator
 
@@ -35,9 +35,7 @@ DEFAULTS = Defaults({})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(
-    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
-) -> deque[Item]:
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -66,15 +64,15 @@ def parser(
         >>> objconf = Objectify(kwargs)
         >>> stream = ({'x': x} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
-        >>> parser(stream, objconf, tuples, **kwargs)[0]
+        >>> next(parser(stream, objconf, tuples, **kwargs))
         {'x': 3}
 
     """
-    return deque(stream, int(objconf.count))
+    yield from deque(stream, int(objconf.count))
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> deque[Item]:
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously truncates a stream to the last N items.
 
@@ -111,7 +109,7 @@ def async_pipe(*args, **kwargs) -> deque[Item]:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> deque[Item]:
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that truncates a stream to the last N items.
 

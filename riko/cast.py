@@ -32,17 +32,16 @@ from riko.dates import (
     tt_to_datetime,
 )
 from riko.locations import LOCATIONS
-from riko.types.general import NumericCaster, PreCaster
+from riko.types.general import NumericCaster, Opts, PreCaster
 from riko.types.values import (
     AnyLocation,
     BasicArg,
     BasicValue,
-    ComplexArg,
-    ComplexValue,
     DateDict,
     DateLike,
     IPAddress,
     Location,
+    PrimitiveValue,
 )
 
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
@@ -63,7 +62,7 @@ DATES = {
 }
 
 
-T = TypeVar("T", bound=ComplexArg)
+T = TypeVar("T")
 
 url_quote = lambda url: quote(url, safe=URL_SAFE)
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -110,6 +109,9 @@ class CastType(StrEnum):
     PASS = "pass"  # noqa: S105
     TEXT = "text"
     URL = "url"
+
+
+SourceOpts: Opts = {"ftype": BasicCastType.NONE}
 
 
 def literal_parse(content: BasicValue | bool) -> BasicArg:
@@ -210,7 +212,7 @@ def cast_datetime(  # noqa: E704
 ) -> date | None: ...
 @overload  # noqa: E302
 def cast_datetime(  # noqa: E704
-    value: DateLike, as_date: Literal[False]
+    value: DateLike, as_date: Literal[False] = ...
 ) -> dt | None: ...
 @overload  # noqa: E302
 def cast_datetime(  # noqa: E704
@@ -218,7 +220,7 @@ def cast_datetime(  # noqa: E704
 ) -> DateDict | None: ...
 @overload  # noqa: E302
 def cast_datetime(  # noqa: E704
-    value: DateLike, as_date: Literal[False], as_datedict: Literal[True]
+    value: DateLike, *, as_date: Literal[False] = ..., as_datedict: Literal[True]
 ) -> DateDict | None: ...
 def cast_datetime(  # noqa: E302
     value: DateLike,
@@ -292,64 +294,66 @@ CAST_SWITCH: dict[str, PreCaster] = {
 
 
 @overload
-def cast(content: ComplexArg) -> str: ...  # noqa: E704
+def cast(content: object) -> str: ...  # noqa: E704
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast[T](  # noqa: E704
     content: T,
     _type: Literal[CastType.PASS],
     **kwargs,
 ) -> T: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg,
+    content: object,
     _type: Literal[CastType.NONE],
     **kwargs,
 ) -> None: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg,
+    content: object,
     _type: Literal[CastType.TEXT],
     **kwargs,
 ) -> str: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg,
+    content: object,
     _type: Literal[CastType.FLOAT],
     **kwargs,
 ) -> float: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg, _type: Literal[CastType.DECIMAL], **kwargs
+    content: object, _type: Literal[CastType.DECIMAL], **kwargs
 ) -> Decimal: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg, _type: Literal[CastType.INT], **kwargs
+    content: object, _type: Literal[CastType.INT], **kwargs
 ) -> int: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg, _type: Literal[CastType.DATETIME], **kwargs
+    content: object, _type: Literal[CastType.DATETIME], **kwargs
 ) -> dt: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg, _type: Literal[CastType.DATE], **kwargs
+    content: object, _type: Literal[CastType.DATE], **kwargs
 ) -> date: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg, _type: Literal[CastType.URL], **kwargs
+    content: object, _type: Literal[CastType.URL], **kwargs
 ) -> str: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg, _type: Literal[CastType.LOCATION], **kwargs
+    content: object, _type: Literal[CastType.LOCATION], **kwargs
 ) -> AnyLocation: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: ComplexArg, _type: Literal[CastType.BOOL], **kwargs
+    content: object, _type: Literal[CastType.BOOL], **kwargs
 ) -> bool: ...
-@overload
-def cast(content: T, _type: CastType, **kwargs) -> T | ComplexValue: ...  # noqa: E704
-def cast(  # noqa: E302
+@overload  # noqa: E302
+def cast[T](  # noqa: E704
+    content: T, _type: CastType, **kwargs
+) -> T | PrimitiveValue: ...
+def cast[T](  # noqa: E302
     content: T, _type: CastType = CastType.TEXT, **kwargs
-) -> T | ComplexValue:
+) -> T | PrimitiveValue | AnyLocation:
     """
     Convert content from one type to another
 
@@ -427,7 +431,7 @@ def cast(  # noqa: E302
     return value
 
 
-cast_none = cast_type(Callable[[ComplexArg], None], partial(cast, _type=CastType.NONE))
+cast_none = cast_type(Callable[..., None], partial(cast, _type=CastType.NONE))
 
 
 cast_pass = cast_type(Callable[[T], T], partial(cast, _type=CastType.PASS))

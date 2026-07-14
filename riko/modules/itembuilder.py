@@ -35,7 +35,7 @@ from riko.cast import BasicCastType
 from riko.dotdict import DotDict
 from riko.types.general import Defaults, Opts
 from riko.types.modules import ParsedParam
-from riko.types.values import ComplexDict
+from riko.types.values import RikoDict
 
 from . import processor
 
@@ -46,7 +46,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(
     _, extraction: Sequence[ParsedParam], objconf: Objconf, **kwargs
-) -> ComplexDict:
+) -> RikoDict:
     """
     Parses the pipe content
 
@@ -75,7 +75,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> ComplexDict:
+def async_pipe(*args, **kwargs) -> RikoDict:
     """
     A source that asynchronously builds an item.
 
@@ -119,7 +119,7 @@ def async_pipe(*args, **kwargs) -> ComplexDict:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> ComplexDict:
+def pipe(*args, **kwargs) -> RikoDict:
     """
     A source that builds an item.
 

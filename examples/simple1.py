@@ -1,4 +1,3 @@
-from collections.abc import Mapping
 from pprint import pprint
 
 from riko.collections import AsyncPipe, SyncPipe
@@ -23,4 +22,4 @@ async def async_pipe(_, test=False):
 
 if __name__ == "__main__":
     for i in pipe():
-        pprint(i["url"] if isinstance(i, Mapping) else i)
+        pprint(i["url"] if isinstance(i, dict) else i)

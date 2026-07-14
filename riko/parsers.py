@@ -8,38 +8,35 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import asdict, is_dataclass
 from html.entities import name2codepoint
 from html.parser import HTMLParser
-from io import BytesIO, RawIOBase, StringIO, TextIOBase
+from io import BytesIO, RawIOBase, StringIO
 from itertools import chain
 from json import JSONDecodeError, load, loads
 from time import struct_time
-from typing import (
-    TYPE_CHECKING,
-    Literal,
-    TypeAlias,
-    Union,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Literal, cast, overload
 from urllib.error import URLError
 from xml.sax import SAXParseException  # noqa: S406
 
 import feedparser
 import pygogo as gogo
-from ijson import items
 from requests.structures import CaseInsensitiveDict
 
 from riko import listize
-from riko.bado.io import NamedTextIOWrapper
 from riko.dotdict import DotDict, is_sentinal, is_type_value
-from riko.types.general import ComplexArg, FileTypes, Item, SkipFunc, SkipIf
-from riko.types.modules import AnyModuleConf, ConfValues, Skip
+from riko.types.general import (
+    FileTypes,
+    Item,
+    ItemOrValue,
+    SkipFunc,
+    SkipIf,
+    Stream,
+)
+from riko.types.modules import Skip
 from riko.types.values import (
     BasicArg,
-    ComplexMapping,
-    ComplexSequence,
-    IntermediateValue,
     ParserRSSEntry,
-    StrictDate,
+    RikoDict,
+    Stringy,
+    StringyDict,
 )
 from riko.utils import Fetch, repr_cache, truncate_content
 
@@ -78,24 +75,21 @@ else:
     IJSON_IS_NATIVE = ijson.backend != "python"
 
 if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
     from xml.etree.ElementTree import Element as nativeElement
     from xml.etree.ElementTree import ElementTree as nativeElementTree
 
     from lxml.etree import Element as lxmlElement
     from lxml.etree import ElementTree as lxmlElementTree
 
-STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
-
-AnyElementTree: TypeAlias = Union["nativeElementTree", "lxmlElementTree"]
-AnyElement: TypeAlias = Union["nativeElement", "lxmlElement"]
-Stringy: TypeAlias = Union[str, "StringySequence", "StringyMapping"]
-StringyMapping: TypeAlias = Mapping[str, Stringy]
-StringySequence: TypeAlias = Sequence[Stringy]
+type AnyElementTree = "nativeElementTree" | "lxmlElementTree"
+type AnyElement = "nativeElement" | "lxmlElement"
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
 
+STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 
 SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
@@ -397,24 +391,31 @@ def xpath(
 
 @overload
 def xml2etree(  # noqa: E704
-    f: str | FileTypes | NamedTextIOWrapper | TextIOBase,
-    xml: Literal[True],
-    html5: bool = ...,
+    f: str | FileTypes,
+    xml: Literal[True] = ...,
+    html5: Literal[False] = ...,
 ) -> AnyElementTree: ...
 @overload  # noqa: E302
 def xml2etree(  # noqa: E704
-    f: str | FileTypes | NamedTextIOWrapper | TextIOBase,
+    f: str | FileTypes,
+    *,
+    xml: Literal[True] = ...,
+    html5: Literal[True],
+) -> AnyElementTree: ...
+@overload  # noqa: E302
+def xml2etree(  # noqa: E704
+    f: str | FileTypes,
     xml: Literal[False],
     html5: Literal[True],
 ) -> AnyElementTree: ...
 @overload  # noqa: E302
 def xml2etree(  # noqa: E704
-    f: str | FileTypes | NamedTextIOWrapper | TextIOBase,
+    f: str | FileTypes,
     xml: Literal[False],
     html5: Literal[False] = ...,
 ) -> "nativeElementTree": ...
 def xml2etree(  # noqa: E302
-    f: str | FileTypes | NamedTextIOWrapper | TextIOBase,
+    f: str | FileTypes,
     xml: bool = True,
     html5: bool = False,
 ) -> AnyElementTree | None:
@@ -436,12 +437,12 @@ def xml2etree(  # noqa: E302
 
 
 def _make_content(
-    i: StringyMapping,
+    i: StringyDict,
     value: Stringy | None = None,
     tag="content",
     append=True,
     strip=False,
-) -> StringyMapping:
+) -> StringyDict:
     content: Stringy = i.get(tag, "")
 
     if value and isinstance(value, str) and strip:
@@ -462,9 +463,9 @@ def _make_content(
     return {tag: content} if content else {}
 
 
-def etree2dict(element: AnyElement) -> Stringy:
+def etree2dict(element: AnyElement) -> StringyDict:
     """Convert an element tree into a dict imitating how Yahoo Pipes does it."""
-    i: StringyMapping = dict(element.items())
+    i: StringyDict = dict(element.items())
     content = _make_content(i, element.text, strip=True)
     i.update(content)
 
@@ -476,7 +477,7 @@ def etree2dict(element: AnyElement) -> Stringy:
 
     if element.text and not set(i).difference(["content"]):
         # element is leaf node and doesn't have attributes
-        result = i["content"]
+        result = cast(StringyDict, i["content"])
     else:
         result = i
 
@@ -484,19 +485,12 @@ def etree2dict(element: AnyElement) -> Stringy:
 
 
 def any2dict(
-    content: FileTypes
-    | NamedTextIOWrapper
-    | TextIOBase
-    | Stringy
-    | IntermediateValue
-    | DotDict
-    | ComplexSequence,
+    content: FileTypes | RikoDict | list[RikoDict],
     ext: str | None = "xml",
     html5=False,
     path: str | None = None,
-) -> Iterator[
-    Stringy | float | ComplexMapping | StrictDate | Sequence[ComplexArg]
-]:
+) -> Stream:
+    """Path should be the location to a list of items"""
     path = path or ""
 
     if content is None:
@@ -510,8 +504,10 @@ def any2dict(
             if item is not None:
                 yield item
     elif ext and ext in {"xml", "html"}:
-        xml = ext == "xml"
-        root = xml2etree(content, xml, html5).getroot()
+        if ext == "xml":
+            root = xml2etree(content, xml=True, html5=html5).getroot()
+        else:
+            root = xml2etree(content, xml=False, html5=html5).getroot()
 
         if path:
             replaced = "/".join(path.split("."))
@@ -533,7 +529,8 @@ def any2dict(
 
         if use_ijson:
             prefix = path if path.endswith(".item") else f"{path}.item"
-            yield from items(content, prefix, use_float=True)
+            items = ijson.items(content, prefix, use_float=True)
+            yield from cast(Stream, items)
         elif isinstance(content, str):
             try:
                 json = loads(content)
@@ -541,7 +538,7 @@ def any2dict(
                 logger.error(e)
             else:
                 value = DotDict(json).get(path, "")
-                yield from any2dict(value, ext=None)
+                yield from any2dict(cast(list[RikoDict], value), ext=None)
         else:
             try:
                 json_obj = load(content)
@@ -549,7 +546,7 @@ def any2dict(
                 logger.error(e)
             else:
                 value = DotDict(json_obj).get(path, "") if path else json_obj
-                yield from any2dict(value, ext=None)
+                yield from any2dict(cast(RikoDict, value), ext=None)
     elif ext:
         raise TypeError(f"Invalid file type: '{ext}'")
     elif isinstance(content, str):
@@ -559,26 +556,27 @@ def any2dict(
         raise TypeError("No file type provided!")
 
 
-def _conf_is_dynamic_uncached(conf: ComplexArg) -> bool:
+def _conf_is_dynamic_uncached(conf: object, **kwargs: bool) -> bool:
     is_dynamic = False
 
     if isinstance(conf, Mapping):
-        if "subkey" in conf or is_sentinal(conf):
+        if "subkey" in conf or is_sentinal(conf, **kwargs):
             is_dynamic = True
         else:
-            is_dynamic = any(map(_conf_is_dynamic_uncached, conf.values()))
+            values = conf.values()
+            is_dynamic = any(_conf_is_dynamic_uncached(v, **kwargs) for v in values)
     elif isinstance(conf, Sequence) and not isinstance(conf, str):
-        is_dynamic = any(map(_conf_is_dynamic_uncached, conf))
+        is_dynamic = any(_conf_is_dynamic_uncached(c, **kwargs) for c in conf)
 
     return is_dynamic
 
 
 @repr_cache
-def _conf_is_dynamic_cached(conf: ComplexArg) -> bool:
-    return _conf_is_dynamic_uncached(conf)
+def _conf_is_dynamic_cached(conf: object, **kwargs: bool) -> bool:
+    return _conf_is_dynamic_uncached(conf, **kwargs)
 
 
-def conf_is_dynamic(conf: ComplexArg, memoize=False) -> bool:
+def conf_is_dynamic(conf: object, memoize=False, **kwargs) -> bool:
     """
     Examples:
         >>> _conf_is_dynamic_cached.cache_clear()
@@ -592,62 +590,65 @@ def conf_is_dynamic(conf: ComplexArg, memoize=False) -> bool:
 
     """
     func = _conf_is_dynamic_cached if memoize else _conf_is_dynamic_uncached
-    return func(conf)
+    return func(conf, **kwargs)
 
 
-def _parse_conf_uncached(
-    item: Item = None,
-    conf: AnyModuleConf | ConfValues | None = None,
-    default=None,
-    **kwargs,
-) -> ComplexArg:
+def _parse_conf_uncached[VT](
+    item: Item | None = None,
+    conf: VT | None = None,
+    default: VT | None = None,
+    **kwargs: VT,
+) -> VT | dict[str, VT] | list[VT] | None:
     parsed = default
 
-    if is_dataclass(conf) and not isinstance(conf, type):
-        conf = asdict(conf)
+    if is_dataclass(conf):
+        d_conf: dict[str, VT] | VT | None = asdict(cast("DataclassInstance", conf))
+    else:
+        d_conf = conf
 
-    if isinstance(conf, Mapping):
-        dd_conf = DotDict(conf)
+    dd_conf = DotDict.dictize(d_conf)
 
+    if isinstance(dd_conf, DotDict):
         if subkey := dd_conf.get("subkey"):
-            dd_item = DotDict(item) if isinstance(item, Mapping) else DotDict()
+            dd_item = DotDict.dictize(item) if item else DotDict()
             parsed = dd_item.get(cast(str, subkey), **kwargs)
-        elif is_sentinal(dd_conf):
-            parsed = dd_conf.get(**kwargs)
-        elif is_type_value(dd_conf):
-            parsed = cast(DotDict, dd_conf).get()
+        elif is_sentinal(dd_conf, **kwargs) or is_type_value(dd_conf):
+            # parsed = next(gen_dict(dd_conf, key=None, default_key=None, **kwargs))
+            parsed = cast(DotDict[VT], dd_conf).get()
         else:
-            parsed = {
-                k.lower(): parse_conf(item, cast(ConfValues, v), **kwargs)
-                for k, v in conf.items()
+            _parsed = {
+                k: _parse_conf_uncached(item, v, **kwargs)
+                for k, v in dd_conf.asdict(key=None, **kwargs).items()
             }
-    elif isinstance(conf, (str, struct_time)):
-        parsed = conf
-    elif isinstance(conf, Sequence):
-        parsed = [parse_conf(item, c, **kwargs) for c in conf]
-    elif conf is not None:
-        parsed = conf
+            parsed = cast(dict[str, VT], _parsed)
+    elif isinstance(dd_conf, (str, struct_time)):
+        parsed = dd_conf
+    elif isinstance(dd_conf, (list, tuple)):
+        _parsed = [_parse_conf_uncached(item, c, **kwargs) for c in dd_conf]
+        parsed = cast(list[VT], _parsed)
+    elif dd_conf is not None:
+        parsed = cast(VT, dd_conf)
 
     return parsed
 
 
 @repr_cache
-def _parse_conf_cached(
-    item: Item = None,
-    conf: AnyModuleConf | ConfValues | None = None,
+def _parse_conf_cached[VT](
+    item: Item | None = None,
+    conf: VT | None = None,
     default=None,
     **kwargs,
-) -> ComplexArg:
+) -> VT | dict[str, VT] | list[VT] | None:
     return _parse_conf_uncached(item, conf, default=default, **kwargs)
 
 
-def parse_conf(
-    item: Item = None,
-    conf: AnyModuleConf | ConfValues | None = None,
+def parse_conf[VT](
+    item: Item | None = None,
+    conf: VT | None = None,
     default=None,
     memoize=None,
     **kwargs,
-) -> ComplexArg:
+) -> VT | dict[str, VT] | list[VT] | None:
     """
     Examples
     --------
@@ -695,13 +696,13 @@ def parse_conf(
 
     """
     if memoize is None:
-        memoize = not conf_is_dynamic(conf)
+        memoize = not conf_is_dynamic(conf, **kwargs)
 
     func = _parse_conf_cached if memoize else _parse_conf_uncached
     return func(item, conf, default=default, **kwargs)
 
 
-def get_skip(item: Item, skip_if: SkipIf | None = None, **_) -> bool:
+def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_) -> bool:
     """
     Determine whether or not to skip an item
 
@@ -735,37 +736,37 @@ def get_skip(item: Item, skip_if: SkipIf | None = None, **_) -> bool:
     item = item or {}
     skip = False
 
-    for __skip in listize(skip_if):
-        _skip = cast(SkipFunc | Skip, __skip)
+    if isinstance(item, (dict, CaseInsensitiveDict)):
+        for __skip in listize(skip_if):
+            _skip = cast(SkipFunc | Skip, __skip)
 
-        if callable(_skip):
-            skip = _skip(item)
-        elif isinstance(item, Mapping):
-            _skip = cast(Skip, _skip)
-            field = _skip["field"]
-            value = str(item.get(field, ""))
-
-            if text := str(_skip.get("text")):
-                op = str(_skip.get("op", "contains"))
-                match = not SKIP_SWITCH[op](text, value)
-                skip = match if _skip.get("include") else not match
+            if callable(_skip):
+                skip = _skip(item)
             else:
-                skip = bool(value) if _skip.get("include") else not value
+                _skip = cast(Skip, _skip)
+                field = _skip["field"]
+                value = str(item.get(field, ""))
 
-        if skip:
-            break
+                if text := str(_skip.get("text")):
+                    op = str(_skip.get("op", "contains"))
+                    match = not SKIP_SWITCH[op](text, value)
+                    skip = match if _skip.get("include") else not match
+                else:
+                    skip = bool(value) if _skip.get("include") else not value
+
+            if skip:
+                break
 
     return skip
 
 
-def get_field(item: Item = None, field="", **kwargs) -> ComplexArg:
-    value = item
-
-    if field and isinstance(item, Mapping):
-        try:
-            value = item.get(field, **kwargs)
-        except TypeError:
-            value = item.get(field)
+def get_field(item: ItemOrValue | None = None, field="", **kwargs) -> ItemOrValue:
+    if field and isinstance(item, DotDict):
+        value = item.get(field, **kwargs)
+    elif field and isinstance(item, dict):
+        value = item.get(field)
+    else:
+        value = item
 
     return value
 

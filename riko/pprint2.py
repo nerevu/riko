@@ -5,8 +5,7 @@ Provides function pretty printing
 
 from collections.abc import Mapping, Sequence
 from functools import total_ordering
-
-from riko.types.values import BasicArg
+from time import struct_time
 
 
 def cmp(a, b):
@@ -36,7 +35,7 @@ class Id:
             return False
 
 
-def repr_args(*args):
+def repr_args(*args: object):
     """
     Formats a list of function arguments prettily but as working code
     """
@@ -54,7 +53,7 @@ def repr_args(*args):
     return ", ".join(res)
 
 
-def repr_arg(arg: BasicArg) -> str:
+def repr_arg(arg: object) -> str:
     """
     Formats a function argument prettily but as working code
 
@@ -83,7 +82,7 @@ def repr_arg(arg: BasicArg) -> str:
     return value
 
 
-def str_args(*args):
+def str_args(*args: object):
     """
     Formats a list of function arguments prettily not as code
 
@@ -92,9 +91,9 @@ def str_args(*args):
     res = []
 
     for arg in args:
-        if isinstance(arg, str):
+        if isinstance(arg, (str, struct_time)):
             res.append(arg)
-        elif isinstance(arg, Sequence) and len(arg) == 2:
+        elif isinstance(arg, tuple) and len(arg) == 2:
             key, value = arg
 
             if value and (str_value := str_arg(value)):
@@ -105,7 +104,7 @@ def str_args(*args):
     return ", ".join(res)
 
 
-def str_arg(arg):
+def str_arg(arg: object):
     """
     Formats a function argument prettily not as code
 

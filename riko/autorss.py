@@ -8,10 +8,9 @@ from typing import cast
 
 import pygogo as gogo
 
-from riko.bado.io import NamedTextIOWrapper, async_url_open
+from riko.bado.io import async_url_open
 from riko.parsers import LinkParser
-from riko.types.general import StringFileTypes
-from riko.types.values import BasicMapping
+from riko.types.general import Stream, StringFileTypes
 from riko.utils import Fetch
 
 TIMEOUT = 10
@@ -23,15 +22,13 @@ class RSSLinkParser(LinkParser):
         super().__init__(*args, rss_only=True, **kwargs)
 
 
-def file2entries(
-    f: StringFileTypes | NamedTextIOWrapper | Iterator[str], parser: RSSLinkParser
-) -> Iterator[BasicMapping]:
+def file2entries(f: StringFileTypes | Iterator[str], parser: RSSLinkParser) -> Stream:
     for line in f:
         parser.feed(line)
         yield from parser.entry
 
 
-def doc2entries(document) -> Iterator[BasicMapping]:
+def doc2entries(document) -> Stream:
     for node in document.childNodes:
         if hasattr(node, "attributes") and node.attributes:
             entry = node.attributes
@@ -53,7 +50,7 @@ def doc2entries(document) -> Iterator[BasicMapping]:
 
 async def async_get_rss(
     url: str, convert_charrefs=False, auto_sort=False, **kwargs
-) -> Iterator[BasicMapping]:
+) -> Stream:
     try:
         parser = RSSLinkParser(convert_charrefs=convert_charrefs, **kwargs)
     except TypeError:
@@ -72,9 +69,7 @@ async def async_get_rss(
     return entries
 
 
-def get_rss(
-    url: str, convert_charrefs=False, auto_sort=False, **kwargs
-) -> Iterator[BasicMapping]:
+def get_rss(url: str, convert_charrefs=False, auto_sort=False, **kwargs) -> Stream:
     try:
         parser = RSSLinkParser(convert_charrefs=convert_charrefs, **kwargs)
     except TypeError:

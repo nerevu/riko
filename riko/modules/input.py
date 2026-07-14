@@ -53,12 +53,13 @@ Attributes:
 import pygogo as gogo
 
 from riko import Objconf
-from riko.cast import BasicCastType, CastType, cast
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.cast import CastType, SourceOpts, cast
+from riko.types.general import Defaults, Extraction, Item
+from riko.types.values import PrimitiveValue
 
 from . import processor
 
-OPTS: Opts = {"ftype": BasicCastType.NONE}
+OPTS = SourceOpts
 DEFAULTS: Defaults = {
     "type": "text",
     "default": "",
@@ -70,12 +71,13 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 def parser(
     _: Item, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> Item:
+) -> PrimitiveValue:
     """
     Obtains the user input
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't prompt for input
 
@@ -104,7 +106,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Item:
+def async_pipe(*args, **kwargs) -> PrimitiveValue:
     """
     A processor module that asynchronously prompts for text and parses it
     into a variety of different types, e.g., int, bool, date, etc.
@@ -154,7 +156,7 @@ def async_pipe(*args, **kwargs) -> Item:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Item:
+def pipe(*args, **kwargs) -> PrimitiveValue:
     """
     A processor module that prompts for text and parses it into a variety of
     different types, e.g., int, bool, date, etc.

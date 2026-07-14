@@ -22,7 +22,6 @@ Attributes:
 """
 
 from collections import deque
-from collections.abc import Mapping
 
 import pygogo as gogo
 
@@ -74,10 +73,7 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
     seen = deque(maxlen=limit)
 
     for item in stream:
-        if isinstance(item, Mapping):
-            value = item.get(key)
-        else:
-            value = item
+        value = item.get(key)
 
         if value not in seen:
             seen.append(value)

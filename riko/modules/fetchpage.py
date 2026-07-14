@@ -29,14 +29,14 @@ import pygogo as gogo
 
 from riko import ENCODING, Objconf
 from riko.bado import io
-from riko.cast import BasicCastType
+from riko.cast import SourceOpts
 from riko.parsers import get_text
-from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types.general import Defaults, Extraction, Item
 from riko.utils import Fetch, betwix
 
 from . import processor
 
-OPTS: Opts = {"ftype": BasicCastType.NONE}
+OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -58,7 +58,8 @@ async def async_parser(
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 
@@ -95,8 +96,7 @@ async def async_parser(
     parsed = get_string(content, str(objconf.start), str(objconf.end))
     detagged = get_text(parsed) if objconf.detag else parsed
     split = detagged.split(objconf.token) if objconf.token else [detagged]
-    stream = map(str.strip, split)
-    return stream
+    return map(str.strip, split)
 
 
 def parser(
@@ -106,7 +106,8 @@ def parser(
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
 
     Returns:
@@ -132,8 +133,7 @@ def parser(
     parsed = get_string(content, str(objconf.start), objconf.end)
     detagged = get_text(parsed) if objconf.detag else parsed
     split = detagged.split(objconf.token) if objconf.token else [detagged]
-    stream = map(str.strip, split)
-    return stream
+    return map(str.strip, split)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -14,7 +14,7 @@ Examples:
 
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from inspect import iscoroutinefunction
 from typing import cast
 
@@ -62,23 +62,22 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
     """
     func = cast(Callable[[Stream], Item], kwargs["func"])
     result = func(stream)
-    return iter(listize(result))
+    listed = listize(result)
+    return iter(cast(list[Item], listed))
 
 
 async def async_parser(
     stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
 ) -> Stream:
-    func = cast(
-        Callable[[Stream], Item | Awaitable[Item]],
-        kwargs["func"],
-    )
+    func = cast(Callable[[Stream], Item], kwargs["func"])
 
     if iscoroutinefunction(func):
         result = await func(stream)
     else:
         result = func(stream)
 
-    return iter(listize(result))
+    listed = listize(result)
+    return iter(cast(list[Item], listed))
 
 
 @operator(DEFAULTS, isasync=True)

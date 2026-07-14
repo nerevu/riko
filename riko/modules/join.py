@@ -22,7 +22,7 @@ Attributes:
 
 """
 
-from collections.abc import Generator, Iterator, Mapping
+from collections.abc import Mapping
 from itertools import product
 from typing import cast
 
@@ -32,7 +32,6 @@ from meza.process import join, merge
 from riko import Objconf
 from riko.dotdict import is_mapping
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
-from riko.types.values import ComplexMapping
 
 from . import operator
 
@@ -41,9 +40,7 @@ DEFAULTS: Defaults = {"join_key": None, "lower": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(
-    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
-) -> Iterator[ComplexMapping]:
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -90,7 +87,7 @@ def parser(
         4
 
     """
-    other = cast(Stream, kwargs["other"])
+    other = kwargs["other"]
 
     def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
         if isinstance(x, Mapping) and isinstance(y, Mapping):
@@ -110,20 +107,17 @@ def parser(
         x_key = objconf.join_key or objconf.other_join_key
         y_key = objconf.other_join_key or x_key
         prod = product(stream, other)
-        _joined = (
-            merge([cast(ComplexMapping, x), cast(ComplexMapping, y)])
-            for x, y in prod
-            if compare(x, y, x_key=x_key, y_key=y_key)
+        joined = (
+            merge([x, y]) for x, y in prod if compare(x, y, x_key=x_key, y_key=y_key)
         )
-        joined = cast(Generator[ComplexMapping, None, None], _joined)
     else:
-        joined = join(filter(is_mapping, stream), filter(is_mapping, other))
+        joined = join(stream, filter(is_mapping, other))
 
-    return joined
+    return cast(Stream, joined)
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Iterator[ComplexMapping]:
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously merges multiple source streams together.
 
@@ -169,7 +163,7 @@ def async_pipe(*args, **kwargs) -> Iterator[ComplexMapping]:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[ComplexMapping]:
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that merges multiple streams together.
 

@@ -6,25 +6,15 @@ by Paul Harrison
 Public domain, do with it as you will
 """
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable
 from graphlib import CycleError, TopologicalSorter
-from typing import (
-    TypeVar,
-)
 
 import networkx as nx
 
-T = TypeVar("T", bound=str | int)
-
-# After upgrading to Python 3.12, we can use the new TypeAlias syntax and remove the
-# redundant type constraints:
-# https://docs.python.org/3/reference/compound_stmts.html#generic-type-aliases
-# type Nodes[T: (str | int)] = Sequence[T]
-# type Graph[T: (str | int)] = Mapping[T, Sequence[T]]
-# type NodeList[T: (str | int)] = list[T]
+from riko.types.modules import SCC, Graph, NodeList
 
 
-def scc_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> list[tuple[T, ...]]:
+def scc_sort[T: str | int](graph: Graph[T], reverse=False) -> SCC[T]:
     """
     Identify strongly connected components in a graph using Tarjan's algorithm.
 
@@ -65,12 +55,14 @@ def scc_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> list[tuple[T, ...
     [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
     """
     digraph = nx.DiGraph(graph)
-    components: Iterable[set[T]] = nx.strongly_connected_components(digraph)
-    order = [tuple(c) for c in components]
-    return order if reverse else order[::-1]
+    component_group: Iterable[set[T]] = nx.strongly_connected_components(digraph)
+    scc = [tuple(components) for components in component_group]
+    return scc if reverse else scc[::-1]
 
 
-def native_topological_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> list[T]:
+def native_topological_sort[T: str | int](
+    graph: Graph[T], reverse=False
+) -> NodeList[T]:
     """
     # A --> B --> C --> D
     >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
@@ -116,9 +108,7 @@ def native_topological_sort(graph: Mapping[T, Sequence[T]], reverse=False) -> li
     return static_order if reverse else static_order[::-1]
 
 
-def topological_sort(
-    graph: Mapping[T, Sequence[T]], **kwargs
-) -> list[T] | list[tuple[T, ...]]:
+def topological_sort[T: str | int](graph: Graph[T], **kwargs) -> NodeList[T] | SCC[T]:
     """
     # A --> B --> C --> D
     >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}

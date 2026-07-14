@@ -37,7 +37,7 @@ from collections.abc import (
     Iterator,
 )
 from datetime import timedelta
-from typing import Self, TypeVar, cast
+from typing import Self, cast
 
 import pygogo as gogo
 
@@ -46,7 +46,6 @@ from riko.bado.itertools import ensure_deferred
 from riko.bado.util import async_sleep
 from riko.cast import BasicCastType
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
-from riko.types.values import ComplexArg
 
 from . import operator
 
@@ -56,10 +55,8 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 items = ("days", "hours", "microseconds", "milliseconds", "minutes", "seconds", "weeks")
 
-T = TypeVar("T", bound=ComplexArg)
 
-
-class AsyncTimeoutIterator(AsyncIterator[T]):
+class AsyncTimeoutIterator[T](AsyncIterator[T]):
     def __init__(
         self, elements: AsyncIterable[T] | Iterable[T], timeout: float = 0
     ) -> None:
@@ -97,7 +94,7 @@ class AsyncTimeoutIterator(AsyncIterator[T]):
             return await anext(self.aiter)
 
 
-class TimeoutIterator(Iterator[T]):
+class TimeoutIterator[T](Iterator[T]):
     def __init__(self, elements: Iterable[T], timeout: float = 0) -> None:
         self.iter: Iterator[T] = iter(elements)
         self.timeout = timeout

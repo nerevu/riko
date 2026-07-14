@@ -26,11 +26,11 @@ import pygogo as gogo
 
 from riko import Objconf
 from riko.cast import BasicCastType
-from riko.types.general import Defaults, Extraction
+from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
-OPTS: dict[str, str | bool] = {"ftype": BasicCastType.TEXT, "field": "content"}
+OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {
     "delimiter": ",",
     "dedupe": False,

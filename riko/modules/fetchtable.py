@@ -20,7 +20,6 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
 from os import path as p
 
 import pygogo as gogo
@@ -28,14 +27,13 @@ from meza.io import read
 
 from riko import ENCODING, Objconf
 from riko.bado import io
-from riko.cast import BasicCastType
-from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.types.values import BasicMapping
+from riko.cast import SourceOpts
+from riko.types.general import Defaults, Extraction, Item, Stream
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
-OPTS: Opts = {"ftype": BasicCastType.NONE}
+OPTS = SourceOpts
 DEFAULTS: Defaults = {
     "delimiter": ",",
     "quotechar": '"',
@@ -52,12 +50,13 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 async def async_parser(
     _: Item, extraction: Extraction, objconf: Objconf, **kwargs
-) -> Iterator[BasicMapping]:
+) -> Stream:
     """
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 
@@ -93,20 +92,19 @@ async def async_parser(
     r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
-    rkwargs = {**dict(objconf.iteritems()), **renamed}
+    rkwargs = {**objconf, **renamed}
     ext = p.splitext(objconf.url)[1]
     stream = auto_close(read(r, ext, **rkwargs), r)
     return stream
 
 
-def parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
-) -> Iterator[BasicMapping]:
+def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
 
     Returns:
@@ -129,14 +127,14 @@ def parser(
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     f = Fetch(objconf.url, encoding=objconf.encoding)
-    rkwargs = {**dict(objconf.iteritems()), **renamed}
+    rkwargs = {**objconf, **renamed}
     ext = p.splitext(objconf.url)[1]
     stream = auto_close(read(f, ext, **rkwargs), f)
     return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Iterator[BasicMapping]:
+async def async_pipe(*args, **kwargs) -> Stream:
     """
     A source that asynchronously fetches a file.
 
@@ -187,7 +185,7 @@ async def async_pipe(*args, **kwargs) -> Iterator[BasicMapping]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[BasicMapping]:
+def pipe(*args, **kwargs) -> Stream:
     """
     A source that fetches and parses a file to yield items.
 

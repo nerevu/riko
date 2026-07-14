@@ -14,7 +14,6 @@ from collections import deque
 from collections.abc import (
     Callable,
     Generator,
-    Hashable,
     ItemsView,
     Iterable,
     Iterator,
@@ -25,15 +24,16 @@ from dataclasses import asdict, fields, is_dataclass
 from decimal import Decimal
 from functools import cache, partial, reduce, wraps
 from http.client import HTTPResponse
-from io import BytesIO, IOBase, RawIOBase, StringIO, TextIOBase
+from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
 from os import O_NONBLOCK
 from time import struct_time
 from typing import (
-    Generic,
+    TYPE_CHECKING,
     Literal,
     Protocol,
+    TypeGuard,
     TypeVar,
     Union,
     cast,
@@ -52,6 +52,7 @@ import pygogo as gogo
 import requests
 from meza.io import reencode
 from mezmorize.utils import get_cache_type
+from requests.structures import CaseInsensitiveDict
 
 import riko.cast as cast_module
 from riko import (
@@ -64,7 +65,6 @@ from riko import (
     listize,
     replacer,
 )
-from riko.bado.io import NamedTextIOWrapper
 from riko.cast import CAST_SWITCH, CastType
 from riko.cast import cast as cast_value
 from riko.dates import ensure_tzinfo
@@ -75,7 +75,9 @@ from riko.types.general import (
     Item,
     Opener,
     PipelineDependencies,
-    SyncItemFunc,
+    Stream,
+    StreamOrValueStream,
+    ValueStream,
 )
 from riko.types.modules import (
     EmbeddedModule,
@@ -86,51 +88,71 @@ from riko.types.modules import (
 )
 from riko.types.values import (
     BasicArg,
-    BasicMapping,
+    BasicDict,
     BasicValue,
-    ComplexArg,
-    ComplexValue,
-    IntermediateValue,
+    Hashable,
+    HashableType,
     ParserRSSEntry,
+    PrimitiveValue,
+    RikoDict,
+    RikoList,
+    RikoValue,
     RSSEntry,
     SortableValue,
     StatefulItem,
     StreamState,
+    StringyDict,
+    StringyList,
 )
 
-NON_SORTABLE = (Mapping, Objectify, Sequence)
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
+
+NON_SORTABLE = (Mapping, Sequence)
 
 _registry: dict[str, Generator[None, Item | StatefulItem, None]] = {}
-_receive_queue: dict[str, deque[tuple[StreamState | None, ComplexArg]]] = {}
+_receive_queue: dict[str, deque[tuple[StreamState | None, Item]]] = {}
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
 
-T = TypeVar("T", bound=ComplexArg)
-R = TypeVar("R")
-R_co = TypeVar("R_co", covariant=True)
+T_co = TypeVar("T_co", covariant=True)
 B = TypeVar("B", Literal[True], Literal[False])
+VT = TypeVar("VT")
+
+type TuplePair = tuple[str, HashableOrTuple]
+type InnerPairs = tuple[TuplePair, ...]
+type DataclassTuple = tuple[str, tuple[type, InnerPairs]]
+type CollectionTuple = tuple[type, InnerPairs | tuple[HashableOrTuple, ...]]
+type HashableOrTuple = Hashable | CollectionTuple | DataclassTuple
 
 
-class ReprCacheWrapper(Protocol[R_co]):
+def is_dataclass_tuple(obj: tuple) -> TypeGuard[DataclassTuple]:
+    return obj[0] == "dataclass"
+
+
+class ReprCacheWrapper(Protocol[T_co]):
     def __call__(  # noqa: E704
-        self, *args: ComplexArg, **kwargs: ComplexArg
-    ) -> R_co: ...
+        self, *args: VT, **kwargs: VT
+    ) -> T_co: ...
     def cache_clear(self) -> None: ...  # noqa: E704
     def cache_info(self) -> object: ...  # noqa: E704
 
 
-def fromdict(cls, **d):
+def fromdict(
+    cls: type["DataclassInstance"],
+    **data: Union["DataclassInstance", RikoValue, StringyList, StringyDict],
+) -> "DataclassInstance":
     module = sys.modules[cls.__module__]
     localns = {**vars(module), **vars(cast_module)}
     hints = get_type_hints(cls, localns=localns, include_extras=True)
 
     for f in fields(cls):
-        if f.name not in d:
+        if f.name not in data:
             continue
 
         ftype = hints[f.name]
-        val = d[f.name]
+        val = data[f.name]
         origin = get_origin(ftype)
 
         if origin is Union:
@@ -146,32 +168,30 @@ def fromdict(cls, **d):
         elif is_dataclass(ftype) and isinstance(ftype, type) and isinstance(val, dict):
             val = fromdict(ftype, **val)
 
-        d[f.name] = val
+        data[f.name] = val
 
-    return cls(**d)
+    return cls(**data)
 
 
-def _to_hashable(obj: ComplexArg) -> Hashable:
+def _to_hashable(obj: object) -> HashableOrTuple:
     hashed = None
 
     if obj is None:
         pass
-    elif type(obj) in frozenset([int, float, bool, bytes, str, struct_time]):
+    elif isinstance(obj, HashableType):
         hashed = obj
     elif isinstance(obj, DotDict):
         inner = sorted((k, _to_hashable(v)) for k, v in obj._store.values())
         hashed = (DotDict, tuple(inner))
-    elif isinstance(obj, Objectify):
-        inner = tuple(sorted((k, _to_hashable(v)) for k, v in obj.iteritems()))
-        hashed = (Objectify, inner)
     elif isinstance(obj, Mapping):
-        inner = sorted((k, _to_hashable(cast(ComplexArg, v))) for k, v in obj.items())
-        hashed = (dict, tuple(inner))
+        inner = sorted((k, _to_hashable(v)) for k, v in obj.items())
+        typ = Objectify if isinstance(obj, Objectify) else dict
+        hashed = (typ, tuple(inner))
     elif isinstance(obj, Sequence):
         hashed = (list, tuple(_to_hashable(v) for v in obj))
     elif is_dataclass(obj):
-        items = asdict(obj).items()
-        inner = tuple(sorted((k, _to_hashable(cast(ComplexArg, v))) for k, v in items))
+        items = asdict(cast("DataclassInstance", obj)).items()
+        inner = tuple(sorted((k, _to_hashable(v)) for k, v in items))
         hashed = ("dataclass", (type(obj), inner))
     else:
         logger.error(f"Unsupported {type(obj)=}")
@@ -180,33 +200,36 @@ def _to_hashable(obj: ComplexArg) -> Hashable:
 
 
 @cache
-def _from_hashable(obj: Hashable) -> ComplexArg:
-    if isinstance(obj, tuple) and len(obj) == 2:
-        typ, inner = obj
-
-        if typ == "dataclass":
-            cls, inner = inner
+def _from_hashable(
+    obj: HashableOrTuple,
+) -> Union[RikoValue, Objectify, "DataclassInstance", CollectionTuple, DataclassTuple]:
+    if not isinstance(obj, struct_time) and isinstance(obj, tuple) and len(obj) == 2:
+        if is_dataclass_tuple(obj):
+            typ, (cls, inner) = obj
         else:
+            typ, inner = cast(CollectionTuple, obj)
             cls = None
 
         if typ in (Objectify, DotDict, dict, "dataclass"):
-            arg = {k: _from_hashable(v) for k, v in inner}
+            _arg = {k: _from_hashable(v) for k, v in cast(InnerPairs, inner)}
+            arg = cast(RikoDict, _arg)
 
             if (typ is Objectify) or (typ is DotDict):
                 arg = typ(arg)
             elif cls and typ == "dataclass":
                 arg = fromdict(cls, **arg)
         elif typ is list:
-            arg = [_from_hashable(v) for v in inner]
+            _arg = [_from_hashable(v) for v in cast(tuple[HashableOrTuple, ...], inner)]
+            arg = cast(RikoList, _arg)
         else:
-            arg = cast(ComplexArg, obj)
+            arg = obj
     else:
-        arg = cast(ComplexArg, obj)
+        arg = obj
 
     return arg
 
 
-def repr_cache(fn: Callable[..., R]) -> ReprCacheWrapper[R]:
+def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
     @cache
     def _cached(hashable_args: tuple, hashable_kwargs: tuple) -> R:
         args = tuple(_from_hashable(a) for a in hashable_args)
@@ -214,7 +237,7 @@ def repr_cache(fn: Callable[..., R]) -> ReprCacheWrapper[R]:
         return fn(*args, **kwargs)
 
     @wraps(fn)
-    def wrapper(*args: ComplexArg, **kwargs: ComplexArg) -> R:
+    def wrapper(*args: VT, **kwargs: VT) -> R:
         return _cached(
             tuple(_to_hashable(a) for a in args),
             tuple(sorted((k, _to_hashable(v)) for k, v in kwargs.items())),
@@ -223,10 +246,6 @@ def repr_cache(fn: Callable[..., R]) -> ReprCacheWrapper[R]:
     setattr(wrapper, "cache_clear", _cached.cache_clear)  # noqa: B010
     setattr(wrapper, "cache_info", _cached.cache_info)  # noqa: B010
     return cast(ReprCacheWrapper[R], wrapper)
-
-
-def combine_dicts(*dicts: Mapping[str, BasicArg]) -> dict[str, BasicArg]:
-    return dict(it.chain.from_iterable(map(Mapping.items, dicts)))
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1
@@ -303,9 +322,7 @@ def get_response_encoding(r: HTTPResponse | addinfourl, def_encoding=ENCODING) -
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close(
-    stream: Iterable[T], f: FileTypes | NamedTextIOWrapper | IOBase
-) -> Iterator[T]:
+def auto_close[T](stream: Iterable[T], f: FileTypes) -> Iterator[T]:
     try:
         yield from stream
     finally:
@@ -456,13 +473,13 @@ def get_opener(memoize=False, **kwargs) -> Opener:
     return current_opener
 
 
-class Fetch(Generic[B]):
+class Fetch[B: (Literal[True], Literal[False])]:
     binary: B
 
     @overload
     def __init__(  # noqa: E704
         self: "Fetch[Literal[True]]",
-        url: BasicArg = ...,
+        url: str = ...,
         *,
         binary: Literal[True],
         **kwargs: BasicArg,
@@ -470,22 +487,15 @@ class Fetch(Generic[B]):
     @overload  # noqa: E301
     def __init__(  # noqa: E704
         self: "Fetch[Literal[False]]",
-        url: BasicArg = ...,
+        url: str = ...,
         *,
-        binary: Literal[False],
-        **kwargs: BasicArg,
-    ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704
-        self: "Fetch[Literal[False]]",
-        url: BasicArg = ...,
-        memoize: BasicArg = ...,
-        binary: bool = False,
+        binary: Literal[False] = ...,
         **kwargs: BasicArg,
     ) -> None: ...
     def __init__(  # noqa: E301
         self,
-        url: BasicArg = "",
+        url: str = "",
+        *,
         memoize: BasicArg = False,
         binary: bool = False,
         **kwargs: BasicArg,
@@ -497,7 +507,7 @@ class Fetch(Generic[B]):
         opener = get_opener(memoize=bool(url and memoize), binary=binary, **kwargs)
 
         try:
-            self.file, self.content_type = opener(str(url))
+            self.file, self.content_type = opener(url)
         except URLError as e:
             if "File name too long" in str(e.reason):
                 raise
@@ -571,7 +581,7 @@ class Fetch(Generic[B]):
 
 
 def _resolve_uncastable(
-    value: ComplexArg,
+    value: Mapping | Sequence | PrimitiveValue,
     msg: str,
     default: SortableValue,
 ) -> SortableValue | None:
@@ -579,7 +589,7 @@ def _resolve_uncastable(
         msg += ". Returning value without casting."
         logger.warning(msg)
         casted = value
-    elif isinstance(value, (Mapping, Objectify, Sequence)):
+    elif isinstance(value, (dict, CaseInsensitiveDict, list, tuple, Mapping, Sequence)):
         msg += ". Returning default value."
         logger.warning(msg)
         casted = default
@@ -598,23 +608,26 @@ def _warn_and_default(type_name: str, default: SortableValue) -> SortableValue:
 
 
 def _resolve_default(
-    _type: str | None, invalid_type: bool | None, default: ComplexValue | None
+    _type: str | None, invalid_type: bool | None, default: PrimitiveValue | None
 ) -> SortableValue:
+    resolved = ""
+
     if invalid_type and default is None:
         logger.warning(f"Invalid cast type={_type}. Setting default to empty string.")
     elif _type and default is None:
         _default = CAST_SWITCH[_type].get("default")
-        default = cast_type(IntermediateValue, _default)
+        resolved = cast_type(PrimitiveValue, _default) or ""
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
-        default = None
+    elif default is not None:
+        resolved = default
 
-    return default if default is not None else ""
+    return resolved
 
 
 def def_itemgetter(
-    attr: str, default: ComplexValue | None = None, _type: str | None = None
-) -> Callable[[Item], SortableValue]:
+    attr: str, default: PrimitiveValue | None = None, _type: str | None = None
+) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
     # like operator.itemgetter but fills in missing keys with a default value
     _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
     invalid_type = bool(_invalid_type or (_type and _type not in CAST_SWITCH))
@@ -623,11 +636,9 @@ def def_itemgetter(
     _invalid_type = _type in {CastType.LOCATION, CastType.PASS, CastType.NONE}
     invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
 
-    def keyfunc(item: Item) -> SortableValue:
-        if isinstance(item, Mapping):
+    def keyfunc(item: Mapping | PrimitiveValue) -> SortableValue:
+        if isinstance(item, (dict, CaseInsensitiveDict, Mapping)):
             value = item.get(attr, default)
-        elif isinstance(item, Objectify):
-            value = dict(item.iteritems()).get(attr, default)
         else:
             value = item
 
@@ -637,7 +648,7 @@ def def_itemgetter(
             casted = _resolve_uncastable(value, msg, default)
         elif _type:
             _casted = cast_value(value, CastType(_type))
-            casted = cast_type(IntermediateValue, _casted)
+            casted = cast_type(PrimitiveValue, _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
         elif isinstance(value, NON_SORTABLE):
@@ -656,7 +667,9 @@ def def_itemgetter(
 
 
 # TODO: move this to meza.process.group
-def group_by(content: Iterable[T], attr: str, default=None) -> ItemsView[str, list[T]]:
+def group_by[T: Mapping | PrimitiveValue](
+    content: Iterable[T], attr: str, default=None
+) -> ItemsView[str, list[T]]:
     keyfunc = def_itemgetter(attr, default)
     groups: dict[str, list[T]] = {}
 
@@ -672,12 +685,12 @@ def group_by(content: Iterable[T], attr: str, default=None) -> ItemsView[str, li
 
 
 @overload
-def unique_everseen(content: Iterable[T]) -> Iterator[T]: ...  # noqa: E704
+def unique_everseen[T](content: Iterable[T]) -> Iterator[T]: ...  # noqa: E704
 @overload  # noqa: E302
-def unique_everseen(  # noqa: E704
+def unique_everseen[T](  # noqa: E704
     content: Iterable[T], keyfunc: Callable
 ) -> Iterator[str]: ...
-def unique_everseen(  # noqa: E302
+def unique_everseen[T](  # noqa: E302
     content: Iterable[T], keyfunc: Callable | None = None
 ) -> Iterator[str | T]:
     # List unique elements, preserving order. Remember all elements ever seen
@@ -745,9 +758,7 @@ def betwix(iterable, start=None, stop=None, inc=False):
     return last
 
 
-def dispatch(
-    split: Sequence[ComplexArg], *funcs: SyncItemFunc
-) -> tuple[ComplexArg, ...]:
+def dispatch[T, VT](split: Sequence[VT], *funcs: Callable[[VT], T]) -> tuple[T, ...]:
     r"""
     Takes a tuple of items and delivers each one to a different function
 
@@ -777,7 +788,7 @@ def dispatch(
     return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
-def broadcast(item: Item, *funcs: SyncItemFunc, **kwargs) -> tuple[ComplexArg, ...]:
+def broadcast[T, VT](item: VT, *funcs: Callable[[VT], T], **kwargs) -> tuple[T, ...]:
     r"""
     Delivers the same item to different functions.
 
@@ -960,7 +971,7 @@ def get_regex_rule(rule: Objconf | RegexConfRule, recompile=False) -> RegexRule:
     return RegexRule(**nrule)
 
 
-def multiplex(sources: Iterable[Iterable[T]]) -> Iterable[T]:
+def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
     """Combine multiple generators into one"""
     return it.chain.from_iterable(sources)
 
@@ -1004,16 +1015,26 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         yield cast(RSSEntry, entry)
 
 
-def gen_items(
-    content: BasicArg | None, key: str | None = None, yield_if_none=False
-) -> Iterator[BasicArg | BasicMapping | None]:
-    if isinstance(content, (str, int, Mapping)):
+@overload
+def gen_items(content: RikoValue) -> ValueStream: ...  # noqa: E704
+@overload  # noqa: E302
+def gen_items(  # noqa: E704
+    content: RikoValue, key: str, yield_if_none: bool = ...
+) -> Stream: ...  # noqa: E704
+@overload  # noqa: E302
+def gen_items(  # noqa: E704
+    content: RikoValue, key: None = ..., yield_if_none: bool = ...
+) -> ValueStream: ...
+def gen_items(  # noqa: E302
+    content: RikoValue, key: str | None = None, yield_if_none=False
+) -> StreamOrValueStream:
+    if isinstance(content, (struct_time, dict, CaseInsensitiveDict)):
+        yield {key: cast(BasicDict, content)} if key else content
+    elif isinstance(content, (list, tuple)):
+        for value in content:
+            yield from gen_items(value, key)
+    elif content is not None or yield_if_none:
         yield {key: content} if key else content
-    elif content:
-        for nested in content:
-            yield from gen_items(nested, key)
-    elif yield_if_none:
-        yield
 
 
 def send(target: str, item: Item | StatefulItem):
@@ -1123,7 +1144,7 @@ def extract_input(
 
 
 def pythonise(
-    content: str | BasicMapping | Wire,
+    content: str | Mapping,
     encoding="ascii",
     replace: Sequence[str] = ("-", ":", "/", ""),
     key: str | None = None,
@@ -1216,14 +1237,12 @@ def gen_parented_graph(graph):
             yield (node, value)
 
 
-def truncate_content(content: T | object, length: int = 20) -> T:
+def truncate_content[T](content: T | object, length: int = 20) -> T:
     if isinstance(content, str):
         truncated = content[:length] + "…" if len(content) > length else content
-    elif isinstance(content, Objectify):
-        truncated = {k: truncate_content(v) for k, v in content.iteritems()}
-    elif isinstance(content, Mapping):
+    elif isinstance(content, (dict, CaseInsensitiveDict, Mapping)):
         truncated = {k: truncate_content(v) for k, v in content.items()}
-    elif isinstance(content, Sequence):
+    elif isinstance(content, (list, tuple, Sequence)):
         truncated = [truncate_content(v) for v in content]
     else:
         truncated = content

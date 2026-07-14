@@ -21,8 +21,6 @@ Attributes:
 
 """
 
-from collections.abc import Iterator, Sequence
-from decimal import Decimal
 from os import path as p
 from typing import cast
 
@@ -30,29 +28,27 @@ import pygogo as gogo
 
 from riko import ENCODING, Objconf, listize
 from riko.bado import io
-from riko.cast import BasicCastType
-from riko.parsers import Stringy, any2dict
-from riko.types.general import Defaults, Extraction, FileTypes, Item, Opts
-from riko.types.values import ComplexArg, ComplexMapping, StrictDate
+from riko.cast import SourceOpts
+from riko.parsers import any2dict
+from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
-OPTS: Opts = {"ftype": BasicCastType.NONE}
+OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
     _: Item, extraction: Extraction, objconf: Objconf, **kwargs
-) -> Iterator[
-    Stringy | ComplexMapping | StrictDate | Decimal | float | Sequence[ComplexArg]
-]:
+) -> Stream:
     """
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 
@@ -92,16 +88,13 @@ async def async_parser(
     return stream
 
 
-def parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
-) -> Iterator[
-    Stringy | ComplexMapping | StrictDate | Decimal | float | Sequence[ComplexArg]
-]:
+def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         kwargs (dict): Keyword arguments
 
@@ -133,11 +126,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(
-    *args, **kwargs
-) -> Iterator[
-    Stringy | ComplexMapping | StrictDate | Decimal | float | Sequence[ComplexArg]
-]:
+async def async_pipe(*args, **kwargs) -> Stream:
     """
     A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -182,11 +171,7 @@ async def async_pipe(
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(
-    *args, **kwargs
-) -> Iterator[
-    Stringy | ComplexMapping | StrictDate | Decimal | float | Sequence[ComplexArg]
-]:
+def pipe(*args, **kwargs) -> Stream:
     """
     A source that fetches and parses an XML or JSON file to
     return the entries.

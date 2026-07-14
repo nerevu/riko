@@ -1,26 +1,25 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from re import RegexFlag
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    NotRequired,
-    Required,
-    TypeAlias,
-    TypedDict,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Literal, NotRequired, Required, TypedDict, Union
 
 if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
+
     from riko.cast import CastType, LocationType, SortableCastType
     from riko.types.compile import PipeModule
-    from riko.types.values import BasicArg
+    from riko.types.values import BasicValue
 
 
 # Shared
-Sentinal: TypeAlias = Literal["terminal"]
-ModuleName = Literal["fetch", "input", "sort", "tail", "itembuilder", "loop"]
+type Nodes[T: (str | int)] = Sequence[T]
+type Graph[T: (str | int)] = Mapping[T, Nodes[T]]
+type NodeList[T: (str | int)] = list[T]
+type SCC[T: (str | int)] = list[tuple[T, ...]]
+
+ModuleName = Literal[
+    "fetch", "fetchdata", "input", "sort", "tail", "itembuilder", "urlbuilder"
+]
 
 
 class ConfArg(TypedDict):
@@ -377,7 +376,7 @@ class XpathFetchPageRawConf(TypedDict):
     html5: NotRequired[Value]
 
 
-AnyModuleRawConf: TypeAlias = (
+type AnyModuleRawConf = (
     CountRawConf
     | CsvRawConf
     | CurrencyFormatRawConf
@@ -445,7 +444,7 @@ class FilterConfRule:
         "atleast",
         "atmost",
     ]
-    value: "BasicArg"
+    value: "BasicValue"
 
 
 @dataclass
@@ -764,20 +763,24 @@ class XpathFetchPageConf(TypedDict):
 
 
 # General
-ConfValues: TypeAlias = Union[
-    "BasicArg",
-    "PipeModule",
-    bool,
-    float,
-    int,
-    Literal["and", "or"],
-    ParsedParam,
-    Sequence[ParsedParam],
-    Sequence[str],
-    str,
-]
+type ConfDictValues = "PipeModule" | ParsedParam
 
-AnyConfRule: TypeAlias = (
+type RawConfValues = dict[str, str | int | bool]
+
+
+type ConfValues = (
+    "BasicValue"
+    | ConfDictValues
+    | bool
+    | DataclassInstance
+    | int
+    | Literal["and", "or"]
+    | list[ParsedParam]
+    | list[str]
+    | str
+)
+
+type AnyConfRule = (
     FindConfRule
     | FilterConfRule
     | RegexConfRule
@@ -787,7 +790,7 @@ AnyConfRule: TypeAlias = (
     | StrTransformConfRule
 )
 
-AnyModuleConf: TypeAlias = (
+type AnyModuleConf = (
     AggregateConf
     | CountConf
     | CsvConf

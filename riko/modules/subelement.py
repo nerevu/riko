@@ -51,13 +51,10 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
-
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import Defaults, Extraction, Opts
-from riko.types.values import BasicArg, BasicMapping
+from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 from riko.utils import gen_items
 
 from . import processor
@@ -67,9 +64,7 @@ DEFAULTS: Defaults = {"token_key": "content"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(
-    item: BasicMapping, extraction: Extraction, objconf: Objconf, **kwargs
-) -> Iterator[BasicArg | None]:
+def parser(item: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -105,7 +100,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Iterator[BasicArg | None]:
+def async_pipe(*args, **kwargs) -> Stream:
     """
     A processor that asynchronously extracts sub-elements from an item.
 
@@ -148,7 +143,7 @@ def async_pipe(*args, **kwargs) -> Iterator[BasicArg | None]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[BasicArg | None]:
+def pipe(*args, **kwargs) -> Stream:
     """
     A processor that extracts sub-elements from an item.
 
