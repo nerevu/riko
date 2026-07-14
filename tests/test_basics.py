@@ -179,7 +179,7 @@ class TestBasics:
     ###############
     # Offline Tests
     ###############
-    def test_kazeek1(self):
+    def test_kazeeki1(self):
         """Loads the kazeeki simple test pipeline."""
         pipe_name = "pipe_kazeeki1"
         items = self._get_pipeline(pipe_name)
@@ -208,7 +208,7 @@ class TestBasics:
         assert item["k:content"].startswith(" With this specification sheet we")
         assert item["k:content"].endswith("for implementing a website for a german...")
 
-    def test_kazeek2(self):
+    def test_kazeeki2(self):
         """Loads the kazeeki simple test pipeline."""
         pipe_name = "pipe_kazeeki2"
         items = self._get_pipeline(pipe_name)
@@ -246,7 +246,7 @@ class TestBasics:
         example = {
             "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
             "dc:creator": "riko",
-            # "id": 474310371,
+            "id": 2241242391,
             "k:author": "Homepage for a germansocial organization",
             "k:budget_raw": "0 - $250",
             "k:budget_raw1": "0",
@@ -258,10 +258,10 @@ class TestBasics:
             "k:budget_raw2_num": "250",
             "k:budget_raw2_sym": "$",
             "k:budget": 125.0,
-            # "k:budget_converted": 125.0,
-            # "k:budget_converted_w_sym": "$125.00",
+            "k:budget_converted": 125.0,
+            "k:budget_converted_w_sym": "$125.00",
             "k:budget_full": "$125.00",
-            # "k:budget_sym": "$",
+            "k:budget_sym": "$",
             "k:budget_w_sym": "$125.00",
             "k:client_location": "unknown",
             "k:content": (
@@ -277,9 +277,9 @@ class TestBasics:
                 "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, "
                 "tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)"
             ),
-            # "k:rate": 1.0,
+            "k:rate": 1.0,
             "k:submissions": "unknown",
-            # "k:tags": [{"content": "IT"}, {"content": "Software"}, {"content": "Web"}],
+            "k:tags": [{"content": "IT"}, {"content": "Software"}, {"content": "Web"}],
             "k:work_location": " Worldwide",
             "link": (
                 "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/"

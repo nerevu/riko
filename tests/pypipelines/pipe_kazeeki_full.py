@@ -94,7 +94,7 @@ match1_14b = "(.*)(<b>)(.*)"
 match1_15 = "(.*)(<b>(Category:?<.*?>:?))(.*?)(<.*?>|<b>Skills<.*?>)(.*)"
 match1_16 = "(.*)(<b>(Required skills|Desired Skills):<.*?>)(.*?)(<.*?>)(.*)"
 match1_17 = "(.*)(Jobs:)(.*?)(\\))(.*)"
-match1_18 = "&gt;|<br>"
+match1_18 = "&amp;|&gt;|&|<br>"
 match1_19 = "(\\w+)(?!.*,)"
 match1_20b = "\\/"
 match1_21b = "[^a-zA-Z\\d,]+"
@@ -205,7 +205,7 @@ strconcat4_conf = {"part": [{"subkey": "k:budget_full"}, " / hr"]}
 
 tokenizer_conf = make_tokenizer(",", True, True)
 substring1_conf = make_substring("0", "3")
-substring2_conf = make_substring("0", "1")
+substring2_conf = make_substring("1", "1")
 currencyformat1_conf = {"currency": {"subkey": "k:cur_code"}}
 exchangerate_conf = make_exchangerate(DEF_CUR_CODE, True)
 currencyformat2_conf = {"currency": DEF_CUR_CODE}
@@ -293,8 +293,10 @@ def parse_source(source: SyncPipe):
         .currencyformat(
             conf=currencyformat1_conf, field="k:budget", assign="k:budget_w_sym"
         )
-        # .exchangerate(conf=exchangerate_conf, field="k:cur_code", assign="k:rate")
-        # .simplemath(conf=simplemath2_conf, field="k:budget", assign="k:budget_converted")
+        .exchangerate(conf=exchangerate_conf, field="k:cur_code", assign="k:rate")
+        .simplemath(
+            conf=simplemath2_conf, field="k:budget", assign="k:budget_converted"
+        )
         .currencyformat(
             conf=currencyformat2_conf,
             field="k:budget_converted",
