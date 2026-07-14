@@ -225,8 +225,10 @@ def gen_assignments(  # noqa: E302
     if assign:
         if value is None:
             yield item
-        elif value_is_iterator:
+        elif item and value_is_iterator:
             yield item | {assign: list(value)}
+        elif value_is_iterator:
+            yield from ({assign: v} for v in value)
         else:
             yield item | {assign: value}
     elif value_is_iterator:
@@ -969,16 +971,12 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
         emit: bool = False,
         **conf: ConfValues,
     ) -> OperatorWrapperOutput:
-        _, assignment = get_assignment(stream, skip=False, **conf)
+        one, assignment = get_assignment(stream, skip=False, **conf)
 
         if emit:
             result = assignment
         else:
-            singles = (iter([v]) for v in assignment)
-            assigned = (
-                gen_assignments(DotDict(), s, assign=assign, one=True) for s in singles
-            )
-            result = chain.from_iterable(assigned)
+            result = gen_assignments(DotDict(), assignment, assign=assign, one=one)
 
         return result
 
