@@ -325,11 +325,8 @@ class Module[B: (Literal[True], Literal[False])]:
         conf = conf or {}
         def_emit = self._opts.get("emit") if emit is None else emit
         def_assign = assign or self._opts.get("assign", "")
-        self.name = module_name
         self.opts = Opts(self._opts)
         self.opts.setdefault("objectify", self._opts.get("ptype") != BasicCastType.NONE)
-        self.conf = DotDict(cast_type(dict, self.defaults))
-        self.conf.update(cast_type(dict, conf))
 
         _type_name = type(self).__name__
 
@@ -350,12 +347,13 @@ class Module[B: (Literal[True], Literal[False])]:
         else:
             logger.error(f"Unknown module {self}.")
 
-        key = (module_name, repr(conf))
-
-        if key == self._prepare_key:
+        if (key := (module_name, repr(conf))) == self._prepare_key:
             return
 
         self._prepare_key = key
+        self.name = module_name
+        self.conf = DotDict(cast_type(dict, self.defaults))
+        self.conf.update(cast_type(dict, conf))
         _conf = cast_type(Conf, self.conf.asdict())
 
         if self.emit and assign and not callable(self.emit):
