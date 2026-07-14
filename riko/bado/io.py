@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 logger = gogo.Gogo(__name__, monolog=True).logger
-CHUNK_SIZE = 8
+CHUNK_SIZE = 32 * 1024  # 32KB
 
 
 # http://stackoverflow.com/q/26314586/408556
