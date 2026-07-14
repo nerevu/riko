@@ -17,13 +17,12 @@ Attributes:
 
 """
 
-import itertools as it
 from collections.abc import Iterator
 
 import pygogo as gogo
 
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
-from riko.utils import def_itemgetter
+from riko.utils import group_by
 
 from . import operator
 
@@ -70,16 +69,14 @@ def parser(
         >>> tuples = zip(stream, repeat(conf['count_key']))
         >>> counted = parser(stream, conf['count_key'], tuples, **kwargs)
         >>> next(counted)
-        {'one': 1}
-        >>> next(counted)
         {'two': 2}
+        >>> next(counted)
+        {'one': 1}
 
     """
     if count_key:
-        keyfunc = def_itemgetter(count_key)
-        sorted_stream = sorted(stream, key=keyfunc)
-        grouped = it.groupby(sorted_stream, keyfunc)
-        counted = ({str(key): len(list(group))} for key, group in grouped)
+        grouped = group_by(stream, count_key)
+        counted = ({key: len(group)} for key, group in grouped)
     else:
         counted = len(list(stream))
 
@@ -164,9 +161,9 @@ def pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
         >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]
         >>> counted = pipe(stream, conf={'count_key': 'word'})
         >>> next(counted)
-        {'one': 1}
-        >>> next(counted)
         {'two': 2}
+        >>> next(counted)
+        {'one': 1}
 
     """
     return parser(*args, **kwargs)

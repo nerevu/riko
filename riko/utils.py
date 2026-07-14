@@ -10,7 +10,7 @@ import itertools as it
 import re
 import sys
 from codecs import StreamReader
-from collections import deque
+from collections import defaultdict, deque
 from collections.abc import (
     Callable,
     Generator,
@@ -671,15 +671,11 @@ def group_by[T: Mapping | PrimitiveValue](
     content: Iterable[T], attr: str, default=None
 ) -> ItemsView[str, list[T]]:
     keyfunc = def_itemgetter(attr, default)
-    groups: dict[str, list[T]] = {}
+    groups = defaultdict(list)
 
     for item in content:
-        if isinstance(item, (Mapping, str, int)):
-            key = str(keyfunc(item))
-        else:
-            key = str(item)
-
-        groups.setdefault(key, []).append(item)
+        key = str(keyfunc(item))
+        groups[key].append(item)
 
     return groups.items()
 

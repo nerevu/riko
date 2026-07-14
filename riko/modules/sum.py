@@ -17,7 +17,6 @@ Attributes:
 
 """
 
-import itertools as it
 from collections.abc import Iterator
 from decimal import Decimal
 
@@ -25,7 +24,7 @@ import pygogo as gogo
 
 from riko import Objconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
-from riko.utils import def_itemgetter
+from riko.utils import group_by
 
 from . import operator
 
@@ -85,10 +84,8 @@ def parser(
     _sum = lambda group: sum(Decimal(g[objconf.sum_key]) for g in group) or Decimal(0)
 
     if objconf.group_key:
-        keyfunc = def_itemgetter(objconf.group_key)
-        sorted_stream = sorted(stream, key=keyfunc)
-        grouped = it.groupby(sorted_stream, keyfunc)
-        summed = ({str(key): _sum(group)} for key, group in grouped)
+        grouped = group_by(stream, objconf.group_key)
+        summed = ({key: _sum(group)} for key, group in grouped)
     else:
         summed = _sum(stream)
 
