@@ -151,8 +151,8 @@ def lint(where=None, fix=False, unsafe_fixes=False, strict=False, parallel=False
 
 @manager.command()
 @click.option("-w", "--where", help="Modules to check", default=None)
-@click.option("-s", "--sort", help="Sort module imports", is_flag=True)
-def prettify(where=None, sort=False):
+@click.option("-s", "--sort/--no-sort", help="Sort module imports", default=True)
+def prettify(where=None, sort=True):
     """Prettify code with ruff"""
     where = where or ""
     return_code = 0
