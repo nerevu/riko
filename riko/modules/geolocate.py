@@ -9,7 +9,7 @@ Examples:
         >>> from riko.modules.geolocate import pipe
         >>>
         >>> address = '123 Bakersville St., USA'
-        >>> geolocate = next(pipe({'content': address}))['geolocate']
+        >>> geolocate = next(pipe({'content': address}))
         >>> geolocate['country']
         'United States'
 
@@ -94,7 +94,7 @@ def async_pipe(*args, **kwargs) -> AnyLocation:
         >>> async def run(reactor):
         ...     conf = {'type': 'currency'}
         ...     result = await async_pipe({'content': 'GBP'}, conf=conf)
-        ...     print(next(result)['geolocate']['country'])
+        ...     print(next(result)['country'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -133,11 +133,11 @@ def pipe(*args, **kwargs) -> AnyLocation:
 
     Examples:
         >>> conf = {'type': 'currency'}
-        >>> geolocate = next(pipe({'content': 'INR'}, conf=conf))['geolocate']
+        >>> geolocate = next(pipe({'content': 'INR'}, conf=conf))
         >>> geolocate['country']
         'India'
         >>> address = '123 Bakersville St., USA'
-        >>> kwargs = {'field': 'address', 'assign': 'result'}
+        >>> kwargs = {'field': 'address', 'emit': False, 'assign': 'result'}
         >>> geolocate = next(pipe({'address': address}, **kwargs))['result']
         >>> geolocate['country']
         'United States'

@@ -18,25 +18,19 @@ Examples:
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
         ... )
-        [169]
-        >>> list(SyncPipe('fetchdata', conf=fconf)
-        ...     .sort(conf=sort_conf)
-        ...     .tokenizer(conf=str_conf, **str_kwargs)
-        ...     .count(emit=False)
-        ... )
         [{'count': 169}]
         >>> list(SyncPipe('fetchdata', conf=fconf, parallel=True)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
         ... )
-        [169]
+        [{'count': 169}]
         >>> list(SyncPipe('fetchdata', conf=fconf, parallel=True, threads=False)
         ...     .sort(conf=sort_conf)
         ...     .tokenizer(conf=str_conf, **str_kwargs)
         ...     .count()
         ... )
-        [169]
+        [{'count': 169}]
         >>> fconf['type'] = 'fetchdata'
         >>> sources = [{'url': get_path('feed.xml')}, fconf]
         >>> stream = SyncCollection(sources)
@@ -69,13 +63,13 @@ Examples:
         ...     print(list(d))
         ...
         >>> if _issync:
-        ...     [169]
+        ...     [{'count': 169}]
         ... else:
         ...     try:
         ...         react(run, _reactor=FakeReactor())
         ...     except SystemExit:
         ...         pass
-        [169]
+        [{'count': 169}]
         >>> async def run(reactor):
         ...     fconf['type'] = 'fetchdata'
         ...     sources = [{'url': get_path('feed.xml')}, fconf]

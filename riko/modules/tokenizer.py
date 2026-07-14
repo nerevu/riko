@@ -11,7 +11,7 @@ Examples:
         >>> from riko.modules.tokenizer import pipe
         >>>
         >>> item = {'content': 'Once,twice,thrice'}
-        >>> next(pipe(item))['tokenizer'][0]
+        >>> next(pipe(item))
         {'content': 'Once'}
 
 Attributes:
@@ -110,7 +110,7 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
         >>> async def run(reactor):
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     result = await async_pipe(item)
-        ...     print(next(result)['tokenizer'][0])
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -157,7 +157,7 @@ def pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
     Examples:
         >>> item = {'description': 'Once//twice//thrice//no more'}
         >>> conf = {'delimiter': '//', 'sort': True}
-        >>> kwargs = {'field': 'description', 'assign': 'tokens'}
+        >>> kwargs = {'field': 'description', 'emit': False, 'assign': 'tokens'}
         >>> next(pipe(item, conf=conf, **kwargs))['tokens'][0]
         {'content': 'no more'}
         >>> kwargs.update({'emit': True})

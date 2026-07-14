@@ -26,7 +26,7 @@ def make_simplemath(other, op):
 def add_source(source):
     subelement_conf = {"path": "k:source.content.1", "token_key": None}
 
-    sourced = source.urlparse(field="link", assign="k:source").subelement(
+    sourced = source.urlparse(field="link", emit=False, assign="k:source").subelement(
         conf=subelement_conf, emit=False, assign="k:source"
     )
 
@@ -59,7 +59,6 @@ def add_posted(
 
 
 def add_tags(source, rule, field="summary", assign="k:tags"):
-    tokenizer_conf = {"dedupe": True, "sort": True}
     no_tags = {"field": assign}
 
     tag_strreplace_rule = [
@@ -84,7 +83,13 @@ def add_tags(source, rule, field="summary", assign="k:tags"):
             assign=assign,
             skip_if=no_tags,
         )
-        .tokenizer(conf=tokenizer_conf, field=assign, assign=assign, skip_if=no_tags)
+        .tokenizer(
+            conf={"dedupe": True, "sort": True},
+            field=assign,
+            emit=False,
+            assign=assign,
+            skip_if=no_tags,
+        )
     )
 
     return tagged

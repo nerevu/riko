@@ -535,7 +535,7 @@ class DotDict(CaseInsensitiveDict[VT]):
             reduced[last] = value
             CaseInsensitiveDict.update(self, item)
 
-    def __or__(self, other: Mapping[str, VT]) -> Self:
+    def __or__[V](self, other: Mapping[str, V]) -> Self:
         """
         >>> r = DotDict({'key': 'bar'})
         >>> r | {'key': 'baz'}
@@ -656,6 +656,8 @@ class DotDict(CaseInsensitiveDict[VT]):
     def update(  # noqa: E704
         self, data: Data, **kwargs: VT
     ) -> None: ...
+    @overload
+    def update[V](self, data: Mapping[str, V]) -> None: ...  # noqa: E704
     @overload
     def update(self, **kwargs: VT) -> None: ...  # noqa: E704
     @overload

@@ -267,12 +267,10 @@ def parse_source(source: SyncPipe):
         .regex(conf={"RULE": regex2_rule})
         .rename(conf={"RULE": rename3_rule})
         .regex(conf={"RULE": regex3_rule})
-        .tokenizer(conf=tokenizer_conf, field="k:tags")
+        .tokenizer(conf=tokenizer_conf, emit=False, assign="k:tags", field="k:tags")
         .simplemath(conf=simplemath1_conf, field="k:budget_raw1_num", assign="k:budget")
-        .strconcat(conf=strconcat1_conf, assign="k:cur_code")
-        .substr(conf=substring1_conf, field="k:cur_code")
         .strconcat(conf=strconcat2_conf, assign="k:budget_sym")
-        .substr(conf=substring2_conf, field="k:budget_sym")
+        .substr(conf=substring2_conf, assign="k:budget_sym", field="k:budget_sym")
         .rename(
             conf={
                 "RULE": {"newval": "k:cur_code", "field": "k:budget_sym", "copy": True}

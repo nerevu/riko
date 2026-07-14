@@ -8,7 +8,7 @@ Examples:
         >>> from riko.modules.urlparse import pipe
         >>>
         >>> item = {'content': 'http://yahoo.com'}
-        >>> next(pipe(item))['urlparse'][0]
+        >>> next(pipe(item))
         {'component': 'scheme', 'content': 'http'}
 
 Attributes:
@@ -88,7 +88,7 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
         >>>
         >>> async def run(reactor):
         ...     result = await async_pipe({'content': 'http://yahoo.com'})
-        ...     print(next(result)['urlparse'][0])
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -124,7 +124,7 @@ def pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
 
     Examples:
         >>> item = {'content': 'http://yahoo.com'}
-        >>> next(pipe(item))['urlparse'][0]
+        >>> next(pipe(item))
         {'component': 'scheme', 'content': 'http'}
         >>> conf = {'parse_key': 'value'}
         >>> next(pipe(item, conf=conf, emit=True))

@@ -8,7 +8,7 @@ Examples:
         >>> from riko.modules.sum import pipe
         >>>
         >>> stream = pipe({'content': x} for x in range(5))
-        >>> next(stream)
+        >>> next(stream)['sum']
         Decimal('10')
 
 Attributes:
@@ -129,7 +129,7 @@ def async_pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
         >>> async def run(reactor):
         ...     items = ({'content': x} for x in range(5))
         ...     result = await async_pipe(items)
-        ...     print(next(result))
+        ...     print(next(result)['sum'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -171,7 +171,7 @@ def pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
 
     Examples:
         >>> stream = ({'content': x} for x in range(5))
-        >>> next(pipe(stream))
+        >>> next(pipe(stream))['sum'    ]
         Decimal('10')
         >>> stream = [
         ...     {'amount': 2, 'x': 'one'},

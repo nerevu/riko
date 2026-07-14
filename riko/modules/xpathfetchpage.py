@@ -178,6 +178,11 @@ def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Strea
         >>> result = parser(None, None, objconf)
         >>> next(result)['title'][:44]
         'Running “Native” Data Wrangling Applications'
+        >>> url = get_path('sciencedaily.html')
+        >>> objconf = Objectify({'url': url, 'xpath': '/html/head/title'})
+        >>> result = parser(None, None, objconf)
+        >>> next(result)['content']
+        'Help Page -- ScienceDaily'
 
     """
     ext = splitext(objconf.url)[1].lstrip(".")

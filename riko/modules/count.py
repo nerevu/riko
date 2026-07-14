@@ -8,10 +8,8 @@ Examples:
         >>> from riko.modules.count import pipe
         >>>
         >>> stream = [{'x': x} for x in range(5)]
-        >>> next(pipe(stream))
+        >>> next(pipe(stream))['count']
         5
-        >>> next(pipe(stream, emit=False))
-        {'count': 5}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -127,7 +125,7 @@ def async_pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
         ... except SystemExit:
         ...     pass
         ...
-        5
+        {'count': 5}
 
     """
     return parser(*args, **kwargs)
@@ -159,10 +157,8 @@ def pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
 
     Examples:
         >>> stream = [{'x': x} for x in range(5)]
-        >>> next(pipe(stream))
+        >>> next(pipe(stream))['count']
         5
-        >>> next(pipe(stream, emit=False))
-        {'count': 5}
         >>> next(pipe(stream, emit=False, assign='content'))
         {'content': 5}
         >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]

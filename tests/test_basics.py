@@ -623,14 +623,16 @@ class TestBasics:
         pipe_name = "pipe_9420a757a49ddf11d8b98349abb5bcf4"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 8, 0)
-        assert items[2] == "$3.00</td>"
+        item = cast(dict, items[2])
+        assert item["content"] == "$3.00</td>"
 
     def test_fetchpage_loop(self):
         """Loads a pipeline containing a fetchpage module within a loop"""
         pipe_name = "pipe_188eca77fd28c96c559f71f5729d91ec"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 8, 0)
-        assert items[2] == "$3.00</td>"
+        item = cast(dict, items[2])
+        assert item["content"] == "$3.00</td>"
 
     def test_split(self):
         """Loads an example pipeline containing a split module"""

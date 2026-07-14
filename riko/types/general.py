@@ -57,7 +57,7 @@ type OperatorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
 
-type PipeTuple = tuple[ItemOrValue, "Objconf"]
+type PipeTuple = tuple[Item, "Objconf"]
 type PipeTuples = Iterator[PipeTuple]
 type Objconfs = Sequence["Objconf"]
 type Extraction = T
@@ -151,7 +151,7 @@ class Casted(NamedTuple):
 
 
 class Dispatched(NamedTuple):
-    item: ItemOrValue
+    item: "DotDict"
     casted: Casted
 
 

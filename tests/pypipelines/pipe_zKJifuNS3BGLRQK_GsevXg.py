@@ -39,7 +39,7 @@ def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, conf=None):
 
     sw_250, sw_251 = split(sw_224, context=context, conf=None)
 
-    sw_243 = count(sw_250, context=context, conf=None)
+    sw_243 = count(sw_250, context=context, conf=None, emit=True)
 
     sw_169 = simplemath(
         sw_243,
