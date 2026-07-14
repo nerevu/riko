@@ -67,10 +67,6 @@ from riko.utils import broadcast, dispatch
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
-FRAMEWORK_KEYS = frozenset(
-    {"isasync", "pollable", "debug", "ftype", "ptype", "assign", "emit"}
-)
-
 # Operators
 __aggregators__ = (
     "count",
@@ -504,13 +500,12 @@ class processor(Module):  # noqa: N801
     def setup(
         self, _input: DotDict | DateLike | NumLike, **kwargs
     ) -> tuple[Item, Casted, bool]:
-        dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in FRAMEWORK_KEYS}
         skip = get_skip(_input, skip_if=self.opts.get("skip_if"))
 
         if self._static_casted:
             field_func, pre_casted_extract, pre_casted_conf = self._static_casted
-            field = dispatch_kwargs.pop("field", None) or self.opts.get("field") or ""
-            parsed_field = get_field(_input, field=field, **dispatch_kwargs)
+            field = kwargs.pop("field", None) or self.opts.get("field") or ""
+            parsed_field = get_field(_input, field=field, **kwargs)
             casted_field = field_func(parsed_field)
             orig_item = _input
             casted = Casted(casted_field, pre_casted_extract, pre_casted_conf)
@@ -522,7 +517,7 @@ class processor(Module):  # noqa: N801
                 parsers=self.parsers,
                 casters=self.casters,
                 defaults=Defaults(self.defaults),
-                **dispatch_kwargs,
+                **kwargs,
             )
 
         return orig_item, casted, skip
@@ -787,10 +782,6 @@ class operator(Module):  # noqa: N801
             tuples = ((item, objconf) for item in _input)
             orig_stream = _input
         else:
-            dispatch_kwargs = {
-                k: v for k, v in kwargs.items() if k not in FRAMEWORK_KEYS
-            }
-
             conf = cast_type(AnyModuleConf, self.conf.asdict())
             _dispatcher = partial(
                 _dispatch,
@@ -811,7 +802,7 @@ class operator(Module):  # noqa: N801
 
             # Parses conf that doesn't vary per item and may contain terminal input
             orig_stream = (d.item for d in dispatches)
-            casted = dispatcher(DotDict(), self.opts, **dispatch_kwargs).casted
+            casted = dispatcher(DotDict(), self.opts, **kwargs).casted
 
         return (tuples, orig_stream, casted)
 
@@ -1021,7 +1012,6 @@ class operator(Module):  # noqa: N801
 
 class splitter(Module):  # noqa: N801
     def setup(self, _input, **kwargs) -> tuple[PipeTuples, Stream, Casted]:
-        dispatch_kwargs = {k: v for k, v in kwargs.items() if k not in FRAMEWORK_KEYS}
         conf = cast_type(AnyModuleConf, self.conf.asdict())
         _dispatcher = partial(
             _dispatch,
@@ -1034,7 +1024,7 @@ class splitter(Module):  # noqa: N801
         dispatches = (dispatcher(item, self.opts) for item in _input)
         tuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
         orig_stream = (d.item for d in dispatches)
-        casted = dispatcher(DotDict(), self.opts, **dispatch_kwargs).casted
+        casted = dispatcher(DotDict(), self.opts, **kwargs).casted
         return (tuples, orig_stream, casted)
 
     @overload
