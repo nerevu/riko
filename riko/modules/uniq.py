@@ -25,14 +25,17 @@ from collections import deque
 
 import pygogo as gogo
 
+from riko import Objconf
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
+
 from . import operator
 
-OPTS = {}
-DEFAULTS = {"uniq_key": "content", "limit": 1024}
+OPTS = Opts()
+DEFAULTS: Defaults = {"uniq_key": "content", "limit": 1024}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -66,7 +69,7 @@ def parser(stream, objconf, tuples, **kwargs):
         [{'x': 0, 'mod': 0}, {'x': 1, 'mod': 1}]
 
     """
-    key, limit = objconf.uniq_key, int(objconf.limit)
+    key, limit = objconf.uniq_key, objconf.limit
     seen = deque(maxlen=limit)
 
     for item in stream:
@@ -77,8 +80,8 @@ def parser(stream, objconf, tuples, **kwargs):
             yield item
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously filters out non unique items according
     to a specified field.
@@ -104,11 +107,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print([i['mod'] for i in x])
+        >>> async def run(reactor):
         ...     items = ({'x': x, 'mod': x % 2} for x in range(5))
-        ...     d = async_pipe(items, conf={'uniq_key': 'mod'})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items, conf={'uniq_key': 'mod'})
+        ...     print([i['mod'] for i in result])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -122,7 +124,7 @@ def async_pipe(*args, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that filters out non unique items according to a specified
     field.

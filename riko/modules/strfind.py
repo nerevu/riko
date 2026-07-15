@@ -25,14 +25,20 @@ from functools import reduce
 import pygogo as gogo
 
 from riko import Objconf
-from riko.bado import coroutine, return_value
 from riko.bado import itertools as ait
-from riko.types.general import ItemArg, ObjconfRule
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Opts
+from riko.types.modules import FindConfRule
 
 from . import processor
 
-OPTS = {"ftype": "text", "listize": True, "field": "content", "extract": "rule"}
-DEFAULTS = {}
+OPTS: Opts = {
+    "ftype": BasicCastType.TEXT,
+    "listize": True,
+    "field": "content",
+    "extract": "rule",
+}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 PARAMS = {
@@ -47,12 +53,12 @@ AT_PARAMS = {
 
 OPS = {
     "before": lambda splits, rule: rule.find.join(splits[: len(splits) - 1]),
-    "after": lambda splits, rule: splits[-1],
-    "at": lambda splits, rule: splits,
+    "after": lambda splits, _: splits[-1],
+    "at": lambda splits, _: splits,
 }
 
 
-def reducer(word, rule):
+def reducer(word, rule) -> str:
     default = rule.default or ""
 
     if rule.location == "at":
@@ -64,17 +70,15 @@ def reducer(word, rule):
     return OPS.get(rule.location, OPS["before"])(splits, rule).strip()
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    word: str, rules: Sequence[FindConfRule], objconf: Objconf, **kwargs
+) -> str:
     """
     Asynchronously parses the pipe content
 
     Args:
         word (str): The string to transform
         rules (List[obj]): the parsed rules (Objectify instances).
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -89,12 +93,12 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
+        >>> async def run(reactor):
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'find': 'o'}}
         ...     rule = Objectify(conf['rule'])
-        ...     d = async_parser(item['content'], [rule], None, stream=item)
-        ...     return d.addCallbacks(print, logger.error)
+        ...     result = await async_parser(item['content'], [rule], None, stream=item)
+        ...     print(result)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -104,24 +108,17 @@ def async_parser(
         hell
 
     """
-    if skip:
-        value = kwargs["stream"]
-    else:
-        value = yield ait.coop_reduce(reducer, rules, word)  # pyright: ignore[reportCallIssue]
-
-    return_value(value)
+    value = await ait.coop_reduce(reducer, rules, word)
+    return value
 
 
-def parser(
-    word: str, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
-) -> ItemArg:
+def parser(word: str, rules: Sequence[FindConfRule], objconf: Objconf, **kwargs) -> str:
     """
     Parses the pipe content
 
     Args:
         word (str): The string to transform
         rules (List[obj]): the parsed rules (Objectify instances).
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -143,11 +140,11 @@ def parser(
         'hell'
 
     """
-    return kwargs["stream"] if skip else reduce(reducer, rules, word)
+    return reduce(reducer, rules, word)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> str:
     """
     A processor module that asynchronously finds text within the field of an
     item.
@@ -181,11 +178,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['strfind'])
+        >>> async def run(reactor):
         ...     conf = {'rule': {'find': 'o'}}
-        ...     d = async_pipe({'content': 'hello world'}, conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
+        ...     print(next(result)['strfind'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -195,11 +191,12 @@ def async_pipe(*args, **kwargs):
         hell
 
     """
-    return async_parser(*args, **kwargs)
+    parsed = await async_parser(*args, **kwargs)
+    return parsed
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> str:
     """
     A processor that finds text within the field of an item.
 

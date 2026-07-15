@@ -30,23 +30,27 @@ Attributes:
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import Extraction, ItemArg
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
-OPTS = {"ftype": "text", "ptype": "int", "field": "content"}
-DEFAULTS = {"start": 0, "length": 0}
+OPTS: Opts = {
+    "ftype": BasicCastType.TEXT,
+    "ptype": BasicCastType.INT,
+    "field": "content",
+}
+DEFAULTS: Defaults = {"start": 0, "length": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word: str, _: Extraction, objconf: Objconf, skip=False, **kwargs) -> ItemArg:
+def parser(word: str, _: Extraction, objconf: Objconf, **kwargs) -> str:
     """
     Parses the pipe content
 
     Args:
         word (str): The string to parse
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -65,12 +69,12 @@ def parser(word: str, _: Extraction, objconf: Objconf, skip=False, **kwargs) -> 
         'lo w'
 
     """
-    end = objconf.start + objconf.length if objconf.length else None
-    return kwargs["stream"] if skip else word[objconf.start : end]
+    end = int(objconf.start) + int(objconf.length) if objconf.length else None
+    return word[objconf.start : end]
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> str:
     """
     A processor module that asynchronously returns a substring of a field
     of an item.
@@ -96,11 +100,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['substr'])
+        >>> async def run(reactor):
         ...     conf = {'start': '3', 'length': '4'}
-        ...     d = async_pipe({'content': 'hello world'}, conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
+        ...     print(next(result)['substr'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -114,7 +117,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> str:
     """
     A processor that returns a substring of a field of an item.
 

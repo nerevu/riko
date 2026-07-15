@@ -21,20 +21,22 @@ Attributes:
 
 from collections.abc import Iterable
 from itertools import chain
+from typing import cast
 
 import pygogo as gogo
 
+from riko import Objconf
 from riko.dotdict import DotDict
-from riko.types.general import BasicDict
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator
 
-OPTS = {}
-DEFAULTS = {}
+OPTS = Opts()
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -71,12 +73,12 @@ def parser(stream, objconf, tuples, **kwargs):
 
     """
     kwargs = DotDict(kwargs)
-    others: Iterable[Iterable[BasicDict]] = kwargs["others"]
+    others = cast(Iterable[Stream], kwargs["others"])
     return chain(stream, chain.from_iterable(others))
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs):
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously merges multiple source streams together.
 
@@ -94,13 +96,12 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(len(list(x)))
+        >>> async def run(reactor):
         ...     items = ({'x': x} for x in range(5))
         ...     other1 = ({'x': x + 5} for x in range(5))
         ...     other2 = ({'x': x + 10} for x in range(5))
-        ...     d = async_pipe(items, others=[other1, other2])
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items, others=[other1, other2])
+        ...     print(len(list(result)))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -114,7 +115,7 @@ def async_pipe(*args, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that merges multiple streams together.
 

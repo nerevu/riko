@@ -10,15 +10,16 @@ Examples:
         >>> from riko.modules.send import pipe as sender
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver1'}, func=noop)
+        >>> conf = {'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}
+        >>> target = receiver(conf=conf, func=noop)
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
         >>> source = sender(stream, others=['receiver1'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
 
@@ -29,34 +30,87 @@ Attributes:
 
 """
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Generator, Iterator, Mapping
+from random import choice
 from time import sleep
+from typing import cast
 
 import pygogo as gogo
 from meza.fntools import dfilter
 
 from riko import Objconf
-from riko.types.general import (
-    BasicMapping,
-    ComplexArg,
-    StreamState,
-)
-from riko.utils import _receive_queue, _registry, actor, close
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
+from riko.types.values import StatefulItem, StreamState
+from riko.utils import _receive_queue, _registry, close, coroutine
 
 from . import operator
 
-OPTS = {"ftype": "none", "pollable": True}
-DEFAULTS = {"wait": 1, "max_wait": 5}
+OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
+DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5}
 logger = gogo.Gogo(__name__, monolog=True).logger
+
+ONSETS = (
+    "b",
+    "br",
+    "cl",
+    "cr",
+    "d",
+    "dr",
+    "f",
+    "fl",
+    "g",
+    "gr",
+    "k",
+    "m",
+    "n",
+    "p",
+    "pl",
+    "r",
+    "s",
+    "sl",
+    "st",
+    "t",
+    "tr",
+    "v",
+)
+VOWELS = "aeiou"
+CODAS = ("", "l", "m", "n", "r", "s", "th", "nd", "nt", "ck")
+
+ADJECTIVES = [
+    "ancient",
+    "autumn",
+    "bold",
+    "brisk",
+    "calm",
+    "crimson",
+    "gentle",
+    "hidden",
+    "lucky",
+    "misty",
+    "rapid",
+    "silent",
+    "silver",
+    "steady",
+    "wild",
+]
+
+
+def gen_name(count=2) -> Iterator[str]:
+    yield choice(ADJECTIVES)  # noqa: S311
+    yield "-"
+
+    for _ in range(count):
+        yield "".join(map(choice, [ONSETS, VOWELS, CODAS]))  # noqa: S311
 
 
 def parser(
-    _: BasicMapping,
+    _: Stream,
     objconf: Objconf,
-    tuples,
-    func: Callable[[Mapping], ComplexArg] | None = None,
+    tuples: PipeTuples,
+    func: Callable[[Item | StatefulItem], Item] | None = None,
     **kwargs,
-) -> Iterator[dict[str, StreamState] | ComplexArg]:
+) -> Stream | Iterator[StatefulItem]:
     """
     Parses the pipe content
     Args:
@@ -80,10 +134,10 @@ def parser(
         >>> from riko.utils import noop
         >>> from meza.fntools import Objectify
         >>>
-        >>> conf = {'wait': 1, 'max_wait': 5, 'name': 'receiver2'}
+        >>> conf = {'wait': 0.01, 'max_wait': 2, 'name': 'receiver2'}
         >>> target = parser(None, Objectify(conf), None, func=noop)
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
         >>> source = sender(stream, others=['receiver2'])
         >>> next(source)
@@ -92,7 +146,7 @@ def parser(
         {'x': 0}
 
     """
-    name = objconf.name
+    name = objconf.name or "".join(gen_name())
     wait = objconf.wait
     max_wait = objconf.max_wait
     total_waited = 0
@@ -101,13 +155,16 @@ def parser(
     if name not in _registry:
         fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
 
-        @actor(registry_name=name, maxlen=objconf.max_len)
-        def receiver():
+        @coroutine(registry_name=name, maxlen=objconf.max_len)
+        def receiver() -> Generator[None, Item | StatefulItem, None]:
             while True:
-                item: Mapping = yield
+                item = yield
 
                 if item is not None:
-                    state = item.get("state")
+                    if isinstance(item, Mapping) and "state" in item:
+                        state = cast(StreamState, item["state"])
+                    else:
+                        state = None
 
                     try:
                         result = func(item, **fkwargs) if func else item
@@ -118,29 +175,27 @@ def parser(
 
         receiver()
 
-    gen = _registry[name]
-
     while True:
         if _buf := _receive_queue[name]:
             total_waited = 0
             state, result = _buf.popleft()
 
             if state is StreamState.DONE:
-                close(gen)
+                close(name)
                 break
             else:
                 yield result
         elif total_waited >= max_wait:
-            close(gen)
+            close(name)
             break
         else:
             sleep(wait)
             total_waited += wait
-            yield {"content": StreamState.PENDING}
+            yield StatefulItem(state=StreamState.PENDING)
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream | Iterator[StatefulItem]:
     """
     A source that fetches and parses the first feed found on a site.
 
@@ -161,14 +216,14 @@ def pipe(*args, **kwargs):
         >>> from riko.modules.send import pipe as sender
         >>> from riko.utils import noop
         >>>
-        >>> target = pipe(conf={'name': 'receiver3'}, func=noop)
+        >>> target = pipe(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2}, func=noop)
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> source = sender([{'x': 0}], others=['receiver3'])
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'content': <StreamState.PENDING: 1>}
+        {'state': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
 

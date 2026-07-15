@@ -1,14 +1,15 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.dotdict
-~~~~~~~~~~~~
 Provides a class for creating case insensitive dicts with dot notation access
 """
 
-from collections.abc import Iterator, Mapping, Sequence
+from __future__ import annotations
+
+from collections.abc import Iterable, Iterator, Mapping
+from datetime import date
+from decimal import Decimal
 from functools import reduce
-from time import struct_time
-from typing import TypeGuard, Union
+from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
 from typing import cast as cast_type
 
 import pygogo as gogo
@@ -18,68 +19,291 @@ from typing_extensions import TypeIs
 from riko import Objectify, replacer
 from riko.cast import CAST_SWITCH, CastType
 from riko.cast import cast as cast_value
-from riko.types.compile import Wire, WireEndpoint
-from riko.types.general import (
+from riko.types.general import Item, Stream
+from riko.types.modules import ConfArg
+from riko.types.values import (
+    BasicList,
     BasicValue,
-    ComplexArg,
-    ComplexMapping,
-    ComplexSequence,
-    IntermediateValue,
-    Items,
-    StatefulItem,
-    StreamState,
+    BasicValueType,
+    Key,
+    PrimitiveValue,
+    RikoList,
+    RikoValue,
+    RSSEntry,
+    Sentinal,
+    SentinalValue,
 )
-from riko.types.modules import ConfArg, Sentinal
+
+if TYPE_CHECKING:
+    from _typeshed import SupportsKeysAndGetItem
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-SENTINALS = ("terminal",)
 TV_KEYS = ("type", "value")
 WIRE_KEYS = ("id", "src", "tgt")
+PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)
+
+D = TypeVar("D")
+VT = TypeVar("VT")
+type Data = Iterable[tuple[str, VT]] | RSSEntry
 
 
-def is_mapping(val: ComplexArg | WireEndpoint) -> TypeIs[Mapping]:
-    return isinstance(val, Mapping)
+def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
+    failure = False
+
+    # Delay calling isinstance(val, Mapping) as much as possible
+    if not (success := isinstance(val, (dict, CaseInsensitiveDict, Objectify))):
+        failure = isinstance(val, (str, int, float))
+
+    return success or (False if failure else isinstance(val, Mapping))
 
 
-def is_mapping_seq(val: ComplexArg) -> TypeIs[Sequence[Mapping]]:
-    return isinstance(val, Sequence) and isinstance(val[0], Mapping)
+def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT]]:
+    return isinstance(val, (list, tuple))
 
 
-def is_value_seq(val: ComplexArg) -> TypeIs[Sequence[BasicValue]]:
-    return isinstance(val, Sequence) and isinstance(val[0], BasicValue)
+def is_mapping_seq[D, VT](
+    val: list[VT] | tuple[VT],
+) -> TypeGuard[list[Mapping[D, VT]] | tuple[Mapping[D, VT]]]:
+    return is_mapping(val[0])
 
 
-def is_sentinal(val: ComplexArg) -> TypeIs[Mapping[str | Sentinal, str]]:
-    return is_mapping(val) and len(val) == 2 and any(s in val for s in SENTINALS)
+def is_value_seq[VT](
+    val: list[VT] | tuple[VT],
+) -> TypeGuard[BasicList | tuple[BasicValue]]:
+    return isinstance(val[0], BasicValueType)
 
 
-def is_type_value(val: ComplexArg) -> TypeGuard[ConfArg]:
-    normal = is_mapping(val) and len(val) == 2 and all(s in val for s in TV_KEYS)
-    shortcut = is_mapping(val) and len(val) == 1 and "value" in val
-    return normal or shortcut
-
-
-def is_wire(val: ComplexArg) -> TypeGuard[Wire]:
-    if is_mapping(val) and len(val) == 3 and all(s in val for s in WIRE_KEYS):
-        success = is_mapping(val["src"]) and is_mapping(val["tgt"])
+def is_sentinal[VT](val: Mapping[str, VT], **kwargs) -> TypeGuard[Sentinal]:
+    if SentinalValue in val:
+        sentinal = str(val[SentinalValue])
+        key = replacer(sentinal, "")
     else:
-        success = False
+        key = None
 
-    return success
+    return all([key, (len(val) == 2), key in kwargs])
 
 
-def is_stateful_item(val: ComplexArg) -> TypeGuard[StatefulItem]:
-    if isinstance(val, Mapping) and len(val) == 1 and "state" in val:
-        success = isinstance(val["state"], StreamState)
+def is_type_value(val: Mapping) -> TypeGuard[ConfArg]:
+    n = len(val)
+    double = n == 2 and "type" in val and "value" in val
+    return double or (n == 1 and "value" in val)
+
+
+def parse_key(key: Key | None = None) -> list[str]:
+    if isinstance(key, str):
+        if not key:
+            keys = []
+        elif "." not in key:
+            keys = [key]
+        else:
+            keys = key.rstrip(".").split(".")
+    elif key and (subkey := key.get("subkey")):
+        keys = [subkey]
     else:
-        success = False
+        keys = []
 
-    return success
+    return keys
 
 
-class DotDict(CaseInsensitiveDict[ComplexArg]):
+@overload
+def parse_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+    value: ConfArg, default: object | None = ...
+) -> PrimitiveValue: ...
+@overload  # noqa: E302
+def parse_sentinel[D](  # noqa: E704
+    value: Sentinal, default: D | None = ..., **kwargs: object
+) -> Item | D | None: ...
+@overload  # noqa: E302
+def parse_sentinel[D, VT](  # noqa: E704
+    value: Mapping[str, VT],
+    default: D | None = ...,  # pyright: ignore[reportInvalidTypeVarUse]
+    **kwargs: VT,
+) -> dict[str, VT]: ...
+def parse_sentinel[D, VT](  # noqa: E302
+    value: Sentinal | Mapping[str, VT], default: D | None = None, **kwargs: VT
+) -> Item | D | dict[str, VT] | PrimitiveValue:
+    if is_sentinal(value, **kwargs):
+        key = replacer(value[SentinalValue], "")
+
+        if stream := kwargs.get(key):
+            stream = cast_type(Stream, stream)
+            parsed = next(stream)
+        else:
+            parsed = default
+    elif is_type_value(value):
+        parsed = value["value"]
+
+        if (
+            not (_type := value.get("type"))
+            or (_type == CastType.TEXT)
+            and isinstance(parsed, str)
+        ):
+            pass
+        elif _type == CastType.LOCATION:
+            logger.warning(f"Location type not supported! Not casting {parsed=}.")
+        elif _type in CAST_SWITCH:
+            parsed = cast_value(parsed, _type=CastType(_type))
+        elif _type != "module":
+            logger.warning(f"Invalid cast type={_type}! Not casting {parsed=}.")
+    else:
+        _parsed = {}
+
+        for k, v in value.items():
+            _parsed[k] = parse_sentinel(v, v, **kwargs) if is_mapping(v) else v
+
+        parsed = cast(dict[str, VT], _parsed)
+
+    return parsed
+
+
+def parse_map[VT](
+    *keys: str, data: Mapping[str, VT], **kwargs: VT
+) -> Iterator[tuple[str, VT | None]]:
+    for key in keys:
+        value = DotDict(data).get(key, **kwargs)
+        v = next(gen_dict(value, default_key=None))
+        yield (key.lower(), v)
+
+
+def parse_dotdict[VT](*keys: str, data: DotDict[VT]) -> Iterator[tuple[str, VT | None]]:
+    for key in keys:
+        value = cast(VT, CaseInsensitiveDict.__getitem__(data, key))
+        v = next(gen_dict(value, default_key=None))
+        yield (key.lower(), cast(VT, v))
+
+
+@overload
+def gen_dict[VT](  # noqa: E704
+    data: DotDict[VT] | Mapping[str, VT],
+    key: Key | None = ...,
+    default_key: str = ...,
+    **kwargs: VT,
+) -> Iterator[tuple[str, VT | None]]: ...
+@overload  # noqa: E302
+def gen_dict[VT](  # noqa: E704
+    data: DotDict[VT] | Mapping[str, VT],
+    key: Key,
+    default_key: None,
+    **kwargs: VT,
+) -> Iterator[dict[str, VT | None]]: ...
+@overload  # noqa: E302
+def gen_dict[VT](  # noqa: E704
+    data: list[VT] | tuple[VT],
+    key: Key | None = ...,
+    default_key: str = ...,
+    **kwargs: VT,
+) -> Iterator[dict[str, VT | None]]: ...
+@overload  # noqa: E302
+def gen_dict[VT](  # noqa: E704
+    data: list[VT | None] | tuple[VT | None],
+    key: Key | None = ...,
+    *,
+    default_key: None,
+    **kwargs: VT,
+) -> Iterator[list[VT | None]]: ...
+@overload  # noqa: E302
+def gen_dict[VT](  # noqa: E704
+    data: VT,
+    key: Key | None = ...,
+    default_key: str = ...,
+) -> Iterator[tuple[str, VT | None]]: ...
+@overload  # noqa: E302
+def gen_dict[VT](  # noqa: E704
+    data: Sentinal | ConfArg,
+    key: Key | None = ...,
+    *,
+    default_key: None,
+    **kwargs: VT,
+) -> Iterator[VT | None]: ...
+@overload  # noqa: E302
+def gen_dict[VT](  # noqa: E704
+    data: VT,
+    key: Key | None = ...,
+    *,
+    default_key: None,
+    **kwargs: VT,
+) -> Iterator[VT | None]: ...
+def gen_dict[VT](  # noqa: E302
+    data: Sentinal
+    | ConfArg
+    | DotDict[VT]
+    | Mapping[str, VT]
+    | list[VT]
+    | tuple[VT]
+    | VT
+    | None,
+    key: Key | None = None,
+    default_key: str | None = "self",
+    **kwargs: VT,
+) -> Iterator[
+    tuple[str, VT | None] | VT | None | list[VT | None] | dict[str, VT | None]
+]:
+    """
+    >>> r = DotDict({'a': {'value': 'bar'}})
+    >>> r
+    {'a': 'bar'}
+    >>> dict(gen_dict(r))
+    {'a': 'bar'}
+    >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
+    >>> r
+    {'a': 'baz'}
+    >>> dict(gen_dict(r))
+    {'a': 'baz'}
+    """
+    if key:
+        keys = parse_key(key)
+    else:
+        if is_mapping(data):
+            if DotDict.is_self(data) and not kwargs:
+                data = parse_sentinel(cast(DotDict[VT], data), default=data)
+            else:
+                data = DotDict(cast(Mapping[str, VT], data)).get(**kwargs)
+
+        keys = []
+
+    if is_mapping(data):
+        keys = keys or data.keys()
+
+        if DotDict.is_self(data) and not kwargs:
+            items = parse_dotdict(*keys, data=data)
+        else:
+            items = parse_map(*keys, data=data, **kwargs)
+
+        items = cast(Iterator[tuple[str, VT]], items)
+
+        if default_key:
+            yield from items
+        else:
+            yield dict(items)
+    elif is_known_sequence(data) and default_key:
+        for d in data:
+            yield dict(gen_dict(d, default_key=default_key))
+    elif is_known_sequence(data):
+        yield [next(gen_dict(d, default_key=None)) for d in data]
+    elif default_key:
+        yield (default_key, data)
+    else:
+        yield data
+
+
+# def is_stateful_item(val: dict | CaseInsensitiveDict) -> TypeIs[StatefulItem]:
+#     return len(val) == 1 and "state" in val
+#
+#
+# def is_wire(val) -> TypeIs[Wire]:
+#     if is_mapping(val) and len(val) == 3 and all(s in val for s in WIRE_KEYS):
+#         x = val["src"]
+#         x
+#         success = is_mapping(val["src"]) and is_mapping(val["tgt"])
+#     else:
+#         success = False
+#
+#     return success
+#
+#
+class DotDict(CaseInsensitiveDict[VT]):
     """
     A dictionary whose keys can be accessed using dot notation
 
@@ -123,127 +347,127 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         ['value', 'key']
         >>> DotDict({'start': 0, 'count': {'type': 'int', 'value': '5'}})
         {'start': 0, 'count': 5}
+        >>> DotDict(**{'a': 1, 'b': 2})
+        {'a': 1, 'b': 2}
 
     """
 
-    def __init__(self, data: ComplexMapping | None = None, **kwargs):
+    def __init__(self, data: Mapping[str, VT] | Data | None = None, **kwargs: VT):
         super().__init__()
+        self.update(data, **kwargs)
 
-        if isinstance(data, Objectify):
-            _data = data.iteritems()
-        elif isinstance(data, Mapping):
-            # pyright doesn't like typeddicts
-            _data = cast_type(dict[str, ComplexArg], data)
-        else:
-            _data = None
+    @classmethod
+    def is_self[V](cls, value: Mapping[str, V]) -> TypeGuard[DotDict[V]]:
+        return isinstance(value, DotDict)
 
-        if _data is not None:
-            self.update(_data, **kwargs)
-
-    def _parse_key(self, key: str | Mapping[str, str] | None = None) -> list[str]:
-        if isinstance(key, str):
-            keys = key.rstrip(".").split(".") if key else []
-        elif key and "subkey" in key:
-            keys = [key["subkey"]]
-        else:
-            keys = []
-
-        return keys
-
-    def _parse_sentinel(
-        self, value: ComplexArg, default: ComplexArg | None = None, **kwargs: ComplexArg
-    ) -> ComplexArg:
-
-        if kwargs and is_sentinal(value):
-            key = next(s for s in SENTINALS if s in value)
-            sentinal = value[key]
-            replaced = replacer(sentinal, "")
-
-            if stream := kwargs.get(replaced):
-                stream = cast_type(Items, stream)
-                item = next(stream)
-                #
-                # if callable(stream):
-                #     item = next(stream(**kwargs))
-                # else:
-                #     item = next(stream)
-                parsed = item
+    @overload
+    @classmethod
+    def dictize[V](cls, value: Mapping[str, V]) -> DotDict[V]: ...  # noqa: E704
+    @overload  # noqa: E301
+    @classmethod
+    def dictize[V](cls, value: Mapping[str, V], key: Key) -> V: ...  # noqa: E704
+    @overload  # noqa: E301
+    @classmethod
+    def dictize[T, V](  # noqa: E704
+        cls,
+        value: Mapping[str, V],
+        key: Key | None = ...,
+        default: T | None = ...,
+        **kwargs: V,
+    ) -> T | None: ...
+    @overload  # noqa: E301
+    @classmethod
+    def dictize[V](cls, value: V) -> V: ...  # noqa: E704
+    @overload  # noqa: E301
+    @classmethod
+    def dictize[V](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+        cls, value: Mapping[str, V] | V
+    ) -> DotDict[V] | V: ...
+    @classmethod  # noqa: E30
+    def dictize[T, V](
+        cls,
+        value: Mapping[str, V] | V,
+        key: Key | None = None,
+        default: T | None = None,
+        **kwargs: V,
+    ) -> DotDict[V] | V | T | None:
+        if is_mapping(value):
+            if cls.is_self(value):
+                result = value
             else:
-                # logger.warning(f"Sentinal {replaced} not found in {kwargs=}.")
-                parsed = default
-        elif is_type_value(value):
-            parsed = value["value"]
+                result = cast(DotDict[V], cls(cast(Mapping[str, Any], value)))
 
-            if not (_type := value.get("type")):
-                pass
-            elif _type == CastType.LOCATION:
-                logger.warning(f"Location type not supported! Not casting {parsed=}.")
-            elif _type in CAST_SWITCH:
-                _parsed = cast_value(parsed, _type=CastType(_type))
-                parsed = cast_type(IntermediateValue, _parsed)
-            elif _type != "module":
-                logger.warning(f"Invalid cast type={_type}! Not casting {parsed=}.")
-        elif is_stateful_item(value):
-            parsed = value
-        elif isinstance(value, Mapping):
-            parsed = {
-                k: self._parse_sentinel(
-                    cast_type(ComplexArg, v), cast_type(ComplexArg, v), **kwargs
-                )
-                for k, v in value.items()
-            }
+            if key or kwargs:
+                result = result.get(key=key, default=default, **kwargs)
         else:
-            parsed = default
+            result = value
 
-        return parsed
+        return result
 
-    def _parse_value(
+    @overload
+    def _parse_value(  # noqa: E704
         self,
-        value: ComplexArg,
+        value: Mapping[str, VT],
         key: str | int,
-        default: ComplexArg | None = None,
-        **kwargs,
-    ) -> ComplexArg:
+        default: D | None = ...,
+        **kwargs: VT,
+    ) -> VT | dict[str, VT] | Item | RikoValue | D | None: ...
+    @overload  # noqa: E301
+    def _parse_value(  # noqa: E704
+        self,
+        value: list[VT] | tuple[VT],
+        key: str | int,
+        default: object | None = ...,
+        **kwargs: VT,
+    ) -> RikoList | BasicValue: ...
+    @overload  # noqa: E301
+    def _parse_value(  # noqa: E704
+        self, value: object, key: str | int, default: D | None = ..., **kwargs: VT
+    ) -> D | None: ...
+    def _parse_value(  # noqa: E301
+        self,
+        value: list[VT] | tuple[VT] | Mapping[str, VT] | object,
+        key: str | int,
+        default: D | None = None,
+        **kwargs: VT,
+    ) -> VT | D | Any:
         parsed = default
         msg = f"Ignoring unsupported key {key} to access {{0}} value {{1}}."
-        # if kwargs:
-        #     print(f"_parse_value got {value=} with {key=} and {kwargs=}")
 
-        if isinstance(value, Mapping) and isinstance(key, str):
-            dd_value = DotDict(value)
+        if is_mapping(value):
+            if isinstance(key, str):
+                dd_value = value if self.is_self(value) else DotDict(value)
 
-            if key in dd_value:
-                parsed = dd_value[key]
-            elif kwargs and is_sentinal(value):
-                parsed = self._parse_sentinel(value, default=default, **kwargs)
+                if key in dd_value:
+                    parsed = dd_value[key]
+                elif is_sentinal(value, **kwargs):
+                    parsed = parse_sentinel(value, default=default, **kwargs)
 
-                if key and is_mapping(parsed) and key in parsed:
-                    parsed = parsed[key]
-                elif key:
-                    parsed = default
-        elif isinstance(value, (str, int, struct_time)):
-            parsed = value
-        elif isinstance(value, Mapping):
-            logger.warning(msg.format("Mapping", value))
-        elif isinstance(value, Objectify):
-            logger.warning(msg.format("Objectify", value))
-        elif is_mapping_seq(value) and isinstance(key, str):
-            parsed = [v[key] for v in value]
-        elif is_mapping_seq(value):
-            logger.warning(msg.format("submapping", value[0]))
-        elif is_value_seq(value) and isinstance(key, int):
-            parsed = value[key]
-        elif is_value_seq(value):
-            logger.warning(msg.format("submapping", value[0]))
-        elif isinstance(value, Sequence):
-            parsed = list(value)
+                    if is_mapping(parsed) and key in parsed:
+                        parsed = parsed[key]
+                    elif key:
+                        parsed = default
+            else:
+                logger.warning(msg.format("Mapping", value))
+        elif is_known_sequence(value):
+            if is_mapping_seq(value):
+                if isinstance(key, str):
+                    parsed = cast(RikoList, [v[key] for v in value])
+                else:
+                    logger.warning(msg.format("submapping", value[0]))
+            elif is_value_seq(value):
+                if isinstance(key, int):
+                    parsed = value[key]
+                else:
+                    logger.warning(msg.format("submapping", value[0]))
+            else:
+                parsed = list(value)
         elif value is not None:
             parsed = value
 
-        # print(f"_parse_value {value=} with {key=} and {kwargs=} -> {parsed=}.")
         return parsed
 
-    def __getitem__(self, key: str) -> ComplexArg:
+    def __getitem__(self, key: Key) -> VT:
         """
         >>> r = DotDict({'key': 'bar'})
         >>> r['key']
@@ -251,29 +475,98 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         >>> r['KEY']
         'bar'
         """
-        keys = self._parse_key(key)
-        value = super().__getitem__(keys[0])
+        keys = parse_key(key)
+        value = cast(VT, CaseInsensitiveDict.__getitem__(self, keys[0]))
 
         if len(keys) > 1:
             key = ".".join(keys[1:])
             msg = f"Ignoring unsupported key {key} to access non-mapping value {value}."
 
-            if isinstance(value, Mapping):
-                value = value[key]
+            if is_mapping(value):
+                value = cast(VT, value[key])
             else:
                 logger.warning(msg)
 
-        value = self._parse_sentinel(value, default=value)
-        result = DotDict(value) if isinstance(value, Mapping) else value
-        # print(f"DotDict __getitem__ {keys=} -> {value=} -> {result=}.")
+        result = value
+
+        if is_mapping(value):
+            parsed = parse_sentinel(value, default=value)
+            result = cast(VT, self.dictize(parsed))
+
         return result
 
-    def get(  # pyright: ignore[reportIncompatibleMethodOverride]
+    def __setitem__(self, key: str, value: VT):
+        """
+        >>> r = DotDict({'author': 'bar'})
+        >>> r
+        {'author': 'bar'}
+        >>> r['author.name'] = 'bar'
+        >>> r
+        {'author': {'name': 'bar'}}
+        >>> r['author.url'] = 'example.com'
+        >>> r
+        {'author': {'name': 'bar', 'url': 'example.com'}}
+        """
+
+        def reducer(item: Self, key: str) -> Self:
+            if item and key in item:
+                existing = CaseInsensitiveDict.__getitem__(item, key)
+
+                if existing and not is_mapping(existing):
+                    del item[key]
+                    existing = None
+            else:
+                existing = None
+
+            if existing is None:
+                existing = item[key] = cast(VT, {})
+                # CaseInsensitiveDict.__setitem__(item, key, existing)
+
+            return cast(Self, existing)
+
+        keys = parse_key(key)
+
+        if len(keys) == 1:
+            CaseInsensitiveDict.__setitem__(self, key, value)
+        else:
+            item = self.copy()
+            rest, last = keys[:-1], keys[-1]
+            reduced = reduce(reducer, rest, item)
+            reduced[last] = value
+            CaseInsensitiveDict.update(self, item)
+
+    def __or__[V](self, other: Mapping[str, V]) -> Self:
+        """
+        >>> r = DotDict({'key': 'bar'})
+        >>> r | {'key': 'baz'}
+        {'key': 'baz'}
+        >>> r | DotDict({'key': 'baz'})
+        {'key': 'baz'}
+        """
+        dd = self.copy()
+        dd.update(other)
+        return dd
+
+    @overload
+    def get(  # noqa: E704
+        self, key: Key | None, default: None = None
+    ) -> VT | None: ...
+    @overload
+    def get(self, key: Key | None, default: D) -> D: ...  # noqa: E704
+    @overload  # noqa: E301
+    def get(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+        self, key: Key | None, default: D | VT
+    ) -> D | VT: ...
+    @overload
+    def get(self) -> VT: ...  # noqa: E704
+    @overload
+    def get(self, **kwargs: VT) -> VT | None: ...  # noqa: E704
+    def get(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
         self,
-        key: str | Mapping[str, str] | None = None,
-        default: ComplexArg | None = None,
-        **kwargs,
-    ) -> Union["DotDict", IntermediateValue, ComplexSequence]:
+        key: Key | None = None,
+        default: D | None = None,
+        **kwargs: VT,
+    ) -> Self | VT | D | Item | dict[str, VT] | PrimitiveValue:
         """
         >>> r = DotDict({'key': 'bar'})
         >>> r.get('key')
@@ -308,10 +601,15 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         >>> r.get('attrs.value.content', attrs_1=iter([{'content': 'baz'}]))
         'baz'
         >>> r.get('attrs.value.foo', attrs_1=iter([{'content': 'baz'}]))
+        >>> r = DotDict({'stanzas': {'verses': ['verse1', 'verse2']}})
+        >>> r.get('stanzas.verses')
+        ['verse1', 'verse2']
+        >>> r.get('stanzas.verses.1')
+        'verse2'
         """
-        keys = self._parse_key(key)
-        # TODO: figure out if the copy is necessary
-        item = self.copy()
+        keys = parse_key(key)
+        item = self
+
         if keys:
             for k in keys:
                 try:
@@ -320,24 +618,20 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
                     pass
 
                 item = self._parse_value(item, k, default=default, **kwargs)
-                # print(f"got key={k} -> {item=}.")
         else:
-            item = self._parse_sentinel(item, default=item, **kwargs)
+            item = parse_sentinel(item, default=item, **kwargs)
 
-        if kwargs and is_sentinal(item):
-            item = self._parse_sentinel(item, default=default, **kwargs)
+        if is_mapping(item) and is_sentinal(item, **kwargs):
+            item = parse_sentinel(item, default=default, **kwargs)
 
-        if isinstance(item, (Mapping, Objectify)):
-            value = DotDict(item)
-        else:
-            value = item
+        return self.dictize(item)
 
-        # print(f"got {keys=} from {item=} with {kwargs=} -> {value=}.")
-        return value
+    def copy(self) -> Self:
+        return type(self)(self)
 
     def delete(self, key: str):
         reducer = lambda i, k: DotDict(i.get(k))
-        keys = self._parse_key(key)
+        keys = parse_key(key)
         rest, last = keys[:-1], keys[-1]
         reduced = reduce(reducer, rest, self)
 
@@ -348,54 +642,71 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         else:
             del _key
 
-    # TODO: does this need to be __setitem__?
-    def set(self, key: str, value: ComplexArg):
-        reducer = lambda i, k: i.setdefault(k, {})
-        keys = self._parse_key(key)
-        item = self.copy()
-        # print(f"set before {keys=}, {item=}, {self=}, {value=}")
-        rest, last = keys[:-1], keys[-1]
-        reduced = reduce(reducer, rest, item)
-        reduced[last] = value
-        # print(f"set during {rest=}, {last=}, {reduced=}")
-        # print(f"set during {item=}, {self=}")
-        super().update(item)
-        # print(f"set after {item=}, {self=}")
-
-    def update(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self,
-        data: ComplexMapping | Iterator[tuple[str, ComplexArg]] | None = None,
-        **kwargs,
+    @overload
+    def update(  # noqa: E704
+        self, data: SupportsKeysAndGetItem[str, VT]
+    ) -> None: ...
+    @overload  # noqa: E301
+    def update(  # noqa: E704
+        self, data: SupportsKeysAndGetItem[str, VT], **kwargs: VT
+    ) -> None: ...
+    @overload
+    def update(self, data: Data) -> None: ...  # noqa: E704
+    @overload  # noqa: E301
+    def update(  # noqa: E704
+        self, data: Data, **kwargs: VT
+    ) -> None: ...
+    @overload
+    def update[V](self, data: Mapping[str, V]) -> None: ...  # noqa: E704
+    @overload
+    def update(self, **kwargs: VT) -> None: ...  # noqa: E704
+    @overload
+    def update(self, data: None) -> None: ...  # noqa: E704
+    def update(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
+        self, data: SupportsKeysAndGetItem[str, VT] | Data | None = None, **kwargs: VT
     ):
-        if isinstance(data, Objectify):
-            _dict = dict(data.iteritems())
-        elif isinstance(data, Mapping):
-            # pyright doesn't like typeddicts
-            _dict = cast_type(dict[str, ComplexArg], data)
+        """
+        >>> r = DotDict({'author': 'bar'})
+        >>> r
+        {'author': 'bar'}
+        >>> r.update({'author.name': 'bar', 'author.url': 'example.com'})
+        >>> r
+        {'author': {'name': 'bar', 'url': 'example.com'}}
+        >>> r = DotDict({'author.name': 'bar', 'author.url': 'example.com'})
+        >>> r
+        {'author': {'name': 'bar', 'url': 'example.com'}}
+        """
+        if is_mapping(data):
+            data = cast(Mapping[str, VT], data)
+            if self.is_self(data):
+                if kwargs:
+                    _dict = data | kwargs
+                else:
+                    return self._store.update(data._store)
+            elif kwargs or any("." in k for k in data):
+                _dict = cast_type(dict[str, VT], {**data, **kwargs})
+            else:
+                for key, value in data.items():
+                    CaseInsensitiveDict.__setitem__(self, key, value)
+
+                return
         elif data:
-            _dict = dict(data)
+            _dict = dict(data, **kwargs)
         else:
-            _dict: dict[str, ComplexArg] = {}
+            _dict = kwargs
 
-        _dict.update(kwargs)
-
-        # print(f"update {_dict=}")
-        if dot_keys := [d for d in _dict if "." in d]:
+        if dot_keys := [k for k in _dict if "." in k]:
             # skip key if a subkey redefines it
             # i.e., 'author.name' has precedence over 'author'
-            skip_keys = {".".join(self._parse_key(key)[:-1]) for key in dot_keys}
+            skip_keys = {".".join(parse_key(key)[:-1]) for key in dot_keys}
             items = [(k, _dict[k]) for k in _dict if k not in skip_keys]
         else:
-            skip_keys = set()
             items = _dict.items()
 
-        # print(f"update {items=}")
-        # print(f"update before {self=}")
-        [self.set(key, value) for key, value in items]
-        super().update(self)
-        # print(f"update after {self=}")
+        for key, value in items:
+            self[key] = value
 
-    def asdict(self, default_key="self", **kwargs) -> dict[str, ComplexArg]:
+    def asdict(self, key: Key | None = None, **kwargs: VT) -> dict[str, VT | None]:
         """
         >>> r = DotDict({'a': {'value': 'bar'}})
         >>> r
@@ -408,16 +719,5 @@ class DotDict(CaseInsensitiveDict[ComplexArg]):
         >>> r.asdict()
         {'a': 'baz'}
         """
-        value = self.get(**kwargs)
-
-        if isinstance(value, Mapping):
-            result = {
-                k: DotDict(v).get(**kwargs) if isinstance(v, Mapping) else v
-                for k, v in value.items()
-            }
-        elif value:
-            result = {default_key: value}
-        else:
-            result: dict[str, ComplexArg] = {}
-
-        return dict(result)
+        items = gen_dict(self, key=key, default_key="self", **kwargs)
+        return dict(items)

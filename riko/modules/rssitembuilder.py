@@ -20,19 +20,19 @@ Attributes:
 
 """
 
-from datetime import datetime as dt
 from typing import cast
 
 import pygogo as gogo
 
 from riko import Objconf
+from riko.dates import NOW
 from riko.dotdict import DotDict
-from riko.types.general import BasicArg, Extraction
+from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
 
-OPTS = {"emit": True}
-DEFAULTS = {"pubDate": dt.now().isoformat()}
+OPTS: Opts = {"emit": True}
+DEFAULTS: Defaults = {"pubDate": NOW.isoformat()}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -56,16 +56,13 @@ rss = {
 RSS = cast(dict[str, str], DotDict(rss))
 
 
-def parser(
-    item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> DotDict:
+def parser(item: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> DotDict:
     """
     Parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -86,17 +83,13 @@ def parser(
         {'y:id': 'a1', 'media:thumbnail': {'url': 'image.png'}}
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        rdict = {RSS[k]: v for k, v in objconf.iteritems() if k in RSS}
-        stream = DotDict(rdict)
-
+    rdict = {RSS[k]: v for k, v in objconf.iteritems() if k in RSS}
+    stream = DotDict(rdict)
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> DotDict:
     """
     A source that asynchronously builds an rss item.
 
@@ -128,15 +121,13 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['media:thumbnail'])
+        >>> async def run(reactor):
         ...     conf = {'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
-        ...     d = async_pipe(conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(conf=conf)
+        ...     print(next(result)['media:thumbnail'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
-        ...     pass
         ... except SystemExit:
         ...     pass
         ...
@@ -147,7 +138,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> DotDict:
     """
     A source that builds an rss item.
 

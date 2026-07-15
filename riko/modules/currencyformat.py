@@ -22,25 +22,25 @@ import pygogo as gogo
 from babel.numbers import format_currency
 
 from riko import Objconf
-from riko.types.general import Extraction
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
-OPTS = {"ftype": "decimal", "field": "content"}
-DEFAULTS = {"currency": "USD"}
+OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
+DEFAULTS: Defaults = {"currency": "USD"}
 NaN = Decimal("NaN")
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(amount, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
+def parser(amount, extraction: Extraction, objconf: Objconf, **kwargs) -> str | Decimal:
     """
     Parsers the pipe content
 
     Args:
         amount (Decimal): The amount to format
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
 
     Returns:
         dict: The formatted item
@@ -54,21 +54,19 @@ def parser(amount, extraction: Extraction, objconf: Objconf, skip=False, **kwarg
         '$10.33'
 
     """
-    if skip:
-        parsed = kwargs["stream"]
-    elif amount is not None:
+    if amount is None:
+        parsed = NaN
+    else:
         try:
             parsed = format_currency(amount, objconf.currency)
         except ValueError:
             parsed = NaN
-    else:
-        parsed = NaN
 
     return parsed
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> str | Decimal:
     """
     A processor module that asynchronously formats a number to a given
     currency string.
@@ -96,10 +94,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['currencyformat'])
-        ...     d = async_pipe({'content': '10.33'})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe({'content': '10.33'})
+        ...     print(next(result)['currencyformat'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -113,7 +110,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> str | Decimal:
     """
     A processor module that formats a number to a given currency string.
 

@@ -42,16 +42,18 @@ def run_command(script: str, argument: str, *opts: str) -> str:
     - the working directory is ``PARENT_DIR``
     - a non-zero exit code raises ``subprocess.CalledProcessError``
     """
-    cmd = [script] + list(opts)
+    cmd = f"{script} + {' '.join(opts)}"
 
     if argument:
-        cmd.append(argument)
+        cmd += f" {argument}"
 
     result = subprocess.run(
         cmd,
         cwd=PARENT_DIR,
         capture_output=True,
         text=True,
+        check=False,
+        shell=True,
     )
 
     if result.stderr:

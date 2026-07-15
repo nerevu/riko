@@ -44,23 +44,22 @@ Attributes:
 
 """
 
-import traceback
-from collections.abc import Iterator
 from os.path import splitext
 from typing import cast
 
 import pygogo as gogo
 
-from riko import Objconf
-from riko.bado import coroutine, io, return_value, util
-from riko.parsers import Stringy, any2dict, xpath
-from riko.types.general import BasicArg, BasicMapping, Extraction, ItemArg, Items
-from riko.utils import Fetch
+from riko import ENCODING, Objconf
+from riko.bado import io
+from riko.cast import SourceOpts
+from riko.parsers import any2dict
+from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
+from riko.utils import Fetch, auto_close
 
 from . import processor
 
-OPTS = {"ftype": "none"}
-DEFAULTS = {}
+OPTS = SourceOpts
+DEFAULTS = Defaults({"encoding": ENCODING})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -69,17 +68,16 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 # TODO: clean html with Tidy
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Stream:
     """
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -90,13 +88,14 @@ def async_parser(
         Iter[dict]: The stream of items
 
     Examples:
+        >>> from traceback import format_exc
+        >>>
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> @coroutine
-        ... def run(reactor):
+        >>> async def run(reactor):
         ...     xml_url = get_path('ouseful.xml')
         ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
         ...     xml_objconf = Objectify(xml_conf)
@@ -108,13 +107,13 @@ def async_parser(
         ...     kwargs = {'stream': {}}
         ...
         ...     try:
-        ...         xml_stream = yield async_parser(*xml_args, **kwargs)
-        ...         html_stream = yield async_parser(*html_args, **kwargs)
+        ...         xml_stream = await async_parser(*xml_args, **kwargs)
+        ...         html_stream = await async_parser(*html_args, **kwargs)
         ...         print(next(xml_stream)['title'][:44])
-        ...         print(next(html_stream))
+        ...         print(next(html_stream)['content'])
         ...     except Exception as e:
         ...         logger.error(e)
-        ...         logger.error(traceback.format_exc())
+        ...         logger.error(format_exc())
         ...
         >>>
         >>> try:
@@ -126,37 +125,46 @@ def async_parser(
         Help Page -- ScienceDaily
 
     """
-    stream = kwargs["stream"]
+    ext = splitext(objconf.url)[1].lstrip(".")
 
-    if not skip:
-        ext = splitext(objconf.url)[1].lstrip(".")
-        xml = ext == "xml"
+    if objconf.url.startswith("http") and not ext:
+        ext = "html"
 
-        try:
-            f = yield io.async_url_open(objconf.url)  # pyright: ignore[reportCallIssue]
-        except Exception as e:
-            logger.error(e)
-            logger.error(traceback.format_exc())
-        else:
-            # yield from any2dict(f, ext, objconf.html5, path=objconf.xpath)
-            tree = yield util.xml2etree(f, xml=xml)
-            elements = xpath(tree, objconf.xpath)
-            f.close()
-            stream = map(util.etree2dict, elements)
+    # TODO: centralize error handling and retry logic
+    """
+    from twisted.internet import error as inet_error
 
-    return_value(stream)
+    except (
+        inet_error.DNSLookupError,
+        inet_error.ConnectionRefusedError,
+        inet_error.TimeoutError,
+        inet_error.ConnectionLost,
+    ) as e:
+        logger.warning("Network error fetching %s: %s", objconf.url, e)
+        stream = iter(())
+
+    except UnicodeDecodeError as e:
+        logger.error("Encoding error fetching %s: %s", objconf.url, e)
+        stream = iter(())
+
+    except OSError as e:
+        logger.error("Filesystem error during fetch of %s: %s", objconf.url, e)
+        stream = iter(())
+    """
+    f = await io.async_url_open(objconf.url, encoding=objconf.encoding)
+    content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
+    stream = auto_close(content, f)
+    return stream
 
 
-def parser(
-    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> Items | Iterator[Stringy]:
+def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
 
     Returns:
         Iter[dict]: The stream of items
@@ -167,25 +175,28 @@ def parser(
         >>>
         >>> url = get_path('ouseful.xml')
         >>> objconf = Objectify({'url': url, 'xpath': '/rss/channel/item'})
-        >>> result = parser(None, None, objconf, stream={})
+        >>> result = parser(None, None, objconf)
         >>> next(result)['title'][:44]
         'Running “Native” Data Wrangling Applications'
+        >>> url = get_path('sciencedaily.html')
+        >>> objconf = Objectify({'url': url, 'xpath': '/html/head/title'})
+        >>> result = parser(None, None, objconf)
+        >>> next(result)['content']
+        'Help Page -- ScienceDaily'
 
     """
-    if skip:
-        yield cast(ItemArg, kwargs["stream"])
-    else:
-        ext = splitext(objconf.url)[1].lstrip(".")
+    ext = splitext(objconf.url)[1].lstrip(".")
 
-        if objconf.url.startswith("http") and not ext:
-            ext = "html"
+    if objconf.url.startswith("http") and not ext:
+        ext = "html"
 
-        with Fetch(**{k: objconf[k] for k in objconf}) as f:
-            yield from any2dict(f, ext, objconf.html5, path=objconf.xpath)
+    with Fetch(objconf.url, encoding=objconf.encoding) as f:
+        content = cast(FileTypes, f)
+        yield from any2dict(content, ext, objconf.html5, path=objconf.xpath)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Stream:
     """
     A source that asynchronously fetches the content of a given website as
     DOM nodes or a string.
@@ -210,25 +221,26 @@ def async_pipe(*args, **kwargs):
         dict: twisted.internet.defer.Deferred item
 
     Examples:
+        >>> from traceback import format_exc
+        >>>
         >>> from riko import get_path
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> @coroutine
-        ... def run(reactor):
+        >>> async def run(reactor):
         ...     xml_url = get_path('ouseful.xml')
         ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
         ...     html_url = get_path('sciencedaily.html')
         ...     html_conf = {'url': html_url, 'xpath': '/html/head/title'}
         ...
         ...     try:
-        ...         xml_stream = yield async_pipe(conf=xml_conf)
-        ...         html_stream = yield async_pipe(conf=html_conf)
+        ...         xml_stream = await async_pipe(conf=xml_conf)
+        ...         html_stream = await async_pipe(conf=html_conf)
         ...         print(next(xml_stream)['guid']['content'])
-        ...         print(next(html_stream))
+        ...         print(next(html_stream)['content'])
         ...     except Exception as e:
         ...         logger.error(e)
-        ...         logger.error(traceback.format_exc())
+        ...         logger.error(format_exc())
         ...
         >>>
         >>> try:
@@ -240,11 +252,12 @@ def async_pipe(*args, **kwargs):
         Help Page -- ScienceDaily
 
     """
-    return async_parser(*args, **kwargs)
+    parsed = await async_parser(*args, **kwargs)
+    return parsed
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     A source that fetches the content of a given website as DOM nodes or a
     string.
@@ -279,9 +292,8 @@ def pipe(*args, **kwargs):
         {'isPermaLink': 'false', 'content': 'http://blog.ouseful.info/?p=12065'}
         >>> url = get_path('sciencedaily.html')
         >>> conf = {'url': url, 'xpath': '/html/head/title'}
-        >>> next(pipe(conf=conf))
+        >>> next(pipe(conf=conf))['content']
         'Help Page -- ScienceDaily'
 
     """
-    # FIXME
     return parser(*args, **kwargs)

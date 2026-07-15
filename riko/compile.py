@@ -35,11 +35,11 @@ License: see LICENSE file
 
 from codecs import open
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator
 from importlib import import_module
-from itertools import chain
 from json import JSONEncoder, dumps
 from pprint import PrettyPrinter
+from typing import overload
 
 from jinja2 import Environment, PackageLoader
 
@@ -47,8 +47,9 @@ from riko import Context, utils
 from riko.modules.forever import pipe as forever
 from riko.pprint2 import Id, repr_args, str_args
 from riko.topsort import topological_sort
-from riko.types.compile import Wire
-from riko.types.general import Items, ParsedPipeDef, PipeDef, Step, Steps, SyncPipeline
+from riko.types.compile import ParsedPipeDef, PipeDef, Wire
+from riko.types.general import ParserOutput, Step, Steps, Stream, SyncPipeParser
+from riko.types.modules import AnyModuleRawConf
 
 
 class MyPrettyPrinter(PrettyPrinter):
@@ -99,25 +100,22 @@ def _gen_string_modules(
     module_names: Iterable[str],
     pipe_names: Iterable[str],
     context: Context | None = None,
+    steps: Steps | None = None,
     **kwargs,
 ):
     zipped = zip(module_ids, module_names, pipe_names, strict=False)
     context = context or Context(**kwargs)
 
     for module_id, module_name, pipe_name in zipped:
-        print(f"{module_name=}")
-        pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
-        pykwargs = dict(_gen_pykwargs(parsed_pipe_def, module_id, **kwargs))
+        args = (parsed_pipe_def, module_id)
+        pyarg = _get_pyarg(*args, steps=None, **kwargs)
+        pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
 
         if context.verbose:
-            # con_args = filter(lambda x: x != Id("context"), pyargs):
-            nconf_kwargs = filter(lambda x: x[0] != "conf", pykwargs.items())
-            conf_kwargs = filter(lambda x: x[0] == "conf", pykwargs.items())
-            all_args = chain([pyarg], nconf_kwargs, conf_kwargs)
-            print(f"{module_id} = {pipe_name}({str_args(all_args)})")
+            print(f"{module_id} = {pipe_name}({str_args(pyarg, *pykwargs)})")
 
         yield {
-            "args": repr_args(chain([pyarg], pykwargs.items())),
+            "args": repr_args(pyarg, *pykwargs),
             "id": module_id,
             # "sub_pipe": module_name.startswith("pipe_"),
             "sub_pipe": module_id in parsed_pipe_def["embed"],
@@ -126,13 +124,21 @@ def _gen_string_modules(
         }
 
 
-def _get_pyarg(
+@overload  # noqa: E302
+def _get_pyarg(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs
+) -> Id: ...
+@overload  # noqa: E302
+def _get_pyarg(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps, **kwargs
+) -> ParserOutput | SyncPipeParser: ...
+def _get_pyarg(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
     steps: Steps | None = None,
     context: Context | None = None,
     **kwargs,
-):
+) -> ParserOutput | SyncPipeParser | Id:
     context = context or Context(**kwargs)
     describe = context.describe_input or context.describe_dependencies
 
@@ -145,13 +151,25 @@ def _get_pyarg(
     return input_module if steps else Id(input_module)
 
 
-def _gen_pykwargs(
+@overload  # noqa: E302
+def _gen_pykwargs(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs
+) -> Iterator[tuple[str, Id | Context | AnyModuleRawConf]]: ...
+@overload  # noqa: E302
+def _gen_pykwargs(  # noqa: E704
+    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps, **kwargs
+) -> Iterator[
+    tuple[str, ParserOutput | SyncPipeParser | Context | AnyModuleRawConf]
+]: ...
+def _gen_pykwargs(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
-    steps: Mapping | None = None,
+    steps: Steps | None = None,
     context: Context | None = None,
     **kwargs,
-):
+) -> Iterator[
+    tuple[str, ParserOutput | SyncPipeParser | Id | Context | AnyModuleRawConf]
+]:
     module = parsed_pipe_def["modules"][module_id]
     yield ("conf", module["conf"])
 
@@ -216,7 +234,7 @@ def _gen_steps(
             import_name = f"riko.modules.{module_name}"
 
         module = import_module(import_name)
-        pipeline: SyncPipeline = getattr(module, pipe_name)
+        pipeline: SyncPipeParser = getattr(module, pipe_name)
 
         if module_id in parsed_pipe_def["embed"]:
             # We need to wrap submodules (used by loops) so we can pass the
@@ -294,7 +312,7 @@ def build_pipeline(
     pipe_def: PipeDef,
     context: Context | None = None,
     **kwargs,
-) -> Items:
+) -> Stream:
     """
     Convert a pipe into an executable Python pipeline
 
@@ -318,7 +336,7 @@ def build_pipeline(
             "module_ids": module_ids,
             "module_names": utils.gen_names(module_ids, parsed_pipe_def),
             "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
-            "steps": {"forever", forever()},
+            "steps": {"forever": forever(context=context)},
         }
 
         steps = dict(_gen_steps(parsed_pipe_def, **kwargs, **updates))
@@ -339,7 +357,7 @@ def stringify_pipe(parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, **kwargs) 
         "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, ntype="pipe"),
     }
 
-    env = Environment(loader=PackageLoader("riko"))
+    env = Environment(loader=PackageLoader("riko"), autoescape=False)  # noqa: S701
     template = env.get_template("pypipe.txt")
     modules = list(_gen_string_modules(parsed_pipe_def, **kwargs, **updates))
     keys = ["sub_pipe", "name", "pipe_name"]

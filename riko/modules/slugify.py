@@ -20,22 +20,28 @@ import pygogo as gogo
 from slugify import slugify
 
 from riko import Objconf
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Opts
 
 from . import processor
 
-OPTS = {"ftype": "text", "extract": "separator", "field": "content", "objectify": False}
-DEFAULTS = {"separator": "-"}
+OPTS: Opts = {
+    "ftype": BasicCastType.TEXT,
+    "extract": "separator",
+    "field": "content",
+    "objectify": False,
+}
+DEFAULTS: Defaults = {"separator": "-"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word: str, separator: str, objconf: Objconf, skip=False, **kwargs):
+def parser(word: str, separator: str, objconf: Objconf, **kwargs) -> str:
     """
     Parsers the pipe content
 
     Args:
         word (str): The string to transform
         separator (str): The slug separator.
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -53,16 +59,11 @@ def parser(word: str, separator: str, objconf: Objconf, skip=False, **kwargs):
         'hello-world'
 
     """
-    if skip:
-        parsed = kwargs["stream"]
-    else:
-        parsed = slugify(word.strip(), separator=separator)
-
-    return parsed
+    return slugify(word.strip(), separator=separator)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> str:
     """
     A processor module that asynchronously slugifies the field of an item.
 
@@ -81,10 +82,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['slugify'])
-        ...     d = async_pipe({'content': 'hello world'})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe({'content': 'hello world'})
+        ...     print(next(result)['slugify'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -98,7 +98,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> str:
     """
     A processor that slugifies the field of an item.
 

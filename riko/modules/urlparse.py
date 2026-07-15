@@ -8,7 +8,7 @@ Examples:
         >>> from riko.modules.urlparse import pipe
         >>>
         >>> item = {'content': 'http://yahoo.com'}
-        >>> next(pipe(item))['urlparse'][0]
+        >>> next(pipe(item))
         {'component': 'scheme', 'content': 'http'}
 
 Attributes:
@@ -17,28 +17,31 @@ Attributes:
 
 """
 
+from collections.abc import Iterator
 from urllib.parse import urlparse
 
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import Extraction
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
-OPTS = {"ftype": "text", "field": "content"}
-DEFAULTS = {"parse_key": "content"}
+OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
+DEFAULTS: Defaults = {"parse_key": "content"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(url: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
+def parser(
+    url: str, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[dict[str, str]]:
     """
     Parsers the pipe content
 
     Args:
         url (str): The link to parse
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -57,19 +60,14 @@ def parser(url: str, extraction: Extraction, objconf: Objconf, skip=False, **kwa
         {'component': 'scheme', 'value': 'http'}
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        parsed = urlparse(url)
-
-        items = parsed._asdict().items()
-        stream = ({"component": k, objconf.parse_key: v} for k, v in items)
-
+    parsed = urlparse(url)
+    items = parsed._asdict().items()
+    stream = ({"component": k, objconf.parse_key: v} for k, v in items)
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
     """
     A processor module that asynchronously parses a URL into its components.
 
@@ -88,10 +86,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['urlparse'][0])
-        ...     d = async_pipe({'content': 'http://yahoo.com'})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe({'content': 'http://yahoo.com'})
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -105,7 +102,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
     """
     A processor that parses a URL into its components.
 
@@ -127,7 +124,7 @@ def pipe(*args, **kwargs):
 
     Examples:
         >>> item = {'content': 'http://yahoo.com'}
-        >>> next(pipe(item))['urlparse'][0]
+        >>> next(pipe(item))
         {'component': 'scheme', 'content': 'http'}
         >>> conf = {'parse_key': 'value'}
         >>> next(pipe(item, conf=conf, emit=True))

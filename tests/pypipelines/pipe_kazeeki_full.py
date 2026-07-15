@@ -1,17 +1,14 @@
 # vim: sw=4:ts=4:expandtab
 
-from itertools import chain
 from os import path as p
 from pprint import pprint
 
 from riko import Context, get_path
 from riko.collections import SyncPipe
+from riko.types.modules import FetchConf, FetchDataConf
+from riko.utils import make_regex_rule
 
 PARENT = p.dirname(p.dirname(p.dirname(__file__)))
-
-make_regex = lambda f, m, r: {"field": f, "match": m, "replace": r}
-cdict = lambda *d: dict(chain.from_iterable(map(dict.items, d)))
-pmatch = {"seriesmatch": False}
 
 
 def make_simplemath(other, op):
@@ -38,11 +35,7 @@ def make_loop(field, assign, embed_conf, skip_if=None):
         "skip_if": skip_if,
     }
 
-    kwargs = {
-        "emit": False,
-        "assign": assign,
-    }
-
+    kwargs = {"emit": False, "assign": assign}
     return conf, kwargs
 
 
@@ -101,13 +94,16 @@ match1_14b = "(.*)(<b>)(.*)"
 match1_15 = "(.*)(<b>(Category:?<.*?>:?))(.*?)(<.*?>|<b>Skills<.*?>)(.*)"
 match1_16 = "(.*)(<b>(Required skills|Desired Skills):<.*?>)(.*?)(<.*?>)(.*)"
 match1_17 = "(.*)(Jobs:)(.*?)(\\))(.*)"
-match1_18 = "&gt;|<br>"
+match1_18 = "&amp;|&gt;|&|<br>"
 match1_19 = "(\\w+)(?!.*,)"
 match1_20b = "\\/"
 match1_21b = "[^a-zA-Z\\d,]+"
 match1_22 = ".*Time Left.*\\(Ends(.*)\\) <.*?>"
 match1_23 = "(.*)(<b>)(.*)"
-# match1_24a = "(.*)(Fixed Price budget:<.*?>|Hourly budget.*Rate:|Budget:|Type and Budget|Budget<.*?>:)(.*?)(<.*?>|, Jobs:)(.*)"
+# match1_24a = (
+#     "(.*)(Fixed Price budget:<.*?>|Hourly budget.*Rate:|Budget:|Type and Budget|"
+#     "Budget<.*?>:)(.*?)(<.*?>|, Jobs:)(.*)"
+# )
 match1_24b1 = "^((?!(budget|Budget|Hourly budget.*Rate)).)*$"
 match1_24b2 = (
     r"(.*)((budget|Budget|Hourly budget.*Rate):?(<.*?>)?:?)\s*(.*?)(<.*?>|, Jobs:)(.*)"
@@ -116,59 +112,59 @@ match1_25 = "Under|Upto|Less than"
 match1_26 = "^(?!.*-.*)(.*)"
 
 regex1_rule = [
-    make_regex("title", match1_01, "$1"),
-    make_regex("k:marketplace", match1_02, "$3"),
-    make_regex("k:job_type", match1_03, "hourly"),
-    make_regex("k:job_type", match1_04, "fixed"),
-    make_regex("k:job_type", match1_05, "unknown"),
-    make_regex("k:job_type", ".*hr.*", "hourly"),
-    make_regex("k:job_type", ".*unknown.*", "unknown"),
-    make_regex("k:job_type", "^(?!.*(hourly|unknown).*).*", "fixed"),
-    make_regex("k:content", match1_06, "$1"),
-    make_regex("k:content", match1_07, "$3"),
-    make_regex("k:submissions", match1_08, "$3"),
-    make_regex("k:submissions", match1_09, "unknown"),
-    make_regex("k:author", match1_10, "$3"),
-    make_regex("k:author", match1_11, "unknown"),
-    make_regex("k:work_location", match1_12, "$4"),
-    make_regex("k:work_location", match1_13, "unknown"),
-    make_regex("k:client_location", match1_14, "$4"),
-    make_regex("k:client_location", match1_14b, "unknown"),
-    make_regex("k:tags", match1_15, "$4"),
-    make_regex("k:tags", match1_16, "$4"),
-    make_regex("k:tags", match1_17, "$3"),
-    make_regex("k:tags", match1_18, ""),
-    make_regex("k:tags", match1_19, "$1,"),
-    make_regex("k:tags", match1_20b, ","),
-    make_regex("k:tags", match1_21b, "-"),
-    make_regex("k:tags", "^-|-$", ""),
-    make_regex("k:tags", ",-|-,", ","),
-    make_regex("k:tags", "^,|,$", ""),
-    make_regex("k:due", match1_22, "$1"),
-    make_regex("k:due", match1_23, "unknown"),
-    cdict(pmatch, make_regex("k:budget_raw", match1_24b1, "0")),
-    cdict(pmatch, make_regex("k:budget_raw", match1_24b2, "$5")),
-    make_regex("k:budget_raw", "k", "000"),
-    make_regex("k:budget_raw", match1_25, "0 -"),
-    make_regex("k:budget_raw", "or less", "- 0"),
-    make_regex("k:budget_raw", match1_26, "$1 - $1"),
+    make_regex_rule("title", match1_01, "$1"),
+    make_regex_rule("k:marketplace", match1_02, "$3"),
+    make_regex_rule("k:job_type", match1_03, "hourly"),
+    make_regex_rule("k:job_type", match1_04, "fixed"),
+    make_regex_rule("k:job_type", match1_05, "unknown"),
+    make_regex_rule("k:job_type", ".*hr.*", "hourly"),
+    make_regex_rule("k:job_type", ".*unknown.*", "unknown"),
+    make_regex_rule("k:job_type", "^(?!.*(hourly|unknown).*).*", "fixed"),
+    make_regex_rule("k:content", match1_06, "$1"),
+    make_regex_rule("k:content", match1_07, "$3"),
+    make_regex_rule("k:submissions", match1_08, "$3"),
+    make_regex_rule("k:submissions", match1_09, "unknown"),
+    make_regex_rule("k:author", match1_10, "$3"),
+    make_regex_rule("k:author", match1_11, "unknown"),
+    make_regex_rule("k:work_location", match1_12, "$4"),
+    make_regex_rule("k:work_location", match1_13, "unknown"),
+    make_regex_rule("k:client_location", match1_14, "$4"),
+    make_regex_rule("k:client_location", match1_14b, "unknown"),
+    make_regex_rule("k:tags", match1_15, "$4"),
+    make_regex_rule("k:tags", match1_16, "$4"),
+    make_regex_rule("k:tags", match1_17, "$3"),
+    make_regex_rule("k:tags", match1_18, ""),
+    make_regex_rule("k:tags", match1_19, "$1,"),
+    make_regex_rule("k:tags", match1_20b, ","),
+    make_regex_rule("k:tags", match1_21b, "-"),
+    make_regex_rule("k:tags", "^-|-$", ""),
+    make_regex_rule("k:tags", ",-|-,", ","),
+    make_regex_rule("k:tags", "^,|,$", ""),
+    make_regex_rule("k:due", match1_22, "$1"),
+    make_regex_rule("k:due", match1_23, "unknown"),
+    make_regex_rule("k:budget_raw", match1_24b1, "0", seriesmatch=False),
+    make_regex_rule("k:budget_raw", match1_24b2, "$5", seriesmatch=False),
+    make_regex_rule("k:budget_raw", "k", "000"),
+    make_regex_rule("k:budget_raw", match1_25, "0 -"),
+    make_regex_rule("k:budget_raw", "or less", "- 0"),
+    make_regex_rule("k:budget_raw", match1_26, "$1 - $1"),
 ]
 
 regex2_rule = [
-    make_regex("k:budget_raw1", "(.*) - (.*)", "$1"),
-    make_regex("k:budget_raw2", "(.*) - (.*)", "$2"),
+    make_regex_rule("k:budget_raw1", "(.*) - (.*)", "$1"),
+    make_regex_rule("k:budget_raw2", "(.*) - (.*)", "$2"),
 ]
 
 regex3_rule = [
-    make_regex("k:budget_raw1_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
-    make_regex("k:budget_raw1_sym", "\\s*([$£€₹]).*", "$1"),
-    make_regex("k:budget_raw1_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
-    make_regex("k:budget_raw2_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
-    make_regex("k:budget_raw2_sym", "\\s*([$£€₹]).*", "$1"),
-    make_regex("k:budget_raw2_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
+    make_regex_rule("k:budget_raw1_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
+    make_regex_rule("k:budget_raw1_sym", "\\s*([$£€₹]).*", "$1"),
+    make_regex_rule("k:budget_raw1_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
+    make_regex_rule("k:budget_raw2_num", "[^\\d]*(\\d+\\.?\\d*).*", "$1"),
+    make_regex_rule("k:budget_raw2_sym", "\\s*([$£€₹]).*", "$1"),
+    make_regex_rule("k:budget_raw2_code", ".*(\\b[A-Z]{3}\\b).*", "$1"),
 ]
 
-regex4_rule = [make_regex("k:cur_code", "^(?![A-Z]{3}\\b)(.*)", DEF_CUR_CODE)]
+regex4_rule = [make_regex_rule("k:cur_code", "^(?![A-Z]{3}\\b)(.*)", DEF_CUR_CODE)]
 
 strreplace_conf = {
     "RULE": [
@@ -209,7 +205,7 @@ strconcat4_conf = {"part": [{"subkey": "k:budget_full"}, " / hr"]}
 
 tokenizer_conf = make_tokenizer(",", True, True)
 substring1_conf = make_substring("0", "3")
-substring2_conf = make_substring("0", "1")
+substring2_conf = make_substring("1", "1")
 currencyformat1_conf = {"currency": {"subkey": "k:cur_code"}}
 exchangerate_conf = make_exchangerate(DEF_CUR_CODE, True)
 currencyformat2_conf = {"currency": DEF_CUR_CODE}
@@ -221,10 +217,35 @@ test3 = lambda item: item.get("k:cur_code") == DEF_CUR_CODE
 test4 = lambda item: item.get("k:job_type") != "hourly"
 
 my_item = {
-    "content": '<p>Hello, I need to fix an application i am working on. Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>',
-    "link": "https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss",
+    "content": (
+        "<p>Hello, I need to fix an application i am working on. Currently the rss has "
+        "a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i "
+        "need to configure that the news will be read as an ion-list element, and a "
+        "single article will be in a new page. with transition.<br>\n<br>\nThe "
+        "application is in ionic + angular, so only experienced developers are welcome "
+        "to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27"
+        ", 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development "
+        "&gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a "
+        'href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_'
+        '%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>'
+    ),
+    "link": (
+        "https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_"
+        "%7E01d9a84fc5a0a79ddb?source=rss"
+    ),
     "pubDate": "December 27, 2014",
-    "summary": '<p>Hello, I need to fix an application i am working on. Currently the rss has a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i need to configure that the news will be read as an ion-list element, and a single article will be in a new page. with transition.<br>\n<br>\nThe application is in ionic + angular, so only experienced developers are welcome to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27, 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development &gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>',
+    "summary": (
+        "<p>Hello, I need to fix an application i am working on. Currently the rss has "
+        "a cross origin problem, and i need to fix this.<br>\n<br>\nNext thing is i "
+        "need to configure that the news will be read as an ion-list element, and a "
+        "single article will be in a new page. with transition.<br>\n<br>\nThe "
+        "application is in ionic + angular, so only experienced developers are welcome "
+        "to this project.<br><br><b>Budget</b>: 10 EUR<br><b>Posted On</b>: December 27"
+        ", 2014 13:32 UTC<br><b>ID</b>: 204946132<br><b>Category</b>: Web Development "
+        "&gt; Web Programming<br><b>Skills</b>: Array<br><b>Country</b>: Israel<br><a "
+        'href="https://www.odesk.com/jobs/Need-fix-Ionic-Rss-Reader-Application_'
+        '%7E01d9a84fc5a0a79ddb?source=rss">click to apply</a></p>'
+    ),
     "title": "Need to fix Ionic Rss Reader Application - oDesk",
     "updated": "Sat, 27 Dec 2014 13:32:55 +0000",
     "y:id": None,
@@ -234,11 +255,11 @@ my_item = {
 
 itembuilder_attrs = [{"key": k, "value": v} for k, v in my_item.items()]
 itembuilder_conf = {"attrs": itembuilder_attrs}
-fetch_conf = {"URL": "http://feeds.feedburner.com/guru/all"}
-fetchdata_conf = {"URL": get_path("kazeeki2.json"), "path": "items"}
+fetch_conf = FetchConf({"url": "http://feeds.feedburner.com/guru/all"})
+fetchdata_conf = FetchDataConf({"url": get_path("kazeeki2.json"), "path": "items"})
 
 
-def parse_source(source):
+def parse_source(source: SyncPipe):
     pipe = (
         source.rename(conf={"RULE": rename1_rule})
         .regex(conf={"RULE": regex1_rule})
@@ -246,12 +267,10 @@ def parse_source(source):
         .regex(conf={"RULE": regex2_rule})
         .rename(conf={"RULE": rename3_rule})
         .regex(conf={"RULE": regex3_rule})
-        .tokenizer(conf=tokenizer_conf, field="k:tags")
+        .tokenizer(conf=tokenizer_conf, emit=False, assign="k:tags", field="k:tags")
         .simplemath(conf=simplemath1_conf, field="k:budget_raw1_num", assign="k:budget")
-        .strconcat(conf=strconcat1_conf, assign="k:cur_code")
-        .substr(conf=substring1_conf, field="k:cur_code")
         .strconcat(conf=strconcat2_conf, assign="k:budget_sym")
-        .substr(conf=substring2_conf, field="k:budget_sym")
+        .substr(conf=substring2_conf, assign="k:budget_sym", field="k:budget_sym")
         .rename(
             conf={
                 "RULE": {"newval": "k:cur_code", "field": "k:budget_sym", "copy": True}
@@ -274,8 +293,10 @@ def parse_source(source):
         .currencyformat(
             conf=currencyformat1_conf, field="k:budget", assign="k:budget_w_sym"
         )
-        # .exchangerate(conf=exchangerate_conf, field="k:cur_code", assign="k:rate")
-        # .simplemath(conf=simplemath2_conf, field="k:budget", assign="k:budget_converted")
+        .exchangerate(conf=exchangerate_conf, field="k:cur_code", assign="k:rate")
+        .simplemath(
+            conf=simplemath2_conf, field="k:budget", assign="k:budget_converted"
+        )
         .currencyformat(
             conf=currencyformat2_conf,
             field="k:budget_converted",
@@ -286,7 +307,7 @@ def parse_source(source):
         .strconcat(conf=strconcat4_conf, assign="k:budget_full", skip_if=test4)
     )
 
-    return pipe.list
+    return list(pipe)
 
 
 def print_content(output):

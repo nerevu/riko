@@ -1,44 +1,64 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.utils
-~~~~~~~~~~~~~~
 Provides utility classes and functions
 """
 
 import builtins
+import datetime
 import fcntl
 import itertools as it
 import re
 import sys
-from collections import deque
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from codecs import StreamReader
+from collections import defaultdict, deque
+from collections.abc import (
+    Callable,
+    Generator,
+    ItemsView,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
+from dataclasses import asdict, fields, is_dataclass
 from decimal import Decimal
-from functools import partial, reduce, wraps
+from functools import cache, partial, reduce, wraps
 from http.client import HTTPResponse
-from io import StringIO, TextIOBase
+from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
 from os import O_NONBLOCK
 from time import struct_time
 from typing import (
+    TYPE_CHECKING,
+    Literal,
+    Protocol,
+    TypeGuard,
     TypeVar,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
     overload,
 )
 from typing import cast as cast_type
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+from urllib.response import addinfourl
 
 import mezmorize
 import pygogo as gogo
 import requests
-from meza import compat
 from meza.io import reencode
 from mezmorize.utils import get_cache_type
-from werkzeug.local import LocalProxy
+from requests.structures import CaseInsensitiveDict
 
+import riko.cast as cast_module
 from riko import (
     ENCODING,
     Context,
+    Objconf,
     Objectify,
     __version__,
     get_abspath,
@@ -47,41 +67,185 @@ from riko import (
 )
 from riko.cast import CAST_SWITCH, CastType
 from riko.cast import cast as cast_value
+from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
-from riko.types.compile import Module, Wire
+from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
 from riko.types.general import (
-    BasicArg,
-    BasicMapping,
-    BasicValue,
-    ComplexArg,
-    DateLike,
-    IntermediateValue,
-    ItemArg,
-    NumLike,
-    ObjconfRegexRule,
+    FileTypes,
+    Item,
     Opener,
-    ParsedPipeDef,
-    PipeDef,
     PipelineDependencies,
+    Stream,
+    StreamOrValueStream,
+    ValueStream,
+)
+from riko.types.modules import (
+    EmbeddedModule,
+    InputRawConf,
+    LoopRawConf,
+    RegexConfRule,
+    RegexRule,
+)
+from riko.types.values import (
+    BasicArg,
+    BasicDict,
+    BasicValue,
+    Hashable,
+    HashableType,
+    ParserRSSEntry,
+    PrimitiveValue,
+    RikoDict,
+    RikoList,
+    RikoValue,
+    RSSEntry,
+    SortableValue,
     StatefulItem,
     StreamState,
-    SyncAnyFunc,
-    SyncItemFunc,
+    StringyDict,
+    StringyList,
 )
-from riko.types.modules import EmbeddedModule, InputConf, LoopConf
 
-_registry: dict[str, Generator[StatefulItem, StatefulItem, StatefulItem]] = {}
-_receive_queue: dict[str, deque[tuple[StreamState | None, ComplexArg]]] = {}
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
+
+NON_SORTABLE = (Mapping, Sequence)
+
+_registry: dict[str, Generator[None, Item | StatefulItem, None]] = {}
+_receive_queue: dict[str, deque[tuple[StreamState | None, Item]]] = {}
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
 
-DEF_NS = "https://github.com/nerevu/riko"
-T = TypeVar("T", bound=ComplexArg)
+T_co = TypeVar("T_co", covariant=True)
+B = TypeVar("B", Literal[True], Literal[False])
+VT = TypeVar("VT")
+
+type TuplePair = tuple[str, HashableOrTuple]
+type InnerPairs = tuple[TuplePair, ...]
+type DataclassTuple = tuple[str, tuple[type, InnerPairs]]
+type CollectionTuple = tuple[type, InnerPairs | tuple[HashableOrTuple, ...]]
+type HashableOrTuple = Hashable | CollectionTuple | DataclassTuple
 
 
-def combine_dicts(*dicts: Mapping[str, BasicArg]) -> dict[str, BasicArg]:
-    return dict(it.chain.from_iterable(map(Mapping.items, dicts)))
+def is_dataclass_tuple(obj: tuple) -> TypeGuard[DataclassTuple]:
+    return obj[0] == "dataclass"
+
+
+class ReprCacheWrapper(Protocol[T_co]):
+    def __call__(  # noqa: E704
+        self, *args: VT, **kwargs: VT
+    ) -> T_co: ...
+    def cache_clear(self) -> None: ...  # noqa: E704
+    def cache_info(self) -> object: ...  # noqa: E704
+
+
+def fromdict(
+    cls: type["DataclassInstance"],
+    **data: Union["DataclassInstance", RikoValue, StringyList, StringyDict],
+) -> "DataclassInstance":
+    module = sys.modules[cls.__module__]
+    localns = {**vars(module), **vars(cast_module)}
+    hints = get_type_hints(cls, localns=localns, include_extras=True)
+
+    for f in fields(cls):
+        if f.name not in data:
+            continue
+
+        ftype = hints[f.name]
+        val = data[f.name]
+        origin = get_origin(ftype)
+
+        if origin is Union:
+            args = [a for a in get_args(ftype) if a is not type(None)]
+            ftype = args[0] if args else ftype
+            origin = get_origin(ftype)
+
+        if origin is Literal:
+            valid = get_args(ftype)
+
+            if val not in valid:
+                raise ValueError(f"Invalid {f.name}={val!r}, expected one of {valid}")
+        elif is_dataclass(ftype) and isinstance(ftype, type) and isinstance(val, dict):
+            val = fromdict(ftype, **val)
+
+        data[f.name] = val
+
+    return cls(**data)
+
+
+def _to_hashable(obj: object) -> HashableOrTuple:
+    hashed = None
+
+    if obj is None:
+        pass
+    elif isinstance(obj, HashableType):
+        hashed = obj
+    elif isinstance(obj, DotDict):
+        inner = sorted((k, _to_hashable(v)) for k, v in obj._store.values())
+        hashed = (DotDict, tuple(inner))
+    elif isinstance(obj, Mapping):
+        inner = sorted((k, _to_hashable(v)) for k, v in obj.items())
+        typ = Objectify if isinstance(obj, Objectify) else dict
+        hashed = (typ, tuple(inner))
+    elif isinstance(obj, Sequence):
+        hashed = (list, tuple(_to_hashable(v) for v in obj))
+    elif is_dataclass(obj):
+        items = asdict(cast("DataclassInstance", obj)).items()
+        inner = tuple(sorted((k, _to_hashable(v)) for k, v in items))
+        hashed = ("dataclass", (type(obj), inner))
+    else:
+        logger.error(f"Unsupported {type(obj)=}")
+
+    return hashed
+
+
+@cache
+def _from_hashable(
+    obj: HashableOrTuple,
+) -> Union[RikoValue, Objectify, "DataclassInstance", CollectionTuple, DataclassTuple]:
+    if not isinstance(obj, struct_time) and isinstance(obj, tuple) and len(obj) == 2:
+        if is_dataclass_tuple(obj):
+            typ, (cls, inner) = obj
+        else:
+            typ, inner = cast(CollectionTuple, obj)
+            cls = None
+
+        if typ in (Objectify, DotDict, dict, "dataclass"):
+            _arg = {k: _from_hashable(v) for k, v in cast(InnerPairs, inner)}
+            arg = cast(RikoDict, _arg)
+
+            if (typ is Objectify) or (typ is DotDict):
+                arg = typ(arg)
+            elif cls and typ == "dataclass":
+                arg = fromdict(cls, **arg)
+        elif typ is list:
+            _arg = [_from_hashable(v) for v in cast(tuple[HashableOrTuple, ...], inner)]
+            arg = cast(RikoList, _arg)
+        else:
+            arg = obj
+    else:
+        arg = obj
+
+    return arg
+
+
+def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
+    @cache
+    def _cached(hashable_args: tuple, hashable_kwargs: tuple) -> R:
+        args = tuple(_from_hashable(a) for a in hashable_args)
+        kwargs = {k: _from_hashable(v) for k, v in hashable_kwargs}
+        return fn(*args, **kwargs)
+
+    @wraps(fn)
+    def wrapper(*args: VT, **kwargs: VT) -> R:
+        return _cached(
+            tuple(_to_hashable(a) for a in args),
+            tuple(sorted((k, _to_hashable(v)) for k, v in kwargs.items())),
+        )
+
+    setattr(wrapper, "cache_clear", _cached.cache_clear)  # noqa: B010
+    setattr(wrapper, "cache_info", _cached.cache_info)  # noqa: B010
+    return cast(ReprCacheWrapper[R], wrapper)
 
 
 # https://trac.edgewall.org/ticket/2066#comment:1
@@ -127,154 +291,280 @@ def invert_dict(d):
 
 
 def multi_try(source, zipped, default=None):
-    value = None
-
     for func, error in zipped:
         try:
             value = func(source)
         except error:
             pass
         else:
-            return value
-    return default
+            break
+    else:
+        value = default
+
+    return value
 
 
-def get_response_content_type(response):
-    try:
-        content_type = response.getheader("Content-Type", "")
-    except AttributeError:
-        content_type = response.headers.get("Content-Type", "")
-
+def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) -> str:
+    content_type = r.headers.get("Content-Type", "")
     return content_type.lower()
 
 
-def get_response_encoding(response, def_encoding=ENCODING):
-    info = response.info()
+def get_response_encoding(r: HTTPResponse | addinfourl, def_encoding=ENCODING) -> str:
+    content_type = get_response_content_type(r)
 
-    try:
-        encoding = info.getencoding()
-    except AttributeError:
-        encoding = info.get_charset()
-
-    encoding = None if encoding == "7bit" else encoding
-
-    if not encoding and hasattr(info, "get_content_charset"):
-        encoding = info.get_content_charset()
-
-    if not encoding:
-        content_type = get_response_content_type(response)
-
-        if "charset" in content_type:
-            ctype = content_type.split("=")[1]
-            encoding = ctype.strip().strip('"').strip("'")
+    if "charset=" in content_type:
+        ctype = content_type.split("charset=")[1]
+        encoding = ctype.strip().strip('"').strip("'")
+    else:
+        encoding = None
 
     return encoding or def_encoding
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close(stream: Iterable[T], f) -> Iterator[T]:
+def auto_close[T](stream: Iterable[T], f: FileTypes) -> Iterator[T]:
     try:
         yield from stream
     finally:
         f.close()
 
 
-def opener(
+@overload
+def opener(  # noqa: E704
+    url: str,
+    memoize: Literal[True],
+    delay: int = ...,
+    encoding: str = ...,
+    params: dict | None = ...,
+    offline: bool = ...,
+    *,
+    binary: Literal[True],
+    **kwargs,
+) -> tuple[BytesIO, str | None]: ...
+
+
+@overload
+def opener(  # noqa: E704
+    url: str,
+    memoize: Literal[False] = ...,
+    delay: int = ...,
+    encoding: str = ...,
+    params: dict | None = ...,
+    offline: bool = ...,
+    *,
+    binary: Literal[True],
+    **kwargs,
+) -> tuple[RawIOBase, str | None]: ...
+
+
+@overload
+def opener(  # noqa: E704
+    url: str,
+    memoize: Literal[True],
+    delay: int = ...,
+    encoding: str = ...,
+    params: dict | None = ...,
+    offline: bool = ...,
+    binary: Literal[False] = ...,
+    **kwargs,
+) -> tuple[StringIO, str | None]: ...
+
+
+@overload
+def opener(  # noqa: E704
+    url: str,
+    memoize: Literal[False] = ...,
+    delay: int = ...,
+    encoding: str = ...,
+    params: dict | None = ...,
+    offline: bool = ...,
+    binary: Literal[False] = ...,
+    **kwargs,
+) -> tuple[StreamReader, str | None]: ...
+
+
+def opener(  # noqa: E302
     url: str,
     memoize=False,
     delay=0,
     encoding=ENCODING,
     params=None,
     offline=True,
+    binary: bool = False,
     **kwargs,
-) -> tuple[str | StringIO, str | None]:
+) -> tuple[FileTypes, str | None]:
     params = params or {}
     timeout = kwargs.get("timeout")
     url = get_abspath(url, offline=offline)
     r = None
 
     if url.startswith("http") and params:
-        r = requests.get(url, params=params, stream=True)
-        r.raw.decode_content = True
-        response = r.text if memoize else r.raw
+        r = requests.get(url, params=params, stream=binary, timeout=timeout)
+        r.raw.decode_content = not binary
+
+        if binary:
+            response = BytesIO(r.content) if memoize else cast(RawIOBase, r.raw)
+        elif memoize:
+            response = StringIO(r.text)
+        else:
+            encoding = r.encoding or encoding
+            reencoded = reencode(r.raw, encoding, decode=True)
+            # TODO: Add self._f = f to Reencoder
+            reencoded._r = r  # pyright: ignore[reportAttributeAccessIssue]
+            response = cast(StreamReader, reencoded)
     else:
-        req = Request(url, headers={"User-Agent": default_user_agent()})
+        req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
 
         if delay:
             logger.debug("Request delaying not currently implemented.")
 
-        if r := urlopen(req, timeout=timeout):
-            r = cast_type(HTTPResponse, r)
-            text = r.read() if memoize else None
+        if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
+            response = BytesIO(r.read()) if memoize else cast(RawIOBase, r)
+        elif r:
             encoding = get_response_encoding(r, encoding)
 
-            if text:
-                response = cast_type(str, compat.decode(text, encoding))
-            else:
-                reencoded = reencode(r.fp, encoding, decode=True)
-                content: str = reencoded.read()
+            if not (binary or encoding):
+                encoding = ENCODING
 
-                # FIXME: this is a band-aid for the fact that reencode objects don't
-                # support seek
-                response = StringIO(content)
+            if memoize and encoding:
+                response = StringIO(r.read().decode(encoding))
+            elif memoize:
+                response = StringIO(r.read())
+            elif encoding:
+                reencoded = reencode(r.fp, encoding, decode=True)
+                # TODO: Add self._f = f to Reencoder
+                reencoded._r = r  # pyright: ignore[reportAttributeAccessIssue]
+                response = cast(StreamReader, reencoded)
+            else:
+                response = cast(TextIOBase, r)
         else:
-            response = ""
+            response = BytesIO() if binary else StringIO()
 
     content_type = get_response_content_type(r) if r else None
     return (response, content_type)
 
 
+@repr_cache
 def get_opener(memoize=False, **kwargs) -> Opener:
+    """
+    Examples:
+        >>> get_opener.cache_clear()
+        >>> o1 = get_opener()
+        >>> o1 is get_opener()
+        True
+        >>> o1 is get_opener(encoding='utf-8')
+        False
+        >>> get_opener.cache_info().hits
+        1
+        >>> o2 = get_opener(memoize=True)
+        >>> o2 is get_opener(memoize=True)
+        True
+        >>> get_opener.cache_info().hits
+        2
+
+    """
     wrapper = partial(opener, memoize=memoize, **kwargs)
     current_opener = wraps(opener)(wrapper)
 
     if memoize:
         kwargs.setdefault("cache_type", get_cache_type(spread=False))
-        memoizer = mezmorize.memoize(**kwargs)
-        current_opener = memoizer(current_opener)
+        return mezmorize.memoize(**kwargs)(current_opener)
 
     return current_opener
 
 
-class Fetch(TextIOBase):
-    # http://stackoverflow.com/a/22836333/408556
-    def __init__(self, url: str, memoize=False, **kwargs):
+class Fetch[B: (Literal[True], Literal[False])]:
+    binary: B
+
+    @overload
+    def __init__(  # noqa: E704
+        self: "Fetch[Literal[True]]",
+        url: str = ...,
+        *,
+        binary: Literal[True],
+        **kwargs: BasicArg,
+    ) -> None: ...
+    @overload  # noqa: E301
+    def __init__(  # noqa: E704
+        self: "Fetch[Literal[False]]",
+        url: str = ...,
+        *,
+        binary: Literal[False] = ...,
+        **kwargs: BasicArg,
+    ) -> None: ...
+    def __init__(  # noqa: E301
+        self,
+        url: str = "",
+        *,
+        memoize: BasicArg = False,
+        binary: bool = False,
+        **kwargs: BasicArg,
+    ):
         # TODO: need to use separate timeouts for memoize and urlopen
+        self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]
         self.content_type = None
         self.file = None
+        opener = get_opener(memoize=bool(url and memoize), binary=binary, **kwargs)
 
-        if memoize:
-            opener = LocalProxy(partial(get_opener, memoize=True, **kwargs))
-            self.opener = cast_type(Opener, opener)
-            response, self.content_type = self.opener(url)
-        else:
-            self.opener = get_opener(**kwargs)
+        try:
+            self.file, self.content_type = opener(url)
+        except URLError as e:
+            if "File name too long" in str(e.reason):
+                raise
+            logger.error(f"Error opening {url}: {e.reason}")
 
-            try:
-                response, self.content_type = self.opener(url)
-            except URLError as e:
-                if "File name too long" in str(e.reason):
-                    raise
-                else:
-                    logger.error(f"Error opening {url}: {e.reason}")
-                    response = None
+    def __getattr__(self, name: str):
+        if self.file is not None:
+            return getattr(self.file, name)
+        raise AttributeError(name)
 
-        if isinstance(response, str):
-            self.file = StringIO(response)
-        elif response:
-            self.file = response
-
+    def close(self):
         if self.file:
-            self.close = self.file.close
-            self.read = self.file.read
-            self.readline = self.file.readline
-            self.seek = self.file.seek
+            self.file.close()
 
     def __enter__(self):
         return self
 
     def __exit__(self, *_):
         self.close()
+
+    @overload
+    def __iter__(self: "Fetch[Literal[True]]") -> Iterator[bytes]: ...  # noqa: E704
+    @overload
+    def __iter__(self: "Fetch[Literal[False]]") -> Iterator[str]: ...  # noqa: E704
+    def __iter__(self) -> Iterator[bytes | str]:  # noqa: E301
+        if self.file:
+            result = iter(self.file)
+        elif self.binary:
+            result = iter([b""])
+        else:
+            result = iter([""])
+
+        return result
+
+    @overload
+    def __next__(self: "Fetch[Literal[True]]") -> bytes: ...  # noqa: E704
+    @overload
+    def __next__(self: "Fetch[Literal[False]]") -> str: ...  # noqa: E704
+    def __next__(self) -> bytes | str:  # noqa: E301
+        if self.file:
+            return next(self.file)
+
+        raise StopIteration
+
+    @overload
+    def read(self: "Fetch[Literal[True]]", size: int = ...) -> bytes: ...  # noqa: E704
+    @overload
+    def read(self: "Fetch[Literal[False]]", size: int = ...) -> str: ...  # noqa: E704
+    def read(self, size: int = -1) -> bytes | str:  # noqa: E301
+        if self.file and size < 0:
+            result = self.file.read()
+        elif self.file:
+            result = self.file.read(size)
+        else:
+            result = b"" if self.binary else ""
+
+        return result
 
     @property
     def ext(self):
@@ -290,29 +580,64 @@ class Fetch(TextIOBase):
         return ext
 
 
-# TODO add strict option to opt into sortability
-def def_itemgetter(
-    attr: str, default: IntermediateValue | None = None, _type: str | None = None
-) -> Callable[[ItemArg], BasicValue | DateLike | NumLike | bool]:
-    # like operator.itemgetter but fills in missing keys with a default value
-    _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
-    invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
+def _resolve_uncastable(
+    value: Mapping | Sequence | PrimitiveValue,
+    msg: str,
+    default: SortableValue,
+) -> SortableValue | None:
+    if isinstance(value, (str, int, struct_time)):
+        msg += ". Returning value without casting."
+        logger.warning(msg)
+        casted = value
+    elif isinstance(value, (dict, CaseInsensitiveDict, list, tuple, Mapping, Sequence)):
+        msg += ". Returning default value."
+        logger.warning(msg)
+        casted = default
+    else:
+        msg += ". Returning value without casting."
+        logger.warning(msg)
+        casted = value
+
+    return casted
+
+
+def _warn_and_default(type_name: str, default: SortableValue) -> SortableValue:
+    msg = f"Received non-sortable {type_name} value. Returning default instead."
+    logger.warning(msg)
+    return default
+
+
+def _resolve_default(
+    _type: str | None, invalid_type: bool | None, default: PrimitiveValue | None
+) -> SortableValue:
+    resolved = ""
 
     if invalid_type and default is None:
-        msg = f"Invalid cast type={_type}. Setting default to empty string."
-        logger.warning(msg)
+        logger.warning(f"Invalid cast type={_type}. Setting default to empty string.")
     elif _type and default is None:
         _default = CAST_SWITCH[_type].get("default")
-        default = cast_type(IntermediateValue, _default)
+        resolved = cast_type(PrimitiveValue, _default) or ""
+    elif isinstance(default, Mapping):
+        logger.warning(f"Invalid {default=}. Setting to empty string.")
+    elif default is not None:
+        resolved = default
 
-    if default is None:
-        default = ""
+    return resolved
+
+
+def def_itemgetter(
+    attr: str, default: PrimitiveValue | None = None, _type: str | None = None
+) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
+    # like operator.itemgetter but fills in missing keys with a default value
+    _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
+    invalid_type = bool(_invalid_type or (_type and _type not in CAST_SWITCH))
+    default = _resolve_default(_type, invalid_type, default)
 
     _invalid_type = _type in {CastType.LOCATION, CastType.PASS, CastType.NONE}
     invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
 
-    def keyfunc(item: ItemArg) -> BasicValue | DateLike | NumLike | bool:
-        if isinstance(item, Mapping):
+    def keyfunc(item: Mapping | PrimitiveValue) -> SortableValue:
+        if isinstance(item, (dict, CaseInsensitiveDict, Mapping)):
             value = item.get(attr, default)
         else:
             value = item
@@ -320,36 +645,14 @@ def def_itemgetter(
         msg = f"Invalid cast type={_type} for key '{attr}'."
 
         if invalid_type:
-            if isinstance(value, (str, int, struct_time)):
-                msg += ". Returning value without casting."
-                logger.warning(msg)
-                casted = value
-            elif isinstance(value, (Mapping, Objectify, Sequence)):
-                msg += ". Returning default value."
-                logger.warning(msg)
-                casted = default
-            else:
-                msg += ". Returning value without casting."
-                logger.warning(msg)
-                casted = value
+            casted = _resolve_uncastable(value, msg, default)
         elif _type:
-            # pyright: ignore[reportCallIssue,reportArgumentType]
             _casted = cast_value(value, CastType(_type))
-            casted = cast_type(IntermediateValue, _casted)
+            casted = cast_type(PrimitiveValue, _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
-        elif isinstance(value, Mapping):
-            msg = "Received non-sortable Mapping value. Returning default instead."
-            logger.warning(msg)
-            casted = default
-        elif isinstance(value, Objectify):
-            msg = "Received non-sortable Objectify value. Returning default instead."
-            logger.warning(msg)
-            casted = default
-        elif isinstance(value, Sequence):
-            msg = "Received non-sortable Sequence value. Returning default instead."
-            logger.warning(msg)
-            casted = default
+        elif isinstance(value, NON_SORTABLE):
+            casted = _warn_and_default(type(value).__name__, default)
         elif value is not None:
             casted = value
         else:
@@ -364,23 +667,26 @@ def def_itemgetter(
 
 
 # TODO: move this to meza.process.group
-def group_by(content: Iterable[Mapping[str, str]], attr: str, default=None):
+def group_by[T: Mapping | PrimitiveValue](
+    content: Iterable[T], attr: str, default=None
+) -> ItemsView[str, list[T]]:
     keyfunc = def_itemgetter(attr, default)
-    data = list(content)
-    uniq = unique_everseen(data, keyfunc)
-    sorted_iterable = sorted(data, key=keyfunc)
-    grouped = it.groupby(sorted_iterable, keyfunc)
-    groups = {str(k): list(v) for k, v in grouped}
+    groups = defaultdict(list)
 
-    # return groups in original order
-    return ((key, groups[key]) for key in uniq)
+    for item in content:
+        key = str(keyfunc(item))
+        groups[key].append(item)
+
+    return groups.items()
 
 
 @overload
-def unique_everseen(content: Iterable[T]) -> Iterator[T]: ...
-@overload
-def unique_everseen(content: Iterable[T], keyfunc: Callable) -> Iterator[str]: ...
-def unique_everseen(
+def unique_everseen[T](content: Iterable[T]) -> Iterator[T]: ...  # noqa: E704
+@overload  # noqa: E302
+def unique_everseen[T](  # noqa: E704
+    content: Iterable[T], keyfunc: Callable
+) -> Iterator[str]: ...
+def unique_everseen[T](  # noqa: E302
     content: Iterable[T], keyfunc: Callable | None = None
 ) -> Iterator[str | T]:
     # List unique elements, preserving order. Remember all elements ever seen
@@ -448,9 +754,7 @@ def betwix(iterable, start=None, stop=None, inc=False):
     return last
 
 
-def dispatch(
-    split: Sequence[ComplexArg], *funcs: SyncAnyFunc
-) -> tuple[ComplexArg, ...]:
+def dispatch[T, VT](split: Sequence[VT], *funcs: Callable[[VT], T]) -> tuple[T, ...]:
     r"""
     Takes a tuple of items and delivers each one to a different function
 
@@ -480,7 +784,7 @@ def dispatch(
     return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
-def broadcast(item: ItemArg, *funcs: SyncItemFunc, **kwargs) -> tuple[ComplexArg, ...]:
+def broadcast[T, VT](item: VT, *funcs: Callable[[VT], T], **kwargs) -> tuple[T, ...]:
     r"""
     Delivers the same item to different functions.
 
@@ -623,8 +927,17 @@ def substitute(word: str, rule):
     return replaced
 
 
+def make_regex_rule(
+    f: str, m: str, r: str, seriesmatch: bool = True, default=None
+) -> RegexConfRule:
+    return RegexConfRule(
+        field=f, match=m, replace=r, seriesmatch=seriesmatch, default=default
+    )
+
+
 # @memoize(TIMEOUT)
-def get_new_rule(rule: ObjconfRegexRule, recompile=False) -> dict[str, str | int]:
+def get_regex_rule(rule: Objconf | RegexConfRule, recompile=False) -> RegexRule:
+    rule = rule if is_dataclass(rule) else RegexConfRule(**rule)
     flags = 0 if rule.casematch else re.IGNORECASE
 
     if not rule.singlelinematch:
@@ -634,70 +947,93 @@ def get_new_rule(rule: ObjconfRegexRule, recompile=False) -> dict[str, str | int
     count: int = 1 if rule.singlelinematch else 0
 
     if recompile and "$" in rule.replace:
-        replace = re.sub(r"\$(\d+)", r"\\\1", rule.replace, 0)
+        replace = re.sub(r"\$(\d+)", r"\\\1", rule.replace, count=0)
     else:
         replace = rule.replace
 
     match = re.compile(rule.match, flags) if recompile else rule.match
 
     nrule = {
+        "count": count,
+        "flags": flags,
         "match": match,
         "replace": replace,
         "default": rule.default,
         "field": rule.field,
-        "count": count,
-        "flags": flags,
-        "series": rule.seriesmatch,
         "offset": rule.offset or 0,
+        "series": rule.seriesmatch,
     }
 
-    return nrule
+    return RegexRule(**nrule)
 
 
-def multiplex(sources: Iterable[Iterable[T]]) -> Iterable[T]:
+def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
     """Combine multiple generators into one"""
     return it.chain.from_iterable(sources)
 
 
-def gen_entries(entries: Iterable[Mapping]):
-    for _entry in entries:
-        entry = dict(_entry)
-        published = updated = None
+def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
+    for entry in entries:
+        pub_date = updated_date = None
 
-        # prevent feedparser deprecation warnings
+        if "summary" not in entry:
+            entry["summary"] = entry["description"]
+
         if "published_parsed" in entry:
-            published = updated = entry["published_parsed"]
-        elif "pubDate" in entry:
-            # TODO: convert this to utc_datetime obj
-            published = updated = entry["pubDate"]
+            pub_date = updated_date = entry["published_parsed"]
+        elif "published" in entry:
+            pub_date = updated_date = entry["published"]
+
+        if pub_date:
+            pub_date = ensure_tzinfo(pub_date)
+
+            if isinstance(pub_date, datetime.datetime):
+                pub_date = pub_date.timetuple()
 
         if "updated_parsed" in entry:
-            updated = entry.get("updated_parsed")
+            updated_date = entry["updated_parsed"]
+        elif "updated" in entry:
+            updated_date = entry["updated"]
 
-        entry.setdefault("updated_parsed", updated)
-        entry.setdefault("pubDate", published)
-        entry["y:published"] = entry["pubDate"]
-        entry["dc:creator"] = entry.get("author")
-        entry["author.uri"] = entry.get("author_detail", {}).get("href")
+        if updated_date:
+            updated_date = ensure_tzinfo(updated_date)
+
+            if isinstance(updated_date, datetime.datetime):
+                updated_date = updated_date.timetuple()
+
         entry["author.name"] = entry.get("author_detail", {}).get("name")
-        entry["y:title"] = entry.get("title")
+        entry["author.uri"] = entry.get("author_detail", {}).get("href")
+        entry["dc:creator"] = entry.get("author")
         entry["y:id"] = entry.get("id")
-        yield entry
+        entry["updated_parsed"] = updated_date
+        entry["published_parsed"] = entry["y:published"] = entry["pubDate"] = pub_date
+        entry["y:title"] = entry.get("title")
+        yield cast(RSSEntry, entry)
 
 
-def gen_items(
-    content: BasicArg | None, key: str | None = None, yield_if_none=False
-) -> Iterator[BasicArg | BasicMapping | None]:
-    if isinstance(content, (str, int, Mapping)):
+@overload
+def gen_items(content: RikoValue) -> ValueStream: ...  # noqa: E704
+@overload  # noqa: E302
+def gen_items(  # noqa: E704
+    content: RikoValue, key: str, yield_if_none: bool = ...
+) -> Stream: ...  # noqa: E704
+@overload  # noqa: E302
+def gen_items(  # noqa: E704
+    content: RikoValue, key: None = ..., yield_if_none: bool = ...
+) -> ValueStream: ...
+def gen_items(  # noqa: E302
+    content: RikoValue, key: str | None = None, yield_if_none=False
+) -> StreamOrValueStream:
+    if isinstance(content, (struct_time, dict, CaseInsensitiveDict)):
+        yield {key: cast(BasicDict, content)} if key else content
+    elif isinstance(content, (list, tuple)):
+        for value in content:
+            yield from gen_items(value, key)
+    elif content is not None or yield_if_none:
         yield {key: content} if key else content
-    elif content:
-        for nested in content:
-            yield from gen_items(nested, key)
-    elif yield_if_none:
-        yield
 
 
-def send(target: str, item: ItemArg | StatefulItem):
+def send(target: str, item: Item | StatefulItem):
     if target in _registry:
         _registry[target].send(item)
     else:
@@ -709,11 +1045,11 @@ def close(name: str):
         gen.close()
 
 
-def actor(registry_name: str | None = None, maxlen=256):
+def coroutine(registry_name: str | None = None, maxlen=256):
     """Decorator for generator-based coroutines."""
 
     def decorator(
-        func: Callable[..., Generator[StatefulItem, StatefulItem, StatefulItem]],
+        func: Callable[..., Generator[None, Item | StatefulItem, None]],
     ):
         name = registry_name or func.__name__
 
@@ -765,7 +1101,7 @@ def gen_input(pipe_def: PipeDef) -> Iterator[tuple[str]]:
             yield tuple(module_confs)
 
 
-def get_input(conf: InputConf, **kwargs):
+def get_input(conf: InputRawConf, **kwargs):
     """
     Gets a user parameter, either from the console or from an outer
      submodule/system
@@ -804,7 +1140,7 @@ def extract_input(
 
 
 def pythonise(
-    content: str | BasicMapping | Wire,
+    content: str | Mapping,
     encoding="ascii",
     replace: Sequence[str] = ("-", ":", "/", ""),
     key: str | None = None,
@@ -856,12 +1192,12 @@ def gen_names(
 
 def gen_modules(
     pipe_def: PipeDef, embedded=False
-) -> Iterator[tuple[str, Module] | tuple[str, EmbeddedModule]]:
+) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
         yield (pythonise(module["id"]), module)
 
         if embedded and module["type"] == "loop":
-            conf = cast_type(LoopConf, module["conf"])
+            conf = cast_type(LoopRawConf, module["conf"])
             embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), embed)
 
@@ -885,7 +1221,7 @@ def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list]]:
 
         # make the loop dependent on its embedded module
         if module["type"] == "loop":
-            conf = cast_type(LoopConf, module["conf"])
+            conf = cast_type(LoopRawConf, module["conf"])
             embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), [module_id])
 
@@ -895,3 +1231,16 @@ def gen_parented_graph(graph):
     for node, value in graph.items():
         if value or any(node in v for v in graph.values()):
             yield (node, value)
+
+
+def truncate_content[T](content: T | object, length: int = 20) -> T:
+    if isinstance(content, str):
+        truncated = content[:length] + "…" if len(content) > length else content
+    elif isinstance(content, (dict, CaseInsensitiveDict, Mapping)):
+        truncated = {k: truncate_content(v) for k, v in content.items()}
+    elif isinstance(content, (list, tuple, Sequence)):
+        truncated = [truncate_content(v) for v in content]
+    else:
+        truncated = content
+
+    return cast(T, truncated)

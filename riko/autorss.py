@@ -1,20 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.autorss
-~~~~~~~~~~~~
 Provides functions for finding RSS feeds from a site's LINK tags
 """
 
-from collections.abc import Generator, Iterator
-from io import StringIO, TextIOBase
+from collections.abc import Iterator
+from typing import cast
 
 import pygogo as gogo
-from meza.compat import decode
-from twisted.internet.defer import Deferred
 
-from riko.bado import coroutine, microdom, return_value
 from riko.bado.io import async_url_open
 from riko.parsers import LinkParser
+from riko.types.general import Stream, StringFileTypes
 from riko.utils import Fetch
 
 TIMEOUT = 10
@@ -26,16 +22,13 @@ class RSSLinkParser(LinkParser):
         super().__init__(*args, rss_only=True, **kwargs)
 
 
-def file2entries(
-    f: StringIO | Iterator[str] | TextIOBase, parser: RSSLinkParser
-) -> Iterator[dict]:
+def file2entries(f: StringFileTypes | Iterator[str], parser: RSSLinkParser) -> Stream:
     for line in f:
-        parser.feed(decode(line))
-
+        parser.feed(line)
         yield from parser.entry
 
 
-def doc2entries(document) -> Iterator[dict]:
+def doc2entries(document) -> Stream:
     for node in document.childNodes:
         if hasattr(node, "attributes") and node.attributes:
             entry = node.attributes
@@ -55,22 +48,28 @@ def doc2entries(document) -> Iterator[dict]:
             yield entry
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_get_rss(
-    url: str, **kwargs
-) -> Generator[Deferred[Iterator[dict]], Iterator[dict], None]:
+async def async_get_rss(
+    url: str, convert_charrefs=False, auto_sort=False, **kwargs
+) -> Stream:
     try:
-        f = yield async_url_open(url, timeout=TIMEOUT)  # pyright: ignore[reportCallIssue]
+        parser = RSSLinkParser(convert_charrefs=convert_charrefs, **kwargs)
+    except TypeError:
+        parser = RSSLinkParser(**kwargs)
+
+    try:
+        f = await async_url_open(url, timeout=TIMEOUT)
     except ValueError:
         f = filter(None, url.splitlines())
 
-    document = microdom.parse(f, lenient=True)
-    return_value(doc2entries(document))
+    entries = file2entries(f, parser)
+
+    if auto_sort:
+        entries = iter(sorted(entries, key=parser.keyfunc))
+
+    return entries
 
 
-def get_rss(
-    url: str, convert_charrefs=False, auto_sort=False, **kwargs
-) -> Iterator[dict]:
+def get_rss(url: str, convert_charrefs=False, auto_sort=False, **kwargs) -> Stream:
     try:
         parser = RSSLinkParser(convert_charrefs=convert_charrefs, **kwargs)
     except TypeError:
@@ -81,7 +80,7 @@ def get_rss(
     except ValueError:
         f = filter(None, url.splitlines())
 
-    entries = file2entries(f, parser)
+    entries = file2entries(cast(StringFileTypes, f), parser)
 
     if auto_sort:
         entries = iter(sorted(entries, key=parser.keyfunc))

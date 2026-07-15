@@ -29,24 +29,29 @@ Attributes:
 
 import operator as op
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Sequence
+from datetime import date
 from decimal import Decimal, InvalidOperation
-from time import struct_time
 
 import pygogo as gogo
 from dateutil.parser import ParserError
 
+from riko import Objectify
 from riko.cast import cast_date
-from riko.types.general import BasicArg, BasicMapping, DateLike, ObjconfRule
+from riko.dotdict import DotDict
+from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
+from riko.types.modules import FilterConfRule
+from riko.utils import repr_cache
 
 from . import operator
 
-OPTS = {"listize": True, "extract": "rule"}
-DEFAULTS = {"combine": "and", "permit": True}
-ITER_ATTRS = {"__next__", "next", "__iter__"}
+OPTS: Opts = {"listize": True, "extract": "rule"}
+DEFAULTS: Defaults = {"combine": "and", "permit": True}
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
-SWITCH = {
+SWITCH: dict[str, Callable[..., bool]] = {
+    # TODO: add support for all containment semantics
+    # 2 in [1, 2, 3]  or "a" in {"a": 1}
     "contains": lambda x, y: x and y.lower() in x.lower(),
     "doesnotcontain": lambda x, y: x and y.lower() not in x.lower(),
     "matches": lambda x, y: re.search(y, x),
@@ -63,54 +68,80 @@ SWITCH = {
     "atmost": op.le,
 }
 
+NUMERIC_OPS = {"atmost", "atleast"}
+STRING_OPS = {"contains", "doesnotcontain", "matches"}
+DATE_OPS = {"after", "before"}
+STRING_OPS = {"matches"}
+PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
+TRUTHINESS_OPS = {"truthy", "falsy"}
+
 logger = gogo.Gogo(__name__, monolog=True).logger
-is_iterable = lambda item: ITER_ATTRS.intersection(dir(item))
 
 
-def _parse_arg(arg: BasicArg | DateLike | None):
-    if isinstance(arg, Mapping):
+def _parse_arg_uncached[VT](arg: VT, op: str) -> str | date | Decimal | VT | None:
+    if op in PASSTHROUGH_OPS:
         value = arg
-    elif isinstance(arg, int):
-        value = Decimal(arg)
-    elif isinstance(arg, str):
+    elif op in STRING_OPS:
+        value = str(arg)
+    elif op in DATE_OPS:
         try:
+            value = cast_date(arg)  # pyright: ignore[reportArgumentType]
+        except (IndexError, ParserError, KeyError):
+            value = None
+    elif op in NUMERIC_OPS or isinstance(arg, (int, float)):
+        if isinstance(arg, Decimal):
+            value = arg
+        elif isinstance(arg, int):
             value = Decimal(arg)
-        except InvalidOperation:
+        elif isinstance(arg, float):
+            value = Decimal(str(arg))
+        else:
             try:
-                value = cast_date(arg)
-            except (
-                IndexError,
-                ParserError,
-                KeyError,
-            ):  # TODO: figure out which exceptions cast_date can raise
-                value = arg
-    elif isinstance(arg, struct_time):
-        value = cast_date(arg)
-    elif isinstance(arg, Sequence):
-        value = arg
-    elif arg:
-        value = cast_date(arg)
+                value = Decimal(arg)  # pyright: ignore[reportArgumentType]
+            except (InvalidOperation, ValueError):
+                value = None
     else:
         value = arg
 
     return value
 
 
-def parse_rule(rule: ObjconfRule, item: BasicMapping, **kwargs):
-    truthy_like = rule.op in {"truthy", "falsy"}
-    _x, _y = item.get(rule.field, **kwargs), rule.value
+@repr_cache
+def _parse_arg_cached[VT](arg: VT, op: str) -> str | date | Decimal | VT | None:
+    return _parse_arg_uncached(arg, op)
+
+
+def parse_arg[VT](arg: VT, op: str, memoize=False) -> str | date | Decimal | VT | None:
+    func = _parse_arg_cached if memoize else _parse_arg_uncached
+    return func(arg, op)
+
+
+def parse_rule(rule: FilterConfRule, item: Item, **kwargs) -> bool:
+    truthiness = rule.op in TRUTHINESS_OPS
+    _y = rule.value
+
+    if isinstance(item, Objectify):
+        _x = getattr(item, rule.field)
+    elif isinstance(item, (dict, DotDict)):
+        _x = item.get(rule.field, **kwargs)
+    else:
+        raise TypeError(f"Item is not a mapping: {item!r}.")
+
     has_value = _y is not None
     result = False
 
-    if has_value and not truthy_like:
-        x, y = _parse_arg(_x), _parse_arg(_y)
+    if has_value and not truthiness:
+        x = parse_arg(_x, rule.op)
+        y = parse_arg(_y, rule.op, memoize=True)
     else:
         x, y = _x, _y
 
-    if has_value or truthy_like:
+    has_value = y is not None
+
+    if has_value or truthiness:
         operation = SWITCH.get(rule.op)
 
-        if truthy_like:
+        if truthiness:
             result = operation(x)
         elif has_value:
             try:
@@ -121,7 +152,9 @@ def parse_rule(rule: ObjconfRule, item: BasicMapping, **kwargs):
     return result
 
 
-def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
+def parser(
+    _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 
@@ -158,13 +191,21 @@ def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
         {'ex': 4}
 
     """
+    for rule in extract:
+        truthiness = rule.op in TRUTHINESS_OPS
+        has_value = rule.value is not None
+
+        if has_value and not truthiness:
+            parse_arg(rule.value, rule.op, memoize=True)
+
     for item, objconf in tuples:
         results = (parse_rule(rule, item, **kwargs) for rule in extract)
 
         try:
             func = COMBINE_BOOLEAN[objconf.combine]
         except KeyError:
-            print(f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')")
+            msg = f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')"
+            logger.error(msg)
         else:
             result = func(results)
 
@@ -174,8 +215,8 @@ def parser(stream, extract: Sequence[ObjconfRule], tuples, **kwargs):
                 break
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously filters for source items matching
     the given rules.
@@ -215,12 +256,11 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['title'])
+        >>> async def run(reactor):
         ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
         ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
-        ...     d = async_pipe(items, conf={'rule': rule})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items, conf={'rule': rule})
+        ...     print(next(result)['title'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -234,7 +274,7 @@ def async_pipe(*args, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that extracts items matching the given rules.
 

@@ -3,11 +3,11 @@
 from riko import Context, get_path
 from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.filter import pipe as _filter
+from riko.modules.input import pipe as _input
 from riko.modules.input import pipe as textinput
 from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
-from riko.modules.urlinput import pipe as urlinput
 
 
 def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(context=None, conf=None):
@@ -33,10 +33,9 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(context=None, conf=None):
             "regex",
             "rename",
             "input",
-            "urlinput",
         ]
 
-    sw_521 = urlinput(
+    sw_521 = _input(
         context=context,
         conf={
             "test": True,

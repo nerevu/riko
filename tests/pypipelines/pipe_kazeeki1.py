@@ -12,9 +12,9 @@ def pipe_kazeeki1(context: Context):
         output = ["fetchdata", "rename", "regex"]
     else:
         source = SyncPipe("fetchdata", context=context, conf=fetchdata_conf)
-        output = source.rename(conf=rename_conf).regex(conf=regex_conf).export()
+        output = source.rename(conf=rename_conf).regex(conf=regex_conf)
 
-    return output
+    return list(output)
 
 
 if __name__ == "__main__":

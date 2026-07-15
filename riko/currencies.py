@@ -1,7 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko.currencies
-~~~~~~~~~~~~~~~
 Provides currency lookup dictionaries
 
 
@@ -11,16 +9,16 @@ Attributes:
 
 """
 
-from riko.types.general import CurrencyCode
+from riko.types.values import CurrencyCode
 
 CURRENCY_SYMBOLS = {
     "$": "USD",
     "£": "GBP",
     "€": "EUR",
     "₹": "INR",
-    "\xa3": "GBP",
-    "\u20ac": "EUR",
-    "\u20b9": "INR",
+    "\xa3": "GBP",  # noqa: F601
+    "\u20ac": "EUR",  # noqa: F601
+    "\u20b9": "INR",  # noqa: F601
 }
 
 CURRENCY_CODES: dict[str, CurrencyCode] = {

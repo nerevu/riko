@@ -2,8 +2,9 @@
 
 from riko import Context, get_path
 from riko.modules.fetchsitefeed import pipe as fetchsitefeed
+from riko.modules.input import pipe as _input
 from riko.modules.truncate import pipe as truncate
-from riko.modules.urlinput import pipe as urlinput
+from riko.types.modules import FetchSiteFeedRawConf, InputRawConf, TruncateRawConf
 
 
 def pipe_551507461cbcb19a828165daad5fe007(context=None, conf=None):
@@ -22,27 +23,30 @@ def pipe_551507461cbcb19a828165daad5fe007(context=None, conf=None):
         ]
 
     if context and context.describe_dependencies:
-        return ["fetchsitefeed", "truncate", "urlinput"]
+        return ["fetchsitefeed", "truncate", "input"]
 
-    sw_242 = urlinput(
-        context=context,
-        conf={
+    input_conf = InputRawConf(
+        {
             "test": {"type": "bool", "value": "true"},
             "debug": {"type": "url", "value": get_path("www.bbc.co.uk_news.html")},
             "default": {"type": "url", "value": get_path("www.bbc.co.uk_news.html")},
             "prompt": {"type": "text", "value": "Enter a URL"},
             "name": {"type": "text", "value": "urlinput1"},
-        },
+        }
     )
+
+    sw_242 = _input(context=context, conf=input_conf, emit=True)
 
     sw_234 = fetchsitefeed(
         context=context,
         _1_URL=sw_242,
-        conf={"URL": {"terminal": "1_URL", "type": "url"}},
+        conf=FetchSiteFeedRawConf({"url": {"terminal": "1_URL", "type": "url"}}),
     )
 
     sw_246 = truncate(
-        sw_234, context=context, conf={"count": {"type": "int", "value": "5"}}
+        sw_234,
+        context=context,
+        conf=TruncateRawConf({"count": {"type": "int", "value": "5"}}),
     )
 
     return sw_246

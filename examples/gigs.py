@@ -1,7 +1,6 @@
 from pprint import pprint
 
 from riko import get_path
-from riko.bado import coroutine, return_value
 from riko.collections import AsyncPipe, SyncPipe
 
 p1_conf = {"url": get_path("gigs.json"), "path": "value.items"}
@@ -21,22 +20,20 @@ def pipe(test=False):
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
-        .list
     )
 
-    return stream
+    return list(stream)
 
 
-@coroutine
-def async_pipe(reactor, test=False):
-    stream = yield (
+async def async_pipe(reactor, test=False):
+    stream = await (
         AsyncPipe("fetchdata", conf=p1_conf, test=test)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
         .sort(conf=p4_conf)
     )
 
-    return_value(stream)
+    return list(stream)
 
 
 if __name__ == "__main__":

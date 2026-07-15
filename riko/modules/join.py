@@ -22,19 +22,25 @@ Attributes:
 
 """
 
+from collections.abc import Mapping
 from itertools import product
+from typing import cast
 
 import pygogo as gogo
 from meza.process import join, merge
 
+from riko import Objconf
+from riko.dotdict import is_mapping
+from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
+
 from . import operator
 
-OPTS = {}
-DEFAULTS = {"join_key": None, "lower": False}
+OPTS = Opts()
+DEFAULTS: Defaults = {"join_key": None, "lower": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -81,30 +87,37 @@ def parser(stream, objconf, tuples, **kwargs):
         4
 
     """
+    other = kwargs["other"]
 
-    def compare(x, y):
-        if objconf.lower:
+    def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
+        if isinstance(x, Mapping) and isinstance(y, Mapping):
             x_value, y_value = x.get(x_key, ""), y.get(y_key, "")
-            equal = x_value.lower() == y_value.lower()
+
+            if objconf.lower and isinstance(x_value, str) and isinstance(y_value, str):
+                equal = x_value.lower() == y_value.lower()
+            else:
+                equal = x_value == y_value
         else:
-            equal = x.get(x_key) == y.get(y_key)
+            logger.warning(f"Unsupported types for compare: {type(x)} and {type(y)}")
+            equal = False
 
         return equal
 
     if objconf.join_key or objconf.other_join_key:
         x_key = objconf.join_key or objconf.other_join_key
         y_key = objconf.other_join_key or x_key
-        prod = product(stream, kwargs["other"])
-
-        joined = (merge([x, y]) for x, y in prod if compare(x, y))
+        prod = product(stream, other)
+        joined = (
+            merge([x, y]) for x, y in prod if compare(x, y, x_key=x_key, y_key=y_key)
+        )
     else:
-        joined = join(stream, kwargs["other"])
+        joined = join(stream, filter(is_mapping, other))
 
-    return joined
+    return cast(Stream, joined)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously merges multiple source streams together.
 
@@ -132,12 +145,11 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     items = ({'x': 'foo', 'sum': x} for x in range(5))
         ...     other = ({'x': 'foo', 'count': x + 5} for x in range(5))
-        ...     d = async_pipe(items, conf={'join_key': 'x'}, other=other)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items, conf={'join_key': 'x'}, other=other)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -151,7 +163,7 @@ def async_pipe(*args, **kwargs):
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that merges multiple streams together.
 

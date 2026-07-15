@@ -1,26 +1,22 @@
 # vim: sw=4:ts=4:expandtab
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from functools import partial
 from pprint import pprint
 
 from riko import get_path
-from riko.bado import coroutine, return_value
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import FetchDataConf
+
+# from riko.utils import make_regex_rule
 
 BR = {"find": "<br>"}
 DEF_CUR_CODE = "USD"
 
-odesk_conf = {"url": get_path("odesk.json"), "path": "items"}
-guru_conf = {"url": get_path("guru.json"), "path": "items"}
-elance_conf = {"url": get_path("elance.json"), "path": "items"}
-freelancer_conf = {"url": get_path("freelancer.json"), "path": "items"}
-
-
-def make_regex(field, match, replace, default=None):
-    result = {"field": field, "match": match, "replace": replace, "default": default}
-
-    return result
+odesk_conf = FetchDataConf({"url": get_path("odesk.json"), "path": "items"})
+guru_conf = FetchDataConf({"url": get_path("guru.json"), "path": "items"})
+elance_conf = FetchDataConf({"url": get_path("elance.json"), "path": "items"})
+freelancer_conf = FetchDataConf({"url": get_path("freelancer.json"), "path": "items"})
 
 
 def make_simplemath(other, op):
@@ -30,7 +26,7 @@ def make_simplemath(other, op):
 def add_source(source):
     subelement_conf = {"path": "k:source.content.1", "token_key": None}
 
-    sourced = source.urlparse(field="link", assign="k:source").subelement(
+    sourced = source.urlparse(field="link", emit=False, assign="k:source").subelement(
         conf=subelement_conf, emit=False, assign="k:source"
     )
 
@@ -49,7 +45,7 @@ def add_id(source, rule, field="link"):
 
 def add_posted(
     source,
-    rule: Sequence[Mapping[str, str]] | Mapping[str, str] | None = None,
+    rule: Sequence[dict[str, str]] | dict[str, str] | None = None,
     field="summary",
 ):
     if rule:
@@ -63,7 +59,6 @@ def add_posted(
 
 
 def add_tags(source, rule, field="summary", assign="k:tags"):
-    tokenizer_conf = {"dedupe": True, "sort": True}
     no_tags = {"field": assign}
 
     tag_strreplace_rule = [
@@ -88,13 +83,19 @@ def add_tags(source, rule, field="summary", assign="k:tags"):
             assign=assign,
             skip_if=no_tags,
         )
-        .tokenizer(conf=tokenizer_conf, field=assign, assign=assign, skip_if=no_tags)
+        .tokenizer(
+            conf={"dedupe": True, "sort": True},
+            field=assign,
+            emit=False,
+            assign=assign,
+            skip_if=no_tags,
+        )
     )
 
     return tagged
 
 
-def add_budget(source, fixed_text="", hourly_text="", double=True):
+def add_budget(source, fixed_text="", hourly_text="", double: bool | str = True):
     codes = "$£€₹"
     no_raw_budget = {"field": "k:budget_raw"}
     has_code = {"field": "k:cur_code", "include": True}
@@ -117,7 +118,7 @@ def add_budget(source, fixed_text="", hourly_text="", double=True):
     cur_rule = {"find": r"\b[A-Z]{3}\b", "location": "at"}
     sym_rule = {"find": f"[{codes}]", "location": "at"}
 
-    # make_regex('k:budget_raw', r'[(),.\s]', ''),
+    # make_regex_rule('k:budget_raw', r'[(),.\s]', ''),
     invalid_budgets = [
         {"find": "Less than", "replace": "0-"},
         {"find": "Under", "replace": "0-"},
@@ -535,11 +536,11 @@ def parse_freelancer(source):
 def pipe(test=False, parallel=False, threads=False):
     kwargs = {"parallel": parallel, "threads": threads}
 
-    Pipe = partial(SyncPipe, "fetchdata", **kwargs)
-    odesk_source = Pipe(conf=odesk_conf)
-    guru_source = Pipe(conf=guru_conf)
-    freelancer_source = Pipe(conf=freelancer_conf)
-    elance_source = Pipe(conf=elance_conf)
+    pipe = partial(SyncPipe, "fetchdata", **kwargs)
+    odesk_source = pipe(conf=odesk_conf)
+    guru_source = pipe(conf=guru_conf)
+    freelancer_source = pipe(conf=freelancer_conf)
+    elance_source = pipe(conf=elance_conf)
 
     odesk_pipe = parse_odesk(odesk_source)  # 10
     guru_stream = parse_guru(guru_source)  # 75
@@ -547,26 +548,24 @@ def pipe(test=False, parallel=False, threads=False):
     elance_stream = parse_elance(elance_source)  # 75
 
     others = [guru_stream, freelancer_stream, elance_stream]
-    return odesk_pipe.union(others=others).list
-    # return elance_stream.list
+    return list(odesk_pipe.union(others=others))
 
 
-@coroutine
-def async_pipe(reactor, test=None):
-    Pipe = partial(AsyncPipe, "fetchdata")
-    odesk_source = Pipe(conf=odesk_conf)
-    guru_source = Pipe(conf=guru_conf)
-    freelancer_source = Pipe(conf=freelancer_conf)
-    elance_source = Pipe(conf=elance_conf)
+async def async_pipe(reactor, test=None):
+    pipe = partial(AsyncPipe, "fetchdata")
+    odesk_source = pipe(conf=odesk_conf)
+    guru_source = pipe(conf=guru_conf)
+    freelancer_source = pipe(conf=freelancer_conf)
+    elance_source = pipe(conf=elance_conf)
 
-    odesk_pipe = yield parse_odesk(odesk_source)
-    guru_stream = yield parse_guru(guru_source)
-    elance_stream = yield parse_elance(elance_source)
-    freelancer_stream = yield parse_freelancer(freelancer_source)
+    odesk_pipe = await parse_odesk(odesk_source)
+    guru_stream = await parse_guru(guru_source)
+    elance_stream = await parse_elance(elance_source)
+    freelancer_stream = await parse_freelancer(freelancer_source)
 
     others = [guru_stream, freelancer_stream, elance_stream]
-    stream = odesk_pipe.union(others=others).list
-    return_value(stream)
+    stream = odesk_pipe.union(others=others)
+    return list(stream)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 from typing import NotRequired, TypedDict
 
-from riko.types.modules import AnyModuleConf, ModuleName
+from riko.types.modules import AnyModuleRawConf, ModuleName
 
 
 class XY(TypedDict):
@@ -13,10 +13,10 @@ class LayoutItem(TypedDict):
     xy: tuple[int, int]
 
 
-class Module(TypedDict):
+class PipeModule(TypedDict):
     id: str
     type: ModuleName
-    conf: AnyModuleConf
+    conf: AnyModuleRawConf
 
 
 class TypeCount(TypedDict):
@@ -51,24 +51,27 @@ class FieldWithAttr(TypedDict):
     _count: NotRequired[str]
 
 
-class ItemAttr(TypedDict, total=False):
-    category: TypeCount
-    description: TypeCount | FieldWithAttr
-    guid: FieldWithAttr
-    link: TypeCount
-    pubDate: TypeCount
-    source: TypeCount
-    title: TypeCount
-    y_title: TypeCount  # was y:title
-    y_id: FieldWithAttr  # was y:id
-    y_published: FieldWithAttr  # was y:published
-    media_content: FieldWithAttr  # was media:content
-    media_credits: FieldWithAttr  # was media:credit
-    media_text: FieldWithAttr  # was media:text
-    media_thumbnail: FieldWithAttr  # was media:thumbnail
-    loop_itembuilder: FieldWithAttr  # was loop:itembuilder
-    newtitle: TypeCount
-    lostattribute: TypeCount
+ItemAttr = TypedDict(
+    "ItemAttr",
+    {
+        "category": TypeCount,
+        "description": TypeCount | FieldWithAttr,
+        "guid": FieldWithAttr,
+        "link": TypeCount,
+        "lostattribute": TypeCount,
+        "media:content": FieldWithAttr,
+        "media:credits": FieldWithAttr,
+        "media:text": FieldWithAttr,
+        "media:thumbnail": FieldWithAttr,
+        "newtitle": TypeCount,
+        "pubDate": TypeCount,
+        "source": TypeCount,
+        "title": TypeCount,
+        "y:id": FieldWithAttr,
+        "y:published": FieldWithAttr,
+        "y:title": TypeCount,
+    },
+)
 
 
 class TerminalData(TypedDict):
@@ -94,20 +97,18 @@ class Wire(TypedDict):
     tgt: WireEndpoint
 
 
-endpoint: WireEndpoint = {"id": "id", "moduleid": "id"}
-x: Wire = {"id": "1", "src": endpoint, "tgt": endpoint}
-y = dict(x)
-#
-#
-# def sanitize_keys(obj: Any) -> Any:
-#     """Recursively replace ':' with '_' in all dict keys."""
-#     if isinstance(obj, dict):
-#         return {k.replace(":", "_"): sanitize_keys(v) for k, v in obj.items()}
-#     elif isinstance(obj, list):
-#         return [sanitize_keys(item) for item in obj]
-#
-#     return obj
-#
-#
-# def load_pipeline(raw: dict) -> Pipeline:
-#     return cast(Pipeline, sanitize_keys(raw))
+class PipeDef(TypedDict):
+    layout: list[LayoutItem]
+    modules: list[PipeModule]
+    terminaldata: list[TerminalDataEntry]
+    # TODO: json can be either a list or object, so will need to handle both cases in
+    # the parser
+    wires: list[Wire]
+
+
+class ParsedPipeDef(TypedDict):
+    name: str
+    modules: dict[str, PipeModule]
+    embed: dict[str, PipeModule]
+    graph: dict[str, str | list[str]]
+    wires: dict[str, Wire]

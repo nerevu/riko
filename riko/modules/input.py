@@ -6,6 +6,9 @@ Use this module any time you need to obtain and parse user input to wire into
 another pipe. Supported parsers are 'text', 'int', 'float', 'bool', 'url', and
 'date'. Not loopable.
 
+http://pipes.yahoo.com/pipes/docs?doc=user_inputs#Number
+http://pipes.yahoo.com/pipes/docs?doc=user_inputs#URL
+
 Valid Date Values
 
 Obvious date formats:
@@ -50,24 +53,31 @@ Attributes:
 import pygogo as gogo
 
 from riko import Objconf
-from riko.cast import CastType, cast
-from riko.types.general import BasicArg, ComplexArg, Defaults, Extraction
+from riko.cast import CastType, SourceOpts, cast
+from riko.types.general import Defaults, Extraction, Item
+from riko.types.values import PrimitiveValue
 
 from . import processor
 
-OPTS = {"ftype": "none"}
-DEFAULTS: Defaults = {"type": "text", "field": "content", "default": "", "test": False}
+OPTS = SourceOpts
+DEFAULTS: Defaults = {
+    "type": "text",
+    "default": "",
+    "test": False,
+    "input_key": "content",
+}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> ComplexArg:
+    _: Item, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+) -> PrimitiveValue:
     """
     Obtains the user input
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
         skip (bool): Don't prompt for input
 
@@ -78,14 +88,14 @@ def parser(
         >>> from meza.fntools import Objectify
         >>>
         >>> inputs = {'age': '30'}
-        >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'field': 'age'}
+        >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'input_key': 'age'}
         >>> objconf = Objectify(conf)
         >>> parser(None, None, objconf, inputs=inputs)
         30
 
     """
     if kwargs.get("inputs"):
-        value = kwargs["inputs"].get(objconf.field, objconf.default)
+        value = kwargs["inputs"].get(objconf.input_key, objconf.default)
     elif objconf.test or skip:
         value = objconf.default
     else:
@@ -95,8 +105,8 @@ def parser(
     return cast(value, CastType(objconf.type)) if objconf.type else value
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> PrimitiveValue:
     """
     A processor module that asynchronously prompts for text and parses it
     into a variety of different types, e.g., int, bool, date, etc.
@@ -114,7 +124,7 @@ def async_pipe(*args, **kwargs):
             type (str): Expected value type. Must be one of 'text', 'int',
                 'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
 
-            field (str): Attribute to assign parsed content (default: content)
+            input_key (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values to be used in place of prompting the user e.g.
             {'name': 'value1'}
@@ -129,11 +139,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     conf = {'prompt': 'How old are you?', 'type': 'int'}
-        ...     d = async_pipe(conf=conf, inputs={'content': '30'})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(conf=conf, inputs={'content': '30'})
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -147,7 +156,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> ComplexArg:
+def pipe(*args, **kwargs) -> PrimitiveValue:
     """
     A processor module that prompts for text and parses it into a variety of
     different types, e.g., int, bool, date, etc.
@@ -158,14 +167,14 @@ def pipe(*args, **kwargs) -> ComplexArg:
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'prompt',
-            'default', 'type'.
+            'default', 'type', 'input_key'.
 
             prompt (str): User command line prompt
             default (scalar): Default value
             type (str): Expected value type. Must be one of 'text', 'int',
                 'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
 
-            field (str): Attribute to assign parsed content (default: content)
+            input_key (str): Attribute to assign parsed content (default: content)
 
         inputs (dict): values to be used in place of prompting the user e.g.
             {'name': 'value1'}
@@ -177,26 +186,21 @@ def pipe(*args, **kwargs) -> ComplexArg:
        dict: item of user input
 
     Examples:
-        >>> # int
+        >>> import datetime
+        >>> from datetime import datetime as dt, UTC
+        >>>
         >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
         >>> next(pipe(conf=conf, inputs={'content': '30'}))
         30
         >>> next(pipe(conf=conf, inputs={'content': '30'}, emit=False))
         {'content': 30}
-
-        >>> # date
-        >>> import datetime
-        >>> from datetime import datetime as dt, UTC
         >>> now = dt.now(UTC)
-        >>>
         >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
         >>> next(pipe(conf=conf, inputs={'content': '5/4/82'})).year
         1982
         >>> stream = pipe(conf={'type': 'date'}, inputs={'content': 'tomorrow'})
         >>> next(stream) > now.date()
         True
-
-        >>> # float, bool, text
         >>> matrix = [
         ...     ('float', '1', 1.0),
         ...     ('bool', 'true', True),
@@ -208,13 +212,9 @@ def pipe(*args, **kwargs) -> ComplexArg:
         1.0
         True
         'hello'
-
-        >>> # url
         >>> inputs = {'content': 'google.com'}
         >>> next(pipe(conf={'type': 'url'}, inputs=inputs))
         'http://google.com'
-
-        >>> # location
         >>> inputs = {'content': 'palo alto, ca'}
         >>> result = next(pipe(conf={'type': 'location'}, inputs=inputs))
         >>> sorted(result)[:5]

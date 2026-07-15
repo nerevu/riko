@@ -31,26 +31,28 @@ from collections.abc import Sequence
 import pygogo as gogo
 
 from riko import Objconf
+from riko.cast import BasicCastType
 from riko.dotdict import DotDict
-from riko.types.general import ParsedParam
+from riko.types.general import Defaults, Opts
+from riko.types.modules import ParsedParam
+from riko.types.values import RikoDict
 
 from . import processor
 
-OPTS = {"ftype": "none", "listize": True, "extract": "attrs"}
-DEFAULTS = {}
+OPTS: Opts = {"ftype": BasicCastType.NONE, "listize": True, "extract": "attrs"}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _, extraction: Sequence[ParsedParam], objconf: Objconf, skip=False, **kwargs
-) -> DotDict:
+    _, extraction: Sequence[ParsedParam], objconf: Objconf, **kwargs
+) -> RikoDict:
     """
     Parses the pipe content
 
     Args:
         _ (None): Ignored
         attrs (List[dict]): Attributes
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -69,11 +71,11 @@ def parser(
 
     """
     item = {a["key"]: a["value"] for a in extraction}
-    return kwargs["stream"] if skip else DotDict(item)
+    return DotDict(item).asdict()
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> RikoDict:
     """
     A source that asynchronously builds an item.
 
@@ -97,18 +99,16 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['title'])
+        >>> async def run(reactor):
         ...     attrs = [
         ...         {'key': 'title', 'value': 'the title'},
         ...         {'key': 'desc.content', 'value': 'the desc'}]
         ...
-        ...     d = async_pipe(conf={'attrs': attrs})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(conf={'attrs': attrs})
+        ...     print(next(result)['title'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
-        ...     pass
         ... except SystemExit:
         ...     pass
         ...
@@ -119,7 +119,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> RikoDict:
     """
     A source that builds an item.
 

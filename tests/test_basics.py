@@ -17,13 +17,9 @@ import pytest
 
 from riko import Context, get_path, listize
 from riko.compile import build_pipeline, parse_pipe_def
-from riko.types.general import (
-    ComplexArg,
-    PipelineDependencies,
-    StreamState,
-    SyncPipeline,
-)
-from riko.utils import extract_dependencies
+from riko.types.general import ParserOutput, PipelineDependencies, SyncPipeParser
+from riko.types.values import StreamState
+from riko.utils import extract_dependencies, truncate_content
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -33,7 +29,7 @@ class TestBasics:
 
     def _get_pipeline(
         self, pipe_name: str
-    ) -> Sequence[ComplexArg | dict[str, StreamState]]:
+    ) -> list[ParserOutput | dict[str, StreamState]]:
         try:
             module = import_module(f"tests.pypipelines.{pipe_name}")
         except ImportError as e:
@@ -47,14 +43,14 @@ class TestBasics:
             parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
             stream = build_pipeline(parsed_pipe_def, pipe_def, context=self.context)
         else:
-            pipeline: SyncPipeline = getattr(module, pipe_name)
+            pipeline: SyncPipeParser = getattr(module, pipe_name)
             stream = pipeline(context=self.context)
 
         return list(listize(stream))
 
     def _load(
         self,
-        items: Sequence[ComplexArg | dict[str, StreamState]],
+        items: Sequence[ParserOutput | dict[str, StreamState]],
         pipe_name,
         value=0,
         check=1,
@@ -81,9 +77,11 @@ class TestBasics:
         msg = f"pipeline length {actual} {value}, but expected {desired} {value}. Got "
 
         try:
-            msg += f"{len(items)} items. First item is {items[0]}"
+            first = items[0]
         except IndexError:
-            msg += f"{items}"
+            msg += f"{type(items)=}"
+        else:
+            msg += f"{len(items)} items. First item is {truncate_content(first)}"
 
         assert compared == _check, msg
 
@@ -181,7 +179,7 @@ class TestBasics:
     ###############
     # Offline Tests
     ###############
-    def test_kazeek1(self):
+    def test_kazeeki1(self):
         """Loads the kazeeki simple test pipeline."""
         pipe_name = "pipe_kazeeki1"
         items = self._get_pipeline(pipe_name)
@@ -205,12 +203,12 @@ class TestBasics:
         item = cast(dict, items[0])
 
         for k, v in example.items():
-            assert v == item.get(k), f"Expected {v} for key {k}, but got {item.get(k)}"
+            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
 
         assert item["k:content"].startswith(" With this specification sheet we")
         assert item["k:content"].endswith("for implementing a website for a german...")
 
-    def test_kazeek2(self):
+    def test_kazeeki2(self):
         """Loads the kazeeki simple test pipeline."""
         pipe_name = "pipe_kazeeki2"
         items = self._get_pipeline(pipe_name)
@@ -234,7 +232,7 @@ class TestBasics:
         item = cast(dict, items[0])
 
         for k, v in example.items():
-            assert v == item.get(k), f"Expected {v} for key {k}, but got {item.get(k)}"
+            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
 
         assert item["k:content"].startswith("<p>Hello, I need to fix an application")
         assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
@@ -248,7 +246,7 @@ class TestBasics:
         example = {
             "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
             "dc:creator": "riko",
-            # "id": 474310371,
+            "id": 2241242391,
             "k:author": "Homepage for a germansocial organization",
             "k:budget_raw": "0 - $250",
             "k:budget_raw1": "0",
@@ -260,36 +258,54 @@ class TestBasics:
             "k:budget_raw2_num": "250",
             "k:budget_raw2_sym": "$",
             "k:budget": 125.0,
-            # "k:budget_converted": 125.0,
-            # "k:budget_converted_w_sym": "$125.00",
+            "k:budget_converted": 125.0,
+            "k:budget_converted_w_sym": "$125.00",
             "k:budget_full": "$125.00",
-            # "k:budget_sym": "$",
+            "k:budget_sym": "$",
             "k:budget_w_sym": "$125.00",
             "k:client_location": "unknown",
-            "k:content": " With this specification sheet we want to give you a request for implementing a website for a german...",
+            "k:content": (
+                " With this specification sheet we want to give you a request for "
+                "implementing a website for a german..."
+            ),
             "k:cur_code": "USD",
             "k:due": "unknown",
             "k:job_type": "fixed",
             "k:job_type_code": "1",
             "k:marketplace": "guru.com",
-            "k:posted": "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)",
-            # "k:rate": 1.0,
+            "k:posted": (
+                "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, "
+                "tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)"
+            ),
+            "k:rate": 1.0,
             "k:submissions": "unknown",
-            # "k:tags": [{"content": "IT"}, {"content": "Software"}, {"content": "Web"}],
+            "k:tags": [{"content": "IT"}, {"content": "Software"}, {"content": "Web"}],
             "k:work_location": " Worldwide",
-            "link": "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595",
+            "link": (
+                "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/"
+                "1099595"
+            ),
             "links": [{}],
-            "pubDate": "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)",
+            "pubDate": (
+                "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, "
+                "tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)"
+            ),
             "title": "Homepage for a germansocial organization",
             "updated": "Tue, 06 Jan 2015 17:13:47 GMT",
-            "updated_parsed": "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)",
-            "y:id": "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/1099595",
+            "updated_parsed": (
+                "time.struct_time(tm_year=2015, tm_mon=1, tm_mday=6, tm_hour=17, "
+                "tm_min=13, tm_sec=47, tm_wday=1, tm_yday=6, tm_isdst=0)"
+            ),
+            "y:id": (
+                "http://www.guru.com/jobs/homepage-for-a-germansocial-organization/"
+                "1099595"
+            ),
         }
 
         item = cast(dict, items[0])
 
         for k, v in example.items():
-            assert v == item.get(k), f"Expected {v} for key {k}, but got {item.get(k)}"
+            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
 
         assert item["summary"].startswith("<span><b>Description:</b> With this spe")
         assert item["summary"].endswith("ancer Location:</b> Worldwide<br></span>")
@@ -534,16 +550,11 @@ class TestBasics:
         self.context.describe_dependencies = True
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 8, 0)
+        self._load(items, pipe_name, 3, 0)
         assert items == [
-            "dateinput",
             "input",
-            "locationinput",
-            "numberinput",
             "output",
-            "privateinput",
             "rssitembuilder",
-            "urlinput",
         ]
 
     def test_describe_both(self):
@@ -570,14 +581,9 @@ class TestBasics:
         ]
 
         dependencies = [
-            "dateinput",
             "input",
-            "locationinput",
-            "numberinput",
             "output",
-            "privateinput",
             "rssitembuilder",
-            "urlinput",
         ]
 
         item = cast(dict, items[0])
@@ -617,14 +623,16 @@ class TestBasics:
         pipe_name = "pipe_9420a757a49ddf11d8b98349abb5bcf4"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 8, 0)
-        assert items[2] == "$3.00</td>"
+        item = cast(dict, items[2])
+        assert item["content"] == "$3.00</td>"
 
     def test_fetchpage_loop(self):
         """Loads a pipeline containing a fetchpage module within a loop"""
         pipe_name = "pipe_188eca77fd28c96c559f71f5729d91ec"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 8, 0)
-        assert items[2] == "$3.00</td>"
+        item = cast(dict, items[2])
+        assert item["content"] == "$3.00</td>"
 
     def test_split(self):
         """Loads an example pipeline containing a split module"""

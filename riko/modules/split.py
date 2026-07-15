@@ -26,16 +26,17 @@ from copy import deepcopy
 
 import pygogo as gogo
 
-from riko.types.general import Items
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Opts, Stream
 
-from . import operator
+from . import splitter
 
-OPTS = {"extract": "splits", "ptype": "int", "objectify": False}
-DEFAULTS = {"splits": 2}
+OPTS: Opts = {"extract": "splits", "ptype": BasicCastType.INT, "objectify": False}
+DEFAULTS: Defaults = {"splits": 2}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream: Items, splits: int, tuples, **kwargs) -> Iterator[Items]:
+def parser(stream: Stream, splits: int, tuples, **kwargs) -> Iterator[Stream]:
     """
     Parses the pipe content
 
@@ -73,8 +74,8 @@ def parser(stream: Items, splits: int, tuples, **kwargs) -> Iterator[Items]:
         yield map(deepcopy, source)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@splitter(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Iterator[Stream]:
     """
     An operator that asynchronously and eagerly splits a stream into identical
     copies. Note that this pipe is not lazy.
@@ -95,10 +96,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(next(x)))
-        ...     d = async_pipe({'x': x} for x in range(5))
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe({'x': x} for x in range(5))
+        ...     print(next(next(result)))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -111,8 +111,8 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[Items]:
+@splitter(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs) -> Iterator[Stream]:
     """
     An operator that eagerly splits a stream into identical copies.
     Note that this pipe is not lazy.

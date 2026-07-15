@@ -36,29 +36,30 @@ from collections.abc import Iterator
 import pygogo as gogo
 
 from riko import Objconf, autorss
-from riko.bado import coroutine, io, return_value
+from riko.bado import io
+from riko.cast import SourceOpts
 from riko.parsers import parse_rss
-from riko.types.general import BasicMapping, Extraction
-from riko.utils import gen_entries
+from riko.types.general import Defaults, Extraction, Item
+from riko.types.values import RSSEntry
+from riko.utils import augment_entries
 
 from . import processor
 
-OPTS = {"ftype": "none"}
-DEFAULTS = {}
+OPTS = SourceOpts
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[RSSEntry]:
     """
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -73,42 +74,36 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['title'])
+        >>> async def run(reactor):
         ...     objconf = Objectify({'url': get_path('bbc.html')})
-        ...     d = async_parser(None, None, objconf, stream={})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(None, None, objconf)
+        ...     print(next(result)['title'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
-        Using NFC tags in the car
+        EU sets out 'phased' Brexit strategy
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        rss = yield autorss.async_get_rss(objconf.url)  # pyright: ignore[reportCallIssue]
-        link = next(rss)["link"]
-        content = yield io.async_url_read(link)  # pyright: ignore[reportCallIssue]
-        parsed = parse_rss(content)
-        stream = gen_entries(parsed["entries"]) if parsed else iter([])
-
-    return_value(stream)
+    rss = await autorss.async_get_rss(objconf.url)
+    link = str(next(rss)["link"])
+    content = await io.async_url_read(link)
+    entries = parse_rss(content)
+    return augment_entries(entries)
 
 
 def parser(
-    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> Iterator[BasicMapping]:
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[RSSEntry]:
     """
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -122,24 +117,19 @@ def parser(
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'url': get_path('bbc.html')})
-        >>> result = parser(None, None, objconf, stream={})
+        >>> result = parser(None, None, objconf)
         >>> next(result)['title']
         "EU sets out 'phased' Brexit strategy"
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        rss = autorss.get_rss(objconf.url)
-        link = next(rss)["link"]
-        parsed = parse_rss(link)
-        stream = gen_entries(parsed["entries"]) if parsed else iter([])
-
-    return stream
+    rss = autorss.get_rss(objconf.url)
+    link = str(next(rss)["link"])
+    entries = parse_rss(link)
+    return augment_entries(entries)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
     """
     A source that fetches and parses the first feed found on a site.
 
@@ -160,25 +150,23 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['title'])
-        ...     d = async_pipe(conf={'url': get_path('bbc.html')})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe(conf={'url': get_path('bbc.html')})
+        ...     print(next(result)['title'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
-        ...     pass
         ... except SystemExit:
         ...     pass
         ...
-        Using NFC tags in the car
+        EU sets out 'phased' Brexit strategy
 
     """
-    return async_parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Iterator[RSSEntry]:
     """
     A source that fetches and parses the first feed found on a site.
 

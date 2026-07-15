@@ -8,10 +8,8 @@ Examples:
         >>> from riko.modules.count import pipe
         >>>
         >>> stream = [{'x': x} for x in range(5)]
-        >>> next(pipe(stream))
+        >>> next(pipe(stream))['count']
         5
-        >>> next(pipe(stream, emit=False))
-        {'count': 5}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -19,20 +17,23 @@ Attributes:
 
 """
 
-import itertools as it
 from collections.abc import Iterator
-from operator import itemgetter
 
 import pygogo as gogo
 
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.utils import group_by
+
 from . import operator
 
-OPTS = {"extract": "count_key"}
-DEFAULTS = {"count_key": None}
+OPTS: Opts = {"extract": "count_key"}
+DEFAULTS: Defaults = {"count_key": None}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, count_key: str, tuples, **kwargs) -> int | Iterator[dict[str, int]]:
+def parser(
+    stream: Stream, count_key: str, tuples: PipeTuples, **kwargs
+) -> int | Iterator[dict[str, int]]:
     """
     Parses the pipe content
 
@@ -68,24 +69,22 @@ def parser(stream, count_key: str, tuples, **kwargs) -> int | Iterator[dict[str,
         >>> tuples = zip(stream, repeat(conf['count_key']))
         >>> counted = parser(stream, conf['count_key'], tuples, **kwargs)
         >>> next(counted)
-        {'one': 1}
-        >>> next(counted)
         {'two': 2}
+        >>> next(counted)
+        {'one': 1}
 
     """
     if count_key:
-        keyfunc = itemgetter(count_key)
-        sorted_stream = sorted(stream, key=keyfunc)
-        grouped = it.groupby(sorted_stream, keyfunc)
-        counted = ({key: len(list(group))} for key, group in grouped)
+        grouped = group_by(stream, count_key)
+        counted = ({key: len(group)} for key, group in grouped)
     else:
         counted = len(list(stream))
 
     return counted
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
     """
     An operator that asynchronously and eagerly counts the number of items
     in a stream. Note that this pipe is not lazy.
@@ -113,18 +112,17 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     items = ({'x': x} for x in range(5))
-        ...     d = async_pipe(items)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
         ...
-        5
+        {'count': 5}
 
     """
     return parser(*args, **kwargs)
@@ -156,18 +154,16 @@ def pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
 
     Examples:
         >>> stream = [{'x': x} for x in range(5)]
-        >>> next(pipe(stream))
+        >>> next(pipe(stream))['count']
         5
-        >>> next(pipe(stream, emit=False))
-        {'count': 5}
         >>> next(pipe(stream, emit=False, assign='content'))
         {'content': 5}
         >>> stream = [{'word': 'two'}, {'word': 'one'}, {'word': 'two'}]
         >>> counted = pipe(stream, conf={'count_key': 'word'})
         >>> next(counted)
-        {'one': 1}
-        >>> next(counted)
         {'two': 2}
+        >>> next(counted)
+        {'one': 1}
 
     """
     return parser(*args, **kwargs)

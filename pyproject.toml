@@ -1,5 +1,5 @@
 [project]
-version = "0.68.1"
+version = "0.69.0"
 name = "riko"
 authors = [
     {name = "Reuben Cummings", email = "reubano@gmail.com"}
@@ -28,16 +28,16 @@ classifiers=[
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
 ]
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.12"
 dependencies = [
     "babel>=2.8.0,<3.0.0",
     "chardet>=3.0.4,<8.0.0",
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
-    "ijson>=2.6.1,<3.0.0",
     "meza>=0.42.5",
     "mezmorize>=0.27.0",
     "pygogo>=0.12.0,<2.0.0",
+    "pytest-asyncio>=1.4.0",
     "python-dateutil>=2.8.1,<3.0.0",
     "pytz>=2019.3",
     "requests>=2.22.0,<3.0.0",
@@ -45,13 +45,18 @@ dependencies = [
 
 [project.optional-dependencies]
 perf = [
+    "fastfeedparser>=0.6.0",
+    "ijson>=3.4.0,<4.0.0",
     "lxml>=4.5.0,<7.0.0",
-    "speedparser3>=0.3.1",
 ]
 
 twisted = [
-    "treq>=18.6.0,<26.0.0",
-    "twisted>=19.10.0,<22.1.0",
+    "treq>=26.0.0,<27.0.0",
+    "twisted>=26.0.0,<27.0.0",
+]
+
+finance = [
+    "csv2ofx>=0.34.2",
 ]
 
 [dependency-groups]
@@ -108,6 +113,7 @@ ignore = [
     "D107",  # undocumented-public-init
     "D401",  # non-imperative-mood
     "D417",  # undocumented-param
+    "D104",  #undocumented-public-package
 
     # misc
     "T201",  # print
@@ -116,12 +122,21 @@ ignore = [
     # stylistic
     "E731",  # do not assign a lambda expression, use a def
     "E501",  # line too long
+    "D301",  #escape-sequence-in-docstring
+
+    # security
+    "S404",
+    "S602",
+    "S603",
 
      # this is incompatible with D211 no-blank-line-before-class
     "D203",  # incorrect-blank-line-before-class
 
      # this is incompatible with D213 multi-line-summary-second-line
     "D212",  # multi-line-summary-first-line
+
+     # this is incompatible with flake8 E302 Expected 2 blank lines...
+    "RUF100",  # unused noqa directive
 ]
 
 exclude = [
@@ -137,7 +152,7 @@ exclude = [
 preview = true
 
 [tool.ruff.lint.mccabe]
-max-complexity = 10
+max-complexity = 11
 
 [tool.ruff.lint.isort]
 known-first-party = ["riko"]
@@ -198,6 +213,9 @@ examples = ["examples/*"]
 [tool.uv.build-backend]
 module-name = "riko"
 module-root = ""
+
+[tool.uv.sources]
+meza = { git = "https://github.com/reubano/meza.git", rev = "aa584e56edcd20e038b58379ab833e796dcf92df" }
 
 [build-system]
 requires = ["uv_build>=0.11.3,<0.12.0"]

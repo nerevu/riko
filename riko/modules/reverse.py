@@ -18,14 +18,17 @@ Attributes:
 
 import pygogo as gogo
 
+from riko import Objconf
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
+
 from . import operator
 
-OPTS = {}
-DEFAULTS = {}
+OPTS = Opts()
+DEFAULTS = Defaults({})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream, objconf, tuples, **kwargs):
+def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
     """
     Parses the pipe content
 
@@ -59,8 +62,8 @@ def parser(stream, objconf, tuples, **kwargs):
     return reversed(list(stream))
 
 
-@operator(isasync=True, **OPTS)
-def async_pipe(*args, **kwargs):
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     An operator that asynchronously reverses the order of source items in
     a stream. Note that this pipe is not lazy.
@@ -77,11 +80,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     items = ({'x': x} for x in range(5))
-        ...     d = async_pipe(items)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(items)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -94,8 +96,8 @@ def async_pipe(*args, **kwargs):
     return parser(*args, **kwargs)
 
 
-@operator(**OPTS)
-def pipe(*args, **kwargs):
+@operator(DEFAULTS, **OPTS)
+def pipe(*args, **kwargs) -> Stream:
     """
     An operator that eagerly reverses the order of source items in a stream.
 

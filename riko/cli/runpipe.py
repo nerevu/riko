@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
 from importlib import import_module
@@ -13,9 +11,13 @@ io_error = FileNotFoundError
 
 def load_file(name, src):
     location = f"examples/{src}.py"
-    spec = spec_from_file_location(name, location)
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
+
+    if spec := spec_from_file_location(name, location):
+        module = module_from_spec(spec)
+        spec.loader.exec_module(module)
+    else:
+        module = None
+
     return module
 
 

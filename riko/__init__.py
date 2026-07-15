@@ -33,30 +33,18 @@ Examples:
 
 """
 
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from importlib.metadata import metadata, version
 from os import path as p
 from time import struct_time
-from typing import (
-    Any,
-    Literal,
-    TypeVar,
-    overload,
-)
-from typing import cast as cast_type
+from typing import TYPE_CHECKING, Literal, TypeVar, overload
 
-from meza import compat
 from meza.fntools import Objectify as _Objectify
+from requests.structures import CaseInsensitiveDict
 
-from riko.types.general import (
-    BasicArg,
-    ComplexArg,
-    ComplexMapping,
-    IntermediateValue,
-    ObjconfParam,
-    ObjconfRule,
-    SyncItemFunc,
-)
+from riko.types.general import ItemOrValue, SyncArgFunc
+from riko.types.modules import AnyConfRule, ObjconfParam
+from riko.types.values import PrimitiveValue, PrimitiveValueType
 
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
 meta = metadata("riko")
@@ -84,6 +72,7 @@ __copyright__ = "Copyright 2015 Reuben Cummings"
 
 PARENT_DIR = p.abspath(p.dirname(__file__))
 ENCODING = "utf-8"
+VT = TypeVar("VT")
 
 
 def get_path(name: str):
@@ -95,7 +84,7 @@ def get_path(name: str):
     return url
 
 
-def get_abspath(url: str, offline=False):
+def get_abspath(url: str, offline=False) -> str:
     if url.startswith(("http", "file:///")):
         pass
     elif url.startswith("file://"):
@@ -108,7 +97,7 @@ def get_abspath(url: str, offline=False):
     else:
         url = f"http://{url}" if url and "://" not in url else url
 
-    return compat.decode(url)
+    return url
 
 
 def replacer(content: str, old: str, new="_") -> str:
@@ -150,13 +139,13 @@ class Context:
         return f"Context({content})"
 
 
-class Objectify(_Objectify):
+class Objectify(_Objectify, Mapping[str, VT]):
     """
     Creates an object with dynamically set attributes. Useful
     for accessing the kwargs of a function as attributes.
     """
 
-    def __init__(self, data: ComplexMapping, *args, **kwargs):
+    def __init__(self, data: Mapping[str, VT], *args, **kwargs):
         """
         Objectify constructor
 
@@ -177,30 +166,27 @@ class Objectify(_Objectify):
         _data = {k.lower(): v for k, v in data.items()}
         super().__init__(_data, *args, **kwargs)
 
-    def __getattribute__(self, name: str) -> BasicArg:
-        return super().__getattribute__(name)
+    def __len__(self) -> int:
+        return len(self.data)
 
-    def __getitem__(self, name: str) -> BasicArg:
-        item = super().__getitem__(name)
-        return cast_type(BasicArg, item)
+    if TYPE_CHECKING:
 
-    def __iter__(self) -> Iterator[str]:
-        return super().__iter__()
-
-    def iteritems(self) -> Iterator[tuple[str, BasicArg]]:
-        return super().iteritems()
+        def __getattribute__(self, *_) -> VT: ...  # noqa: E704
+        def __getitem__(self, *_) -> VT: ...  # noqa: E704
+        def __iter__(self) -> Iterator[str]: ...  # noqa: E704
+        def iteritems(self) -> Iterator[tuple[str, VT]]: ...  # noqa: E704
 
 
 class Objconf(Objectify):
     assign: str
-    attrs: Sequence[str]
+    attrs: list[str]
     base: str
-    col_names: Sequence[str]
+    col_names: list[str]
     combine: Literal["and", "or"]
-    count: str
+    count: str | int
     currency: str
     debug: bool
-    default: BasicArg
+    default: PrimitiveValue
     delay: int
     delimiter: str
     detag: bool
@@ -216,24 +202,24 @@ class Objconf(Objectify):
     limit: int
     lower: bool
     max_len: int
-    max_wait: int
+    max_wait: float
     multi: bool
     name: str
     other: str
     op: str
     other_join_key: str
-    param: ObjconfParam | Sequence[ObjconfParam]
+    param: ObjconfParam | list[ObjconfParam]
     parse_key: str
     part: str
     path: str | list[str]
     permit: bool
     precision: int
     prompt: str
-    rule: ObjconfRule | Sequence[ObjconfRule]
+    rule: AnyConfRule | list[AnyConfRule]
     skip_rows: int
     sort: int
-    start: int
-    stop: str
+    start: str | int
+    stop: str | int
     strict: bool
     stringify: bool
     sum_key: str
@@ -241,16 +227,32 @@ class Objconf(Objectify):
     token: str
     token_key: str
     type: str
-    unique_key: str
+    uniq_key: str
     url: str
-    wait: int
+    wait: float
     xpath: str
 
 
-def objectify(
-    data: ComplexArg, func: SyncItemFunc | None = None, **defaults
-) -> ComplexArg:
-    if isinstance(data, Mapping):
+@overload
+def objectify(data: Mapping) -> Objectify: ...  # noqa: E704
+@overload  # noqa: E302
+def objectify[T](data: T) -> T: ...  # noqa: E704
+@overload  # noqa: E302
+def objectify(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    data: Mapping, func: SyncArgFunc
+) -> Objectify: ...
+@overload  # noqa: E302
+def objectify[T](  # noqa: E704
+    data: Sequence[T], func: SyncArgFunc
+) -> list[ItemOrValue | Objectify]: ...
+@overload  # noqa: E302
+def objectify(  # noqa: E704
+    data: object, func: SyncArgFunc
+) -> ItemOrValue: ...
+def objectify[T](  # noqa: E302
+    data: T, func: SyncArgFunc | None = None, **defaults
+) -> T | ItemOrValue | Objectify | list[T] | list[ItemOrValue | Objectify]:
+    if isinstance(data, (dict, CaseInsensitiveDict, Mapping)):
         objectified = Objectify(data, func=func, **defaults)
     elif func:
         if isinstance(data, (str, struct_time)):
@@ -266,29 +268,27 @@ def objectify(
 
 
 # TODO: move back to meza
-K = TypeVar("K")
-T = TypeVar("T")
-
-
 @overload
-def listize(value: Mapping[K, T]) -> list[Mapping[K, T]]: ...
+def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
+@overload  # noqa: E302
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: dict[str, T],
+) -> list[dict[str, T]]: ...
+@overload  # noqa: E302
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: CaseInsensitiveDict[T],
+) -> list[CaseInsensitiveDict[T]]: ...
 @overload
-def listize(value: Callable[..., T]) -> list[Callable[..., T]]: ...
+def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...  # noqa: E704
+@overload  # noqa: E302
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: Sequence[T],
+) -> Sequence[T]: ...
 @overload
-def listize(value: IntermediateValue) -> list[IntermediateValue]: ...
+def listize[T](value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
 @overload
-def listize(value: list[T]) -> list[T]: ...
-@overload
-def listize(value: Sequence[T]) -> Sequence[T]: ...
-@overload
-def listize(value: Generator[T, None, None]) -> Generator[T, None, None]: ...
-@overload
-def listize(value: Iterator[T]) -> Iterator[T]: ...
-@overload
-def listize(value: Iterable[T]) -> Iterable[T]: ...
-def listize(
-    value: Any,
-) -> list[Mapping | IntermediateValue | Callable] | Iterable | Sequence:
+def listize[T](value: T) -> list[T]: ...  # noqa: E704
+def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     """
     Create a listlike object from any value
 
@@ -311,7 +311,7 @@ def listize(
     """
     if not value:
         result = []
-    elif isinstance(value, (Mapping, IntermediateValue, Callable)):
+    elif isinstance(value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)):
         result = [value]
     elif isinstance(value, (Iterable, Sequence)):
         result = value

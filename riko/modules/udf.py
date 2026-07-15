@@ -14,28 +14,28 @@ Examples:
 
 """
 
+from collections.abc import Callable
+from typing import cast
+
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import BasicArg, ComplexArg, Extraction
+from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
 
-OPTS = {"listize": True, "emit": True}
-DEFAULTS = {}
+OPTS: Opts = {"listize": True, "emit": True}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(
-    item: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> ComplexArg:
+def parser(item: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Item:
     """
     Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -54,11 +54,13 @@ def parser(
         {'y': 3}
 
     """
-    return kwargs["stream"] if skip else kwargs["func"](item)
+    func = cast(Callable[[Item], Item], kwargs["func"])
+    return func(item)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+# TODO: add support for async functions
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Item:
     """
     A processor that asynchronously performs an arbitrary (user-defined)
     function on an item.
@@ -77,11 +79,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     func = lambda item: {'y': item['x'] + 3}
-        ...     d = async_pipe({'x': 0}, func=func)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe({'x': 0}, func=func)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -95,7 +96,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Item:
     """
     A processor that performs an arbitrary (user-defined) function
     on an item.

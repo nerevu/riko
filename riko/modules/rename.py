@@ -35,35 +35,34 @@ import pygogo as gogo
 from meza.fntools import remove_keys
 
 from riko import Objconf
-from riko.bado import coroutine, return_value
-from riko.bado import itertools as ait
+from riko.bado.itertools import coop_reduce
 from riko.dotdict import DotDict
-from riko.types.general import BasicMapping, ItemArg, ObjconfRule
+from riko.types.general import Defaults, Item, Opts
+from riko.types.modules import RenameConfRule
 
 from . import processor
 
-OPTS = {"extract": "rule", "listize": True, "emit": True}
-DEFAULTS = {}
+OPTS: Opts = {"extract": "rule", "listize": True, "emit": True}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def reducer(item: BasicMapping | DotDict, rule: ObjconfRule) -> DotDict:
+def reducer(item: Mapping, rule: RenameConfRule) -> DotDict:
+    reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
     new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
-    old_dict = item if rule.copy else remove_keys(item, rule.field)
-    return DotDict({**old_dict, **new_dict})
+    reduced.update(new_dict)
+    return reduced
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    item: ItemArg, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    item: Item, rules: Sequence[RenameConfRule], objconf: Objconf, **kwargs
+) -> DotDict | Item:
     """
     Asynchronously parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
         rules (List[obj]): the parsed rules (Objectify instances).
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -78,12 +77,11 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(x)
+        >>> async def run(reactor):
         ...     item = DotDict({'content': 'hello world'})
         ...     rule = {'field': 'content', 'newval': 'greeting'}
-        ...     d = async_parser(item, [Objectify(rule)], None, stream=item)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(item, [Objectify(rule)], None, stream=item)
+        ...     print(result)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -93,24 +91,18 @@ def async_parser(
         {'greeting': 'hello world'}
 
     """
-    if skip:
-        item = kwargs["stream"]
-    elif isinstance(item, Mapping):
-        item = yield ait.coop_reduce(reducer, rules, item)  # pyright: ignore[reportCallIssue]
-
-    return_value(item)
+    return await coop_reduce(reducer, rules, item)
 
 
 def parser(
-    item: ItemArg, rules: Sequence[ObjconfRule], objconf: Objconf, skip=False, **kwargs
-) -> ItemArg:
+    item: Item, rules: Sequence[RenameConfRule], objconf: Objconf, **kwargs
+) -> DotDict | Item:
     """
     Parsers the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
         rules (List[obj]): the parsed rules (Objectify instances).
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -126,24 +118,15 @@ def parser(
         >>> item = DotDict({'content': 'hello world'})
         >>> rule = {'field': 'content', 'newval': 'greeting'}
         >>> args = [item, [Objectify(rule)], None]
-        >>> parser(*args, skip=False, stream=item)
+        >>> parser(*args, stream=item)
         {'greeting': 'hello world'}
 
     """
-    if skip:
-        item = kwargs["stream"]
-    elif isinstance(item, Mapping):
-        item = reduce(reducer, rules, item)
-    else:
-        msg = f"{item=} is a {type(item)=}, not a mapping, skipping processing."
-        logger.warning(msg)
-        item = kwargs["stream"]
-
-    return item
+    return reduce(reducer, rules, item)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> DotDict | Item:
     """
     A processor module that asynchronously renames or copies fields in an
     item.
@@ -172,11 +155,10 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['greeting'])
+        >>> async def run(reactor):
         ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
-        ...     d = async_pipe({'content': 'hello world'}, conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
+        ...     print(next(result)['greeting'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -186,11 +168,11 @@ def async_pipe(*args, **kwargs):
         hello world
 
     """
-    return async_parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> DotDict | Item:
     """
     A processor that renames or copies fields in an item.
 

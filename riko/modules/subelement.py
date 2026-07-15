@@ -51,31 +51,26 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
-
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import BasicArg, BasicMapping, Extraction
+from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 from riko.utils import gen_items
 
 from . import processor
 
-OPTS = {"emit": True}
-DEFAULTS = {"token_key": "content"}
+OPTS: Opts = {"emit": True}
+DEFAULTS: Defaults = {"token_key": "content"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(
-    item: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> Iterator[BasicArg | BasicMapping | None]:
+def parser(item: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 
     Args:
         item (obj): The entry to process (a DotDict instance)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
 
     Returns:
         Iter[dict]: The stream of items
@@ -86,31 +81,26 @@ def parser(
         >>>
         >>> conf = {'path': 'stanzas.verses', 'token_key': 'content'}
         >>> objconf = Objectify(conf)
-        >>> args = [None, objconf, False]
         >>>
         >>> sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
-        >>> next(parser(DotDict(sonnet), *args))
+        >>> next(parser(DotDict(sonnet), None, objconf))
         {'content': 'verse1'}
         >>> sonnet = {'stanzas': {'verses': ['verse1', 'verse2']}}
-        >>> next(parser(DotDict(sonnet), *args))
+        >>> next(parser(DotDict(sonnet), None, objconf))
         {'content': 'verse1'}
         >>> sonnet = {'stanzas': {'verses': 'verse1'}}
-        >>> next(parser(DotDict(sonnet), *args))
+        >>> next(parser(DotDict(sonnet), None, objconf))
         {'content': 'verse1'}
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
-        element = item.get(path, **kwargs)
-        stream = gen_items(element, objconf.token_key)
-
+    path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
+    element = item.get(path, **kwargs)
+    stream = gen_items(element, objconf.token_key)
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> Stream:
     """
     A processor that asynchronously extracts sub-elements from an item.
 
@@ -135,12 +125,11 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
         ...     conf = {'path': 'stanzas.verses'}
-        ...     d = async_pipe(sonnet, conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(sonnet, conf=conf)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -154,7 +143,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     A processor that extracts sub-elements from an item.
 

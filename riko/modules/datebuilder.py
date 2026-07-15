@@ -16,39 +16,42 @@ Attributes:
 
 """
 
+from datetime import UTC, timedelta
 from datetime import datetime as dt
-from datetime import timedelta
+from time import struct_time
 
 import pygogo as gogo
 
 from riko import Objconf
-from riko.dates import parse_date
-from riko.types.general import Extraction
+from riko.cast import BasicCastType
+from riko.dates import NOW, TODAY, parse_date_string
+from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
-# TODO: make these timezone aware and add more options (e.g. 'next week', 'last month',
+# TODO: Make timezone settable and add more options (e.g. 'next week', 'last month',
 # etc.)
 SWITCH = {
-    "today": dt.today(),
-    "tomorrow": dt.today() + timedelta(days=1),
-    "yesterday": dt.today() + timedelta(days=-1),
-    "now": dt.now(),
+    "today": TODAY,
+    "tomorrow": TODAY + timedelta(days=1),
+    "yesterday": TODAY + timedelta(days=-1),
+    "now": NOW,
 }
 
-OPTS = {"ptype": "none", "field": "content"}
-DEFAULTS = {}
+OPTS: Opts = {"ptype": BasicCastType.NONE, "field": "content"}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs):
+def parser(
+    text: str, extraction: Extraction, objconf: Objconf, **kwargs
+) -> struct_time:
     """
     Parsers the pipe content
 
     Args:
         text (str): The text to convert
         _ (None): Ignored.
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -65,31 +68,29 @@ def parser(text: str, extraction: Extraction, objconf: Objconf, skip=False, **kw
         2014
 
     """
-    if skip:
-        stream = kwargs["stream"]
+    today = dt.now(UTC).date()
+
+    if text.endswith((" day", " days")):
+        count = int(text.split(" ")[0])
+        new_date = today + timedelta(days=count)
+    elif text.endswith((" year", " years")):
+        count = int(text.split(" ")[0])
+        new_date = today.replace(year=today.year + count)
     else:
-        if text.endswith((" day", " days")):
-            count = int(text.split(" ")[0])
-            new_date = dt.today() + timedelta(days=count)
-        elif text.endswith((" year", " years")):
-            count = int(text.split(" ")[0])
-            new_date = dt.today().replace(year=dt.today().year + count)
-        else:
-            new_date = SWITCH.get(text)
+        new_date = SWITCH.get(text)
 
-        if not new_date:
-            new_date = parse_date(text)
+    if not new_date:
+        new_date = parse_date_string(text)
 
-        if not new_date:
-            raise Exception(f"Unrecognized date string: {text}")
+    if not new_date:
+        raise ValueError(f"Unrecognized date string: {text}")
 
-        stream = new_date.timetuple()
-
+    stream = new_date.timetuple()
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> struct_time:
     """
     A processor module that asynchronously converts a text string into a datetime.
 
@@ -108,10 +109,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['datebuilder'].tm_year)
-        ...     d = async_pipe({'content': '12/2/2014'})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe({'content': '12/2/2014'})
+        ...     print(next(result)['datebuilder'].tm_year)
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -125,7 +125,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> struct_time:
     """
     A processor that converts a text string into a datetime.
 

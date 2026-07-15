@@ -188,13 +188,14 @@ dictionaries, aka ``items``.
 
 .. code-block:: python
 
-    >>> from riko.modules import fetch, fetchsitefeed
+    >>> from riko.modules.fetch import pipe as fetch
+    >>> from riko.modules.fetchsitefeed import pipe as fetchsitefeed
     >>>
     >>> ### Fetch an RSS feed ###
-    >>> stream = fetch.pipe(conf={'url': 'https://news.ycombinator.com/rss'})
+    >>> stream = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
     >>>
     >>> ### Fetch the first RSS feed found ###
-    >>> stream = fetchsitefeed.pipe(conf={'url': 'http://arstechnica.com/rss-feeds/'})
+    >>> stream = fetchsitefeed(conf={'url': 'http://arstechnica.com/rss-feeds/'})
     >>>
     >>> ### View the fetched RSS feed(s) ###
     >>> #
@@ -302,7 +303,7 @@ An example using ``riko``'s asynchronous API.
 
 .. code-block:: python
 
-    >>> from riko.bado import coroutine, react
+    >>> from riko.bado import react
     >>> from riko.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
@@ -321,9 +322,8 @@ An example using ``riko``'s asynchronous API.
     >>> #
     >>> # Note: no point in sorting after the filter since async fetching doesn't guarantee
     >>> # order
-    >>> @coroutine
     ... def run(reactor):
-    ...     stream = yield (
+    ...     stream = await (
     ...         AsyncPipe('fetch', conf=fetch_conf, connections=4)  # 1
     ...             .filter(conf={'rule': filter_rule})             # 2
     ...             .xpathfetchpage(conf=xpath_conf))               # 3                                        # 4
@@ -496,7 +496,7 @@ parallelization.
     ...     {'key': 'title', 'value': 'riko pt. 1'},
     ...     {'key': 'content', 'value': "Let's talk about riko!"}]
     >>> flow = SyncPipe('itembuilder', conf={'attrs': attrs}).hash()
-    >>> flow.list[0]
+    >>> list(flow)[0]
     {'title': 'riko pt. 1',
      'content': "Let's talk about riko!",
      'hash': 1346301218}

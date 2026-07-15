@@ -7,6 +7,12 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.urlbuilder import pipe as urlbuilder
+from riko.types.modules import (
+    FetchDataRawConf,
+    LoopRawConf,
+    RenameRawConf,
+    UrlBuilderRawConf,
+)
 
 
 def pipe_125e9fe8bb5f84526d21bebfec3ad116(context=None, conf=None):
@@ -54,31 +60,35 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(context=None, conf=None):
         sw_467,
         context=context,
         embed=urlbuilder,
-        conf={
-            "count": {"type": "text", "value": "all"},
-            "embed": {
-                "type": "module",
-                "value": {
-                    "type": "urlbuilder",
-                    "id": "sw-72",
-                    "assign": "api",
-                    "emit": False,
-                    "conf": {
-                        "BASE": {
-                            "type": "text",
-                            "value": "api.github.com_search_users",
-                        },
-                        "PARAM": [
+        conf=LoopRawConf(
+            {
+                "count": {"type": "text", "value": "all"},
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "urlbuilder",
+                        "id": "sw-72",
+                        "assign": {"type": "text", "value": "api"},
+                        "emit": {"type": "bool", "value": False},
+                        "conf": UrlBuilderRawConf(
                             {
-                                "value": {"type": "text", "subkey": "title"},
-                                "key": {"type": "text", "value": "q"},
+                                "base": {
+                                    "type": "text",
+                                    "value": "api.github.com_search_users",
+                                },
+                                "param": [
+                                    {
+                                        "value": {"type": "text", "subkey": "title"},
+                                        "key": {"type": "text", "value": "q"},
+                                    }
+                                ],
+                                "ext": {"type": "text", "value": "json"},
                             }
-                        ],
-                        "ext": "json",
+                        ),
                     },
                 },
-            },
-        },
+            }
+        ),
     )
 
     sw_142 = loop(
@@ -87,33 +97,39 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(context=None, conf=None):
         embed=fetchdata,
         assign="info",
         emit=False,
-        conf={
-            "count": {"type": "text", "value": "first"},
-            "embed": {
-                "type": "module",
-                "value": {
-                    "type": "fetchdata",
-                    "id": "sw-150",
-                    "conf": {
-                        "URL": {"type": "url", "subkey": "api"},
-                        "path": {"type": "text", "value": "items"},
+        conf=LoopRawConf(
+            {
+                "count": {"type": "text", "value": "first"},
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "fetchdata",
+                        "id": "sw-150",
+                        "conf": FetchDataRawConf(
+                            {
+                                "url": {"type": "url", "subkey": "api"},
+                                "path": {"type": "text", "value": "items"},
+                            }
+                        ),
                     },
                 },
-            },
-        },
+            }
+        ),
     )
 
     sw_467 = rename(
         next(sw_142),
-        conf={
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "info.user_view_type"},
-                    "copy": {"type": "bool", "value": "true"},
-                    "newval": {"type": "text", "value": "description"},
-                }
-            ]
-        },
+        conf=RenameRawConf(
+            {
+                "rule": [
+                    {
+                        "field": {"type": "text", "value": "info.user_view_type"},
+                        "copy": {"type": "bool", "value": "true"},
+                        "newval": {"type": "text", "value": "description"},
+                    }
+                ]
+            }
+        ),
         context=context,
     )
 

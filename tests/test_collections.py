@@ -4,26 +4,38 @@ Provides pipeline collection tests.
 """
 
 from operator import itemgetter
+from typing import cast
 
 import pytest
 
-from riko.bado import _issync, coroutine, react
+from riko.bado import IReactorCore, _issync, react
+from riko.bado.itertools import ensure_deferred
 from riko.bado.mock import FakeReactor
 from riko.collections import AsyncPipe, SyncPipe
-from riko.utils import StreamState, noop
+from riko.types.general import Item
+from riko.types.modules import (
+    ItemBuilderConf,
+    ParsedParam,
+    ReceiveConf,
+    StrReplaceConf,
+    StrReplaceConfRule,
+)
+from riko.types.values import StreamState
+from riko.utils import noop
 
 value = "once is 1x,twice is 2x,thrice is 3x"
-attrs = {"key": "content", "value": value}
-builder_conf = {"attrs": attrs}
+attrs = ParsedParam({"key": "content", "value": value})
+builder_conf = ItemBuilderConf({"attrs": attrs})
 done_conf = {"attrs": {"key": "state", "value": StreamState.DONE}}
-strr_conf = {"rule": {"find": "is", "replace": "was"}}
+strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
+reactor = cast(IReactorCore, FakeReactor())
 
 
 class TestCollections:
     def setup_method(self):
         self.runs = 0
 
-    def udf(self, item):
+    def udf(self, item: Item) -> Item:
         self.runs += 1
         return item
 
@@ -48,12 +60,13 @@ class TestCollections:
         assert next(stream) == {"content": "once is 1x"}
 
     def test_receive(self, capsys):
-        receiver = SyncPipe("receive", conf={"name": "receiver"})
-        changer = SyncPipe("receive", conf={"name": "changer"}, func=len)
-        printer = SyncPipe("receive", conf={"name": "printer"}, func=print)
-        assert next(receiver) == {"content": StreamState.PENDING}
-        assert next(printer) == {"content": StreamState.PENDING}
-        assert next(changer) == {"content": StreamState.PENDING}
+        _conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
+        receiver = SyncPipe("receive", conf=ReceiveConf({"name": "receiver", **_conf}))
+        changer = SyncPipe("receive", conf={"name": "changer", **_conf}, func=len)
+        printer = SyncPipe("receive", conf={"name": "printer", **_conf}, func=print)
+        assert next(receiver) == {"state": StreamState.PENDING}
+        assert next(printer) == {"state": StreamState.PENDING}
+        assert next(changer) == {"state": StreamState.PENDING}
 
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
@@ -62,9 +75,9 @@ class TestCollections:
         )
 
         assert next(stream) == {"content": "once is 1x"}
-        assert next(receiver) == {"content": StreamState.PENDING}
+        assert next(receiver) == {"state": StreamState.PENDING}
         assert next(receiver) == {"content": "once is 1x"}
-        assert next(changer) == {"content": StreamState.PENDING}
+        assert next(changer) == {"state": StreamState.PENDING}
         assert next(changer) == 1
 
         next(printer)
@@ -85,15 +98,16 @@ class TestCollections:
         assert self.runs == 3
 
     def test_pubsub(self, caplog):
-        receiver1 = SyncPipe("receive", conf={"name": "receiver1"}, func=noop)
-        receiver2 = SyncPipe("receive", conf={"name": "receiver2"}, func=noop)
-        assert next(receiver1) == {"content": StreamState.PENDING}
+        _conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
+        receiver1 = SyncPipe("receive", conf={"name": "receiver1", **_conf}, func=noop)
+        receiver2 = SyncPipe("receive", conf={"name": "receiver2", **_conf}, func=noop)
+        assert next(receiver1) == {"state": StreamState.PENDING}
 
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
             .tokenizer(emit=True)
             .udf(func=self.udf)
-            .send(others=["receiver1", "receiver2"])
+            .send(others=["receiver2", "receiver1"])
         )
 
         assert next(stream) == {"content": "once is 1x"}
@@ -104,13 +118,13 @@ class TestCollections:
         assert caplog.records[0].message == err_msg
 
         assert self.runs == 2
-        assert next(receiver1) == {"content": StreamState.PENDING}
+        assert next(receiver1) == {"state": StreamState.PENDING}
         assert next(receiver1) == {"content": "once is 1x"}
-        assert next(receiver2) == {"content": StreamState.PENDING}
+        assert next(receiver2) == {"state": StreamState.PENDING}
 
         assert next(stream) == {"content": "thrice is 3x"}
         assert next(receiver1) == {"content": "twice is 2x"}
-        assert next(receiver2) == {"content": StreamState.PENDING}
+        assert next(receiver2) == {"state": StreamState.PENDING}
 
         with pytest.raises(StopIteration):
             next(stream)
@@ -120,7 +134,7 @@ class TestCollections:
         with pytest.raises(StopIteration):
             next(receiver1)
 
-        assert stream.list == []
+        assert list(stream) == []
 
     def test_stream(self):
         """Tests a basic stream pipeline."""
@@ -157,9 +171,8 @@ class TestCollections:
     def test_astream(self, capsys):
         """Tests a asynchronous stream pipeline."""
 
-        @coroutine  # pyright: ignore[reportArgumentType]
-        def run(reactor):
-            stream = yield (
+        async def run(reactor):
+            stream = await (
                 AsyncPipe("itembuilder", conf=builder_conf)
                 .tokenizer(emit=True)
                 .udf(func=self.udf)
@@ -170,10 +183,10 @@ class TestCollections:
                 .hash(assign="content")
             )
 
-            print(next(stream)["content"])
+            print(next(stream))
 
         try:
-            react(run, _reactor=FakeReactor())
+            react(lambda r: ensure_deferred(run(r)), _reactor=reactor)
         except SystemExit:
             pass
         else:

@@ -24,25 +24,22 @@ Attributes:
 import pygogo as gogo
 
 from riko import Objconf
-from riko.types.general import BasicArg, Extraction
+from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
 
-OPTS = {"listize": True, "extract": "part"}
-DEFAULTS = {}
+OPTS: Opts = {"listize": True, "extract": "part"}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> str:
+def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> str:
     """
     Parses the pipe content
 
     Args:
         _ (dict): The item (ignored)
         parts (List[str]): The content to concatenate
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -56,16 +53,11 @@ def parser(
         'onetwo'
 
     """
-    if skip:
-        parsed = kwargs["stream"]
-    else:
-        parsed = "".join(str(p) for p in extraction if p)
-
-    return parsed
+    return "".join(str(p) for p in extraction if p)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> str:
     """
     A processor module that asynchronously concatenates strings.
 
@@ -94,12 +86,11 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['strconcat'])
+        >>> async def run(reactor):
         ...     item = {'title': 'Hello world'}
         ...     part = [{'subkey': 'title', 'type': 'text'}, 's']
-        ...     d = async_pipe(item, conf={'part': part})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(item, conf={'part': part})
+        ...     print(next(result)['strconcat'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -113,7 +104,7 @@ def async_pipe(*args, **kwargs):
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> str:
     """
     A processor that concatenates strings.
 

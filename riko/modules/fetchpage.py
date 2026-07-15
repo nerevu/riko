@@ -27,16 +27,17 @@ from collections.abc import Iterator
 
 import pygogo as gogo
 
-from riko import Objconf
-from riko.bado import coroutine, io, return_value
+from riko import ENCODING, Objconf
+from riko.bado import io
+from riko.cast import SourceOpts
 from riko.parsers import get_text
-from riko.types.general import BasicMapping, Extraction
+from riko.types.general import Defaults, Extraction, Item
 from riko.utils import Fetch, betwix
 
 from . import processor
 
-OPTS = {"ftype": "none"}
-DEFAULTS = {}
+OPTS = SourceOpts
+DEFAULTS = Defaults({"encoding": ENCODING})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -50,17 +51,16 @@ def get_string(content: str, start: str, end: str) -> str:
     return right[:end_pos] if end_pos > 0 else right
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Iterator[str]:
     """
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -76,14 +76,13 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)[:32])
+        >>> async def run(reactor):
         ...     url = get_path('cnn.html')
         ...     conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': {}, 'assign': 'content'}
-        ...     d = async_parser(None, None, objconf, **kwargs)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(None, None, objconf, **kwargs)
+        ...     print(next(result)[:32])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -93,28 +92,23 @@ def async_parser(
         CNN.com International - Breaking
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        content = yield io.async_url_read(objconf.url)  # pyright: ignore[reportCallIssue]
-        parsed = get_string(content, objconf.start, objconf.end)
-        detagged = get_text(parsed) if objconf.detag else parsed
-        split = detagged.split(objconf.token) if objconf.token else [detagged]
-        stream = map(str.strip, split)
-
-    return_value(stream)
+    content = await io.async_url_read(objconf.url)
+    parsed = get_string(content, str(objconf.start), str(objconf.end))
+    detagged = get_text(parsed) if objconf.detag else parsed
+    split = detagged.split(objconf.token) if objconf.token else [detagged]
+    return map(str.strip, split)
 
 
 def parser(
-    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
 ) -> Iterator[str]:
     """
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
 
     Returns:
         Iter[dict]: The stream of items
@@ -132,23 +126,18 @@ def parser(
         'CNN.com International'
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        with Fetch(**{k: objconf[k] for k in objconf}) as f:
-            sliced = betwix(f, objconf.start, objconf.end, True)
-            content = "\n".join(sliced)
+    with Fetch(objconf.url, encoding=objconf.encoding) as f:
+        sliced = betwix(f, objconf.start, objconf.end, True)
+        content = "\n".join(sliced)
 
-        parsed = get_string(content, objconf.start, objconf.end)
-        detagged = get_text(parsed) if objconf.detag else parsed
-        split = detagged.split(objconf.token) if objconf.token else [detagged]
-        stream = map(str.strip, split)
-
-    return stream
+    parsed = get_string(content, str(objconf.start), objconf.end)
+    detagged = get_text(parsed) if objconf.detag else parsed
+    split = detagged.split(objconf.token) if objconf.token else [detagged]
+    return map(str.strip, split)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Iterator[str]:
     """
     A source that asynchronously fetches the content of a given web site as
     a string.
@@ -179,12 +168,11 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x))
+        >>> async def run(reactor):
         ...     url, path = get_path('bbc.html'), 'value.items'
         ...     conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
-        ...     d = async_pipe(conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(conf=conf)
+        ...     print(next(result))
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -194,11 +182,11 @@ def async_pipe(*args, **kwargs):
         html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "
 
     """
-    return async_parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Iterator[str]:
     """
     A source that fetches the content of a given web site as a string.
 

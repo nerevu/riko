@@ -21,36 +21,35 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
 from os import path as p
 from typing import cast
 
 import pygogo as gogo
 
-from riko import Objconf, listize
-from riko.bado import coroutine, io, return_value
-from riko.parsers import Stringy, any2dict
-from riko.types.general import BasicArg, Extraction, ItemArg, Items
+from riko import ENCODING, Objconf, listize
+from riko.bado import io
+from riko.cast import SourceOpts
+from riko.parsers import any2dict
+from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
-OPTS = {"ftype": "none"}
-DEFAULTS = {}
+OPTS = SourceOpts
+DEFAULTS = Defaults({"encoding": ENCODING})
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Stream:
     """
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -65,12 +64,11 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['title'])
+        >>> async def run(reactor):
         ...     url = get_path('gigs.json')
         ...     objconf = Objectify({'url': url, 'path': 'value.items'})
-        ...     d = async_parser(None, None, objconf, stream={})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(None, None, objconf)
+        ...     print(next(result)['title'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -80,29 +78,24 @@ def async_parser(
         Business System Analyst
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        ext = p.splitext(objconf.url)[1].lstrip(".")
-        path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
-
-        f = yield io.async_url_open(objconf.url)  # pyright: ignore[reportCallIssue]
-        content = any2dict(f, ext, objconf.html5, path=path)
-        stream = auto_close(content, f)
-
-    return_value(stream)
+    ext = p.splitext(objconf.url)[1].lstrip(".")
+    path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
+    # TODO: Figure out if html/xml files should be parsed as binary too.
+    binary = ext == "json"
+    f = await io.async_url_open(objconf.url, encoding=objconf.encoding, binary=binary)
+    content = any2dict(f, ext, objconf.html5, path=path)
+    stream = auto_close(content, f)
+    return stream
 
 
-def parser(
-    _: BasicArg, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> Items | Iterator[Stringy]:
+def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -117,24 +110,23 @@ def parser(
         >>>
         >>> url = get_path('gigs.json')
         >>> objconf = Objectify({'url': url, 'path': 'value.items'})
-        >>> result = parser(None, None, objconf, stream={})
+        >>> result = parser(None, None, objconf)
         >>> next(result)['title']
         'Business System Analyst'
 
     """
-    if skip:
-        yield cast(ItemArg, kwargs["stream"])
-    else:
-        ext = p.splitext(objconf.url)[1].lstrip(".")
-        path = ".".join(listize(objconf.path))
+    ext = p.splitext(objconf.url)[1].lstrip(".")
+    paths = cast(list[str], listize(objconf.path))
+    path = ".".join(paths)
 
-        with Fetch(**{k: objconf[k] for k in objconf}) as f:
-            ext = ext or f.ext
-            yield from any2dict(f, ext, objconf.html5, path=path)
+    with Fetch(objconf.url, encoding=objconf.encoding, binary=(ext == "json")) as f:
+        ext = ext or f.ext
+        content = cast(FileTypes, f)
+        yield from any2dict(content, ext, objconf.html5, path=path)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Stream:
     """
     A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -161,12 +153,11 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['title'])
+        >>> async def run(reactor):
         ...     path = 'value.items'
         ...     conf = {'url': get_path('gigs.json'), 'path': path}
-        ...     d = async_pipe(conf=conf)
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_pipe(conf=conf)
+        ...     print(next(result)['title'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -176,11 +167,11 @@ def async_pipe(*args, **kwargs):
         Business System Analyst
 
     """
-    return async_parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     A source that fetches and parses an XML or JSON file to
     return the entries.

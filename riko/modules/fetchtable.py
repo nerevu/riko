@@ -20,22 +20,21 @@ Attributes:
 
 """
 
-from collections.abc import Iterator
 from os import path as p
 
 import pygogo as gogo
 from meza.io import read
-from meza.process import merge
 
 from riko import ENCODING, Objconf
-from riko.bado import coroutine, io, return_value
-from riko.types.general import BasicMapping, Extraction
+from riko.bado import io
+from riko.cast import SourceOpts
+from riko.types.general import Defaults, Extraction, Item, Stream
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
-OPTS = {"ftype": "none"}
-DEFAULTS = {
+OPTS = SourceOpts
+DEFAULTS: Defaults = {
     "delimiter": ",",
     "quotechar": '"',
     "encoding": ENCODING,
@@ -49,17 +48,16 @@ DEFAULTS = {
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-@coroutine  # pyright: ignore[reportArgumentType]
-def async_parser(
-    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-):
+async def async_parser(
+    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+) -> Stream:
     """
     Asynchronously parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -74,15 +72,14 @@ def async_parser(
         >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['mileage'])
+        >>> async def run(reactor):
         ...     url = get_path('spreadsheet.csv')
         ...     conf = {
         ...         'url': url, 'sanitize': True, 'skip_rows': 0,
         ...         'encoding': ENCODING}
         ...     objconf = Objectify(conf)
-        ...     d = async_parser(None, None, objconf, stream={})
-        ...     return d.addCallbacks(callback, logger.error)
+        ...     result = await async_parser(None, None, objconf, stream={})
+        ...     print(next(result)['mileage'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -92,29 +89,23 @@ def async_parser(
         7213
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        r = yield io.async_url_open(objconf.url)  # pyright: ignore[reportCallIssue]
-        first_row, custom_header = objconf.skip_rows, objconf.col_names
-        renamed = {"first_row": first_row, "custom_header": custom_header}
-        rkwargs = merge([dict(objconf.iteritems()), renamed])
-        ext = p.splitext(objconf.url)[1]
-        stream = auto_close(read(r, ext, **rkwargs), r)
-
-    return_value(stream)
+    r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
+    first_row, custom_header = objconf.skip_rows, objconf.col_names
+    renamed = {"first_row": first_row, "custom_header": custom_header}
+    rkwargs = {**objconf, **renamed}
+    ext = p.splitext(objconf.url)[1]
+    stream = auto_close(read(r, ext, **rkwargs), r)
+    return stream
 
 
-def parser(
-    _: BasicMapping, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> Iterator[BasicMapping]:
+def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 
     Args:
-        _ (None): Ignored
+        _ (Item): The item (Ignored)
+        extraction: Field values extracted from the item (Ignored)
         objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't parse the content
 
     Returns:
         Iter[dict]: The stream of items
@@ -128,26 +119,22 @@ def parser(
         ...     'url': url, 'sanitize': True, 'skip_rows': 0,
         ...     'encoding': ENCODING}
         >>> objconf = Objectify(conf)
-        >>> result = parser(None, None, objconf, stream={})
+        >>> result = parser(None, None, objconf)
         >>> next(result)['mileage']
         '7213'
 
     """
-    if skip:
-        stream = kwargs["stream"]
-    else:
-        first_row, custom_header = objconf.skip_rows, objconf.col_names
-        renamed = {"first_row": first_row, "custom_header": custom_header}
-        f = Fetch(**{k: objconf[k] for k in objconf})
-        rkwargs = merge([dict(objconf.iteritems()), renamed])
-        ext = p.splitext(objconf.url)[1]
-        stream = auto_close(read(f, ext, **rkwargs), f)
-
+    first_row, custom_header = objconf.skip_rows, objconf.col_names
+    renamed = {"first_row": first_row, "custom_header": custom_header}
+    f = Fetch(objconf.url, encoding=objconf.encoding)
+    rkwargs = {**objconf, **renamed}
+    ext = p.splitext(objconf.url)[1]
+    stream = auto_close(read(f, ext, **rkwargs), f)
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs):
+@processor(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Stream:
     """
     A source that asynchronously fetches a file.
 
@@ -182,10 +169,9 @@ def async_pipe(*args, **kwargs):
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(next(x)['mileage'])
-        ...     d = async_pipe(conf={'url': get_path('spreadsheet.csv')})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe(conf={'url': get_path('spreadsheet.csv')})
+        ...     print(next(result)['mileage'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -195,11 +181,11 @@ def async_pipe(*args, **kwargs):
         7213
 
     """
-    return async_parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs):
+def pipe(*args, **kwargs) -> Stream:
     """
     A source that fetches and parses a file to yield items.
 

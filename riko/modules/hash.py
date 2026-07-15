@@ -28,29 +28,29 @@ Attributes:
 import ctypes
 
 import pygogo as gogo
-from twisted.internet.defer import Deferred
 
 from riko import Objconf
-from riko.bado import return_value
-from riko.types.general import Extraction, ItemArg
+from riko.cast import BasicCastType
+from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
 
-OPTS = {"ftype": "text", "ptype": "none", "field": "content"}
-DEFAULTS = {}
+OPTS: Opts = {
+    "ftype": BasicCastType.TEXT,
+    "ptype": BasicCastType.NONE,
+    "field": "content",
+}
+DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(
-    content: str, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
-) -> ItemArg:
+def parser(content: str, extraction: Extraction, objconf: Objconf, **kwargs) -> int:
     """
     Parsers the pipe content
 
     Args:
         word (str): The string to hash
         _ (None): Ignored.
-        skip (bool): Don't parse the content
         kwargs (dict): Keyword arguments
 
     Kwargs:
@@ -69,11 +69,11 @@ def parser(
         1921504423
 
     """
-    return kwargs["stream"] if skip else ctypes.c_uint(hash(content)).value
+    return ctypes.c_uint(hash(content)).value
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)  # pyright: ignore[reportArgumentType]
-def async_pipe(*args, **kwargs) -> Deferred[ItemArg] | None:
+@processor(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args, **kwargs) -> int:
     """
     A processor module that asynchronously hashes the field of an item.
 
@@ -92,10 +92,9 @@ def async_pipe(*args, **kwargs) -> Deferred[ItemArg] | None:
         >>> from riko.bado import react
         >>> from riko.bado.mock import FakeReactor
         >>>
-        >>> def run(reactor):
-        ...     callback = lambda x: print(x)
-        ...     d = async_pipe({'content': 'hello world'})
-        ...     return d.addCallbacks(callback, logger.error)
+        >>> async def run(reactor):
+        ...     result = await async_pipe({'content': 'hello world'})
+        ...     print(next(result)['hash'])
         >>>
         >>> try:
         ...     react(run, _reactor=FakeReactor())
@@ -106,11 +105,11 @@ def async_pipe(*args, **kwargs) -> Deferred[ItemArg] | None:
 
     """
     # TODO: figure out why print(next(x)) errs
-    return_value(parser(*args, **kwargs))
+    return parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> ItemArg:
+def pipe(*args, **kwargs) -> int:
     """
     A processor that hashes the field of an item.
 

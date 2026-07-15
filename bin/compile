@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys
+
 import requests
+import fileinput
 
 from os import path as p
 from json import loads
 from optparse import OptionParser
 from riko.compile import parse_pipe_def, stringify_pipe, write_file
+from riko.utils import extract_dependencies
 
 PARENT = p.dirname(p.dirname(__file__))
 
@@ -89,7 +93,7 @@ if __name__ == "__main__":
         print("wrote %i bytes to %s" % (size, path))
 
     if kwargs.get("verbose"):
-        pydeps = utils.extract_dependencies(pipe_def)
+        pydeps = extract_dependencies(pipe_def)
         print("Modules used in %s: %s" % (pipe["name"], pydeps))
 
     if options.savejson:

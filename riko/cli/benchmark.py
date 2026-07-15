@@ -1,14 +1,14 @@
-#!/usr/bin/env python
-# vim: sw=4:ts=4:expandtab
-
+from collections.abc import Awaitable, Callable, Iterator
 from functools import partial
 from itertools import chain
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from time import sleep, time
+from timeit import repeat
+from typing import cast
 
 from riko import get_path
-from riko.bado import coroutine, react, return_value
+from riko.bado import react
 from riko.bado.itertools import async_map
 from riko.bado.util import async_sleep
 from riko.collections import (
@@ -19,7 +19,10 @@ from riko.collections import (
     get_chunksize,
     get_worker_cnt,
 )
-from riko.modules.fetch import async_pipe, pipe
+from riko.modules.fetch import async_pipe as async_fetch
+from riko.modules.fetch import pipe as fetch
+from riko.types.modules import AnyModuleConf
+from riko.types.values import RSSEntry
 
 NUMBER = 1
 LOOPS = 1
@@ -43,10 +46,12 @@ files = [
 ]
 
 urls = [get_path(f) for f in files]
-confs = [{"url": url, "sleep": DELAY} for url in urls]
+confs: list[AnyModuleConf] = [{"url": url, "sleep": DELAY} for url in urls]
 sources = [{"url": url} for url in urls]
 length = len(files)
-iterable = [DELAY for x in files]
+iterable = [DELAY for _ in files]
+
+type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
 
 
 def baseline_sync():
@@ -68,40 +73,42 @@ def baseline_procs():
 
 
 def sync_pipeline():
-    pipes = (pipe(conf=conf) for conf in confs)
-    return list(chain.from_iterable(pipes))
+    pipes = (fetch(conf=conf) for conf in confs)
+    return list(chain.from_iterable(cast(Iterator[RSSEntry], pipes)))
 
 
 def sync_pipe():
-    streams = (SyncPipe("fetch", conf=conf).list for conf in confs)
+    streams = (SyncPipe("fetch", conf=conf) for conf in confs)
     return list(chain.from_iterable(streams))
 
 
 def sync_collection():
-    return SyncCollection(sources, sleep=DELAY).list
+    return list(SyncCollection(sources, sleep=DELAY))
 
 
 def par_sync_collection():
-    return SyncCollection(sources, parallel=True, sleep=DELAY).list
+    return list(SyncCollection(sources, parallel=True, sleep=DELAY))
 
 
-def baseline_async():
-    return async_map(async_sleep, iterable)
+async def baseline_async():
+    return await async_map(async_sleep, iterable)
 
 
-def async_pipeline():
-    d = async_map(lambda conf: async_pipe(conf=conf), confs)
-    d.addCallbacks(list, print)
+async def async_pipeline():
+    func = lambda conf: async_fetch(conf=conf)
+    results = await async_map(cast(AsyncFunc, func), confs)
+    return list(results)
 
 
-def async_pipe2(conf=None):
-    asyncCallable = lambda conf: AsyncPipe("fetch", conf=conf).alist
-    d = async_map(asyncCallable, confs)
-    d.addCallbacks(list, print)
+async def async_pipe2(conf=None):
+    func = lambda conf: AsyncPipe("fetch", conf=conf)
+    results = await async_map(func, confs)
+    return list(results)
 
 
-def async_collection():
-    return AsyncCollection(sources, sleep=DELAY).alist
+async def async_collection():
+    results = await AsyncCollection(sources, sleep=DELAY)
+    return list(results)
 
 
 def parse_results(results):
@@ -122,8 +129,7 @@ def print_time(test, max_chars, run_time, units):
     print(msg.format(padded, NUMBER, LOOPS, run_time, units))
 
 
-@coroutine
-def run_async(reactor, tests, max_chars):
+async def run_async(reactor, tests, max_chars):
     for test in tests:
         results = []
 
@@ -132,7 +138,7 @@ def run_async(reactor, tests, max_chars):
 
             for _j in range(NUMBER):
                 start = time()
-                yield test()
+                await test()
                 loop += time() - start
 
             results.append(loop)
@@ -140,12 +146,8 @@ def run_async(reactor, tests, max_chars):
         run_time, units = parse_results(results)
         print_time(test.__name__, max_chars, run_time, units)
 
-    return_value(None)
-
 
 def main():
-    from timeit import repeat
-
     run = partial(repeat, repeat=LOOPS, number=NUMBER)
     sync_tests = [
         "baseline_sync",
