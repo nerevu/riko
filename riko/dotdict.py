@@ -27,9 +27,9 @@ from riko.types.values import (
     BasicValueType,
     Key,
     PrimitiveValue,
-    RSSEntry,
     RikoList,
     RikoValue,
+    RSSEntry,
     Sentinal,
     SentinalValue,
 )

@@ -23,7 +23,7 @@ from riko.types.values import (
 )
 
 if TYPE_CHECKING:
-    from riko import Context, Objconf, DotDict
+    from riko import Context, DotDict, Objconf
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
     from riko.types.modules import AnyConfRule, AnyModuleConf, AnyModuleRawConf, Skip

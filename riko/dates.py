@@ -151,7 +151,7 @@ def get_tzinfo(
 
 
 def get_date(unit: str, count: int, op: Callable) -> date:
-    today = dt.now(timezone.utc).date()
+    today = dt.now(UTC).date()
     new_month = op(today.month, count) % 12 or 12
 
     dates: dict[str, date] = {

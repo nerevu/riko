@@ -165,7 +165,7 @@ def get_assignment(  # noqa: E704
 def get_assignment(  # noqa: E302
     items: ProcessorParserOutput | OperatorParserOutput | DotDict,
     skip=False,
-    **conf: ConfValues
+    **conf: ConfValues,
 ) -> tuple[bool, StreamOrValueStream]:
     count = conf.get("count")
 

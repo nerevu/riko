@@ -75,10 +75,10 @@ else:
     IJSON_IS_NATIVE = ijson.backend != "python"
 
 if TYPE_CHECKING:
-    from _typeshed import DataclassInstance
     from xml.etree.ElementTree import Element as nativeElement
     from xml.etree.ElementTree import ElementTree as nativeElementTree
 
+    from _typeshed import DataclassInstance
     from lxml.etree import Element as lxmlElement
     from lxml.etree import ElementTree as lxmlElementTree
 
