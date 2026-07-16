@@ -31,7 +31,7 @@ from riko.dates import (
     tt_to_datetime,
 )
 from riko.locations import LOCATIONS
-from riko.types.general import NumericCaster, Opts, PreCaster
+from riko.types.general import Opts, PreCaster
 from riko.types.values import (
     AnyLocation,
     BasicArg,
@@ -102,11 +102,12 @@ class CastType(StrEnum):
     URL = "url"
 
 
+KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 SourceOpts: Opts = {"ftype": BasicCastType.NONE}
 
 
 def literal_parse(content: BasicValue | bool) -> BasicArg:
-    if isinstance(content, (bool, int)):
+    if isinstance(content, (bool, int, float, Decimal)):
         parsed = content
     elif content.lower() in {"true", "false"}:
         parsed = loads(content.lower())
@@ -381,6 +382,12 @@ def cast[T](  # noqa: E302
         Decimal('NaN')
         >>> cast('foo', 'int')
         0
+        >>> cast(12.25, 'text')
+        '12.25'
+        >>> cast(Decimal('12.25'), 'text')
+        '12.25'
+        >>> cast(12.25, 'int')
+        12
 
     """
     if _type and _type in CAST_SWITCH:
@@ -391,6 +398,7 @@ def cast[T](  # noqa: E302
 
         precaster = CAST_SWITCH[CastType.PASS]
 
+    caster = precaster["func"]
     default = precaster["default"]
 
     if content is None and _type != CastType.NONE:
@@ -399,31 +407,16 @@ def cast[T](  # noqa: E302
         value = None
     elif _type == CastType.PASS:
         value = content
-    elif isinstance(content, (str, int)):
-        caster = precaster["func"]
-
+    elif _type in KWARG_TYPES:
         try:
-            value = caster(content, **kwargs)
-        except TypeError:
-            value = caster(content)
-        except (InvalidOperation, ValueError):
+            value = caster(content, **kwargs)  # pyright: ignore[reportArgumentType]
+        except (TypeError, InvalidOperation, ValueError):
             value = default
-    elif isinstance(content, (int, float, Decimal)) and _type in {
-        CastType.INT,
-        CastType.FLOAT,
-        CastType.DECIMAL,
-    }:
-        caster = cast_type(NumericCaster, precaster["func"])
-        value = caster(content)
-    elif isinstance(content, (struct_time, dt, date)) and _type == CastType.DATE:
-        value = cast_date(content)
-    elif isinstance(content, (struct_time, dt, date)) and _type == CastType.DATETIME:
-        value = cast_datetime(content)
     else:
-        msg = f"Casting a {type(content)} to _type={_type} is not supported. "
-        msg += f"Returning {content=} as is."
-        logger.warning(msg)
-        value = content
+        try:
+            value = caster(content)  # pyright: ignore[reportArgumentType]
+        except (TypeError, InvalidOperation, ValueError):
+            value = default
 
     return value
 
