@@ -128,7 +128,7 @@ async def coop_reduce[T, S](
     """
     task = get_task()
     content = iter(content)
-    value = initial or next(content)
+    value = next(content) if initial is None else initial
     result = {"value": None}
 
     def work(func, content, value):
@@ -183,7 +183,7 @@ def async_reduce[T, S](
 
     """
     content = iter(content)
-    value = initial or next(content)
+    value = next(content) if initial is None else initial
 
     async def work(async_func, content, value):
         for item in content:
