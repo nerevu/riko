@@ -101,7 +101,6 @@ from collections.abc import (
     Mapping,
 )
 from functools import partial
-from importlib import import_module
 from io import StringIO
 from itertools import chain, repeat
 from multiprocessing import Pool as CPUPool
@@ -141,7 +140,7 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import BasicValue, StreamState
-from riko.utils import parse_context, send
+from riko.utils import _registry, parse_context, send
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
@@ -489,6 +488,12 @@ class SyncPipe(PyPipe):
 
         return result
 
+    def _close(self):
+        if self.name == "send":
+            others = cast(list[str], self.kwargs.get("others", []))
+            targets = [target for target in others if target in _registry]
+            [send(target, {"state": StreamState.DONE}) for target in targets]
+
     def _stream(self) -> Stream:
         pipeline = partial(self.pipe, **self.kwargs)
 
@@ -513,9 +518,11 @@ class SyncPipe(PyPipe):
                 self.terminate()
 
             raise
-        else:
+        finally:
             if self._release_pool_after_iteration():
                 self.close()
+
+            self._close()
 
     def __iter__(self) -> Stream:
         if self._iter is None:
@@ -527,14 +534,7 @@ class SyncPipe(PyPipe):
         if self._iter is None:
             self._iter = self._stream()
 
-        try:
-            return next(self._iter)
-        except StopIteration:
-            if self.name == "send":
-                others = cast(list[str], self.kwargs.get("others", []))
-                [send(target, {"state": StreamState.DONE}) for target in others]
-
-            raise
+        return next(self._iter)
 
     def split(self, **kwargs) -> SplitterParserOutput:
         splits = self._chain("split", **kwargs)
