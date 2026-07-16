@@ -97,8 +97,8 @@ type Hashable = int | float | str | Decimal | date | struct_time | None
 type BasicValue = str | int
 type NumLike = float | int | Decimal
 type Scalar = str | int | float | Decimal
-type Temporal = date | datetime | struct_time
-type DateLike = str | int | date | datetime | struct_time
+type Temporal = datetime | date | struct_time
+type DateLike = str | int | datetime | date | struct_time
 type SortableValue = Scalar | Temporal
 type PrimitiveValue = SortableValue | None
 
@@ -140,8 +140,8 @@ type RikoValue = PrimitiveValue | RikoDict | RikoList
 
 # Instance Types
 BasicValueType = (str, int)
-TemporalType = (date, datetime, struct_time)
-DateLikeType = (str, int, date, datetime, struct_time)
+TemporalType = (datetime, date, struct_time)
+DateLikeType = (str, int, datetime, date, struct_time)
 NumLikeType = (float, int, Decimal)
-PrimitiveValueType = (str, int, float, Decimal, date, datetime, struct_time)
+PrimitiveValueType = (str, int, float, Decimal, datetime, date, struct_time)
 HashableType = (str, int, float, Decimal, date, struct_time)

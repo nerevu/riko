@@ -4,7 +4,6 @@ Provides utility classes and functions
 """
 
 import builtins
-import datetime
 import fcntl
 import itertools as it
 import re
@@ -21,6 +20,7 @@ from collections.abc import (
     Sequence,
 )
 from dataclasses import asdict, fields, is_dataclass
+from datetime import datetime as dt
 from decimal import Decimal
 from functools import cache, partial, reduce, wraps
 from http.client import HTTPResponse
@@ -998,7 +998,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         if pub_date:
             pub_date = ensure_tzinfo(pub_date)
 
-            if isinstance(pub_date, datetime.datetime):
+            if isinstance(pub_date, dt):
                 pub_date = pub_date.timetuple()
 
         if "updated_parsed" in entry:
@@ -1009,7 +1009,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         if updated_date:
             updated_date = ensure_tzinfo(updated_date)
 
-            if isinstance(updated_date, datetime.datetime):
+            if isinstance(updated_date, dt):
                 updated_date = updated_date.timetuple()
 
         entry["author.name"] = entry.get("author_detail", {}).get("name")

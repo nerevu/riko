@@ -229,15 +229,13 @@ def cast_datetime(  # noqa: E302
 ) -> date | dt | DateDict | None:
     tt = None
 
-    if isinstance(value, date) and as_date:
+    if isinstance(value, dt) and as_date:
+        _date = value.date()
+    elif isinstance(value, dt) or isinstance(value, date) and as_date:
         _date = value
     elif isinstance(value, date):
         tt = value.timetuple()
         _date = tt_to_datetime(tt, as_date=as_date)
-    elif isinstance(value, dt) and as_date:
-        _date = value.date()
-    elif isinstance(value, dt):
-        _date = value
     elif isinstance(value, int):
         tt = gmtime(value)
         _date = tt_to_datetime(tt, as_date=as_date)
