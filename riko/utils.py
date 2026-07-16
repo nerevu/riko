@@ -28,6 +28,7 @@ from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
 from time import struct_time
+from types import UnionType
 from typing import (
     TYPE_CHECKING,
     Literal,
@@ -149,6 +150,19 @@ def fromdict(
     cls: type["DataclassInstance"],
     **data: Union["DataclassInstance", RikoValue, StringyList, StringyDict],
 ) -> "DataclassInstance":
+    """
+    Examples:
+        >>> from dataclasses import dataclass
+        >>> @dataclass
+        ... class Inner:
+        ...     n: int = 0
+        >>> @dataclass
+        ... class Outer:
+        ...     inner: Inner | None = None
+        >>> fromdict(Outer, inner={'n': 5}).inner
+        Inner(n=5)
+
+    """
     module = sys.modules[cls.__module__]
     localns = {**vars(module), **vars(cast_module)}
     hints = get_type_hints(cls, localns=localns, include_extras=True)
@@ -161,7 +175,7 @@ def fromdict(
         val = data[f.name]
         origin = get_origin(ftype)
 
-        if origin is Union:
+        if origin is Union or origin is UnionType:
             args = [a for a in get_args(ftype) if a is not type(None)]
             ftype = args[0] if args else ftype
             origin = get_origin(ftype)
