@@ -66,10 +66,11 @@ docs/_build
 build/*
 
 # Misc
+*.local.json
 *.pstats
+.claude
+.serena/memories
 .vscode
 callgraph.svg
 ttyrecord
-*.local.json
-.serena/memories
 memory

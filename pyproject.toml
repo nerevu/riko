@@ -79,6 +79,18 @@ manage = "riko.cli.manage:manager"
 runpipe = "riko.cli.runpipe:run"
 benchmark = "riko.cli.benchmark:main"
 
+[tool.ruff]
+extend-exclude = [
+    "**/pycache",
+    ".cache",
+    ".claude",
+    ".ruff_cache",
+    ".tox/*",
+    "tmp",
+    "build/*",
+    "dist/*",
+]
+
 [tool.ruff.lint]
 extend-select = [
     "E",    # pycodestyle errors
@@ -139,16 +151,6 @@ ignore = [
     "RUF100",  # unused noqa directive
 ]
 
-exclude = [
-    "**/pycache",
-    ".cache",
-    ".ruff_cache",
-    ".tox/*",
-    "tmp",
-    "build/*",
-    "dist/*",
-]
-
 preview = true
 
 [tool.ruff.lint.mccabe]
@@ -171,6 +173,7 @@ known-first-party = ["riko"]
 exclude = [
     "**/pycache",
     ".cache",
+    ".claude",
     ".ruff_cache",
     ".tox/*",
     "tmp",
