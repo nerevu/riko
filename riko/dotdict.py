@@ -636,11 +636,9 @@ class DotDict(CaseInsensitiveDict[VT]):
         reduced = reduce(reducer, rest, self)
 
         try:
-            _key = reduced[last]
+            del reduced[last]
         except KeyError:
             pass
-        else:
-            del _key
 
     @overload
     def update(  # noqa: E704
