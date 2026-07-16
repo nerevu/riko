@@ -59,20 +59,20 @@ def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
     return success or (False if failure else isinstance(val, Mapping))
 
 
-def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT]]:
+def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:
     return isinstance(val, (list, tuple))
 
 
-def is_mapping_seq[D, VT](
-    val: list[VT] | tuple[VT],
-) -> TypeGuard[list[Mapping[D, VT]] | tuple[Mapping[D, VT]]]:
-    return is_mapping(val[0]) if val else False
+def is_mapping_seq(
+    val: list[Any] | tuple[Any, ...],
+) -> TypeGuard[list[Mapping[Any, Any]] | tuple[Mapping[Any, Any], ...]]:
+    return bool(val and is_mapping(val[0]))
 
 
-def is_value_seq[VT](
-    val: list[VT] | tuple[VT],
-) -> TypeGuard[BasicList | tuple[BasicValue]]:
-    return isinstance(val[0], BasicValueType) if val else False
+def is_value_seq(
+    val: list[Any] | tuple[Any, ...],
+) -> TypeGuard[BasicList | tuple[BasicValue, BasicValue]]:
+    return bool(val and isinstance(val[0], BasicValueType))
 
 
 def is_sentinal[VT](val: Mapping[str, VT], **kwargs) -> TypeGuard[Sentinal]:
@@ -190,14 +190,14 @@ def gen_dict[VT](  # noqa: E704
 ) -> Iterator[dict[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: list[VT] | tuple[VT],
+    data: list[VT] | tuple[VT, ...],
     key: Key | None = ...,
     default_key: str = ...,
     **kwargs: VT,
 ) -> Iterator[dict[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: list[VT | None] | tuple[VT | None],
+    data: list[VT | None] | tuple[VT, ...],
     key: Key | None = ...,
     *,
     default_key: None,
@@ -231,7 +231,7 @@ def gen_dict[VT](  # noqa: E302
     | DotDict[VT]
     | Mapping[str, VT]
     | list[VT]
-    | tuple[VT]
+    | tuple[VT, ...]
     | VT
     | None,
     key: Key | None = None,
@@ -415,7 +415,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     @overload  # noqa: E301
     def _parse_value(  # noqa: E704
         self,
-        value: list[VT] | tuple[VT],
+        value: list[VT] | tuple[VT, ...],
         key: str | int,
         default: object | None = ...,
         **kwargs: VT,
@@ -426,7 +426,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     ) -> D | None: ...
     def _parse_value(  # noqa: E301
         self,
-        value: list[VT] | tuple[VT] | Mapping[str, VT] | object,
+        value: list[VT] | tuple[VT, ...] | Mapping[str, VT] | object,
         key: str | int,
         default: D | None = None,
         **kwargs: VT,
