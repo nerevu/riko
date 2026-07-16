@@ -89,7 +89,7 @@ async def async_parser(
         {'content': 4}
 
     """
-    return await async_reduce(reducer, rules, stream)
+    return await async_reduce(reducer, list(reversed(rules)), stream)
 
 
 def parser(
@@ -129,7 +129,7 @@ def parser(
         {'content': 4}
 
     """
-    return reduce(reducer, rules, stream)
+    return reduce(reducer, list(reversed(rules)), stream)
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
@@ -226,6 +226,13 @@ def pipe(*args, **kwargs) -> Stream:
         >>> rule = {'field': 'name', 'dir': 'desc'}
         >>> next(pipe(items, conf={'rule': rule}))['name']
         'sue'
+        >>> tied = [
+        ...     {'rank': 'a', 'name': 'sue'},
+        ...     {'rank': 'a', 'name': 'bill'},
+        ...     {'rank': 'b', 'name': 'adam'}]
+        >>> rules = [{'field': 'rank'}, {'field': 'name'}]
+        >>> [i['name'] for i in pipe(tied, conf={'rule': rules})]
+        ['bill', 'sue', 'adam']
 
     """
     return parser(*args, **kwargs)
