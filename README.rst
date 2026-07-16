@@ -43,8 +43,8 @@ Optional Dependencies
 Feature                   Dependency           Installation
 ========================  ===================  ===========================
 Async API                 `Twisted`_           ``pip install riko[async]``
-Accelerated xml parsing   `lxml`_ [#]_         ``pip install riko[xml]``
-Accelerated feed parsing  `speedparser`_ [#]_  ``pip install riko[xml]``
+Accelerated xml parsing   `lxml`_ [#]_         ``pip install riko[perf]``
+Accelerated feed parsing  `speedparser`_ [#]_  ``pip install riko[perf]``
 ========================  ===================  ===========================
 
 Notes

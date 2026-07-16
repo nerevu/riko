@@ -1223,6 +1223,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+async = [
+    { name = "treq" },
+    { name = "twisted" },
+]
 finance = [
     { name = "csv2ofx" },
 ]
@@ -1230,10 +1234,6 @@ perf = [
     { name = "fastfeedparser" },
     { name = "ijson" },
     { name = "lxml" },
-]
-twisted = [
-    { name = "treq" },
-    { name = "twisted" },
 ]
 
 [package.dev-dependencies]
@@ -1268,10 +1268,10 @@ requires-dist = [
     { name = "python-dateutil", specifier = ">=2.8.1,<3.0.0" },
     { name = "pytz", specifier = ">=2019.3" },
     { name = "requests", specifier = ">=2.22.0,<3.0.0" },
-    { name = "treq", marker = "extra == 'twisted'", specifier = ">=26.0.0,<27.0.0" },
-    { name = "twisted", marker = "extra == 'twisted'", specifier = ">=26.0.0,<27.0.0" },
+    { name = "treq", marker = "extra == 'async'", specifier = ">=26.0.0,<27.0.0" },
+    { name = "twisted", marker = "extra == 'async'", specifier = ">=26.0.0,<27.0.0" },
 ]
-provides-extras = ["perf", "twisted", "finance"]
+provides-extras = ["perf", "async", "finance"]
 
 [package.metadata.requires-dev]
 dev = [
