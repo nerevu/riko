@@ -24,6 +24,7 @@ from dataclasses import asdict, fields, is_dataclass
 from decimal import Decimal
 from functools import cache, partial, reduce, wraps
 from http.client import HTTPResponse
+from inspect import signature
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
@@ -281,9 +282,19 @@ class Chainable:
 
     def __call__(self, *args, **kwargs):
         try:
-            return Chainable(self.method(self.data, *args, **kwargs))
+            signature(self.method).bind(self.data, *args, **kwargs)
+            data_first = True
         except TypeError:
-            return Chainable(self.method(args[0], self.data, **kwargs))
+            data_first = False
+        except ValueError:
+            data_first = True
+
+        if data_first or not args:
+            result = Chainable(self.method(self.data, *args, **kwargs))
+        else:
+            result = Chainable(self.method(args[0], self.data, **kwargs))
+
+        return result
 
 
 def invert_dict(d):
