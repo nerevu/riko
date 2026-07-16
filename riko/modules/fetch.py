@@ -87,9 +87,13 @@ async def async_parser(
         Donations
 
     """
-    content: str = await io.async_url_read(objconf.url, delay=objconf.delay)
-    entries = parse_rss(content)
-    return augment_entries(entries)
+    if objconf.url:
+        content: str = await io.async_url_read(objconf.url, delay=objconf.delay)
+        result = augment_entries(parse_rss(content))
+    else:
+        result = iter([])
+
+    return result
 
 
 def parser(
@@ -121,8 +125,12 @@ def parser(
         'Donations'
 
     """
-    entries = parse_rss(objconf.url, encoding=objconf.encoding)
-    stream = augment_entries(entries)
+    if objconf.url:
+        entries = parse_rss(objconf.url, encoding=objconf.encoding)
+        stream = augment_entries(entries)
+    else:
+        stream = iter([])
+
     return stream
 
 
