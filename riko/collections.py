@@ -343,11 +343,11 @@ class SyncPipe(PyPipe):
     def _stream(self) -> Stream:
         pipeline = partial(self.pipe, **self.kwargs)
 
-        if self.parallelize and self.source:
+        if self.parallelize and self.source is not None:
             source_items = list(self.source)
             zipped = zip(source_items, repeat(pipeline))
             mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
-        elif self.mapify and self.source:
+        elif self.mapify and self.source is not None:
             mapped = self.map(pipeline, self.source)
         else:
             mapped = None
