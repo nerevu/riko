@@ -181,13 +181,14 @@ def _gen_pykwargs(  # noqa: E302
     if describe and steps:
         print("You must not specify both describe and steps. Assuming steps.")
 
+    target_module_id = module_id
+
     # find the default input of this module
     for wire in parsed_pipe_def["wires"].values():
-        module_id = get_module_id(wire)
 
         # todo? this equates the outputs
         is_default_out_only = (
-            utils.pythonise(wire, key="tgt.moduleid") == module_id
+            utils.pythonise(wire, key="tgt.moduleid") == target_module_id
             and wire["tgt"]["id"] != "_INPUT"
             and wire["src"]["id"].startswith("_OUTPUT")
         )
@@ -196,8 +197,10 @@ def _gen_pykwargs(  # noqa: E302
         # but it *is* the default output
         if is_default_out_only:
             # set the extra inputs of this module as pykwargs of this module
+            source_module_id = get_module_id(wire)
             pipe_id = utils.pythonise(wire, key="tgt.id")
-            yield (pipe_id, steps[module_id] if steps else Id(module_id))
+            source = steps[source_module_id] if steps else Id(source_module_id)
+            yield (pipe_id, source)
 
     if module["type"] == "loop":
         value = module["conf"]["embed"]["value"]
