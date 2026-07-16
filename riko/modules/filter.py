@@ -71,7 +71,6 @@ SWITCH: dict[str, Callable[..., bool]] = {
 NUMERIC_OPS = {"atmost", "atleast"}
 STRING_OPS = {"contains", "doesnotcontain", "matches"}
 DATE_OPS = {"after", "before"}
-STRING_OPS = {"matches"}
 PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
 TRUTHINESS_OPS = {"truthy", "falsy"}
 
