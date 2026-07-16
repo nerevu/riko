@@ -101,9 +101,19 @@ def get_abspath(url: str, offline=False) -> str:
 
 
 def replacer(content: str, old: str, new="_") -> str:
+    """
+    Examples:
+        >>> replacer('', '')
+        ''
+        >>> replacer('1abc', '')
+        '_1abc'
+        >>> replacer('a.b', '.')
+        'a_b'
+
+    """
     if old:
         replaced = content.replace(old, new)
-    elif content[0].isdecimal() or not content[0].isascii():
+    elif content and (content[0].isdecimal() or not content[0].isascii()):
         replaced = f"{new}{content}"
     else:
         replaced = content
