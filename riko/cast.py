@@ -5,7 +5,7 @@ Provides type casting capabilities
 
 from ast import literal_eval
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -23,7 +23,6 @@ from riko.currencies import CURRENCY_CODES
 from riko.dates import (
     EPOCH_DATE,
     EPOCH_DATETIME,
-    TODAY,
     date_to_tt,
     ensure_tzinfo,
     get_date,
@@ -53,14 +52,6 @@ GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
     "ip_address": lambda x: lookup_ip_address(x),
     "currency": lambda x: CURRENCY_CODES.get(x, {}),
 }
-
-DATES = {
-    "today": TODAY,
-    "now": TODAY,
-    "tomorrow": TODAY + timedelta(days=1),
-    "yesterday": TODAY - timedelta(days=1),
-}
-
 
 T = TypeVar("T")
 
@@ -245,14 +236,22 @@ def cast_datetime(  # noqa: E302
         words = value.split(" ")
         mathish = set(words).intersection(MATH_WORDS)
         textish = set(words).intersection(TEXT_WORDS)
+        today = dt.now(UTC).date()
+        named = {
+            "today": today,
+            "now": today,
+            "tomorrow": today + timedelta(days=1),
+            "yesterday": today - timedelta(days=1),
+        }
 
-        if value[0] in {"+", "-"} and len(mathish) == 1:
+        if value and value[0] in {"+", "-"} and len(mathish) == 1:
             op = sub if value.startswith("-") else add
             _date = get_date("".join(mathish), int(words[0][1:]), op)
         elif len(textish) == 2:
-            _date = get_date(f"{words[1]}s", 1, add)
-        elif value in DATES:
-            _date = DATES.get(value)
+            op = sub if words[0] == "last" else add
+            _date = get_date(f"{words[1]}s", 1, op)
+        elif value in named:
+            _date = named[value]
         else:
             _date = parse_date_string(value)
 

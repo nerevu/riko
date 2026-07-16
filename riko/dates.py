@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo, available_timezones
 
 import pytz
 from dateutil import parser
+from dateutil.relativedelta import relativedelta
 
 from riko.types.values import DateDict
 
@@ -150,18 +151,34 @@ def get_tzinfo(
     return _tzinfo
 
 
-def get_date(unit: str, count: int, op: Callable) -> date:
-    today = dt.now(UTC).date()
-    new_month = op(today.month, count) % 12 or 12
+def get_date(unit: str, count: int, op: Callable) -> date | dt:
+    """
+    Examples:
+        >>> from datetime import datetime
+        >>> from operator import add, sub
+        >>> from dateutil.relativedelta import relativedelta
+        >>> today = datetime.now(UTC).date()
+        >>> get_date('months', 1, add) == today + relativedelta(months=1)
+        True
+        >>> get_date('years', 1, sub) == today - relativedelta(years=1)
+        True
+        >>> isinstance(get_date('seconds', 30, add), datetime)
+        True
+        >>> get_date('seconds', 30, add) > datetime.now(UTC)
+        True
 
-    dates: dict[str, date] = {
-        "seconds": op(today, timedelta(seconds=count)),
-        "minutes": op(today, timedelta(minutes=count)),
-        "hours": op(today, timedelta(hours=count)),
+    """
+    now = dt.now(UTC)
+    today = now.date()
+
+    dates: dict[str, date | dt] = {
+        "seconds": op(now, timedelta(seconds=count)),
+        "minutes": op(now, timedelta(minutes=count)),
+        "hours": op(now, timedelta(hours=count)),
         "days": op(today, timedelta(days=count)),
         "weeks": op(today, timedelta(weeks=count)),
-        "months": today.replace(month=new_month),
-        "years": today.replace(year=op(today.year, count)),
+        "months": op(today, relativedelta(months=count)),
+        "years": op(today, relativedelta(years=count)),
     }
 
     return dates[unit]
