@@ -19,6 +19,8 @@ try:
 except ImportError:
     async_get = lambda _: lambda: None
     async_json = lambda _: lambda: None
+    async_none = lambda _: lambda: None
+    async_return = lambda _: lambda: None
     backend = "empty"
     defer = None
     Deferred = None
@@ -30,6 +32,7 @@ except ImportError:
     MemoryReactorClock = object
     react = lambda _, _reactor=None: None
     reactor = None
+    testing = None
     real_task = None
     implementer = None
     IReactorCore = None
@@ -57,10 +60,10 @@ else:
 
     async_none = defer.succeed(None)
     async_return = partial(defer.succeed)
-    async_partial = lambda f, **kwargs: partial(maybe_deferred, f, **kwargs)
     backend = "twisted"
     reactor.fake = False
 
+async_partial = lambda f, **kwargs: partial(maybe_deferred, f, **kwargs)
 _issync = backend == "empty"
 _isasync = not _issync
 
@@ -71,6 +74,9 @@ __all__ = [
     "MemoryReactorClock",
     "async_get",
     "async_json",
+    "async_none",
+    "async_partial",
+    "async_return",
     "backend",
     "defer",
     "failure",
