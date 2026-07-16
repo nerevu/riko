@@ -182,7 +182,18 @@ def parser(
                         state = None
 
                     result = _apply(func, item, **fkwargs) if func else item
-                    _receive_queue[name].append((state, result))
+                    queue = _receive_queue[name]
+
+                    if (
+                        queue
+                        and queue.maxlen is not None
+                        and len(queue) >= queue.maxlen
+                    ):
+                        msg = f"Receiver {name!r} queue full (maxlen={queue.maxlen}); "
+                        msg += "dropping oldest item."
+                        logger.warning(msg)
+
+                    queue.append((state, result))
 
         receiver()
 
