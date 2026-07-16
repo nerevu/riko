@@ -528,7 +528,11 @@ def any2dict(
             use_ijson = isinstance(content, RawIOBase)
 
         if use_ijson:
-            prefix = path if path.endswith(".item") else f"{path}.item"
+            if path and not path.endswith(".item"):
+                prefix = f"{path}.item"
+            else:
+                prefix = path
+
             items = ijson.items(content, prefix, use_float=True)
             yield from cast(Stream, items)
         elif isinstance(content, str):
