@@ -4,7 +4,6 @@ Provides utility classes and functions
 """
 
 import builtins
-import fcntl
 import itertools as it
 import re
 import sys
@@ -28,7 +27,6 @@ from inspect import signature
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
-from os import O_NONBLOCK
 from time import struct_time
 from typing import (
     TYPE_CHECKING,
@@ -47,6 +45,13 @@ from typing import cast as cast_type
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 from urllib.response import addinfourl
+
+try:
+    import fcntl
+    from os import O_NONBLOCK
+except ImportError:
+    fcntl = None
+    O_NONBLOCK = 0
 
 import mezmorize
 import pygogo as gogo
@@ -252,12 +257,13 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
 # https://trac.edgewall.org/ticket/2066#comment:1
 # http://stackoverflow.com/a/22675049/408556
 def make_blocking(f):
-    fd = f.fileno()
-    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    if fcntl is not None:
+        fd = f.fileno()
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
 
-    if flags & O_NONBLOCK:
-        blocking = flags & ~O_NONBLOCK
-        fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
+        if flags & O_NONBLOCK:
+            blocking = flags & ~O_NONBLOCK
+            fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
 
 
 def default_user_agent(name="riko"):
