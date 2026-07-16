@@ -144,8 +144,8 @@ class Context:
     def __repr__(self):
         content = f"verbose={self.verbose}, test={self.test}, "
         content += f"describe_input={self.describe_input}, "
-        content = f"describe_dependencies={self.describe_dependencies}, "
-        content = f"inputs={self.inputs}, submodule={self.submodule}"
+        content += f"describe_dependencies={self.describe_dependencies}, "
+        content += f"inputs={self.inputs}, submodule={self.submodule}"
         return f"Context({content})"
 
 
