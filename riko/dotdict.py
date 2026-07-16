@@ -66,13 +66,13 @@ def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT]]:
 def is_mapping_seq[D, VT](
     val: list[VT] | tuple[VT],
 ) -> TypeGuard[list[Mapping[D, VT]] | tuple[Mapping[D, VT]]]:
-    return is_mapping(val[0])
+    return is_mapping(val[0]) if val else False
 
 
 def is_value_seq[VT](
     val: list[VT] | tuple[VT],
 ) -> TypeGuard[BasicList | tuple[BasicValue]]:
-    return isinstance(val[0], BasicValueType)
+    return isinstance(val[0], BasicValueType) if val else False
 
 
 def is_sentinal[VT](val: Mapping[str, VT], **kwargs) -> TypeGuard[Sentinal]:
