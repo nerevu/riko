@@ -129,7 +129,7 @@ def parse_sentinel[D, VT](  # noqa: E302
 
         if stream := kwargs.get(key):
             stream = cast_type(Stream, stream)
-            parsed = next(stream)
+            parsed = next(stream, default)
         else:
             parsed = default
     elif is_type_value(value):
