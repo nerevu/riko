@@ -635,7 +635,8 @@ def get_chunksize(length: int, workers: int) -> int:
 
 def get_worker_cnt(length: int, threads: bool | None = True) -> int:
     multiplier = 2 if threads else 1
-    return min(length or 1, cpu_count() * multiplier)
+    maximum = cpu_count() * multiplier
+    return min(length, maximum) if length else maximum
 
 
 def listpipe(
