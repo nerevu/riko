@@ -247,7 +247,7 @@ def _gen_steps(
             pykwargs = dict(_gen_pykwargs(parsed_pipe_def, module_id, **kwargs))
             step = (module_id, pipeline(pyarg, **pykwargs))
 
-        kwargs["steps"].update(step)
+        kwargs["steps"].update([step])
         yield step
 
 
