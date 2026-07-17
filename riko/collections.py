@@ -188,6 +188,10 @@ if OFX is not None:
     CONVERSION_FUNCS["qif"] = cast(ConversionFunc, records2qif)
 
 
+def list_targets() -> tuple[str, ...]:
+    return tuple(sorted(CONVERSION_FUNCS))
+
+
 @overload
 def export(items) -> list[Item]: ...  # noqa: E704
 @overload
@@ -225,9 +229,8 @@ def export(  # noqa: E302
         else:
             result = _result
     else:
-        logger.error(
-            f"Invalid type, {_type}. You must supply one of {CONVERSION_FUNCS}."
-        )
+        valid = ", ".join(CONVERSION_FUNCS)
+        raise ValueError(f"Invalid export type {_type!r}. Must be one of: {valid}.")
 
     return result
 
@@ -304,14 +307,13 @@ class SyncPipe(PyPipe):
 
         if self.name:
             self.pipe: SyncPipeParser = import_module(f"riko.modules.{self.name}").pipe
-            pipe_type = getattr(self.pipe, "type")  # noqa: B009
-            self.is_processor = bool(pipe_type == "processor")
             self.pollable: bool = getattr(self.pipe, "pollable")  # noqa: B009
-            self.mapify = self.is_processor and self.source is not None
+            self.loopable: bool = getattr(self.pipe, "loopable")  # noqa: B009
+            self.mapify = self.loopable and self.source is not None
             self.parallelize: bool = self.parallel and self.mapify
         else:
             self.pipe = lambda source, **kw: source
-            self.pollable = self.mapify = self.parallelize = False
+            self.pollable = self.loopable = self.mapify = self.parallelize = False
 
         if self.parallelize:
             length = length_hint(self.source)
@@ -518,12 +520,12 @@ class AsyncPipe(PyPipe):
         if self.name:
             self.module = import_module(f"riko.modules.{self.name}")
             self.async_pipe: AsyncPipeParser = self.module.async_pipe
-            pipe_type = getattr(self.async_pipe, "type")  # noqa: B009
-            self.is_processor = bool(pipe_type == "processor")
-            self.mapify = self.is_processor
+            self.pollable: bool = getattr(self.async_pipe, "pollable")  # noqa: B009
+            self.loopable: bool = getattr(self.async_pipe, "loopable")  # noqa: B009
+            self.mapify = self.loopable
         else:
             self.async_pipe = lambda source, **kw: async_return(source)
-            self.mapify = False
+            self.pollable = self.loopable = self.mapify = False
 
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""

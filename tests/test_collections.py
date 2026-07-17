@@ -136,6 +136,24 @@ class TestCollections:
 
         assert list(stream) == []
 
+    def test_pipes_use_loopability_for_mapping(self):
+        source = [{"content": "one"}, {"content": "two"}]
+        transformer = SyncPipe("strtransform", source=source)
+        input_pipe = SyncPipe("input", source=source)
+
+        assert transformer.loopable
+        assert transformer.mapify
+        assert not input_pipe.loopable
+        assert not input_pipe.mapify
+
+        async_transformer = AsyncPipe("strtransform")
+        async_input_pipe = AsyncPipe("input")
+
+        assert async_transformer.loopable
+        assert async_transformer.mapify
+        assert not async_input_pipe.loopable
+        assert not async_input_pipe.mapify
+
     def test_stream(self):
         """Tests a basic stream pipeline."""
         stream = (

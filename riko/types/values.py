@@ -1,3 +1,4 @@
+import ast
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
@@ -145,3 +146,19 @@ DateLikeType = (str, int, datetime, date, struct_time)
 NumLikeType = (float, int, Decimal)
 PrimitiveValueType = (str, int, float, Decimal, datetime, date, struct_time)
 HashableType = (str, int, float, Decimal, date, struct_time)
+
+_NONSTREAM_EXPRESSIONS = (
+    ast.BinOp,
+    ast.Compare,
+    ast.Constant,
+    ast.Dict,
+    ast.DictComp,
+    ast.JoinedStr,
+    ast.Lambda,
+    ast.List,
+    ast.ListComp,
+    ast.Set,
+    ast.SetComp,
+    ast.Tuple,
+    ast.UnaryOp,
+)

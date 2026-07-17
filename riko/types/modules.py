@@ -17,6 +17,36 @@ type Graph[T: (str | int)] = Mapping[T, Nodes[T]]
 type NodeList[T: (str | int)] = list[T]
 type SCC[T: (str | int)] = list[tuple[T, ...]]
 
+type ModuleType = Literal["operator", "processor", "splitter"]
+
+type ModuleSubtype = Literal[
+    "aggregator",
+    "composer",
+    "source",
+    "transformer",
+    "splitter",
+]
+
+type ModuleSubtypes = set[ModuleSubtype]
+type OperatorReturnKind = Literal["stream", "nonstream", "unknown"]
+type Inference = tuple[OperatorReturnKind, str | None]
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleMetadata:
+    name: str
+    type: ModuleType
+    subtype: ModuleSubtype
+    subtypes: ModuleSubtypes
+    pollable: bool
+    loopable: bool
+    has_sync: bool
+    has_async: bool
+
+    def supports(self, subtype: ModuleSubtype) -> bool:
+        return subtype in self.subtypes
+
+
 ModuleName = Literal[
     "fetch", "fetchdata", "input", "sort", "tail", "itembuilder", "urlbuilder"
 ]

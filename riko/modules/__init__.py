@@ -4,12 +4,36 @@ riko.modules
 ~~~~~~~~~~~~
 """
 
-from collections.abc import Callable, Iterator
+import ast
+import builtins
+import textwrap
+from ast import AsyncFunctionDef, FunctionDef
+from collections.abc import Awaitable, Callable, Coroutine, Iterator
 from copy import copy
 from functools import partial, wraps
-from inspect import isawaitable
+from importlib import import_module
+from inspect import (
+    getsource,
+    isasyncgenfunction,
+    isawaitable,
+    isgeneratorfunction,
+    unwrap,
+)
 from itertools import chain, islice
-from typing import Literal, overload
+from pkgutil import iter_modules as iter_package_modules
+from types import UnionType
+from typing import (
+    Annotated,
+    Any,
+    Literal,
+    NamedTuple,
+    TypeAliasType,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+    overload,
+)
 from typing import cast as cast_type
 
 import pygogo as gogo
@@ -34,6 +58,7 @@ from riko.types.general import (
     Dispatched,
     Item,
     ItemOrValue,
+    ModuleWrapper,
     OperatorParser,
     OperatorParserOutput,
     OperatorWrapper,
@@ -42,6 +67,7 @@ from riko.types.general import (
     Opts,
     ParseFuncs,
     ParserOutput,
+    Pipeline,
     PipeTuples,
     ProcessorParser,
     ProcessorParserOutput,
@@ -64,90 +90,347 @@ from riko.types.general import (
     SyncSplitterWrapper,
     ValueStream,
 )
-from riko.types.modules import ConfValues, Embed
-from riko.types.values import BasicReturn, PrimitiveValue, StatefulItem
+from riko.types.modules import (
+    ConfValues,
+    Embed,
+    Inference,
+    ModuleMetadata,
+    ModuleSubtype,
+    ModuleSubtypes,
+    ModuleType,
+    OperatorReturnKind,
+)
+from riko.types.values import (
+    _NONSTREAM_EXPRESSIONS,
+    BasicReturn,
+    PrimitiveValue,
+    StatefulItem,
+)
 from riko.utils import broadcast, dispatch
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
-# Operators
-__aggregators__ = (
-    "count",
+SUBTYPES: dict[ModuleSubtype, ModuleType] = {
+    "source": "processor",
+    "transformer": "processor",
+    "splitter": "splitter",
+    "composer": "operator",
+    "aggregator": "operator",
+}
+
+_STREAM_CALLS = {"aiter", "enumerate", "filter", "iter", "map", "reversed", "zip"}
+
+_NONSTREAM_CALLS = {
+    "abs",
+    "all",
+    "any",
+    "bool",
+    "bytearray",
+    "bytes",
+    "complex",
+    "dict",
+    "float",
+    "frozenset",
+    "int",
+    "len",
+    "list",
+    "max",
+    "min",
+    "range",
+    "round",
+    "set",
+    "sorted",
+    "str",
     "sum",
-    "timeout",
-    "aggregate",
-    # 'mean',
-    # 'min',
-    # 'max',
-)
+    "tuple",
+}
 
-__composers__ = (
-    "filter",
-    "join",
-    "loop",
-    "reverse",
-    "sort",
-    "split",
-    "tail",
-    "truncate",
-    "union",
-    "uniq",
-    # 'webservice',
-)
+_PASSTHROUGH_NAMESPACES = ("asyncio.", "bado.", "riko.bado.")
 
-# Processors (loopable)
-__sources__ = (
-    "csv",
-    "feedautodiscovery",
-    "fetch",
-    "fetchdata",
-    "fetchpage",
-    "fetchsitefeed",
-    "forever",
-    "fetchtext",
-    "fetchtable",
-    "itembuilder",
-    "rssitembuilder",
-    "xpathfetchpage",
-    # yql was shutdown in 2019. Find alternatives, e.g.,
-    # https://github.com/firecrawl/firecrawl
-    # "yql",
-    "input",  # not loopable
-)
 
-__transformers__ = (
-    "currencyformat",
-    "datebuilder",
-    "dateformat",
-    "exchangerate",
-    "geolocate",
-    "hash",
-    # 'locationextractor',
-    # 'locationbuilder',
-    "regex",
-    "rename",
-    "refind",
-    "simplemath",
-    "slugify",
-    "strconcat",
-    "strfind",
-    # 'tokenizer' -> tokenizer
-    # 'strregex' -> regex
-    "strreplace",
-    "strtransform",
-    "subelement",
-    "substr",
-    "typecast",
-    # 'termextractor',
-    "tokenizer",
-    # 'translate',
-    "udf",
-    "urlbuilder",
-    "urlparse",
-    # 'yahooshortcuts',
-)
+class AnnotationMember(NamedTuple):
+    annotation: object
+    candidate: object
 
-# __all__ = __aggregators__ + __composers__ + __sources__ + __transformers__
+
+def _unwrap_alias(annotation: object) -> object:
+    while isinstance(annotation, TypeAliasType):
+        annotation = annotation.__value__
+
+    return annotation
+
+
+def _gen_members(annotation: object) -> Iterator[AnnotationMember]:
+    annotation = _unwrap_alias(annotation)
+    args = get_args(annotation)
+    origin = get_origin(annotation)
+
+    if origin in {Union, UnionType}:
+        for arg in args:
+            yield from _gen_members(arg)
+    elif origin is Annotated:
+        yield from _gen_members(args[0])
+    elif origin in {Awaitable, Coroutine}:
+        if args:
+            yield from _gen_members(args[-1])
+    else:
+        yield AnnotationMember(annotation, origin or annotation)
+
+
+def _matches_abc(candidate: object, abc: type) -> bool:
+    return isinstance(candidate, type) and issubclass(candidate, abc)
+
+
+def _expression_path(node: ast.expr) -> str | None:
+    path = None
+
+    if isinstance(node, ast.Name):
+        path = node.id
+    elif isinstance(node, ast.Attribute):
+        if parent := _expression_path(node.value):
+            path = f"{parent}.{node.attr}"
+
+    return path
+
+
+def _infer_callable_kind(node: ast.expr) -> Inference:
+    kind: OperatorReturnKind = "unknown"
+    reason = None
+
+    if not (path := _expression_path(node)):
+        node_type = type(node).__name__
+        reason = f"call {node_type=} is not a supported direct name or attribute path"
+    elif path.startswith("itertools."):
+        kind = "stream"
+    elif "." in path:
+        reason = f"call target {path!r} is not a recognized namespace"
+    elif path in _STREAM_CALLS:
+        kind = "stream"
+    elif path in _NONSTREAM_CALLS:
+        kind = "nonstream"
+    else:
+        reason = f"direct call {path!r} is not in a return-kind whitelist"
+
+    return kind, reason
+
+
+def _infer_expression_kind(
+    node: ast.expr,
+    assignments: dict[str, ast.expr],
+    seen: frozenset[str] = frozenset(),
+) -> Inference:
+    kind: OperatorReturnKind = "unknown"
+    reason = None
+
+    if isinstance(node, ast.Name):
+        if node.id in seen:
+            reason = f"assignment cycle detected while resolving {node.id!r}"
+        elif value := assignments.get(node.id):
+            kind, reason = _infer_expression_kind(value, assignments, seen | {node.id})
+        else:
+            reason = f"returned name {node.id!r} has no supported top-level assignment"
+    elif isinstance(node, (ast.Await, ast.NamedExpr)):
+        kind, reason = _infer_expression_kind(node.value, assignments, seen)
+    elif isinstance(node, ast.GeneratorExp):
+        kind = "stream"
+    elif isinstance(node, ast.Call):
+        path = _expression_path(node.func)
+        is_passthrough = path and path.startswith(_PASSTHROUGH_NAMESPACES)
+
+        if is_passthrough and node.args:
+            argument = node.args[0]
+            kind, reason = _infer_callable_kind(argument)
+
+            if kind == "unknown":
+                kind, reason = _infer_expression_kind(argument, assignments, seen)
+        elif is_passthrough:
+            reason = f"passthrough call {path!r} has no positional argument to inspect"
+        else:
+            kind, reason = _infer_callable_kind(node.func)
+    elif isinstance(node, _NONSTREAM_EXPRESSIONS):
+        kind = "nonstream"
+    else:
+        reason = f"return expression {type(node).__name__} is not supported"
+
+    return kind, reason
+
+
+def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
+    """Infer the obvious return kind of a short, unannotated pipe.
+
+    This is an intentionally narrow AST heuristic for doctest pipes.
+
+    Assumptions:
+
+    - Generator and async-generator functions are handled by the caller.
+    - The final statement is the only relevant return.
+    - Only simple top-level ``name = expression`` assignments are followed.
+    - Decorators preserve ``__wrapped__`` with ``functools.wraps``.
+    - Source is available through ``inspect.getsource``.
+    - Builtins are not shadowed.
+    - ``itertools``, ``asyncio``, and ``bado`` are not aliased.
+    - Any ``itertools.*`` call returns a stream.
+    - Any ``asyncio.*``, ``bado.*``, or ``riko.bado.*`` call passes
+      through the result represented by its first positional argument.
+    - Arbitrary calls and unsupported expressions are unknown.
+    - Runtime validity is not checked.
+
+    Examples:
+        >>> def mapped(items):
+        ...     return map(str, items)
+        >>> _infer_unannotated_return_kind(mapped)
+        'stream'
+
+        >>> def chained(items):
+        ...     return itertools.chain(items)
+        >>> _infer_unannotated_return_kind(chained)
+        'stream'
+
+        >>> def counted(items):
+        ...     return sum(items)
+        >>> _infer_unannotated_return_kind(counted)
+        'nonstream'
+
+        >>> async def async_counted(items):
+        ...     result = await bado.maybe_deferred(sum, items)
+        ...     return result
+        >>> _infer_unannotated_return_kind(async_counted)
+        'nonstream'
+
+        >>> async def async_mapped(items):
+        ...     result = await asyncio.to_thread(map, str, items)
+        ...     return result
+        >>> _infer_unannotated_return_kind(async_mapped)
+        'stream'
+
+        >>> def ambiguous(items):
+        ...     return build_result(items)
+        >>> _infer_unannotated_return_kind(ambiguous)
+        'unknown'
+    """
+    kind: OperatorReturnKind = "unknown"
+    reason = None
+    name = getattr(pipe, "__qualname__", repr(pipe))
+    is_func = lambda node: isinstance(node, (FunctionDef, AsyncFunctionDef))
+
+    try:
+        module = ast.parse(textwrap.dedent(getsource(unwrap(pipe))))
+
+        if function := next(builtins.filter(is_func, module.body), None):
+            statement = cast_type(FunctionDef, function).body[-1]
+    except (OSError, TypeError, SyntaxError, IndexError) as exc:
+        exc_type = type(exc).__name__
+        reason = f"source could not be inspected or parsed: {exc_type}: {exc}"
+    else:
+        if function := next(builtins.filter(is_func, module.body), None):
+            function = cast_type(FunctionDef | AsyncFunctionDef, function)
+
+            if not function.body:
+                reason = "function body is empty"
+            elif not isinstance(statement := function.body[-1], ast.Return):
+                reason = f"final statement is {type(statement).__name__}, not Return"
+            elif statement.value is None:
+                kind = "nonstream"
+            else:
+                assignments = {
+                    target.id: candidate.value
+                    for candidate in function.body[:-1]
+                    if isinstance(candidate, ast.Assign)
+                    and len(candidate.targets) == 1
+                    and isinstance(target := candidate.targets[0], ast.Name)
+                }
+                kind, reason = _infer_expression_kind(statement.value, assignments)
+        else:
+            reason = "parsed source contains no function definition"
+
+    if reason and kind == "unknown":
+        logger.debug(f"Could not infer return kind because {name}: {reason}.")
+    elif kind == "unknown":
+        logger.debug("Could not infer return kind, but no reason was provided.")
+
+    return kind
+
+
+def _gen_operator_return_kinds(pipe: Pipeline) -> Iterator[OperatorReturnKind]:
+    if isgeneratorfunction(pipe) or isasyncgenfunction(pipe):
+        yield "stream"
+    else:
+        try:
+            annotation = get_type_hints(pipe).get("return")
+        except (NameError, TypeError):
+            annotation = None
+
+        if annotation:
+            for member, candidate in _gen_members(annotation):
+                if member in {Any, object}:
+                    yield "unknown"
+                elif _matches_abc(candidate, Iterator):
+                    yield "stream"
+                else:
+                    yield "nonstream"
+        else:
+            yield _infer_unannotated_return_kind(pipe)
+
+
+def _derive_operator_subtypes(
+    pipe: Pipeline,
+) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
+    subtype: ModuleSubtype | None = None
+    subtypes: ModuleSubtypes = set()
+
+    for kind in _gen_operator_return_kinds(pipe):
+        if kind == "nonstream":
+            subtype = subtype or "aggregator"
+            subtypes.add(subtype)
+        elif kind == "stream":
+            subtype = subtype or "composer"
+            subtypes.add("composer")
+
+        if subtype and subtypes == {"aggregator", "composer"}:
+            break
+
+    if not subtypes:
+        qualified_name = f"{pipe.__module__}.{pipe.__name__}"
+        msg = f"{qualified_name} no supported subtypes found"
+        raise TypeError(msg)
+
+    return subtype, subtypes
+
+
+def _derive_loopable(name: str, module_type: ModuleType) -> bool:
+    return module_type == "processor" and name != "input"
+
+
+def _derive_subtypes(
+    pipe: Pipeline, module_type: ModuleType, **kwargs
+) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
+    if module_type == "processor":
+        none_ftype = kwargs.get("ftype") == BasicCastType.NONE
+        subtype: ModuleSubtype | None = "source" if none_ftype else "transformer"
+        result = subtype, cast_type(ModuleSubtypes, {subtype})
+    elif module_type == "splitter":
+        result = "splitter", cast_type(ModuleSubtypes, {"splitter"})
+    else:
+        result = _derive_operator_subtypes(pipe)
+
+    return result
+
+
+@overload
+def _get_subpipe(  # noqa: E704
+    embed: SyncProcessorWrapper, context: Context, **embedded_kwargs
+) -> partial[ProcessorWrapperOutput]: ...
+@overload  # noqa: E302
+def _get_subpipe(  # noqa: E704
+    embed: AsyncProcessorWrapper, context: Context, **embedded_kwargs
+) -> partial[Awaitable[ProcessorWrapperOutput]]: ...
+def _get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
+    embed: ProcessorWrapper, context: Context, **embedded_kwargs
+) -> partial[ProcessorWrapperOutput | Awaitable[ProcessorWrapperOutput]]:
+    embed_context = copy(context)
+    embed_context.submodule = True
+    embedded_kwargs["context"] = embed_context
+    return partial(embed, **embedded_kwargs)
 
 
 @overload
@@ -316,6 +599,25 @@ class Module[B: (Literal[True], Literal[False])]:
         self._prepare_key: tuple | None = None
         self._static_casted: tuple | None = None
 
+    def _set_wrapper_metadata(self, wrapper: wraps, pipe: Pipeline) -> None:
+        raw_type = type(self).__name__
+
+        if raw_type not in {"operator", "processor", "splitter"}:
+            raise TypeError(f"Unsupported module type: {raw_type!r}")
+
+        module_type = cast_type(ModuleType, raw_type)
+        subtype, subtypes = _derive_subtypes(pipe, module_type, **self._opts)
+        name = pipe.__module__.rsplit(".", 1)[-1]
+        loopable = _derive_loopable(name, module_type)
+
+        setattr(wrapper, "name", name)  # noqa: B010
+        setattr(wrapper, "type", module_type)  # noqa: B010
+        setattr(wrapper, "subtype", subtype)  # noqa: B010
+        setattr(wrapper, "subtypes", subtypes)  # noqa: B010
+        setattr(wrapper, "pollable", self.pollable)  # noqa: B010
+        setattr(wrapper, "isasync", self.isasync)  # noqa: B010
+        setattr(wrapper, "loopable", loopable)  # noqa: B010
+
     def prepare(
         self,
         module_name: str,
@@ -345,7 +647,6 @@ class Module[B: (Literal[True], Literal[False])]:
 
             assignment = "content" if self.is_source else module_name
             self.assign = def_assign or assignment
-            self.sub_type = "source" if self.is_source else "transformer"
         else:
             logger.error(f"Unknown module {self}.")
 
@@ -749,13 +1050,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             yield from processed
 
         wrapper = wraps(pipe)(async_wrapper if self.isasync else sync_wrapper)
-        sub_type = (
-            "source" if self._opts.get("ftype") == BasicCastType.NONE else "transformer"
-        )
-        setattr(wrapper, "type", "processor")  # noqa: B010
-        setattr(wrapper, "name", pipe.__module__.split(".")[-1])  # noqa: B010
-        setattr(wrapper, "sub_type", sub_type)  # noqa: B010
-        setattr(wrapper, "pollable", self.pollable)  # noqa: B010
+        self._set_wrapper_metadata(wrapper, pipe)
         return cast_type(ProcessorWrapper, wrapper)
 
 
@@ -856,9 +1151,9 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             >>> # call an async function
             >>> @operator(isasync=True, emit=False)
             ... async def async_pipe1(stream, objconf, tuples, **kwargs):
-            ...     for item, objconf in tuples:
-            ...         content = await async_return(item['content'])
-            ...         return f'say "{content}" {objconf.times} times!'
+            ...     item, objconf = next(tuples)
+            ...     content = await async_return(item['content'])
+            ...     return f'say "{content}" {objconf.times} times!'
             ...
             >>> # async pipes don't have to return a deferred,
             >>> # they work fine either way
@@ -1001,7 +1296,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from twisted.internet.defer import maybeDeferred
+            >>> from riko import bado
             >>> from riko.bado import react, _issync
             >>> from riko.bado.mock import FakeReactor
             >>>
@@ -1041,7 +1336,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             >>> # call an async function
             >>> async def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     words = (len(item['content'].split()) for item in stream)
-            ...     word_cnt = await maybeDeferred(sum, words)
+            ...     word_cnt = await bado.maybe_deferred(sum, words)
             ...     return word_cnt
             ...
             >>> wrapped_async_pipe1 = async_wrapper(async_pipe1)
@@ -1086,23 +1381,22 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
 
             stream = cast_type(OperatorWrapperInput, _input)
             tuples, orig_stream, casted = self.setup(stream, **kwargs)
+            embed_type = getattr(embed, "type", None)
 
-            if embed and getattr(embed, "name") == "input":  # noqa: B009
-                logger.error("Embedding input pipes is not currently supported.")
-            elif embed and getattr(embed, "type") == "processor":  # noqa: B009
-                embed_context = copy(context)
-                embed_context.submodule = True
-                embedded_kwargs["context"] = embed_context
+            if embed and embed_type and embed.loopable:
                 embed = cast_type(AsyncProcessorWrapper, embed)
-                embedder = partial(embed, **embedded_kwargs)
+                embedder = _get_subpipe(embed, context, **embedded_kwargs)
                 stream_map = await async_map(embedder, _input)
                 stream = cast_type(
                     ProcessorParserOutput, chain.from_iterable(stream_map)
                 )
-            elif embed:
-                msg = "Only processor pipes can be embedded."
-                msg = "Got {type} pipe {name}.".format(**embed.__dict__)
-                logger.error(msg)
+            elif embed and embed_type:
+                logger.error(f"{embed.name} is not loopable and can't be embedded.")
+            elif embed and callable(embed):
+                if name := getattr(embed, "__name__", None):
+                    logger.error(f"{name} is a custom pipe and can't be embedded.")
+                else:
+                    logger.error("Custom embedded pipes are not currently supported.")
             elif op_module_name == "loop":
                 logger.error("No embedded pipe provided!")
             else:
@@ -1112,12 +1406,8 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
 
             if isinstance(stream, Iterator):
                 emit = bool(self.emit)
-                self.sub_type = "composer"
             else:
                 emit = self.emit(stream) if callable(self.emit) else bool(self.emit)
-                self.sub_type = "aggregator"
-
-            setattr(async_wrapper, "sub_type", self.sub_type)  # noqa: B010
 
             if emit:
                 processed = self.process(stream, assign, emit=True, **_conf)
@@ -1145,23 +1435,22 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
 
             stream = cast_type(OperatorWrapperInput, _input)
             tuples, orig_stream, casted = self.setup(stream, **kwargs)
+            embed_type = getattr(embed, "type", None)
 
-            if embed and getattr(embed, "name") == "input":  # noqa: B009
-                logger.error("Embedding input pipes is not currently supported.")
-            elif embed and getattr(embed, "type") == "processor":  # noqa: B009
-                embed_context = copy(context)
-                embed_context.submodule = True
-                embedded_kwargs["context"] = embed_context
+            if embed and embed_type and embed.loopable:
                 embed = cast_type(SyncProcessorWrapper, embed)
-                embedder = partial(embed, **embedded_kwargs)
+                embedder = _get_subpipe(embed, context, **embedded_kwargs)
                 stream_map = map(embedder, _input)
                 stream = cast_type(
                     ProcessorParserOutput, chain.from_iterable(stream_map)
                 )
-            elif embed:
-                msg = "Only processor pipes can be embedded."
-                msg = "Got {type} pipe {name}.".format(**embed.__dict__)
-                logger.error(msg)
+            elif embed_type:
+                logger.error(f"{embed.name} is not loopable and can't be embedded.")
+            elif embed and callable(embed):
+                if name := getattr(embed, "__name__", None):
+                    logger.error(f"{name} is a custom pipe and can't be embedded.")
+                else:
+                    logger.error("Custom embedded pipes are not currently supported.")
             elif op_module_name == "loop":
                 logger.error("No embedded pipe provided!")
             else:
@@ -1170,12 +1459,8 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
 
             if isinstance(stream, Iterator):
                 emit = bool(self.emit)
-                self.sub_type = "composer"
             else:
                 emit = self.emit(stream) if callable(self.emit) else bool(self.emit)
-                self.sub_type = "aggregator"
-
-            setattr(sync_wrapper, "sub_type", self.sub_type)  # noqa: B010
 
             if emit:
                 processed = self.process(stream, assign, emit=True, **_conf)
@@ -1185,10 +1470,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             yield from processed
 
         wrapper = wraps(pipe)(async_wrapper if self.isasync else sync_wrapper)
-        setattr(wrapper, "type", "operator")  # noqa: B010
-        setattr(wrapper, "name", pipe.__module__.split(".")[-1])  # noqa: B010
-        setattr(wrapper, "sub_type", None)  # noqa: B010
-        setattr(wrapper, "pollable", self.pollable)  # noqa: B010
+        self._set_wrapper_metadata(wrapper, pipe)
         return cast_type(OperatorWrapper, wrapper)
 
 
@@ -1278,10 +1560,7 @@ class splitter[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             yield from streams
 
         wrapper = wraps(pipe)(async_wrapper if self.isasync else sync_wrapper)
-        setattr(wrapper, "type", "splitter")  # noqa: B010
-        setattr(wrapper, "name", pipe.__module__.split(".")[-1])  # noqa: B010
-        setattr(wrapper, "sub_type", "splitter")  # noqa: B010
-        setattr(wrapper, "pollable", self.pollable)  # noqa: B010
+        self._set_wrapper_metadata(wrapper, pipe)
         return cast_type(SplitterWrapper, wrapper)
 
 
@@ -1369,3 +1648,122 @@ def get_casters(opts: Opts) -> CastFuncs:
 
     conf_caster = cast_type(SyncConfCastFunc, _conf_caster)
     return CastFuncs(field_func, extract_caster, conf_caster)
+
+
+def _get_module_metadata(name: str) -> ModuleMetadata | None:
+    module = import_module(f"{__name__}.{name}")
+    pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
+    targets = tuple(cast_type(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
+    attrs = ("name", "type", "subtype", "subtypes", "pollable", "loopable")
+
+    if len(targets) == 2:
+        for attr in attrs:
+            actual = getattr(targets[0], attr)
+            expected = getattr(targets[1], attr)
+
+            if actual != expected:
+                msg = f"{module.__name__} has inconsistent sync/async metadata: "
+                msg += f"{expected!r} != {actual!r}"
+                raise TypeError(msg)
+
+    if targets:
+        first = targets[0]
+
+        if first.name != name:
+            raise TypeError(f"{module.__name__} reports module name {first.name!r}")
+
+        for subtype in first.subtypes:
+            expected_type = SUBTYPES[subtype]
+
+            if first.type != expected_type:
+                msg = f"{module.__name__} supports subtype {subtype!r}, "
+                msg += f"which requires type {expected_type!r}, not {first.type!r}"
+                raise TypeError(msg)
+
+        metadata = ModuleMetadata(
+            name=name,
+            type=first.type,
+            subtype=first.subtype,
+            subtypes=first.subtypes,
+            pollable=any(t.pollable for t in targets),
+            loopable=any(t.loopable for t in targets),
+            has_sync=any(not t.isasync for t in targets),
+            has_async=any(t.isasync for t in targets),
+        )
+    else:
+        metadata = None
+
+    return metadata
+
+
+def gen_module_catalog() -> Iterator[ModuleMetadata]:
+    for info in iter_package_modules(__path__):
+        skip = info.ispkg or info.name.startswith("_")
+
+        if not skip and (metadata := _get_module_metadata(info.name)):
+            yield metadata
+
+
+def _matches_subtype(
+    module: ModuleMetadata, subtype: ModuleSubtype | None, *, primary: bool
+) -> bool:
+    if subtype is None:
+        matched = True
+    elif primary:
+        matched = module.subtype == subtype
+    else:
+        matched = subtype in module.subtypes
+
+    return matched
+
+
+@overload
+def list_modules(  # noqa: E704
+    *,
+    type: ModuleType | None = ...,  # noqa: A002
+    subtype: ModuleSubtype | None = ...,
+    primary: bool = ...,
+    loopable: bool | None = ...,
+    show_metadata: Literal[False] = ...,
+) -> tuple[str, ...]: ...
+@overload  # noqa: E302
+def list_modules(  # noqa: E704
+    *,
+    type: ModuleType | None = None,  # noqa: A002
+    subtype: ModuleSubtype | None = None,
+    primary: bool = ...,
+    loopable: bool | None = ...,
+    show_metadata: Literal[True],
+) -> tuple[ModuleMetadata, ...]: ...
+def list_modules(  # noqa: E302
+    *,
+    type: ModuleType | None = None,  # noqa: A002
+    subtype: ModuleSubtype | None = None,
+    primary: bool = False,
+    loopable: bool | None = None,
+    show_metadata: bool = False,
+) -> tuple[str, ...] | tuple[ModuleMetadata, ...]:
+    if type and subtype:
+        raise ValueError("type and subtype cannot be combined")
+    elif primary and not subtype:
+        raise ValueError("primary=True requires subtype")
+
+    subtype_match = partial(_matches_subtype, subtype=subtype, primary=primary)
+    type_match = lambda module: type is None or module.type == type
+    loop_match = lambda module: loopable is None or module.loopable is loopable
+    match = lambda module: all(broadcast(module, subtype_match, type_match, loop_match))
+    # dynamic filter pipe import shadows the builtin filter
+    filtered = builtins.filter(match, gen_module_catalog())
+    modules = tuple(sorted(filtered, key=lambda module: module.name))
+    return modules if show_metadata else tuple(module.name for module in modules)
+
+
+__all__ = [
+    "ModuleMetadata",
+    "ModuleSubtype",
+    "ModuleType",
+    "list_modules",
+    "operator",
+    "processor",
+    "splitter",
+]
