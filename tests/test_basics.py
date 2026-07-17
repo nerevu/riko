@@ -160,21 +160,13 @@ class TestBasics:
         item = cast(dict, items[0])
         assert "The 6 Best Enterprise Data Modeling Tools" in item["title"]
 
-    # TODO: find a replacement for finance.yahoo.com/rss
-    @pytest.mark.skip
     def test_input_override(self):
-        """Loads a pipeline with input override"""
+        """Overrides an offline input->itembuilder pipeline via Context.inputs"""
         self.context.inputs = {"textinput1": "IBM"}
-        pipe_name = "pipe_1LNyRuNS3BGdkTKaAsqenA"
+        pipe_name = "input_override"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-        sliced = islice(items, 3)
-        contains = self.context.inputs["textinput1"]
-        # check if the ticker is in the title of any of the first 3 items
-
-        for i in sliced:
-            item = cast(dict, i)
-            assert contains in " ".join(item["title"])
+        self._load(items, pipe_name, 1, 0)
+        assert items == [{"symbol": "IBM"}]
 
     ###############
     # Offline Tests

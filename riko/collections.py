@@ -141,7 +141,7 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import BasicValue, StreamState
-from riko.utils import send
+from riko.utils import parse_context, send
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
@@ -260,11 +260,11 @@ class PyPipe:
     ):
         self.name = name
         self.parallel = parallel
-        self.inputs = inputs or {}
         self.verbose = kwargs.get("verbose")
         self.test = kwargs.get("test")
         self.conf = conf or {}
-        self.context = context or Context(**kwargs)
+        self.context = parse_context(context, inputs=inputs, **kwargs)
+        self.inputs = self.context.inputs
         self.describe_input = self.context.describe_input
         self.describe_dependencies = self.context.describe_dependencies
         self.kwargs = kwargs

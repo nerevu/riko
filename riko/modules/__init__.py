@@ -107,7 +107,7 @@ from riko.types.values import (
     PrimitiveValue,
     StatefulItem,
 )
-from riko.utils import broadcast, dispatch
+from riko.utils import broadcast, dispatch, parse_context
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -1029,6 +1029,8 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 processed = self.process(*args, emit=True, skip=True, **_conf)
             else:
                 aync_pipe = cast_type(AsyncProcessorParser, pipe)
+                context = parse_context(**kwargs)
+                kwargs["inputs"] = context.inputs
                 result = aync_pipe(*casted, **kwargs)
                 stream = (await result) if isawaitable(result) else result
                 args = (_input, stream, assign)
@@ -1065,6 +1067,8 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 processed = self.process(*args, emit=True, skip=True, **_conf)
             else:
                 sync_pipe = cast_type(SyncProcessorParser, pipe)
+                context = parse_context(**kwargs)
+                kwargs["inputs"] = context.inputs
                 stream = sync_pipe(*casted, **kwargs)
                 args = (_input, stream, assign)
 
@@ -1407,11 +1411,8 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             _conf = cast_type(dict[str, ConfValues], prepared.conf.asdict())
             assign = prepared.assign
             embedded_kwargs = cast_type(Embed, prepared.conf.pop("embed", None))
-            context = context or Context()
-
-            if context.submodule:
-                context.inputs = kwargs.get("inputs")
-
+            context = parse_context(context, **kwargs)
+            kwargs["inputs"] = context.inputs
             stream = cast_type(OperatorWrapperInput, _input)
             tuples, orig_stream, casted = self.setup(prepared, stream, **kwargs)
             embed_type = getattr(embed, "type", None)
@@ -1463,11 +1464,8 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             _conf = cast_type(dict[str, ConfValues], prepared.conf.asdict())
             assign = prepared.assign
             embedded_kwargs = cast_type(Embed, prepared.conf.pop("embed", None))
-            context = context or Context()
-
-            if context.submodule:
-                context.inputs = kwargs.get("inputs")
-
+            context = parse_context(context, **kwargs)
+            kwargs["inputs"] = context.inputs
             stream = cast_type(OperatorWrapperInput, _input)
             tuples, orig_stream, casted = self.setup(prepared, stream, **kwargs)
             embed_type = getattr(embed, "type", None)

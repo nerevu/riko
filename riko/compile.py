@@ -233,13 +233,22 @@ def _gen_steps(
     for module_id, module_name, pipe_name in zipped:
         if module_name.startswith("pipe_"):
             import_name = f"riko.pypipelines.{module_name}"
-        else:
+        elif module_name != "output":
             import_name = f"riko.modules.{module_name}"
+        else:
+            import_name = None
 
-        module = import_module(import_name)
-        pipeline: SyncPipeParser = getattr(module, pipe_name)
+        if import_name:
+            module = import_module(import_name)
+            pipeline: SyncPipeParser = getattr(module, pipe_name)
+        else:
+            pipeline = lambda x, **kwargs: x  # noqa: E731
 
-        if module_id in parsed_pipe_def["embed"]:
+        if module_name == "output":
+            # Legacy Yahoo Pipes. Its result is just its input stream.
+            pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
+            step = (module_id, pyarg)
+        elif module_id in parsed_pipe_def["embed"]:
             # We need to wrap submodules (used by loops) so we can pass the
             # input at runtime (as we can to sub-pipelines)
             # Note: no embed (so no subloops) or wire pykwargs are passed
@@ -340,6 +349,7 @@ def build_pipeline(
             "module_names": utils.gen_names(module_ids, parsed_pipe_def),
             "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
             "steps": {"forever": forever(context=context)},
+            "context": context,
         }
 
         steps = dict(_gen_steps(parsed_pipe_def, **kwargs, **updates))

@@ -18,6 +18,7 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
+from copy import copy
 from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime as dt
 from decimal import Decimal
@@ -1097,6 +1098,16 @@ def coroutine(registry_name: str | None = None, maxlen=256):
     return decorator
 
 
+def parse_context(
+    context: Context | None = None, inputs: Mapping | None = None, **kwargs
+) -> Context:
+    # Prevents mutating caller-supplied Context
+    new_context = Context(**kwargs) if context is None else copy(context)
+    new_inputs = new_context.inputs if inputs is None else dict(inputs)
+    new_context.inputs = new_inputs
+    return new_context
+
+
 def gen_dependencies(pipe_def: PipeDef) -> Iterator[str]:
     for module in pipe_def["modules"]:
         yield module["type"]
@@ -1225,12 +1236,12 @@ def gen_modules(
     pipe_def: PipeDef, embedded=False
 ) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
-        yield (pythonise(module["id"]), module)
-
         if embedded and module["type"] == "loop":
             conf = cast_type(LoopRawConf, module["conf"])
             embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), embed)
+        elif not embedded:
+            yield (pythonise(module["id"]), module)
 
 
 def gen_wires(pipe_def: PipeDef) -> Iterator[tuple[str, Wire]]:
