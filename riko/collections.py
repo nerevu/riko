@@ -328,19 +328,40 @@ class SyncPipe(PyPipe):
             self.chunksize = chunksize or 1
             self.map = map
 
-    def __getattr__(self, name: str):
-        if name.startswith("_") or name in {"keys", "values", "items", "get"}:
-            raise AttributeError(name)
+    def _chain(self, name: str, **overrides) -> "SyncPipe":
+        """
+        Create the next pipe stage, propagating all runtime and execution
+        settings. Context (and its inputs) stays authoritative across the chain.
 
+        Examples:
+            >>> conf = {'key': 'a', 'value': 'b'}
+            >>> flow = SyncPipe('itembuilder', conf=conf, inputs={'x': '1'})
+            >>> chained = flow.hash()
+            >>> str(chained.context) == str(flow.context)
+            True
+            >>> chained.inputs == flow.inputs == flow.context.inputs
+            True
+
+        """
         kwargs = {
             "parallel": self.parallel,
             "threads": self.threads,
             "pool": self.pool if self.reuse_pool else None,
             "reuse_pool": self.reuse_pool,
             "workers": self.workers,
+            "chunksize": self.chunksize,
+            "context": self.context,
+            "inputs": self.inputs,
         }
 
+        kwargs.update(overrides)
         return SyncPipe(name, source=self, **kwargs)
+
+    def __getattr__(self, name: str):
+        if name.startswith("_") or name in {"keys", "values", "items", "get"}:
+            raise AttributeError(name)
+
+        return self._chain(name)
 
     def _stream(self) -> Stream:
         pipeline = partial(self.pipe, **self.kwargs)
@@ -387,15 +408,7 @@ class SyncPipe(PyPipe):
             raise
 
     def split(self, **kwargs) -> SplitterParserOutput:
-        pipe_kwargs = {
-            "parallel": self.parallel,
-            "threads": self.threads,
-            "pool": self.pool if self.reuse_pool else None,
-            "reuse_pool": self.reuse_pool,
-            "workers": self.workers,
-        }
-
-        splits = SyncPipe("split", source=self, **pipe_kwargs, **kwargs)
+        splits = self._chain("split", **kwargs)
         return cast(SplitterParserOutput, splits)
 
     @overload
