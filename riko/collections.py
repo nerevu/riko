@@ -108,7 +108,7 @@ from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import length_hint
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, cast, overload
 
 import pygogo as gogo
 
@@ -148,9 +148,35 @@ if TYPE_CHECKING:
     from multiprocessing.pool import Pool as CPUPoolType
 
 type AnyPool = "ThreadPoolType" | "CPUPoolType"
-
+type PoolScope = Literal["stage", "pipeline"]
 
 logger = gogo.Gogo(__name__, monolog=True).logger
+
+
+class _PoolHandle:
+    """Shared pool state, including whether riko owns the pool."""
+
+    def __init__(self, pool: AnyPool, *, owned: bool) -> None:
+        self.pool: AnyPool | None = pool
+        self.owned = owned
+
+    def close(self) -> None:
+        if not self.owned or self.pool is None:
+            return
+
+        pool = self.pool
+        pool.close()
+        pool.join()
+        self.pool = None
+
+    def terminate(self) -> None:
+        if not self.owned or self.pool is None:
+            return
+
+        pool = self.pool
+        pool.terminate()
+        pool.join()
+        self.pool = None
 
 
 def records2ofx(items, **_) -> Iterable[str]:
@@ -290,8 +316,9 @@ class SyncPipe(PyPipe):
         workers: int | None = None,
         chunksize: int | None = None,
         threads: bool | None = True,
-        reuse_pool: bool | None = True,
+        pool_scope: PoolScope = "pipeline",
         pool: AnyPool | None = None,
+        _pool_handle: _PoolHandle | None = None,
         ordered: bool | None = False,
         **kwargs,
     ):
@@ -300,10 +327,24 @@ class SyncPipe(PyPipe):
         )
         self.source = source
         self.threads = threads
-        self.reuse_pool = reuse_pool
+        self.pool_scope = pool_scope
+        self.ordered = ordered
         self._iter: Stream | None = None
+        self._mapped: Iterator[Stream] | None = None
         self.map: Callable[..., Iterator[Stream]]
-        self.pool = pool
+        self._in_context = False
+        self._terminal = True
+
+        if pool_scope not in {"stage", "pipeline"}:
+            raise ValueError("pool_scope must be either 'stage' or 'pipeline'")
+
+        if pool is not None and _pool_handle is not None:
+            raise TypeError("pool and _pool_handle cannot both be provided")
+
+        self._pool_handle = _pool_handle
+
+        if self._pool_handle is None and pool is not None:
+            self._pool_handle = _PoolHandle(pool, owned=False)
 
         if self.name:
             self.pipe: SyncPipeParser = import_module(f"riko.modules.{self.name}").pipe
@@ -318,15 +359,30 @@ class SyncPipe(PyPipe):
         if self.parallelize:
             length = length_hint(self.source)
             def_pool = ThreadPool if self.threads else CPUPool
-
             self.workers = workers or get_worker_cnt(length, self.threads)
             self.chunksize = chunksize or get_chunksize(length, self.workers)
-            self.pool = self.pool or def_pool(self.workers)
-            self.map = self.pool.imap if ordered else self.pool.imap_unordered
+
+            if self._pool_handle is None:
+                pool = def_pool(self.workers)
+                self._pool_handle = _PoolHandle(pool, owned=True)
+
+            if (pool := self.pool) is None:
+                raise RuntimeError("Cannot reuse a closed worker pool")
+
+            self.map = pool.imap if ordered else pool.imap_unordered
         else:
             self.workers = workers
             self.chunksize = chunksize or 1
             self.map = map
+
+    @property
+    def pool(self) -> AnyPool | None:
+        if self._pool_handle is None:
+            result = None
+        else:
+            result = self._pool_handle.pool
+
+        return result
 
     def _chain(self, name: str, **overrides) -> "SyncPipe":
         """
@@ -343,19 +399,37 @@ class SyncPipe(PyPipe):
             True
 
         """
+        next_scope = cast(PoolScope, overrides.get("pool_scope", self.pool_scope))
+
+        share_pool = (
+            self.pool_scope == "pipeline"
+            and next_scope == "pipeline"
+            and "pool" not in overrides
+        )
+
         kwargs = {
             "parallel": self.parallel,
             "threads": self.threads,
-            "pool": self.pool if self.reuse_pool else None,
-            "reuse_pool": self.reuse_pool,
+            "pool_scope": next_scope,
             "workers": self.workers,
             "chunksize": self.chunksize,
             "context": self.context,
             "inputs": self.inputs,
         }
 
+        shared_handle = self._pool_handle if share_pool else None
+
+        if share_pool:
+            kwargs["_pool_handle"] = shared_handle
+
         kwargs.update(overrides)
-        return SyncPipe(name, source=self, **kwargs)
+        child = SyncPipe(name, source=self, **kwargs)
+        # Transfer cleanup responsibility only after successful construction
+        # and only when the handle was actually shared.
+        if shared_handle is not None and child._pool_handle is shared_handle:
+            self._terminal = False
+
+        return child
 
     def __getattr__(self, name: str):
         if name.startswith("_") or name in {"keys", "values", "items", "get"}:
@@ -363,28 +437,85 @@ class SyncPipe(PyPipe):
 
         return self._chain(name)
 
+    def close(self):
+        if self._pool_handle is not None:
+            self._pool_handle.close()
+
+    def terminate(self):
+        if self._pool_handle is not None:
+            self._pool_handle.terminate()
+
+    def __enter__(self) -> Self:
+        """
+        Use a pipe as a context manager. When a parallel pipe creates its own
+        thread/process pool, that pool is shut down when the block exits (or
+        terminated if the block raises). A pool passed in by the caller is left
+        running.
+
+        Examples:
+            >>> src = [{'content': 'a'}, {'content': 'b'}]
+            >>>
+            >>> with (flow := SyncPipe('hash', source=src, parallel=True)):
+            ...     results = list(flow)
+            ...     flow.pool  # the worker pool is live inside the block
+            <multiprocessing.pool.ThreadPool state=RUN pool_size=2>
+            >>> flow.pool  # ... and shut down once the block exits
+            >>> len(results)
+            2
+            >>> # the pool is *terminated* if the block raises
+            >>> try:
+            ...     with (flow := SyncPipe('hash', source=src, parallel=True)):
+            ...         raise RuntimeError('boom')
+            ... except RuntimeError:
+            ...     pass
+            >>> flow.pool
+
+        """
+        self._in_context = True
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+        self._in_context = False
+        self.close() if exc_type is None else self.terminate()
+        return False
+
+    def _release_pool_after_iteration(self) -> bool:
+        if self._in_context:
+            result = False
+        elif self.pool_scope == "stage":
+            result = True
+        else:
+            result = self._terminal
+
+        return result
+
     def _stream(self) -> Stream:
         pipeline = partial(self.pipe, **self.kwargs)
 
-        if self.parallelize and self.source is not None:
-            source_items = list(self.source)
-            zipped = zip(source_items, repeat(pipeline))
-            mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
-        elif self.mapify and self.source is not None:
-            mapped = self.map(pipeline, self.source)
+        try:
+            if self.parallelize and self.source is not None:
+                source_items = list(self.source)
+                zipped = zip(source_items, repeat(pipeline))
+                mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
+            elif self.mapify and self.source is not None:
+                mapped = self.map(pipeline, self.source)
+            else:
+                mapped = None
+
+            self._mapped = mapped
+
+            if self._mapped is None:
+                yield from pipeline(self.source)
+            else:
+                yield from chain.from_iterable(self._mapped)
+        except BaseException:
+            if self._release_pool_after_iteration():
+                self.terminate()
+
+            raise
         else:
-            mapped = None
-
-        if mapped and self.parallelize and not self.reuse_pool:
-            self.pool.close()
-            self.pool.join()
-
-        self._mapped = mapped
-
-        if self._mapped:
-            yield from chain.from_iterable(self._mapped)
-        else:
-            yield from pipeline(self.source)
+            if self._release_pool_after_iteration():
+                self.close()
 
     def __iter__(self) -> Stream:
         if self._iter is None:
@@ -455,20 +586,47 @@ class PyCollection:
 class SyncCollection(PyCollection):
     """A synchronous PyCollection object"""
 
-    def __init__(self, *args, threads: bool | None = True, **kwargs):
+    def __init__(
+        self,
+        *args,
+        threads: bool | None = True,
+        ordered: bool | None = False,
+        pool: AnyPool | None = None,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.threads = threads
+        self.ordered = ordered
         self._iter: Stream | None = None
         self.map: Callable[..., Iterator[Stream]]
+        self._in_context = False
+        self._pool_handle = None if pool is None else _PoolHandle(pool, owned=False)
 
         if self.parallel:
             self.chunksize = get_chunksize(self.length, self.workers)
-
             def_pool = ThreadPool if self.threads else CPUPool
-            self.pool = def_pool(self.workers)
-            self.map = self.pool.imap_unordered
+
+            if self._pool_handle is None:
+                pool = def_pool(self.workers)
+                self._pool_handle = _PoolHandle(pool, owned=True)
+
+            pool = self.pool
+
+            if pool is None:
+                raise RuntimeError("Cannot reuse a closed worker pool")
+
+            self.map = pool.imap if ordered else pool.imap_unordered
         else:
             self.map = map
+
+    @property
+    def pool(self) -> AnyPool | None:
+        if self._pool_handle is None:
+            result = None
+        else:
+            result = self._pool_handle.pool
+
+        return result
 
     def __iter__(self) -> Stream:
         if self._iter is None:
@@ -482,16 +640,67 @@ class SyncCollection(PyCollection):
 
         return next(self._iter)
 
+    def close(self):
+        if self._pool_handle is not None:
+            self._pool_handle.close()
+
+    def terminate(self):
+        if self._pool_handle is not None:
+            self._pool_handle.terminate()
+
+    def __enter__(self) -> Self:
+        """
+        Use a collection as a context manager. A parallel collection creates its
+        own thread/process pool, which is shut down when the block exits (or
+        terminated if the block raises).
+
+        Examples:
+            >>> from riko import get_path
+            >>> sources = [{'url': get_path(f)} for f in ['feed.xml', 'gawker.xml']]
+            >>>
+            >>> with (stream := SyncCollection(sources, parallel=True)):
+            ...     results = list(stream)
+            ...     stream.pool  # the worker pool is live inside the block
+            <multiprocessing.pool.ThreadPool state=RUN pool_size=2>
+            >>> stream.pool  # ... and shut down once the block exits
+            >>> len(results)
+            32
+            >>> # the pool is *terminated* if the block raises
+            >>> try:
+            ...     with (stream := SyncCollection(sources, parallel=True)):
+            ...         raise RuntimeError('boom')
+            ... except RuntimeError:
+            ...     pass
+            >>> stream.pool
+
+        """
+        self._in_context = True
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+        self._in_context = False
+        self.close() if exc_type is None else self.terminate()
+        return False
+
     def _stream(self) -> Stream:
         """Fetch all source urls"""
-        zargs = zip(self.sources, repeat(self.conf))
+        try:
+            zargs = zip(self.sources, repeat(self.conf))
 
-        if self.parallel:
-            mapped = self.map(fetch_source, zargs, chunksize=self.chunksize)
+            if self.parallel:
+                mapped = self.map(fetch_source, zargs, chunksize=self.chunksize)
+            else:
+                mapped = self.map(fetch_source, zargs)
+
+            yield from chain.from_iterable(mapped)
+        except BaseException:
+            if not self._in_context:
+                self.terminate()
+
+            raise
         else:
-            mapped = self.map(fetch_source, zargs)
-
-        yield from chain.from_iterable(mapped)
+            if not self._in_context:
+                self.close()
 
     def pipe(self, **kwargs):
         """Return a SyncPipe primed with the source feed"""
