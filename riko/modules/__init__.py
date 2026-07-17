@@ -10,6 +10,7 @@ import textwrap
 from ast import AsyncFunctionDef, FunctionDef
 from collections.abc import Awaitable, Callable, Coroutine, Iterator
 from copy import copy
+from dataclasses import dataclass
 from functools import partial, wraps
 from importlib import import_module
 from inspect import (
@@ -550,6 +551,19 @@ def get_pieces_or_conf(
     return pieces_or_conf, merged_conf
 
 
+@dataclass(frozen=True)
+class PreparedModule:
+    name: str
+    conf: DotDict
+    opts: Opts
+    parsers: ParseFuncs
+    casters: CastFuncs | None
+    assign: str
+    emit: bool | Callable[[ParserOutput], bool] | None
+    is_source: bool
+    static_casted: tuple | None
+
+
 class Module[B: (Literal[True], Literal[False])]:
     isasync: B
 
@@ -582,22 +596,12 @@ class Module[B: (Literal[True], Literal[False])]:
     ):
         # Only called once on pipe import
         self.defaults = defaults or Defaults()
-        self.opts = Opts()
         self._opts = Opts(ftype=ftype, ptype=ptype)
         self._opts.update(cast_type(Opts, opts))
-        self.parsers = self.casters = None
-        self.conf = None
         self.debug = debug
         self.isasync = isasync  # pyright: ignore[reportAttributeAccessIssue]
         self.pollable = pollable
         self.types = set()
-        self.assign = ""
-        self.emit: bool | Callable[[ParserOutput], bool] | None = None
-        self.name = None
-        self.is_source = False
-        self.sub_type = None
-        self._prepare_key: tuple | None = None
-        self._static_casted: tuple | None = None
 
     def _set_wrapper_metadata(self, wrapper: wraps, pipe: Pipeline) -> None:
         raw_type = type(self).__name__
@@ -625,64 +629,89 @@ class Module[B: (Literal[True], Literal[False])]:
         assign: str = "",
         emit: bool | None = None,
         **kwargs,
-    ):
+    ) -> PreparedModule:
+        """
+        Resolve invocation state into an immutable ``PreparedModule``. Each call
+        returns fresh state so concurrent invocations and differing call-site
+        options never overwrite one another.
+
+        Examples:
+            >>> @processor()
+            ... def pipe(item, extraction, objconf, **kwargs):
+            ...     return f"{item['content']}-{objconf.times}"
+            ...
+            >>> item = {'content': 'hi'}
+            >>> a = next(pipe(item, conf={'times': '1'}, assign='x'))
+            >>> b = next(pipe(item, conf={'times': '2'}, assign='y'))
+            >>> (a, b)
+            ({'content': 'hi', 'x': 'hi-1'}, {'content': 'hi', 'y': 'hi-2'})
+
+        """
         conf = conf or {}
         def_emit = self._opts.get("emit") if emit is None else emit
         def_assign = assign or self._opts.get("assign", "")
-        self.opts = Opts(self._opts)
-        self.opts.setdefault("objectify", self._opts.get("ptype") != BasicCastType.NONE)
+        opts = Opts(self._opts)
+        opts.setdefault("objectify", self._opts.get("ptype") != BasicCastType.NONE)
 
         _type_name = type(self).__name__
+        is_source = False
 
         if _type_name == "operator":
-            self.emit = is_mapping if def_emit is None else def_emit
-            self.assign = def_assign or module_name
+            _emit = is_mapping if def_emit is None else def_emit
+            _assign = def_assign or module_name
         elif _type_name in {"processor", "splitter"}:
-            self.is_source = self._opts.get("ftype") == BasicCastType.NONE
+            is_source = self._opts.get("ftype") == BasicCastType.NONE
 
             if def_emit is None:
-                self.emit = self.is_source or is_mapping
+                _emit = is_source or is_mapping
             else:
-                self.emit = def_emit
+                _emit = def_emit
 
-            assignment = "content" if self.is_source else module_name
-            self.assign = def_assign or assignment
+            assignment = "content" if is_source else module_name
+            _assign = def_assign or assignment
         else:
             logger.error(f"Unknown module {self}.")
+            _emit = def_emit
+            _assign = def_assign
 
-        if (key := (module_name, repr(conf))) == self._prepare_key:
-            return
+        module_conf = DotDict(cast_type(dict, self.defaults))
+        module_conf.update(cast_type(dict, conf))
+        _conf = cast_type(Conf, module_conf.asdict())
 
-        self._prepare_key = key
-        self.name = module_name
-        self.conf = DotDict(cast_type(dict, self.defaults))
-        self.conf.update(cast_type(dict, conf))
-        _conf = cast_type(Conf, self.conf.asdict())
-
-        if self.emit and assign and not callable(self.emit):
+        if _emit and assign and not callable(_emit):
             msg = f"Assign is set to {assign} for {module_name} but will be "
             msg += "overridden since emit is True."
             logger.warning(msg)
 
-        self.opts["emit"] = self.emit
-        self.opts["assign"] = self.assign
-        self.opts.update(cast_type(Opts, kwargs))
-        self.parsers = get_parsers(self.opts, conf=_conf, **kwargs)
+        opts["emit"] = _emit
+        opts["assign"] = _assign
+        opts.update(cast_type(Opts, kwargs))
+        parsers = get_parsers(opts, conf=_conf, **kwargs)
+        static_casted = None
 
-        if self.opts.get("ptype") == BasicCastType.NONE:
-            self.casters = None
-            self._static_casted = None
+        if opts.get("ptype") == BasicCastType.NONE:
+            casters = None
         else:
-            self.casters = get_casters(self.opts)
+            casters = get_casters(opts)
 
-            if self.casters and not isinstance(self.parsers.conf_parser, partial):
-                parsed_conf = self.parsers.conf_parser({})
-                args = (parsed_conf, self.defaults, self.opts)
+            if casters and not isinstance(parsers.conf_parser, partial):
+                parsed_conf = parsers.conf_parser({})
+                args = (parsed_conf, self.defaults, opts)
                 parsed = get_pieces_or_conf(*args)
-                casted = dispatch(parsed, *self.casters[1:])
-                self._static_casted = (self.casters[0], *casted)
-            else:
-                self._static_casted = None
+                casted = dispatch(parsed, *casters[1:])
+                static_casted = (casters[0], *casted)
+
+        return PreparedModule(
+            name=module_name,
+            conf=module_conf,
+            opts=opts,
+            parsers=parsers,
+            casters=casters,
+            assign=_assign,
+            emit=_emit,
+            is_source=is_source,
+            static_casted=static_casted,
+        )
 
 
 class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
@@ -825,23 +854,25 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
 
         return parsed
 
-    def setup(self, _input: DotDict, **kwargs) -> tuple[DotDict, Casted, bool]:
-        skip = get_skip(_input, skip_if=self.opts.get("skip_if"))
+    def setup(
+        self, prepared: PreparedModule, _input: DotDict, **kwargs
+    ) -> tuple[DotDict, Casted, bool]:
+        skip = get_skip(_input, skip_if=prepared.opts.get("skip_if"))
 
-        if self._static_casted:
-            field_func, pre_casted_extract, pre_casted_conf = self._static_casted
-            field = kwargs.pop("field", None) or self.opts.get("field") or ""
+        if prepared.static_casted:
+            field_func, pre_casted_extract, pre_casted_conf = prepared.static_casted
+            field = kwargs.pop("field", None) or prepared.opts.get("field") or ""
             parsed_field = get_field(_input, field=field, **kwargs)
             casted_field = field_func(parsed_field)
             orig_item = _input
             casted = Casted(casted_field, pre_casted_extract, pre_casted_conf)
         else:
-            conf = cast_type(Conf, self.conf.asdict())
-            args = (_input, self.opts, conf)
+            conf = cast_type(Conf, prepared.conf.asdict())
+            args = (_input, prepared.opts, conf)
             orig_item, casted = _dispatch(
                 *args,
-                parsers=self.parsers,
-                casters=self.casters,
+                parsers=prepared.parsers,
+                casters=prepared.casters,
                 defaults=Defaults(self.defaults),
                 **kwargs,
             )
@@ -984,14 +1015,14 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             **kwargs,
         ) -> ProcessorWrapperOutput:
             _input = self.parse(item, module_name)
-            self.prepare(module_name, conf=conf, **kwargs)
-            assign = self.assign
-            orig_item, casted, skip = self.setup(_input, **kwargs)
+            prepared = self.prepare(module_name, conf=conf, **kwargs)
+            assign = prepared.assign
+            orig_item, casted, skip = self.setup(prepared, _input, **kwargs)
 
-            if self._static_casted:
-                _conf = cast_type(dict[str, ConfValues], self._static_casted[2])
+            if prepared.static_casted:
+                _conf = cast_type(dict[str, ConfValues], prepared.static_casted[2])
             else:
-                _conf = cast_type(dict[str, ConfValues], self.conf.asdict())
+                _conf = cast_type(dict[str, ConfValues], prepared.conf.asdict())
 
             if skip:
                 args = (_input, orig_item, assign)
@@ -1002,10 +1033,10 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 stream = (await result) if isawaitable(result) else result
                 args = (_input, stream, assign)
 
-                if callable(self.emit) and not isinstance(stream, Iterator):
-                    emit = self.emit(stream)
+                if callable(prepared.emit) and not isinstance(stream, Iterator):
+                    emit = prepared.emit(stream)
                 else:
-                    emit = bool(self.emit)
+                    emit = bool(prepared.emit)
 
                 if emit:
                     processed = self.process(*args, emit=True, skip=False, **_conf)
@@ -1020,14 +1051,14 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             **kwargs,
         ) -> ProcessorWrapperOutput:
             _input = self.parse(item, module_name)
-            self.prepare(module_name, conf=conf, **kwargs)
-            assign = self.assign
-            orig_item, casted, skip = self.setup(_input, **kwargs)
+            prepared = self.prepare(module_name, conf=conf, **kwargs)
+            assign = prepared.assign
+            orig_item, casted, skip = self.setup(prepared, _input, **kwargs)
 
-            if self._static_casted:
-                _conf = cast_type(dict[str, ConfValues], self._static_casted[2])
+            if prepared.static_casted:
+                _conf = cast_type(dict[str, ConfValues], prepared.static_casted[2])
             else:
-                _conf = cast_type(dict[str, ConfValues], self.conf.asdict())
+                _conf = cast_type(dict[str, ConfValues], prepared.conf.asdict())
 
             if skip:
                 args = (_input, orig_item, assign)
@@ -1037,10 +1068,10 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 stream = sync_pipe(*casted, **kwargs)
                 args = (_input, stream, assign)
 
-                if callable(self.emit) and not isinstance(stream, Iterator):
-                    emit = self.emit(stream)
+                if callable(prepared.emit) and not isinstance(stream, Iterator):
+                    emit = prepared.emit(stream)
                 else:
-                    emit = bool(self.emit)
+                    emit = bool(prepared.emit)
 
                 if emit:
                     processed = self.process(*args, emit=True, skip=False, **_conf)
@@ -1196,25 +1227,27 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             else:
                 yield cast_type(Item, DotDict({"content": item}))
 
-    def setup(self, _input: Stream, **kwargs) -> tuple[PipeTuples, Stream, Casted]:
-        if self._static_casted:
-            _, pre_casted_extract, pre_casted_conf = self._static_casted
+    def setup(
+        self, prepared: PreparedModule, _input: Stream, **kwargs
+    ) -> tuple[PipeTuples, Stream, Casted]:
+        if prepared.static_casted:
+            _, pre_casted_extract, pre_casted_conf = prepared.static_casted
             objconf = cast_type(Objconf, pre_casted_conf)
             casted = Casted({}, pre_casted_extract, pre_casted_conf)
             tuples = ((item, objconf) for item in _input)
             orig_stream = _input
         else:
-            conf = cast_type(Conf, self.conf.asdict())
+            conf = cast_type(Conf, prepared.conf.asdict())
             _dispatcher = partial(
                 _dispatch,
                 conf=conf,
-                parsers=self.parsers,
-                casters=self.casters,
+                parsers=prepared.parsers,
+                casters=prepared.casters,
                 defaults=Defaults(self.defaults),
             )
             # Parses conf that can vary per item. Can't handle terminal input
             dispatcher = cast_type(Callable[[Item, Opts], Dispatched], _dispatcher)
-            dispatches = (dispatcher(item, self.opts) for item in _input)
+            dispatches = (dispatcher(item, prepared.opts) for item in _input)
 
             # - operators can't skip items
             # - purposely setting both tuples and orig_stream to maps of the same
@@ -1224,7 +1257,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
 
             # Parses conf that doesn't vary per item and may contain terminal input
             orig_stream = (d.item for d in dispatches)
-            casted = dispatcher(DotDict(), self.opts, **kwargs).casted
+            casted = dispatcher(DotDict(), prepared.opts, **kwargs).casted
 
         return (tuples, orig_stream, casted)
 
@@ -1370,17 +1403,17 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             **kwargs,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)
-            self.prepare(op_module_name, conf=conf, **kwargs)
-            _conf = cast_type(dict[str, ConfValues], self.conf.asdict())
-            assign = self.assign
-            embedded_kwargs = cast_type(Embed, self.conf.pop("embed", None))
+            prepared = self.prepare(op_module_name, conf=conf, **kwargs)
+            _conf = cast_type(dict[str, ConfValues], prepared.conf.asdict())
+            assign = prepared.assign
+            embedded_kwargs = cast_type(Embed, prepared.conf.pop("embed", None))
             context = context or Context()
 
             if context.submodule:
                 context.inputs = kwargs.get("inputs")
 
             stream = cast_type(OperatorWrapperInput, _input)
-            tuples, orig_stream, casted = self.setup(stream, **kwargs)
+            tuples, orig_stream, casted = self.setup(prepared, stream, **kwargs)
             embed_type = getattr(embed, "type", None)
 
             if embed and embed_type and embed.loopable:
@@ -1405,9 +1438,11 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 stream = (await result) if isawaitable(result) else result
 
             if isinstance(stream, Iterator):
-                emit = bool(self.emit)
+                emit = bool(prepared.emit)
+            elif callable(prepared.emit):
+                emit = prepared.emit(stream)
             else:
-                emit = self.emit(stream) if callable(self.emit) else bool(self.emit)
+                emit = bool(prepared.emit)
 
             if emit:
                 processed = self.process(stream, assign, emit=True, **_conf)
@@ -1424,17 +1459,17 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             **kwargs,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)
-            self.prepare(op_module_name, conf=conf, **kwargs)
-            _conf = cast_type(dict[str, ConfValues], self.conf.asdict())
-            assign = self.assign
-            embedded_kwargs = cast_type(Embed, self.conf.pop("embed", None))
+            prepared = self.prepare(op_module_name, conf=conf, **kwargs)
+            _conf = cast_type(dict[str, ConfValues], prepared.conf.asdict())
+            assign = prepared.assign
+            embedded_kwargs = cast_type(Embed, prepared.conf.pop("embed", None))
             context = context or Context()
 
             if context.submodule:
                 context.inputs = kwargs.get("inputs")
 
             stream = cast_type(OperatorWrapperInput, _input)
-            tuples, orig_stream, casted = self.setup(stream, **kwargs)
+            tuples, orig_stream, casted = self.setup(prepared, stream, **kwargs)
             embed_type = getattr(embed, "type", None)
 
             if embed and embed_type and embed.loopable:
@@ -1458,9 +1493,11 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 stream = sync_pipe(orig_stream, casted.extraction, tuples, **kwargs)
 
             if isinstance(stream, Iterator):
-                emit = bool(self.emit)
+                emit = bool(prepared.emit)
+            elif callable(prepared.emit):
+                emit = prepared.emit(stream)
             else:
-                emit = self.emit(stream) if callable(self.emit) else bool(self.emit)
+                emit = bool(prepared.emit)
 
             if emit:
                 processed = self.process(stream, assign, emit=True, **_conf)
@@ -1506,20 +1543,22 @@ class splitter[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             else:
                 yield cast_type(Item, DotDict({"content": item}))
 
-    def setup(self, _input: Stream, **kwargs) -> tuple[PipeTuples, Stream, Casted]:
-        conf = cast_type(Conf, self.conf.asdict())
+    def setup(
+        self, prepared: PreparedModule, _input: Stream, **kwargs
+    ) -> tuple[PipeTuples, Stream, Casted]:
+        conf = cast_type(Conf, prepared.conf.asdict())
         _dispatcher = partial(
             _dispatch,
             conf=conf,
-            parsers=self.parsers,
-            casters=self.casters,
+            parsers=prepared.parsers,
+            casters=prepared.casters,
             defaults=Defaults(self.defaults),
         )
         dispatcher = cast_type(Callable[[Item, Opts], Dispatched], _dispatcher)
-        dispatches = (dispatcher(item, self.opts) for item in _input)
+        dispatches = (dispatcher(item, prepared.opts) for item in _input)
         tuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
         orig_stream = (d.item for d in dispatches)
-        casted = dispatcher(DotDict(), self.opts, **kwargs).casted
+        casted = dispatcher(DotDict(), prepared.opts, **kwargs).casted
         return (tuples, orig_stream, casted)
 
     @overload
@@ -1539,9 +1578,9 @@ class splitter[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             **kwargs,
         ) -> Streams:
             _input = self.parse(items)
-            self.prepare(op_module_name, conf=conf, **kwargs)
+            prepared = self.prepare(op_module_name, conf=conf, **kwargs)
             stream = cast_type(SplitterWrapperInput, _input)
-            tuples, orig_stream, casted = self.setup(stream, **kwargs)
+            tuples, orig_stream, casted = self.setup(prepared, stream, **kwargs)
             async_pipe = cast_type(AsyncSplitterParser, pipe)
             result = async_pipe(orig_stream, casted.extraction, tuples, **kwargs)
             return (await result) if isawaitable(result) else result
@@ -1552,9 +1591,9 @@ class splitter[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             **kwargs,
         ) -> Streams:
             _input = self.parse(items)
-            self.prepare(op_module_name, conf=conf, **kwargs)
+            prepared = self.prepare(op_module_name, conf=conf, **kwargs)
             stream = cast_type(SplitterWrapperInput, _input)
-            tuples, orig_stream, casted = self.setup(stream, **kwargs)
+            tuples, orig_stream, casted = self.setup(prepared, stream, **kwargs)
             sync_pipe = cast_type(SyncSplitterParser, pipe)
             streams = sync_pipe(orig_stream, casted.extraction, tuples, **kwargs)
             yield from streams
