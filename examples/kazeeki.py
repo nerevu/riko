@@ -34,7 +34,7 @@ def add_source(source):
 
 
 def add_id(source, rule, field="link"):
-    make_id_part = [{"subkey": "k:source"}, "-", {"subkey": "id"}]
+    make_id_part = [{"subkey": "k:source", "type": "text"}, "-", {"subkey": "id", "type": "text"}]
 
     ideed = source.strfind(conf={"rule": rule}, field=field, assign="id").strconcat(
         conf={"part": make_id_part}, assign="id"
@@ -142,16 +142,16 @@ def add_budget(source, fixed_text="", hourly_text="", double: bool | str = True)
     ]
 
     converted_budget_part = [
-        {"subkey": "k:budget_w_sym"},
+        {"subkey": "k:budget_w_sym", "type": "text"},
         " (",
-        {"subkey": "k:budget_converted_w_sym"},
+        {"subkey": "k:budget_converted_w_sym", "type": "text"},
         ")",
     ]
 
-    def_full_budget_part = {"subkey": "k:budget_w_sym"}
-    hourly_budget_part = [{"subkey": "k:budget_full"}, " / hr"]
+    def_full_budget_part = {"subkey": "k:budget_w_sym", "type": "text"}
+    hourly_budget_part = [{"subkey": "k:budget_full", "type": "text"}, " / hr"]
     exchangerate_conf = {"url": get_path("quote.json")}
-    native_currencyformat_conf = {"currency": {"subkey": "k:cur_code"}}
+    native_currencyformat_conf = {"currency": {"subkey": "k:cur_code", "type": "text"}}
     def_currencyformat_conf = {"currency": DEF_CUR_CODE}
     ave_budget_conf = make_simplemath("k:budget_raw2_num", "mean")
     convert_budget_conf = make_simplemath("k:rate", "multiply")

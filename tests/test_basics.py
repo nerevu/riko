@@ -33,7 +33,7 @@ class TestBasics:
         try:
             module = import_module(f"tests.pypipelines.{pipe_name}")
         except ImportError as e:
-            print(f"Couldn't import module for {pipe_name}: {e}")
+            print(f"Couldn't import module for {pipe_name}: {e}. Building from json...")
             parent = p.dirname(__file__)
             pipe_file_name = p.join(parent, "pipelines", f"{pipe_name}.json")
 

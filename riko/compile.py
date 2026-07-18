@@ -209,11 +209,8 @@ def _gen_pykwargs(  # noqa: E302
         yield ("embed", updated)
 
     if module["type"] == "split":
-        filtered = [
-            v
-            for v in parsed_pipe_def["wires"].values()
-            if module_id == get_module_id(v)
-        ]
+        wires = parsed_pipe_def["wires"].values()
+        filtered = [v for v in wires if module_id == get_module_id(v)]
         count = len(filtered)
         updated = count if steps else Id(count)
         yield ("splits", updated)

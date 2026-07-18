@@ -571,11 +571,6 @@ class PyCollection:
         workers=None,
         **kwargs,
     ):
-        # sources_1 = [{"url": "site.com/a"}, {"url": "site.com/b"}]
-        # sources_2 = [
-        #     {"url": "site.com/c", "type": "xpathfetchpage"},
-        #     {"url": "site.com/d", "type": "xpathfetchpage"},
-        # ]
         self.parallel = parallel
         self.conf = conf or cast(Conf, {})
         self.sources = sources
@@ -584,7 +579,15 @@ class PyCollection:
 
 
 class SyncCollection(PyCollection):
-    """A synchronous PyCollection object"""
+    """A synchronous PyCollection object
+
+    Examples:
+        >>> from riko import get_path
+        >>> sources = [{'url': get_path(f)} for f in ['feed.xml', 'gawker.xml']]
+        >>> stream = SyncCollection(sources, parallel=True)
+        >>> len(list(stream))
+        32
+    """
 
     def __init__(
         self,
