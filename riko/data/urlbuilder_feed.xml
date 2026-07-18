@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>URL Builder Loop Fixture</title>
+    <link>https://example.invalid/</link>
+    <description>Offline fixture for test_urlbuilder_loop</description>
+    <item>
+      <title>First item</title>
+      <link>https://example.invalid/item/1</link>
+      <description>first</description>
+      <media:content url="https://example.invalid/media/1.jpg"/>
+    </item>
+    <item>
+      <title>Second item</title>
+      <link>https://example.invalid/item/2</link>
+      <description>second</description>
+      <media:content url="https://example.invalid/media/2.jpg"/>
+    </item>
+  </channel>
+</rss>

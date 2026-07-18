@@ -4,7 +4,7 @@ from riko import Context, get_path
 from riko.modules.fetch import pipe as fetch
 
 
-def pipe_2de0e4517ed76082dcddf66f7b218057(context=None, conf=None):
+def pipe_2de0e4517ed76082dcddf66f7b218057(item=None, context=None, conf=None):
     # todo: insert pipeline description here
     conf = conf or {}
     print("pipe_2de0e4517ed76082dcddf66f7b218057!")
@@ -23,7 +23,7 @@ def pipe_2de0e4517ed76082dcddf66f7b218057(context=None, conf=None):
 
 
 if __name__ == "__main__":
-    pipeline = pipe_2de0e4517ed76082dcddf66f7b218057(Context())
+    pipeline = pipe_2de0e4517ed76082dcddf66f7b218057(context=Context())
 
     for i in pipeline:
         print(i)

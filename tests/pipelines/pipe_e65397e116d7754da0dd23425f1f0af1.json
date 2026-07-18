@@ -80,10 +80,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "media:content.url"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -130,20 +126,16 @@
                             }
                         },
                         "id": "sw-634",
-                        "type": "urlbuilder"
+                        "type": "urlbuilder",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "media:content.url"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-626",

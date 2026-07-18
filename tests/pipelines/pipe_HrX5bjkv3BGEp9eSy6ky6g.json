@@ -58,10 +58,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "loop:fetch"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -72,20 +68,16 @@
                             }
                         },
                         "id": "sw-165",
-                        "type": "fetch"
+                        "type": "fetch",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:fetch"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": false
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-157",

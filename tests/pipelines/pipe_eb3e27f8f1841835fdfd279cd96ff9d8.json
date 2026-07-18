@@ -75,7 +75,7 @@
                 }
             },
             "id": "sw-521",
-            "type": "urlinput"
+            "type": "input"
         },
         {
             "conf": {},

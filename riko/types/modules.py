@@ -106,21 +106,22 @@ class FetchRawConf(TypedDict):
     url: Value
 
 
-class InputRawConf(TypedDict):
+class InputRawConf(TypedDict, total=False):
+    name: Required[ConfArg]
+    type: Required[ConfArg]
+    prompt: Required[ConfArg]
     debug: ConfArg
     default: ConfArg
-    name: ConfArg
-    prompt: ConfArg
     test: ConfArg
-    param: NotRequired[Param | Sequence[Param]]
-    position: NotRequired[ConfArg]
-    input_key: NotRequired[ConfArg]
+    param: Param | Sequence[Param]
+    position: ConfArg
+    input_key: ConfArg
 
 
-class SortRawRule(TypedDict):
-    field: Value
-    dir: NotRequired[Value]
-    cast: NotRequired[Value]
+class SortRawRule(TypedDict, total=False):
+    field: Required[Value]
+    dir: Value
+    cast: Value
 
 
 class SortRawConf(TypedDict):

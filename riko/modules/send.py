@@ -82,9 +82,15 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
 
     """
     others = kwargs["others"]
+    ids = kwargs.get("ids")
 
     for item in stream:
-        [send(target, item) for target in others]
+        for target in others:
+            target_id = send(target, item)
+
+            if ids is not None and target_id is not None:
+                ids[target] = target_id
+
         yield item
 
 

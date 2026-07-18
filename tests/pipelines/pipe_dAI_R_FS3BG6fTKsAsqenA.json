@@ -36,10 +36,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "title"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -64,20 +60,16 @@
                             ]
                         },
                         "id": "sw-298",
-                        "type": "strconcat"
+                        "type": "strconcat",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "title"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-138",

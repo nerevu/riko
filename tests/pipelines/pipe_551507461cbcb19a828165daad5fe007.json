@@ -69,7 +69,7 @@
                 }
             },
             "id": "sw-242",
-            "type": "urlinput"
+            "type": "input"
         },
         {
             "conf": {

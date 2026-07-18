@@ -288,10 +288,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "description"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -380,20 +376,16 @@
                             ]
                         },
                         "id": "sw-408",
-                        "type": "strconcat"
+                        "type": "strconcat",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "description"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-400",
@@ -404,10 +396,6 @@
                 "count": {
                     "type": "text",
                     "value": "all"
-                },
-                "assign": {
-                    "type": "text",
-                    "value": "title"
                 },
                 "embed": {
                     "type": "module",
@@ -429,20 +417,16 @@
                             ]
                         },
                         "id": "sw-581",
-                        "type": "strconcat"
+                        "type": "strconcat",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "title"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-573",

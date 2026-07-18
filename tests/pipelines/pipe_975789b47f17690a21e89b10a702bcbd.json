@@ -183,10 +183,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "loop:stringtokenizer"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -197,16 +193,16 @@
                             }
                         },
                         "id": "sw-478",
-                        "type": "stringtokenizer"
+                        "type": "tokenizer",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:tokenizer"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": false
                 },
                 "field": {
                     "type": "text",

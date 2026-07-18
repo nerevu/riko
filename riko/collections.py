@@ -128,6 +128,7 @@ from meza import io
 from riko import Context
 from riko.bado import async_return
 from riko.bado.itertools import async_map
+from riko.compile import _resolve_module
 from riko.types.general import (
     AsyncPipeParser,
     Conf,
@@ -140,7 +141,7 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import BasicValue, StreamState
-from riko.utils import _registry, parse_context, send
+from riko.utils import _registry, _ids, parse_context, send
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
@@ -346,7 +347,7 @@ class SyncPipe(PyPipe):
             self._pool_handle = _PoolHandle(pool, owned=False)
 
         if self.name:
-            self.pipe: SyncPipeParser = import_module(f"riko.modules.{self.name}").pipe
+            self.pipe: SyncPipeParser = _resolve_module(self.name, "pipe")
             self.pollable: bool = getattr(self.pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self.pipe, "loopable")  # noqa: B009
             self.mapify = self.loopable and self.source is not None
@@ -436,13 +437,25 @@ class SyncPipe(PyPipe):
 
         return self._chain(name)
 
-    def close(self):
+    def _release_pool(self):
         if self._pool_handle is not None:
             self._pool_handle.close()
 
-    def terminate(self):
+    def _terminate_pool(self):
         if self._pool_handle is not None:
             self._pool_handle.terminate()
+
+    def close(self):
+        if self._iter is not None:
+            self._iter.close()
+
+        self._release_pool()
+
+    def terminate(self):
+        if self._iter is not None:
+            self._iter.close()
+
+        self._terminate_pool()
 
     def __enter__(self) -> Self:
         """
@@ -488,13 +501,16 @@ class SyncPipe(PyPipe):
 
         return result
 
-    def _close(self):
+    def _notify_subscribers(self):
         if self.name == "send":
-            others = cast(list[str], self.kwargs.get("others", []))
-            targets = [target for target in others if target in _registry]
+            ids = cast(dict[str, int], self.kwargs.get("ids", {}))
+            targets = [t for t, tid in ids.items() if _ids.get(t) == tid]
             [send(target, {"state": StreamState.DONE}) for target in targets]
 
     def _stream(self) -> Stream:
+        if self.name == "send":
+            self.kwargs.setdefault("ids", {})
+
         pipeline = partial(self.pipe, **self.kwargs)
 
         try:
@@ -515,14 +531,14 @@ class SyncPipe(PyPipe):
                 yield from chain.from_iterable(self._mapped)
         except BaseException:
             if self._release_pool_after_iteration():
-                self.terminate()
+                self._terminate_pool()
 
             raise
         finally:
             if self._release_pool_after_iteration():
-                self.close()
+                self._release_pool()
 
-            self._close()
+            self._notify_subscribers()
 
     def __iter__(self) -> Stream:
         if self._iter is None:
@@ -741,8 +757,7 @@ class AsyncPipe(PyPipe):
         self._aiter: AsyncIterator[Item] | None = None
 
         if self.name:
-            self.module = import_module(f"riko.modules.{self.name}")
-            self.async_pipe: AsyncPipeParser = self.module.async_pipe
+            self.async_pipe: AsyncPipeParser = _resolve_module(self.name, "async_pipe")
             self.pollable: bool = getattr(self.async_pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self.async_pipe, "loopable")  # noqa: B009
             self.mapify = self.loopable

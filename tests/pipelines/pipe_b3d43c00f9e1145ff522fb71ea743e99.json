@@ -76,10 +76,6 @@
                     "type": "text",
                     "value": "first"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "mpdetails"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -90,20 +86,16 @@
                             }
                         },
                         "id": "sw-603",
-                        "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
+                        "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "mpdetails"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "first"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-595",
@@ -115,10 +107,6 @@
                     "type": "text",
                     "value": "first"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "y:location"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -129,20 +117,16 @@
                             }
                         },
                         "id": "sw-692",
-                        "type": "locationbuilder"
+                        "type": "locationbuilder",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "y:location"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-619",

@@ -76,7 +76,7 @@
                 }
             },
             "id": "sw-131",
-            "type": "numberinput"
+            "type": "input"
         },
         {
             "conf": {

@@ -15,7 +15,7 @@ from riko.pypipelines.{{ module.name }} import {{ module.pipe_name }}
 {%- endfor %}
 
 
-def {{ pipe_name }}(**kwargs):
+def {{ pipe_name }}(item=None, context=None, conf=None, **kwargs):
     if kwargs.get("describe_input"):
         result = {{ inputs }}
     elif kwargs.get("describe_dependencies"):

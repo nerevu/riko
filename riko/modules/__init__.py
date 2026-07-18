@@ -1402,8 +1402,8 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
         async def async_wrapper(
             items: OperatorWrapperInput | None = None,
             conf: Conf = None,
-            embed: ProcessorWrapper | None = None,
             context: Context | None = None,
+            embed: ProcessorWrapper | None = None,
             **kwargs,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)
@@ -1455,8 +1455,8 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
         def sync_wrapper(
             items: OperatorWrapperInput | None = None,
             conf: Conf = None,
-            embed: ProcessorWrapper | None = None,
             context: Context | None = None,
+            embed: ProcessorWrapper | None = None,
             **kwargs,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)

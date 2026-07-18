@@ -23,7 +23,7 @@ from riko.types.modules import (
     StrReplaceConfRule,
 )
 from riko.types.values import StreamState
-from riko.utils import noop
+from riko.utils import _receive_queue, close, noop, reset_pubsub
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
@@ -36,6 +36,7 @@ reactor = cast(IReactorCore, FakeReactor())
 class TestCollections:
     def setup_method(self):
         self.runs = 0
+        reset_pubsub()
 
     def udf(self, item: Item) -> Item:
         self.runs += 1
@@ -137,6 +138,73 @@ class TestCollections:
             next(receiver1)
 
         assert list(stream) == []
+
+    def test_send_signals_done_on_early_close(self):
+        """A sender abandoned before it exhausts still signals DONE to the
+        receiver it bound to, so the receiver terminates promptly rather than
+        blocking until its ``max_wait`` elapses.
+
+        The receiver uses a 30s ``max_wait``; terminating within a handful of
+        polls proves it stopped because of the DONE delivered on close, not a
+        timeout (which would need ~30000 polls).
+        """
+        conf = ReceiveConf({"name": "r", "wait": 0.001, "max_wait": 30})
+        receiver = SyncPipe("receive", conf=conf)
+        assert next(receiver) == {"state": StreamState.PENDING}
+
+        sender = (
+            SyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .send(others=["r"])
+        )
+        assert next(sender) == {"content": "once is 1x"}
+
+        sender.close()
+        drained = []
+
+        for _ in range(100):
+            try:
+                drained.append(next(receiver))
+            except StopIteration:
+                break
+        else:
+            pytest.fail("receiver never terminated; DONE was not delivered on close")
+
+        assert {"content": "once is 1x"} in drained
+
+    def test_send_done_respects_channel_identity(self):
+        """A sender's DONE is addressed to the exact receiver instance it bound
+        to (by minted token), not merely to the channel name.
+
+        The sender binds to two receivers. ``keep`` is left in place; ``r`` is
+        replaced by a new receiver under the same name (a fresh token) before
+        the sender is abandoned. Closing the sender delivers DONE to ``keep``
+        (identity matches) but not to the replacement of ``r`` (stale token).
+        The ``keep`` assertion is a positive control: it fails unless the close
+        actually fired, so the identity assertion cannot pass vacuously.
+        """
+        r_conf = ReceiveConf({"name": "r", "wait": 0.001, "max_wait": 30})
+        keep_conf = ReceiveConf({"name": "keep", "wait": 0.001, "max_wait": 30})
+        first = SyncPipe("receive", conf=r_conf)
+        keep = SyncPipe("receive", conf=keep_conf)
+        next(first)
+        next(keep)
+
+        sender = (
+            SyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .send(others=["r", "keep"])
+        )
+        assert next(sender) == {"content": "once is 1x"}
+
+        close("r")
+        second = SyncPipe("receive", conf=r_conf)
+        next(second)
+        sender.close()
+        keep_q = list(_receive_queue.get("keep") or [])
+        r_q = list(_receive_queue.get("r") or [])
+        assert any(state is StreamState.DONE for state, _ in keep_q)
+        assert all(state is not StreamState.DONE for state, _ in r_q)
 
     def test_pipes_use_loopability_for_mapping(self):
         source = [{"content": "one"}, {"content": "two"}]

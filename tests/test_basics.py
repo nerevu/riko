@@ -10,50 +10,41 @@ from decimal import Decimal
 from importlib import import_module
 from itertools import islice
 from json import loads
-from os import path as p
+from pathlib import Path
 from typing import cast
 
 import pytest
 
 from riko import Context, get_path, listize
-from riko.compile import build_pipeline, parse_pipe_def
-from riko.types.general import ParserOutput, PipelineDependencies, SyncPipeParser
-from riko.types.values import StreamState
+from riko.compile import _resolve_module, build_pipeline
+from riko.exceptions import UnsupportedModuleError
+from riko.types.general import ParserOutput, PipelineDependencies
+from riko.types.values import StatefulItem
 from riko.utils import extract_dependencies, truncate_content
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
+PARENT = Path(__file__).parent
 
 
 class TestBasics:
     """Test a few sample pipelines"""
 
     def _get_pipeline(
-        self, pipe_name: str
-    ) -> list[ParserOutput | dict[str, StreamState]]:
-        try:
-            module = import_module(f"tests.pypipelines.{pipe_name}")
-        except ImportError as e:
-            print(f"Couldn't import module for {pipe_name}: {e}. Building from json...")
-            parent = p.dirname(__file__)
-            pipe_file_name = p.join(parent, "pipelines", f"{pipe_name}.json")
+        self, pipe_name: str, file_path: Path | None = None
+    ) -> list[ParserOutput | StatefulItem]:
+        pipeline, parsed_pipe_def = _resolve_module(pipe_name, pipe_name, True)
 
-            with open(pipe_file_name) as f:
-                pipe_def = loads(f.read())
-
-            parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
-            stream = build_pipeline(parsed_pipe_def, pipe_def, context=self.context)
-        else:
-            pipeline: SyncPipeParser = getattr(module, pipe_name)
+        if pipeline:
             stream = pipeline(context=self.context)
+        elif parsed_pipe_def:
+            stream = build_pipeline(parsed_pipe_def, context=self.context)
+        else:
+            stream = iter(())
 
         return list(listize(stream))
 
     def _load(
-        self,
-        items: Sequence[ParserOutput | dict[str, StreamState]],
-        pipe_name,
-        value=0,
-        check=1,
+        self, items: Sequence[ParserOutput | StatefulItem], pipe_name, value=0, check=1
     ):
         _check = Decimal(check)
         compared = Decimal(len(items)).compare(Decimal(value))
@@ -61,10 +52,9 @@ class TestBasics:
         try:
             module = import_module(f"tests.pypipelines.{pipe_name}")
         except ImportError:
-            parent = p.dirname(__file__)
-            pipe_file_name = p.join(parent, "pipelines", f"{pipe_name}.json")
+            pipe_file_name = PARENT / "pipelines" / f"{pipe_name}.json"
 
-            with open(pipe_file_name) as f:
+            with pipe_file_name.open() as f:
                 pipe_def = loads(f.read())
 
             pydeps = extract_dependencies(pipe_def)
@@ -88,28 +78,7 @@ class TestBasics:
     def setup_method(self):
         """Compile common subpipe"""
         kwargs = {"test": True, "describe_input": False, "describe_dependencies": False}
-
         self.context = Context(**kwargs)
-        # pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
-        # parent = p.dirname(__file__)
-        # pipe_file_name = p.join(parent, f"pipelines", f"{pipe_name}.json")
-
-        # with open(pipe_file_name) as f:
-        #     pipe_def = loads(f.read())
-
-        # parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
-        # pipe_file_name = p.join(parent, "pypipelines", f"{pipe_name}.py")
-
-        # with open(pipe_file_name, "w") as f:
-        #     f.write(stringify_pipe(parsed_pipe_def, pipe_def, context=self.context))
-        #     self.context.describe_input = False
-        #     self.context.describe_dependencies = False
-
-    # def teardown_method(self):
-    #     pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
-    #     parent = p.dirname(__file__)
-    #     pipe_file_name = p.join(parent, "pypipelines", f"{pipe_name}.py")
-    #     remove(pipe_file_name)
 
     ##############
     # Online Tests
@@ -159,7 +128,7 @@ class TestBasics:
     def test_input_override(self):
         """Overrides an offline input->itembuilder pipeline via Context.inputs"""
         self.context.inputs = {"textinput1": "IBM"}
-        pipe_name = "input_override"
+        pipe_name = "pipe_input_override"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
         assert items == [{"symbol": "IBM"}]
@@ -324,19 +293,28 @@ class TestBasics:
             item = cast(dict, i)
             assert "the" in item["summary"]
 
-    # Not compiled
-    @pytest.mark.skip
+    def test_forever(self):
+        """
+        Loads a pipeline that uses the forever driver source, bounded by
+        truncate, and checks it emits the expected driver items.
+        """
+        pipe_name = "pipe_forever"
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 3, 0)
+
+        for i in items:
+            assert cast(dict, i) == {"forever": True}
+
     def test_filtered_multiple_sources(self):
         """
-        Loads the filter multiple sources pipeline and compiles and executes
-         it to check the results
-        Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
-         (assumes its been compiled to a .py file - see test setUp)
+        Loads the filter multiple sources pipeline and compiles and executes it to check
+        the results. Note: uses a subpipe pipe_2de0e4517ed76082dcddf66f7b218057
         """
         pipe_name = "pipe_c1cfa58f96243cea6ff50a12fc50c984"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-        assert items[0] == "test"
+        self._load(items, pipe_name, 18, 0)
+        item = cast(dict, items[0])
+        assert item["title"].startswith("Running “Native” Data Wrangling Applicat")
 
     def test_european_performance_cars(self):
         """Loads a pipeline containing a sort"""
@@ -405,8 +383,6 @@ class TestBasics:
         for pos, item in enumerate(items):
             assert item == expected[pos]
 
-    # FIXME: need a test with a real feed and more stable data
-    @pytest.mark.skip
     def test_rssitembuilder(self):
         """Loads a pipeline containing an rssitembuilder"""
         pipe_name = "pipe_1166de33b0ea6936d96808717355beaa"
@@ -426,22 +402,18 @@ class TestBasics:
             },
             {
                 "newtitle": "NEWTITLE",
-                "loop:itembuilder": [
-                    {
-                        "description": {"content": "DESCRIPTION"},
-                        "title": "NEWTITLE",
-                    }
-                ],
+                "loop:itembuilder": {
+                    "description": {"content": "DESCRIPTION"},
+                    "title": "NEWTITLE",
+                },
                 "title": "TITLE1",
             },
             {
                 "newtitle": "NEWTITLE",
-                "loop:itembuilder": [
-                    {
-                        "description": {"content": "DESCRIPTION"},
-                        "title": "NEWTITLE",
-                    }
-                ],
+                "loop:itembuilder": {
+                    "description": {"content": "DESCRIPTION"},
+                    "title": "NEWTITLE",
+                },
                 "title": "TITLE2",
             },
         ]
@@ -538,12 +510,8 @@ class TestBasics:
         self.context.describe_dependencies = True
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 3, 0)
-        assert items == [
-            "input",
-            "output",
-            "rssitembuilder",
-        ]
+        self._load(items, pipe_name, 2, 0)
+        assert items == ["input", "rssitembuilder"]
 
     def test_describe_both(self):
         """Loads a pipeline but just gets the input requirements"""
@@ -568,11 +536,7 @@ class TestBasics:
             ("", "urlinput1", "urlinput1", "url", get_path("example.html")),
         ]
 
-        dependencies = [
-            "input",
-            "output",
-            "rssitembuilder",
-        ]
+        dependencies = ["input", "rssitembuilder"]
 
         item = cast(dict, items[0])
         assert item["inputs"] == inputs
@@ -685,30 +649,52 @@ class TestBasics:
             item = cast(dict, i)
             assert item["title"] in contains
 
-    # FIXME
-    @pytest.mark.skip
-    def test_xpathfetchpage_1(self):
-        """
-        Loads a pipeline containing xpathfetchpage
-        """
-        pipe_name = "pipe_a08134746e30a6dd3a7cb3c0cf098692"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-
-        for i in items:
-            item = cast(dict, i)
-            assert "title" in item
-
-    # FIXME
-    @pytest.mark.skip
     def test_urlbuilder_loop(self):
-        """
-        Loads a pipeline containing a URL builder in a loop
-        """
+        """Loads a pipeline containing a URL builder in a loop (offline)"""
         pipe_name = "pipe_e65397e116d7754da0dd23425f1f0af1"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-        assert items[0] == "test"
+        self._load(items, pipe_name, 2, 0)
+
+        chart_url = (
+            "https://example.invalid/chart?cht=qr&chs=200x200"
+            "&chl=https%3A%2F%2Fexample.invalid%2Fitem%2F1"
+        )
+        first = cast(dict, items[0])
+        assert first["link"] == "https://example.invalid/item/1"
+        assert first["media:content"]["url"] == chart_url
+        assert "cht=qr" in chart_url
+        assert "chs=200x200" in chart_url
+        assert "chl=https%3A%2F%2Fexample.invalid%2Fitem%2F1" in chart_url
+        assert first["description"].startswith(
+            f'<img src="{chart_url}" alt="QRcode" /><br/>'
+        )
+
+    def test_createrss(self):
+        """
+        Loads a pipeline containing rssitembuilder
+        """
+        pipe_name = "pipe_a08134746e30a6dd3a7cb3c0cf098692"
+
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 94, 0)
+        url = "i.cdn.turner.com/cnn/.e/img/3.0/global/header/intl/CNNi_Logo_new.png"
+
+        item = cast(dict, items[0])
+        assert item == {
+            "pubDate": "",
+            "author": "",
+            "description": f'<img src="http://{url}">',
+            "y:id": "",
+            "link": "/",
+            "media:content": {
+                "height": "65",
+                "type": "",
+                "url": f"http://{url}",
+                "width": "213",
+            },
+            "media:thumbnail": {"height": "", "url": "", "width": ""},
+            "y:title": "CNN",
+        }
 
     # todo: test simplemath - divide by zero and check/implement yahoo handling
     # todo: test malformed pipeline syntax
@@ -719,60 +705,27 @@ class TestBasics:
     #######################
     # Unimplemented modules
     #######################
-    @pytest.mark.skip
-    def test_yql(self):
+    def test_locationbuilder_reports_unsupported_module(self):
         """
-        Loads a pipeline containing a yql query
-        """
-        pipe_name = "pipe_ea463d94cd7c63ea003d9b1d0589d9df"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-
-        for i in items:
-            item = cast(dict, i)
-            assert item["title"]
-            assert item["a"]["content"]
-
-    # pipelocationbuilder module not yet implemented
-    @pytest.mark.skip
-    def test_submodule_loop(self):
-        """
-        Loads a pipeline containing a sub-module in a loop and passes
+        Loads a pipeline containing a locationbuilder, sub-module, passes
         input parameters. Also tests json fetch with nested list, assigns
         part of loop result, and regexes multi-part reference.
         """
         pipe_name = "pipe_b3d43c00f9e1145ff522fb71ea743e99"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-        contains = "Hywel Francis (University of Wales, Swansea (UWS))"
 
-        for i in islice(items, 3):  # lots of data, so just check some of it
-            item = cast(dict, i)
-            assert item["title"] == contains
+        with pytest.raises(UnsupportedModuleError, match=r"\blocationbuilder\b"):
+            self._get_pipeline(pipe_name)
+            # self._load(items, pipe_name, 63, 0)
+            # contains = "Hywel Francis (University of Wales, Swansea (UWS))"
+            #
+            # for i in islice(items, 3):  # lots of data, so just check some of it
+            #     item = cast(dict, i)
+            #     assert item["title"] == contains
 
-    # TermExtractor module not yet implemented
-    @pytest.mark.skip
-    def test_simpletagger(self):
-        """
-        Loads the RTW simple tagger pipeline and compiles and executes it
-        to check the results
-        """
+    def test_simpletagger_reports_unsupported_module(self):
+        """Term extraction (used by the simple tagger) is not implemented."""
         pipe_name = "pipe_93abb8500bd41d56a37e8885094c8d10"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-        assert items[0] == "test"
 
-    ###############
-    # Failing Tests
-    ###############
-    # needs twitter api authentication
-    # need to compile
-    @pytest.mark.skip
-    def test_twitter(self):
-        """
-        Loads a pipeline containing a loop, complex regex etc. for twitter
-        """
-        pipe_name = "pipe_21a90f8ebdba0265c136861a49cf3d93"
-        items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-        assert items[0] == "test"
+        with pytest.raises(UnsupportedModuleError, match=r"\btermextractor\b"):
+            items = self._get_pipeline(pipe_name)
+            self._load(items, pipe_name, 63, 0)

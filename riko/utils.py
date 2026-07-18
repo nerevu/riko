@@ -120,6 +120,8 @@ NON_SORTABLE = (Mapping, Sequence)
 
 _registry: dict[str, Generator[None, Item | StatefulItem, None]] = {}
 _receive_queue: dict[str, deque[tuple[StreamState | None, Item]]] = {}
+_ids: dict[str, int] = {}
+_counter = it.count()
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
@@ -1065,19 +1067,39 @@ def gen_items(  # noqa: E302
         yield {key: content} if key else content
 
 
-def send(target: str, item: Item | StatefulItem):
-    if (gen := _registry.get(target)) is not None:
+def send(target: str, item: Item | StatefulItem) -> int | None:
+    target_id = None
+    gen = _registry.get(target)
+
+    if gen is None:
+        logger.error(f"Attempted to send {item} to non-existent '{target}'")
+    else:
         try:
             gen.send(item)
         except StopIteration:
             _registry.pop(target, None)
-    else:
-        logger.error(f"Attempted to send {item} to non-existent '{target}'")
+            _ids.pop(target, None)
+        else:
+            target_id = _ids.get(target)
+
+    return target_id
 
 
 def close(name: str):
     if (gen := _registry.pop(name, None)) is not None:
         gen.close()
+
+    _receive_queue.pop(name, None)
+    _ids.pop(name, None)
+
+
+def reset_pubsub() -> None:
+    for name in tuple(_registry):
+        close(name)
+
+    _registry.clear()
+    _receive_queue.clear()
+    _ids.clear()
 
 
 def coroutine(registry_name: str | None = None, maxlen=256):
@@ -1094,6 +1116,7 @@ def coroutine(registry_name: str | None = None, maxlen=256):
             next(gen)
             _registry[name] = gen
             _receive_queue[name] = deque(maxlen=maxlen)
+            _ids[name] = next(_counter)
             return gen
 
         return wrapper
@@ -1111,38 +1134,55 @@ def parse_context(
     return new_context
 
 
-def gen_dependencies(pipe_def: PipeDef) -> Iterator[str]:
-    for module in pipe_def["modules"]:
-        yield module["type"]
+def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
+    modules = pipe_def["modules"]
+
+    if isinstance(modules, dict):
+        modules = modules.values()
+
+    for module in modules:
+        dep = module if isinstance(module, str) else module["type"]
+
+        if dep != "output":
+            yield dep
 
 
 def extract_dependencies(
-    pipe_def: PipeDef | None = None, pipeline: PipelineDependencies | None = None
+    pipe_def: PipeDef | ParsedPipeDef | None = None,
+    pipeline: PipelineDependencies | None = None,
 ) -> list[str]:
     """Extract modules used by a pipe"""
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
     elif pipeline:
-        pydeps = pipeline(Context(describe_dependencies=True))
+        pydeps = pipeline(context=Context(describe_dependencies=True))
     else:
         raise TypeError("Must supply at least one kwarg!")
 
     return sorted(set(pydeps))
 
 
-def gen_input(pipe_def: PipeDef) -> Iterator[tuple[str]]:
+def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str]]:
     fields = ["position", "name", "prompt"]
+    values = ["type", "value"]
+    modules = pipe_def["modules"]
 
-    for module in pipe_def["modules"]:
+    if isinstance(modules, dict):
+        modules = modules.values()
+
+    for module in modules:
         # Note: there seems to be no need to recursively collate inputs
         # from subpipelines
+        conf = module["conf"]
+
         try:
-            module_confs = [module["conf"][x]["value"] for x in fields]
+            module_confs = [conf[x]["value"] for x in fields]
         except (KeyError, TypeError):
             pass
         else:
-            values = ["type", "value"]
-            module_confs.extend(module["conf"]["default"][x] for x in values)
+            if default := conf.get("default"):
+                module_confs.extend(default[x] for x in values)
+
             yield tuple(module_confs)
 
 
@@ -1171,7 +1211,8 @@ def get_input(conf: InputRawConf, **kwargs):
 
 
 def extract_input(
-    pipe_def: PipeDef | None = None, pipeline: PipelineDependencies | None = None
+    pipe_def: PipeDef | ParsedPipeDef | None = None,
+    pipeline: PipelineDependencies | None = None,
 ) -> Sequence[str | tuple[str]]:
     """Extract inputs required by a pipe"""
     if pipe_def:

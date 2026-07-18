@@ -51,10 +51,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "loop:fetchpage"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -77,20 +73,16 @@
                             }
                         },
                         "id": "sw-119",
-                        "type": "fetchpage"
+                        "type": "fetchpage",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:fetchpage"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": false
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-111",

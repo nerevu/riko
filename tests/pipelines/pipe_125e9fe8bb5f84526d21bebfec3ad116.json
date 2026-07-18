@@ -50,10 +50,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "api"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -76,20 +72,16 @@
                             ]
                         },
                         "id": "sw-72",
-                        "type": "urlbuilder"
+                        "type": "urlbuilder",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "api"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-61",
@@ -106,10 +98,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "language"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -124,20 +112,16 @@
                             }
                         },
                         "id": "sw-150",
-                        "type": "fetchdata"
+                        "type": "fetchdata",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "language"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-142",

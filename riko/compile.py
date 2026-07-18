@@ -37,18 +37,26 @@ from codecs import open
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from importlib import import_module
-from json import JSONEncoder, dumps
+from json import JSONEncoder, dumps, loads
+from pathlib import Path
 from pprint import PrettyPrinter
-from typing import overload
+from typing import Literal, overload
 
 from jinja2 import Environment, PackageLoader
 
 from riko import Context, utils
-from riko.modules.forever import pipe as forever
+from riko.exceptions import UnsupportedModuleError
 from riko.pprint2 import Id, repr_args, str_args
 from riko.topsort import topological_sort
 from riko.types.compile import ParsedPipeDef, PipeDef, Wire
-from riko.types.general import ParserOutput, Step, Steps, Stream, SyncPipeParser
+from riko.types.general import (
+    ParserOutput,
+    Pipeline,
+    Step,
+    Steps,
+    Stream,
+    SyncPipeParser,
+)
 from riko.types.modules import AnyModuleRawConf
 
 
@@ -148,7 +156,7 @@ def _get_pyarg(  # noqa: E302
     if describe and steps:
         print("You must not specify both describe and steps. Assuming steps.")
 
-    return input_module if steps else Id(input_module)
+    return input_module if steps is not None else Id(input_module)
 
 
 @overload  # noqa: E302
@@ -181,14 +189,14 @@ def _gen_pykwargs(  # noqa: E302
     if describe and steps:
         print("You must not specify both describe and steps. Assuming steps.")
 
-    target_module_id = module_id
+    tgt_module_id = module_id
+    others = []
 
     # find the default input of this module
     for wire in parsed_pipe_def["wires"].values():
-
         # todo? this equates the outputs
         is_default_out_only = (
-            utils.pythonise(wire, key="tgt.moduleid") == target_module_id
+            utils.pythonise(wire, key="tgt.moduleid") == tgt_module_id
             and wire["tgt"]["id"] != "_INPUT"
             and wire["src"]["id"].startswith("_OUTPUT")
         )
@@ -197,23 +205,77 @@ def _gen_pykwargs(  # noqa: E302
         # but it *is* the default output
         if is_default_out_only:
             # set the extra inputs of this module as pykwargs of this module
-            source_module_id = get_module_id(wire)
+            src_module_id = get_module_id(wire)
             pipe_id = utils.pythonise(wire, key="tgt.id")
-            source = steps[source_module_id] if steps else Id(source_module_id)
-            yield (pipe_id, source)
+            source = steps[src_module_id] if steps is not None else Id(src_module_id)
+
+            if pipe_id.startswith("_OTHER") and pipe_id != "_OTHER":
+                others.append(source)
+            else:
+                yield (pipe_id, source)
+
+    if others:
+        yield ("OTHERS", others)
 
     if module["type"] == "loop":
         value = module["conf"]["embed"]["value"]
         pipe_id = utils.pythonise(value["id"])
-        updated = steps[pipe_id] if steps else Id(f"pipe_{pipe_id}")
+        updated = steps[pipe_id] if steps is not None else Id(f"pipe_{pipe_id}")
         yield ("embed", updated)
 
     if module["type"] == "split":
         wires = parsed_pipe_def["wires"].values()
         filtered = [v for v in wires if module_id == get_module_id(v)]
         count = len(filtered)
-        updated = count if steps else Id(count)
+        updated = count if steps is not None else Id(count)
         yield ("splits", updated)
+
+
+@overload
+def _resolve_module(  # noqa: E704
+    module_name: str, pipe_name: str, compile_missing: Literal[False] = ...
+) -> Pipeline: ...
+@overload  # noqa: E302
+def _resolve_module(  # noqa: E704
+    module_name: str, pipe_name: str, compile_missing: Literal[True]
+) -> tuple[Pipeline | None, ParsedPipeDef | None]: ...
+def _resolve_module(  # noqa: E302
+    module_name: str,
+    pipe_name: str,
+    compile_missing=False,
+    file_path: Path | None = None,
+) -> Pipeline | None | tuple[Pipeline | None, ParsedPipeDef | None]:
+    module = parsed_pipe_def = None
+
+    if module_name == "output":
+        pass
+    elif module_name.startswith("pipe_"):
+        try:
+            module = import_module(f"tests.pypipelines.{module_name}")
+        except ModuleNotFoundError as e:
+            if compile_missing:
+                msg = f"Couldn't import module for {pipe_name}: {e}. "
+                msg += "Building from json..."
+                print(msg)
+
+                parent = Path(__file__).parent.parent
+                file_path = file_path or parent / "tests" / "pipelines"
+                pipe_file_name = file_path / f"{pipe_name}.json"
+
+                with pipe_file_name.open() as f:
+                    pipe_def = loads(f.read())
+
+                parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
+            else:
+                raise UnsupportedModuleError(module_name) from e
+    else:
+        try:
+            module = import_module(f"riko.modules.{module_name}")
+        except ModuleNotFoundError as e:
+            raise UnsupportedModuleError(module_name) from e
+
+    pipeline = getattr(module, pipe_name, None) if module else None
+    return (pipeline, parsed_pipe_def) if compile_missing else pipeline
 
 
 def _gen_steps(
@@ -228,18 +290,7 @@ def _gen_steps(
     kwargs.setdefault("steps", {})
 
     for module_id, module_name, pipe_name in zipped:
-        if module_name.startswith("pipe_"):
-            import_name = f"riko.pypipelines.{module_name}"
-        elif module_name != "output":
-            import_name = f"riko.modules.{module_name}"
-        else:
-            import_name = None
-
-        if import_name:
-            module = import_module(import_name)
-            pipeline: SyncPipeParser = getattr(module, pipe_name)
-        else:
-            pipeline = lambda x, **kwargs: x  # noqa: E731
+        pipeline = _resolve_module(module_name, pipe_name)
 
         if module_name == "output":
             # Legacy Yahoo Pipes. Its result is just its input stream.
@@ -263,7 +314,7 @@ def _gen_steps(
 def _get_input_module(
     parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps | None = None
 ):
-    input_module = steps.get("forever") if steps else None
+    input_module = iter([{"forever": True}]) if steps is not None else None
 
     if module_id in parsed_pipe_def["embed"]:
         input_module = "_INPUT"
@@ -281,7 +332,7 @@ def _get_input_module(
             # if the wire is to this module and it's the default input and it's
             # the default output:
             if is_default_in_and_out:
-                input_module = steps[moduleid] if steps else moduleid
+                input_module = steps[moduleid] if steps is not None else moduleid
                 break
 
     return input_module
@@ -317,10 +368,7 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
 
 
 def build_pipeline(
-    parsed_pipe_def: ParsedPipeDef,
-    pipe_def: PipeDef,
-    context: Context | None = None,
-    **kwargs,
+    parsed_pipe_def: ParsedPipeDef, context: Context | None = None, **kwargs
 ) -> Stream:
     """
     Convert a pipe into an executable Python pipeline
@@ -331,8 +379,8 @@ def build_pipeline(
     context = context or Context(**kwargs)
 
     module_ids = topological_sort(parsed_pipe_def["graph"])
-    pydeps = utils.extract_dependencies(pipe_def=pipe_def)
-    pyinput = utils.extract_input(pipe_def=pipe_def)
+    pydeps = utils.extract_dependencies(parsed_pipe_def)
+    pyinput = utils.extract_input(parsed_pipe_def)
 
     if context.describe_input and context.describe_dependencies:
         pipeline = [{"inputs": pyinput, "dependencies": pydeps}]
@@ -345,7 +393,7 @@ def build_pipeline(
             "module_ids": module_ids,
             "module_names": utils.gen_names(module_ids, parsed_pipe_def),
             "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
-            "steps": {"forever": forever(context=context)},
+            "steps": {},
             "context": context,
         }
 
