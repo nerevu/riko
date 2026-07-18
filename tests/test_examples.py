@@ -134,8 +134,6 @@ class TestExamples:
         assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
         assert example == pipeline[-1]
 
-    # FIXME: dateformat no longer returns a struct_time
-    @pytest.mark.skip
     def test_split(self):
         """Tests the split pipeline."""
         pipe_name = "split"
@@ -145,8 +143,6 @@ class TestExamples:
         assert length == 1, f"Pipeline {pipe_name} has length {length}, not 1"
         assert example == pipeline[-1]
 
-    # FIXME: dateformat no longer returns a struct_time
-    @pytest.mark.skip
     def test_wired(self):
         """Tests the wired pipeline."""
         pipe_name = "wired"

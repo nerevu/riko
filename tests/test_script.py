@@ -21,7 +21,7 @@ except ImportError:
 PARENT_DIR = p.abspath(p.dirname(p.dirname(__file__)))
 DEMO_SCRIPT = "runpipe"
 BENCHMARK_SCRIPT = "benchmark"
-DEMO_TEXT = "Deadline to clear up health law eligibility near 682\n"
+DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
 BENCHMARK_TEXTS = [
     "baseline_sync - 1 repetitions/loop, best of 1 loops",
     "baseline_threads - 1 repetitions/loop, best of 1 loops",
@@ -42,10 +42,10 @@ def run_command(script: str, argument: str, *opts: str) -> str:
     - the working directory is ``PARENT_DIR``
     - a non-zero exit code raises ``subprocess.CalledProcessError``
     """
-    cmd = f"{script} + {' '.join(opts)}"
+    cmd = [script, *opts]
 
     if argument:
-        cmd += f" {argument}"
+        cmd.append(argument)
 
     result = subprocess.run(
         cmd,
@@ -53,7 +53,6 @@ def run_command(script: str, argument: str, *opts: str) -> str:
         capture_output=True,
         text=True,
         check=False,
-        shell=True,
     )
 
     if result.stderr:
@@ -108,13 +107,9 @@ def assert_output_matches(
 
 
 def gen_params():
-    yield from [
-        ("demo", DEMO_TEXT),
-        ("simple1", "'farechart'\n"),
-    ]
+    yield from [("demo", DEMO_TEXT), ("simple1", "'farechart'\n")]
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_sync(value):
     argument, expected = value
@@ -123,8 +118,8 @@ def test_demo_sync(value):
     assert_output_matches(output, expected, command=command)
 
 
-@pytest.mark.skip
-@pytest.mark.skipif(_issync, reason="async support not available")
+@pytest.mark.twisted
+@pytest.mark.skipif(_issync, reason="Twisted support not installed")
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_async(value):
     argument, expected = value

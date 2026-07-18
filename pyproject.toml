@@ -186,6 +186,9 @@ addopts = ["--doctest-modules", "--cov=riko", "--tb=short"]
 testpaths = ["tests", "riko"]
 doctest_optionflags = ["ELLIPSIS"]
 timeout = 300
+markers = [
+    "twisted: requires the Twisted optional dependency",
+]
 
 [tool.pylint.format]
 max-line-length=88
