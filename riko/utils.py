@@ -1066,14 +1066,17 @@ def gen_items(  # noqa: E302
 
 
 def send(target: str, item: Item | StatefulItem):
-    if target in _registry:
-        _registry[target].send(item)
+    if (gen := _registry.get(target)) is not None:
+        try:
+            gen.send(item)
+        except StopIteration:
+            _registry.pop(target, None)
     else:
         logger.error(f"Attempted to send {item} to non-existent '{target}'")
 
 
 def close(name: str):
-    if gen := _registry.get(name):
+    if (gen := _registry.pop(name, None)) is not None:
         gen.close()
 
 
