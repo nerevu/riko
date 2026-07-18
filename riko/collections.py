@@ -530,8 +530,6 @@ class SyncPipe(PyPipe):
         try:
             return next(self._iter)
         except StopIteration:
-            self._iter = None
-
             if self.name == "send":
                 others = cast(list[str], self.kwargs.get("others", []))
                 [send(target, {"state": StreamState.DONE}) for target in others]
