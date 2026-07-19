@@ -87,11 +87,7 @@ class TestBasics:
 
     def setup_method(self):
         """Compile common subpipe"""
-        kwargs = {
-            "test": True,
-            "describe_input": False,
-            "describe_dependencies": False,
-        }
+        kwargs = {"test": True, "describe_input": False, "describe_dependencies": False}
 
         self.context = Context(**kwargs)
         # pipe_name = "pipe_2de0e4517ed76082dcddf66f7b218057"
