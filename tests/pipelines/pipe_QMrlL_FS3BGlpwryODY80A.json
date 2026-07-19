@@ -141,43 +141,85 @@
         },
         {
             "conf": {
-                "RULE": {
-                    "field": {
-                        "type": "text",
-                        "value": "title"
-                    },
-                    "match": {
-                        "type": "text",
-                        "value": "(.+)"
-                    },
-                    "replace": {
-                        "type": "text",
-                        "value": "[Weight] $1"
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "regex",
+                        "id": "sw-189e",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:regex"
+                        },
+                        "conf": {
+                            "RULE": {
+                                "field": {
+                                    "type": "text",
+                                    "value": "title"
+                                },
+                                "match": {
+                                    "type": "text",
+                                    "value": "(.+)"
+                                },
+                                "replace": {
+                                    "type": "text",
+                                    "value": "[Weight] $1"
+                                }
+                            }
+                        }
                     }
                 }
             },
             "id": "sw-189",
-            "type": "regex"
+            "type": "loop"
         },
         {
             "conf": {
-                "RULE": {
-                    "field": {
-                        "type": "text",
-                        "value": "title"
-                    },
-                    "match": {
-                        "type": "text",
-                        "value": "(.+)"
-                    },
-                    "replace": {
-                        "type": "text",
-                        "value": "[Drugs] $1"
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "regex",
+                        "id": "sw-204e",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:regex"
+                        },
+                        "conf": {
+                            "RULE": {
+                                "field": {
+                                    "type": "text",
+                                    "value": "title"
+                                },
+                                "match": {
+                                    "type": "text",
+                                    "value": "(.+)"
+                                },
+                                "replace": {
+                                    "type": "text",
+                                    "value": "[Drugs] $1"
+                                }
+                            }
+                        }
                     }
                 }
             },
             "id": "sw-204",
-            "type": "regex"
+            "type": "loop"
         }
     ],
     "terminaldata": [

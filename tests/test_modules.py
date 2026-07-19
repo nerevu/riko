@@ -7,14 +7,32 @@ from collections.abc import Iterator
 
 import pytest
 
+from riko import Context
+from riko.cast import CastType
 from riko.collections import CONVERSION_FUNCS, list_targets
 from riko.modules import ModuleMetadata, list_modules, operator
 from riko.modules.count import pipe as count_pipe
+from riko.modules.input import pipe as input_pipe
+from riko.types.modules import InputConf
 
 
 def get_metadata(name: str) -> ModuleMetadata:
     modules = list_modules(show_metadata=True)
     return next(module for module in modules if module.name == name)
+
+
+def test_input_test_flag_scoped_to_test_context(monkeypatch):
+    """
+    The auto-wired context.test skips the input prompt only in a test
+    context. A non-test context (test=False) still prompts, so the flag can
+    never silently suppress prompting outside of tests.
+    """
+    monkeypatch.setattr("builtins.input", lambda *args: "typed")
+    conf = InputConf({"prompt": "?", "default": "def", "type": CastType.TEXT})
+
+    assert next(input_pipe(conf=conf, context=Context(test=True))) == "def"
+    assert next(input_pipe(conf=conf, context=Context(test=False))) == "typed"
+    assert next(input_pipe(conf=conf)) == "typed"
 
 
 def test_list_modules_names():
@@ -55,12 +73,8 @@ def test_filter_by_primary_subtype():
     assert "count" in primary_aggregators
     assert "count" not in primary_composers
 
-    assert all(
-        module.subtype == "aggregator"
-        for module in list_modules(
-            subtype="aggregator", primary=True, show_metadata=True
-        )
-    )
+    modules = list_modules(subtype="aggregator", primary=True, show_metadata=True)
+    assert all(module.subtype == "aggregator" for module in modules)
 
 
 def test_filter_loopable_modules():

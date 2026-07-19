@@ -147,8 +147,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
             rule (dict): The sort configuration, can be either a dict or list
                 of dicts (default: {'dir': 'asc', 'field': 'content'}).
-                Must contain the key 'field'. May contain the key 'dir', 'type'
-                    or 'cast'.
+                Must contain the key 'field'. May contain the key 'dir' or 'type'.
 
                 type (str): Expected value type. May be one of
                     'float', 'decimal', 'int', 'text', 'datetime', 'date', 'url',
@@ -198,8 +197,7 @@ def pipe(*args, **kwargs) -> Stream:
 
             rule (dict): The sort configuration, can be either a dict or list
                 of dicts (default: {'dir': 'asc', 'field': 'content'}).
-                Must contain the key 'field'. May contain the key 'dir', 'type',
-                    or 'cast'.
+                Must contain the key 'field'. May contain the key 'dir' or 'type'.
 
                 type (str): Expected value type. May be one of
                     'float', 'decimal', 'int', 'text', 'datetime', 'date', 'url',

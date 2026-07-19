@@ -106,7 +106,7 @@ type PrimitiveValue = SortableValue | None
 # Geo/currency
 type IPAddress = dict[str, str]
 type Location = IPAddress | dict[str, float]
-type CurrencyCode = Location | dict[str, int]
+type CurrencyCode = Location | dict[str, str | int] | dict[str, int]
 type AnyLocation = CurrencyCode | dict[str, float | str]
 
 # Args

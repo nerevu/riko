@@ -35,7 +35,11 @@ def add_source(source):
 
 
 def add_id(source, rule, field="link"):
-    make_id_part = [{"subkey": "k:source", "type": "text"}, "-", {"subkey": "id", "type": "text"}]
+    make_id_part = [
+        {"subkey": "k:source", "type": "text"},
+        "-",
+        {"subkey": "id", "type": "text"},
+    ]
 
     ideed = source.strfind(conf={"rule": rule}, field=field, assign="id").strconcat(
         conf={"part": make_id_part}, assign="id"

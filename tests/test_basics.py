@@ -80,9 +80,6 @@ class TestBasics:
         kwargs = {"test": True, "describe_input": False, "describe_dependencies": False}
         self.context = Context(**kwargs)
 
-    ##############
-    # Online Tests
-    ##############
     def test_feeddiscovery(self):
         """
         Loads a pipeline containing a feed auto-discovery module plus
@@ -128,10 +125,21 @@ class TestBasics:
     def test_input_override(self):
         """Overrides an offline input->itembuilder pipeline via Context.inputs"""
         self.context.inputs = {"textinput1": "IBM"}
-        pipe_name = "pipe_input_override"
+        pipe_name = "pipe_1LNyRuNS3BGdkTKaAsqenA"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
         assert items == [{"symbol": "IBM"}]
+
+    def test_gigs(self):
+        """Loads the gigs pipeline backed by a cached fetchdata source"""
+        pipe_name = "pipe_gigs"
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 49, 0)
+        item = cast(dict, items[-1])
+        assert item["title"] == "Educational Android App"
+        assert (
+            item["link"] == "http://www.guru.com/jobs/educational-android-app/1058980"
+        )
 
     ###############
     # Offline Tests
@@ -696,12 +704,6 @@ class TestBasics:
             "y:title": "CNN",
         }
 
-    # todo: test simplemath - divide by zero and check/implement yahoo handling
-    # todo: test malformed pipeline syntax
-    # todo: move these tests to the module doc blocks so each module is tested
-    # individually
-    # todo: test pipe compilation (compare output against expected .py file)
-
     #######################
     # Unimplemented modules
     #######################
@@ -727,5 +729,4 @@ class TestBasics:
         pipe_name = "pipe_93abb8500bd41d56a37e8885094c8d10"
 
         with pytest.raises(UnsupportedModuleError, match=r"\btermextractor\b"):
-            items = self._get_pipeline(pipe_name)
-            self._load(items, pipe_name, 63, 0)
+            self._get_pipeline(pipe_name)

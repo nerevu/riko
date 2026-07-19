@@ -39,28 +39,8 @@
                 "embed": {
                     "type": "module",
                     "value": {
-                        "conf": {
-                            "part": [
-                                {
-                                    "subkey": "headline",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": " ("
-                                },
-                                {
-                                    "subkey": "severity",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": ")"
-                                }
-                            ]
-                        },
-                        "id": "sw-298",
                         "type": "strconcat",
+                        "id": "sw-138e",
                         "emit": {
                             "type": "bool",
                             "value": false
@@ -68,6 +48,26 @@
                         "assign": {
                             "type": "text",
                             "value": "title"
+                        },
+                        "conf": {
+                            "part": [
+                                {
+                                    "type": "text",
+                                    "subkey": "headline"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": " ("
+                                },
+                                {
+                                    "type": "text",
+                                    "subkey": "severity"
+                                },
+                                {
+                                    "type": "text",
+                                    "value": ")"
+                                }
+                            ]
                         }
                     }
                 }
@@ -82,25 +82,46 @@
         },
         {
             "conf": {
-                "RULE": [
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "expires"
-                        },
-                        "newval": {
-                            "type": "text",
-                            "value": "pubDate"
-                        },
-                        "copy": {
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "rename",
+                        "id": "sw-180e",
+                        "emit": {
                             "type": "bool",
-                            "value": false
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:rename"
+                        },
+                        "conf": {
+                            "RULE": [
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "expires"
+                                    },
+                                    "copy": {
+                                        "type": "bool",
+                                        "value": false
+                                    },
+                                    "newval": {
+                                        "type": "text",
+                                        "value": "pubDate"
+                                    }
+                                }
+                            ]
                         }
                     }
-                ]
+                }
             },
             "id": "sw-180",
-            "type": "rename"
+            "type": "loop"
         },
         {
             "conf": {

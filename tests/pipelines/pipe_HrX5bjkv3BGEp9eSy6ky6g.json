@@ -85,7 +85,7 @@
         },
         {
             "conf": {
-                "KEY": [
+                "rule": [
                     {
                         "dir": {
                             "type": "text",
@@ -94,7 +94,8 @@
                         "field": {
                             "type": "text",
                             "value": "pubDate"
-                        }
+                        },
+                        "type": "datetime"
                     }
                 ]
             },

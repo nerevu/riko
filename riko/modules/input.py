@@ -96,7 +96,7 @@ def parser(
     """
     if kwargs.get("inputs"):
         value = kwargs["inputs"].get(objconf.input_key, objconf.default)
-    elif objconf.test or skip:
+    elif objconf.test or skip or kwargs.get("test"):
         value = objconf.default
     else:
         raw = input(f"{objconf.prompt} (default={objconf.default}) ")

@@ -78,6 +78,8 @@ dev = [
 manage = "riko.cli.manage:manager"
 runpipe = "riko.cli.runpipe:run"
 benchmark = "riko.cli.benchmark:main"
+compile = "riko.cli.compile:run"
+convert_dag = "riko.cli.convert_dag:run"
 
 [tool.ruff]
 extend-exclude = [
@@ -162,11 +164,14 @@ known-first-party = ["riko"]
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/**/*" = [
     "S101",   # Use of `assert` detected
+    "S102",   # Use of `exec` detected
 ]
 
 "tests/pypipelines/*" = [
     "N999",  # Invalid module name
     "N802",  # Function name
+    "N806",  # Variable in function should be lowercase (generated _OUTPUT)
+    "UP009",  # UTF-8 encoding declaration (generated header)
 ]
 
 [tool.pyright]

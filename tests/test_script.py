@@ -136,3 +136,29 @@ def test_benchmark():
     output = run_command(BENCHMARK_SCRIPT, "")
     kwargs = {"command": BENCHMARK_SCRIPT, "partial": True}
     assert_output_matches(output, *BENCHMARK_TEXTS, **kwargs)
+
+
+def test_convert_dag_and_compile(tmp_path):
+    dag = p.join(PARENT_DIR, "tests", "dags", "pipe_forever.json")
+    pipe_file = tmp_path / "pipe_forever.json"
+
+    convert = subprocess.run(
+        [sys.executable, "-m", "riko.cli.convert_dag", dag, "-o", str(pipe_file)],
+        cwd=PARENT_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    compiled = subprocess.run(
+        [sys.executable, "-m", "riko.cli.compile", str(pipe_file)],
+        cwd=PARENT_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert not convert.stdout
+    assert '"moduleid": "_OUTPUT"' in pipe_file.read_text(encoding="utf-8")
+    assert "def pipe_forever(" in compiled.stdout
+    assert "truncate" in compiled.stdout

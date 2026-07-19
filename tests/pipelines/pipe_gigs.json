@@ -1,0 +1,127 @@
+{
+    "modules": [
+        {
+            "id": "_OUTPUT",
+            "type": "output",
+            "conf": {}
+        },
+        {
+            "id": "sw-1",
+            "type": "fetchdata",
+            "conf": {
+                "URL": {
+                    "type": "url",
+                    "value": "file://riko/data/gigs.json"
+                },
+                "path": {
+                    "type": "text",
+                    "value": "value.items"
+                }
+            }
+        },
+        {
+            "id": "sw-2",
+            "type": "uniq",
+            "conf": {
+                "uniq_key": {
+                    "type": "text",
+                    "value": "link"
+                }
+            }
+        },
+        {
+            "id": "sw-3",
+            "type": "filter",
+            "conf": {
+                "COMBINE": {
+                    "type": "text",
+                    "value": "or"
+                },
+                "PERMIT": {
+                    "type": "bool",
+                    "value": false
+                },
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "php"
+                        },
+                        "op": {
+                            "type": "text",
+                            "value": "contains"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": "sw-4",
+            "type": "sort",
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "pubDate"
+                        },
+                        "dir": {
+                            "type": "text",
+                            "value": "DESC"
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-1"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-2"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-2"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-3"
+            }
+        },
+        {
+            "id": "_w3",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-3"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-4"
+            }
+        },
+        {
+            "id": "_w4",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-4"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

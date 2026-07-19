@@ -59,17 +59,17 @@
                                 "subkey": "url",
                                 "type": "url"
                             },
-                            "from": {
+                            "start": {
                                 "type": "text",
                                 "value": "One Way</span>"
                             },
-                            "to": {
+                            "end": {
                                 "type": "text",
                                 "value": "</tr>"
                             },
                             "token": {
                                 "type": "text",
-                                "value": "<td style=\"TEXT-ALIGN: center\">"
+                                "value": "<td style=\"text-align: center;\">"
                             }
                         },
                         "id": "sw-119",

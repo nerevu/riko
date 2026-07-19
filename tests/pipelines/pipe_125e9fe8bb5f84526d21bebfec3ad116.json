@@ -56,7 +56,7 @@
                         "conf": {
                             "BASE": {
                                 "type": "text",
-                                "value": "https://api.github.com/search/users"
+                                "value": "api.github.com_search_users"
                             },
                             "PARAM": [
                                 {
@@ -69,7 +69,11 @@
                                         "type": "text"
                                     }
                                 }
-                            ]
+                            ],
+                            "EXT": {
+                                "type": "text",
+                                "value": "json"
+                            }
                         },
                         "id": "sw-72",
                         "type": "urlbuilder",
@@ -96,7 +100,7 @@
             "conf": {
                 "count": {
                     "type": "text",
-                    "value": "all"
+                    "value": "first"
                 },
                 "embed": {
                     "type": "module",
@@ -112,16 +116,16 @@
                             }
                         },
                         "id": "sw-150",
-                        "type": "fetchdata",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "language"
-                        }
+                        "type": "fetchdata"
                     }
+                },
+                "assign": {
+                    "type": "text",
+                    "value": "info"
+                },
+                "emit": {
+                    "type": "bool",
+                    "value": false
                 }
             },
             "id": "sw-142",

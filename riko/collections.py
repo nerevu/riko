@@ -141,7 +141,7 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import BasicValue, StreamState
-from riko.utils import _registry, _ids, parse_context, send
+from riko.utils import _ids, parse_context, send
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
@@ -593,7 +593,8 @@ class PyCollection:
 
 
 class SyncCollection(PyCollection):
-    """A synchronous PyCollection object
+    """
+    A synchronous PyCollection object
 
     Examples:
         >>> from riko import get_path
@@ -601,6 +602,7 @@ class SyncCollection(PyCollection):
         >>> stream = SyncCollection(sources, parallel=True)
         >>> len(list(stream))
         32
+
     """
 
     def __init__(

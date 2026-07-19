@@ -60,21 +60,13 @@ def repr_arg(arg: object) -> str:
     unicode encodable as ascii is formatted as str
     """
     if isinstance(arg, str):
-        try:
-            value = repr(arg.encode("ascii"))
-        except (UnicodeEncodeError, AttributeError):
-            value = repr(arg)
-    elif isinstance(arg, dict):
-        items = arg.items()
-        joined = ", ".join(f"{repr_arg(k)}: {repr_arg(v)}" for k, v in items)
-        value = f"{joined}"
-    elif isinstance(arg, Mapping):
+        value = repr(arg)
+    elif isinstance(arg, (dict, Mapping)):
         joined = ", ".join(f"{repr_arg(k)}: {repr_arg(v)}" for k, v in arg.items())
-        value = f"{joined}"
+        value = f"{{{joined}}}"
     elif isinstance(arg, Sequence):
         value = f"[{', '.join(repr_arg(elem) for elem in arg)}]"
     elif arg is not None:
-        print(f"Unsupported type {type(arg)} for argument {arg}")
         value = str(arg)
     else:
         value = ""

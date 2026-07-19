@@ -1138,7 +1138,8 @@ def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
     modules = pipe_def["modules"]
 
     if isinstance(modules, dict):
-        modules = modules.values()
+        embed = pipe_def.get("embed") or {}
+        modules = [module for key, module in modules.items() if key not in embed]
 
     for module in modules:
         dep = module if isinstance(module, str) else module["type"]
@@ -1168,7 +1169,8 @@ def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str]]:
     modules = pipe_def["modules"]
 
     if isinstance(modules, dict):
-        modules = modules.values()
+        embed = pipe_def.get("embed") or {}
+        modules = [m for k, m in modules.items() if k not in embed]
 
     for module in modules:
         # Note: there seems to be no need to recursively collate inputs
@@ -1276,7 +1278,15 @@ def gen_names(
             yield name
 
 
-def gen_modules(
+@overload
+def gen_modules(  # noqa: E704
+    pipe_def: PipeDef, embedded: Literal[False] = ...
+) -> Iterator[tuple[str, PipeModule]]: ...
+@overload  # noqa: E302
+def gen_modules(  # noqa: E704
+    pipe_def: PipeDef, embedded: Literal[True]
+) -> Iterator[tuple[str, EmbeddedModule]]: ...
+def gen_modules(  # noqa: E302
     pipe_def: PipeDef, embedded=False
 ) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):

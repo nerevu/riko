@@ -51,75 +51,117 @@
         },
         {
             "conf": {
-                "RULE": [
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "programme.title"
-                        },
-                        "newval": {
-                            "type": "text",
-                            "value": "title"
-                        },
-                        "copy": {
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "rename",
+                        "id": "sw-587e",
+                        "emit": {
                             "type": "bool",
                             "value": true
-                        }
-                    },
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "programme.pid"
                         },
-                        "newval": {
+                        "assign": {
                             "type": "text",
-                            "value": "link"
+                            "value": "loop:rename"
                         },
-                        "copy": {
-                            "type": "bool",
-                            "value": true
-                        }
-                    },
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "programme.short_synopsis"
-                        },
-                        "newval": {
-                            "type": "text",
-                            "value": "description"
-                        },
-                        "copy": {
-                            "type": "bool",
-                            "value": true
+                        "conf": {
+                            "RULE": [
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "programme.title"
+                                    },
+                                    "copy": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "newval": {
+                                        "type": "text",
+                                        "value": "title"
+                                    }
+                                },
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "programme.pid"
+                                    },
+                                    "copy": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "newval": {
+                                        "type": "text",
+                                        "value": "link"
+                                    }
+                                },
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "programme.short_synopsis"
+                                    },
+                                    "copy": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "newval": {
+                                        "type": "text",
+                                        "value": "description"
+                                    }
+                                }
+                            ]
                         }
                     }
-                ]
+                }
             },
             "id": "sw-587",
-            "type": "rename"
+            "type": "loop"
         },
         {
             "conf": {
-                "RULE": [
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "link"
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "regex",
+                        "id": "sw-598e",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
                         },
-                        "match": {
+                        "assign": {
                             "type": "text",
-                            "value": "(.*)"
+                            "value": "loop:regex"
                         },
-                        "replace": {
-                            "type": "text",
-                            "value": "http://www.bbc.co.uk/programmes/$1"
+                        "conf": {
+                            "RULE": [
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "link"
+                                    },
+                                    "match": {
+                                        "type": "text",
+                                        "value": "(.*)"
+                                    },
+                                    "replace": {
+                                        "type": "text",
+                                        "value": "http://www.bbc.co.uk/programmes/$1"
+                                    }
+                                }
+                            ]
                         }
                     }
-                ]
+                }
             },
             "id": "sw-598",
-            "type": "regex"
+            "type": "loop"
         }
     ],
     "terminaldata": [

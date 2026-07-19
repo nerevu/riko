@@ -35,6 +35,10 @@
                 "URL": {
                     "terminal": "1_URL",
                     "type": "url"
+                },
+                "offline": {
+                    "type": "bool",
+                    "value": true
                 }
             },
             "id": "sw-481",
@@ -47,41 +51,19 @@
         },
         {
             "conf": {
+                "PATH": {
+                    "type": "text",
+                    "value": ""
+                },
                 "BASE": {
                     "type": "text",
-                    "value": "http://news.google.com/news"
+                    "value": "news.google.com/rss"
+                },
+                "EXT": {
+                    "type": "text",
+                    "value": "xml"
                 },
                 "PARAM": [
-                    {
-                        "key": {
-                            "type": "text",
-                            "value": "pz"
-                        },
-                        "value": {
-                            "type": "text",
-                            "value": "1"
-                        }
-                    },
-                    {
-                        "key": {
-                            "type": "text",
-                            "value": "cf"
-                        },
-                        "value": {
-                            "type": "text",
-                            "value": "all"
-                        }
-                    },
-                    {
-                        "key": {
-                            "type": "text",
-                            "value": "ned"
-                        },
-                        "value": {
-                            "type": "text",
-                            "value": "uk"
-                        }
-                    },
                     {
                         "key": {
                             "type": "text",
@@ -89,7 +71,27 @@
                         },
                         "value": {
                             "type": "text",
-                            "value": "en"
+                            "value": "en-US"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "gl"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "US"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "ceid"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "US:en"
                         }
                     },
                     {
@@ -101,22 +103,8 @@
                             "terminal": "PARAM_5_value",
                             "type": "text"
                         }
-                    },
-                    {
-                        "key": {
-                            "type": "text",
-                            "value": "output"
-                        },
-                        "value": {
-                            "type": "text",
-                            "value": "rss"
-                        }
                     }
-                ],
-                "PATH": {
-                    "type": "text",
-                    "value": ""
-                }
+                ]
             },
             "id": "sw-492",
             "type": "urlbuilder"

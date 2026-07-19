@@ -8,8 +8,8 @@ b) compiles it as a pipeline of generators which can be executed
 in-process
 
 Usage:
-a) python riko/compile.py tests/pipelines/testpipe1.json
-python riko/pypipelines/testpipe1.py
+a) compile tests/pipelines/testpipe1.json -o testpipe1.py
+python testpipe1.py
 
 b) from riko import compile
 
@@ -33,22 +33,26 @@ auto-rss module by Mark Pilgrim
 License: see LICENSE file
 """
 
+import builtins
+import keyword
+import subprocess
 from codecs import open
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from importlib import import_module
+from itertools import pairwise
 from json import JSONEncoder, dumps, loads
 from pathlib import Path
 from pprint import PrettyPrinter
-from typing import Literal, overload
+from typing import Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
 from riko import Context, utils
-from riko.exceptions import UnsupportedModuleError
-from riko.pprint2 import Id, repr_args, str_args
+from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.pprint2 import Id, repr_arg
 from riko.topsort import topological_sort
-from riko.types.compile import ParsedPipeDef, PipeDef, Wire
+from riko.types.compile import ParsedPipeDef, PipeDag, PipeDef, PipeModule, Wire
 from riko.types.general import (
     ParserOutput,
     Pipeline,
@@ -57,7 +61,61 @@ from riko.types.general import (
     Stream,
     SyncPipeParser,
 )
-from riko.types.modules import AnyModuleRawConf
+from riko.types.modules import (
+    AnyModuleRawConf,
+    ConfArg,
+    Embed,
+    LoopConf,
+    LoopRawConf,
+    Value,
+)
+
+_RAW_CONFS = {
+    "count": "CountRawConf",
+    "csv": "CsvRawConf",
+    "currencyformat": "CurrencyFormatRawConf",
+    "dateformat": "DateFormatRawConf",
+    "exchangerate": "ExchangeRateRawConf",
+    "feedautodiscovery": "FeedAutoDiscoveryRawConf",
+    "fetch": "FetchRawConf",
+    "fetchdata": "FetchDataRawConf",
+    "fetchpage": "FetchPageRawConf",
+    "fetchsitefeed": "FetchSiteFeedRawConf",
+    "fetchtable": "FetchTableRawConf",
+    "fetchtext": "FetchTextRawConf",
+    "filter": "FilterRawConf",
+    "geolocate": "GeolocateRawConf",
+    "input": "InputRawConf",
+    "itembuilder": "ItemBuilderRawConf",
+    "join": "JoinRawConf",
+    "loop": "LoopRawConf",
+    "receive": "ReceiveRawConf",
+    "refind": "RefindRawConf",
+    "regex": "RegexRawConf",
+    "rename": "RenameRawConf",
+    "rssitembuilder": "RssItemBuilderRawConf",
+    "send": "SendRawConf",
+    "simplemath": "SimpleMathRawConf",
+    "slugify": "SlugifyRawConf",
+    "sort": "SortRawConf",
+    "split": "SplitRawConf",
+    "strconcat": "StrconcatRawConf",
+    "strfind": "StrfindRawConf",
+    "strreplace": "StrReplaceRawConf",
+    "strtransform": "StrTransformRawConf",
+    "subelement": "SubelementRawConf",
+    "substr": "SubstrRawConf",
+    "sum": "SumRawConf",
+    "tail": "TailRawConf",
+    "timeout": "TimeoutRawConf",
+    "tokenizer": "TokenizerRawConf",
+    "truncate": "TruncateRawConf",
+    "typecast": "TypecastRawConf",
+    "uniq": "UniqRawConf",
+    "urlbuilder": "UrlBuilderRawConf",
+    "urlparse": "UrlParseRawConf",
+    "xpathfetchpage": "XpathFetchPageRawConf",
+}
 
 
 class MyPrettyPrinter(PrettyPrinter):
@@ -102,31 +160,165 @@ def write_file(data, path, pretty=False):
             return f.write(data)
 
 
+def _module_alias(module_name: str) -> str:
+    shadowed = module_name in dir(builtins) or keyword.iskeyword(module_name)
+    return f"_{module_name}" if shadowed else module_name
+
+
+def _lower_keys[T](obj: T) -> T:
+    if isinstance(obj, dict):
+        result = {
+            (k.lower() if isinstance(k, str) and k.isupper() else k): _lower_keys(v)
+            for k, v in obj.items()
+        }
+    elif isinstance(obj, list):
+        result = [_lower_keys(v) for v in obj]
+    else:
+        result = obj
+
+    return cast(T, result)
+
+
+def _render_embed(embed: Embed) -> str:
+    value = embed.get("value")
+    embed_type = value.get("type")
+    parts = []
+
+    for key, val in value.items():
+        rendered = _conf_source(embed_type, val) if key == "conf" else repr_arg(val)
+        parts.append(f"{repr_arg(key)}: {rendered}")
+
+    return f"{{'type': 'module', 'value': {{{', '.join(parts)}}}}}"
+
+
+def _render_loop(conf: LoopConf) -> str:
+    parts = []
+
+    for key, val in conf.items():
+        rendered = _render_embed(cast(Embed, val)) if key == "embed" else repr_arg(val)
+        parts.append(f"{repr_arg(key)}: {rendered}")
+
+    return f"{{{', '.join(parts)}}}"
+
+
+def _conf_source(module_name: str, conf: object) -> str:
+    raw = _RAW_CONFS.get(module_name)
+
+    if module_name == "loop" and isinstance(conf, dict) and "embed" in conf:
+        inner = _render_loop(cast(LoopConf, conf))
+    else:
+        inner = repr_arg(conf)
+
+    return f"{raw}({inner})" if raw else inner
+
+
+def _render_conf(module_name: str, conf: object) -> str:
+    return _conf_source(module_name, _lower_keys(conf))
+
+
+def _gen_embed_module_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
+    for module in parsed_pipe_def["modules"].values():
+        if (
+            (conf := module["conf"])
+            and (embed := cast(LoopRawConf, conf).get("embed"))
+            and (embed_type := embed.get("value", {}).get("type"))
+            and not embed_type.startswith("pipe")
+        ):
+            yield embed_type
+
+
+def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
+    used = set()
+
+    for module in parsed_pipe_def["modules"].values():
+        conf = module["conf"] or {}
+
+        if _collection_sources(conf) is not None:
+            continue
+
+        if raw := _RAW_CONFS.get(module["type"]):
+            used.add(raw)
+
+        if (
+            (embed := cast(LoopRawConf, conf).get("embed"))
+            and (embed_type := embed.get("value", {}).get("type"))
+            and (embed_raw := _RAW_CONFS.get(embed_type))
+        ):
+            used.add(embed_raw)
+
+    return used
+
+
+def _collection_sources(
+    conf: AnyModuleRawConf | None,
+) -> list[dict[str, object]] | None:
+    if conf and (url := conf.get("url")) and isinstance(url, list):
+        urls = cast(list[Value], url)
+        return [{"url": url["value"]} for url in urls]
+
+
+def _render_args(
+    module_name: str, pyarg: object, pykwargs: Iterable[tuple[str, object]]
+) -> str:
+    parts = []
+    rendered = repr_arg(pyarg)
+
+    if rendered:
+        parts.append(rendered)
+
+    for key, value in pykwargs:
+        if key == "context":
+            rendered_value = "context"
+        elif key == "conf":
+            rendered_value = _render_conf(module_name, value)
+        else:
+            rendered_value = repr_arg(value)
+
+        if rendered_value:
+            parts.append(f"{key}={rendered_value}")
+
+    return ", ".join(parts)
+
+
 def _gen_string_modules(
     parsed_pipe_def: ParsedPipeDef,
     module_ids: Iterable[str],
     module_names: Iterable[str],
     pipe_names: Iterable[str],
     context: Context | None = None,
-    steps: Steps | None = None,
     **kwargs,
 ):
     zipped = zip(module_ids, module_names, pipe_names, strict=False)
     context = context or Context(**kwargs)
 
     for module_id, module_name, pipe_name in zipped:
-        args = (parsed_pipe_def, module_id)
-        pyarg = _get_pyarg(*args, steps=None, **kwargs)
-        pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
+        if module_id in parsed_pipe_def["embed"]:
+            continue
 
-        if context.verbose:
-            print(f"{module_id} = {pipe_name}({str_args(pyarg, *pykwargs)})")
+        args = (parsed_pipe_def, module_id)
+        sub_pipe = module_name.startswith("pipe")
+        pyarg = _get_pyarg(*args, steps=None, **kwargs)
+        conf = parsed_pipe_def["modules"][module_id]["conf"]
+        sources = _collection_sources(conf)
+
+        if collection := sources is not None:
+            expr = f"SyncCollection({repr_arg(sources)}, context=context)"
+        elif module_name == "output":
+            expr = repr_arg(pyarg)
+        elif sub_pipe:
+            pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
+            expr = f"{pipe_name}({_render_args(module_name, None, pykwargs)})"
+        else:
+            pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
+            alias = _module_alias(module_name)
+            expr = f"{alias}({_render_args(module_name, pyarg, pykwargs)})"
 
         yield {
-            "args": repr_args(pyarg, *pykwargs),
             "id": module_id,
-            # "sub_pipe": module_name.startswith("pipe_"),
-            "sub_pipe": module_id in parsed_pipe_def["embed"],
+            "expr": expr,
+            "alias": _module_alias(module_name),
+            "sub_pipe": sub_pipe,
+            "collection": collection,
             "name": module_name,
             "pipe_name": pipe_name,
         }
@@ -179,7 +371,18 @@ def _gen_pykwargs(  # noqa: E302
     tuple[str, ParserOutput | SyncPipeParser | Id | Context | AnyModuleRawConf]
 ]:
     module = parsed_pipe_def["modules"][module_id]
-    yield ("conf", module["conf"])
+    conf = module["conf"]
+    keys = ("emit", "assign")
+
+    if any(key in conf for key in keys):
+        yield ("conf", {k: v for k, v in conf.items() if k not in keys})
+
+        for key in keys:
+            if key in conf:
+                setting = cast(ConfArg, conf[key])
+                yield (key, setting["value"])
+    else:
+        yield ("conf", conf)
 
     context = context or Context(**kwargs)
     yield ("context", context)
@@ -209,7 +412,7 @@ def _gen_pykwargs(  # noqa: E302
             pipe_id = utils.pythonise(wire, key="tgt.id")
             source = steps[src_module_id] if steps is not None else Id(src_module_id)
 
-            if pipe_id.startswith("_OTHER") and pipe_id != "_OTHER":
+            if pipe_id.startswith("_OTHER"):
                 others.append(source)
             else:
                 yield (pipe_id, source)
@@ -218,9 +421,9 @@ def _gen_pykwargs(  # noqa: E302
         yield ("OTHERS", others)
 
     if module["type"] == "loop":
-        value = module["conf"]["embed"]["value"]
+        value = cast(LoopRawConf, module["conf"])["embed"]["value"]
         pipe_id = utils.pythonise(value["id"])
-        updated = steps[pipe_id] if steps is not None else Id(f"pipe_{pipe_id}")
+        updated = Id(_module_alias(value["type"])) if steps is None else steps[pipe_id]
         yield ("embed", updated)
 
     if module["type"] == "split":
@@ -262,12 +465,15 @@ def _resolve_module(  # noqa: E302
                 file_path = file_path or parent / "tests" / "pipelines"
                 pipe_file_name = file_path / f"{pipe_name}.json"
 
-                with pipe_file_name.open() as f:
-                    pipe_def = loads(f.read())
+                try:
+                    with pipe_file_name.open() as f:
+                        pipe_def = loads(f.read())
+                except OSError as file_error:
+                    raise UnsupportedPipelineError(pipe_name) from file_error
 
                 parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
             else:
-                raise UnsupportedModuleError(module_name) from e
+                raise UnsupportedPipelineError(pipe_name) from e
     else:
         try:
             module = import_module(f"riko.modules.{module_name}")
@@ -338,6 +544,49 @@ def _get_input_module(
     return input_module
 
 
+def _wire(src: str, tgt: str, wid: str, sid="_OUTPUT", tid="_INPUT") -> Wire:
+    return Wire(
+        {
+            "id": wid,
+            "src": {"id": sid, "moduleid": src},
+            "tgt": {"id": tid, "moduleid": tgt},
+        }
+    )
+
+
+def convert_dag(dag: PipeDag) -> PipeDef:
+    """
+    Expand a bare-bones DAG into a full JSON pipeline
+
+    A DAG lists ``modules`` (``id``/``type``/opaque ``conf``) and, optionally,
+    ``wires`` as ``[source_id, target_id]`` pairs. When ``wires`` is omitted or
+    empty the modules are chained linearly in listing order. A module ``id`` is
+    optional too and defaults to ``sw-{n}`` (1-based listing order), so the
+    concise wireless form can drop ids entirely; supply ids when ``wires``
+    reference them. The terminal ``output`` node and the verbose ``src``/``tgt``
+    wire endpoints are generated automatically; every sink (a module that is
+    never a wire source) is connected to ``_OUTPUT``.
+
+    Note: every generated wire targets ``_INPUT``, so fan-in operators such as
+    ``union``/``join`` (whose secondary inputs need ``_OTHER{n}`` targets in a
+    full pipe definition) cannot be expressed by the ``[source, target]`` pair
+    format and must be authored as a full pipe definition instead.
+    """
+    modules = enumerate(dag["modules"], 1)
+    module_ids = [module.get("id", f"sw-{index}") for index, module in modules]
+    linear = list(pairwise(module_ids))
+    wires = [tuple(wire) for wire in dag.get("wires") or linear]
+    sources = {src for src, _ in wires}
+    output_edges = [(mid, "_OUTPUT") for mid in module_ids if mid not in sources]
+    edges = [*wires, *output_edges]
+    output = PipeModule(id="_OUTPUT", type="output", conf={})
+    zipped = zip(dag["modules"], module_ids, strict=False)
+    modules = [PipeModule({**module, "id": mid}) for module, mid in zipped] + [output]
+    edge_pairs = enumerate(edges, 1)
+    full_wires = [_wire(src, tgt, f"_w{index}") for index, (src, tgt) in edge_pairs]
+    return PipeDef({"modules": modules, "wires": full_wires})
+
+
 def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
     """
     Parse pipe JSON into internal structures
@@ -354,8 +603,14 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
     """
     graph = defaultdict(list, utils.gen_embed_graph(pipe_def))
     [graph[k].append(v) for k, v in utils.gen_graph(pipe_def)]
-    modules = dict(utils.gen_modules(pipe_def))
-    embed = dict(utils.gen_modules(pipe_def, embedded=True))
+    modules = {
+        key: PipeModule({**module, "conf": _lower_keys(module["conf"])})
+        for key, module in utils.gen_modules(pipe_def)
+    }
+    embed = {
+        key: PipeModule({**module, "conf": _lower_keys(module["conf"])})
+        for key, module in utils.gen_modules(pipe_def, embedded=True)
+    }
     modules.update(embed)
 
     return {
@@ -377,7 +632,6 @@ def build_pipeline(
     return that instead of the pipeline
     """
     context = context or Context(**kwargs)
-
     module_ids = topological_sort(parsed_pipe_def["graph"])
     pydeps = utils.extract_dependencies(parsed_pipe_def)
     pyinput = utils.extract_input(parsed_pipe_def)
@@ -405,7 +659,24 @@ def build_pipeline(
     yield from pipeline
 
 
-def stringify_pipe(parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, **kwargs) -> str:
+def _ruff_format(code: str) -> str:
+    kwargs = {"input": code, "capture_output": True, "text": True}
+
+    try:
+        result = subprocess.run(
+            ["ruff", "format", "-"],  # noqa: S607
+            check=True,
+            **kwargs,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        formatted = code
+    else:
+        formatted = result.stdout or code
+
+    return formatted
+
+
+def stringify_pipe(parsed_pipe_def: ParsedPipeDef, **kwargs) -> str:
     """Convert a pipe into Python script"""
     module_ids = topological_sort(parsed_pipe_def["graph"])
 
@@ -418,17 +689,29 @@ def stringify_pipe(parsed_pipe_def: ParsedPipeDef, pipe_def: PipeDef, **kwargs) 
     env = Environment(loader=PackageLoader("riko"), autoescape=False)  # noqa: S701
     template = env.get_template("pypipe.txt")
     modules = list(_gen_string_modules(parsed_pipe_def, **kwargs, **updates))
-    keys = ["sub_pipe", "name", "pipe_name"]
-    uniq_modules = {tuple(m[k] for k in keys) for m in modules}
+    keys = ["sub_pipe", "name", "pipe_name", "alias"]
+    top_names = {m["name"] for m in modules if not m["collection"]}
+    module_tuples = {tuple(m[k] for k in keys) for m in modules if not m["collection"]}
+    embed_names = set(_gen_embed_module_names(parsed_pipe_def)) - top_names
+    embed_tuples = {(False, n, n, _module_alias(n)) for n in embed_names}
+    uniq_modules = sorted(module_tuples | embed_tuples)
 
     data = {
         "uniq_modules": [dict(zip(keys, m, strict=False)) for m in uniq_modules],
         "modules": modules,
         "pipe_name": parsed_pipe_def["name"],
-        "inputs": utils.extract_input(pipe_def=pipe_def),
-        "dependencies": utils.extract_dependencies(pipe_def=pipe_def),
+        "inputs": utils.extract_input(parsed_pipe_def),
+        "dependencies": utils.extract_dependencies(parsed_pipe_def),
         "embedded_pipes": parsed_pipe_def["embed"],
         "last_module": module_ids[-1],
+        "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),
+        "use_collection": any(m["collection"] for m in modules),
     }
 
-    return template.render(**data)
+    return _ruff_format(template.render(**data))
+
+
+def compile(pipe_def: PipeDef, pipe_name: str = "anonymous", **kwargs) -> str:
+    """Compile a JSON pipe definition into a Python module"""
+    parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
+    return stringify_pipe(parsed_pipe_def, **kwargs)

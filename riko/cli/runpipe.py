@@ -11,6 +11,16 @@ io_error = FileNotFoundError
 
 
 def emit_result(result) -> None:
+    """
+    Print a pipe result, expanding iterables item by item.
+
+    >>> emit_result(["alpha", "beta"])
+    alpha
+    beta
+    >>> emit_result({"title": "riko"})
+    {'title': 'riko'}
+    >>> emit_result(None)
+    """
     if result is None:
         pass
     elif isinstance(result, (Mapping, str)):
@@ -35,6 +45,12 @@ def load_file(name, src):
 
 
 def file2name(path):
+    """
+    Return the base module name for a file path.
+
+    >>> file2name("examples/demo.py")
+    'demo'
+    """
     return p.splitext(p.basename(path))[0]
 
 

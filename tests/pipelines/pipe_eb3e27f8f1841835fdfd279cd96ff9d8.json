@@ -128,61 +128,103 @@
         },
         {
             "conf": {
-                "RULE": [
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "begin"
-                        },
-                        "newval": {
-                            "type": "text",
-                            "value": "ctime"
-                        },
-                        "copy": {
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "rename",
+                        "id": "sw-595e",
+                        "emit": {
                             "type": "bool",
                             "value": true
-                        }
-                    },
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "content"
                         },
-                        "newval": {
+                        "assign": {
                             "type": "text",
-                            "value": "title"
+                            "value": "loop:rename"
                         },
-                        "copy": {
-                            "type": "bool",
-                            "value": true
+                        "conf": {
+                            "RULE": [
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "begin"
+                                    },
+                                    "copy": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "newval": {
+                                        "type": "text",
+                                        "value": "ctime"
+                                    }
+                                },
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "content"
+                                    },
+                                    "copy": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "newval": {
+                                        "type": "text",
+                                        "value": "title"
+                                    }
+                                }
+                            ]
                         }
                     }
-                ]
+                }
             },
             "id": "sw-595",
-            "type": "rename"
+            "type": "loop"
         },
         {
             "conf": {
-                "RULE": [
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "ctime"
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "regex",
+                        "id": "sw-606e",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
                         },
-                        "match": {
+                        "assign": {
                             "type": "text",
-                            "value": "(.*)"
+                            "value": "loop:regex"
                         },
-                        "replace": {
-                            "type": "text",
-                            "value": "&time=$1"
+                        "conf": {
+                            "RULE": [
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "ctime"
+                                    },
+                                    "match": {
+                                        "type": "text",
+                                        "value": "(.*)"
+                                    },
+                                    "replace": {
+                                        "type": "text",
+                                        "value": "&time=$1"
+                                    }
+                                }
+                            ]
                         }
                     }
-                ]
+                }
             },
             "id": "sw-606",
-            "type": "regex"
+            "type": "loop"
         },
         {
             "conf": {

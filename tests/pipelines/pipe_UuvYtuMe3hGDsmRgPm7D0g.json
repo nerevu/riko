@@ -57,11 +57,11 @@
                     "type": "url",
                     "value": "file://riko/data/spreadsheets.google.com_pub?key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv"
                 },
-                "col_mode": {
+                "other_sep": {
                     "type": "text",
-                    "value": "custom"
+                    "value": ""
                 },
-                "col_name": [
+                "col_names": [
                     {
                         "type": "text",
                         "value": "Member"
@@ -175,24 +175,12 @@
                         "value": "EmployeeNumOfJourneys"
                     }
                 ],
-                "col_row_end": {
-                    "type": "number",
-                    "value": "1"
-                },
-                "col_row_start": {
-                    "type": "number",
-                    "value": "1"
-                },
-                "other_sep": {
-                    "type": "text",
-                    "value": ""
-                },
-                "separator": {
+                "delimiter": {
                     "type": "text",
                     "value": ","
                 },
-                "skip": {
-                    "type": "number",
+                "skip_rows": {
+                    "type": "int",
                     "value": "0"
                 }
             },
@@ -262,25 +250,42 @@
         },
         {
             "conf": {
-                "RULE": [
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "Member"
-                        },
-                        "newval": {
-                            "type": "text",
-                            "value": "title"
-                        },
-                        "copy": {
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "rename",
+                        "emit": {
                             "type": "bool",
                             "value": true
-                        }
+                        },
+                        "conf": {
+                            "RULE": [
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "Member"
+                                    },
+                                    "copy": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "newval": {
+                                        "type": "text",
+                                        "value": "title"
+                                    }
+                                }
+                            ]
+                        },
+                        "id": "sw-385e"
                     }
-                ]
+                }
             },
             "id": "sw-385",
-            "type": "rename"
+            "type": "loop"
         },
         {
             "conf": {
@@ -291,6 +296,16 @@
                 "embed": {
                     "type": "module",
                     "value": {
+                        "type": "strconcat",
+                        "id": "sw-408",
+                        "assign": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
                         "conf": {
                             "part": [
                                 {
@@ -298,92 +313,82 @@
                                     "value": "Total allowances claimed, inc travel: "
                                 },
                                 {
-                                    "subkey": "TotalAllowancesClaimedIncTravel",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "TotalAllowancesClaimedIncTravel"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>Total basic allowances claimed, ex travel: "
                                 },
                                 {
-                                    "subkey": "TotalBasicAllowancesExcTravel",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "TotalBasicAllowancesExcTravel"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>Total Travel claimed: "
                                 },
                                 {
-                                    "subkey": "TotalTravelClaimed",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "TotalTravelClaimed"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>MP Mileage: "
                                 },
                                 {
-                                    "subkey": "Mileage",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "Mileage"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>MP Rail Travel: "
                                 },
                                 {
-                                    "subkey": "MPRail",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "MPRail"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>MP Air Travel: "
                                 },
                                 {
-                                    "subkey": "MPAir",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "MPAir"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>Cost of staying away from main home: "
                                 },
                                 {
-                                    "subkey": "CostofStayingAwayFromMainHome",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "CostofStayingAwayFromMainHome"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>London Supplement: "
                                 },
                                 {
-                                    "subkey": "LondonSupplement",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "LondonSupplement"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>Office Running Costs: "
                                 },
                                 {
-                                    "subkey": "OfficeRunningCosts",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "OfficeRunningCosts"
                                 },
                                 {
                                     "type": "text",
                                     "value": "<br>Staffing Costs: "
                                 },
                                 {
-                                    "subkey": "StaffingCosts",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "StaffingCosts"
                                 }
                             ]
-                        },
-                        "id": "sw-408",
-                        "type": "strconcat",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "description"
                         }
                     }
                 }
@@ -400,31 +405,31 @@
                 "embed": {
                     "type": "module",
                     "value": {
+                        "type": "strconcat",
+                        "id": "sw-581",
+                        "assign": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
                         "conf": {
                             "part": [
                                 {
-                                    "subkey": "firstName",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "firstName"
                                 },
                                 {
                                     "type": "text",
                                     "value": " "
                                 },
                                 {
-                                    "subkey": "Member",
-                                    "type": "text"
+                                    "type": "text",
+                                    "subkey": "Member"
                                 }
                             ]
-                        },
-                        "id": "sw-581",
-                        "type": "strconcat",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "title"
                         }
                     }
                 }

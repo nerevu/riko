@@ -187,9 +187,8 @@ def _expression_path(node: ast.expr) -> str | None:
 
     if isinstance(node, ast.Name):
         path = node.id
-    elif isinstance(node, ast.Attribute):
-        if parent := _expression_path(node.value):
-            path = f"{parent}.{node.attr}"
+    elif isinstance(node, ast.Attribute) and (parent := _expression_path(node.value)):
+        path = f"{parent}.{node.attr}"
 
     return path
 
@@ -257,7 +256,8 @@ def _infer_expression_kind(
 
 
 def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
-    """Infer the obvious return kind of a short, unannotated pipe.
+    """
+    Infer the obvious return kind of a short, unannotated pipe.
 
     This is an intentionally narrow AST heuristic for doctest pipes.
 
@@ -308,6 +308,7 @@ def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
         ...     return build_result(items)
         >>> _infer_unannotated_return_kind(ambiguous)
         'unknown'
+
     """
     kind: OperatorReturnKind = "unknown"
     reason = None
@@ -1031,6 +1032,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 aync_pipe = cast_type(AsyncProcessorParser, pipe)
                 context = parse_context(**kwargs)
                 kwargs["inputs"] = context.inputs
+                kwargs["test"] = context.test
                 result = aync_pipe(*casted, **kwargs)
                 stream = (await result) if isawaitable(result) else result
                 args = (_input, stream, assign)
@@ -1069,6 +1071,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 sync_pipe = cast_type(SyncProcessorParser, pipe)
                 context = parse_context(**kwargs)
                 kwargs["inputs"] = context.inputs
+                kwargs["test"] = context.test
                 stream = sync_pipe(*casted, **kwargs)
                 args = (_input, stream, assign)
 

@@ -5,6 +5,7 @@ from pprint import pprint
 
 from riko import Context, get_path
 from riko.collections import SyncPipe
+from riko.types.general import Conf
 from riko.types.modules import FetchConf, FetchDataConf
 from riko.utils import make_regex_rule
 
@@ -316,7 +317,9 @@ def print_content(output):
     print("count", len(pipe))
 
 
-def pipe_kazeeki_full(context: Context):
+def pipe_kazeeki_full(
+    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:
@@ -331,5 +334,5 @@ def pipe_kazeeki_full(context: Context):
 
 
 if __name__ == "__main__":
-    output = pipe_kazeeki_full(Context())
+    output = pipe_kazeeki_full(context=Context())
     print_content(output)

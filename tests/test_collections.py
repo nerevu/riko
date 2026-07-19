@@ -140,7 +140,8 @@ class TestCollections:
         assert list(stream) == []
 
     def test_send_signals_done_on_early_close(self):
-        """A sender abandoned before it exhausts still signals DONE to the
+        """
+        A sender abandoned before it exhausts still signals DONE to the
         receiver it bound to, so the receiver terminates promptly rather than
         blocking until its ``max_wait`` elapses.
 
@@ -173,7 +174,8 @@ class TestCollections:
         assert {"content": "once is 1x"} in drained
 
     def test_send_done_respects_channel_identity(self):
-        """A sender's DONE is addressed to the exact receiver instance it bound
+        """
+        A sender's DONE is addressed to the exact receiver instance it bound
         to (by minted token), not merely to the channel name.
 
         The sender binds to two receivers. ``keep`` is left in place; ``r`` is

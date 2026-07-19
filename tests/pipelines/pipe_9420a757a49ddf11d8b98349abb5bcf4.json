@@ -34,17 +34,17 @@
                     "type": "url",
                     "value": "file://riko/data/www.caltrain.com_Fares_farechart.html"
                 },
-                "from": {
+                "start": {
                     "type": "text",
                     "value": "One Way</span>"
                 },
-                "to": {
+                "end": {
                     "type": "text",
                     "value": "</tr>"
                 },
                 "token": {
                     "type": "text",
-                    "value": "<td style=\"TEXT-ALIGN: center\">"
+                    "value": "<td style=\"text-align: center;\">"
                 }
             },
             "id": "sw-266",
