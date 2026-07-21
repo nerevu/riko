@@ -32,7 +32,8 @@ class TestBasics:
     def _get_pipeline(
         self, pipe_name: str, file_path: Path | None = None
     ) -> list[ParserOutput | StatefulItem]:
-        pipeline, parsed_pipe_def = _resolve_module(pipe_name, pipe_name, True)
+        args = (pipe_name, pipe_name, True)
+        pipeline, parsed_pipe_def = _resolve_module(*args, file_path=file_path)
 
         if pipeline:
             stream = pipeline(context=self.context)
@@ -141,9 +142,6 @@ class TestBasics:
             item["link"] == "http://www.guru.com/jobs/educational-android-app/1058980"
         )
 
-    ###############
-    # Offline Tests
-    ###############
     def test_kazeeki1(self):
         """Loads the kazeeki simple test pipeline."""
         pipe_name = "pipe_kazeeki1"

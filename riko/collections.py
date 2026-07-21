@@ -131,7 +131,6 @@ from riko.bado import async_return
 from riko.bado.itertools import async_map
 from riko.compile import _resolve_module
 from riko.types.general import (
-    AsyncPipeParser,
     Conf,
     ConversionFunc,
     Item,
@@ -330,7 +329,7 @@ class SyncPipe(PyPipe):
         self.threads = threads
         self.pool_scope = pool_scope
         self.ordered = ordered
-        self._iter: Stream | None = None
+        self._iter: Generator[Item, None, None] | None = None
         self._mapped: Iterator[Stream] | None = None
         self.map: Callable[..., Iterator[Stream]]
         self._in_context = False
@@ -347,7 +346,7 @@ class SyncPipe(PyPipe):
             self._pool_handle = _pool_handle
 
         if self.name:
-            self.pipe: SyncPipeParser = _resolve_module(self.name, "pipe")
+            self.pipe = _resolve_module(self.name, "pipe")
             self.pollable: bool = getattr(self.pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self.pipe, "loopable")  # noqa: B009
             self.mapify = self.loopable and self.source is not None
@@ -498,7 +497,7 @@ class SyncPipe(PyPipe):
             targets = [t for t, tid in ids.items() if _ids.get(t) == tid]
             [send(target, {"state": StreamState.DONE}) for target in targets]
 
-    def _stream(self) -> Stream:
+    def _stream(self) -> Generator[Item, None, None]:
         if self.name == "send":
             self.kwargs.setdefault("ids", {})
 
@@ -743,7 +742,7 @@ class AsyncPipe(PyPipe):
         self._aiter: AsyncIterator[Item] | None = None
 
         if self.name:
-            self.async_pipe: AsyncPipeParser = _resolve_module(self.name, "async_pipe")
+            self.async_pipe = _resolve_module(self.name, "async_pipe")
             self.pollable: bool = getattr(self.async_pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self.async_pipe, "loopable")  # noqa: B009
             self.mapify = self.loopable

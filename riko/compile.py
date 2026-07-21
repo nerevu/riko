@@ -54,6 +54,7 @@ from riko.pprint2 import Id, repr_arg
 from riko.topsort import topological_sort
 from riko.types.compile import ParsedPipeDef, PipeDag, PipeDef, PipeModule, Wire
 from riko.types.general import (
+    AsyncPipeParser,
     ParserOutput,
     Pipeline,
     Step,
@@ -436,11 +437,31 @@ def _gen_pykwargs(  # noqa: E302
 
 @overload
 def _resolve_module(  # noqa: E704
-    module_name: str, pipe_name: str, compile_missing: Literal[False] = ...
+    module_name: str,
+    pipe_name: Literal["pipe"],
+    compile_missing: Literal[False] = ...,
+    file_path: Path | None = ...,
+) -> SyncPipeParser: ...
+@overload  # noqa: E302
+def _resolve_module(  # noqa: E704
+    module_name: str,
+    pipe_name: Literal["async_pipe"],
+    compile_missing: Literal[False] = ...,
+    file_path: Path | None = ...,
+) -> AsyncPipeParser: ...
+@overload  # noqa: E302
+def _resolve_module(  # noqa: E704
+    module_name: str,
+    pipe_name: str,
+    compile_missing: Literal[False] = ...,
+    file_path: Path | None = ...,
 ) -> Pipeline: ...
 @overload  # noqa: E302
 def _resolve_module(  # noqa: E704
-    module_name: str, pipe_name: str, compile_missing: Literal[True]
+    module_name: str,
+    pipe_name: str,
+    compile_missing: Literal[True],
+    file_path: Path | None = ...,
 ) -> tuple[Pipeline | None, ParsedPipeDef | None]: ...
 def _resolve_module(  # noqa: E302
     module_name: str,
