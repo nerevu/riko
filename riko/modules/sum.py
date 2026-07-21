@@ -22,7 +22,7 @@ from decimal import Decimal
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko.types.configs import SumObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from riko.utils import group_by
 
@@ -34,7 +34,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: SumObjconf, tuples: PipeTuples, **kwargs
 ) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     Parses the pipe content

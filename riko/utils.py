@@ -66,7 +66,7 @@ import riko.cast as cast_module
 from riko import (
     ENCODING,
     Context,
-    Objconf,
+    DynamicConf,
     Objectify,
     __version__,
     get_abspath,
@@ -976,7 +976,7 @@ def make_regex_rule(
 
 
 # @memoize(TIMEOUT)
-def get_regex_rule(rule: Objconf | RegexConfRule, recompile=False) -> RegexRule:
+def get_regex_rule(rule: DynamicConf | RegexConfRule, recompile=False) -> RegexRule:
     rule = rule if is_dataclass(rule) else RegexConfRule(**rule)
     flags = 0 if rule.casematch else re.IGNORECASE
 

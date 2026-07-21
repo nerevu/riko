@@ -22,8 +22,8 @@ from urllib.parse import urlparse
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import BasicCastType
+from riko.types.configs import UrlParseObjconf
 from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
@@ -34,7 +34,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    url: str, extraction: Extraction, objconf: Objconf, **kwargs
+    url: str, extraction: Extraction, objconf: UrlParseObjconf, **kwargs
 ) -> Iterator[dict[str, str]]:
     """
     Parsers the pipe content

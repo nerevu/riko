@@ -2,14 +2,14 @@
 """
 riko.ext
 ~~~~~~~~
-The supported extension-author API: pipe decorators, module metadata, and
-parser protocols. SemVer-guaranteed for a smaller audience than the stable
-:mod:`riko.api` surface.
+The supported extension-author API: pipe decorators, parsed config types,
+module metadata, and parser protocols. SemVer-guaranteed for a smaller audience
+than the stable :mod:`riko.api` surface.
 
-Config types (``ParsedConf``/``DynamicConf``) and ``register`` join this
-surface in later phases (see docs/API_SURFACE.md).
+``register`` joins this surface in a later phase (see docs/API_SURFACE.md).
 """
 
+from riko.ext.config import DynamicConf, get_conf_type
 from riko.ext.decorators import operator, processor, splitter
 from riko.ext.protocols import (
     AsyncOperatorWrapper,
@@ -26,6 +26,7 @@ __all__ = [
     "AsyncOperatorWrapper",
     "AsyncProcessorWrapper",
     "AsyncSplitterWrapper",
+    "DynamicConf",
     "ModuleMetadata",
     "ModuleSubtype",
     "ModuleType",
@@ -33,6 +34,7 @@ __all__ = [
     "SyncOperatorWrapper",
     "SyncProcessorWrapper",
     "SyncSplitterWrapper",
+    "get_conf_type",
     "operator",
     "processor",
     "splitter",

@@ -27,9 +27,10 @@ from typing import TypedDict, cast
 import pygogo as gogo
 from twisted.web.iweb import IResponse
 
-from riko import ENCODING, Objconf
+from riko import ENCODING
 from riko.bado import async_get, async_json, io
 from riko.cast import BasicCastType
+from riko.types.configs import ExchangeRateObjconf
 from riko.types.general import Defaults, Extraction, Opts
 from riko.utils import Fetch
 
@@ -93,7 +94,7 @@ def calc_rate(
 
 
 async def async_parser(
-    base: str, extraction: Extraction, objconf: Objconf, **kwargs
+    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs
 ) -> Decimal:
     """
     Asynchronously parses the pipe content
@@ -154,7 +155,9 @@ async def async_parser(
     return rate
 
 
-def parser(base: str, extraction: Extraction, objconf: Objconf, **kwargs) -> Decimal:
+def parser(
+    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs
+) -> Decimal:
     """
     Parses the pipe content
 

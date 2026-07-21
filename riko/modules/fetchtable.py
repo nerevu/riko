@@ -25,9 +25,10 @@ from os import path as p
 import pygogo as gogo
 from meza.io import read
 
-from riko import ENCODING, Objconf
+from riko import ENCODING
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.types.configs import FetchTableObjconf
 from riko.types.general import Defaults, Extraction, Item, Stream
 from riko.utils import Fetch, auto_close
 
@@ -49,7 +50,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchTableObjconf, **kwargs
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -98,7 +99,9 @@ async def async_parser(
     return stream
 
 
-def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
+def parser(
+    _: Item, extraction: Extraction, objconf: FetchTableObjconf, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

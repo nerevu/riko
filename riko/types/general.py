@@ -24,7 +24,7 @@ from riko.types.values import (
 )
 
 if TYPE_CHECKING:
-    from riko import Context, DotDict, Objconf
+    from riko import Context, DotDict, DynamicConf
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
     from riko.types.modules import AnyConfRule, AnyModuleConf, AnyModuleRawConf, Skip
@@ -58,9 +58,9 @@ type OperatorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
 
-type PipeTuple = tuple[Item, "Objconf"]
+type PipeTuple = tuple[Item, "DynamicConf"]
 type PipeTuples = Iterator[PipeTuple]
-type Objconfs = Sequence["Objconf"]
+type Objconfs = Sequence["DynamicConf"]
 type Extraction = T
 type ConversionFunc = Callable[..., Items | StringIO]
 type Caster = Callable[[str | int], PrimitiveValue | AnyLocation]

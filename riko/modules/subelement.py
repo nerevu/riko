@@ -53,7 +53,7 @@ Attributes:
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko.types.configs import SubelementObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 from riko.utils import gen_items
 
@@ -64,7 +64,9 @@ DEFAULTS: Defaults = {"token_key": "content"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(item: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
+def parser(
+    item: Item, extraction: Extraction, objconf: SubelementObjconf, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

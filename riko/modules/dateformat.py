@@ -35,8 +35,8 @@ import datetime
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import BasicCastType
+from riko.types.configs import DateFormatObjconf
 from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
@@ -47,7 +47,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    date: datetime.date, extraction: Extraction, objconf: Objconf, **kwargs
+    date: datetime.date, extraction: Extraction, objconf: DateFormatObjconf, **kwargs
 ) -> str:
     """
     Obtains the user input

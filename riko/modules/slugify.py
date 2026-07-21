@@ -19,8 +19,8 @@ Attributes:
 import pygogo as gogo
 from slugify import slugify
 
-from riko import Objconf
 from riko.cast import BasicCastType
+from riko.types.configs import SlugifyObjconf
 from riko.types.general import Defaults, Opts
 
 from . import processor
@@ -35,7 +35,7 @@ DEFAULTS: Defaults = {"separator": "-"}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word: str, separator: str, objconf: Objconf, **kwargs) -> str:
+def parser(word: str, separator: str, objconf: SlugifyObjconf, **kwargs) -> str:
     """
     Parsers the pipe content
 

@@ -22,8 +22,8 @@ Attributes:
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import BasicCastType, CastType, cast
+from riko.types.configs import GeolocateObjconf
 from riko.types.general import Defaults, Extraction, Opts
 from riko.types.values import AnyLocation
 
@@ -35,7 +35,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    address: str, extraction: Extraction, objconf: Objconf, **kwargs
+    address: str, extraction: Extraction, objconf: GeolocateObjconf, **kwargs
 ) -> AnyLocation:
     """
     Parses the pipe content

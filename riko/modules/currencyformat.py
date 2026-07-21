@@ -21,8 +21,8 @@ from decimal import Decimal
 import pygogo as gogo
 from babel.numbers import format_currency
 
-from riko import Objconf
 from riko.cast import BasicCastType
+from riko.types.configs import CurrencyFormatObjconf
 from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
@@ -34,7 +34,9 @@ NaN = Decimal("NaN")
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(amount, extraction: Extraction, objconf: Objconf, **kwargs) -> str | Decimal:
+def parser(
+    amount, extraction: Extraction, objconf: CurrencyFormatObjconf, **kwargs
+) -> str | Decimal:
     """
     Parsers the pipe content
 

@@ -90,7 +90,15 @@ def get_task() -> "Cooperator":
     return task
 
 
-async def coop_reduce[T, S](
+@overload
+async def coop_reduce[T, S](  # noqa: E704
+    func: Callable[[T, S], T], content: Iterable[S], initial: T
+) -> T | S: ...
+@overload  # noqa: E302
+async def coop_reduce[T, S](  # noqa: E704
+    func: Callable[[T, S], T], content: Iterable[S], initial: None = ...
+) -> T | S | None: ...
+async def coop_reduce[T, S](  # noqa: E302
     func: Callable[[T, S], T], content: Iterable[S], initial: T | None = None
 ) -> T | S | None:
     """

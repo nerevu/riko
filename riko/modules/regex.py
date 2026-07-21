@@ -30,9 +30,9 @@ from functools import reduce
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.dotdict import DotDict
+from riko.types.configs import RegexObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RegexConfRule, RegexRule
 from riko.utils import get_regex_rule, group_by, multi_substitute, substitute
@@ -47,7 +47,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 async def async_parser(
     item: Item,
     rules: Sequence[RegexConfRule],
-    objconf: Objconf,
+    objconf: RegexObjconf,
     **kwargs,
 ) -> Item:
     """
@@ -118,7 +118,7 @@ async def async_parser(
 def parser(
     item: Item,
     rules: Sequence[RegexConfRule],
-    objconf: Objconf,
+    objconf: RegexObjconf,
     **kwargs,
 ) -> Item:
     """

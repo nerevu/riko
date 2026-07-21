@@ -37,15 +37,15 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from importlib.metadata import metadata, version
 from os import path as p
 from time import struct_time
-from typing import TYPE_CHECKING, Literal, TypeVar, overload
+from typing import TYPE_CHECKING, TypeVar, overload
+from warnings import warn
 
 from meza.fntools import Objectify as _Objectify
 from requests.structures import CaseInsensitiveDict
 
 from riko.context import Context, ExecutionMode  # noqa: F401
 from riko.types.general import ItemOrValue, SyncArgFunc
-from riko.types.modules import AnyConfRule, ObjconfParam
-from riko.types.values import PrimitiveValue, PrimitiveValueType
+from riko.types.values import PrimitiveValueType
 
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
 meta = metadata("riko")
@@ -160,60 +160,21 @@ class Objectify(_Objectify, Mapping[str, VT]):
         def iteritems(self) -> Iterator[tuple[str, VT]]: ...  # noqa: E704
 
 
-class Objconf(Objectify):
-    assign: str
-    attrs: list[str]
-    base: str
-    col_names: list[str]
-    combine: Literal["and", "or"]
-    count: str | int
-    currency: str
-    debug: bool
-    default: PrimitiveValue
-    delay: int
-    delimiter: str
-    detag: bool
-    emit: bool
-    encoding: str
-    end: str
-    ext: str
-    format: str
-    group_key: str
-    html5: bool
-    join_key: str
-    length: int
-    limit: int
-    lower: bool
-    max_len: int
-    max_wait: float
-    multi: bool
-    name: str
-    other: str
-    op: str
-    other_join_key: str
-    param: ObjconfParam | list[ObjconfParam]
-    parse_key: str
-    part: str
-    path: str | list[str]
-    permit: bool
-    precision: int
-    prompt: str
-    rule: AnyConfRule | list[AnyConfRule]
-    skip_rows: int
-    sort: int
-    start: str | int
-    stop: str | int
-    strict: bool
-    stringify: bool
-    sum_key: str
-    times: int
-    token: str
-    token_key: str
-    type: str
-    uniq_key: str
-    url: str
-    wait: float
-    xpath: str
+class DynamicConf(Objectify):
+    """
+    A parsed configuration bag with case-insensitive attribute and mapping
+    access. The base type every parsed module config is, and the fallback
+    config type for modules without a precise config.
+    """
+
+
+def Objconf[VT](values: Mapping[str, VT], *args, **kwargs) -> DynamicConf:  # noqa: N802
+    warn(
+        "Objconf is deprecated; use riko.ext.config.DynamicConf",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return DynamicConf(values, *args, **kwargs)
 
 
 @overload

@@ -22,7 +22,7 @@ from time import struct_time
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko import DynamicConf
 from riko.cast import BasicCastType
 from riko.dates import NOW, TODAY, parse_date_string
 from riko.types.general import Defaults, Extraction, Opts
@@ -44,7 +44,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    text: str, extraction: Extraction, objconf: Objconf, **kwargs
+    text: str, extraction: Extraction, objconf: DynamicConf, **kwargs
 ) -> struct_time:
     """
     Parsers the pipe content

@@ -26,7 +26,7 @@ Examples:
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko.types.configs import SendObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from riko.utils import send
 
@@ -37,7 +37,9 @@ DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
+def parser(
+    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

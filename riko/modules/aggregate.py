@@ -20,7 +20,8 @@ from typing import cast
 
 import pygogo as gogo
 
-from riko import Objconf, listize
+from riko import listize
+from riko.types.configs import AggregateObjconf
 from riko.types.general import Defaults, Item, PipeTuples, Stream
 
 from . import operator
@@ -29,7 +30,9 @@ DEFAULTS = Defaults()
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
+def parser(
+    stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 
@@ -67,7 +70,7 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
 
 
 async def async_parser(
-    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs
 ) -> Stream:
     func = cast(Callable[[Stream], Item], kwargs["func"])
 

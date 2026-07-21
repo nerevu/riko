@@ -42,8 +42,9 @@ Attributes:
 
 import pygogo as gogo
 
-from riko import Objconf, autorss
+from riko import autorss
 from riko.cast import SourceOpts
+from riko.types.configs import FeedAutoDiscoveryObjconf
 from riko.types.general import Defaults, Extraction, Item, Stream
 
 from . import processor
@@ -54,7 +55,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -95,7 +96,9 @@ async def async_parser(
     return stream
 
 
-def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
+def parser(
+    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

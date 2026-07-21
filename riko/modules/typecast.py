@@ -19,8 +19,8 @@ Attributes:
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import CastType, cast
+from riko.types.configs import TypecastObjconf
 from riko.types.general import Defaults, Extraction, Opts
 from riko.types.values import PrimitiveValue
 
@@ -32,7 +32,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: Objconf, **kwargs
+    content: str, extraction: Extraction, objconf: TypecastObjconf, **kwargs
 ) -> PrimitiveValue:
     """
     Parsers the pipe content

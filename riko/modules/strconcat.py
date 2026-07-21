@@ -23,7 +23,7 @@ Attributes:
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko.types.configs import StrconcatObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
@@ -33,7 +33,7 @@ DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> str:
+def parser(_: Item, extraction: Extraction, objconf: StrconcatObjconf, **kwargs) -> str:
     """
     Parses the pipe content
 
