@@ -4,7 +4,7 @@ riko FAQ
 Index
 -----
 
-`What pipes are available`_ | `What file types are supported`_ | `What protocols are supported`_
+`What pipes are available`_ | `What file types are supported`_ | `What protocols are supported`_ | `Can I define a workflow as JSON`_
 
 
 What pipes are available?
@@ -26,6 +26,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `currencyformat`_    | processor | transformer   | formats a number to a given currency string                                                  |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `datebuilder`_       | processor | transformer   | converts a text string into a datetime                                                       |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `dateformat`_        | processor | transformer   | formats a date                                                                               |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `exchangerate`_      | processor | transformer   | retrieves the current exchange rate for a given currency pair                                |
@@ -40,9 +42,15 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `fetchsitefeed`_     | processor | source        | fetches and parses the first feed found on a site                                            |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `fetchtable`_        | processor | source        | fetches and parses tabular data (csv, xls, json, etc.) to yield items                        |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `fetchtext`_         | processor | source        | fetches and parses a text file                                                               |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `filter`_            | operator  | composer      | extracts items matching the given rules                                                      |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `forever`_           | processor | source        | yields an endless stream of empty items (mocks an input source)                              |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `geolocate`_         | processor | transformer   | obtains the geo location of an ip or street address                                          |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `hash`_              | processor | transformer   | hashes the field of a feed item                                                              |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
@@ -52,15 +60,21 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `join`_              | operator  | aggregator    | perform a SQL like join on two feeds                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `regex`_             | processor | transformer   | replaces text in fields of a feed item using regexes                                         |
+| `loop`_              | operator  | composer      | runs a submodule (pipe) once per stream item                                                 |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `receive`_           | operator  | composer      | receives stream items from a named channel (pub/sub)                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `refind`_            | processor | transformer   | finds text located before, after, or between substrings using regular expressions            |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `regex`_             | processor | transformer   | replaces text in fields of a feed item using regexes                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `rename`_            | processor | transformer   | renames or copies fields in a feed item                                                      |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `reverse`_           | operator  | composer      | reverses the order of source items in a feed                                                 |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `rssitembuilder`_    | processor | source        | builds an rss item                                                                           |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `send`_              | operator  | composer      | pushes a copy of each stream item to named channels (pub/sub)                                |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `simplemath`_        | processor | transformer   | performs basic arithmetic, such as addition and subtraction                                  |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
@@ -92,6 +106,8 @@ riko's available pipes are outlined below [#]_:
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `truncate`_          | operator  | composer      | returns a specified number of items from a feed                                              |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
+| `typecast`_          | processor | transformer   | casts a field into a specific type                                                           |
++----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `udf`_               | processor | transformer   | performs an arbitrary (user-defined) function on an item                                     |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `union`_             | operator  | composer      | merges multiple feeds together                                                               |
@@ -103,8 +119,6 @@ riko's available pipes are outlined below [#]_:
 | `urlparse`_          | processor | transformer   | parses a URL into its six components                                                         |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 | `xpathfetchpage`_    | processor | source        | fetches the content of a given website as DOM nodes or a string                              |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `yql`_               | processor | source        | fetches the result of a given YQL query                                                      |
 +----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
 
 Args
@@ -130,9 +144,11 @@ and ``pipereverse``.
     >>> from riko.modules.hash import pipe
     >>>
     >>> item = {'title': 'riko pt. 1'}
-    >>> stream = pipe(item, field='title')
-    >>> next(stream)
-    {'title': 'riko pt. 1', 'hash': 2853617420L}
+    >>> result = next(pipe(item, field='title'))
+    >>> sorted(result)
+    ['hash', 'title']
+    >>> isinstance(result['hash'], int)
+    True
 
 Kwargs
 ^^^^^^
@@ -169,14 +185,20 @@ What file types are supported?
 
 File types that riko supports are outlined below:
 
-====================  =======================  ===========================================
-File type             Recognized extension(s)  Supported pipes
-====================  =======================  ===========================================
-HTML                  html                     feedautodiscovery, fetchpage, fetchsitefeed
-XML                   xml                      fetch, fetchdata
-JSON                  json                     fetchdata
-Comma separated file  csv, tsv                 csv
-====================  =======================  ===========================================
+===================  =======================  ===========================================
+File type            Recognized extension(s)  Supported pipes
+===================  =======================  ===========================================
+HTML                 html                     feedautodiscovery, fetchpage, fetchsitefeed
+XML                  xml                      fetch, fetchdata
+JSON                 json, geojson            fetchdata, fetchtable
+Comma/tab separated  csv, tsv                 csv, fetchtable
+Excel                xls, xlsx                fetchtable
+MS Access            mdb                      fetchtable
+dBASE                dbf                      fetchtable
+YAML                 yml, yaml                fetchtable
+SQLite               sqlite                   fetchtable
+Fixed width          fixed                    fetchtable
+===================  =======================  ===========================================
 
 What protocols are supported?
 -----------------------------
@@ -191,9 +213,27 @@ https     https://github.com/reubano/feed
 file      file:///Users/reubano/Downloads/feed.xml
 ========  =========================================
 
+Can I define a workflow as JSON?
+--------------------------------
+
+Yes. Besides Python ``workflows``, riko runs workflows stored as JSON pipe
+definitions (the Yahoo! Pipes-style ``{"modules": [...], "wires": [...]}``
+format). ``riko.compile.parse_pipe_def`` + ``build_pipeline`` execute one
+in-process, and the ``compile`` command translates one into a runnable Python
+module.
+
+For hand-authoring, the ``convert_dag`` command (and
+``riko.compile.convert_dag``) expands a *bare-bones DAG* — a list of ``modules``
+plus optional ``[source, target]`` wire pairs — into a full pipe definition.
+Omit ``wires`` to chain modules linearly, and omit ``id`` to auto-number them.
+See the `DAG format`_ doc and the `Cookbook`_ for examples.
+
 .. _What pipes are available: #what-pipes-are-available
 .. _What file types are supported: #what-file-types-are-supported
 .. _What protocols are supported: #what-protocols-are-supported
+.. _Can I define a workflow as JSON: #can-i-define-a-workflow-as-json
+.. _DAG format: https://github.com/nerevu/riko/blob/master/docs/DAG_FORMAT.md
+.. _Cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#compiling-json-workflows
 .. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
 .. _Alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#synchronous-processing
 
@@ -241,4 +281,11 @@ file      file:///Users/reubano/Downloads/feed.xml
 .. _urlbuilder: https://github.com/nerevu/riko/blob/master/riko/modules/urlbuilder.py
 .. _urlparse: https://github.com/nerevu/riko/blob/master/riko/modules/urlparse.py
 .. _xpathfetchpage: https://github.com/nerevu/riko/blob/master/riko/modules/xpathfetchpage.py
-.. _yql: https://github.com/nerevu/riko/blob/master/riko/modules/yql.py
+.. _datebuilder: https://github.com/nerevu/riko/blob/master/riko/modules/datebuilder.py
+.. _fetchtable: https://github.com/nerevu/riko/blob/master/riko/modules/fetchtable.py
+.. _forever: https://github.com/nerevu/riko/blob/master/riko/modules/forever.py
+.. _geolocate: https://github.com/nerevu/riko/blob/master/riko/modules/geolocate.py
+.. _loop: https://github.com/nerevu/riko/blob/master/riko/modules/loop.py
+.. _receive: https://github.com/nerevu/riko/blob/master/riko/modules/receive.py
+.. _send: https://github.com/nerevu/riko/blob/master/riko/modules/send.py
+.. _typecast: https://github.com/nerevu/riko/blob/master/riko/modules/typecast.py

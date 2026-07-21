@@ -187,8 +187,8 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--doctest-modules", "--cov=riko", "--tb=short"]
-testpaths = ["tests", "riko"]
+addopts = ["--doctest-modules", "--doctest-glob=*.rst", "--cov=riko", "--tb=short"]
+testpaths = ["tests", "riko", "README.rst", "docs"]
 doctest_optionflags = ["ELLIPSIS"]
 timeout = 300
 markers = [
