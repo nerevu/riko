@@ -17,7 +17,7 @@ from riko.collections import (
     export,
     list_targets,
 )
-from riko.context import Context
+from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.modules import list_modules
 
@@ -25,6 +25,7 @@ __all__ = [
     "AsyncCollection",
     "AsyncPipe",
     "Context",
+    "ExecutionMode",
     "SyncCollection",
     "SyncPipe",
     "UnsupportedModuleError",

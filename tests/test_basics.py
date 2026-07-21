@@ -15,7 +15,7 @@ from typing import cast
 
 import pytest
 
-from riko import Context, get_path, listize
+from riko import Context, ExecutionMode, get_path, listize
 from riko.compile import _resolve_module, build_pipeline
 from riko.exceptions import UnsupportedModuleError
 from riko.types.general import ParserOutput, PipelineDependencies
@@ -78,8 +78,7 @@ class TestBasics:
 
     def setup_method(self):
         """Compile common subpipe"""
-        kwargs = {"test": True, "describe_input": False, "describe_dependencies": False}
-        self.context = Context(**kwargs)
+        self.context = Context(test=True)
 
     def test_feeddiscovery(self):
         """
@@ -483,7 +482,7 @@ class TestBasics:
 
     def test_describe_input(self):
         """Loads a pipeline but just gets the input requirements"""
-        self.context.describe_input = True
+        self.context.mode = ExecutionMode.DESCRIBE_INPUTS
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 6, 0)
@@ -513,7 +512,7 @@ class TestBasics:
             assert item == expected[pos]
 
     def test_describe_dependencies(self):
-        self.context.describe_dependencies = True
+        self.context.mode = ExecutionMode.DESCRIBE_DEPENDENCIES
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 2, 0)
@@ -521,8 +520,7 @@ class TestBasics:
 
     def test_describe_both(self):
         """Loads a pipeline but just gets the input requirements"""
-        self.context.describe_input = True
-        self.context.describe_dependencies = True
+        self.context.mode = ExecutionMode.DESCRIBE
         pipe_name = "pipe_5fabfc509a8e44342941060c7c7d0340"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)

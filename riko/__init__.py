@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar, overload
 from meza.fntools import Objectify as _Objectify
 from requests.structures import CaseInsensitiveDict
 
-from riko.context import Context  # noqa: F401
+from riko.context import Context, ExecutionMode  # noqa: F401
 from riko.types.general import ItemOrValue, SyncArgFunc
 from riko.types.modules import AnyConfRule, ObjconfParam
 from riko.types.values import PrimitiveValue, PrimitiveValueType
@@ -320,6 +320,7 @@ __all__ = [
     "AsyncCollection",
     "AsyncPipe",
     "Context",
+    "ExecutionMode",
     "SyncCollection",
     "SyncPipe",
     "UnsupportedModuleError",

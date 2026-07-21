@@ -17,6 +17,7 @@ STABLE = {
     "AsyncCollection",
     "AsyncPipe",
     "Context",
+    "ExecutionMode",
     "SyncCollection",
     "SyncPipe",
     "UnsupportedModuleError",

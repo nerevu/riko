@@ -49,6 +49,7 @@ from typing import Literal, cast, overload
 from jinja2 import Environment, PackageLoader
 
 from riko import Context, utils
+from riko.context import ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.pprint2 import Id, repr_arg
 from riko.topsort import topological_sort
@@ -341,7 +342,7 @@ def _get_pyarg(  # noqa: E302
     **kwargs,
 ) -> ParserOutput | SyncPipeParser | Id:
     context = context or Context(**kwargs)
-    describe = context.describe_input or context.describe_dependencies
+    describe = context.mode is not ExecutionMode.RUN
 
     # find the default input of this module
     input_module = _get_input_module(parsed_pipe_def, module_id, steps)
@@ -388,7 +389,7 @@ def _gen_pykwargs(  # noqa: E302
     context = context or Context(**kwargs)
     yield ("context", context)
 
-    describe = context.describe_input or context.describe_dependencies
+    describe = context.mode is not ExecutionMode.RUN
 
     if describe and steps:
         print("You must not specify both describe and steps. Assuming steps.")
@@ -657,11 +658,11 @@ def build_pipeline(
     pydeps = utils.extract_dependencies(parsed_pipe_def)
     pyinput = utils.extract_input(parsed_pipe_def)
 
-    if context.describe_input and context.describe_dependencies:
+    if context.mode is ExecutionMode.DESCRIBE:
         pipeline = [{"inputs": pyinput, "dependencies": pydeps}]
-    elif context.describe_input:
+    elif context.mode is ExecutionMode.DESCRIBE_INPUTS:
         pipeline = pyinput
-    elif context.describe_dependencies:
+    elif context.mode is ExecutionMode.DESCRIBE_DEPENDENCIES:
         pipeline = pydeps
     else:
         updates = {

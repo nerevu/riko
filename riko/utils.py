@@ -75,6 +75,7 @@ from riko import (
 )
 from riko.cast import CAST_SWITCH, CastType
 from riko.cast import cast as cast_value
+from riko.context import ExecutionMode
 from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
 from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
@@ -1161,7 +1162,7 @@ def extract_dependencies(
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
     elif pipeline:
-        pydeps = pipeline(context=Context(describe_dependencies=True))
+        pydeps = pipeline(context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES))
     else:
         raise TypeError("Must supply at least one kwarg!")
 
@@ -1225,7 +1226,7 @@ def extract_input(
     if pipe_def:
         pyinput = gen_input(pipe_def)
     elif pipeline:
-        pyinput = pipeline(Context(describe_input=True))
+        pyinput = pipeline(Context(mode=ExecutionMode.DESCRIBE_INPUTS))
     else:
         raise TypeError("Must supply at least one kwarg!")
 
