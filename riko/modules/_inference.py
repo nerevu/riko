@@ -28,7 +28,12 @@ from typing import cast as cast_type
 import pygogo as gogo
 
 from riko.types.general import Pipeline
-from riko.types.modules import Inference, OperatorReturnKind
+from riko.types.modules import (
+    Inference,
+    InferenceSource,
+    OperatorReturnKind,
+    ReturnInference,
+)
 from riko.types.values import NonstreamExpressions
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -61,6 +66,11 @@ _NONSTREAM_CALLS = {
 }
 
 _PASSTHROUGH_NAMESPACES = ("asyncio.", "bado.", "riko.bado.")
+
+_FIX_HINT = (
+    "add an explicit return annotation, e.g. `-> Iterator[Item]` for a stream "
+    "or `-> int` for a single value"
+)
 
 
 class AnnotationMember(NamedTuple):
@@ -169,11 +179,13 @@ def _infer_expression_kind(
     return kind, reason
 
 
-def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
+def _infer_from_source(pipe: Pipeline) -> ReturnInference:
     """
-    Infer the obvious return kind of a short, unannotated pipe.
+    Infer the return kind of a short, unannotated pipe from its source.
 
-    This is an intentionally narrow AST heuristic for doctest pipes.
+    This is an intentionally narrow AST heuristic for doctest pipes. When it
+    cannot classify the return, the result's ``reason`` explains why and how to
+    fix the function contract.
 
     Assumptions:
 
@@ -193,35 +205,21 @@ def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
     Examples:
         >>> def mapped(items):
         ...     return map(str, items)
-        >>> _infer_unannotated_return_kind(mapped).value
-        'stream'
-
-        >>> def chained(items):
-        ...     return itertools.chain(items)
-        >>> _infer_unannotated_return_kind(chained).value
-        'stream'
+        >>> _infer_from_source(mapped)
+        ReturnInference(kind=<OperatorReturnKind.STREAM: 'stream'>, source=<InferenceSource.AST: 'ast'>, reason=None)
 
         >>> def counted(items):
         ...     return sum(items)
-        >>> _infer_unannotated_return_kind(counted).value
+        >>> _infer_from_source(counted).kind.value
         'nonstream'
-
-        >>> async def async_counted(items):
-        ...     result = await bado.maybe_deferred(sum, items)
-        ...     return result
-        >>> _infer_unannotated_return_kind(async_counted).value
-        'nonstream'
-
-        >>> async def async_mapped(items):
-        ...     result = await asyncio.to_thread(map, str, items)
-        ...     return result
-        >>> _infer_unannotated_return_kind(async_mapped).value
-        'stream'
 
         >>> def ambiguous(items):
         ...     return build_result(items)
-        >>> _infer_unannotated_return_kind(ambiguous).value
-        'unknown'
+        >>> inference = _infer_from_source(ambiguous)
+        >>> inference.kind.value, inference.source
+        ('unknown', None)
+        >>> print(inference.reason)
+        direct call 'build_result' is not in a return-kind whitelist; add an explicit return annotation, e.g. `-> Iterator[Item]` for a stream or `-> int` for a single value
 
     """
     kind = OperatorReturnKind.UNKNOWN
@@ -259,17 +257,20 @@ def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
         else:
             reason = "parsed source contains no function definition"
 
-    if reason and kind == OperatorReturnKind.UNKNOWN:
-        logger.debug(f"Could not infer return kind because {name}: {reason}.")
-    elif kind == OperatorReturnKind.UNKNOWN:
-        logger.debug("Could not infer return kind, but no reason was provided.")
+    if kind is OperatorReturnKind.UNKNOWN:
+        detail = reason or "the return expression could not be classified"
+        reason = f"{detail}; {_FIX_HINT}"
+        logger.debug(f"Could not infer return kind for {name}: {reason}")
+        result = ReturnInference(kind, None, reason)
+    else:
+        result = ReturnInference(kind, InferenceSource.AST)
 
-    return kind
+    return result
 
 
-def _gen_operator_return_kinds(pipe: Pipeline) -> Iterator[OperatorReturnKind]:
+def gen_return_inferences(pipe: Pipeline) -> Iterator[ReturnInference]:
     if isgeneratorfunction(pipe) or isasyncgenfunction(pipe):
-        yield OperatorReturnKind.STREAM
+        yield ReturnInference(OperatorReturnKind.STREAM, InferenceSource.GENERATOR)
     else:
         try:
             annotation = get_type_hints(pipe).get("return")
@@ -279,10 +280,23 @@ def _gen_operator_return_kinds(pipe: Pipeline) -> Iterator[OperatorReturnKind]:
         if annotation:
             for member, candidate in _gen_members(annotation):
                 if member in {Any, object}:
-                    yield OperatorReturnKind.UNKNOWN
+                    reason = (
+                        f"return annotation {annotation!r} is too broad to classify; "
+                        "narrow it to a concrete stream (Iterator[...]) or value type"
+                    )
+                    yield ReturnInference(OperatorReturnKind.UNKNOWN, None, reason)
                 elif _matches_abc(candidate, Iterator):
-                    yield OperatorReturnKind.STREAM
+                    yield ReturnInference(
+                        OperatorReturnKind.STREAM, InferenceSource.ANNOTATION
+                    )
                 else:
-                    yield OperatorReturnKind.NONSTREAM
+                    yield ReturnInference(
+                        OperatorReturnKind.NONSTREAM, InferenceSource.ANNOTATION
+                    )
         else:
-            yield _infer_unannotated_return_kind(pipe)
+            yield _infer_from_source(pipe)
+
+
+def _gen_operator_return_kinds(pipe: Pipeline) -> Iterator[OperatorReturnKind]:
+    for inference in gen_return_inferences(pipe):
+        yield inference.kind

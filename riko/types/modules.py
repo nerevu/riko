@@ -40,6 +40,19 @@ class OperatorReturnKind(StrEnum):
 type Inference = tuple[OperatorReturnKind, str | None]
 
 
+class InferenceSource(StrEnum):
+    ANNOTATION = "annotation"
+    GENERATOR = "generator"
+    AST = "ast"
+
+
+@dataclass(frozen=True, slots=True)
+class ReturnInference:
+    kind: OperatorReturnKind
+    source: InferenceSource | None
+    reason: str | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class ModuleMetadata:
     name: str
