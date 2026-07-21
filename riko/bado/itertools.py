@@ -92,7 +92,7 @@ def get_task() -> "Cooperator":
 
 async def coop_reduce[T, S](
     func: Callable[[T, S], T], content: Iterable[S], initial: T | None = None
-) -> T | None:
+) -> T | S | None:
     """
     Reduces *iterable* with *func* using Twisted cooperative multitasking.
 
@@ -129,7 +129,7 @@ async def coop_reduce[T, S](
     task = get_task()
     content = iter(content)
     value = next(content) if initial is None else initial
-    result = {"value": None}
+    result = {"value": value}
 
     def work(func, content, value):
         for item in content:
