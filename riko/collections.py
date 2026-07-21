@@ -100,6 +100,7 @@ from collections.abc import (
     Iterator,
     Mapping,
 )
+from enum import StrEnum
 from functools import partial
 from io import StringIO
 from itertools import chain, repeat
@@ -148,9 +149,12 @@ if TYPE_CHECKING:
     from multiprocessing.pool import Pool as CPUPoolType
 
 type AnyPool = "ThreadPoolType" | "CPUPoolType"
-type PoolScope = Literal["stage", "pipeline"]
 
 logger = gogo.Gogo(__name__, monolog=True).logger
+
+class PoolScope(StrEnum):
+    STAGE = "stage"
+    PIPELINE = "pipeline"
 
 
 class _PoolHandle:
@@ -160,23 +164,20 @@ class _PoolHandle:
         self.pool: AnyPool | None = pool
         self.owned = owned
 
-    def close(self) -> None:
-        if not self.owned or self.pool is None:
-            return
+    def __bool__(self):
+        return self.pool is not None
 
-        pool = self.pool
-        pool.close()
-        pool.join()
-        self.pool = None
+    def close(self) -> None:
+        if self.owned and (pool := self.pool):
+            pool.close()
+            pool.join()
+            self.pool = None
 
     def terminate(self) -> None:
-        if not self.owned or self.pool is None:
-            return
-
-        pool = self.pool
-        pool.terminate()
-        pool.join()
-        self.pool = None
+        if self.owned and (pool := self.pool):
+            pool.terminate()
+            pool.join()
+            self.pool = None
 
 
 def records2ofx(items, **_) -> Iterable[str]:
@@ -316,7 +317,7 @@ class SyncPipe(PyPipe):
         workers: int | None = None,
         chunksize: int | None = None,
         threads: bool | None = True,
-        pool_scope: PoolScope = "pipeline",
+        pool_scope=PoolScope.PIPELINE,
         pool: AnyPool | None = None,
         _pool_handle: _PoolHandle | None = None,
         ordered: bool | None = False,
@@ -338,13 +339,12 @@ class SyncPipe(PyPipe):
         if pool_scope not in {"stage", "pipeline"}:
             raise ValueError("pool_scope must be either 'stage' or 'pipeline'")
 
-        if pool is not None and _pool_handle is not None:
+        if pool and _pool_handle:
             raise TypeError("pool and _pool_handle cannot both be provided")
-
-        self._pool_handle = _pool_handle
-
-        if self._pool_handle is None and pool is not None:
+        elif pool:
             self._pool_handle = _PoolHandle(pool, owned=False)
+        else:
+            self._pool_handle = _pool_handle
 
         if self.name:
             self.pipe: SyncPipeParser = _resolve_module(self.name, "pipe")
@@ -362,11 +362,11 @@ class SyncPipe(PyPipe):
             self.workers = workers or get_worker_cnt(length, self.threads)
             self.chunksize = chunksize or get_chunksize(length, self.workers)
 
-            if self._pool_handle is None:
+            if not self._pool_handle:
                 pool = def_pool(self.workers)
                 self._pool_handle = _PoolHandle(pool, owned=True)
 
-            if (pool := self.pool) is None:
+            if not (pool := self.pool):
                 raise RuntimeError("Cannot reuse a closed worker pool")
 
             self.map = pool.imap if ordered else pool.imap_unordered
@@ -377,14 +377,9 @@ class SyncPipe(PyPipe):
 
     @property
     def pool(self) -> AnyPool | None:
-        if self._pool_handle is None:
-            result = None
-        else:
-            result = self._pool_handle.pool
+        return self._pool_handle.pool if self._pool_handle else None
 
-        return result
-
-    def _chain(self, name: str, **overrides) -> "SyncPipe":
+    def _chain(self, name: str, **kwargs) -> "SyncPipe":
         """
         Create the next pipe stage, propagating all runtime and execution
         settings. Context (and its inputs) stays authoritative across the chain.
@@ -399,15 +394,9 @@ class SyncPipe(PyPipe):
             True
 
         """
-        next_scope = cast(PoolScope, overrides.get("pool_scope", self.pool_scope))
+        next_scope = cast(PoolScope, kwargs.get("pool_scope", self.pool_scope))
 
-        share_pool = (
-            self.pool_scope == "pipeline"
-            and next_scope == "pipeline"
-            and "pool" not in overrides
-        )
-
-        kwargs = {
+        skwargs = {
             "parallel": self.parallel,
             "threads": self.threads,
             "pool_scope": next_scope,
@@ -417,16 +406,18 @@ class SyncPipe(PyPipe):
             "inputs": self.inputs,
         }
 
-        shared_handle = self._pool_handle if share_pool else None
+        if self.pool_scope == next_scope == PoolScope.PIPELINE and "pool" not in kwargs:
+            shared_handle = self._pool_handle
+            skwargs["_pool_handle"] = shared_handle
+        else:
+            shared_handle = None
 
-        if share_pool:
-            kwargs["_pool_handle"] = shared_handle
+        skwargs.update(kwargs)
+        child = SyncPipe(name, source=self, **skwargs)
 
-        kwargs.update(overrides)
-        child = SyncPipe(name, source=self, **kwargs)
         # Transfer cleanup responsibility only after successful construction
         # and only when the handle was actually shared.
-        if shared_handle is not None and child._pool_handle is shared_handle:
+        if shared_handle and child._pool_handle is shared_handle:
             self._terminal = False
 
         return child
@@ -438,11 +429,11 @@ class SyncPipe(PyPipe):
         return self._chain(name)
 
     def _release_pool(self):
-        if self._pool_handle is not None:
+        if self._pool_handle:
             self._pool_handle.close()
 
     def _terminate_pool(self):
-        if self._pool_handle is not None:
+        if self._pool_handle:
             self._pool_handle.terminate()
 
     def close(self):
@@ -494,7 +485,7 @@ class SyncPipe(PyPipe):
     def _release_pool_after_iteration(self) -> bool:
         if self._in_context:
             result = False
-        elif self.pool_scope == "stage":
+        elif self.pool_scope == PoolScope.STAGE:
             result = True
         else:
             result = self._terminal
@@ -619,19 +610,17 @@ class SyncCollection(PyCollection):
         self._iter: Stream | None = None
         self.map: Callable[..., Iterator[Stream]]
         self._in_context = False
-        self._pool_handle = None if pool is None else _PoolHandle(pool, owned=False)
+        self._pool_handle = _PoolHandle(pool, owned=False) if pool else None
 
         if self.parallel:
             self.chunksize = get_chunksize(self.length, self.workers)
             def_pool = ThreadPool if self.threads else CPUPool
 
-            if self._pool_handle is None:
+            if not self._pool_handle:
                 pool = def_pool(self.workers)
                 self._pool_handle = _PoolHandle(pool, owned=True)
 
-            pool = self.pool
-
-            if pool is None:
+            if not (pool := self.pool):
                 raise RuntimeError("Cannot reuse a closed worker pool")
 
             self.map = pool.imap if ordered else pool.imap_unordered
@@ -640,12 +629,7 @@ class SyncCollection(PyCollection):
 
     @property
     def pool(self) -> AnyPool | None:
-        if self._pool_handle is None:
-            result = None
-        else:
-            result = self._pool_handle.pool
-
-        return result
+        return self._pool_handle.pool if self._pool_handle else None
 
     def __iter__(self) -> Stream:
         if self._iter is None:
@@ -660,11 +644,11 @@ class SyncCollection(PyCollection):
         return next(self._iter)
 
     def close(self):
-        if self._pool_handle is not None:
+        if self._pool_handle:
             self._pool_handle.close()
 
     def terminate(self):
-        if self._pool_handle is not None:
+        if self._pool_handle:
             self._pool_handle.terminate()
 
     def __enter__(self) -> Self:
