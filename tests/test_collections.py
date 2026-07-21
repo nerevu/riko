@@ -11,7 +11,6 @@ import pytest
 
 from riko import get_path
 from riko.bado import IReactorCore, _issync, react
-from riko.bado.itertools import ensure_deferred
 from riko.bado.mock import FakeReactor
 from riko.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.types.general import Item
@@ -276,7 +275,7 @@ class TestCollections:
             print(next(stream))
 
         try:
-            react(lambda r: ensure_deferred(run(r)), _reactor=reactor)
+            react(run, _reactor=reactor)
         except SystemExit:
             pass
         else:
