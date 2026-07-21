@@ -130,6 +130,7 @@ from riko import Context
 from riko.bado import async_return
 from riko.bado.itertools import async_map
 from riko.compile import _resolve_module
+from riko.exceptions import PipelineStateError
 from riko.types.general import (
     Conf,
     ConversionFunc,
@@ -154,6 +155,63 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 class PoolScope(StrEnum):
     STAGE = "stage"
     PIPELINE = "pipeline"
+
+
+class PipeState(StrEnum):
+    NEW = "new"
+    RUNNING = "running"
+    EXHAUSTED = "exhausted"
+    CLOSED = "closed"
+    FAILED = "failed"
+
+
+class _Lifecycle:
+    """
+    One-shot execution state shared by pipes and collections. An instance
+    represents a single execution: iteration is a plain memoized generator, so
+    re-iterating an already-run instance yields nothing (ordinary spent-iterator
+    semantics), and chaining a started or exhausted instance wraps whatever
+    source is left. The mixin only tracks that state for introspection
+    (``state``, ``closed``, ``exhausted``, ``failed``) and refuses to chain onto
+    an instance whose resources are gone, raising ``PipelineStateError`` when it
+    is ``CLOSED`` or ``FAILED``.
+    """
+
+    _state: PipeState = PipeState.NEW
+
+    @property
+    def state(self) -> PipeState:
+        return self._state
+
+    @property
+    def closed(self) -> bool:
+        return self._state is PipeState.CLOSED
+
+    @property
+    def exhausted(self) -> bool:
+        return self._state is PipeState.EXHAUSTED
+
+    @property
+    def failed(self) -> bool:
+        return self._state is PipeState.FAILED
+
+    def _begin(self) -> None:
+        if self._state is PipeState.NEW:
+            self._state = PipeState.RUNNING
+
+    def _end(self) -> None:
+        if self._state is PipeState.RUNNING:
+            self._state = PipeState.EXHAUSTED
+
+    def _fail(self) -> None:
+        self._state = PipeState.FAILED
+
+    def _close(self) -> None:
+        self._state = PipeState.CLOSED
+
+    def _require_usable(self, action: str) -> None:
+        if self._state in {PipeState.CLOSED, PipeState.FAILED}:
+            raise PipelineStateError(self._state.value, action)
 
 
 class _PoolHandle:
@@ -261,7 +319,7 @@ def export(  # noqa: E302
     return result
 
 
-class PyPipe:
+class PyPipe(_Lifecycle):
     """
     A riko module fetching object
 
@@ -284,6 +342,7 @@ class PyPipe:
         conf: Conf = None,
         **kwargs,
     ):
+        self._state = PipeState.NEW
         self.name = name
         self.parallel = parallel
         self.verbose = kwargs.get("verbose")
@@ -393,6 +452,7 @@ class SyncPipe(PyPipe):
             True
 
         """
+        self._require_usable("chain")
         next_scope = cast(PoolScope, kwargs.get("pool_scope", self.pool_scope))
 
         skwargs = {
@@ -440,12 +500,14 @@ class SyncPipe(PyPipe):
             self._iter.close()
 
         self._release_pool()
+        self._close()
 
     def terminate(self):
         if self._iter is not None:
             self._iter.close()
 
         self._terminate_pool()
+        self._close()
 
     def __enter__(self) -> Self:
         """
@@ -501,6 +563,7 @@ class SyncPipe(PyPipe):
         if self.name == "send":
             self.kwargs.setdefault("ids", {})
 
+        self._begin()
         pipeline = partial(self.pipe, **self.kwargs)
 
         try:
@@ -520,6 +583,8 @@ class SyncPipe(PyPipe):
             else:
                 yield from chain.from_iterable(self._mapped)
         except BaseException:
+            self._fail()
+
             if self._release_pool_after_iteration():
                 self._terminate_pool()
 
@@ -528,6 +593,7 @@ class SyncPipe(PyPipe):
             if self._release_pool_after_iteration():
                 self._release_pool()
 
+            self._end()
             self._notify_subscribers()
 
     def __iter__(self) -> Stream:
@@ -564,7 +630,7 @@ class SyncPipe(PyPipe):
         return result
 
 
-class PyCollection:
+class PyCollection(_Lifecycle):
     """A riko bulk url fetching object"""
 
     def __init__(
@@ -575,6 +641,7 @@ class PyCollection:
         workers=None,
         **kwargs,
     ):
+        self._state = PipeState.NEW
         self.parallel = parallel
         self.conf = conf or cast(Conf, {})
         self.sources = sources
@@ -642,13 +709,21 @@ class SyncCollection(PyCollection):
 
         return next(self._iter)
 
-    def close(self):
+    def _release_pool(self):
         if self._pool_handle:
             self._pool_handle.close()
 
-    def terminate(self):
+    def _terminate_pool(self):
         if self._pool_handle:
             self._pool_handle.terminate()
+
+    def close(self):
+        self._release_pool()
+        self._close()
+
+    def terminate(self):
+        self._terminate_pool()
+        self._close()
 
     def __enter__(self) -> Self:
         """
@@ -686,6 +761,8 @@ class SyncCollection(PyCollection):
 
     def _stream(self) -> Stream:
         """Fetch all source urls"""
+        self._begin()
+
         try:
             zargs = zip(self.sources, repeat(self.conf))
 
@@ -701,8 +778,10 @@ class SyncCollection(PyCollection):
 
             raise
         else:
+            self._end()
+
             if not self._in_context:
-                self.close()
+                self._release_pool()
 
     def pipe(self, **kwargs):
         """Return a SyncPipe primed with the source feed"""
@@ -758,6 +837,7 @@ class AsyncPipe(PyPipe):
         if name.startswith("_"):
             raise AttributeError(name)
 
+        self._require_usable("chain")
         kwargs = {"source": self._await_stream(), "connections": self.connections}
         return AsyncPipe(name, **kwargs)
 
@@ -777,6 +857,7 @@ class AsyncPipe(PyPipe):
         return await anext(self._aiter)
 
     async def _stream(self) -> AsyncIterator[Item]:
+        self._begin()
         source = await self.source if self.source else None
         async_pipeline = partial(self.async_pipe, **self.kwargs)
 
@@ -791,6 +872,8 @@ class AsyncPipe(PyPipe):
 
             for item in result:
                 yield item
+
+        self._end()
 
     async def split(self, **kwargs) -> SplitterParserOutput:
         pipe_kwargs = {"source": self._await_stream(), "connections": self.connections}
@@ -815,12 +898,15 @@ class AsyncCollection(PyCollection):
 
     async def _stream(self) -> AsyncIterator[Item]:
         """Fetch all source urls"""
+        self._begin()
         zargs = zip(self.sources, repeat(self.conf))
         mapped = await async_map(afetch_source, zargs, self.connections)
 
         for stream in mapped:
             for item in stream:
                 yield item
+
+        self._end()
 
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""
