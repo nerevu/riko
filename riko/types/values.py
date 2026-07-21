@@ -106,7 +106,9 @@ type PrimitiveValue = SortableValue | None
 # Geo/currency
 type IPAddress = dict[str, str]
 type Location = IPAddress | dict[str, float]
-type CurrencyCode = Location | dict[str, str | int] | dict[str, int]
+type CurrencyCode = (
+    Location | dict[str, int] | dict[str, str | int] | dict[str, str | int | float]
+)
 type AnyLocation = CurrencyCode | dict[str, float | str]
 
 # Args
@@ -147,7 +149,7 @@ NumLikeType = (float, int, Decimal)
 PrimitiveValueType = (str, int, float, Decimal, datetime, date, struct_time)
 HashableType = (str, int, float, Decimal, date, struct_time)
 
-_NONSTREAM_EXPRESSIONS = (
+NonstreamExpressions = (
     ast.BinOp,
     ast.Compare,
     ast.Constant,

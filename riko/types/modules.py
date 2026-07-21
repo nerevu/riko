@@ -653,7 +653,7 @@ class DateFormatConf(TypedDict):
 
 class ExchangeRateConf(TypedDict):
     url: str
-    param: ParsedParam | Sequence[ParsedParam]
+    param: dict[str, str]
     currency: str = "USD"
     delay: int = 0
     memoize: bool = True

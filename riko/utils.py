@@ -304,18 +304,23 @@ class Chainable:
         return Chainable(self.data, method)
 
     def __call__(self, *args, **kwargs):
-        try:
-            signature(self.method).bind(self.data, *args, **kwargs)
-            data_first = True
-        except TypeError:
-            data_first = False
-        except ValueError:
-            data_first = True
+        method = self.method
 
-        if data_first or not args:
-            result = Chainable(self.method(self.data, *args, **kwargs))
+        if method is None:
+            result = Chainable(self.data)
         else:
-            result = Chainable(self.method(args[0], self.data, **kwargs))
+            try:
+                signature(method).bind(self.data, *args, **kwargs)
+                data_first = True
+            except TypeError:
+                data_first = False
+            except ValueError:
+                data_first = True
+
+            if data_first or not args:
+                result = Chainable(method(self.data, *args, **kwargs))
+            else:
+                result = Chainable(method(args[0], self.data, **kwargs))
 
         return result
 

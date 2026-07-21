@@ -102,8 +102,8 @@ from riko.types.modules import (
     OperatorReturnKind,
 )
 from riko.types.values import (
-    _NONSTREAM_EXPRESSIONS,
     BasicReturn,
+    NonstreamExpressions,
     PrimitiveValue,
     StatefulItem,
 )
