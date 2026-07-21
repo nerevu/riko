@@ -672,3 +672,71 @@ common subgraph, impact-analysis, and composition utilities.
 
 The executors should remain separate because a pipeline DAG describes data dependencies within one computation, while an agent DAG describes event routing between independent computations.
 
+---
+
+# Shelf integration addendum: external event adapters
+
+Webhook receivers, feed monitors, ZeroMQ, RabbitMQ, Service Bus, Event Grid, and mail
+inboxes are valid agent ingress or egress mechanisms. They do not belong in `Dag` and do
+not justify a universal graph executor.
+
+## Adapter contracts
+
+```python
+class EventSource(Protocol):
+    async def receive(self, context: ExecutionContext) -> Event: ...
+    async def aclose(self) -> None: ...
+
+
+class EventSink(Protocol):
+    async def publish(
+        self,
+        event: Event,
+        context: ExecutionContext,
+    ) -> PublishResult: ...
+
+
+class CheckpointStore(Protocol):
+    async def load(self, key: str) -> JsonValue | None: ...
+    async def save(self, key: str, value: JsonValue) -> None: ...
+```
+
+`AgentNetwork` owns routing between registered agents. Connector packages own protocol
+sessions, acknowledgements, redelivery, authentication, and serialization.
+
+## Delivery semantics
+
+Every adapter declares:
+
+```text
+best_effort
+at_most_once
+at_least_once
+```
+
+Exactly-once must not be claimed. Agent handlers use event IDs and idempotency keys when
+duplicate delivery is possible.
+
+## Webhooks
+
+A webhook server validates the request, assigns an event ID, persists or acknowledges it
+according to local policy, and pushes the normalized event into an agent root. The HTTP
+request thread must not execute an unbounded agent workflow.
+
+## Feed monitoring
+
+A feed monitor is a long-lived `EventSource`, not a restartable one-shot pipeline. Its
+last-seen IDs or timestamps live in `CheckpointStore`; an in-memory dictionary is only a
+test implementation. Polling uses cancellation-aware waits and bounded backoff.
+
+## Broker adapters
+
+ZeroMQ may be offered as best-effort transport. RabbitMQ, Service Bus, and similar
+brokers expose acknowledgements and redelivery. Connections are execution resources and
+must not be opened once per item or hidden in graph node attributes.
+
+## Lifecycle
+
+Startup order remains downstream-first when receivers must be ready before publishers.
+Shutdown is upstream-first for intake, then drains in-flight deliveries, then closes
+sinks. This preserves the graph/executor separation already established in this plan.

@@ -677,3 +677,101 @@ Recommended implementation order
 14. Microsoft and AI extension packages
 
 The first milestone should stop after step 7. That gives Riko a coherent developer contract before changing concurrency or adding external integrations.
+
+---
+
+# Shelf integration addendum
+
+## Extension families after core stabilization
+
+The Shelf confirms that most future integrations should not become built-in Riko core
+modules. Once the extension contracts are stable, use these package families:
+
+```text
+riko-connect
+    URI/source resolution
+    HTTP response adapters
+    object storage
+    FTP/SFTP
+    mail
+    broker publishers and consumers
+    CKAN, Prometheus, and tabular-file connectors
+    Singer-to-RDP adapters
+
+riko-sql
+    Ibis connection adapters
+    SQL reads and writes
+    query planning and push-down
+    Arrow/Narwhals batch bridges
+
+riko-dbt
+    dbt invocation services
+    manifest and run-result normalization
+    optional dbt-ibis helpers
+
+riko-orchestration
+    Airflow, Prefect, and Dagster adapters
+    webhook entrypoints
+    schedules and deployment helpers
+
+riko-enrichment
+    optional near-duplicate and contact-extraction modules
+```
+
+## Generic hooks permitted in core
+
+Core may add only contracts that are useful without any specific integration:
+
+```text
+SourceResolver
+RecordCodec
+CheckpointStore
+ExecutionResource
+EventSource / EventSink
+ArtifactRef
+```
+
+A contract is not added merely because one extension needs it. It must have at least two
+independent consumers and preserve the one-shot pipeline lifecycle.
+
+## Source resolution boundary
+
+Do not implement a hard-coded universal `fetch` switch in `riko.modules`.
+
+Use a registry whose resolvers return immutable plans:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SourcePlan:
+    resolver: str
+    uri: str
+    media_type: str | None
+    capability_id: str
+    options: Mapping[str, JsonValue]
+```
+
+Resolution and execution remain separate:
+
+```text
+URI + explicit hints
+→ deterministic resolver selection
+→ inspectable SourcePlan
+→ policy and credential resolution
+→ connector execution
+```
+
+This supports plugin schemes without growing a monolithic dispatch table and gives the
+CLI, MCP catalog, and AI selector a stable object to inspect.
+
+## Updated implementation order
+
+After the existing fourteen steps:
+
+```text
+15. Generic source-plan and checkpoint contracts, if justified by two extensions
+16. riko-connect protocol and storage adapters
+17. riko-sql and riko-dbt
+18. riko-orchestration and optional enrichment packages
+```
+
+None of these steps should delay the HigherGov vertical slice or RDP/Connect core.

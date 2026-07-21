@@ -164,3 +164,19 @@ parse_pipe_def(..., legacy_typed_values=True)
 
 This keeps compatibility scoped to imported workflow definitions rather than spreading it across all runtime data.
 
+---
+
+# Connector configuration implication
+
+The same boundary applies to promoted source and protocol adapters:
+
+* connector configuration is parsed explicitly before execution;
+* response records, email bodies, API payloads, database rows, and broker messages remain
+  literal business data;
+* a two-element list received from an external system is never interpreted as a typed
+  Riko value merely because it resembles legacy configuration syntax;
+* credential references and URI options use typed parsed configuration objects;
+* compatibility parsing is limited to imported legacy pipeline definitions.
+
+This requirement is especially important for JSON, CKAN, Prometheus, OpenAPI, and mail
+payloads, where arbitrary arrays are normal data.

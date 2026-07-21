@@ -1823,6 +1823,46 @@ Test:
 
 ---
 
+# 24.1 SaaS gateways and credential brokers
+
+The Shelf's HTTPSanction and authorizer concepts fit this architecture as adapters, not
+new Riko core modules.
+
+## HTTPSanction-style token service
+
+Treat a token vending service as a credential provider behind a named reference:
+
+```text
+credential reference
+→ credential provider
+→ short-lived token
+→ connector or OpenAPI executor
+```
+
+The token value must never enter a capability plan, catalog record, pipeline definition,
+artifact, or normal stream item. Token refresh is execution-scoped and concurrency-safe.
+
+## Authorizer-style API proxy
+
+Treat a full SaaS API proxy as one or more OpenAPI capability providers. Its operations
+are normalized into the same immutable `OpenApiOperationSpec` used for public APIs.
+There is no special `fetchauthorizer` module.
+
+Requirements:
+
+* pagination and result normalization are explicit operation metadata;
+* POST, PATCH, and DELETE operations receive write/destructive effects;
+* tenant and credential references come from `ExecutionContext`;
+* approval policy applies exactly as it does to any other write capability;
+* proxy URLs must be operator-configured and cannot be invented by the model;
+* proxy availability does not weaken SSRF, host allowlist, or schema-size controls.
+
+## Connector catalog projection
+
+`riko-connect` may project stable connector operations into the unified capability
+catalog. MCP and OpenAPI execution continue to own capability policy; connector packages
+own protocol-specific sessions and data streaming.
+
 # 25. Explicit non-goals
 
 Do not implement initially:

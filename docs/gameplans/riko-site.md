@@ -1732,6 +1732,28 @@ Do not require full benchmark infrastructure in the first pull request.
 
 ---
 
+# 11.1 Source and connector boundary
+
+The site pipeline may consume modules supplied by `riko-connect`, `riko-sql`, or
+`riko-mcp`, but `riko-site` does not own protocol detection, authentication, database
+connections, or document extraction.
+
+For web content:
+
+```text
+HTTP connector
+→ response record with body/status/content type/final URL
+→ named document extraction module
+→ SiteArtifact
+```
+
+This replaces an implicit `fetchpage(postprocess=callable)` design and keeps component
+rendering pure. Build manifests should record connector capability IDs and artifact
+fingerprints, never resolved credentials or access tokens.
+
+Long-lived feed monitors and webhook servers are orchestration inputs that trigger a
+site build; they are not renderers or `SiteSpec` components.
+
 # 12. Explicit non-goals
 
 Do not implement these during the initial sequence:

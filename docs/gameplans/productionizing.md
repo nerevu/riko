@@ -2997,6 +2997,146 @@ Replace compatibility queues and polling with bounded channels after Feed has st
 
 ---
 
+## 12.1 Shelf promotion sequence
+
+The following Shelf ideas are compatible with this roadmap, but must land after the
+Feed runtime and HigherGov vertical slice. They are not part of PRs 1-8.
+
+### PR 9 — HTTP response contracts
+
+Promote the useful parts of the `fetchpage` proposal without adding a transformation
+callback to the fetch module.
+
+Add an immutable response envelope:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class HttpResponseRecord:
+    body: bytes
+    status: int
+    content_type: str | None
+    final_url: str
+    headers: Mapping[str, str]
+```
+
+Requirements:
+
+* fetching and content transformation remain separate stages;
+* `fetchpage` may expose metadata through an assignment-compatible record;
+* PDF, DOCX, HTML-to-Markdown, and text extraction belong in named downstream modules
+  or an optional document connector package;
+* redirects, timeouts, and response size limits are represented explicitly;
+* no `postprocess` callable is added to serialized module configuration.
+
+This gives HigherGov document ingestion access to status, content type, and canonical URL
+without mixing network I/O with document parsing.
+
+### PR 10 — Declarative record transformations
+
+Add only the missing reusable record operations:
+
+```text
+coalesce
+strtransform
+dropfields
+```
+
+Use existing modules for:
+
+```text
+regex
+rename
+```
+
+Rules:
+
+* `strip` is a `strtransform` operation, not a separate module;
+* dropping `_drop` or `_additional` fields uses `dropfields`, not an overloaded `rename`;
+* missing-value handling recognizes `None` and supported scalar NaN values through one
+  helper with tests for float, pandas, Polars, and Arrow scalars when those extras exist;
+* the modules operate on ordinary records first and gain batch implementations only after
+  the batch contract is stable;
+* do not add public `applys()` generator composition. `SyncPipe._chain()`, `then()`, and
+  compiled pipeline execution remain the composition mechanisms.
+
+### PR 11 — Codec protocol and measured optimization
+
+Do not make `msgspec.Struct` the canonical Riko item. Plain mappings remain the public
+record contract.
+
+Introduce an execution-scoped codec protocol only where serialization is required:
+
+```python
+class RecordCodec(Protocol):
+    media_type: str
+
+    def encode(self, value: JsonValue) -> bytes: ...
+    def decode(self, payload: bytes) -> JsonValue: ...
+```
+
+The standard JSON codec is always available. A `msgspec` implementation is optional and
+may provide JSON or MessagePack. Selection belongs in `ExecutionContext.resources` or an
+RDP/connector configuration, not in each module.
+
+Before changing defaults, benchmark:
+
+* encode/decode throughput;
+* allocation count;
+* payload size;
+* thread and task safety;
+* small-record latency;
+* large-batch throughput.
+
+Do not replace isolated `json.dumps()` calls until the callsite is confirmed to be a
+protocol, checkpoint, cache, or artifact boundary. Internal Python stage-to-stage flow
+must not serialize records.
+
+### PR 12 — Runtime source bridges
+
+Promote DataFrame ingestion as a runtime-resource bridge, not a serialized configuration
+value:
+
+```python
+flow = SyncPipe.from_frame(frame)
+```
+
+or:
+
+```python
+context.resources.register("frames/customers", frame)
+flow = SyncPipe(
+    "fetchdataframe",
+    conf={"resource": "frames/customers"},
+    context=context,
+)
+```
+
+Requirements:
+
+* pandas, Polars, Arrow, and other frame libraries are normalized through the accepted
+  interchange layer;
+* lazy frames are rejected unless the caller explicitly supplies a bounded collection
+  operation;
+* the frame object never appears in serialized pipeline JSON;
+* conversion preserves nulls and column names predictably;
+* early termination releases readers and imported resources.
+
+Database ingestion is not implemented in this PR. It belongs in the separate SQL and
+dbt integration gameplan because connection management, credentials, query push-down,
+write semantics, and schema evolution are larger than a source-module patch.
+
+### Revised later pull-request order
+
+```text
+PR 9   HTTP response contracts
+PR 10  Declarative record transformations
+PR 11  Codec protocol and benchmarks
+PR 12  Runtime frame source bridge
+```
+
+Connector, orchestration, SQL, dbt, broker, mail, and storage implementations remain in
+extension packages and their dedicated gameplans.
+
 ## 13. Definition of done
 
 The corrected roadmap work is complete when:

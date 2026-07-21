@@ -455,3 +455,36 @@ Later remove dictize and pdictize; code search currently finds them only in the 
 
 The important boundary is: code owns current behavior; the manifest owns history; status.csv is only the generated report.
 
+---
+
+# Shelf integration addendum
+
+## Built-in versus extension documentation
+
+`status.csv` remains a Yahoo Pipes migration and built-in runtime report. It must not
+become a cross-package connector catalog.
+
+When the declarative transformation work lands, built-in modules such as:
+
+```text
+coalesce
+strtransform
+dropfields
+```
+
+appear automatically as runtime-only rows through `list_modules()` unless a real Yahoo
+Pipes identity exists in the historical manifest.
+
+Protocol, storage, SQL, dbt, orchestration, and optional enrichment modules installed
+from extension packages are documented through:
+
+```text
+riko modules list
+riko plugins list
+package-owned generated reference pages
+```
+
+The status generator should support an explicit `builtins_only=True` catalog query so an
+installed connector extra cannot make the checked-in `status.csv` nondeterministic.
+Tests must verify that entry-point modules are excluded from this historical report while
+remaining visible in the public module registry.

@@ -2212,6 +2212,44 @@ or the interactive shell in this phase.
 
 ---
 
+# 31.1 Connector and orchestration plugin surface
+
+Shelf-promoted integrations are exposed through command plugins. The base CLI does not
+embed protocol libraries or run a scheduler daemon.
+
+Suggested plugin commands:
+
+```text
+riko sources list
+riko sources inspect URI
+riko sources resolve URI
+riko sources test URI
+
+riko orchestration list
+riko orchestration scaffold airflow NAME
+riko orchestration scaffold prefect NAME
+riko orchestration scaffold dagster NAME
+
+riko sql inspect CONNECTION_REF
+riko dbt run --select SELECTOR
+```
+
+Rules:
+
+* `sources resolve` prints an immutable source plan and performs no network I/O unless
+  `--probe` is supplied;
+* machine-readable output follows the existing stdout contract;
+* credentials are named references and remain redacted;
+* protocol extras are imported only when their command is invoked;
+* scaffolding emits files but does not silently deploy them;
+* Airflow, Prefect, and Dagster plugins call reusable adapter services;
+* the CLI may execute one pipeline run, but persistent scheduling belongs to the selected
+  orchestrator or operating system;
+* connector and orchestrator command collisions follow the existing entry-point policy.
+
+A future `riko run --schedule ...` flag is explicitly rejected because it would turn the
+CLI into another scheduler process.
+
 # 32. Final architecture
 
 ```text

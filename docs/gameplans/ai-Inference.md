@@ -3226,6 +3226,25 @@ Provider SDK `Any` usage must remain isolated inside adapters.
 
 ---
 
+# 21.1 Connector selection boundary
+
+AI may select among connector, MCP, OpenAPI, SQL, and native Riko capabilities only after
+those capabilities have been deterministically discovered and normalized.
+
+The model must not:
+
+* invent a URI scheme handler;
+* choose an arbitrary storage bucket, broker, database, or proxy host;
+* place credentials in a URI or module configuration;
+* trigger content-type probing as an implicit side effect of semantic retrieval;
+* convert a read request into a write operation;
+* select a long-lived feed or webhook source without an explicit runtime budget and
+  checkpoint policy.
+
+A universal source request is represented to the model as an inspectable `SourcePlan` or
+catalog capability. Deterministic resolution, policy, credentials, and execution remain
+outside the model.
+
 # 22. Explicit non-goals
 
 Do not implement:

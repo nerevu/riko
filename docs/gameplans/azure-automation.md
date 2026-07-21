@@ -885,3 +885,38 @@ External packages
 
 Thus .poll remains a generic wait-and-check operator. Pub/sub merely lets it recheck immediately instead of sleeping until the next interval.
 
+---
+
+# Shelf integration addendum: common connector contracts
+
+The Microsoft package should implement the same connector contracts used by generic
+storage, mail, broker, and SaaS adapters.
+
+```text
+Microsoft Graph / ARM
+    capability and HTTP connector adapters
+
+Exchange Online / PowerShell
+    command adapters and tool projections
+
+Service Bus / Event Grid / Graph webhooks
+    EventSource and EventSink adapters
+
+Key Vault / managed identity / certificate services
+    credential-provider adapters
+```
+
+This avoids creating a second Microsoft-only execution framework.
+
+Rules inherited from the Shelf review:
+
+* IMAP/SMTP convenience modules are not substitutes for Graph or Exchange APIs when
+  Microsoft-specific semantics are required;
+* broker connections are execution-scoped resources, never per-item globals;
+* credentials are named references, not URL user-info or serialized secrets;
+* webhook and event subscriptions use the subscribe-before-start sequence already
+  defined in this plan;
+* source resolution may identify an Azure scheme or capability, but execution remains in
+  `riko-microsoft` and still passes policy and tenant-context checks;
+* write and destructive actions remain approval-gated even when invoked through a generic
+  connector or MCP capability.
