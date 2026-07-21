@@ -3,7 +3,7 @@
 ## Result
 
 The Shelf material has been incorporated into revised copies of every attached gameplan
-and four new authoritative gameplans. The original files are unchanged.
+and five new authoritative gameplans. The original files are unchanged.
 
 ## Mapping
 
@@ -14,7 +14,7 @@ and four new authoritative gameplans. The original files are unchanged.
 | Milestone 5.2: DataFrame source | `productionizing.md` | Use `from_frame()` or an execution-resource reference; never serialize a frame object in `conf`. |
 | Milestone 6: fetchpage | `productionizing.md`, `connectors.md`, `riko-site.md` | Add response envelope and metadata; keep extraction as downstream named modules; reject `postprocess` in serialized config. |
 | Milestone 9: msgspec | `productionizing.md`, `connectors.md` | Add a codec protocol and benchmarks; keep mappings canonical; optional msgspec implementation at serialization boundaries only. |
-| Milestone 11: FTP/SFTP/IMAP/SMTP/brokers | `connectors.md`, `agents.md`, `azure-automation.md` | Extension adapters with AnyIO, execution-scoped resources, delivery semantics, and credential references; reject Twisted runtime. |
+| Milestone 11: FTP/SFTP/IMAP/SMTP/brokers | `connectors.md`, `agents.md`, `azure-automation.md`, `twisted-protocol-servers.md` | Extension adapters with AnyIO, execution-scoped resources, delivery semantics, and credential references; reject Twisted *as runtime*, but bridge Twisted *protocol* impls via `asyncioreactor` where genuinely superior (server-side). |
 | Milestone 12: universal fetch | `connectors.md`, `repo-refinement.md`, `cli.md` | Registry-backed `SourcePlan`; staged migration from RSS `fetch`; explicit bounded probing; no hard-coded monolith. |
 | Milestone 13.1: Singer | `connectors.md`, `productionizing.md` | Implement as Singer↔RDP adapter so schema and state are preserved. |
 | Milestones 13.2-13.3: webhooks/feedtail | `orchestration.md`, `agents.md` | Webhook ingress and finite feed polls with durable checkpoints; not an in-memory forever source. |
@@ -26,7 +26,10 @@ and four new authoritative gameplans. The original files are unchanged.
 
 ## Major corrections applied
 
-1. AnyIO remains the only async runtime; Twisted examples were not promoted.
+1. AnyIO remains the only async **runtime**; Twisted is not promoted as a runtime. Runtime and
+   protocol layers are orthogonal (ROADMAP §23.1): Twisted *protocol* implementations may be
+   bridged onto the asyncio loop via `asyncioreactor` inside an adapter where genuinely superior
+   (chiefly server-side — see [twisted-protocol-servers.md](twisted-protocol-servers.md)).
 2. Passwords, tokens, and private keys are references, never URI user-info or serialized
    configuration values.
 3. DataFrame objects are runtime resources, not declarative JSON.
@@ -63,4 +66,5 @@ connectors.md
 orchestration.md
 database-transforms.md
 enrichment-modules.md
+twisted-protocol-servers.md
 ```

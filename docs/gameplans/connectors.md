@@ -41,11 +41,20 @@ Provider-specific dependencies remain optional extras or separate distributions.
 
 ## 3. Non-negotiable decisions
 
-### 3.1 AnyIO only
+### 3.1 AnyIO runtime; protocols are orthogonal
 
-Do not reintroduce Twisted as an execution runtime. A connector may wrap a synchronous
-stdlib or third-party client in a worker thread, or use an async client compatible with
-the AnyIO runtime. No connector starts a private event loop.
+Do not reintroduce Twisted as the **execution runtime**. A connector may wrap a synchronous
+stdlib or third-party client in a worker thread, or use an async client compatible with the
+AnyIO runtime (prefer asyncio-native protocol libraries: `asyncssh`, `aiosmtplib`/`aiosmtpd`,
+`aioftp`, `aioimaplib`, `bottom`, `slixmpp`). No connector starts a private event loop.
+
+**Twisted protocol implementations are not banned — only Twisted-as-runtime is.** Protocol
+support is an orthogonal adapter-layer concern (ROADMAP §23.1). Where a Twisted implementation is
+genuinely superior (chiefly server-side roles and AMP — see
+[twisted-protocol-servers.md](twisted-protocol-servers.md)), a connector may run it on the shared
+asyncio loop via `twisted.internet.asyncioreactor` **inside that connector package** — this is not
+"starting a private event loop," it is installing the asyncio reactor so Twisted protocol code
+cooperates with the AnyIO/asyncio loop the engine already runs on.
 
 ### 3.2 Credentials are references
 

@@ -1796,6 +1796,45 @@ whether the source is finite or live — a `Feed` may wrap a bounded in-memory c
 just as easily as a live source. The manual anyio integration guide is
 [ANYIO_NO_SNIFFIO.md](ANYIO_NO_SNIFFIO.md).
 
+### 23.1 Runtime and protocol layers are orthogonal
+
+The core async **runtime** (AnyIO) and network **protocol** support are separate concerns and
+must not be conflated. "Twisted is not the runtime" does **not** mean "Twisted protocols are
+banned." Twisted's producer/consumer flow control and its protocol library were once reasons to
+keep it as the loop; both are now covered without that coupling:
+
+* **Flow control** — Twisted's push-producer `pauseProducing`/`resumeProducing` is the
+  callback-era ancestor of AnyIO memory object streams, where a bounded `send()` suspends
+  automatically (backpressure by construction, not by convention). §6 backpressure is built on
+  AnyIO streams, not Twisted producers.
+* **Protocols** — riko ingests/emits streams, so a network protocol is a **source/sink adapter**
+  (a `Feed`, `Publisher`, or `Subscription` — see §11/§24), never a core-runtime concern. The
+  protocol library is a dependency of that adapter, ideally an external package, so a new protocol
+  is a small focused package rather than a core change.
+
+Adapter library selection is on the merits, per protocol, and is mostly asyncio-native:
+
+| Protocol | Preferred adapter library | Notes |
+|---|---|---|
+| SSH | `asyncssh` | asyncio-native; cleaner and better-maintained than Twisted Conch |
+| SMTP | `aiosmtplib` (client) / `aiosmtpd` (server) | asyncio-native |
+| IRC | `bottom` / `pydle` | asyncio-native; lighter than `twisted.words` |
+| FTP/SFTP | `aioftp` / `asyncssh` (SFTP) | asyncio-native |
+| XMPP | `slixmpp` | asyncio-native |
+| IMAP (client/poll) | `aioimaplib` | adequate for IDLE/poll sources |
+
+**The `asyncioreactor` escape hatch.** Where a Twisted protocol implementation is genuinely
+superior — chiefly **server-side** roles and full-suite completeness (`twisted.names` DNS server,
+`twisted.mail` IMAP/SMTP servers, Twisted's `AMP` RPC) — run it **on the asyncio event loop** via
+`twisted.internet.asyncioreactor` **inside that one adapter package**. riko gains Twisted's
+protocol strengths without Twisted being the engine's loop. See
+[gameplans/twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md) for the server-side
+capabilities worth pursuing this way.
+
+Consequence for §24/connectors: adapters default to asyncio-native protocol libraries and reject
+Twisted *as a runtime*; a Twisted protocol *implementation* bridged via `asyncioreactor` is
+permitted within an adapter when it is the superior option (almost always a server role).
+
 ---
 
 ## 24. Module registry and plugins
