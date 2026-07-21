@@ -152,6 +152,16 @@ type AnyPool = "ThreadPoolType" | "CPUPoolType"
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 
+__all__ = [
+    "AsyncCollection",
+    "AsyncPipe",
+    "SyncCollection",
+    "SyncPipe",
+    "export",
+    "list_targets",
+]
+
+
 class PoolScope(StrEnum):
     STAGE = "stage"
     PIPELINE = "pipeline"

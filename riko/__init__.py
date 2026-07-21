@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar, overload
 from meza.fntools import Objectify as _Objectify
 from requests.structures import CaseInsensitiveDict
 
+from riko.context import Context  # noqa: F401
 from riko.types.general import ItemOrValue, SyncArgFunc
 from riko.types.modules import AnyConfRule, ObjconfParam
 from riko.types.values import PrimitiveValue, PrimitiveValueType
@@ -119,34 +120,6 @@ def replacer(content: str, old: str, new="_") -> str:
         replaced = content
 
     return replaced
-
-
-class Context:
-    """
-    The context of a pipeline
-    verbose = debug printing during compilation and running
-    describe_input = return pipe input requirements
-    describe_dependencies = return a list of sub-pipelines used
-    test = takes input values from default (skips the console prompt)
-    inputs = a dictionary of values that overrides the defaults
-        e.g. {'name one': 'test value1'}
-    submodule = takes input values from inputs (or default)
-    """
-
-    def __init__(self, **kwargs):
-        self.verbose = bool(kwargs.get("verbose"))
-        self.test = bool(kwargs.get("test"))
-        self.describe_input = bool(kwargs.get("describe_input"))
-        self.describe_dependencies = bool(kwargs.get("describe_dependencies"))
-        self.inputs = dict(kwargs.get("inputs") or {})
-        self.submodule = kwargs.get("submodule", False)
-
-    def __repr__(self):
-        content = f"verbose={self.verbose}, test={self.test}, "
-        content += f"describe_input={self.describe_input}, "
-        content += f"describe_dependencies={self.describe_dependencies}, "
-        content += f"inputs={self.inputs}, submodule={self.submodule}"
-        return f"Context({content})"
 
 
 class Objectify(_Objectify, Mapping[str, VT]):
@@ -329,3 +302,29 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
         result = [value]
 
     return result
+
+
+from riko.api import (  # noqa: E402
+    AsyncCollection,
+    AsyncPipe,
+    SyncCollection,
+    SyncPipe,
+    UnsupportedModuleError,
+    UnsupportedPipelineError,
+    export,
+    list_modules,
+    list_targets,
+)
+
+__all__ = [
+    "AsyncCollection",
+    "AsyncPipe",
+    "Context",
+    "SyncCollection",
+    "SyncPipe",
+    "UnsupportedModuleError",
+    "UnsupportedPipelineError",
+    "export",
+    "list_modules",
+    "list_targets",
+]

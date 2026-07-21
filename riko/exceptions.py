@@ -21,3 +21,10 @@ class PipelineStateError(Exception):
         super().__init__(f"cannot {action} a pipe in state {state!r}")
         self.state = state
         self.action = action
+
+
+__all__ = [
+    "PipelineStateError",
+    "UnsupportedModuleError",
+    "UnsupportedPipelineError",
+]
