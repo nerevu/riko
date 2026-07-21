@@ -1,5 +1,6 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from re import RegexFlag
 from typing import TYPE_CHECKING, Any, Literal, NotRequired, Required, TypedDict, Union
 
@@ -28,7 +29,14 @@ type ModuleSubtype = Literal[
 ]
 
 type ModuleSubtypes = set[ModuleSubtype]
-type OperatorReturnKind = Literal["stream", "nonstream", "unknown"]
+
+
+class OperatorReturnKind(StrEnum):
+    STREAM = "stream"
+    NONSTREAM = "nonstream"
+    UNKNOWN = "unknown"
+
+
 type Inference = tuple[OperatorReturnKind, str | None]
 
 

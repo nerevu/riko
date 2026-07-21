@@ -194,20 +194,20 @@ def _expression_path(node: ast.expr) -> str | None:
 
 
 def _infer_callable_kind(node: ast.expr) -> Inference:
-    kind: OperatorReturnKind = "unknown"
+    kind = OperatorReturnKind.UNKNOWN
     reason = None
 
     if not (path := _expression_path(node)):
         node_type = type(node).__name__
         reason = f"call {node_type=} is not a supported direct name or attribute path"
     elif path.startswith("itertools."):
-        kind = "stream"
+        kind = OperatorReturnKind.STREAM
     elif "." in path:
         reason = f"call target {path!r} is not a recognized namespace"
     elif path in _STREAM_CALLS:
-        kind = "stream"
+        kind = OperatorReturnKind.STREAM
     elif path in _NONSTREAM_CALLS:
-        kind = "nonstream"
+        kind = OperatorReturnKind.NONSTREAM
     else:
         reason = f"direct call {path!r} is not in a return-kind whitelist"
 
@@ -219,7 +219,7 @@ def _infer_expression_kind(
     assignments: dict[str, ast.expr],
     seen: frozenset[str] = frozenset(),
 ) -> Inference:
-    kind: OperatorReturnKind = "unknown"
+    kind = OperatorReturnKind.UNKNOWN
     reason = None
 
     if isinstance(node, ast.Name):
@@ -232,7 +232,7 @@ def _infer_expression_kind(
     elif isinstance(node, (ast.Await, ast.NamedExpr)):
         kind, reason = _infer_expression_kind(node.value, assignments, seen)
     elif isinstance(node, ast.GeneratorExp):
-        kind = "stream"
+        kind = OperatorReturnKind.STREAM
     elif isinstance(node, ast.Call):
         path = _expression_path(node.func)
         is_passthrough = path and path.startswith(_PASSTHROUGH_NAMESPACES)
@@ -241,14 +241,14 @@ def _infer_expression_kind(
             argument = node.args[0]
             kind, reason = _infer_callable_kind(argument)
 
-            if kind == "unknown":
+            if kind == OperatorReturnKind.UNKNOWN:
                 kind, reason = _infer_expression_kind(argument, assignments, seen)
         elif is_passthrough:
             reason = f"passthrough call {path!r} has no positional argument to inspect"
         else:
             kind, reason = _infer_callable_kind(node.func)
-    elif isinstance(node, _NONSTREAM_EXPRESSIONS):
-        kind = "nonstream"
+    elif isinstance(node, NonstreamExpressions):
+        kind = OperatorReturnKind.NONSTREAM
     else:
         reason = f"return expression {type(node).__name__} is not supported"
 
@@ -279,38 +279,38 @@ def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
     Examples:
         >>> def mapped(items):
         ...     return map(str, items)
-        >>> _infer_unannotated_return_kind(mapped)
+        >>> _infer_unannotated_return_kind(mapped).value
         'stream'
 
         >>> def chained(items):
         ...     return itertools.chain(items)
-        >>> _infer_unannotated_return_kind(chained)
+        >>> _infer_unannotated_return_kind(chained).value
         'stream'
 
         >>> def counted(items):
         ...     return sum(items)
-        >>> _infer_unannotated_return_kind(counted)
+        >>> _infer_unannotated_return_kind(counted).value
         'nonstream'
 
         >>> async def async_counted(items):
         ...     result = await bado.maybe_deferred(sum, items)
         ...     return result
-        >>> _infer_unannotated_return_kind(async_counted)
+        >>> _infer_unannotated_return_kind(async_counted).value
         'nonstream'
 
         >>> async def async_mapped(items):
         ...     result = await asyncio.to_thread(map, str, items)
         ...     return result
-        >>> _infer_unannotated_return_kind(async_mapped)
+        >>> _infer_unannotated_return_kind(async_mapped).value
         'stream'
 
         >>> def ambiguous(items):
         ...     return build_result(items)
-        >>> _infer_unannotated_return_kind(ambiguous)
+        >>> _infer_unannotated_return_kind(ambiguous).value
         'unknown'
 
     """
-    kind: OperatorReturnKind = "unknown"
+    kind = OperatorReturnKind.UNKNOWN
     reason = None
     name = getattr(pipe, "__qualname__", repr(pipe))
     is_func = lambda node: isinstance(node, (FunctionDef, AsyncFunctionDef))
@@ -332,7 +332,7 @@ def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
             elif not isinstance(statement := function.body[-1], ast.Return):
                 reason = f"final statement is {type(statement).__name__}, not Return"
             elif statement.value is None:
-                kind = "nonstream"
+                kind = OperatorReturnKind.NONSTREAM
             else:
                 assignments = {
                     target.id: candidate.value
@@ -345,9 +345,9 @@ def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
         else:
             reason = "parsed source contains no function definition"
 
-    if reason and kind == "unknown":
+    if reason and kind == OperatorReturnKind.UNKNOWN:
         logger.debug(f"Could not infer return kind because {name}: {reason}.")
-    elif kind == "unknown":
+    elif kind == OperatorReturnKind.UNKNOWN:
         logger.debug("Could not infer return kind, but no reason was provided.")
 
     return kind
@@ -355,7 +355,7 @@ def _infer_unannotated_return_kind(pipe: Pipeline) -> OperatorReturnKind:
 
 def _gen_operator_return_kinds(pipe: Pipeline) -> Iterator[OperatorReturnKind]:
     if isgeneratorfunction(pipe) or isasyncgenfunction(pipe):
-        yield "stream"
+        yield OperatorReturnKind.STREAM
     else:
         try:
             annotation = get_type_hints(pipe).get("return")
@@ -365,11 +365,11 @@ def _gen_operator_return_kinds(pipe: Pipeline) -> Iterator[OperatorReturnKind]:
         if annotation:
             for member, candidate in _gen_members(annotation):
                 if member in {Any, object}:
-                    yield "unknown"
+                    yield OperatorReturnKind.UNKNOWN
                 elif _matches_abc(candidate, Iterator):
-                    yield "stream"
+                    yield OperatorReturnKind.STREAM
                 else:
-                    yield "nonstream"
+                    yield OperatorReturnKind.NONSTREAM
         else:
             yield _infer_unannotated_return_kind(pipe)
 
@@ -381,10 +381,10 @@ def _derive_operator_subtypes(
     subtypes: ModuleSubtypes = set()
 
     for kind in _gen_operator_return_kinds(pipe):
-        if kind == "nonstream":
+        if kind == OperatorReturnKind.NONSTREAM:
             subtype = subtype or "aggregator"
             subtypes.add(subtype)
-        elif kind == "stream":
+        elif kind == OperatorReturnKind.STREAM:
             subtype = subtype or "composer"
             subtypes.add("composer")
 
