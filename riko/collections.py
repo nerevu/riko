@@ -774,11 +774,7 @@ class AsyncPipe(PyPipe):
         if self._aiter is None:
             self._aiter = self._stream()
 
-        try:
-            return await anext(self._aiter)
-        except StopAsyncIteration:
-            self._aiter = None
-            raise
+        return await anext(self._aiter)
 
     async def _stream(self) -> AsyncIterator[Item]:
         source = await self.source if self.source else None
@@ -843,11 +839,7 @@ class AsyncCollection(PyCollection):
         if self._aiter is None:
             self._aiter = self._stream()
 
-        try:
-            return await anext(self._aiter)
-        except StopAsyncIteration:
-            self._aiter = None
-            raise
+        return await anext(self._aiter)
 
     def async_pipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""
