@@ -163,11 +163,6 @@ def test_async_chain_after_run_is_allowed():
 
 
 @pytest.mark.skipif(_issync, reason="async support not available")
-@pytest.mark.xfail(
-    strict=True,
-    reason="async chaining re-executes the parent instead of wrapping the "
-    "remaining stream; sync/async parity is P7 (docs/REFINEMENT_PLAN.md Phase 7)",
-)
 def test_async_chain_after_run_wraps_remainder():
     reactor = FakeReactor()
     result = {}

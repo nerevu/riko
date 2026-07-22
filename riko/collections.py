@@ -843,13 +843,43 @@ class AsyncPipe(PyPipe):
         """Converts the AsyncIterator stream to an Awaitable"""
         return iter([item async for item in self._stream()])
 
+    async def _resolve_source(self) -> Items | None:
+        """
+        Materialize the source to a sync stream for the parser.
+
+        A parent pipe (any ``AsyncIterable``) is drained through its memoized
+        ``__aiter__`` so chaining wraps the *remaining* stream (mirrors sync
+        ``source=self``); an ``Awaitable`` source is awaited as before.
+        """
+        if self.source is None:
+            resolved = None
+        elif hasattr(self.source, "__aiter__"):
+            resolved = [item async for item in self.source]
+        else:
+            resolved = await self.source
+
+        return resolved
+
+    def _chain(self, name: str, **kwargs) -> "AsyncPipe":
+        """
+        Create the next async pipe stage, propagating runtime and execution
+        settings and consuming this pipe's single execution (not restarting it).
+        """
+        self._require_usable("chain")
+        skwargs = {
+            "parallel": self.parallel,
+            "context": self.context,
+            "inputs": self.inputs,
+            "connections": self.connections,
+        }
+        skwargs.update(kwargs)
+        return AsyncPipe(name, source=self, **skwargs)
+
     def __getattr__(self, name):
         if name.startswith("_"):
             raise AttributeError(name)
 
-        self._require_usable("chain")
-        kwargs = {"source": self._await_stream(), "connections": self.connections}
-        return AsyncPipe(name, **kwargs)
+        return self._chain(name)
 
     def __await__(self) -> Generator[Any, None, Stream]:
         return self._await_stream().__await__()
@@ -868,10 +898,10 @@ class AsyncPipe(PyPipe):
 
     async def _stream(self) -> AsyncIterator[Item]:
         self._begin()
-        source = await self.source if self.source else None
+        source = await self._resolve_source()
         async_pipeline = partial(self.async_pipe, **self.kwargs)
 
-        if self.mapify and source:
+        if self.mapify and source is not None:
             mapped = await async_map(async_pipeline, source, self.connections)
 
             for stream in mapped:

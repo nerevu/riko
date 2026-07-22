@@ -1,5 +1,13 @@
 from codecs import StreamReader
-from collections.abc import Awaitable, Callable, Iterable, Iterator, Sequence
+from collections.abc import (
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterable,
+    Iterator,
+    Sequence,
+)
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from typing import (
     TYPE_CHECKING,
@@ -40,6 +48,10 @@ type ValueStream = Iterator[RikoValue]
 type Stream = Iterator[Item]
 type StreamOrValueStream = Iterator[ItemOrValue]
 type Streams = Iterator[Stream]
+
+type AsyncStream = AsyncIterator[Item]
+type AsyncItems = AsyncIterable[Item]
+type Feed = AsyncItems
 
 type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]
 type OperatorParserOutput = Stream | ItemOrValue | Iterator[StatefulItem]
