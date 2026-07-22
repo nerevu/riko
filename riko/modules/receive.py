@@ -31,6 +31,7 @@ Attributes:
 """
 
 from collections.abc import Callable, Generator, Iterator, Mapping
+from inspect import signature
 from random import choice
 from time import sleep
 from typing import cast
@@ -104,6 +105,20 @@ def gen_name(count=2) -> Iterator[str]:
         yield "".join(map(choice, [ONSETS, VOWELS, CODAS]))  # noqa: S311
 
 
+def _apply(func: Callable, item: Item | StatefulItem, **fkwargs) -> Item:
+    try:
+        params = signature(func).parameters
+    except (TypeError, ValueError):
+        allowed = {}
+    else:
+        if any(p.kind == p.VAR_KEYWORD for p in params.values()):
+            allowed = fkwargs
+        else:
+            allowed = {k: v for k, v in fkwargs.items() if k in params}
+
+    return func(item, **allowed)
+
+
 def parser(
     _: Stream,
     objconf: Objconf,
@@ -166,12 +181,19 @@ def parser(
                     else:
                         state = None
 
-                    try:
-                        result = func(item, **fkwargs) if func else item
-                    except TypeError:
-                        result = func(item)
+                    result = _apply(func, item, **fkwargs) if func else item
+                    queue = _receive_queue[name]
 
-                    _receive_queue[name].append((state, result))
+                    if (
+                        queue
+                        and queue.maxlen is not None
+                        and len(queue) >= queue.maxlen
+                    ):
+                        msg = f"Receiver {name!r} queue full (maxlen={queue.maxlen}); "
+                        msg += "dropping oldest item."
+                        logger.warning(msg)
+
+                    queue.append((state, result))
 
         receiver()
 

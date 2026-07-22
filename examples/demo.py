@@ -40,7 +40,8 @@ Fetching feeds
     'http://feeds.gawker.com'
 """
 
-from typing import cast
+from collections.abc import Awaitable
+from typing import cast, overload
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
@@ -79,11 +80,28 @@ async def async_pipe(reactor, test=False):
     return (s1, s2)
 
 
+def print_results(result) -> None:
+    feed, count = result
+    print(cast(dict, next(feed))["title"])
+    print(cast(dict, next(count))["count"])
+
+
+@overload
+def main(*, test: bool = False) -> None: ...  # noqa: E704
+@overload
+def main(reactor, *, test: bool = False) -> Awaitable[None]: ...  # noqa: E704
+def main(reactor=None, *, test: bool = False) -> None | Awaitable[None]:  # noqa: E302
+    if reactor:
+
+        async def run() -> None:
+            print_results(await async_pipe(reactor, test=test))
+
+        result = run()
+    else:
+        result = print_results(pipe(test=test))
+
+    return result
+
+
 if __name__ == "__main__":
-    s1, s2 = pipe()
-
-    if s1:
-        print(cast(dict, next(s1))["title"])
-
-    if s2:
-        print(cast(dict, next(s2))["count"])
+    main()

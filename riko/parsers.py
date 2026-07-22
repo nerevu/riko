@@ -57,6 +57,17 @@ else:
     ElementTree = None
     IS_LXML = True
 
+if IS_LXML:
+    XML_PARSER = etree.XMLParser(  # noqa: S314
+        resolve_entities=False,
+        no_network=True,
+        load_dtd=False,
+        dtd_validation=False,
+        huge_tree=False,
+    )
+else:
+    XML_PARSER = None
+
 try:
     import fastfeedparser
 except ImportError:
@@ -419,8 +430,27 @@ def xml2etree(  # noqa: E302
     xml: bool = True,
     html5: bool = False,
 ) -> AnyElementTree | None:
+    """
+    Parse XML/HTML into an ElementTree. External XML is parsed with a hardened
+    policy: entity resolution, DTD loading, and network access are disabled to
+    guard against XXE and entity-expansion attacks.
+
+    Examples:
+        >>> from io import StringIO
+        >>> xxe = (
+        ...     '<?xml version="1.0"?>'
+        ...     '<!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>'
+        ...     '<r>&x;</r>')
+        >>> try:
+        ...     root = xml2etree(StringIO(xxe), xml=True).getroot()
+        ...     'root' not in (root.text or '')
+        ... except Exception:
+        ...     True
+        True
+
+    """
     if xml:
-        element_tree = etree.parse(f)  # noqa: S314
+        element_tree = etree.parse(f, XML_PARSER)  # noqa: S314
     elif html5 and html5parser:
         element_tree = html5parser.parse(f)
     elif IS_LXML:
@@ -528,7 +558,11 @@ def any2dict(
             use_ijson = isinstance(content, RawIOBase)
 
         if use_ijson:
-            prefix = path if path.endswith(".item") else f"{path}.item"
+            if path and not path.endswith(".item"):
+                prefix = f"{path}.item"
+            else:
+                prefix = path
+
             items = ijson.items(content, prefix, use_float=True)
             yield from cast(Stream, items)
         elif isinstance(content, str):

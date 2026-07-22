@@ -44,71 +44,84 @@
         },
         {
             "conf": {
-                "author": {
+                "count": {
                     "type": "text",
-                    "value": ""
+                    "value": "all"
                 },
-                "description": {
-                    "type": "text",
-                    "value": ""
-                },
-                "guid": {
-                    "type": "text",
-                    "value": ""
-                },
-                "link": {
-                    "type": "text",
-                    "value": ""
-                },
-                "mediaContentHeight": {
-                    "type": "text",
-                    "value": ""
-                },
-                "mediaContentType": {
-                    "type": "text",
-                    "value": ""
-                },
-                "mediaContentURL": {
-                    "type": "text",
-                    "value": "img.src"
-                },
-                "mediaContentWidth": {
-                    "type": "text",
-                    "value": ""
-                },
-                "mediaThumbHeight": {
-                    "type": "text",
-                    "value": ""
-                },
-                "mediaThumbURL": {
-                    "type": "text",
-                    "value": ""
-                },
-                "mediaThumbWidth": {
-                    "type": "text",
-                    "value": ""
-                },
-                "pubdate": {
-                    "type": "text",
-                    "value": ""
-                },
-                "title": {
-                    "type": "text",
-                    "value": "img.alt"
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "rssitembuilder",
+                        "id": "sw-444",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "conf": {
+                            "author": {
+                                "type": "text",
+                                "value": ""
+                            },
+                            "description": {
+                                "subkey": "description",
+                                "type": "text"
+                            },
+                            "guid": {
+                                "type": "text",
+                                "value": ""
+                            },
+                            "link": {
+                                "subkey": "link",
+                                "type": "url"
+                            },
+                            "mediaContentHeight": {
+                                "subkey": "img.height",
+                                "type": "text"
+                            },
+                            "mediaContentType": {
+                                "type": "text",
+                                "value": ""
+                            },
+                            "mediaContentURL": {
+                                "subkey": "img.src",
+                                "type": "url"
+                            },
+                            "mediaContentWidth": {
+                                "subkey": "img.width",
+                                "type": "text"
+                            },
+                            "mediaThumbHeight": {
+                                "type": "text",
+                                "value": ""
+                            },
+                            "mediaThumbURL": {
+                                "type": "text",
+                                "value": ""
+                            },
+                            "mediaThumbWidth": {
+                                "type": "text",
+                                "value": ""
+                            },
+                            "pubdate": {
+                                "type": "text",
+                                "value": ""
+                            },
+                            "title": {
+                                "subkey": "img.alt",
+                                "type": "text"
+                            }
+                        }
+                    }
                 }
             },
             "id": "sw-443",
-            "type": "createrss"
+            "type": "loop"
         },
         {
             "conf": {
                 "count": {
                     "type": "text",
                     "value": "all"
-                },
-                "assign": {
-                    "type": "text",
-                    "value": "description"
                 },
                 "embed": {
                     "type": "module",
@@ -130,20 +143,16 @@
                             ]
                         },
                         "id": "sw-515",
-                        "type": "strconcat"
+                        "type": "strconcat",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "description"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-507",
@@ -153,11 +162,11 @@
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "http://pinterest.com/popular/"
+                    "value": "file://riko/data/edition.cnn.html"
                 },
                 "xpath": {
                     "type": "text",
-                    "value": "//a[@class='PinImage ImgLink']"
+                    "value": "//a[img]"
                 }
             },
             "id": "sw-327",
@@ -165,23 +174,40 @@
         },
         {
             "conf": {
-                "RULE": {
-                    "field": {
-                        "type": "text",
-                        "value": "href"
-                    },
-                    "newval": {
-                        "type": "text",
-                        "value": "link"
-                    },
-                    "op": {
-                        "type": "text",
-                        "value": "rename"
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "rename",
+                        "id": "sw-304",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "conf": {
+                            "RULE": {
+                                "field": {
+                                    "type": "text",
+                                    "value": "href"
+                                },
+                                "newval": {
+                                    "type": "text",
+                                    "value": "link"
+                                },
+                                "op": {
+                                    "type": "text",
+                                    "value": "rename"
+                                }
+                            }
+                        }
                     }
                 }
             },
             "id": "sw-303",
-            "type": "rename"
+            "type": "loop"
         }
     ],
     "wires": [

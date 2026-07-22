@@ -1,5 +1,6 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from re import RegexFlag
 from typing import TYPE_CHECKING, Any, Literal, NotRequired, Required, TypedDict, Union
 
@@ -17,8 +18,73 @@ type Graph[T: (str | int)] = Mapping[T, Nodes[T]]
 type NodeList[T: (str | int)] = list[T]
 type SCC[T: (str | int)] = list[tuple[T, ...]]
 
+type ModuleType = Literal["operator", "processor", "splitter"]
+
+type ModuleSubtype = Literal[
+    "aggregator",
+    "composer",
+    "source",
+    "transformer",
+    "splitter",
+]
+
+type ModuleSubtypes = set[ModuleSubtype]
+
+
+class OperatorReturnKind(StrEnum):
+    STREAM = "stream"
+    NONSTREAM = "nonstream"
+    UNKNOWN = "unknown"
+
+
+type Inference = tuple[OperatorReturnKind, str | None]
+
+
+class InferenceSource(StrEnum):
+    ANNOTATION = "annotation"
+    GENERATOR = "generator"
+    AST = "ast"
+
+
+@dataclass(frozen=True, slots=True)
+class ReturnInference:
+    kind: OperatorReturnKind
+    source: InferenceSource | None
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleMetadata:
+    name: str
+    type: ModuleType
+    subtype: ModuleSubtype
+    subtypes: ModuleSubtypes
+    pollable: bool
+    loopable: bool
+    has_sync: bool
+    has_async: bool
+
+    def supports(self, subtype: ModuleSubtype) -> bool:
+        return subtype in self.subtypes
+
+
 ModuleName = Literal[
-    "fetch", "fetchdata", "input", "sort", "tail", "itembuilder", "urlbuilder"
+    "fetch",
+    "fetchdata",
+    "fetchpage",
+    "forever",
+    "input",
+    "itembuilder",
+    "loop",
+    "output",
+    "regex",
+    "rename",
+    "sort",
+    "strconcat",
+    "tail",
+    "tokenizer",
+    "truncate",
+    "urlbuilder",
 ]
 
 
@@ -73,31 +139,30 @@ class RegexRule(TypedDict):
 
 # Raw
 class FetchRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
+    offline: NotRequired[Value]
 
 
-class InputRawConf(TypedDict):
+class InputRawConf(TypedDict, total=False):
+    name: Required[ConfArg]
+    prompt: Required[ConfArg]
+    type: ConfArg
     debug: ConfArg
     default: ConfArg
-    name: ConfArg
-    prompt: ConfArg
     test: ConfArg
-    param: NotRequired[Param | Sequence[Param]]
-    position: NotRequired[ConfArg]
-    input_key: NotRequired[ConfArg]
+    param: Param | Sequence[Param]
+    position: ConfArg
+    input_key: ConfArg
 
 
-class SortRawRule(TypedDict):
-    field: Value
-    dir: NotRequired[Value]
-    cast: NotRequired[Value]
+class SortRawRule(TypedDict, total=False):
+    field: Required[Value]
+    dir: Value
+    type: str
 
 
 class SortRawConf(TypedDict):
     rule: SortRawRule | list[SortRawRule]
-    type: Value
-    field: Value
-    dir: Value
 
 
 class TailRawConf(TypedDict):
@@ -105,7 +170,7 @@ class TailRawConf(TypedDict):
 
 
 class ItemBuilderRawConf(TypedDict):
-    attrs: list[Param]
+    attrs: Param | list[Param]
 
 
 class RssItemBuilderRawConf(TypedDict, total=False):
@@ -130,6 +195,7 @@ class EmbeddedModule(TypedDict):
     conf: "AnyModuleRawConf"
     assign: NotRequired[ConfArg]
     emit: NotRequired[ConfArg]
+    field: NotRequired[ConfArg]
 
 
 class Embed(TypedDict):
@@ -149,7 +215,7 @@ class CountRawConf(TypedDict, total=False):
 
 
 class CsvRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
     delimiter: NotRequired[Value]
     quotechar: NotRequired[Value]
     encoding: NotRequired[Value]
@@ -157,7 +223,8 @@ class CsvRawConf(TypedDict):
     skip_rows: NotRequired[Value]
     sanitize: NotRequired[Value]
     dedupe: NotRequired[Value]
-    col_names: NotRequired[Value]
+    col_names: NotRequired[Value | list[Value]]
+    other_sep: NotRequired[Value]
 
 
 class CurrencyFormatRawConf(TypedDict, total=False):
@@ -169,7 +236,7 @@ class DateFormatRawConf(TypedDict, total=False):
 
 
 class ExchangeRateRawConf(TypedDict, total=False):
-    url: Value
+    url: Value | list[Value]
     param: Value
     currency: Value
     delay: Value
@@ -178,19 +245,19 @@ class ExchangeRateRawConf(TypedDict, total=False):
 
 
 class FeedAutoDiscoveryRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
     strict: NotRequired[Value]
     sort: NotRequired[Value]
 
 
 class FetchDataRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
     path: NotRequired[Value]
     html5: NotRequired[Value]
 
 
 class FetchPageRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
     start: NotRequired[Value]
     end: NotRequired[Value]
     token: NotRequired[Value]
@@ -198,11 +265,11 @@ class FetchPageRawConf(TypedDict):
 
 
 class FetchSiteFeedRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
 
 
 class FetchTableRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
     delimiter: NotRequired[Value]
     quotechar: NotRequired[Value]
     encoding: NotRequired[Value]
@@ -214,7 +281,7 @@ class FetchTableRawConf(TypedDict):
 
 
 class FetchTextRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
     encoding: NotRequired[Value]
 
 
@@ -258,8 +325,22 @@ class RefindRawConf(TypedDict):
     rule: FindRawRule | list[FindRawRule]
 
 
+class RegexRawRule(TypedDict, total=False):
+    count: Value
+    default: Value
+    field: Value
+    flags: Value
+    match: Value
+    offset: Value
+    replace: Value
+    series: Value
+    singlematch: Value
+    singlelinematch: Value
+    casematch: Value
+
+
 class RegexRawConf(TypedDict):
-    rule: RegexRule | list[RegexRule]
+    rule: RegexRawRule | list[RegexRawRule]
     multi: NotRequired[Value]
     convert: NotRequired[Value]
 
@@ -359,10 +440,15 @@ class TypecastRawConf(TypedDict, total=False):
     type: Value
 
 
+class UniqRawConf(TypedDict, total=False):
+    uniq_key: Value
+    limit: Value
+
+
 class UrlBuilderRawConf(TypedDict, total=False):
     base: Value
     ext: Value
-    path: Value
+    path: Value | list[Value]
     param: Param | list[Param]
 
 
@@ -371,7 +457,7 @@ class UrlParseRawConf(TypedDict, total=False):
 
 
 class XpathFetchPageRawConf(TypedDict):
-    url: Value
+    url: Value | list[Value]
     xpath: NotRequired[Value]
     html5: NotRequired[Value]
 
@@ -418,6 +504,7 @@ type AnyModuleRawConf = (
     | TruncateRawConf
     | TypecastRawConf
     # | UdfRawConf
+    | UniqRawConf
     | UrlBuilderRawConf
     | UrlParseRawConf
     | XpathFetchPageRawConf
@@ -513,10 +600,10 @@ class SortConf(TypedDict):
     rule: SortConfRule | list[SortConfRule]
 
 
-class InputConf(TypedDict):
-    prompt: str
-    default: NotRequired[str]
-    type: "CastType"
+class InputConf(TypedDict, total=False):
+    prompt: Required[str]
+    type: Required["CastType"]
+    default: str
     test: bool
     input_key: str
 
@@ -587,7 +674,7 @@ class DateFormatConf(TypedDict):
 
 class ExchangeRateConf(TypedDict):
     url: str
-    param: ParsedParam | Sequence[ParsedParam]
+    param: dict[str, str]
     currency: str = "USD"
     delay: int = 0
     memoize: bool = True

@@ -1,0 +1,17 @@
+{
+    "modules": [
+        {
+            "type": "forever",
+            "conf": {}
+        },
+        {
+            "type": "truncate",
+            "conf": {
+                "count": {
+                    "type": "number",
+                    "value": "3"
+                }
+            }
+        }
+    ]
+}

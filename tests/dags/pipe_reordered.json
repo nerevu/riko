@@ -1,0 +1,22 @@
+{
+    "modules": [
+        {
+            "id": "trunc",
+            "type": "truncate",
+            "conf": {
+                "count": {
+                    "type": "number",
+                    "value": "2"
+                }
+            }
+        },
+        {
+            "id": "gen",
+            "type": "forever",
+            "conf": {}
+        }
+    ],
+    "wires": [
+        ["gen", "trunc"]
+    ]
+}

@@ -51,10 +51,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "loop:fetchpage"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -63,34 +59,30 @@
                                 "subkey": "url",
                                 "type": "url"
                             },
-                            "from": {
+                            "start": {
                                 "type": "text",
                                 "value": "One Way</span>"
                             },
-                            "to": {
+                            "end": {
                                 "type": "text",
                                 "value": "</tr>"
                             },
                             "token": {
                                 "type": "text",
-                                "value": "<td style=\"TEXT-ALIGN: center\">"
+                                "value": "<td style=\"text-align: center;\">"
                             }
                         },
                         "id": "sw-119",
-                        "type": "fetchpage"
+                        "type": "fetchpage",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:fetchpage"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": false
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-111",

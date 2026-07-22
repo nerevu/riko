@@ -1,0 +1,72 @@
+{
+    "layout": [
+        {
+            "id": "sw-1",
+            "xy": [
+                100,
+                60
+            ]
+        },
+        {
+            "id": "sw-2",
+            "xy": [
+                100,
+                180
+            ]
+        },
+        {
+            "id": "_OUTPUT",
+            "xy": [
+                100,
+                300
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "conf": {},
+            "id": "sw-1",
+            "type": "forever"
+        },
+        {
+            "conf": {
+                "count": {
+                    "type": "number",
+                    "value": "3"
+                }
+            },
+            "id": "sw-2",
+            "type": "truncate"
+        },
+        {
+            "conf": {},
+            "id": "_OUTPUT",
+            "type": "output"
+        }
+    ],
+    "terminaldata": [],
+    "wires": [
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-1"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-2"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-2"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

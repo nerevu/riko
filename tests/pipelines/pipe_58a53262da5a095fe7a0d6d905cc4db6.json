@@ -81,7 +81,7 @@
         },
         {
             "conf": {
-                "KEY": [
+                "rule": [
                     {
                         "dir": {
                             "type": "text",

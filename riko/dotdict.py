@@ -59,20 +59,20 @@ def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
     return success or (False if failure else isinstance(val, Mapping))
 
 
-def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT]]:
+def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:
     return isinstance(val, (list, tuple))
 
 
-def is_mapping_seq[D, VT](
-    val: list[VT] | tuple[VT],
-) -> TypeGuard[list[Mapping[D, VT]] | tuple[Mapping[D, VT]]]:
-    return is_mapping(val[0])
+def is_mapping_seq(
+    val: list[Any] | tuple[Any, ...],
+) -> TypeGuard[list[Mapping[Any, Any]] | tuple[Mapping[Any, Any], ...]]:
+    return bool(val and is_mapping(val[0]))
 
 
-def is_value_seq[VT](
-    val: list[VT] | tuple[VT],
-) -> TypeGuard[BasicList | tuple[BasicValue]]:
-    return isinstance(val[0], BasicValueType)
+def is_value_seq(
+    val: list[Any] | tuple[Any, ...],
+) -> TypeGuard[BasicList | tuple[BasicValue, BasicValue]]:
+    return bool(val and isinstance(val[0], BasicValueType))
 
 
 def is_sentinal[VT](val: Mapping[str, VT], **kwargs) -> TypeGuard[Sentinal]:
@@ -107,6 +107,29 @@ def parse_key(key: Key | None = None) -> list[str]:
     return keys
 
 
+def match_key(data: object, key: str) -> str | None:
+    if is_mapping(data):
+        if key in data:
+            matched = key
+        else:
+            lowered = key.lower()
+            keys = (k for k in data if k.lower() == lowered)
+            matched = next(keys, None)
+    else:
+        matched = None
+
+    return matched
+
+
+def raw_get[VT](data: Mapping[str, VT], key: str) -> VT:
+    if isinstance(data, CaseInsensitiveDict):
+        value = CaseInsensitiveDict.__getitem__(data, key)
+    else:
+        value = data[key]
+
+    return value
+
+
 @overload
 def parse_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
     value: ConfArg, default: object | None = ...
@@ -129,7 +152,7 @@ def parse_sentinel[D, VT](  # noqa: E302
 
         if stream := kwargs.get(key):
             stream = cast_type(Stream, stream)
-            parsed = next(stream)
+            parsed = next(stream, default)
         else:
             parsed = default
     elif is_type_value(value):
@@ -169,8 +192,12 @@ def parse_map[VT](
 
 def parse_dotdict[VT](*keys: str, data: DotDict[VT]) -> Iterator[tuple[str, VT | None]]:
     for key in keys:
-        value = cast(VT, CaseInsensitiveDict.__getitem__(data, key))
-        v = next(gen_dict(value, default_key=None))
+        if key in data:
+            value = raw_get(data, key)
+            v = next(gen_dict(value, default_key=None))
+        else:
+            v = None
+
         yield (key.lower(), cast(VT, v))
 
 
@@ -190,14 +217,14 @@ def gen_dict[VT](  # noqa: E704
 ) -> Iterator[dict[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: list[VT] | tuple[VT],
+    data: list[VT] | tuple[VT, ...],
     key: Key | None = ...,
     default_key: str = ...,
     **kwargs: VT,
 ) -> Iterator[dict[str, VT | None]]: ...
 @overload  # noqa: E302
 def gen_dict[VT](  # noqa: E704
-    data: list[VT | None] | tuple[VT | None],
+    data: list[VT | None] | tuple[VT, ...],
     key: Key | None = ...,
     *,
     default_key: None,
@@ -231,7 +258,7 @@ def gen_dict[VT](  # noqa: E302
     | DotDict[VT]
     | Mapping[str, VT]
     | list[VT]
-    | tuple[VT]
+    | tuple[VT, ...]
     | VT
     | None,
     key: Key | None = None,
@@ -415,7 +442,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     @overload  # noqa: E301
     def _parse_value(  # noqa: E704
         self,
-        value: list[VT] | tuple[VT],
+        value: list[VT] | tuple[VT, ...],
         key: str | int,
         default: object | None = ...,
         **kwargs: VT,
@@ -426,7 +453,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     ) -> D | None: ...
     def _parse_value(  # noqa: E301
         self,
-        value: list[VT] | tuple[VT] | Mapping[str, VT] | object,
+        value: list[VT] | tuple[VT, ...] | Mapping[str, VT] | object,
         key: str | int,
         default: D | None = None,
         **kwargs: VT,
@@ -476,7 +503,7 @@ class DotDict(CaseInsensitiveDict[VT]):
         'bar'
         """
         keys = parse_key(key)
-        value = cast(VT, CaseInsensitiveDict.__getitem__(self, keys[0]))
+        value = raw_get(self, keys[0])
 
         if len(keys) > 1:
             key = ".".join(keys[1:])
@@ -510,7 +537,7 @@ class DotDict(CaseInsensitiveDict[VT]):
 
         def reducer(item: Self, key: str) -> Self:
             if item and key in item:
-                existing = CaseInsensitiveDict.__getitem__(item, key)
+                existing = raw_get(item, key)
 
                 if existing and not is_mapping(existing):
                     del item[key]
@@ -630,17 +657,46 @@ class DotDict(CaseInsensitiveDict[VT]):
         return type(self)(self)
 
     def delete(self, key: str):
-        reducer = lambda i, k: DotDict(i.get(k))
+        """
+        Delete a root or nested key. Matching is case-insensitive at every
+        level, including nested plain-dict values.
+
+        Examples:
+            >>> r = DotDict({'author': 'bar', 'title': 'foo'})
+            >>> r.delete('author')
+            >>> r.asdict()
+            {'title': 'foo'}
+            >>> r = DotDict({'author': {'name': 'bar', 'url': 'x.com'}})
+            >>> r.delete('author.name')
+            >>> r.asdict()
+            {'author': {'url': 'x.com'}}
+            >>> r = DotDict({'author': {'name': 'bar', 'url': 'x.com'}})
+            >>> r.delete('AUTHOR.NAME')
+            >>> r.asdict()
+            {'author': {'url': 'x.com'}}
+            >>> r.delete('missing.key')
+            >>> r.asdict()
+            {'author': {'url': 'x.com'}}
+
+        """
+
+        def reducer(item: Self | None, key: str) -> Self | None:
+            if item and key and (matched := match_key(item, key)):
+                value = raw_get(item, matched)
+            else:
+                value = None
+
+            return cast(Self, value) if is_mapping(value) else None
+
         keys = parse_key(key)
         rest, last = keys[:-1], keys[-1]
-        reduced = reduce(reducer, rest, self)
 
-        try:
-            _key = reduced[last]
-        except KeyError:
-            pass
-        else:
-            del _key
+        if len(keys) == 1 and match_key(self, key):
+            CaseInsensitiveDict.__delitem__(self, key)
+        elif (reduced := reduce(reducer, rest, self)) is not None and (
+            matched := match_key(reduced, last)
+        ) is not None:
+            del reduced[matched]
 
     @overload
     def update(  # noqa: E704

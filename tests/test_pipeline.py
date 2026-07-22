@@ -3,6 +3,7 @@
 from riko import Context, get_path
 from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
+from riko.types.modules import FetchRawConf, FilterRawConf, FilterRawRule
 
 
 def pipe_testpipe1(context=None, conf=None):
@@ -13,23 +14,28 @@ def pipe_testpipe1(context=None, conf=None):
         return []
 
     sw_90 = fetch(
-        context=context, conf={"URL": {"type": "url", "value": get_path("feed.xml")}}
+        context=context,
+        conf=FetchRawConf({"url": {"type": "url", "value": get_path("feed.xml")}}),
     )
 
     sw_102 = _filter(
         sw_90,
         context=context,
-        conf={
-            "COMBINE": {"type": "text", "value": "and"},
-            "PERMIT": {"type": "bool", "value": True},
-            "RULE": [
-                {
-                    "field": {"type": "text", "value": "description"},
-                    "value": {"type": "text", "value": "the"},
-                    "op": {"type": "text", "value": "contains"},
-                }
-            ],
-        },
+        conf=FilterRawConf(
+            {
+                "combine": {"type": "text", "value": "and"},
+                "permit": {"type": "bool", "value": True},
+                "rule": [
+                    FilterRawRule(
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "value": {"type": "text", "value": "the"},
+                            "op": {"type": "text", "value": "contains"},
+                        }
+                    )
+                ],
+            }
+        ),
     )
 
     return sw_102

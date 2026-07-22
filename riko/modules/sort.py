@@ -89,7 +89,7 @@ async def async_parser(
         {'content': 4}
 
     """
-    return await async_reduce(reducer, rules, stream)
+    return await async_reduce(reducer, list(reversed(rules)), stream)
 
 
 def parser(
@@ -129,7 +129,7 @@ def parser(
         {'content': 4}
 
     """
-    return reduce(reducer, rules, stream)
+    return reduce(reducer, list(reversed(rules)), stream)
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
@@ -147,8 +147,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
             rule (dict): The sort configuration, can be either a dict or list
                 of dicts (default: {'dir': 'asc', 'field': 'content'}).
-                Must contain the key 'field'. May contain the key 'dir', 'type'
-                    or 'cast'.
+                Must contain the key 'field'. May contain the key 'dir' or 'type'.
 
                 type (str): Expected value type. May be one of
                     'float', 'decimal', 'int', 'text', 'datetime', 'date', 'url',
@@ -198,8 +197,7 @@ def pipe(*args, **kwargs) -> Stream:
 
             rule (dict): The sort configuration, can be either a dict or list
                 of dicts (default: {'dir': 'asc', 'field': 'content'}).
-                Must contain the key 'field'. May contain the key 'dir', 'type',
-                    or 'cast'.
+                Must contain the key 'field'. May contain the key 'dir' or 'type'.
 
                 type (str): Expected value type. May be one of
                     'float', 'decimal', 'int', 'text', 'datetime', 'date', 'url',
@@ -226,6 +224,13 @@ def pipe(*args, **kwargs) -> Stream:
         >>> rule = {'field': 'name', 'dir': 'desc'}
         >>> next(pipe(items, conf={'rule': rule}))['name']
         'sue'
+        >>> tied = [
+        ...     {'rank': 'a', 'name': 'sue'},
+        ...     {'rank': 'a', 'name': 'bill'},
+        ...     {'rank': 'b', 'name': 'adam'}]
+        >>> rules = [{'field': 'rank'}, {'field': 'name'}]
+        >>> [i['name'] for i in pipe(tied, conf={'rule': rules})]
+        ['bill', 'sue', 'adam']
 
     """
     return parser(*args, **kwargs)

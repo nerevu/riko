@@ -4,7 +4,7 @@ riko Cookbook
 Index
 -----
 
-`User input`_ | `Fetching data and feeds`_ | `Alternate conf value entry`_ | `Alternate workflow creation`_
+`User input`_ | `Fetching data and feeds`_ | `Alternate conf value entry`_ | `Alternate workflow creation`_ | `Compiling JSON workflows`_
 
 User input
 ----------
@@ -20,7 +20,7 @@ set of values passed into every pipe).
     >>> from riko.modules.input import pipe
     >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
     >>> next(pipe(conf=conf, inputs={'content': '30'}))
-    {'content': 30}
+    30
 
 Fetching data and feeds
 -----------------------
@@ -34,33 +34,36 @@ aka ``items``.
     >>> from itertools import chain
     >>> from riko import get_path
     >>> from riko.modules.fetch import pipe as fetch
+    >>> from riko.modules.fetchpage import pipe as fetchpage
     >>> from riko.modules.fetchdata import pipe as fetchdata
     >>> from riko.modules.fetchsitefeed import pipe as fetchsitefeed
     >>> from riko.modules.feedautodiscovery import pipe as feedautodiscovery
     >>>
-    >>> ### Fetch a url ###
-    >>> stream = fetchpage(conf={'url': 'https://news.ycombinator.com'})
+    >>> # Note: `get_path` looks up a cached copy of a url in the `data`
+    >>> # directory, so these examples run offline
     >>>
-    >>> ### Fetch a filepath ###
-    >>> #
-    >>> # Note: `get_path` just looks up a file in the `data` directory
+    >>> ### Fetch a web page ###
+    >>> stream = fetchpage(conf={'url': get_path('users.jyu.fi.html')})
+    >>>
+    >>> ### Fetch a data file ###
     >>> stream = fetchdata(conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
-    >>> item['list']['resources'][0]['resource']['fields']['symbol']
-    'KRW=X'
+    >>> item['base']
+    'USD'
 
     >>> ### Fetch an rss feed ###
-    >>> stream = fetch(conf={'url': 'https://news.ycombinator.com/rss'})
+    >>> stream = fetch(conf={'url': get_path('feed.xml')})
     >>>
-    >>> ### Fetch the first rss feed found ###
-    >>> stream = fetchsitefeed(conf={'url': 'http://www.bbc.com/news'})
+    >>> ### Fetch the first rss feed found on a page ###
+    >>> stream = fetchsitefeed(conf={'url': get_path('cnn.html')})
     >>>
-    >>> ### Find all rss links and fetch the feeds ###
-    >>> url = 'http://edition.cnn.com/services/rss'
-    >>> entries = feedautodiscovery(conf={'url': url})
-    >>> urls = (e['link'] for e in entries)
+    >>> ### Find all rss links on a page and fetch the feeds ###
+    >>> entries = feedautodiscovery(conf={'url': get_path('bbc.html')})
+    >>> urls = [entry['link'] for entry in entries]
+    >>> urls
+    ['file://riko/data/bbci.co.uk.xml']
     >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
     >>>
     >>> ### Alternatively, create a SyncCollection ###
@@ -70,22 +73,14 @@ aka ``items``.
     >>> from riko.collections import SyncCollection
     >>>
     >>> sources = [{'url': url} for url in urls]
-    >>> stream = SyncCollection(sources).fetch()
+    >>> stream = SyncCollection(sources)
     >>>
     >>> ### View the fetched rss feed(s) ###
     >>> #
     >>> # Note: regardless of how you fetch an rss feed, it will have the same
     >>> # structure
-    >>> item = next(stream)
-    >>> sorted(item.keys())
-    [
-        'author', 'author.name', 'author.uri', 'comments', 'content',
-        'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title',
-        'updated', 'updated_parsed', 'y:id', 'y:published', 'y:title']
-    >>> item['title'], item['author'], item['link']
-    (
-        u'Using NFC tags in the car', u'Liam Green-Hughes',
-        u'http://www.greenhughes.com/content/using-nfc-tags-car')
+    >>> next(stream)['title']
+    "EU sets out 'phased' Brexit strategy"
 
 
 Alternate ``conf`` value entry
@@ -100,23 +95,9 @@ Some workflows have ``conf`` values that are wired from other pipes
     >>>
     >>> conf = {'url': {'subkey': 'url'}}
     >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
-    >>> set(next(result).keys())
-    {'author',
-     'author.name',
-     'author.uri',
-     'comments',
-     'content',
-     'dc:creator',
-     'id',
-     'link',
-     'pubDate',
-     'summary',
-     'title',
-     'updated',
-     'updated_parsed',
-     'y:id',
-     'y:published',
-     'y:title'}
+    >>> item = next(result)
+    >>> sorted(item)
+    ['author', 'author_detail', 'authors', 'comments', 'content', 'dc:creator', 'description', 'id', 'link', 'links', 'pubDate', 'published', 'published_parsed', 'summary', 'tags', 'title', 'updated_parsed', 'y:id', 'y:published', 'y:title']
 
 Alternate workflow creation
 ---------------------------
@@ -201,6 +182,51 @@ style [#]_.
     >>> next(sorted_match)
     {'content': 'mailto:mail@writetoreply.org'}
 
+Compiling JSON workflows
+------------------------
+
+In addition to writing ``workflows`` in Python, ``riko`` can load and compile
+workflows stored as JSON pipe definitions (the Yahoo! Pipes-style
+``{"modules": [...], "wires": [...]}`` format). The simplest way to author one is
+as a *bare-bones DAG* — a list of ``modules`` plus optional ``[source, target]``
+wire pairs. When ``wires`` are omitted the modules are chained linearly, and a
+missing ``id`` defaults to ``sw-{n}``.
+
+.. code-block:: python
+
+    >>> from riko import Context
+    >>> from riko.compile import convert_dag, build_pipeline, parse_pipe_def
+    >>>
+    >>> ### Author a terse, linear DAG (no wires, no ids) ###
+    >>> dag = {
+    ...     'modules': [
+    ...         {'type': 'itembuilder', 'conf': {'attrs': {'key': 'greeting', 'value': 'hello'}}},
+    ...         {'type': 'rename', 'conf': {'rule': {'field': 'greeting', 'newval': 'salutation'}}},
+    ...     ]
+    ... }
+    >>>
+    >>> ### Expand it into a full JSON pipe definition ###
+    >>> #
+    >>> # `convert_dag` appends the terminal `output` node, wires the modules in
+    >>> # listing order, and connects the final sink to `_OUTPUT`.
+    >>> pipe_def = convert_dag(dag)
+    >>>
+    >>> ### Execute it in-process ###
+    >>> stream = build_pipeline(parse_pipe_def(pipe_def, 'pipe_demo'), context=Context())
+
+To instead emit a standalone, runnable Python module (equivalent to the
+``compile`` CLI), use ``compile``:
+
+.. code-block:: python
+
+    >>> from riko.compile import compile
+    >>> source = compile(pipe_def, 'pipe_demo')
+
+Note that fan-in operators such as ``union``/``join`` cannot be expressed with the
+``[source, target]`` pair format (their secondary inputs need ``_OTHER{n}``
+targets) and must be authored as a full JSON pipe definition instead. See the
+`DAG format doc`_ for the complete schema and expansion rules.
+
 Notes
 ^^^^^
 
@@ -208,3 +234,4 @@ Notes
 
 .. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
 .. _class based workflows: https://github.com/nerevu/riko/blob/master/README.rst#synchronous-processing
+.. _DAG format doc: https://github.com/nerevu/riko/blob/master/docs/DAG_FORMAT.md

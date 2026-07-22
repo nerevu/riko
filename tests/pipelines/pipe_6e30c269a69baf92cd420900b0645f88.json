@@ -87,7 +87,7 @@
         },
         {
             "conf": {
-                "field": {
+                "uniq_key": {
                     "type": "text",
                     "value": "title"
                 }
@@ -141,7 +141,7 @@
         },
         {
             "conf": {
-                "KEY": [
+                "rule": [
                     {
                         "dir": {
                             "type": "text",
@@ -159,73 +159,115 @@
         },
         {
             "conf": {
-                "RULE": [
-                    {
-                        "casematch": {
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "regex",
+                        "id": "sw-195e",
+                        "emit": {
                             "type": "bool",
                             "value": true
                         },
-                        "field": {
+                        "assign": {
                             "type": "text",
-                            "value": "description"
+                            "value": "loop:regex"
                         },
-                        "singlematch": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "match": {
-                            "type": "text",
-                            "value": "</div>.*$"
-                        },
-                        "replace": {
-                            "type": "text",
-                            "value": ""
-                        },
-                        "singlelinematch": {
-                            "type": "bool",
-                            "value": true
-                        }
-                    },
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "link"
-                        },
-                        "match": {
-                            "type": "text",
-                            "value": "^(.*\\/.*)\\/"
-                        },
-                        "replace": {
-                            "type": "text",
-                            "value": "$1/2.220/"
+                        "conf": {
+                            "RULE": [
+                                {
+                                    "singlelinematch": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "singlematch": {
+                                        "type": "bool",
+                                        "value": false
+                                    },
+                                    "replace": {
+                                        "type": "text",
+                                        "value": ""
+                                    },
+                                    "field": {
+                                        "type": "text",
+                                        "value": "description"
+                                    },
+                                    "casematch": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "match": {
+                                        "type": "text",
+                                        "value": "</div>.*$"
+                                    }
+                                },
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "link"
+                                    },
+                                    "match": {
+                                        "type": "text",
+                                        "value": "^(.*\\/.*)\\/"
+                                    },
+                                    "replace": {
+                                        "type": "text",
+                                        "value": "$1/2.220/"
+                                    }
+                                }
+                            ]
                         }
                     }
-                ]
+                }
             },
             "id": "sw-195",
-            "type": "regex"
+            "type": "loop"
         },
         {
             "conf": {
-                "RULE": [
-                    {
-                        "field": {
-                            "type": "text",
-                            "value": "y:id.value"
-                        },
-                        "newval": {
-                            "type": "text",
-                            "value": "link"
-                        },
-                        "copy": {
+                "count": {
+                    "type": "text",
+                    "value": "all"
+                },
+                "embed": {
+                    "type": "module",
+                    "value": {
+                        "type": "rename",
+                        "id": "sw-210e",
+                        "emit": {
                             "type": "bool",
                             "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:rename"
+                        },
+                        "conf": {
+                            "RULE": [
+                                {
+                                    "field": {
+                                        "type": "text",
+                                        "value": "y:id.value"
+                                    },
+                                    "copy": {
+                                        "type": "bool",
+                                        "value": true
+                                    },
+                                    "newval": {
+                                        "type": "text",
+                                        "value": "link"
+                                    }
+                                }
+                            ]
                         }
                     }
-                ]
+                }
             },
             "id": "sw-210",
-            "type": "rename"
+            "type": "loop"
         },
         {
             "conf": {

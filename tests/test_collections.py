@@ -3,15 +3,16 @@
 Provides pipeline collection tests.
 """
 
+from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
 from typing import cast
 
 import pytest
 
+from riko import get_path
 from riko.bado import IReactorCore, _issync, react
-from riko.bado.itertools import ensure_deferred
 from riko.bado.mock import FakeReactor
-from riko.collections import AsyncPipe, SyncPipe
+from riko.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.types.general import Item
 from riko.types.modules import (
     ItemBuilderConf,
@@ -21,7 +22,7 @@ from riko.types.modules import (
     StrReplaceConfRule,
 )
 from riko.types.values import StreamState
-from riko.utils import noop
+from riko.utils import _receive_queue, close, noop, reset_pubsub
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
@@ -34,6 +35,7 @@ reactor = cast(IReactorCore, FakeReactor())
 class TestCollections:
     def setup_method(self):
         self.runs = 0
+        reset_pubsub()
 
     def udf(self, item: Item) -> Item:
         self.runs += 1
@@ -136,6 +138,93 @@ class TestCollections:
 
         assert list(stream) == []
 
+    def test_send_signals_done_on_early_close(self):
+        """
+        A sender abandoned before it exhausts still signals DONE to the
+        receiver it bound to, so the receiver terminates promptly rather than
+        blocking until its ``max_wait`` elapses.
+
+        The receiver uses a 30s ``max_wait``; terminating within a handful of
+        polls proves it stopped because of the DONE delivered on close, not a
+        timeout (which would need ~30000 polls).
+        """
+        conf = ReceiveConf({"name": "r", "wait": 0.001, "max_wait": 30})
+        receiver = SyncPipe("receive", conf=conf)
+        assert next(receiver) == {"state": StreamState.PENDING}
+
+        sender = (
+            SyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .send(others=["r"])
+        )
+        assert next(sender) == {"content": "once is 1x"}
+
+        sender.close()
+        drained = []
+
+        for _ in range(100):
+            try:
+                drained.append(next(receiver))
+            except StopIteration:
+                break
+        else:
+            pytest.fail("receiver never terminated; DONE was not delivered on close")
+
+        assert {"content": "once is 1x"} in drained
+
+    def test_send_done_respects_channel_identity(self):
+        """
+        A sender's DONE is addressed to the exact receiver instance it bound
+        to (by minted token), not merely to the channel name.
+
+        The sender binds to two receivers. ``keep`` is left in place; ``r`` is
+        replaced by a new receiver under the same name (a fresh token) before
+        the sender is abandoned. Closing the sender delivers DONE to ``keep``
+        (identity matches) but not to the replacement of ``r`` (stale token).
+        The ``keep`` assertion is a positive control: it fails unless the close
+        actually fired, so the identity assertion cannot pass vacuously.
+        """
+        r_conf = ReceiveConf({"name": "r", "wait": 0.001, "max_wait": 30})
+        keep_conf = ReceiveConf({"name": "keep", "wait": 0.001, "max_wait": 30})
+        first = SyncPipe("receive", conf=r_conf)
+        keep = SyncPipe("receive", conf=keep_conf)
+        next(first)
+        next(keep)
+
+        sender = (
+            SyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .send(others=["r", "keep"])
+        )
+        assert next(sender) == {"content": "once is 1x"}
+
+        close("r")
+        second = SyncPipe("receive", conf=r_conf)
+        next(second)
+        sender.close()
+        keep_q = list(_receive_queue.get("keep") or [])
+        r_q = list(_receive_queue.get("r") or [])
+        assert any(state is StreamState.DONE for state, _ in keep_q)
+        assert all(state is not StreamState.DONE for state, _ in r_q)
+
+    def test_pipes_use_loopability_for_mapping(self):
+        source = [{"content": "one"}, {"content": "two"}]
+        transformer = SyncPipe("strtransform", source=source)
+        input_pipe = SyncPipe("input", source=source)
+
+        assert transformer.loopable
+        assert transformer.mapify
+        assert not input_pipe.loopable
+        assert not input_pipe.mapify
+
+        async_transformer = AsyncPipe("strtransform")
+        async_input_pipe = AsyncPipe("input")
+
+        assert async_transformer.loopable
+        assert async_transformer.mapify
+        assert not async_input_pipe.loopable
+        assert not async_input_pipe.mapify
+
     def test_stream(self):
         """Tests a basic stream pipeline."""
         stream = (
@@ -186,10 +275,91 @@ class TestCollections:
             print(next(stream))
 
         try:
-            react(lambda r: ensure_deferred(run(r)), _reactor=reactor)
+            react(run, _reactor=reactor)
         except SystemExit:
             pass
         else:
             captured = capsys.readouterr()
             assert self.runs == 9
             assert captured.out == "396558121\n"
+
+
+class TestPoolLifecycle:
+    """Owned pools are cleaned up; caller-provided pools remain usable."""
+
+    def _parallel_pipe(self) -> SyncPipe:
+        source = [{"content": "a"}, {"content": "b"}]
+        return SyncPipe("hash", source=source, parallel=True)
+
+    def test_enter_returns_self(self):
+        pipe = self._parallel_pipe()
+
+        with pipe as flow:
+            assert flow is pipe
+
+    def test_owned_pool_closed_on_exit(self):
+        pipe = self._parallel_pipe()
+
+        assert pipe._pool_handle is not None
+        assert pipe._pool_handle.owned
+        assert pipe.pool is not None
+
+        with pipe:
+            assert len(list(pipe)) == 2
+            assert pipe.pool is not None
+
+        assert pipe.pool is None
+        assert pipe._pool_handle.owned
+
+    def test_owned_pool_terminated_on_exception(self):
+        pipe = self._parallel_pipe()
+
+        assert pipe._pool_handle is not None
+        assert pipe._pool_handle.owned
+        assert pipe.pool is not None
+
+        with pytest.raises(RuntimeError), pipe:
+            raise RuntimeError("boom")
+
+        assert pipe.pool is None
+        assert pipe._pool_handle.owned
+
+    def test_borrowed_pool_not_closed(self):
+        pool = ThreadPool(2)
+
+        try:
+            source = [{"content": "a"}]
+            pipe = SyncPipe("hash", source=source, parallel=True, pool=pool)
+
+            assert pipe._pool_handle is not None
+            assert not pipe._pool_handle.owned
+            assert pipe.pool is pool
+
+            with pipe:
+                assert len(list(pipe)) == 1
+
+            assert pipe.pool is pool
+            assert pool.map(lambda x: x, [1, 2]) == [1, 2]
+        finally:
+            pool.close()
+            pool.join()
+
+    def test_close_is_idempotent(self):
+        pipe = self._parallel_pipe()
+        pipe.close()
+        pipe.close()
+        assert pipe.pool is None
+
+    def test_collection_owned_pool_closed_on_exit(self):
+        coll = SyncCollection([{"url": get_path("feed.xml")}], parallel=True)
+
+        assert coll._pool_handle is not None
+        assert coll._pool_handle.owned
+        assert coll.pool is not None
+
+        with coll:
+            assert list(coll)
+            assert coll.pool is not None
+
+        assert coll.pool is None
+        assert coll._pool_handle.owned

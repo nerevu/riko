@@ -39,10 +39,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "terms"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -53,16 +49,16 @@
                             }
                         },
                         "id": "sw-508",
-                        "type": "termextractor"
+                        "type": "termextractor",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "terms"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
                 },
                 "field": {
                     "type": "text",

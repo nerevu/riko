@@ -19,7 +19,7 @@ Examples:
         ...         yield {'x': x}
         >>>
         >>> len(list(pipe(gen_stream(), conf={'milliseconds': '250'})))
-        3
+        2
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -27,7 +27,6 @@ Attributes:
 
 """
 
-import threading
 from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
@@ -37,6 +36,7 @@ from collections.abc import (
     Iterator,
 )
 from datetime import timedelta
+from time import monotonic_ns
 from typing import Self, cast
 
 import pygogo as gogo
@@ -53,33 +53,45 @@ OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
-items = ("days", "hours", "microseconds", "milliseconds", "minutes", "seconds", "weeks")
+MS_PER_SECOND = 1_000
+NS_PER_MS = 1_000_000
 
 
 class AsyncTimeoutIterator[T](AsyncIterator[T]):
     def __init__(
-        self, elements: AsyncIterable[T] | Iterable[T], timeout: float = 0
+        self,
+        elements: AsyncIterable[T] | Iterable[T],
+        timeout_ms: int = 0,
     ) -> None:
         if isinstance(elements, AsyncIterable):
             self.aiter = aiter(elements)
         else:
             self.aiter = self._async_iter_sync(elements)
 
-        self.timeout = timeout
+        self.timeout_ms = max(timeout_ms, 0)
         self.timed_out = False
-        ensure_deferred(self._expire())
+        self.timeout_started = False
 
     async def _async_iter_sync(self, elements: Iterable[T]) -> AsyncGenerator[T, None]:
         for item in elements:
             await async_sleep(0)
             yield item
 
-    async def _expire(self) -> None:
-        await async_sleep(self.timeout)
-        self.timed_out = True
-
     async def _collect(self) -> Iterator[T]:
         return iter([item async for item in self])
+
+    async def _expire(self) -> None:
+        await async_sleep(self.timeout_ms / MS_PER_SECOND)
+        self.timed_out = True
+
+    def _raise_if_expired(self) -> None:
+        if self.timeout_ms:
+            if not self.timeout_started:
+                self.timeout_started = True
+                ensure_deferred(self._expire())
+
+            if self.timed_out:
+                raise StopAsyncIteration
 
     def __await__(self) -> Generator[None, None, Iterator[T]]:
         return self._collect().__await__()
@@ -88,43 +100,35 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
         return self
 
     async def __anext__(self) -> T:
-        if self.timed_out:
-            raise StopAsyncIteration
-        else:
-            return await anext(self.aiter)
+        self._raise_if_expired()
+        item = await anext(self.aiter)
+        self._raise_if_expired()
+        return item
 
 
 class TimeoutIterator[T](Iterator[T]):
-    def __init__(self, elements: Iterable[T], timeout: float = 0) -> None:
+    def __init__(self, elements: Iterable[T], timeout_ms: int = 0) -> None:
         self.iter: Iterator[T] = iter(elements)
-        self.timeout = timeout
-        self.timedout: bool = False
-        self.started: bool = False
-        self._timer: threading.Timer | None = None
+        self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
+        self.deadline: int | None = None
 
-    def _expire(self) -> None:
-        self.timedout = True
+    def _raise_if_expired(self) -> None:
+        if self.timeout_ns:
+            now = monotonic_ns()
+
+            if self.deadline is None:
+                self.deadline = now + self.timeout_ns
+            elif now >= self.deadline:
+                raise StopIteration
 
     def __iter__(self) -> Self:
         return self
 
     def __next__(self) -> T:
-        if self.timedout:
-            raise StopIteration
-        elif not self.started:
-            if self.timeout:
-                self._timer = threading.Timer(self.timeout, self._expire)
-                self._timer.daemon = True
-                self._timer.start()
-            self.started = True
-
-        try:
-            return next(self.iter)
-        except StopIteration:
-            if self._timer:
-                self._timer.cancel()
-            self.timedout = True
-            raise
+        self._raise_if_expired()
+        item = next(self.iter)
+        self._raise_if_expired()
+        return item
 
 
 async def async_parser(
@@ -173,12 +177,12 @@ async def async_parser(
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
-        3
+        2
 
     """
     td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
-    time = timedelta(**td_kwargs).total_seconds()
-    return await AsyncTimeoutIterator(stream, time)
+    time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
+    return await AsyncTimeoutIterator(stream, time_ms)
 
 
 def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
@@ -215,13 +219,13 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
         ...         yield {'x': x}
         >>>
         >>> len(list(parser(gen_stream(), objconf, iter(()))))
-        3
+        2
 
     """
     # objconf only parses on __getitem__
     td_kwargs = cast(dict[str, int], {k: objconf[k] for k in objconf if k})
-    time = timedelta(**td_kwargs).total_seconds()
-    return TimeoutIterator(stream, time)
+    time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
+    return TimeoutIterator(stream, time_ms)
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
@@ -270,7 +274,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
         ...     react(run, _reactor=FakeReactor())
         ... except SystemExit:
         ...     pass
-        3
+        2
 
     """
     return await async_parser(*args, **kwargs)
@@ -318,7 +322,7 @@ def pipe(*args, **kwargs) -> Stream:
         ...         yield {'x': x}
         >>>
         >>> len(list(pipe(gen_stream(), conf={'milliseconds': '250'})))
-        3
+        2
 
     """
     return parser(*args, **kwargs)

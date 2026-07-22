@@ -4,8 +4,6 @@ Provides utility classes and functions
 """
 
 import builtins
-import datetime
-import fcntl
 import itertools as it
 import re
 import sys
@@ -20,15 +18,18 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
+from copy import copy
 from dataclasses import asdict, fields, is_dataclass
+from datetime import datetime as dt
 from decimal import Decimal
 from functools import cache, partial, reduce, wraps
 from http.client import HTTPResponse
+from inspect import signature
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
-from os import O_NONBLOCK
 from time import struct_time
+from types import UnionType
 from typing import (
     TYPE_CHECKING,
     Literal,
@@ -46,6 +47,13 @@ from typing import cast as cast_type
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 from urllib.response import addinfourl
+
+try:
+    import fcntl
+    from os import O_NONBLOCK
+except ImportError:
+    fcntl = None
+    O_NONBLOCK = 0
 
 import mezmorize
 import pygogo as gogo
@@ -67,6 +75,7 @@ from riko import (
 )
 from riko.cast import CAST_SWITCH, CastType
 from riko.cast import cast as cast_value
+from riko.context import ExecutionMode
 from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
 from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
@@ -112,6 +121,8 @@ NON_SORTABLE = (Mapping, Sequence)
 
 _registry: dict[str, Generator[None, Item | StatefulItem, None]] = {}
 _receive_queue: dict[str, deque[tuple[StreamState | None, Item]]] = {}
+_ids: dict[str, int] = {}
+_counter = it.count()
 
 logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 noop = lambda item: item
@@ -143,6 +154,19 @@ def fromdict(
     cls: type["DataclassInstance"],
     **data: Union["DataclassInstance", RikoValue, StringyList, StringyDict],
 ) -> "DataclassInstance":
+    """
+    Examples:
+        >>> from dataclasses import dataclass
+        >>> @dataclass
+        ... class Inner:
+        ...     n: int = 0
+        >>> @dataclass
+        ... class Outer:
+        ...     inner: Inner | None = None
+        >>> fromdict(Outer, inner={'n': 5}).inner
+        Inner(n=5)
+
+    """
     module = sys.modules[cls.__module__]
     localns = {**vars(module), **vars(cast_module)}
     hints = get_type_hints(cls, localns=localns, include_extras=True)
@@ -155,7 +179,7 @@ def fromdict(
         val = data[f.name]
         origin = get_origin(ftype)
 
-        if origin is Union:
+        if origin is Union or origin is UnionType:
             args = [a for a in get_args(ftype) if a is not type(None)]
             ftype = args[0] if args else ftype
             origin = get_origin(ftype)
@@ -251,12 +275,13 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
 # https://trac.edgewall.org/ticket/2066#comment:1
 # http://stackoverflow.com/a/22675049/408556
 def make_blocking(f):
-    fd = f.fileno()
-    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    if fcntl is not None:
+        fd = f.fileno()
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
 
-    if flags & O_NONBLOCK:
-        blocking = flags & ~O_NONBLOCK
-        fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
+        if flags & O_NONBLOCK:
+            blocking = flags & ~O_NONBLOCK
+            fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
 
 
 def default_user_agent(name="riko"):
@@ -280,10 +305,25 @@ class Chainable:
         return Chainable(self.data, method)
 
     def __call__(self, *args, **kwargs):
-        try:
-            return Chainable(self.method(self.data, *args, **kwargs))
-        except TypeError:
-            return Chainable(self.method(args[0], self.data, **kwargs))
+        method = self.method
+
+        if method is None:
+            result = Chainable(self.data)
+        else:
+            try:
+                signature(method).bind(self.data, *args, **kwargs)
+                data_first = True
+            except TypeError:
+                data_first = False
+            except ValueError:
+                data_first = True
+
+            if data_first or not args:
+                result = Chainable(method(self.data, *args, **kwargs))
+            else:
+                result = Chainable(method(args[0], self.data, **kwargs))
+
+        return result
 
 
 def invert_dict(d):
@@ -987,7 +1027,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         if pub_date:
             pub_date = ensure_tzinfo(pub_date)
 
-            if isinstance(pub_date, datetime.datetime):
+            if isinstance(pub_date, dt):
                 pub_date = pub_date.timetuple()
 
         if "updated_parsed" in entry:
@@ -998,7 +1038,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         if updated_date:
             updated_date = ensure_tzinfo(updated_date)
 
-            if isinstance(updated_date, datetime.datetime):
+            if isinstance(updated_date, dt):
                 updated_date = updated_date.timetuple()
 
         entry["author.name"] = entry.get("author_detail", {}).get("name")
@@ -1033,16 +1073,39 @@ def gen_items(  # noqa: E302
         yield {key: content} if key else content
 
 
-def send(target: str, item: Item | StatefulItem):
-    if target in _registry:
-        _registry[target].send(item)
-    else:
+def send(target: str, item: Item | StatefulItem) -> int | None:
+    target_id = None
+    gen = _registry.get(target)
+
+    if gen is None:
         logger.error(f"Attempted to send {item} to non-existent '{target}'")
+    else:
+        try:
+            gen.send(item)
+        except StopIteration:
+            _registry.pop(target, None)
+            _ids.pop(target, None)
+        else:
+            target_id = _ids.get(target)
+
+    return target_id
 
 
 def close(name: str):
-    if gen := _registry.get(name):
+    if (gen := _registry.pop(name, None)) is not None:
         gen.close()
+
+    _receive_queue.pop(name, None)
+    _ids.pop(name, None)
+
+
+def reset_pubsub() -> None:
+    for name in tuple(_registry):
+        close(name)
+
+    _registry.clear()
+    _receive_queue.clear()
+    _ids.clear()
 
 
 def coroutine(registry_name: str | None = None, maxlen=256):
@@ -1059,6 +1122,7 @@ def coroutine(registry_name: str | None = None, maxlen=256):
             next(gen)
             _registry[name] = gen
             _receive_queue[name] = deque(maxlen=maxlen)
+            _ids[name] = next(_counter)
             return gen
 
         return wrapper
@@ -1066,38 +1130,67 @@ def coroutine(registry_name: str | None = None, maxlen=256):
     return decorator
 
 
-def gen_dependencies(pipe_def: PipeDef) -> Iterator[str]:
-    for module in pipe_def["modules"]:
-        yield module["type"]
+def parse_context(
+    context: Context | None = None, inputs: Mapping | None = None, **kwargs
+) -> Context:
+    # Prevents mutating caller-supplied Context
+    new_context = Context(**kwargs) if context is None else copy(context)
+    new_inputs = new_context.inputs if inputs is None else dict(inputs)
+    new_context.inputs = new_inputs
+    return new_context
+
+
+def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
+    modules = pipe_def["modules"]
+
+    if isinstance(modules, dict):
+        embed = pipe_def.get("embed") or {}
+        modules = [module for key, module in modules.items() if key not in embed]
+
+    for module in modules:
+        dep = module if isinstance(module, str) else module["type"]
+
+        if dep != "output":
+            yield dep
 
 
 def extract_dependencies(
-    pipe_def: PipeDef | None = None, pipeline: PipelineDependencies | None = None
+    pipe_def: PipeDef | ParsedPipeDef | None = None,
+    pipeline: PipelineDependencies | None = None,
 ) -> list[str]:
     """Extract modules used by a pipe"""
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
     elif pipeline:
-        pydeps = pipeline(Context(describe_dependencies=True))
+        pydeps = pipeline(context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES))
     else:
         raise TypeError("Must supply at least one kwarg!")
 
     return sorted(set(pydeps))
 
 
-def gen_input(pipe_def: PipeDef) -> Iterator[tuple[str]]:
+def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str]]:
     fields = ["position", "name", "prompt"]
+    values = ["type", "value"]
+    modules = pipe_def["modules"]
 
-    for module in pipe_def["modules"]:
+    if isinstance(modules, dict):
+        embed = pipe_def.get("embed") or {}
+        modules = [m for k, m in modules.items() if k not in embed]
+
+    for module in modules:
         # Note: there seems to be no need to recursively collate inputs
         # from subpipelines
+        conf = module["conf"]
+
         try:
-            module_confs = [module["conf"][x]["value"] for x in fields]
+            module_confs = [conf[x]["value"] for x in fields]
         except (KeyError, TypeError):
             pass
         else:
-            values = ["type", "value"]
-            module_confs.extend(module["conf"]["default"][x] for x in values)
+            if default := conf.get("default"):
+                module_confs.extend(default[x] for x in values)
+
             yield tuple(module_confs)
 
 
@@ -1126,13 +1219,14 @@ def get_input(conf: InputRawConf, **kwargs):
 
 
 def extract_input(
-    pipe_def: PipeDef | None = None, pipeline: PipelineDependencies | None = None
+    pipe_def: PipeDef | ParsedPipeDef | None = None,
+    pipeline: PipelineDependencies | None = None,
 ) -> Sequence[str | tuple[str]]:
     """Extract inputs required by a pipe"""
     if pipe_def:
         pyinput = gen_input(pipe_def)
     elif pipeline:
-        pyinput = pipeline(Context(describe_input=True))
+        pyinput = pipeline(Context(mode=ExecutionMode.DESCRIBE_INPUTS))
     else:
         raise TypeError("Must supply at least one kwarg!")
 
@@ -1190,16 +1284,24 @@ def gen_names(
             yield name
 
 
-def gen_modules(
+@overload
+def gen_modules(  # noqa: E704
+    pipe_def: PipeDef, embedded: Literal[False] = ...
+) -> Iterator[tuple[str, PipeModule]]: ...
+@overload  # noqa: E302
+def gen_modules(  # noqa: E704
+    pipe_def: PipeDef, embedded: Literal[True]
+) -> Iterator[tuple[str, EmbeddedModule]]: ...
+def gen_modules(  # noqa: E302
     pipe_def: PipeDef, embedded=False
 ) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
-        yield (pythonise(module["id"]), module)
-
         if embedded and module["type"] == "loop":
             conf = cast_type(LoopRawConf, module["conf"])
             embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), embed)
+        elif not embedded:
+            yield (pythonise(module["id"]), module)
 
 
 def gen_wires(pipe_def: PipeDef) -> Iterator[tuple[str, Wire]]:

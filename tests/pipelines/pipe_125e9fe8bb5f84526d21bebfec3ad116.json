@@ -50,17 +50,13 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "api"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
                         "conf": {
                             "BASE": {
                                 "type": "text",
-                                "value": "https://api.github.com/search/users"
+                                "value": "api.github.com_search_users"
                             },
                             "PARAM": [
                                 {
@@ -73,23 +69,23 @@
                                         "type": "text"
                                     }
                                 }
-                            ]
+                            ],
+                            "EXT": {
+                                "type": "text",
+                                "value": "json"
+                            }
                         },
                         "id": "sw-72",
-                        "type": "urlbuilder"
+                        "type": "urlbuilder",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "api"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-61",
@@ -104,11 +100,7 @@
             "conf": {
                 "count": {
                     "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "text",
-                    "value": "language"
+                    "value": "first"
                 },
                 "embed": {
                     "type": "module",
@@ -127,17 +119,13 @@
                         "type": "fetchdata"
                     }
                 },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
                 "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
                     "type": "text",
-                    "value": ""
+                    "value": "info"
+                },
+                "emit": {
+                    "type": "bool",
+                    "value": false
                 }
             },
             "id": "sw-142",

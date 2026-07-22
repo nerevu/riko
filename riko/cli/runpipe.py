@@ -1,5 +1,6 @@
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
+from collections.abc import Iterable, Mapping
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 from os import path as p
@@ -7,6 +8,28 @@ from os import path as p
 from riko.bado import react
 
 io_error = FileNotFoundError
+
+
+def emit_result(result) -> None:
+    """
+    Print a pipe result, expanding iterables item by item.
+
+    >>> emit_result(["alpha", "beta"])
+    alpha
+    beta
+    >>> emit_result({"title": "riko"})
+    {'title': 'riko'}
+    >>> emit_result(None)
+    """
+    if result is None:
+        pass
+    elif isinstance(result, (Mapping, str)):
+        print(result)
+    elif isinstance(result, Iterable):
+        for item in result:
+            emit_result(item)
+    else:
+        print(result)
 
 
 def load_file(name, src):
@@ -22,7 +45,18 @@ def load_file(name, src):
 
 
 def file2name(path):
+    """
+    Return the base module name for a file path.
+
+    >>> file2name("examples/demo.py")
+    'demo'
+    """
     return p.splitext(p.basename(path))[0]
+
+
+async def runner(reactor, async_pipe, test=False, cb=None):
+    result = await async_pipe(reactor, test=test)
+    cb(result) if callable(cb) else None
 
 
 def run():
@@ -69,12 +103,14 @@ def run():
         except ImportError:
             sys.exit(f"Pipe examples.{args.pipeid} not found!")
 
-    if args.isasync:
-        pipeline = module.async_pipe
-        react(pipeline, [args.test])
+    if (main := getattr(module, "main", None)) and args.isasync:
+        react(runner, [main, args.test])
+    elif args.isasync:
+        react(runner, [module.async_pipe, args.test, emit_result])
+    elif main:
+        main(test=args.test)
     else:
-        pipeline = module.pipe
-        pipeline(test=args.test)
+        emit_result(module.pipe(test=args.test))
 
 
 if __name__ == "__main__":

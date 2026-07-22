@@ -195,28 +195,31 @@ async def async_url_open(  # noqa: E302
                 and write
 
     """
-    if url.startswith("http"):
-        mode = "wb" if binary else "w"
-        page = NamedTemporaryFile(delete=False, mode=mode)  # noqa: SIM115
-        new_url = page.name
-        response = await async_get(url, timeout=timeout)
-        content = await (response.content() if binary else response.text())
-        page.write(content)
-        page.flush()
-        file_name = url.split("://")[1] if url.startswith("file") else None
-    else:
-        page, new_url, file_name = None, url, None
+    page = None
 
-    f = await async_get_file(
-        new_url, testing.StringTransport(), binary=binary, **kwargs
-    )
+    try:
+        if url.startswith("http"):
+            mode = "wb" if binary else "w"
+            page = NamedTemporaryFile(delete=False, mode=mode)  # noqa: SIM115
+            new_url = page.name
+            response = await async_get(url, timeout=timeout)
+            content = await (response.content() if binary else response.text())
+            page.write(content)
+            page.flush()
+        else:
+            new_url = url
 
-    if not hasattr(f, "name") and file_name:
-        f.name = file_name  # type: ignore[attr-defined]
+        f = await async_get_file(
+            new_url, testing.StringTransport(), binary=binary, **kwargs
+        )
+    finally:
+        if page:
+            page.close()
 
-    if page:
-        page.close()
-        remove(page.name)
+            try:
+                remove(page.name)
+            except OSError:
+                logger.debug(f"Could not remove temp file {page.name}")
 
     return f
 

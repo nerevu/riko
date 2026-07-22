@@ -11,6 +11,7 @@ from typing import (
     TypeVar,
 )
 
+from riko.types.modules import ModuleSubtype, ModuleSubtypes, ModuleType
 from riko.types.values import (
     AnyLocation,
     BasicArg,
@@ -176,7 +177,17 @@ type Step = tuple[str, ParserOutput] | tuple[str, SyncPipeParser]
 type Steps = dict[str, ParserOutput | SyncPipeParser]
 
 
-class SyncProcessorWrapper(Protocol):
+class ModuleWrapper(Protocol):
+    name: str
+    type: ModuleType
+    subtype: ModuleSubtype
+    subtypes: ModuleSubtypes
+    pollable: bool
+    loopable: bool
+    isasync: bool
+
+
+class SyncProcessorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
@@ -186,7 +197,7 @@ class SyncProcessorWrapper(Protocol):
     ) -> ProcessorWrapperOutput: ...
 
 
-class SyncOperatorWrapper(Protocol):
+class SyncOperatorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: OperatorWrapperInput | None = None,
@@ -197,7 +208,7 @@ class SyncOperatorWrapper(Protocol):
     ) -> OperatorWrapperOutput: ...
 
 
-class SyncSplitterWrapper(Protocol):
+class SyncSplitterWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: SplitterWrapperInput | None = None,
@@ -233,7 +244,7 @@ type AsyncPipeItems = Awaitable[ParserOutput]
 type AsyncPipeParser = Callable[..., AsyncPipeItems]
 
 
-class AsyncProcessorWrapper(Protocol):
+class AsyncProcessorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
@@ -243,7 +254,7 @@ class AsyncProcessorWrapper(Protocol):
     ) -> Awaitable[ProcessorWrapperOutput]: ...
 
 
-class AsyncOperatorWrapper(Protocol):
+class AsyncOperatorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: OperatorWrapperInput | None = None,
@@ -254,7 +265,7 @@ class AsyncOperatorWrapper(Protocol):
     ) -> Awaitable[OperatorWrapperOutput]: ...
 
 
-class AsyncSplitterWrapper(Protocol):
+class AsyncSplitterWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: SplitterWrapperInput | None = None,

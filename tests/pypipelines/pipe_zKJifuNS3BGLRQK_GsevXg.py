@@ -6,10 +6,13 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.simplemath import pipe as simplemath
 from riko.modules.split import pipe as split
 from riko.modules.truncate import pipe as truncate
+from riko.types.general import Conf
 from riko.types.modules import FetchRawConf, SimpleMathRawConf
 
 
-def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, conf=None):
+def pipe_zKJifuNS3BGLRQK_GsevXg(
+    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+):
     # todo: insert pipeline description here
     conf = conf or {}
 
@@ -64,7 +67,7 @@ def pipe_zKJifuNS3BGLRQK_GsevXg(context=None, conf=None):
 
 
 if __name__ == "__main__":
-    pipeline = pipe_zKJifuNS3BGLRQK_GsevXg(Context())
+    pipeline = pipe_zKJifuNS3BGLRQK_GsevXg(context=Context())
 
     for i in pipeline:
         print(i)

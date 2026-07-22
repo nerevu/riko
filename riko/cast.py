@@ -5,7 +5,7 @@ Provides type casting capabilities
 
 from ast import literal_eval
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -23,7 +23,6 @@ from riko.currencies import CURRENCY_CODES
 from riko.dates import (
     EPOCH_DATE,
     EPOCH_DATETIME,
-    TODAY,
     date_to_tt,
     ensure_tzinfo,
     get_date,
@@ -32,7 +31,7 @@ from riko.dates import (
     tt_to_datetime,
 )
 from riko.locations import LOCATIONS
-from riko.types.general import NumericCaster, Opts, PreCaster
+from riko.types.general import Opts, PreCaster
 from riko.types.values import (
     AnyLocation,
     BasicArg,
@@ -53,14 +52,6 @@ GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
     "ip_address": lambda x: lookup_ip_address(x),
     "currency": lambda x: CURRENCY_CODES.get(x, {}),
 }
-
-DATES = {
-    "today": TODAY,
-    "now": TODAY,
-    "tomorrow": TODAY + timedelta(days=1),
-    "yesterday": TODAY - timedelta(days=1),
-}
-
 
 T = TypeVar("T")
 
@@ -111,11 +102,12 @@ class CastType(StrEnum):
     URL = "url"
 
 
+KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
 SourceOpts: Opts = {"ftype": BasicCastType.NONE}
 
 
 def literal_parse(content: BasicValue | bool) -> BasicArg:
-    if isinstance(content, (bool, int)):
+    if isinstance(content, (bool, int, float, Decimal)):
         parsed = content
     elif content.lower() in {"true", "false"}:
         parsed = loads(content.lower())
@@ -229,15 +221,13 @@ def cast_datetime(  # noqa: E302
 ) -> date | dt | DateDict | None:
     tt = None
 
-    if isinstance(value, date) and as_date:
+    if isinstance(value, dt) and as_date:
+        _date = value.date()
+    elif isinstance(value, dt) or isinstance(value, date) and as_date:
         _date = value
     elif isinstance(value, date):
         tt = value.timetuple()
         _date = tt_to_datetime(tt, as_date=as_date)
-    elif isinstance(value, dt) and as_date:
-        _date = value.date()
-    elif isinstance(value, dt):
-        _date = value
     elif isinstance(value, int):
         tt = gmtime(value)
         _date = tt_to_datetime(tt, as_date=as_date)
@@ -247,14 +237,22 @@ def cast_datetime(  # noqa: E302
         words = value.split(" ")
         mathish = set(words).intersection(MATH_WORDS)
         textish = set(words).intersection(TEXT_WORDS)
+        today = dt.now(UTC).date()
+        named = {
+            "today": today,
+            "now": today,
+            "tomorrow": today + timedelta(days=1),
+            "yesterday": today - timedelta(days=1),
+        }
 
-        if value[0] in {"+", "-"} and len(mathish) == 1:
+        if value and value[0] in {"+", "-"} and len(mathish) == 1:
             op = sub if value.startswith("-") else add
             _date = get_date("".join(mathish), int(words[0][1:]), op)
         elif len(textish) == 2:
-            _date = get_date(f"{words[1]}s", 1, add)
-        elif value in DATES:
-            _date = DATES.get(value)
+            op = sub if words[0] == "last" else add
+            _date = get_date(f"{words[1]}s", 1, op)
+        elif value in named:
+            _date = named[value]
         else:
             _date = parse_date_string(value)
 
@@ -384,6 +382,12 @@ def cast[T](  # noqa: E302
         Decimal('NaN')
         >>> cast('foo', 'int')
         0
+        >>> cast(12.25, 'text')
+        '12.25'
+        >>> cast(Decimal('12.25'), 'text')
+        '12.25'
+        >>> cast(12.25, 'int')
+        12
 
     """
     if _type and _type in CAST_SWITCH:
@@ -394,6 +398,7 @@ def cast[T](  # noqa: E302
 
         precaster = CAST_SWITCH[CastType.PASS]
 
+    caster = precaster["func"]
     default = precaster["default"]
 
     if content is None and _type != CastType.NONE:
@@ -402,31 +407,16 @@ def cast[T](  # noqa: E302
         value = None
     elif _type == CastType.PASS:
         value = content
-    elif isinstance(content, (str, int)):
-        caster = precaster["func"]
-
+    elif _type in KWARG_TYPES:
         try:
-            value = caster(content, **kwargs)
-        except TypeError:
-            value = caster(content)
-        except (InvalidOperation, ValueError):
+            value = caster(content, **kwargs)  # pyright: ignore[reportArgumentType]
+        except (TypeError, InvalidOperation, ValueError):
             value = default
-    elif isinstance(content, (int, float, Decimal)) and _type in {
-        CastType.INT,
-        CastType.FLOAT,
-        CastType.DECIMAL,
-    }:
-        caster = cast_type(NumericCaster, precaster["func"])
-        value = caster(content)
-    elif isinstance(content, (struct_time, dt, date)) and _type == CastType.DATE:
-        value = cast_date(content)
-    elif isinstance(content, (struct_time, dt, date)) and _type == CastType.DATETIME:
-        value = cast_datetime(content)
     else:
-        msg = f"Casting a {type(content)} to _type={_type} is not supported. "
-        msg += f"Returning {content=} as is."
-        logger.warning(msg)
-        value = content
+        try:
+            value = caster(content)  # pyright: ignore[reportArgumentType]
+        except (TypeError, InvalidOperation, ValueError):
+            value = default
 
     return value
 

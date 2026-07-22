@@ -6,10 +6,13 @@ from twisted.internet.task import react
 
 from riko import Context
 from riko.collections import AsyncPipe
+from riko.types.general import Conf
 from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 
-async def pipe_async_kazeeki(reactor, context: Context | None = None):
+async def pipe_async_kazeeki(
+    reactor, item=None, conf: Conf = None, context: Context | None = None, **kwargs
+):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:
@@ -26,7 +29,7 @@ async def pipe_async_kazeeki(reactor, context: Context | None = None):
 
 
 def _main(reactor):
-    return defer.ensureDeferred(pipe_async_kazeeki(reactor, Context()))
+    return defer.ensureDeferred(pipe_async_kazeeki(reactor, context=Context()))
 
 
 if __name__ == "__main__":

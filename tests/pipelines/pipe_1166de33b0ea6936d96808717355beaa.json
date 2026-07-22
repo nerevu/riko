@@ -130,10 +130,6 @@
                     "type": "text",
                     "value": "all"
                 },
-                "assign": {
-                    "type": "text",
-                    "value": "loop:itembuilder"
-                },
                 "embed": {
                     "type": "module",
                     "value": {
@@ -162,20 +158,16 @@
                             ]
                         },
                         "id": "sw-696",
-                        "type": "itembuilder"
+                        "type": "itembuilder",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:itembuilder"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": false
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-656",
@@ -186,10 +178,6 @@
                 "count": {
                     "type": "text",
                     "value": "all"
-                },
-                "assign": {
-                    "type": "text",
-                    "value": "loop:itembuilder"
                 },
                 "embed": {
                     "type": "module",
@@ -219,20 +207,16 @@
                             ]
                         },
                         "id": "sw-710",
-                        "type": "itembuilder"
+                        "type": "itembuilder",
+                        "emit": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:itembuilder"
+                        }
                     }
-                },
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "assign": {
-                    "type": "bool",
-                    "value": true
-                },
-                "field": {
-                    "type": "text",
-                    "value": ""
                 }
             },
             "id": "sw-688",

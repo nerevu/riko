@@ -100,15 +100,15 @@ from collections.abc import (
     Iterator,
     Mapping,
 )
+from enum import StrEnum
 from functools import partial
-from importlib import import_module
 from io import StringIO
 from itertools import chain, repeat
 from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import length_hint
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, cast, overload
 
 import pygogo as gogo
 
@@ -129,8 +129,9 @@ from meza import io
 from riko import Context
 from riko.bado import async_return
 from riko.bado.itertools import async_map
+from riko.compile import _resolve_module
+from riko.exceptions import PipelineStateError
 from riko.types.general import (
-    AsyncPipeParser,
     Conf,
     ConversionFunc,
     Item,
@@ -141,7 +142,7 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import BasicValue, StreamState
-from riko.utils import send
+from riko.utils import _ids, parse_context, send
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
@@ -149,8 +150,101 @@ if TYPE_CHECKING:
 
 type AnyPool = "ThreadPoolType" | "CPUPoolType"
 
-
 logger = gogo.Gogo(__name__, monolog=True).logger
+
+__all__ = [
+    "AsyncCollection",
+    "AsyncPipe",
+    "SyncCollection",
+    "SyncPipe",
+    "export",
+    "list_targets",
+]
+
+
+class PoolScope(StrEnum):
+    STAGE = "stage"
+    PIPELINE = "pipeline"
+
+
+class PipeState(StrEnum):
+    NEW = "new"
+    RUNNING = "running"
+    EXHAUSTED = "exhausted"
+    CLOSED = "closed"
+    FAILED = "failed"
+
+
+class _Lifecycle:
+    """
+    One-shot execution state shared by pipes and collections. An instance
+    represents a single execution: iteration is a plain memoized generator, so
+    re-iterating an already-run instance yields nothing (ordinary spent-iterator
+    semantics), and chaining a started or exhausted instance wraps whatever
+    source is left. The mixin only tracks that state for introspection
+    (``state``, ``closed``, ``exhausted``, ``failed``) and refuses to chain onto
+    an instance whose resources are gone, raising ``PipelineStateError`` when it
+    is ``CLOSED`` or ``FAILED``.
+    """
+
+    _state: PipeState = PipeState.NEW
+
+    @property
+    def state(self) -> PipeState:
+        return self._state
+
+    @property
+    def closed(self) -> bool:
+        return self._state is PipeState.CLOSED
+
+    @property
+    def exhausted(self) -> bool:
+        return self._state is PipeState.EXHAUSTED
+
+    @property
+    def failed(self) -> bool:
+        return self._state is PipeState.FAILED
+
+    def _begin(self) -> None:
+        if self._state is PipeState.NEW:
+            self._state = PipeState.RUNNING
+
+    def _end(self) -> None:
+        if self._state is PipeState.RUNNING:
+            self._state = PipeState.EXHAUSTED
+
+    def _fail(self) -> None:
+        self._state = PipeState.FAILED
+
+    def _close(self) -> None:
+        self._state = PipeState.CLOSED
+
+    def _require_usable(self, action: str) -> None:
+        if self._state in {PipeState.CLOSED, PipeState.FAILED}:
+            raise PipelineStateError(self._state.value, action)
+
+
+class _PoolHandle:
+    """Shared pool state, including whether riko owns the pool."""
+
+    def __init__(self, pool: AnyPool, *, owned: bool) -> None:
+        self.pool: AnyPool | None = pool
+        self.owned = owned
+
+    def __bool__(self):
+        return self.pool is not None
+
+    def close(self) -> None:
+        if self.owned and (pool := self.pool):
+            pool.close()
+            pool.join()
+            self.pool = None
+
+    def terminate(self) -> None:
+        if self.owned and (pool := self.pool):
+            pool.terminate()
+            pool.join()
+            self.pool = None
 
 
 def records2ofx(items, **_) -> Iterable[str]:
@@ -186,6 +280,10 @@ CONVERSION_FUNCS: dict[str, ConversionFunc] = {
 if OFX is not None:
     CONVERSION_FUNCS["ofx"] = cast(ConversionFunc, records2ofx)
     CONVERSION_FUNCS["qif"] = cast(ConversionFunc, records2qif)
+
+
+def list_targets() -> tuple[str, ...]:
+    return tuple(sorted(CONVERSION_FUNCS))
 
 
 @overload
@@ -225,14 +323,13 @@ def export(  # noqa: E302
         else:
             result = _result
     else:
-        logger.error(
-            f"Invalid type, {_type}. You must supply one of {CONVERSION_FUNCS}."
-        )
+        valid = ", ".join(CONVERSION_FUNCS)
+        raise ValueError(f"Invalid export type {_type!r}. Must be one of: {valid}.")
 
     return result
 
 
-class PyPipe:
+class PyPipe(_Lifecycle):
     """
     A riko module fetching object
 
@@ -255,13 +352,14 @@ class PyPipe:
         conf: Conf = None,
         **kwargs,
     ):
+        self._state = PipeState.NEW
         self.name = name
         self.parallel = parallel
-        self.inputs = inputs or {}
         self.verbose = kwargs.get("verbose")
         self.test = kwargs.get("test")
         self.conf = conf or {}
-        self.context = context or Context(**kwargs)
+        self.context = parse_context(context, inputs=inputs, **kwargs)
+        self.inputs = self.context.inputs
         self.describe_input = self.context.describe_input
         self.describe_dependencies = self.context.describe_dependencies
         self.kwargs = kwargs
@@ -287,8 +385,9 @@ class SyncPipe(PyPipe):
         workers: int | None = None,
         chunksize: int | None = None,
         threads: bool | None = True,
-        reuse_pool: bool | None = True,
+        pool_scope=PoolScope.PIPELINE,
         pool: AnyPool | None = None,
+        _pool_handle: _PoolHandle | None = None,
         ordered: bool | None = False,
         **kwargs,
     ):
@@ -297,71 +396,215 @@ class SyncPipe(PyPipe):
         )
         self.source = source
         self.threads = threads
-        self.reuse_pool = reuse_pool
-        self._iter: Stream | None = None
+        self.pool_scope = pool_scope
+        self.ordered = ordered
+        self._iter: Generator[Item, None, None] | None = None
+        self._mapped: Iterator[Stream] | None = None
         self.map: Callable[..., Iterator[Stream]]
-        self.pool = pool
+        self._in_context = False
+        self._terminal = True
+
+        if pool_scope not in {"stage", "pipeline"}:
+            raise ValueError("pool_scope must be either 'stage' or 'pipeline'")
+
+        if pool and _pool_handle:
+            raise TypeError("pool and _pool_handle cannot both be provided")
+        elif pool:
+            self._pool_handle = _PoolHandle(pool, owned=False)
+        else:
+            self._pool_handle = _pool_handle
 
         if self.name:
-            self.pipe: SyncPipeParser = import_module(f"riko.modules.{self.name}").pipe
-            pipe_type = getattr(self.pipe, "type")  # noqa: B009
-            self.is_processor = bool(pipe_type == "processor")
+            self.pipe = _resolve_module(self.name, "pipe")
             self.pollable: bool = getattr(self.pipe, "pollable")  # noqa: B009
-            self.mapify = self.is_processor and self.source is not None
+            self.loopable: bool = getattr(self.pipe, "loopable")  # noqa: B009
+            self.mapify = self.loopable and self.source is not None
             self.parallelize: bool = self.parallel and self.mapify
         else:
             self.pipe = lambda source, **kw: source
-            self.pollable = self.mapify = self.parallelize = False
+            self.pollable = self.loopable = self.mapify = self.parallelize = False
 
         if self.parallelize:
             length = length_hint(self.source)
             def_pool = ThreadPool if self.threads else CPUPool
-
             self.workers = workers or get_worker_cnt(length, self.threads)
             self.chunksize = chunksize or get_chunksize(length, self.workers)
-            self.pool = self.pool or def_pool(self.workers)
-            self.map = self.pool.imap if ordered else self.pool.imap_unordered
+
+            if not self._pool_handle:
+                pool = def_pool(self.workers)
+                self._pool_handle = _PoolHandle(pool, owned=True)
+
+            if not (pool := self.pool):
+                raise RuntimeError("Cannot reuse a closed worker pool")
+
+            self.map = pool.imap if ordered else pool.imap_unordered
         else:
             self.workers = workers
             self.chunksize = chunksize or 1
             self.map = map
 
+    @property
+    def pool(self) -> AnyPool | None:
+        return self._pool_handle.pool if self._pool_handle else None
+
+    def _chain(self, name: str, **kwargs) -> "SyncPipe":
+        """
+        Create the next pipe stage, propagating all runtime and execution
+        settings. Context (and its inputs) stays authoritative across the chain.
+
+        Examples:
+            >>> conf = {'key': 'a', 'value': 'b'}
+            >>> flow = SyncPipe('itembuilder', conf=conf, inputs={'x': '1'})
+            >>> chained = flow.hash()
+            >>> str(chained.context) == str(flow.context)
+            True
+            >>> chained.inputs == flow.inputs == flow.context.inputs
+            True
+
+        """
+        self._require_usable("chain")
+        next_scope = cast(PoolScope, kwargs.get("pool_scope", self.pool_scope))
+
+        skwargs = {
+            "parallel": self.parallel,
+            "threads": self.threads,
+            "pool_scope": next_scope,
+            "workers": self.workers,
+            "chunksize": self.chunksize,
+            "context": self.context,
+            "inputs": self.inputs,
+        }
+
+        if self.pool_scope == next_scope == PoolScope.PIPELINE and "pool" not in kwargs:
+            shared_handle = self._pool_handle
+            skwargs["_pool_handle"] = shared_handle
+        else:
+            shared_handle = None
+
+        skwargs.update(kwargs)
+        child = SyncPipe(name, source=self, **skwargs)
+
+        # Transfer cleanup responsibility only after successful construction
+        # and only when the handle was actually shared.
+        if shared_handle and child._pool_handle is shared_handle:
+            self._terminal = False
+
+        return child
+
     def __getattr__(self, name: str):
         if name.startswith("_") or name in {"keys", "values", "items", "get"}:
             raise AttributeError(name)
 
-        kwargs = {
-            "parallel": self.parallel,
-            "threads": self.threads,
-            "pool": self.pool if self.reuse_pool else None,
-            "reuse_pool": self.reuse_pool,
-            "workers": self.workers,
-        }
+        return self._chain(name)
 
-        return SyncPipe(name, source=self, **kwargs)
+    def _release_pool(self):
+        if self._pool_handle:
+            self._pool_handle.close()
 
-    def _stream(self) -> Stream:
+    def _terminate_pool(self):
+        if self._pool_handle:
+            self._pool_handle.terminate()
+
+    def close(self):
+        if self._iter is not None:
+            self._iter.close()
+
+        self._release_pool()
+        self._close()
+
+    def terminate(self):
+        if self._iter is not None:
+            self._iter.close()
+
+        self._terminate_pool()
+        self._close()
+
+    def __enter__(self) -> Self:
+        """
+        Use a pipe as a context manager. When a parallel pipe creates its own
+        thread/process pool, that pool is shut down when the block exits (or
+        terminated if the block raises). A pool passed in by the caller is left
+        running.
+
+        Examples:
+            >>> src = [{'content': 'a'}, {'content': 'b'}]
+            >>>
+            >>> with (flow := SyncPipe('hash', source=src, parallel=True)):
+            ...     results = list(flow)
+            ...     flow.pool  # the worker pool is live inside the block
+            <multiprocessing.pool.ThreadPool state=RUN pool_size=2>
+            >>> flow.pool  # ... and shut down once the block exits
+            >>> len(results)
+            2
+            >>> # the pool is *terminated* if the block raises
+            >>> try:
+            ...     with (flow := SyncPipe('hash', source=src, parallel=True)):
+            ...         raise RuntimeError('boom')
+            ... except RuntimeError:
+            ...     pass
+            >>> flow.pool
+
+        """
+        self._in_context = True
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+        self._in_context = False
+        self.close() if exc_type is None else self.terminate()
+        return False
+
+    def _release_pool_after_iteration(self) -> bool:
+        if self._in_context:
+            result = False
+        elif self.pool_scope == PoolScope.STAGE:
+            result = True
+        else:
+            result = self._terminal
+
+        return result
+
+    def _notify_subscribers(self):
+        if self.name == "send":
+            ids = cast(dict[str, int], self.kwargs.get("ids", {}))
+            targets = [t for t, tid in ids.items() if _ids.get(t) == tid]
+            [send(target, {"state": StreamState.DONE}) for target in targets]
+
+    def _stream(self) -> Generator[Item, None, None]:
+        if self.name == "send":
+            self.kwargs.setdefault("ids", {})
+
+        self._begin()
         pipeline = partial(self.pipe, **self.kwargs)
 
-        if self.parallelize and self.source:
-            source_items = list(self.source)
-            zipped = zip(source_items, repeat(pipeline))
-            mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
-        elif self.mapify and self.source:
-            mapped = self.map(pipeline, self.source)
-        else:
-            mapped = None
+        try:
+            if self.parallelize and self.source is not None:
+                source_items = list(self.source)
+                zipped = zip(source_items, repeat(pipeline))
+                mapped = self.map(listpipe, zipped, chunksize=self.chunksize)
+            elif self.mapify and self.source is not None:
+                mapped = self.map(pipeline, self.source)
+            else:
+                mapped = None
 
-        if mapped and self.parallelize and not self.reuse_pool:
-            self.pool.close()
-            self.pool.join()
+            self._mapped = mapped
 
-        self._mapped = mapped
+            if self._mapped is None:
+                yield from pipeline(self.source)
+            else:
+                yield from chain.from_iterable(self._mapped)
+        except BaseException:
+            self._fail()
 
-        if self._mapped:
-            yield from chain.from_iterable(self._mapped)
-        else:
-            yield from pipeline(self.source)
+            if self._release_pool_after_iteration():
+                self._terminate_pool()
+
+            raise
+        finally:
+            if self._release_pool_after_iteration():
+                self._release_pool()
+
+            self._end()
+            self._notify_subscribers()
 
     def __iter__(self) -> Stream:
         if self._iter is None:
@@ -373,27 +616,10 @@ class SyncPipe(PyPipe):
         if self._iter is None:
             self._iter = self._stream()
 
-        try:
-            return next(self._iter)
-        except StopIteration:
-            self._iter = None
-
-            if self.name == "send":
-                others = cast(list[str], self.kwargs.get("others", []))
-                [send(target, {"state": StreamState.DONE}) for target in others]
-
-            raise
+        return next(self._iter)
 
     def split(self, **kwargs) -> SplitterParserOutput:
-        pipe_kwargs = {
-            "parallel": self.parallel,
-            "threads": self.threads,
-            "pool": self.pool if self.reuse_pool else None,
-            "reuse_pool": self.reuse_pool,
-            "workers": self.workers,
-        }
-
-        splits = SyncPipe("split", source=self, **pipe_kwargs, **kwargs)
+        splits = self._chain("split", **kwargs)
         return cast(SplitterParserOutput, splits)
 
     @overload
@@ -414,7 +640,7 @@ class SyncPipe(PyPipe):
         return result
 
 
-class PyCollection:
+class PyCollection(_Lifecycle):
     """A riko bulk url fetching object"""
 
     def __init__(
@@ -425,11 +651,7 @@ class PyCollection:
         workers=None,
         **kwargs,
     ):
-        # sources_1 = [{"url": "site.com/a"}, {"url": "site.com/b"}]
-        # sources_2 = [
-        #     {"url": "site.com/c", "type": "xpathfetchpage"},
-        #     {"url": "site.com/d", "type": "xpathfetchpage"},
-        # ]
+        self._state = PipeState.NEW
         self.parallel = parallel
         self.conf = conf or cast(Conf, {})
         self.sources = sources
@@ -438,22 +660,52 @@ class PyCollection:
 
 
 class SyncCollection(PyCollection):
-    """A synchronous PyCollection object"""
+    """
+    A synchronous PyCollection object
 
-    def __init__(self, *args, threads: bool | None = True, **kwargs):
+    Examples:
+        >>> from riko import get_path
+        >>> sources = [{'url': get_path(f)} for f in ['feed.xml', 'gawker.xml']]
+        >>> stream = SyncCollection(sources, parallel=True)
+        >>> len(list(stream))
+        32
+
+    """
+
+    def __init__(
+        self,
+        *args,
+        threads: bool | None = True,
+        ordered: bool | None = False,
+        pool: AnyPool | None = None,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.threads = threads
+        self.ordered = ordered
         self._iter: Stream | None = None
         self.map: Callable[..., Iterator[Stream]]
+        self._in_context = False
+        self._pool_handle = _PoolHandle(pool, owned=False) if pool else None
 
         if self.parallel:
             self.chunksize = get_chunksize(self.length, self.workers)
-
             def_pool = ThreadPool if self.threads else CPUPool
-            self.pool = def_pool(self.workers)
-            self.map = self.pool.imap_unordered
+
+            if not self._pool_handle:
+                pool = def_pool(self.workers)
+                self._pool_handle = _PoolHandle(pool, owned=True)
+
+            if not (pool := self.pool):
+                raise RuntimeError("Cannot reuse a closed worker pool")
+
+            self.map = pool.imap if ordered else pool.imap_unordered
         else:
             self.map = map
+
+    @property
+    def pool(self) -> AnyPool | None:
+        return self._pool_handle.pool if self._pool_handle else None
 
     def __iter__(self) -> Stream:
         if self._iter is None:
@@ -467,16 +719,79 @@ class SyncCollection(PyCollection):
 
         return next(self._iter)
 
+    def _release_pool(self):
+        if self._pool_handle:
+            self._pool_handle.close()
+
+    def _terminate_pool(self):
+        if self._pool_handle:
+            self._pool_handle.terminate()
+
+    def close(self):
+        self._release_pool()
+        self._close()
+
+    def terminate(self):
+        self._terminate_pool()
+        self._close()
+
+    def __enter__(self) -> Self:
+        """
+        Use a collection as a context manager. A parallel collection creates its
+        own thread/process pool, which is shut down when the block exits (or
+        terminated if the block raises).
+
+        Examples:
+            >>> from riko import get_path
+            >>> sources = [{'url': get_path(f)} for f in ['feed.xml', 'gawker.xml']]
+            >>>
+            >>> with (stream := SyncCollection(sources, parallel=True)):
+            ...     results = list(stream)
+            ...     stream.pool  # the worker pool is live inside the block
+            <multiprocessing.pool.ThreadPool state=RUN pool_size=2>
+            >>> stream.pool  # ... and shut down once the block exits
+            >>> len(results)
+            32
+            >>> # the pool is *terminated* if the block raises
+            >>> try:
+            ...     with (stream := SyncCollection(sources, parallel=True)):
+            ...         raise RuntimeError('boom')
+            ... except RuntimeError:
+            ...     pass
+            >>> stream.pool
+
+        """
+        self._in_context = True
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+        self._in_context = False
+        self.close() if exc_type is None else self.terminate()
+        return False
+
     def _stream(self) -> Stream:
         """Fetch all source urls"""
-        zargs = zip(self.sources, repeat(self.conf))
+        self._begin()
 
-        if self.parallel:
-            mapped = self.map(fetch_source, zargs, chunksize=self.chunksize)
+        try:
+            zargs = zip(self.sources, repeat(self.conf))
+
+            if self.parallel:
+                mapped = self.map(fetch_source, zargs, chunksize=self.chunksize)
+            else:
+                mapped = self.map(fetch_source, zargs)
+
+            yield from chain.from_iterable(mapped)
+        except BaseException:
+            if not self._in_context:
+                self.terminate()
+
+            raise
         else:
-            mapped = self.map(fetch_source, zargs)
+            self._end()
 
-        yield from chain.from_iterable(mapped)
+            if not self._in_context:
+                self._release_pool()
 
     def pipe(self, **kwargs):
         """Return a SyncPipe primed with the source feed"""
@@ -516,14 +831,13 @@ class AsyncPipe(PyPipe):
         self._aiter: AsyncIterator[Item] | None = None
 
         if self.name:
-            self.module = import_module(f"riko.modules.{self.name}")
-            self.async_pipe: AsyncPipeParser = self.module.async_pipe
-            pipe_type = getattr(self.async_pipe, "type")  # noqa: B009
-            self.is_processor = bool(pipe_type == "processor")
-            self.mapify = self.is_processor
+            self.async_pipe = _resolve_module(self.name, "async_pipe")
+            self.pollable: bool = getattr(self.async_pipe, "pollable")  # noqa: B009
+            self.loopable: bool = getattr(self.async_pipe, "loopable")  # noqa: B009
+            self.mapify = self.loopable
         else:
             self.async_pipe = lambda source, **kw: async_return(source)
-            self.mapify = False
+            self.pollable = self.loopable = self.mapify = False
 
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""
@@ -533,6 +847,7 @@ class AsyncPipe(PyPipe):
         if name.startswith("_"):
             raise AttributeError(name)
 
+        self._require_usable("chain")
         kwargs = {"source": self._await_stream(), "connections": self.connections}
         return AsyncPipe(name, **kwargs)
 
@@ -549,13 +864,10 @@ class AsyncPipe(PyPipe):
         if self._aiter is None:
             self._aiter = self._stream()
 
-        try:
-            return await anext(self._aiter)
-        except StopAsyncIteration:
-            self._aiter = None
-            raise
+        return await anext(self._aiter)
 
     async def _stream(self) -> AsyncIterator[Item]:
+        self._begin()
         source = await self.source if self.source else None
         async_pipeline = partial(self.async_pipe, **self.kwargs)
 
@@ -570,6 +882,8 @@ class AsyncPipe(PyPipe):
 
             for item in result:
                 yield item
+
+        self._end()
 
     async def split(self, **kwargs) -> SplitterParserOutput:
         pipe_kwargs = {"source": self._await_stream(), "connections": self.connections}
@@ -594,12 +908,15 @@ class AsyncCollection(PyCollection):
 
     async def _stream(self) -> AsyncIterator[Item]:
         """Fetch all source urls"""
+        self._begin()
         zargs = zip(self.sources, repeat(self.conf))
         mapped = await async_map(afetch_source, zargs, self.connections)
 
         for stream in mapped:
             for item in stream:
                 yield item
+
+        self._end()
 
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""
@@ -618,11 +935,7 @@ class AsyncCollection(PyCollection):
         if self._aiter is None:
             self._aiter = self._stream()
 
-        try:
-            return await anext(self._aiter)
-        except StopAsyncIteration:
-            self._aiter = None
-            raise
+        return await anext(self._aiter)
 
     def async_pipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""
@@ -635,7 +948,8 @@ def get_chunksize(length: int, workers: int) -> int:
 
 def get_worker_cnt(length: int, threads: bool | None = True) -> int:
     multiplier = 2 if threads else 1
-    return min(length or 1, cpu_count() * multiplier)
+    maximum = cpu_count() * multiplier
+    return min(length, maximum) if length else maximum
 
 
 def listpipe(

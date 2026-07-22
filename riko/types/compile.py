@@ -98,12 +98,10 @@ class Wire(TypedDict):
 
 
 class PipeDef(TypedDict):
-    layout: list[LayoutItem]
     modules: list[PipeModule]
-    terminaldata: list[TerminalDataEntry]
-    # TODO: json can be either a list or object, so will need to handle both cases in
-    # the parser
     wires: list[Wire]
+    layout: NotRequired[list[LayoutItem]]
+    terminaldata: NotRequired[list[TerminalDataEntry]]
 
 
 class ParsedPipeDef(TypedDict):
@@ -112,3 +110,26 @@ class ParsedPipeDef(TypedDict):
     embed: dict[str, PipeModule]
     graph: dict[str, str | list[str]]
     wires: dict[str, Wire]
+
+
+class DagModule(TypedDict):
+    id: NotRequired[str]
+    type: ModuleName
+    conf: AnyModuleRawConf
+
+
+class PipeDag(TypedDict):
+    """
+    Bare-bones DAG expanded by ``riko.compile.convert_dag``.
+
+    ``wires`` is optional (omit for a linear chain in module listing order) and
+    holds ``(source_id, target_id)`` pairs. A module ``id`` is also optional and
+    defaults to ``sw-{n}`` (1-based listing order) — practical for the concise
+    wireless form; supply ids when ``wires`` reference them. Every expanded wire
+    targets ``_INPUT``, so fan-in operators such as ``union``/``join`` (whose
+    secondary inputs need ``_OTHER{n}`` targets) cannot be expressed here and
+    must be authored as a full ``PipeDef``.
+    """
+
+    modules: list[DagModule]
+    wires: NotRequired[list[tuple[str, str]]]

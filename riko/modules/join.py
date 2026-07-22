@@ -38,6 +38,7 @@ from . import operator
 OPTS = Opts()
 DEFAULTS: Defaults = {"join_key": None, "lower": False}
 logger = gogo.Gogo(__name__, monolog=True).logger
+_MISSING = object()
 
 
 def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
@@ -91,9 +92,13 @@ def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> St
 
     def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
         if isinstance(x, Mapping) and isinstance(y, Mapping):
-            x_value, y_value = x.get(x_key, ""), y.get(y_key, "")
+            x_value, y_value = x.get(x_key, _MISSING), y.get(y_key, _MISSING)
 
-            if objconf.lower and isinstance(x_value, str) and isinstance(y_value, str):
+            if x_value is _MISSING or y_value is _MISSING:
+                equal = False
+            elif (
+                objconf.lower and isinstance(x_value, str) and isinstance(y_value, str)
+            ):
                 equal = x_value.lower() == y_value.lower()
             else:
                 equal = x_value == y_value
@@ -202,6 +207,11 @@ def pipe(*args, **kwargs) -> Stream:
         {'x': 'foo-0', 'sum': 0, 'y': 'FOO-0', 'count': 5}
         >>> next(joined)
         {'x': 'foo-1', 'sum': 1, 'y': 'FOO-1', 'count': 6}
+        >>> items = [{'x': 'foo', 'sum': 0}, {'sum': 1}]
+        >>> other = [{'y': 'foo', 'count': 5}, {'count': 6}]
+        >>> conf = {'join_key': 'x', 'other_join_key': 'y'}
+        >>> [i['sum'] for i in pipe(items, conf=conf, other=other)]
+        [0]
 
     """
     return parser(*args, **kwargs)

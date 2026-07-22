@@ -1204,23 +1204,29 @@ wheels = [
 
 [[package]]
 name = "riko"
-version = "0.69.0"
+version = "0.70.0"
 source = { editable = "." }
 dependencies = [
     { name = "babel" },
     { name = "chardet" },
+    { name = "click" },
     { name = "feedparser" },
     { name = "html5lib" },
+    { name = "jinja2" },
     { name = "meza" },
     { name = "mezmorize" },
+    { name = "networkx" },
     { name = "pygogo" },
-    { name = "pytest-asyncio" },
     { name = "python-dateutil" },
     { name = "pytz" },
     { name = "requests" },
 ]
 
 [package.optional-dependencies]
+async = [
+    { name = "treq" },
+    { name = "twisted" },
+]
 finance = [
     { name = "csv2ofx" },
 ]
@@ -1229,20 +1235,14 @@ perf = [
     { name = "ijson" },
     { name = "lxml" },
 ]
-twisted = [
-    { name = "treq" },
-    { name = "twisted" },
-]
 
 [package.dev-dependencies]
 dev = [
-    { name = "click" },
     { name = "coverage" },
     { name = "ipython" },
-    { name = "jinja2" },
-    { name = "networkx" },
     { name = "pylint" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "pytest-timeout" },
     { name = "pytest-xdist" },
@@ -1253,33 +1253,33 @@ dev = [
 requires-dist = [
     { name = "babel", specifier = ">=2.8.0,<3.0.0" },
     { name = "chardet", specifier = ">=3.0.4,<8.0.0" },
+    { name = "click", specifier = ">=8.4.0" },
     { name = "csv2ofx", marker = "extra == 'finance'", specifier = ">=0.34.2" },
     { name = "fastfeedparser", marker = "extra == 'perf'", specifier = ">=0.6.0" },
     { name = "feedparser", specifier = ">=5.2.1,<7.0.0" },
     { name = "html5lib", specifier = ">=1.0.1,<2.0.0" },
     { name = "ijson", marker = "extra == 'perf'", specifier = ">=3.4.0,<4.0.0" },
+    { name = "jinja2", specifier = ">=3.1.6" },
     { name = "lxml", marker = "extra == 'perf'", specifier = ">=4.5.0,<7.0.0" },
     { name = "meza", git = "https://github.com/reubano/meza.git?rev=aa584e56edcd20e038b58379ab833e796dcf92df" },
     { name = "mezmorize", specifier = ">=0.27.0" },
+    { name = "networkx", specifier = ">=3.4.2" },
     { name = "pygogo", specifier = ">=0.12.0,<2.0.0" },
-    { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "python-dateutil", specifier = ">=2.8.1,<3.0.0" },
     { name = "pytz", specifier = ">=2019.3" },
     { name = "requests", specifier = ">=2.22.0,<3.0.0" },
-    { name = "treq", marker = "extra == 'twisted'", specifier = ">=26.0.0,<27.0.0" },
-    { name = "twisted", marker = "extra == 'twisted'", specifier = ">=26.0.0,<27.0.0" },
+    { name = "treq", marker = "extra == 'async'", specifier = ">=26.0.0,<27.0.0" },
+    { name = "twisted", marker = "extra == 'async'", specifier = ">=26.0.0,<27.0.0" },
 ]
-provides-extras = ["perf", "twisted", "finance"]
+provides-extras = ["perf", "async", "finance"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "click", specifier = ">=8.4.0" },
     { name = "coverage", specifier = ">=4.3.4,<8.0.0" },
     { name = "ipython", specifier = ">=8.39.0" },
-    { name = "jinja2", specifier = ">=3.1.6" },
-    { name = "networkx", specifier = ">=3.4.2" },
     { name = "pylint", specifier = ">=4.0.5,<5.0.0" },
     { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=7.0.0,<8.0.0" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },

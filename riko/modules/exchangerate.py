@@ -140,7 +140,7 @@ async def async_parser(
     if same_currency:
         rate = Decimal(1)
     elif objconf.url.startswith("http"):
-        r = await async_get(objconf.url, param=objconf.param)
+        r = await async_get(objconf.url, params=objconf.param)
         rates = await async_json(cast(IResponse, r))
     else:
         content = await io.async_url_read(objconf.url, delay=objconf.delay)
@@ -189,7 +189,7 @@ def parser(base: str, extraction: Extraction, objconf: Objconf, **kwargs) -> Dec
     if base == objconf.currency:
         rate = Decimal(1)
     else:
-        with Fetch(objconf.url, encoding=objconf.encoding) as f:
+        with Fetch(objconf.url, encoding=objconf.encoding, params=objconf.param) as f:
             json = load(f)
 
             if rates := json.get("rates", {}):

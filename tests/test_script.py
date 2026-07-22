@@ -21,7 +21,7 @@ except ImportError:
 PARENT_DIR = p.abspath(p.dirname(p.dirname(__file__)))
 DEMO_SCRIPT = "runpipe"
 BENCHMARK_SCRIPT = "benchmark"
-DEMO_TEXT = "Deadline to clear up health law eligibility near 682\n"
+DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
 BENCHMARK_TEXTS = [
     "baseline_sync - 1 repetitions/loop, best of 1 loops",
     "baseline_threads - 1 repetitions/loop, best of 1 loops",
@@ -42,10 +42,10 @@ def run_command(script: str, argument: str, *opts: str) -> str:
     - the working directory is ``PARENT_DIR``
     - a non-zero exit code raises ``subprocess.CalledProcessError``
     """
-    cmd = f"{script} + {' '.join(opts)}"
+    cmd = [script, *opts]
 
     if argument:
-        cmd += f" {argument}"
+        cmd.append(argument)
 
     result = subprocess.run(
         cmd,
@@ -53,7 +53,6 @@ def run_command(script: str, argument: str, *opts: str) -> str:
         capture_output=True,
         text=True,
         check=False,
-        shell=True,
     )
 
     if result.stderr:
@@ -108,13 +107,9 @@ def assert_output_matches(
 
 
 def gen_params():
-    yield from [
-        ("demo", DEMO_TEXT),
-        ("simple1", "'farechart'\n"),
-    ]
+    yield from [("demo", DEMO_TEXT), ("simple1", "'farechart'\n")]
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_sync(value):
     argument, expected = value
@@ -123,8 +118,8 @@ def test_demo_sync(value):
     assert_output_matches(output, expected, command=command)
 
 
-@pytest.mark.skip
-@pytest.mark.skipif(_issync, reason="async support not available")
+@pytest.mark.twisted
+@pytest.mark.skipif(_issync, reason="Twisted support not installed")
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_async(value):
     argument, expected = value
@@ -141,3 +136,29 @@ def test_benchmark():
     output = run_command(BENCHMARK_SCRIPT, "")
     kwargs = {"command": BENCHMARK_SCRIPT, "partial": True}
     assert_output_matches(output, *BENCHMARK_TEXTS, **kwargs)
+
+
+def test_convert_dag_and_compile(tmp_path):
+    dag = p.join(PARENT_DIR, "tests", "dags", "pipe_forever.json")
+    pipe_file = tmp_path / "pipe_forever.json"
+
+    convert = subprocess.run(
+        [sys.executable, "-m", "riko.cli.convert_dag", dag, "-o", str(pipe_file)],
+        cwd=PARENT_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    compiled = subprocess.run(
+        [sys.executable, "-m", "riko.cli.compile", str(pipe_file)],
+        cwd=PARENT_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert not convert.stdout
+    assert '"moduleid": "_OUTPUT"' in pipe_file.read_text(encoding="utf-8")
+    assert "def pipe_forever(" in compiled.stdout
+    assert "truncate" in compiled.stdout
