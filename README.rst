@@ -776,6 +776,21 @@ to stdout, or to a file via ``-o``):
 
 See `docs/DAG_FORMAT.md`_ for the full format and expansion rules.
 
+Regenerating config types
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each module's parse-time ``objconf`` type in ``riko/types/configs.py`` is
+generated from the matching ``<Name>Conf`` TypedDict contract in
+``riko/types/modules.py``. After editing a contract, regenerate and reformat the
+config types with a single command:
+
+.. code-block:: bash
+
+    gen-config
+
+A drift guard (``tests/internal/test_gen_config.py``) fails if the two layers
+fall out of sync.
+
 Scripts
 -------
 

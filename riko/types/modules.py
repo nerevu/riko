@@ -832,6 +832,11 @@ class UdfConf(TypedDict):
     func: Callable[..., Any]
 
 
+class UniqConf(TypedDict):
+    uniq_key: str = "content"
+    limit: int = 1024
+
+
 class UrlBuilderConf(TypedDict, total=False):
     base: str
     ext: str
@@ -920,6 +925,7 @@ type AnyModuleConf = (
     | TruncateConf
     | TypecastConf
     | UdfConf
+    | UniqConf
     | UrlBuilderConf
     | UrlParseConf
     | XpathFetchPageConf

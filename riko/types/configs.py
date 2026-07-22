@@ -7,6 +7,10 @@ Parse-time ``objconf`` config types, one per module. Each subclasses
 ``None``). Field types only — the ``conf=`` contract and its defaults live on the
 ``<Name>Conf`` TypedDicts in ``riko.types.modules``; runtime defaults come from each
 module's ``DEFAULTS``.
+
+Generated from the nonraw ``<Name>Conf`` TypedDicts by ``riko.cli.gen_config``.
+Edit those objects (not this file), then regenerate with ``gen-config``.
+``tests/internal/test_gen_config.py`` fails if the two layers drift.
 """
 
 from __future__ import annotations
@@ -269,6 +273,11 @@ class UdfObjconf(DynamicConf):
     func: Callable[..., Any]
 
 
+class UniqObjconf(DynamicConf):
+    uniq_key: str
+    limit: int
+
+
 class UrlBuilderObjconf(DynamicConf):
     base: str
     ext: str
@@ -284,8 +293,3 @@ class XpathFetchPageObjconf(DynamicConf):
     url: str
     xpath: str
     html5: bool
-
-
-class UniqObjconf(DynamicConf):
-    limit: int
-    uniq_key: str
