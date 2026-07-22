@@ -1,19 +1,25 @@
 from pprint import pprint
 
+from riko.cast import CastType
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import InputConf, ItemBuilderRawConf, Param
 
-format_conf = {"type": "text", "input_key": "format", "test": True}
+format_conf = InputConf({"type": CastType.TEXT, "input_key": "format", "test": True})
 format_in = {"format": "%B %d, %Y"}
-date_conf = {
-    "type": "date",
-    "default": "5/4/82",
-    "prompt": "enter a date",
-    "test": True,
-}
+date_conf = InputConf(
+    {"type": CastType.DATE, "default": "5/4/82", "prompt": "enter a date", "test": True}
+)
 dynamic_conf = {"format": {"terminal": "format", "path": "format"}}
-build_conf = {
-    "attrs": {"value": {"terminal": "formatted", "type": "text"}, "key": "date"}
-}
+build_conf = ItemBuilderRawConf(
+    {
+        "attrs": Param(
+            {
+                "value": {"terminal": "formatted", "type": "text"},
+                "key": {"type": "text", "value": "date"},
+            }
+        )
+    }
+)
 
 
 def pipe(test=False):

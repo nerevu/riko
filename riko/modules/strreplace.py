@@ -52,7 +52,7 @@ OPS = {
 }
 
 
-def reducer(word, rule):
+def reducer(word: str, rule: StrReplaceConfRule):
     return OPS.get(rule.param, OPS["every"])(word, rule)
 
 

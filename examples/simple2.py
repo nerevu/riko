@@ -1,16 +1,26 @@
 from pprint import pprint
 
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import (
+    ItemBuilderConf,
+    ParsedParam,
+    StrReplaceConf,
+    StrReplaceConfRule,
+)
 
-p232_conf = {
-    "attrs": [
-        {"value": "www.google.com", "key": "link"},
-        {"value": "google", "key": "title"},
-        {"value": "empty", "key": "author"},
-    ]
-}
+p232_conf = ItemBuilderConf(
+    {
+        "attrs": [
+            ParsedParam({"value": "www.google.com", "key": "link"}),
+            ParsedParam({"value": "google", "key": "title"}),
+            ParsedParam({"value": "empty", "key": "author"}),
+        ]
+    }
+)
 
-p421_conf = {"rule": [{"find": "empty", "param": "first", "replace": "ABC"}]}
+p421_conf = StrReplaceConf(
+    {"rule": StrReplaceConfRule(find="empty", param="first", replace="ABC")}
+)
 
 
 def pipe(test=False):

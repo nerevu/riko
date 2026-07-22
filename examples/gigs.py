@@ -2,16 +2,26 @@ from pprint import pprint
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import (
+    FetchDataConf,
+    FilterConf,
+    FilterConfRule,
+    SortConf,
+    SortConfRule,
+    UniqConf,
+)
 
-p1_conf = {"url": get_path("gigs.json"), "path": "value.items"}
-p2_conf = {"uniq_key": "link"}
-p3_conf = {
-    "combine": "or",
-    "permit": False,
-    "rule": [{"field": "title", "value": "php", "op": "contains"}],
-}
+p1_conf = FetchDataConf({"url": get_path("gigs.json"), "path": "value.items"})
+p2_conf = UniqConf({"uniq_key": "link"})
+p3_conf = FilterConf(
+    {
+        "combine": "or",
+        "permit": False,
+        "rule": FilterConfRule(field="title", value="php", op="contains"),
+    }
+)
 
-p4_conf = {"rule": [{"field": "pubDate", "dir": "desc"}]}
+p4_conf = SortConf({"rule": SortConfRule(field="", dir="desc")})
 
 
 def pipe(test=False):

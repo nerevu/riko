@@ -58,12 +58,14 @@ OPS = {
 }
 
 
-def reducer(word, rule) -> str:
-    default = rule.default or ""
+def reducer(word: str, rule: FindConfRule) -> str:
+    splits = ""
 
     if rule.location == "at":
         result = AT_PARAMS.get(rule.param, AT_PARAMS["first"])(word, rule)
-        splits = word[result : len(rule.find)] if result != -1 else default
+
+        if result != -1:
+            splits = word[result : len(rule.find)]
     else:
         splits = PARAMS.get(rule.param, PARAMS["first"])(word, rule)
 

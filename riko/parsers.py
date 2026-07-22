@@ -51,13 +51,12 @@ except ImportError:
     import html5lib as html
 
     IS_LXML = False
+    XML_PARSER = None
 else:
     from lxml.html import html5parser
 
     ElementTree = None
     IS_LXML = True
-
-if IS_LXML:
     XML_PARSER = etree.XMLParser(  # noqa: S314
         resolve_entities=False,
         no_network=True,
@@ -65,8 +64,6 @@ if IS_LXML:
         dtd_validation=False,
         huge_tree=False,
     )
-else:
-    XML_PARSER = None
 
 try:
     import fastfeedparser

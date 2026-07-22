@@ -4,6 +4,7 @@ from riko import Context
 from riko.modules.datebuilder import pipe as datebuilder
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.itembuilder import pipe as itembuilder
+from riko.types.modules import DateFormatRawConf
 
 
 def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(item=None, conf=None, context=None, **kwargs):
@@ -14,18 +15,18 @@ def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(item=None, conf=None, context=None, **
         return []
 
     if context.describe_dependencies:
-        return ["pipedatebuilder", "pipedateformat", "itembuilder"]
+        return ["datebuilder", "dateformat", "itembuilder"]
 
-    sw_385 = datebuilder(
-        context=context, conf={"DATE": {"type": "datetime", "value": "12/2/2014"}}
-    )
+    sw_385 = datebuilder({"content": "12/2/2014"}, emit=True)
 
     sw_405 = dateformat(
         sw_385,
-        conf={
-            "timezone": {"type": "text", "value": ""},
-            "format": {"type": "text", "value": "%B %d, %Y"},
-        },
+        conf=DateFormatRawConf(
+            {
+                # "timezone": {"type": "text", "value": ""},
+                "format": {"type": "text", "value": "%B %d, %Y"},
+            }
+        ),
     )
 
     sw_393 = itembuilder(

@@ -50,7 +50,7 @@ class InferenceSource(StrEnum):
 class ReturnInference:
     kind: OperatorReturnKind
     source: InferenceSource | None
-    reason: str | None = None
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -601,8 +601,8 @@ class SortConf(TypedDict):
 
 
 class InputConf(TypedDict, total=False):
-    prompt: Required[str]
     type: Required["CastType"]
+    prompt: str
     default: str
     test: bool
     input_key: str
@@ -610,7 +610,7 @@ class InputConf(TypedDict, total=False):
 
 class FetchConf(TypedDict, total=False):
     url: str
-    delay: int
+    delay: float
 
 
 class TailConf(TypedDict):
@@ -717,8 +717,8 @@ class FetchTextConf(TypedDict):
 class FilterConf(TypedDict):
     rule: FilterConfRule | list[FilterConfRule]
     combine: Literal["and", "or"] = "and"
-    permit: bool = True
-    stop: bool = False
+    permit: NotRequired[bool] = True
+    stop: NotRequired[bool] = False
 
 
 class GeolocateConf(TypedDict):
@@ -834,7 +834,7 @@ class UdfConf(TypedDict):
 
 class UniqConf(TypedDict):
     uniq_key: str = "content"
-    limit: int = 1024
+    limit: NotRequired[int] = 1024
 
 
 class UrlBuilderConf(TypedDict, total=False):

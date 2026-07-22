@@ -5,6 +5,7 @@ from riko.modules.datebuilder import pipe as datebuilder
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.input import pipe as _input
 from riko.modules.itembuilder import pipe as itembuilder
+from riko.types.modules import DateFormatRawConf
 
 
 def pipe_4f26297843f4952fad920af5990ddc50(item=None, conf=None, context=None, **kwargs):
@@ -48,15 +49,17 @@ def pipe_4f26297843f4952fad920af5990ddc50(item=None, conf=None, context=None, **
         },
     )
 
-    sw_112 = datebuilder(conf={"DATE": {"type": "datetime", "value": "12/3/2014"}})
+    sw_112 = datebuilder({"content": "12/3/2014"}, emit=True)
 
     sw_151 = dateformat(
         sw_112,
         timezone=sw_124,
-        conf={
-            "timezone": {"terminal": "timezone", "type": "text"},
-            "format": {"terminal": "format", "type": "text"},
-        },
+        conf=DateFormatRawConf(
+            {
+                # "timezone": {"terminal": "timezone", "type": "text"},
+                "format": {"terminal": "format", "type": "text"},
+            }
+        ),
         format=sw_120,
     )
 

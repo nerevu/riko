@@ -21,7 +21,7 @@ from riko.collections import (
 )
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
-from riko.types.modules import AnyModuleConf
+from riko.types.modules import FetchConf
 from riko.types.values import RSSEntry
 
 NUMBER = 1
@@ -46,7 +46,7 @@ files = [
 ]
 
 urls = [get_path(f) for f in files]
-confs: list[AnyModuleConf] = [{"url": url, "sleep": DELAY} for url in urls]
+confs = [FetchConf({"url": url, "delay": DELAY}) for url in urls]
 sources = [{"url": url} for url in urls]
 length = len(files)
 iterable = [DELAY for _ in files]

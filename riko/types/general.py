@@ -65,7 +65,9 @@ type WrapperOutput = (
     ProcessorWrapperOutput | OperatorWrapperOutput | SplitterWrapperOutput
 )
 
-type ProcessorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
+type ProcessorWrapperInput = (
+    ProcessorWrapperOutput | OperatorWrapperOutput | ItemOrValue
+)
 type OperatorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
@@ -118,6 +120,7 @@ class Defaults(TypedDict, total=False):
     memoize: bool
     multi: bool
     name: str
+    prompt: str
     param: dict[str, str | None]
     parse_key: str
     permit: bool

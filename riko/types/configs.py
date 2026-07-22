@@ -51,7 +51,7 @@ class InputObjconf(DynamicConf):
 
 class FetchObjconf(DynamicConf):
     url: str
-    delay: int
+    delay: float
 
 
 class TailObjconf(DynamicConf):

@@ -146,7 +146,7 @@ def test_unavailable_source_is_unknown_with_hint():
 
 def test_ambiguous_call_is_unknown_with_hint():
     def pipe(items):
-        return build_result(items)  # noqa: F821
+        return build_result(items)  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
 
     inference = only(pipe)
     assert inference.kind is UNKNOWN
@@ -171,7 +171,7 @@ def test_nested_decorator_with_wraps():
 
 
 def test_unresolvable_annotation_falls_back_to_ast():
-    def pipe(items) -> "Nonexistent":  # noqa: F821
+    def pipe(items) -> "Nonexistent":  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
         return sum(items)
 
     inference = only(pipe)
@@ -195,7 +195,10 @@ def test_infer_from_source_direct():
     assert inference.source is InferenceSource.AST
 
 
-@pytest.mark.parametrize("pipe", [len, lambda items: undefined(items)])  # noqa: F821
+@pytest.mark.parametrize(
+    "pipe",
+    [len, lambda items: undefined(items)],  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
+)
 def test_every_unknown_is_actionable(pipe):
     for inference in gen_return_inferences(pipe):
         if inference.kind is UNKNOWN:

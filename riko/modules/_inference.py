@@ -206,7 +206,7 @@ def _infer_from_source(pipe: Pipeline) -> ReturnInference:
         >>> def mapped(items):
         ...     return map(str, items)
         >>> _infer_from_source(mapped)
-        ReturnInference(kind=<OperatorReturnKind.STREAM: 'stream'>, source=<InferenceSource.AST: 'ast'>, reason=None)
+        ReturnInference(kind=<OperatorReturnKind.STREAM: 'stream'>, source=<InferenceSource.AST: 'ast'>, reason='')
 
         >>> def counted(items):
         ...     return sum(items)

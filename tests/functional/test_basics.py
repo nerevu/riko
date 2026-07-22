@@ -26,7 +26,7 @@ from riko.types.general import (
     SyncPipelineDependencies,
     SyncPipeParser,
 )
-from riko.types.values import StatefulItem
+from riko.types.values import FeedParserRSSEntry, StatefulItem
 from riko.utils import augment_entries, extract_dependencies, truncate_content
 
 try:
@@ -152,24 +152,30 @@ class TestBasics:
 
     def test_augment_entries_without_description(self):
         entries = [
-            {
-                "content": [{"value": "from content"}],
-                "link": "https://example.com/feed-item",
-                "title": "fallback title",
-            }
+            FeedParserRSSEntry(
+                {
+                    "content": [{"value": "from content"}],
+                    "link": "https://example.com/feed-item",
+                    "title": "fallback title",
+                }
+            )
         ]
         item = cast(dict, next(augment_entries(entries)))
         assert item["summary"] == "from content"
         assert item["description"] == "from content"
 
     def test_augment_entries_without_content(self):
-        entries = [{"link": "https://example.com/feed-item", "title": "fallback title"}]
+        entries = [
+            FeedParserRSSEntry(
+                {"link": "https://example.com/feed-item", "title": "fallback title"}
+            )
+        ]
         item = cast(dict, next(augment_entries(entries)))
         assert item["summary"] == "fallback title"
         assert item["description"] == "fallback title"
 
     def test_augment_entries_without_text(self):
-        entries = [{"link": "https://example.com/feed-item"}]
+        entries = [FeedParserRSSEntry({"link": "https://example.com/feed-item"})]
         item = cast(dict, next(augment_entries(entries)))
         assert item["summary"] == ""
         assert item["description"] == ""
