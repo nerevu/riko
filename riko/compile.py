@@ -38,7 +38,7 @@ import keyword
 import subprocess
 from codecs import open
 from collections import defaultdict
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from importlib import import_module
 from itertools import pairwise
 from json import JSONEncoder, dumps, loads
@@ -48,14 +48,23 @@ from typing import Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
-from riko import Context, utils
+from riko import Context
 from riko.context import ExecutionMode
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.pprint2 import Id, repr_arg
 from riko.topsort import topological_sort
-from riko.types.compile import ParsedPipeDef, PipeDag, PipeDef, PipeModule, Wire
+from riko.types.compile import (
+    ParsedPipeDef,
+    PipeDag,
+    PipeDef,
+    PipelineDescription,
+    PipeModule,
+    Wire,
+)
 from riko.types.general import (
+    AsyncPipeItems,
     AsyncPipeParser,
+    AsyncStream,
     ParserOutput,
     Pipeline,
     Step,
@@ -70,6 +79,17 @@ from riko.types.modules import (
     LoopConf,
     LoopRawConf,
     Value,
+)
+from riko.utils import (
+    extract_dependencies,
+    extract_input,
+    gen_embed_graph,
+    gen_graph,
+    gen_modules,
+    gen_names,
+    gen_parented_graph,
+    gen_wires,
+    pythonise,
 )
 
 _RAW_CONFS = {
@@ -139,7 +159,7 @@ class CustomEncoder(JSONEncoder):
 
 
 def get_module_id(wire: Wire):
-    return utils.pythonise(wire, key="src.moduleid")
+    return pythonise(wire, key="src.moduleid")
 
 
 def write_file(data, path, pretty=False):
@@ -401,7 +421,7 @@ def _gen_pykwargs(  # noqa: E302
     for wire in parsed_pipe_def["wires"].values():
         # todo? this equates the outputs
         is_default_out_only = (
-            utils.pythonise(wire, key="tgt.moduleid") == tgt_module_id
+            pythonise(wire, key="tgt.moduleid") == tgt_module_id
             and wire["tgt"]["id"] != "_INPUT"
             and wire["src"]["id"].startswith("_OUTPUT")
         )
@@ -411,7 +431,7 @@ def _gen_pykwargs(  # noqa: E302
         if is_default_out_only:
             # set the extra inputs of this module as pykwargs of this module
             src_module_id = get_module_id(wire)
-            pipe_id = utils.pythonise(wire, key="tgt.id")
+            pipe_id = pythonise(wire, key="tgt.id")
             source = steps[src_module_id] if steps is not None else Id(src_module_id)
 
             if pipe_id.startswith("_OTHER"):
@@ -424,7 +444,7 @@ def _gen_pykwargs(  # noqa: E302
 
     if module["type"] == "loop":
         value = cast(LoopRawConf, module["conf"])["embed"]["value"]
-        pipe_id = utils.pythonise(value["id"])
+        pipe_id = pythonise(value["id"])
         updated = Id(_module_alias(value["type"])) if steps is None else steps[pipe_id]
         yield ("embed", updated)
 
@@ -552,7 +572,7 @@ def _get_input_module(
 
             # todo? this equates the outputs
             is_default_in_and_out = (
-                utils.pythonise(wire["tgt"]["moduleid"]) == module_id
+                pythonise(wire["tgt"]["moduleid"]) == module_id
                 and wire["tgt"]["id"] == "_INPUT"
                 and wire["src"]["id"].startswith("_OUTPUT")
             )
@@ -623,25 +643,82 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name="anonymous") -> ParsedPipeDef:
     pipe -- an internal representation of a pipe
 
     """
-    graph = defaultdict(list, utils.gen_embed_graph(pipe_def))
-    [graph[k].append(v) for k, v in utils.gen_graph(pipe_def)]
+    graph = defaultdict(list, gen_embed_graph(pipe_def))
+    [graph[k].append(v) for k, v in gen_graph(pipe_def)]
     modules = {
         key: PipeModule({**module, "conf": _lower_keys(module["conf"])})
-        for key, module in utils.gen_modules(pipe_def)
+        for key, module in gen_modules(pipe_def)
     }
     embed = {
         key: PipeModule({**module, "conf": _lower_keys(module["conf"])})
-        for key, module in utils.gen_modules(pipe_def, embedded=True)
+        for key, module in gen_modules(pipe_def, embedded=True)
     }
     modules.update(embed)
 
     return {
-        "name": utils.pythonise(pipe_name),
+        "name": pythonise(pipe_name),
         "modules": modules,
         "embed": embed,
-        "graph": dict(utils.gen_parented_graph(graph)),
-        "wires": dict(utils.gen_wires(pipe_def)),
+        "graph": dict(gen_parented_graph(graph)),
+        "wires": dict(gen_wires(pipe_def)),
     }
+
+
+@overload
+def _build_pipeline(  # noqa: E704
+    *args,
+    is_async: Literal[True],
+    **kwargs,
+) -> AsyncPipeParser | AsyncPipeItems: ...
+@overload  # noqa: E302
+def _build_pipeline(  # noqa: E704
+    *args,
+    is_async: Literal[False] = ...,
+    **kwargs,
+) -> SyncPipeParser | ParserOutput: ...
+def _build_pipeline(  # noqa: E302
+    parsed_pipe_def: ParsedPipeDef,
+    module_names: Iterable[str],
+    module_ids: Sequence[str] | Sequence[tuple[str, ...]],
+    *,
+    is_async=False,
+    context: Context | None = None,
+    **kwargs,
+) -> Pipeline | AsyncPipeItems | ParserOutput:
+    ntype = "async_pipe" if is_async else "pipe"
+    pipe_names = gen_names(module_ids, parsed_pipe_def, ntype)
+
+    updates = {
+        "module_ids": module_ids,
+        "module_names": module_names,
+        "pipe_names": pipe_names,
+        "steps": {},
+        "context": context,
+    }
+
+    steps = dict(_gen_steps(parsed_pipe_def, **kwargs, **updates))
+    _module_id = module_ids[-1]
+    module_id = _module_id if isinstance(_module_id, str) else _module_id[-1]
+    return steps[module_id]
+
+
+def _get_descriptions(
+    parsed_pipe_def: ParsedPipeDef, context: Context | None = None, **kwargs
+) -> list[PipelineDescription] | list[str | tuple[str, ...]] | list[str]:
+    context = context or Context(**kwargs)
+    pydeps = extract_dependencies(parsed_pipe_def)
+    pyinput = extract_input(parsed_pipe_def)
+
+    if context.mode is ExecutionMode.DESCRIBE:
+        pipeline = [PipelineDescription({"inputs": pyinput, "dependencies": pydeps})]
+    elif context.mode is ExecutionMode.DESCRIBE_INPUTS:
+        pipeline = pyinput
+    elif context.mode is ExecutionMode.DESCRIBE_DEPENDENCIES:
+        pipeline = pydeps
+    else:
+        pipeline = []
+
+    return pipeline
 
 
 def build_pipeline(
@@ -655,30 +732,39 @@ def build_pipeline(
     """
     context = context or Context(**kwargs)
     module_ids = topological_sort(parsed_pipe_def["graph"])
-    pydeps = utils.extract_dependencies(parsed_pipe_def)
-    pyinput = utils.extract_input(parsed_pipe_def)
 
-    if context.mode is ExecutionMode.DESCRIBE:
-        pipeline = [{"inputs": pyinput, "dependencies": pydeps}]
-    elif context.mode is ExecutionMode.DESCRIBE_INPUTS:
-        pipeline = pyinput
-    elif context.mode is ExecutionMode.DESCRIBE_DEPENDENCIES:
-        pipeline = pydeps
+    if context.mode is ExecutionMode.RUN:
+        module_names = gen_names(module_ids, parsed_pipe_def)
+        args = (parsed_pipe_def, module_names, module_ids)
+        pipeline = _build_pipeline(*args, is_async=False, context=context, **kwargs)
     else:
-        updates = {
-            "module_ids": module_ids,
-            "module_names": utils.gen_names(module_ids, parsed_pipe_def),
-            "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, "pipe"),
-            "steps": {},
-            "context": context,
-        }
-
-        steps = dict(_gen_steps(parsed_pipe_def, **kwargs, **updates))
-        _module_id = module_ids[-1]
-        module_id = _module_id if isinstance(_module_id, str) else _module_id[-1]
-        pipeline = steps[module_id]
+        pipeline = _get_descriptions(parsed_pipe_def, context, **kwargs)
 
     yield from pipeline
+
+
+async def abuild_pipeline(
+    parsed_pipe_def: ParsedPipeDef, context: Context | None = None, **kwargs
+) -> AsyncStream:
+    """
+    Convert a pipe into an executable Python pipeline
+
+    If describe_input or describe_dependencies then just
+    return that instead of the pipeline
+    """
+    context = context or Context(**kwargs)
+    module_ids = topological_sort(parsed_pipe_def["graph"])
+
+    if context.mode is ExecutionMode.RUN:
+        module_names = gen_names(module_ids, parsed_pipe_def)
+        args = (parsed_pipe_def, module_names, module_ids)
+        kwargs["context"] = context
+        pipeline = await _build_pipeline(*args, is_async=True, **kwargs)
+    else:
+        pipeline = _get_descriptions(parsed_pipe_def, context, **kwargs)
+
+    for item in pipeline:
+        yield item
 
 
 def _ruff_format(code: str) -> str:
@@ -704,8 +790,8 @@ def stringify_pipe(parsed_pipe_def: ParsedPipeDef, **kwargs) -> str:
 
     updates = {
         "module_ids": module_ids,
-        "module_names": utils.gen_names(module_ids, parsed_pipe_def),
-        "pipe_names": utils.gen_names(module_ids, parsed_pipe_def, ntype="pipe"),
+        "module_names": gen_names(module_ids, parsed_pipe_def),
+        "pipe_names": gen_names(module_ids, parsed_pipe_def, ntype="pipe"),
     }
 
     env = Environment(loader=PackageLoader("riko"), autoescape=False)  # noqa: S701
@@ -722,8 +808,8 @@ def stringify_pipe(parsed_pipe_def: ParsedPipeDef, **kwargs) -> str:
         "uniq_modules": [dict(zip(keys, m, strict=False)) for m in uniq_modules],
         "modules": modules,
         "pipe_name": parsed_pipe_def["name"],
-        "inputs": utils.extract_input(parsed_pipe_def),
-        "dependencies": utils.extract_dependencies(parsed_pipe_def),
+        "inputs": extract_input(parsed_pipe_def),
+        "dependencies": extract_dependencies(parsed_pipe_def),
         "embedded_pipes": parsed_pipe_def["embed"],
         "last_module": module_ids[-1],
         "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),

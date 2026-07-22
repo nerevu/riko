@@ -10,6 +10,7 @@ import sys
 from codecs import StreamReader
 from collections import defaultdict, deque
 from collections.abc import (
+    Awaitable,
     Callable,
     Generator,
     ItemsView,
@@ -24,7 +25,7 @@ from datetime import datetime as dt
 from decimal import Decimal
 from functools import cache, partial, reduce, wraps
 from http.client import HTTPResponse
-from inspect import signature
+from inspect import isawaitable, signature
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from math import isnan
 from operator import itemgetter
@@ -80,12 +81,14 @@ from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
 from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
 from riko.types.general import (
+    AsyncPipelineDependencies,
     FileTypes,
     Item,
     Opener,
     PipelineDependencies,
     Stream,
     StreamOrValueStream,
+    SyncPipelineDependencies,
     ValueStream,
 )
 from riko.types.modules import (
@@ -1188,10 +1191,26 @@ def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
             yield dep
 
 
-def extract_dependencies(
+@overload
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+) -> list[str]: ...
+@overload  # noqa: E302
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: AsyncPipelineDependencies,
+) -> Awaitable[list[str]]: ...
+@overload  # noqa: E302
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: SyncPipelineDependencies,
+) -> list[str]: ...
+def extract_dependencies(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
-) -> list[str]:
+) -> Awaitable[list[str]] | list[str]:
     """Extract modules used by a pipe"""
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
@@ -1200,10 +1219,10 @@ def extract_dependencies(
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return sorted(set(pydeps))
+    return pydeps if isawaitable(pydeps) else sorted(set(pydeps))
 
 
-def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str]]:
+def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str, ...]]:
     fields = ["position", "name", "prompt"]
     values = ["type", "value"]
     modules = pipe_def["modules"]
@@ -1218,7 +1237,7 @@ def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str]]:
         conf = module["conf"]
 
         try:
-            module_confs = [conf[x]["value"] for x in fields]
+            module_confs: list[str] = [conf[x]["value"] for x in fields]
         except (KeyError, TypeError):
             pass
         else:
@@ -1252,10 +1271,26 @@ def get_input(conf: InputRawConf, **kwargs):
     return value
 
 
-def extract_input(
+@overload
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+) -> list[str | tuple[str, ...]]: ...
+@overload  # noqa: E302
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: AsyncPipelineDependencies,
+) -> Awaitable[list[str]]: ...
+@overload  # noqa: E302
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: SyncPipelineDependencies,
+) -> list[str | tuple[str, ...]]: ...
+def extract_input(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
-) -> Sequence[str | tuple[str]]:
+) -> Awaitable[list[str]] | list[str | tuple[str, ...]]:
     """Extract inputs required by a pipe"""
     if pipe_def:
         pyinput = gen_input(pipe_def)
@@ -1264,7 +1299,7 @@ def extract_input(
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return sorted(pyinput)
+    return pyinput if isawaitable(pyinput) else sorted(pyinput)
 
 
 def pythonise(
@@ -1297,7 +1332,7 @@ def pythonise(
 def gen_names(
     module_ids: Sequence[str] | Sequence[tuple[str, ...]],
     parsed_pipe_def: ParsedPipeDef,
-    ntype="module",
+    ntype: Literal["module", "pipe", "async_pipe"] = "module",
 ) -> Iterator[str]:
     for module_id in module_ids:
         if isinstance(module_id, str):
@@ -1310,10 +1345,11 @@ def gen_names(
                 name = pythonise(module_type)
             elif ntype == "module":
                 name = module_type
-            elif ntype == "pipe":
-                name = "pipe"
+            elif ntype in {"pipe", "async_pipe"}:
+                name = ntype
             else:
-                raise ValueError(f"Invalid {ntype=}. (Expected 'module' or 'pipe')")
+                msg = f"Invalid {ntype=}. (Expected 'module', 'pipe', or 'async_pipe')"
+                raise ValueError(msg)
 
             yield name
 

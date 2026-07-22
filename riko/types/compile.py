@@ -112,6 +112,11 @@ class ParsedPipeDef(TypedDict):
     wires: dict[str, Wire]
 
 
+class PipelineDescription(TypedDict):
+    inputs: list[str | tuple[str, ...]]
+    dependencies: list[str]
+
+
 class DagModule(TypedDict):
     id: NotRequired[str]
     type: ModuleName
