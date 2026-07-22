@@ -4,7 +4,7 @@ riko.modules
 ~~~~~~~~~~~~
 """
 
-from riko import Context, Objconf, listize, objectify
+from riko import Context, DynamicConf, listize, objectify
 from riko.bado.itertools import async_map
 from riko.cast import CAST_SWITCH, BasicCastType, CastType, cast_none, cast_pass
 from riko.cast import cast as cast_value
@@ -109,6 +109,7 @@ __all__ = [
     "Defaults",
     "Dispatched",
     "DotDict",
+    "DynamicConf",
     "Embed",
     "Inference",
     "Item",
@@ -120,7 +121,6 @@ __all__ = [
     "ModuleType",
     "ModuleWrapper",
     "NonstreamExpressions",
-    "Objconf",
     "OperatorParser",
     "OperatorParserOutput",
     "OperatorReturnKind",

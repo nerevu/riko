@@ -19,9 +19,11 @@ Python stream processing engine modeled after Yahoo! Pipes.
 | `riko/exceptions.py` | `UnsupportedModuleError` (unresolved leaf module) / `UnsupportedPipelineError` (unresolved `pipe_*` sub-pipeline) — both raised in `_resolve_module` in `compile.py` |
 | `riko/dotdict.py` | `DotDict` — case-insensitive nested dict for pipe items (dotted keys = nested paths; see `docs/DOTDICT_FOOTGUN.md` for the data-derived-key footgun) |
 | `riko/cli/compile.py` | `compile` script — JSON pipeline → generated Python module (wraps `compile.compile`) |
-| `riko/cli/convert_dag.py` | `convert_dag` script — bare-bones DAG → full JSON pipeline (`convert_dag`) |
+| `riko/cli/convert_dag.py` | `convert-dag` script — bare-bones DAG → full JSON pipeline (`convert-dag`) |
+| `riko/cli/gen_config.py` | `gen-config` script — regenerates `riko/types/configs.py` from the nonraw `<Name>Conf` TypedDicts in `riko/types/modules.py` (+`ruff format`) |
+| `riko/types/configs.py` | generated per-module `<Name>Objconf(DynamicConf)` parse-time config types (edit `modules.py` contracts, run `gen-config` — never hand-edit) |
 | `riko/transform.py` | column transformation helpers (shelved — see `docs/Shelf.md`) |
-| `docs/DAG_FORMAT.md` | bare-bones DAG format + `convert_dag`/`compile` commands |
+| `docs/DAG_FORMAT.md` | bare-bones DAG format + `convert-dag`/`compile` commands |
 | `optional-requirements.txt` | Twisted, treq, lxml, speedparser3 |
 | `docs/ROADMAP.md` | authoritative roadmap and runtime contract (HigherGov-first critical path + RDP/Connect end state + async Feed) |
 | `docs/Shelf.md` | tabled ideas (extra source pipes, protocol/orchestration/DB integrations) not on the critical path |
@@ -65,9 +67,10 @@ Python stream processing engine modeled after Yahoo! Pipes.
 - **`meza` pinned to git** — `pyproject.toml` sources meza from `github.com/reubano/meza` at a specific commit; meza owns conversion work (`docs/ROADMAP.md` §25)
 - **Doctests are tests** — `pytest --doctest-modules` runs all `>>>` blocks in source; keep them passing
 - **Codegen regression tests** (`tests/test_compile.py`) — `test_codegen_matches_expected_file` compiles every `tests/pipelines/*.json` with a matching `tests/pypipelines/*.py` and asserts `stringify_pipe` output is byte-identical to the expected file (hand-maintained splitter pipes `pipe_QMrlL_FS3BGlpwryODY80A`/`pipe_zKJifuNS3BGLRQK_GsevXg` are excluded via `HAND_MAINTAINED`); `test_malformed_pipeline_syntax` asserts unknown modules raise `UnsupportedModuleError` and structurally-broken defs raise `KeyError`/`IndexError`. `S102` (exec) is per-file-ignored for `tests/**` (codegen tests exec generated modules).
-- **`manage`** = `riko.cli.manage:manager` click entry point; `runpipe`, `benchmark`, `compile` and `convert_dag` also available (`[project.scripts]`)
+- **`manage`** = `riko.cli.manage:manager` click entry point; `runpipe`, `benchmark`, `compile`, `convert-dag` and `gen-config` also available (`[project.scripts]`)
+- **`gen-config`** = `riko.cli.gen_config:main` — regenerates `riko/types/configs.py` (the per-module `<Name>Objconf(DynamicConf)` parse-time types) from the nonraw `<Name>Conf` TypedDict contracts in `riko/types/modules.py` (strips `Required`/`NotRequired` + `= default` doc-hints, dereferences forward-refs, rebases `FetchTableConf(CsvConf)` → `FetchTableObjconf(CsvObjconf)`), then runs `ruff format`. Idempotent. `tests/internal/test_gen_config.py` is a structural drift guard (fails if the two layers diverge). Edit the contracts in `modules.py`, never `configs.py` by hand.
 - **Bare-bones DAG** — `convert_dag(dag)` in `riko/compile.py` expands a minimal DAG (`modules` + *optional* `[src, tgt]` wire pairs, opaque `conf`) into a full `PipeDef`: chains modules linearly when `wires` is omitted, auto-assigns `sw-{n}` ids when absent, appends the terminal `output` node, and wires every sink to `_OUTPUT`. Type is `PipeDag`/`DagModule` in `riko/types/compile.py`; fixture `tests/dags/pipe_forever.json`; see `docs/DAG_FORMAT.md`
-- **`compile.compile(pipe_def, pipe_name)`** — one-call wrapper over `parse_pipe_def` + `stringify_pipe` (JSON pipe def → Python source); parallels `convert_dag` and backs the `compile` CLI. (Shadows the builtin only inside `riko/compile.py`, which doesn't use it.)
+- **`compile.compile(pipe_def, pipe_name)`** — one-call wrapper over `parse_pipe_def` + `stringify_pipe` (JSON pipe def → Python source); parallels `convert-dag` and backs the `compile` CLI. (Shadows the builtin only inside `riko/compile.py`, which doesn't use it.)
 - **`mezmorize`** — used for memoization (`utils.py`); Flask dependency slated for removal (`docs/ROADMAP.md` §26 Milestone 10)
 - **`conftest.py` at root and `tests/`** — both reset `_registry` and `_receive_queue` via `contextvars` fixture
 - **Parallel pipes** use `listpipe_safe` 5-tuple `(source, pipeline, error_key, on_error, worker_local)`

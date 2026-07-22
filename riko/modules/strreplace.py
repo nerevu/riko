@@ -28,9 +28,9 @@ from functools import reduce
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.bado import itertools as ait
 from riko.cast import BasicCastType
+from riko.types.configs import StrReplaceObjconf
 from riko.types.general import Defaults, Opts
 from riko.types.modules import StrReplaceConfRule
 
@@ -57,7 +57,7 @@ def reducer(word, rule):
 
 
 async def async_parser(
-    word: str, rules: Sequence[StrReplaceConfRule], objconf: Objconf, **kwargs
+    word: str, rules: Sequence[StrReplaceConfRule], objconf: StrReplaceObjconf, **kwargs
 ) -> str:
     """
     Asynchronously parses the pipe content
@@ -99,7 +99,7 @@ async def async_parser(
 
 
 def parser(
-    word: str, rules: Sequence[StrReplaceConfRule], objconf: Objconf, **kwargs
+    word: str, rules: Sequence[StrReplaceConfRule], objconf: StrReplaceObjconf, **kwargs
 ) -> str:
     """
     Parses the pipe content

@@ -27,12 +27,13 @@ Attributes:
 """
 
 from collections.abc import Sequence
+from typing import cast
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import BasicCastType
 from riko.dotdict import DotDict
+from riko.types.configs import ItemBuilderObjconf
 from riko.types.general import Defaults, Opts
 from riko.types.modules import ParsedParam
 from riko.types.values import RikoDict
@@ -45,7 +46,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _, extraction: Sequence[ParsedParam], objconf: Objconf, **kwargs
+    _, extraction: Sequence[ParsedParam], objconf: ItemBuilderObjconf, **kwargs
 ) -> RikoDict:
     """
     Parses the pipe content
@@ -71,7 +72,7 @@ def parser(
 
     """
     item = {a["key"]: a["value"] for a in extraction}
-    return DotDict(item).asdict()
+    return cast(RikoDict, DotDict(item).asdict())
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

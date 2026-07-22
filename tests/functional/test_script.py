@@ -18,7 +18,7 @@ try:
 except ImportError:
     _issync = True
 
-PARENT_DIR = p.abspath(p.dirname(p.dirname(__file__)))
+PARENT_DIR = p.abspath(p.dirname(p.dirname(p.dirname(__file__))))
 DEMO_SCRIPT = "runpipe"
 BENCHMARK_SCRIPT = "benchmark"
 DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"

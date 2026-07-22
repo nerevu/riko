@@ -1,5 +1,13 @@
 from codecs import StreamReader
-from collections.abc import Awaitable, Callable, Iterable, Iterator, Sequence
+from collections.abc import (
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterable,
+    Iterator,
+    Sequence,
+)
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from typing import (
     TYPE_CHECKING,
@@ -24,7 +32,7 @@ from riko.types.values import (
 )
 
 if TYPE_CHECKING:
-    from riko import Context, DotDict, Objconf
+    from riko import Context, DotDict, DynamicConf
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
     from riko.types.modules import AnyConfRule, AnyModuleConf, AnyModuleRawConf, Skip
@@ -40,6 +48,10 @@ type ValueStream = Iterator[RikoValue]
 type Stream = Iterator[Item]
 type StreamOrValueStream = Iterator[ItemOrValue]
 type Streams = Iterator[Stream]
+
+type AsyncStream = AsyncIterator[Item]
+type AsyncItems = AsyncIterable[Item]
+type Feed = AsyncItems
 
 type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]
 type OperatorParserOutput = Stream | ItemOrValue | Iterator[StatefulItem]
@@ -58,9 +70,9 @@ type OperatorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
 
-type PipeTuple = tuple[Item, "Objconf"]
+type PipeTuple = tuple[Item, "DynamicConf"]
 type PipeTuples = Iterator[PipeTuple]
-type Objconfs = Sequence["Objconf"]
+type Objconfs = Sequence["DynamicConf"]
 type Extraction = T
 type ConversionFunc = Callable[..., Items | StringIO]
 type Caster = Callable[[str | int], PrimitiveValue | AnyLocation]

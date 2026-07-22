@@ -222,7 +222,7 @@ format). ``riko.compile.parse_pipe_def`` + ``build_pipeline`` execute one
 in-process, and the ``compile`` command translates one into a runnable Python
 module.
 
-For hand-authoring, the ``convert_dag`` command (and
+For hand-authoring, the ``convert-dag`` command (and
 ``riko.compile.convert_dag``) expands a *bare-bones DAG* — a list of ``modules``
 plus optional ``[source, target]`` wire pairs — into a full pipe definition.
 Omit ``wires`` to chain modules linearly, and omit ``id`` to auto-number them.

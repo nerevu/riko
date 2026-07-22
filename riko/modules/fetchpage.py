@@ -27,10 +27,11 @@ from collections.abc import Iterator
 
 import pygogo as gogo
 
-from riko import ENCODING, Objconf
+from riko import ENCODING
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import get_text
+from riko.types.configs import FetchPageObjconf
 from riko.types.general import Defaults, Extraction, Item
 from riko.utils import Fetch, betwix
 
@@ -52,7 +53,7 @@ def get_string(content: str, start: str, end: str) -> str:
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchPageObjconf, **kwargs
 ) -> Iterator[str]:
     """
     Asynchronously parses the pipe content
@@ -100,7 +101,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchPageObjconf, **kwargs
 ) -> Iterator[str]:
     """
     Parses the pipe content

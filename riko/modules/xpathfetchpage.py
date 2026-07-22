@@ -49,10 +49,11 @@ from typing import cast
 
 import pygogo as gogo
 
-from riko import ENCODING, Objconf
+from riko import ENCODING
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import any2dict
+from riko.types.configs import XpathFetchPageObjconf
 from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
 from riko.utils import Fetch, auto_close
 
@@ -69,7 +70,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -157,7 +158,9 @@ async def async_parser(
     return stream
 
 
-def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
+def parser(
+    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

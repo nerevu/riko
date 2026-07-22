@@ -24,8 +24,8 @@ from collections.abc import Iterator
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import BasicCastType
+from riko.types.configs import TokenizerObjconf
 from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor
@@ -42,7 +42,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: Objconf, **kwargs
+    content: str, extraction: Extraction, objconf: TokenizerObjconf, **kwargs
 ) -> Iterator[dict[str, str]]:
     """
     Parses the pipe content

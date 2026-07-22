@@ -19,7 +19,7 @@ from typing import cast
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko.types.configs import UdfObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
@@ -29,7 +29,7 @@ DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(item: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Item:
+def parser(item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs) -> Item:
     """
     Parsers the pipe content
 

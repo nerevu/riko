@@ -29,8 +29,8 @@ from typing import cast
 import pygogo as gogo
 from meza.process import join, merge
 
-from riko import Objconf
 from riko.dotdict import is_mapping
+from riko.types.configs import JoinObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 
 from . import operator
@@ -41,7 +41,9 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 _MISSING = object()
 
 
-def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
+def parser(
+    stream: Stream, objconf: JoinObjconf, tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

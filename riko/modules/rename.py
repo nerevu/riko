@@ -34,9 +34,9 @@ from functools import reduce
 import pygogo as gogo
 from meza.fntools import remove_keys
 
-from riko import Objconf
 from riko.bado.itertools import coop_reduce
 from riko.dotdict import DotDict
+from riko.types.configs import RenameObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RenameConfRule
 
@@ -55,7 +55,7 @@ def reducer(item: Mapping, rule: RenameConfRule) -> DotDict:
 
 
 async def async_parser(
-    item: Item, rules: Sequence[RenameConfRule], objconf: Objconf, **kwargs
+    item: Item, rules: Sequence[RenameConfRule], objconf: RenameObjconf, **kwargs
 ) -> DotDict | Item:
     """
     Asynchronously parses the pipe content
@@ -95,7 +95,7 @@ async def async_parser(
 
 
 def parser(
-    item: Item, rules: Sequence[RenameConfRule], objconf: Objconf, **kwargs
+    item: Item, rules: Sequence[RenameConfRule], objconf: RenameObjconf, **kwargs
 ) -> DotDict | Item:
     """
     Parsers the pipe content

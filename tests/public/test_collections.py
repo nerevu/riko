@@ -29,10 +29,9 @@ attrs = ParsedParam({"key": "content", "value": value})
 builder_conf = ItemBuilderConf({"attrs": attrs})
 done_conf = {"attrs": {"key": "state", "value": StreamState.DONE}}
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
-reactor = cast(IReactorCore, FakeReactor())
 
 
-class TestCollections:
+class _CollectionTest:
     def setup_method(self):
         self.runs = 0
         reset_pubsub()
@@ -41,6 +40,8 @@ class TestCollections:
         self.runs += 1
         return item
 
+
+class TestSyncCollections(_CollectionTest):
     def test_udf(self):
         stream = (
             SyncPipe("itembuilder", conf=builder_conf)
@@ -98,6 +99,15 @@ class TestCollections:
         assert next(stream1) == {"content": "once is 1x"}
         assert next(stream2) == {"content": "once is 1x"}
         assert self.runs == 3
+
+    def test_export(self):
+        """Tests exporting a synchronous stream to a list."""
+        stream = SyncPipe("itembuilder", conf=builder_conf).tokenizer(emit=True)
+        assert stream.export() == [
+            {"content": "once is 1x"},
+            {"content": "twice is 2x"},
+            {"content": "thrice is 3x"},
+        ]
 
     def test_pubsub(self, caplog):
         _conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
@@ -217,14 +227,6 @@ class TestCollections:
         assert not input_pipe.loopable
         assert not input_pipe.mapify
 
-        async_transformer = AsyncPipe("strtransform")
-        async_input_pipe = AsyncPipe("input")
-
-        assert async_transformer.loopable
-        assert async_transformer.mapify
-        assert not async_input_pipe.loopable
-        assert not async_input_pipe.mapify
-
     def test_stream(self):
         """Tests a basic stream pipeline."""
         stream = (
@@ -256,8 +258,23 @@ class TestCollections:
         assert first_item == {"content": 396558121}
         assert self.runs == 3
 
-    @pytest.mark.skipif(_issync, reason="async support not available")
-    def test_astream(self, capsys):
+
+@pytest.mark.skipif(_issync, reason="async support not available")
+class TestAsyncCollections(_CollectionTest):
+    @pytest.fixture
+    def reactor(self) -> IReactorCore:
+        return cast(IReactorCore, FakeReactor())
+
+    def test_pipes_use_loopability_for_mapping(self):
+        async_transformer = AsyncPipe("strtransform")
+        async_input_pipe = AsyncPipe("input")
+
+        assert async_transformer.loopable
+        assert async_transformer.mapify
+        assert not async_input_pipe.loopable
+        assert not async_input_pipe.mapify
+
+    def test_stream(self, capsys, reactor: IReactorCore):
         """Tests a asynchronous stream pipeline."""
 
         async def run(reactor):
@@ -278,10 +295,82 @@ class TestCollections:
             react(run, _reactor=reactor)
         except SystemExit:
             pass
-        else:
-            captured = capsys.readouterr()
-            assert self.runs == 9
-            assert captured.out == "396558121\n"
+
+        captured = capsys.readouterr()
+        assert self.runs == 9
+        assert captured.out == "{'content': 396558121}\n"
+
+    def test_export(self, reactor: IReactorCore):
+        """Tests exporting an asynchronous stream to a list."""
+        result = {}
+
+        async def run(reactor):
+            pipe = AsyncPipe("itembuilder", conf=builder_conf).tokenizer(emit=True)
+            result["items"] = await pipe.export()
+
+        try:
+            react(run, _reactor=reactor)
+        except SystemExit:
+            pass
+
+        assert result["items"] == [
+            {"content": "once is 1x"},
+            {"content": "twice is 2x"},
+            {"content": "thrice is 3x"},
+        ]
+
+    def test_udf(self, reactor: IReactorCore):
+        result = {}
+
+        async def run(_reactor):
+            stream = await (
+                AsyncPipe("itembuilder", conf=builder_conf)
+                .tokenizer(emit=True)
+                .udf(func=itemgetter("content"))
+            )
+            result["first"] = next(stream)
+
+        try:
+            react(run, _reactor=reactor)
+        except SystemExit:
+            pass
+
+        assert result["first"] == "once is 1x"
+
+    def test_split(self, reactor: IReactorCore):
+        result = {}
+
+        async def run(_reactor):
+            splits = await (
+                AsyncPipe("itembuilder", conf=builder_conf)
+                .tokenizer(emit=True)
+                .udf(func=self.udf)
+                .split()
+            )
+            stream1, stream2 = splits
+            result["s1"] = next(stream1)
+            result["s2"] = next(stream2)
+
+        try:
+            react(run, _reactor=reactor)
+        except SystemExit:
+            pass
+
+        assert result["s1"] == {"content": "once is 1x"}
+        assert result["s2"] == {"content": "once is 1x"}
+        assert self.runs == 3
+
+    @pytest.mark.skip(
+        reason="async pub/sub parity deferred to the AnyIO pass; see docs/P7_CHECKLIST.md"
+    )
+    def test_pubsub(self):
+        """Async send/receive/pubsub parity (5 sync tests) is deferred."""
+
+    @pytest.mark.skip(
+        reason="async parallel-stream parity needs the AnyIO capacity limiter (P7.2)"
+    )
+    def test_pstream(self):
+        """Async parallel execution lands with the AnyIO pass; see docs/P7_CHECKLIST.md."""
 
 
 class TestPoolLifecycle:

@@ -25,7 +25,7 @@ from typing import cast
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko import DynamicConf
 from riko.dotdict import DotDict
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
@@ -36,7 +36,9 @@ DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
+def parser(
+    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

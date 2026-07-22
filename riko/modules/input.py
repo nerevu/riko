@@ -52,8 +52,8 @@ Attributes:
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import CastType, SourceOpts, cast
+from riko.types.configs import InputObjconf
 from riko.types.general import Defaults, Extraction, Item
 from riko.types.values import PrimitiveValue
 
@@ -70,7 +70,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: Objconf, skip=False, **kwargs
+    _: Item, extraction: Extraction, objconf: InputObjconf, skip=False, **kwargs
 ) -> PrimitiveValue:
     """
     Obtains the user input

@@ -28,7 +28,6 @@ Attributes:
 """
 
 from collections.abc import (
-    AsyncGenerator,
     AsyncIterable,
     AsyncIterator,
     Generator,
@@ -41,10 +40,10 @@ from typing import Self, cast
 
 import pygogo as gogo
 
-from riko import Objconf
-from riko.bado.itertools import ensure_deferred
+from riko.bado.itertools import async_iter, ensure_deferred
 from riko.bado.util import async_sleep
 from riko.cast import BasicCastType
+from riko.types.configs import TimeoutObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator
@@ -66,16 +65,11 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
         if isinstance(elements, AsyncIterable):
             self.aiter = aiter(elements)
         else:
-            self.aiter = self._async_iter_sync(elements)
+            self.aiter = async_iter(elements, cooperative=True)
 
         self.timeout_ms = max(timeout_ms, 0)
         self.timed_out = False
         self.timeout_started = False
-
-    async def _async_iter_sync(self, elements: Iterable[T]) -> AsyncGenerator[T, None]:
-        for item in elements:
-            await async_sleep(0)
-            yield item
 
     async def _collect(self) -> Iterator[T]:
         return iter([item async for item in self])
@@ -132,7 +126,7 @@ class TimeoutIterator[T](Iterator[T]):
 
 
 async def async_parser(
-    stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -185,7 +179,9 @@ async def async_parser(
     return await AsyncTimeoutIterator(stream, time_ms)
 
 
-def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
+def parser(
+    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

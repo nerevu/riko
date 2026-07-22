@@ -29,7 +29,7 @@ import ctypes
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko import DynamicConf
 from riko.cast import BasicCastType
 from riko.types.general import Defaults, Extraction, Opts
 
@@ -44,7 +44,7 @@ DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content: str, extraction: Extraction, objconf: Objconf, **kwargs) -> int:
+def parser(content: str, extraction: Extraction, objconf: DynamicConf, **kwargs) -> int:
     """
     Parsers the pipe content
 

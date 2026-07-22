@@ -24,8 +24,8 @@ from itertools import islice
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import BasicCastType
+from riko.types.configs import TruncateObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator
@@ -35,7 +35,9 @@ DEFAULTS: Defaults = {"start": 0, "count": 0}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream: Stream, objconf: Objconf, tuples: PipeTuples, **kwargs) -> Stream:
+def parser(
+    stream: Stream, objconf: TruncateObjconf, tuples: PipeTuples, **kwargs
+) -> Stream:
     """
     Parses the pipe content
 

@@ -21,7 +21,7 @@ from typing import cast as cast_type
 
 import pygogo as gogo
 
-from riko import Context, Objconf
+from riko import Context, DynamicConf
 from riko.bado.itertools import async_map
 from riko.cast import BasicCastType
 from riko.dotdict import DotDict, is_mapping
@@ -765,7 +765,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
     ) -> tuple[PipeTuples, Stream, Casted]:
         if prepared.static_casted:
             _, pre_casted_extract, pre_casted_conf = prepared.static_casted
-            objconf = cast_type(Objconf, pre_casted_conf)
+            objconf = cast_type(DynamicConf, pre_casted_conf)
             casted = Casted({}, pre_casted_extract, pre_casted_conf)
             tuples = ((item, objconf) for item in _input)
             orig_stream = _input
@@ -786,7 +786,9 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             # - purposely setting both tuples and orig_stream to maps of the same
             #   iterable since only one is intended to be used at any given time
             # - `tuples` is an iterator of tuples of the item and full objconf
-            tuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
+            tuples = (
+                (d.item, cast_type(DynamicConf, d.casted.conf)) for d in dispatches
+            )
 
             # Parses conf that doesn't vary per item and may contain terminal input
             orig_stream = (d.item for d in dispatches)
@@ -1083,7 +1085,7 @@ class splitter[B: (Literal[True], Literal[False])](Module):  # noqa: N801
         )
         dispatcher = cast_type(Callable[[Item, Opts], Dispatched], _dispatcher)
         dispatches = (dispatcher(item, prepared.opts) for item in _input)
-        tuples = ((d.item, cast_type(Objconf, d.casted.conf)) for d in dispatches)
+        tuples = ((d.item, cast_type(DynamicConf, d.casted.conf)) for d in dispatches)
         orig_stream = (d.item for d in dispatches)
         casted = dispatcher(DotDict(), prepared.opts, **kwargs).casted
         return (tuples, orig_stream, casted)

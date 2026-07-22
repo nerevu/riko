@@ -39,8 +39,8 @@ from typing import cast
 import pygogo as gogo
 from meza.fntools import dfilter
 
-from riko import Objconf
 from riko.cast import BasicCastType
+from riko.types.configs import ReceiveObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 from riko.types.values import StatefulItem, StreamState
 from riko.utils import _receive_queue, _registry, close, coroutine
@@ -121,7 +121,7 @@ def _apply(func: Callable, item: Item | StatefulItem, **fkwargs) -> Item:
 
 def parser(
     _: Stream,
-    objconf: Objconf,
+    objconf: ReceiveObjconf,
     tuples: PipeTuples,
     func: Callable[[Item | StatefulItem], Item] | None = None,
     **kwargs,

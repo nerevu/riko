@@ -81,7 +81,7 @@ Both are registered in `[project.scripts]`:
 
 ```sh
 # bare-bones DAG -> full JSON pipeline (stdout, or -o path)
-convert_dag tests/dags/pipe_forever.json -o pipe_forever.json
+convert-dag tests/dags/pipe_forever.json -o pipe_forever.json
 
 # JSON pipeline -> generated Python module (stdout, or -o path)
 compile pipe_forever.json -o pipe_forever.py
@@ -90,7 +90,7 @@ compile pipe_forever.json -o pipe_forever.py
 Chaining them turns a DAG straight into runnable Python:
 
 ```sh
-convert_dag tests/dags/pipe_forever.json -o pipe_forever.json
+convert-dag tests/dags/pipe_forever.json -o pipe_forever.json
 compile pipe_forever.json
 ```
 

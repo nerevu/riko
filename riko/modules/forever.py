@@ -23,7 +23,7 @@ from itertools import repeat, takewhile
 
 import pygogo as gogo
 
-from riko import Objconf
+from riko import DynamicConf
 from riko.cast import SourceOpts
 from riko.types.general import Defaults, Extraction, Item
 
@@ -35,7 +35,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: DynamicConf, **kwargs
 ) -> Iterator[dict[str, bool]]:
     """
     Parses the pipe content

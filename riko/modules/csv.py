@@ -23,9 +23,10 @@ from typing import cast
 import pygogo as gogo
 from meza.io import read_csv
 
-from riko import ENCODING, Objconf
+from riko import ENCODING
 from riko.bado import io
 from riko.cast import SourceOpts
+from riko.types.configs import CsvObjconf
 from riko.types.general import Defaults, Extraction, Item, Stream
 from riko.utils import Fetch, auto_close
 
@@ -47,7 +48,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: Objconf, **kwargs
+    _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -96,7 +97,7 @@ async def async_parser(
     return stream
 
 
-def parser(_: Item, extraction: Extraction, objconf: Objconf, **kwargs) -> Stream:
+def parser(_: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs) -> Stream:
     """
     Parses the pipe content
 

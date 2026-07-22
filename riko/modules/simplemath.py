@@ -25,8 +25,8 @@ from decimal import Decimal
 
 import pygogo as gogo
 
-from riko import Objconf
 from riko.cast import BasicCastType, CastType, cast
+from riko.types.configs import SimpleMathObjconf
 from riko.types.general import Defaults, Extraction, NumLike, Opts
 
 from . import processor
@@ -55,7 +55,9 @@ OPS: dict[str, Callable[..., NumLike]] = {
 }
 
 
-def parser(num: Decimal, extraction: Extraction, objconf: Objconf, **kwargs) -> NumLike:
+def parser(
+    num: Decimal, extraction: Extraction, objconf: SimpleMathObjconf, **kwargs
+) -> NumLike:
     """
     Parsers the pipe content
 

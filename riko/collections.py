@@ -92,7 +92,8 @@ Examples:
 """
 
 from collections.abc import (
-    AsyncIterator,
+    AsyncGenerator,
+    AsyncIterable,
     Awaitable,
     Callable,
     Generator,
@@ -102,6 +103,7 @@ from collections.abc import (
 )
 from enum import StrEnum
 from functools import partial
+from inspect import isawaitable
 from io import StringIO
 from itertools import chain, repeat
 from multiprocessing import Pool as CPUPool
@@ -128,10 +130,12 @@ from meza import io
 
 from riko import Context
 from riko.bado import async_return
-from riko.bado.itertools import async_map
+from riko.bado.itertools import async_iter, async_map
 from riko.compile import _resolve_module
 from riko.exceptions import PipelineStateError
 from riko.types.general import (
+    AsyncItems,
+    AsyncStream,
     Conf,
     ConversionFunc,
     Item,
@@ -287,31 +291,31 @@ def list_targets() -> tuple[str, ...]:
 
 
 @overload
-def export(items) -> list[Item]: ...  # noqa: E704
+def export(items: Items) -> list[Item]: ...  # noqa: E704
 @overload
-def export(items, **kwargs) -> list[Item]: ...  # noqa: E704
+def export(items: Items, **kwargs) -> list[Item]: ...  # noqa: E704
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items, _type: Literal["list"], **kwargs
+    items: Items, _type: Literal["list"], **kwargs
 ) -> list[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items, _type: Literal["tuple"], **kwargs
+    items: Items, _type: Literal["tuple"], **kwargs
 ) -> tuple[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
+    items: Items, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
 ) -> int: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items, _type: Literal["csv", "json", "geojson"], f: None = ..., **kwargs
+    items: Items, _type: Literal["csv", "json", "geojson"], f: None = ..., **kwargs
 ) -> StringIO: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items, _type: str = ..., **kwargs
+    items: Items, _type: str = ..., **kwargs
 ) -> StringIO | Items | None: ...
 def export(  # noqa: E302
-    items: Stream, _type: str = "list", f: str | None = None, **kwargs
+    items: Items, _type: str = "list", f: str | None = None, **kwargs
 ) -> int | StringIO | Items | None:
     result = None
 
@@ -819,7 +823,7 @@ class AsyncPipe(PyPipe):
         inputs: Mapping | None = None,
         context: Context | None = None,
         conf: Conf = None,
-        source: Awaitable[Items] | None = None,
+        source: AsyncItems | Awaitable[Items] | Items | None = None,
         connections=16,
         **kwargs,
     ):
@@ -828,7 +832,7 @@ class AsyncPipe(PyPipe):
         )
         self.source = source
         self.connections = connections
-        self._aiter: AsyncIterator[Item] | None = None
+        self._aiter: AsyncGenerator[Item, None] | None = None
 
         if self.name:
             self.async_pipe = _resolve_module(self.name, "async_pipe")
@@ -839,22 +843,13 @@ class AsyncPipe(PyPipe):
             self.async_pipe = lambda source, **kw: async_return(source)
             self.pollable = self.loopable = self.mapify = False
 
-    async def _await_stream(self) -> Stream:
-        """Converts the AsyncIterator stream to an Awaitable"""
-        return iter([item async for item in self._stream()])
-
     def __getattr__(self, name):
         if name.startswith("_"):
             raise AttributeError(name)
 
-        self._require_usable("chain")
-        kwargs = {"source": self._await_stream(), "connections": self.connections}
-        return AsyncPipe(name, **kwargs)
+        return self._chain(name)
 
-    def __await__(self) -> Generator[Any, None, Stream]:
-        return self._await_stream().__await__()
-
-    def __aiter__(self) -> AsyncIterator[Item]:
+    def __aiter__(self) -> AsyncStream:
         if self._aiter is None:
             self._aiter = self._stream()
 
@@ -866,29 +861,110 @@ class AsyncPipe(PyPipe):
 
         return await anext(self._aiter)
 
-    async def _stream(self) -> AsyncIterator[Item]:
-        self._begin()
-        source = await self.source if self.source else None
-        async_pipeline = partial(self.async_pipe, **self.kwargs)
+    def __await__(self) -> Generator[Any, None, Stream]:
+        return self._await_stream().__await__()
 
-        if self.mapify and source:
-            mapped = await async_map(async_pipeline, source, self.connections)
+    async def __aenter__(self) -> Self:
+        return self
 
-            for stream in mapped:
-                for item in stream:
-                    yield item
-        else:
-            result = await async_pipeline(source)
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        await self.aclose()
+        return False
 
-            for item in result:
-                yield item
+    async def aclose(self) -> None:
+        """Close the pipe: stop the underlying async generator (idempotent)."""
+        if self._aiter is not None:
+            await self._aiter.aclose()
 
-        self._end()
+        self._close()
 
     async def split(self, **kwargs) -> SplitterParserOutput:
-        pipe_kwargs = {"source": self._await_stream(), "connections": self.connections}
-        result = await AsyncPipe("split", **pipe_kwargs, **kwargs)
-        return cast(SplitterParserOutput, result)
+        splits = await self._chain("split", **kwargs)
+        return cast(SplitterParserOutput, splits)
+
+    @overload
+    async def export(self) -> list[Item]: ...  # noqa: E704
+    @overload  # noqa: E301
+    async def export(  # noqa: E704
+        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
+    ) -> int: ...
+    async def export(  # noqa: E301
+        self, *args, **kwargs
+    ) -> int | StringIO | Items | None:
+        items = [item async for item in self]
+
+        try:
+            result = export(items, *args, **kwargs)
+        except AttributeError as e:
+            # Reraise as TypeError to avoid confusion with missing AsyncPipe attributes
+            raise TypeError(f"Erred while exporting: {e}") from e
+
+        return result
+
+    def _chain(self, name: str, **kwargs) -> "AsyncPipe":
+        """
+        Create the next async pipe stage, propagating runtime and execution
+        settings and consuming this pipe's single execution (not restarting it).
+        """
+        self._require_usable("chain")
+        skwargs = {
+            "parallel": self.parallel,
+            "context": self.context,
+            "inputs": self.inputs,
+            "connections": self.connections,
+        }
+        skwargs.update(kwargs)
+        return AsyncPipe(name, source=self, **skwargs)
+
+    async def _resolve_source(self) -> Items | None:
+        """
+        Materialize the source to a sync stream for the parser.
+
+        A parent pipe (any ``AsyncIterable``) is drained through its memoized
+        ``__aiter__`` so chaining wraps the *remaining* stream (mirrors sync
+        ``source=self``); an ``Awaitable`` is awaited; a plain sync iterable is
+        adapted to a ``Feed`` via ``async_iter`` and drained.
+        """
+        src = self.source
+
+        if src is None:
+            resolved = None
+        elif isinstance(src, AsyncIterable):
+            resolved = [item async for item in src]
+        elif isawaitable(src):
+            resolved = await src
+        else:
+            resolved = [item async for item in async_iter(src)]
+
+        return resolved
+
+    async def _stream(self) -> AsyncGenerator[Item, None]:
+        self._begin()
+
+        try:
+            source = await self._resolve_source()
+            async_pipeline = partial(self.async_pipe, **self.kwargs)
+
+            if self.mapify and source is not None:
+                mapped = await async_map(async_pipeline, source, self.connections)
+
+                for stream in mapped:
+                    for item in stream:
+                        yield item
+            else:
+                result = await async_pipeline(source)
+
+                for item in result:
+                    yield item
+        except BaseException:
+            self._fail()
+            raise
+        finally:
+            self._end()
+
+    async def _await_stream(self) -> Stream:
+        """Converts the AsyncIterator stream to an Awaitable"""
+        return iter([item async for item in self._stream()])
 
 
 class AsyncCollection(PyCollection):
@@ -904,28 +980,9 @@ class AsyncCollection(PyCollection):
     ):
         super().__init__(sources, conf=conf, parallel=parallel, **kwargs)
         self.connections = connections
-        self._aiter: AsyncIterator[Item] | None = None
+        self._aiter: AsyncGenerator[Item, None] | None = None
 
-    async def _stream(self) -> AsyncIterator[Item]:
-        """Fetch all source urls"""
-        self._begin()
-        zargs = zip(self.sources, repeat(self.conf))
-        mapped = await async_map(afetch_source, zargs, self.connections)
-
-        for stream in mapped:
-            for item in stream:
-                yield item
-
-        self._end()
-
-    async def _await_stream(self) -> Stream:
-        """Converts the AsyncIterator stream to an Awaitable"""
-        return iter([item async for item in self._stream()])
-
-    def __await__(self) -> Generator[Any, None, Stream]:
-        return self._await_stream().__await__()
-
-    def __aiter__(self) -> AsyncIterator[Item]:
+    def __aiter__(self) -> AsyncStream:
         if self._aiter is None:
             self._aiter = self._stream()
 
@@ -937,9 +994,59 @@ class AsyncCollection(PyCollection):
 
         return await anext(self._aiter)
 
+    def __await__(self) -> Generator[Any, None, Stream]:
+        return self._await_stream().__await__()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        await self.aclose()
+        return False
+
+    async def aclose(self) -> None:
+        """Close the collection: stop the underlying async generator (idempotent)."""
+        if self._aiter is not None:
+            await self._aiter.aclose()
+
+        self._close()
+
     def async_pipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""
         return AsyncPipe(source=self._await_stream(), **kwargs)
+
+    @overload
+    async def export(self) -> list[Item]: ...  # noqa: E704
+    @overload  # noqa: E301
+    async def export(  # noqa: E704
+        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
+    ) -> int: ...
+    async def export(  # noqa: E301
+        self, *args, **kwargs
+    ) -> int | StringIO | Items | None:
+        items = [item async for item in self]
+        return export(items, *args, **kwargs)
+
+    async def _stream(self) -> AsyncGenerator[Item, None]:
+        """Fetch all source urls"""
+        self._begin()
+
+        try:
+            zargs = zip(self.sources, repeat(self.conf))
+            mapped = await async_map(afetch_source, zargs, self.connections)
+
+            for stream in mapped:
+                for item in stream:
+                    yield item
+        except BaseException:
+            self._fail()
+            raise
+        finally:
+            self._end()
+
+    async def _await_stream(self) -> Stream:
+        """Converts the AsyncIterator stream to an Awaitable"""
+        return iter([item async for item in self._stream()])
 
 
 def get_chunksize(length: int, workers: int) -> int:
