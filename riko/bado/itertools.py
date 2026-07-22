@@ -32,7 +32,7 @@ Examples:
 
 """
 
-from collections.abc import Awaitable, Callable, Coroutine, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Iterable
 from functools import partial
 from inspect import isawaitable, iscoroutine
 from itertools import repeat, starmap
@@ -50,6 +50,7 @@ from typing import (
 from riko import bado
 from riko.bado import defer, gather_results, real_task
 from riko.bado.mock import FakeReactor
+from riko.bado.util import async_sleep
 
 if TYPE_CHECKING:
     from twisted.internet.defer import Deferred
@@ -58,6 +59,48 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 S = TypeVar("S")
 Ts = TypeVarTuple("Ts")
+
+
+async def async_iter[T](
+    elements: Iterable[T], cooperative: bool = False
+) -> AsyncGenerator[T, None]:
+    """
+    Converts a sync iterable into an async generator.
+
+    Useful when an async consumer requires an ``AsyncIterable`` but the source
+    is a plain sync iterable.
+
+    Args:
+        elements (Iterable): The sync iterable to wrap.
+        cooperative (bool): Yield control (``async_sleep(0)``) before each item
+            so concurrent tasks (e.g. a timeout) can run (default: False).
+
+    Yields:
+        Any: Each element from *elements* in order.
+
+    Examples:
+        >>> from riko.bado import react, _issync
+        >>> from riko.bado.mock import FakeReactor
+        >>>
+        >>> async def run(reactor):
+        ...     result = [x async for x in async_iter(range(3))]
+        ...     print(result)
+        >>>
+        >>> if _issync:
+        ...     [0, 1, 2]
+        ... else:
+        ...     try:
+        ...         react(run, _reactor=FakeReactor())
+        ...     except SystemExit:
+        ...         pass
+        [0, 1, 2]
+
+    """
+    for item in elements:
+        if cooperative:
+            await async_sleep(0)
+
+        yield item
 
 
 def get_task() -> "Cooperator":
