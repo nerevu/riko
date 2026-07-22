@@ -802,8 +802,10 @@ def _ruff_format(code: str) -> str:
     return formatted
 
 
-def stringify_pipe(parsed_pipe_def: ParsedPipeDef, **kwargs) -> str:
-    """Convert a pipe into Python script"""
+def stringify_pipe(
+    parsed_pipe_def: ParsedPipeDef, is_async: bool = False, **kwargs
+) -> str:
+    """Convert a pipe into Python script (async/anyio variant when ``is_async``)."""
     module_ids = topological_sort(parsed_pipe_def["graph"])
 
     updates = {
@@ -813,7 +815,7 @@ def stringify_pipe(parsed_pipe_def: ParsedPipeDef, **kwargs) -> str:
     }
 
     env = Environment(loader=PackageLoader("riko"), autoescape=False)  # noqa: S701
-    template = env.get_template("pypipe.txt")
+    template = env.get_template("pypipe_async.txt" if is_async else "pypipe.txt")
     modules = list(_gen_string_modules(parsed_pipe_def, **kwargs, **updates))
     keys = ["sub_pipe", "name", "pipe_name", "alias"]
     top_names = {m["name"] for m in modules if not m["collection"]}

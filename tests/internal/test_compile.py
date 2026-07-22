@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from riko import Context
+from riko.bado import _issync
 from riko.compile import (
     _resolve_module,
     _wire,
@@ -223,3 +224,28 @@ def test_convert_dag_generates_ids_when_omitted():
 
     assert module_ids == ["sw-1", "sw-2", "_OUTPUT"]
     assert edges == [("sw-1", "sw-2"), ("sw-2", "_OUTPUT")]
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(_issync, reason="async support not installed")
+def test_async_codegen_matches_sync():
+    """
+    ``compile(is_async=True)`` emits a runnable anyio pipeline whose output
+    matches the sync compilation.
+    """
+    import anyio  # noqa: PLC0415
+
+    pipe_def = loads((PIPELINE_DIR / "pipe_gigs.json").read_text())
+
+    async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
+    async_ns: dict = {}
+    exec(async_src, async_ns)
+    async_result = list(anyio.run(async_ns["pipe_gigs"]))
+
+    sync_src = compile_pipe(pipe_def, "pipe_gigs", is_async=False)
+    sync_ns: dict = {}
+    exec(sync_src, sync_ns)
+    sync_result = list(sync_ns["pipe_gigs"]())
+
+    assert async_result
+    assert async_result == sync_result
