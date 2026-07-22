@@ -28,7 +28,7 @@ from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.types.compile import DagModule, PipeDag, PipeDef, PipeModule
 from riko.utils import listize
 
-PARENT = Path(__file__).parent
+PARENT = Path(__file__).parent.parent
 PIPELINE_DIR = PARENT / "pipelines"
 PYPIPELINE_DIR = PARENT / "pypipelines"
 DAG_DIR = PARENT / "dags"

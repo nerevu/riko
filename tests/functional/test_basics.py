@@ -23,7 +23,7 @@ from riko.types.values import StatefulItem
 from riko.utils import extract_dependencies, truncate_content
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
-PARENT = Path(__file__).parent
+PARENT = Path(__file__).parent.parent
 
 
 class TestBasics:
