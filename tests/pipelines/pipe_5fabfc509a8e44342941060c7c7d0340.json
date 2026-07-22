@@ -217,7 +217,7 @@
                 },
                 "default": {
                     "type": "url",
-                    "value": "file:///Users/reubano/Documents/Projects/riko/riko/data/example.html"
+                    "value": "file://riko/data/example.html"
                 },
                 "type": {
                     "type": "text",

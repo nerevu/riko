@@ -131,11 +131,11 @@ def pipe(*args, **kwargs) -> PrimitiveValue:
         >>> conf = {'type': 'datetime'}
         >>> date = next(pipe(item, conf=conf, emit=True))
         >>> date.isoformat()
-        '1982-05-04T00:00:00-05:00'
+        '1982-05-04T00:00:00+00:00'
         >>> item = {'content': dt(1982, 5, 4).timetuple()}
         >>> date = next(pipe(item, conf=conf, emit=True))
         >>> date.isoformat()
-        '1982-05-04T00:00:00-05:00'
+        '1982-05-04T00:00:00+00:00'
         >>> item = {'content': None}
         >>> next(pipe(item, emit=True))
         ''

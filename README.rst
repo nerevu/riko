@@ -209,7 +209,7 @@ dictionaries, aka ``items``.
     >>> # structure
     >>> item = next(stream)
     >>> sorted(item)
-    ['author', 'author_detail', 'authors', 'comments', 'content', 'dc:creator', 'description', 'id', 'link', 'links', 'pubDate', 'published', 'published_parsed', 'summary', 'tags', 'title', 'updated_parsed', 'y:id', 'y:published', 'y:title']
+    ['author', 'author_detail', 'authors', 'comments', 'content', 'dc:creator', 'guidislink', 'id', 'link', 'links', 'pubDate', 'published', 'published_parsed', 'slash_comments', 'summary', 'summary_detail', 'tags', 'title', 'title_detail', 'updated_parsed', 'wfw_commentrss', 'y:id', 'y:published', 'y:title']
     >>> item['title'], item['author'], item['id']
     ('Donations', {'name': 'WriteToReply', 'uri': None}, 'http://writetoreply.org/?page_id=111')
 

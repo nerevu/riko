@@ -1,8 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 
+import pytest
 
-from twisted.internet import defer
-from twisted.internet.task import react
+pytest.importorskip("twisted")
+
+from twisted.internet import defer  # noqa: E402
+from twisted.internet.task import react  # noqa: E402
 
 from riko import Context
 from riko.collections import AsyncPipe
