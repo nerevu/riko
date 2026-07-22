@@ -183,10 +183,9 @@ type SyncSplitterParser = Callable[
 ]
 
 type SyncPipeParser = Callable[..., ParserOutput]
-
-type PipelineDependencies = Callable[..., list[str]]
-type Step = tuple[str, ParserOutput] | tuple[str, SyncPipeParser]
-type Steps = dict[str, ParserOutput | SyncPipeParser]
+type SyncPipelineDependencies = Callable[..., list[str]]
+type SyncStep = tuple[str, ParserOutput] | tuple[str, SyncPipeParser]
+type SyncSteps = dict[str, ParserOutput | SyncPipeParser]
 
 
 class ModuleWrapper(Protocol):
@@ -254,6 +253,9 @@ type AsyncSplitterParser = Callable[
 ]
 type AsyncPipeItems = Awaitable[ParserOutput]
 type AsyncPipeParser = Callable[..., AsyncPipeItems]
+type AsyncPipelineDependencies = Callable[..., Awaitable[list[str]]]
+type AsyncStep = tuple[str, AsyncPipeItems] | tuple[str, AsyncPipeParser]
+type AsyncSteps = dict[str, AsyncPipeItems | AsyncPipeParser]
 
 
 class AsyncProcessorWrapper(ModuleWrapper):
@@ -294,3 +296,6 @@ type OperatorWrapper = SyncOperatorWrapper | AsyncOperatorWrapper
 type SplitterParser = SyncSplitterParser | AsyncSplitterParser
 type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
 type Pipeline = SyncPipeParser | AsyncPipeParser
+type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
+type Step = SyncStep | AsyncStep
+type Steps = SyncSteps | AsyncSteps
