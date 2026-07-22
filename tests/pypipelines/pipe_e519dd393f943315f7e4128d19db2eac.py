@@ -14,9 +14,9 @@ def pipe_e519dd393f943315f7e4128d19db2eac(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = [("", "q", "Search term:", "text", "enterprise mashup")]
+        _OUTPUT = [("", "q", "Search term:", "text", "enterprise mashup")]
     elif context and context.describe_dependencies:
-        result = ["fetch", "input", "urlbuilder"]
+        _OUTPUT = ["fetch", "input", "urlbuilder"]
     else:
         sw_552 = _input(
             None,
@@ -73,9 +73,8 @@ def pipe_e519dd393f943315f7e4128d19db2eac(
             _1_URL=sw_492,
         )
         _OUTPUT = sw_481
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

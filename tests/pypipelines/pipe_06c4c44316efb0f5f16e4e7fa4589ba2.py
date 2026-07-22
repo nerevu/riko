@@ -15,7 +15,7 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = [
+        _OUTPUT = [
             (
                 "",
                 "numberinput1",
@@ -25,7 +25,7 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
             )
         ]
     elif context and context.describe_dependencies:
-        result = ["fetch", "input", "sort", "tail"]
+        _OUTPUT = ["fetch", "input", "sort", "tail"]
     else:
         sw_123 = fetch(
             None,
@@ -76,9 +76,8 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
             count=sw_131,
         )
         _OUTPUT = sw_106
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

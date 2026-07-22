@@ -13,9 +13,9 @@ def pipe_9420a757a49ddf11d8b98349abb5bcf4(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetchpage", "truncate"]
+        _OUTPUT = ["fetchpage", "truncate"]
     else:
         sw_266 = fetchpage(
             None,
@@ -41,9 +41,8 @@ def pipe_9420a757a49ddf11d8b98349abb5bcf4(
             context=context,
         )
         _OUTPUT = sw_287
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

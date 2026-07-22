@@ -20,9 +20,9 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetchdata", "loop"]
+        _OUTPUT = ["fetchdata", "loop"]
     else:
         sw_286 = fetchdata(
             None,
@@ -103,9 +103,8 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(
             embed=rename,
         )
         _OUTPUT = sw_180
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

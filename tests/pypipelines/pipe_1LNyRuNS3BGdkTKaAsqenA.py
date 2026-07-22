@@ -13,9 +13,9 @@ def pipe_1LNyRuNS3BGdkTKaAsqenA(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["input", "itembuilder"]
+        _OUTPUT = ["input", "itembuilder"]
     else:
         sw_1 = _input(
             None,
@@ -47,9 +47,8 @@ def pipe_1LNyRuNS3BGdkTKaAsqenA(
             symbol_in=sw_1,
         )
         _OUTPUT = sw_2
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

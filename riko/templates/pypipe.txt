@@ -25,16 +25,15 @@ from riko.types.modules import (
 
 def {{ pipe_name }}(item=None, conf: Conf = None, context: Context | None = None, **kwargs):
     if context and context.describe_input:
-        result = {{ inputs }}
+        {{ last_module }} = {{ inputs }}
     elif context and context.describe_dependencies:
-        result = {{ dependencies }}
+        {{ last_module }} = {{ dependencies }}
     else:
 {%- for module in modules %}
         {{ module.id }} = {{ module.expr }}
 {%- endfor %}
-        result = {{ last_module }}
 
-    return result
+    return {{ last_module }}
 
 
 if __name__ == "__main__":

@@ -15,9 +15,9 @@ def pipe_1166de33b0ea6936d96808717355beaa(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["itembuilder", "loop", "rssitembuilder", "union"]
+        _OUTPUT = ["itembuilder", "loop", "rssitembuilder", "union"]
     else:
         sw_569 = itembuilder(
             None,
@@ -169,9 +169,8 @@ def pipe_1166de33b0ea6936d96808717355beaa(
         )
         sw_730 = union(sw_674, conf={}, context=context, OTHERS=[sw_688])
         _OUTPUT = sw_730
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

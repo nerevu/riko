@@ -14,7 +14,7 @@ def pipe_551507461cbcb19a828165daad5fe007(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = [
+        _OUTPUT = [
             (
                 "",
                 "urlinput1",
@@ -24,7 +24,7 @@ def pipe_551507461cbcb19a828165daad5fe007(
             )
         ]
     elif context and context.describe_dependencies:
-        result = ["fetchsitefeed", "input", "truncate"]
+        _OUTPUT = ["fetchsitefeed", "input", "truncate"]
     else:
         sw_242 = _input(
             None,
@@ -57,9 +57,8 @@ def pipe_551507461cbcb19a828165daad5fe007(
             context=context,
         )
         _OUTPUT = sw_246
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

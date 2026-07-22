@@ -20,9 +20,9 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["itembuilder", "loop", "truncate"]
+        _OUTPUT = ["itembuilder", "loop", "truncate"]
     else:
         sw_163 = itembuilder(
             None,
@@ -78,9 +78,8 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
             context=context,
         )
         _OUTPUT = sw_287
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

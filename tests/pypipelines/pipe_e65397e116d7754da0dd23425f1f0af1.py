@@ -22,9 +22,9 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetch", "loop"]
+        _OUTPUT = ["fetch", "loop"]
     else:
         sw_565 = fetch(
             None,
@@ -156,9 +156,8 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
             embed=regex,
         )
         _OUTPUT = sw_636
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":
