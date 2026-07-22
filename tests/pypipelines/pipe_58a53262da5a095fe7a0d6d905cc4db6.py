@@ -23,9 +23,9 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetch", "reverse", "sort", "truncate", "union", "urlbuilder"]
+        _OUTPUT = ["fetch", "reverse", "sort", "truncate", "union", "urlbuilder"]
     else:
         sw_606 = urlbuilder(
             None,
@@ -81,9 +81,8 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(
         )
         sw_625 = reverse(sw_596, conf={}, context=context)
         _OUTPUT = sw_625
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

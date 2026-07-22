@@ -24,9 +24,9 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = [("", "name", "Name", "text", "Lancaster")]
+        _OUTPUT = [("", "name", "Name", "text", "Lancaster")]
     elif context and context.describe_dependencies:
-        result = ["csv", "filter", "input", "loop"]
+        _OUTPUT = ["csv", "filter", "input", "loop"]
     else:
         sw_371 = _input(
             None,
@@ -255,9 +255,8 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(
             embed=strconcat,
         )
         _OUTPUT = sw_573
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

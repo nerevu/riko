@@ -14,9 +14,9 @@ def pipe_8NMkiTW32xGvMbDKruymrA(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetch", "filter", "sort"]
+        _OUTPUT = ["fetch", "filter", "sort"]
     else:
         sw_35 = SyncCollection(
             [
@@ -113,9 +113,8 @@ def pipe_8NMkiTW32xGvMbDKruymrA(
             context=context,
         )
         _OUTPUT = sw_105
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

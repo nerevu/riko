@@ -14,9 +14,9 @@ def pipe_b96287458de001ad62a637095df33ad5(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["itembuilder", "strconcat", "union"]
+        _OUTPUT = ["itembuilder", "strconcat", "union"]
     else:
         sw_605 = strconcat(
             None,
@@ -71,9 +71,8 @@ def pipe_b96287458de001ad62a637095df33ad5(
         )
         sw_613 = union(sw_551, conf={}, context=context, OTHERS=[sw_632])
         _OUTPUT = sw_613
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

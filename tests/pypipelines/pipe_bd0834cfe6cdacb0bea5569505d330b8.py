@@ -14,9 +14,9 @@ def pipe_bd0834cfe6cdacb0bea5569505d330b8(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = [("", "gid", "MP Guardian ID", "text", "1276")]
+        _OUTPUT = [("", "gid", "MP Guardian ID", "text", "1276")]
     elif context and context.describe_dependencies:
-        result = ["fetchdata", "input", "urlbuilder"]
+        _OUTPUT = ["fetchdata", "input", "urlbuilder"]
     else:
         sw_606 = _input(
             None,
@@ -63,9 +63,8 @@ def pipe_bd0834cfe6cdacb0bea5569505d330b8(
             URL=sw_579,
         )
         _OUTPUT = sw_610
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":
