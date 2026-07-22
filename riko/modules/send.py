@@ -132,3 +132,23 @@ def pipe(*args, **kwargs) -> Stream:
 
     """
     return parser(*args, **kwargs)
+
+
+@operator(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Stream:
+    """
+    An async operator that pushes stream items to receiver targets.
+
+    Args:
+        item (dict): The entry to process
+        kwargs (dict): The keyword arguments passed to the wrapper
+
+    Kwargs:
+        others Iter[(str)]: Target names to receive each stream item.
+        conf (dict): The pipe configuration. May contain the key 'name'.
+
+    Yields:
+        dict: an item
+
+    """
+    return parser(*args, **kwargs)

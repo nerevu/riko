@@ -39,6 +39,7 @@ from typing import cast
 import pygogo as gogo
 from meza.fntools import dfilter
 
+from riko.bado import async_sleep
 from riko.cast import BasicCastType
 from riko.types.configs import ReceiveObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
@@ -119,6 +120,39 @@ def _apply(func: Callable, item: Item | StatefulItem, **fkwargs) -> Item:
     return func(item, **allowed)
 
 
+def _register_receiver(name, objconf, func, kwargs) -> None:
+    # See https://github.com/ICRAR/ijson#push-interfaces
+    if name not in _registry:
+        fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
+
+        @coroutine(registry_name=name, maxlen=objconf.max_len)
+        def receiver() -> Generator[None, Item | StatefulItem, None]:
+            while True:
+                item = yield
+
+                if item is not None:
+                    if isinstance(item, Mapping) and "state" in item:
+                        state = cast(StreamState, item["state"])
+                    else:
+                        state = None
+
+                    result = _apply(func, item, **fkwargs) if func else item
+                    queue = _receive_queue[name]
+
+                    if (
+                        queue
+                        and queue.maxlen is not None
+                        and len(queue) >= queue.maxlen
+                    ):
+                        msg = f"Receiver {name!r} queue full (maxlen={queue.maxlen}); "
+                        msg += "dropping oldest item."
+                        logger.warning(msg)
+
+                    queue.append((state, result))
+
+        receiver()
+
+
 def parser(
     _: Stream,
     objconf: ReceiveObjconf,
@@ -165,37 +199,7 @@ def parser(
     wait = objconf.wait
     max_wait = objconf.max_wait
     total_waited = 0
-
-    # See https://github.com/ICRAR/ijson#push-interfaces
-    if name not in _registry:
-        fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
-
-        @coroutine(registry_name=name, maxlen=objconf.max_len)
-        def receiver() -> Generator[None, Item | StatefulItem, None]:
-            while True:
-                item = yield
-
-                if item is not None:
-                    if isinstance(item, Mapping) and "state" in item:
-                        state = cast(StreamState, item["state"])
-                    else:
-                        state = None
-
-                    result = _apply(func, item, **fkwargs) if func else item
-                    queue = _receive_queue[name]
-
-                    if (
-                        queue
-                        and queue.maxlen is not None
-                        and len(queue) >= queue.maxlen
-                    ):
-                        msg = f"Receiver {name!r} queue full (maxlen={queue.maxlen}); "
-                        msg += "dropping oldest item."
-                        logger.warning(msg)
-
-                    queue.append((state, result))
-
-        receiver()
+    _register_receiver(name, objconf, func, kwargs)
 
     while True:
         if _buf := _receive_queue[name]:
@@ -214,6 +218,49 @@ def parser(
             sleep(wait)
             total_waited += wait
             yield StatefulItem(state=StreamState.PENDING)
+
+
+async def async_parser(
+    _: Stream,
+    objconf: ReceiveObjconf,
+    tuples: PipeTuples,
+    func: Callable[[Item | StatefulItem], Item] | None = None,
+    **kwargs,
+) -> Stream:
+    """
+    Asynchronously receives pushed items (materialized).
+
+    Polls the receive queue, yielding control via ``async_sleep`` between polls
+    (so a concurrent sender can run), and collects results until DONE or
+    ``max_wait``. Note: this is *materialized* — results are returned only once
+    draining completes; incremental (yield-as-received) delivery awaits P7.3.
+    """
+    name = objconf.name or "".join(gen_name())
+    wait = objconf.wait
+    max_wait = objconf.max_wait
+    total_waited = 0
+    results: list[Item] = []
+
+    _register_receiver(name, objconf, func, kwargs)
+
+    while True:
+        if _buf := _receive_queue[name]:
+            total_waited = 0
+            state, result = _buf.popleft()
+
+            if state is StreamState.DONE:
+                close(name)
+                break
+            else:
+                results.append(result)
+        elif total_waited >= max_wait:
+            close(name)
+            break
+        else:
+            await async_sleep(wait)
+            total_waited += wait
+
+    return iter(results)
 
 
 @operator(DEFAULTS, **OPTS)
@@ -251,3 +298,9 @@ def pipe(*args, **kwargs) -> Stream | Iterator[StatefulItem]:
 
     """
     return parser(*args, **kwargs)
+
+
+@operator(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Stream:
+    """An async operator that receives pushed stream items (materialized)."""
+    return await async_parser(*args, **kwargs)

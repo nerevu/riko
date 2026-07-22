@@ -3,6 +3,7 @@
 Provides pipeline collection tests.
 """
 
+from functools import partial
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
 from typing import cast
@@ -10,7 +11,7 @@ from typing import cast
 import pytest
 
 from riko import get_path
-from riko.bado import issync, run
+from riko.bado import async_sleep, create_task_group, issync, run
 from riko.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.types.general import Item
 from riko.types.modules import (
@@ -20,14 +21,44 @@ from riko.types.modules import (
     StrReplaceConf,
     StrReplaceConfRule,
 )
-from riko.types.values import StreamState
-from riko.utils import _receive_queue, close, noop, reset_pubsub
+from riko.types.values import StatefulItem, StreamState
+from riko.utils import _receive_queue, close, reset_pubsub, send
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
 builder_conf = ItemBuilderConf({"attrs": attrs})
-done_conf = {"attrs": {"key": "state", "value": StreamState.DONE}}
+recv_conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
+
+
+async def _pubsub_session(*tasks):
+    async with create_task_group() as tg:
+        for task in tasks:
+            tg.start_soon(task)
+
+
+async def _async_receiver(events, name):
+    pipe = AsyncPipe("receive", conf={"name": name, **recv_conf})
+
+    async for item in pipe:
+        events.append((name, item))
+
+
+async def _async_sender(events, others, func=None, before=0.0, between=0.0):
+    flow = AsyncPipe("itembuilder", conf=builder_conf).tokenizer(emit=True)
+    stream = (flow.udf(func=func) if func else flow).send(others=others)
+
+    if before:
+        await async_sleep(before)
+
+    async for item in stream:
+        events.append(("send", item))
+
+        if between:
+            await async_sleep(between)
+
+    for name in others:
+        send(name, StatefulItem(state=StreamState.DONE))
 
 
 class _CollectionTest:
@@ -109,9 +140,8 @@ class TestSyncCollections(_CollectionTest):
         ]
 
     def test_pubsub(self, caplog):
-        _conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
-        receiver1 = SyncPipe("receive", conf={"name": "receiver1", **_conf}, func=noop)
-        receiver2 = SyncPipe("receive", conf={"name": "receiver2", **_conf}, func=noop)
+        receiver1 = SyncPipe("receive", conf={"name": "receiver1", **recv_conf})
+        receiver2 = SyncPipe("receive", conf={"name": "receiver2", **recv_conf})
         assert next(receiver1) == {"state": StreamState.PENDING}
 
         stream = (
@@ -352,15 +382,60 @@ class TestAsyncCollections(_CollectionTest):
         assert result["s2"] == {"content": "once is 1x"}
         assert self.runs == 3
 
-    @pytest.mark.skip(
-        reason="async pub/sub parity deferred to the AnyIO pass; see docs/P7_CHECKLIST.md"
-    )
+    @pytest.mark.anyio
     def test_pubsub(self):
-        """Async send/receive/pubsub parity (5 sync tests) is deferred."""
+        """
+        Two concurrent async receivers each collect every item a sender pushes.
 
-    @pytest.mark.skip(
-        reason="async parallel-stream parity needs the AnyIO capacity limiter (P7.2)"
+        Like the sync ``test_pubsub``, a sender pushes items to two receivers.
+        The receivers and sender run as sibling tasks in one task group; the
+        receivers' ``async_sleep`` polling yields control, so pushes land while
+        they are still draining. Delivery is materialized (P7.2): each receiver
+        returns its whole batch only once the sender signals DONE.
+        """
+        events = []
+        recv_names = ["receiver1", "receiver2"]
+        receivers = [partial(_async_receiver, events, name) for name in recv_names]
+        sender = partial(_async_sender, events, recv_names, func=self.udf, before=0.05)
+        run(_pubsub_session, *receivers, sender)
+
+        expected = [
+            {"content": "once is 1x"},
+            {"content": "twice is 2x"},
+            {"content": "thrice is 3x"},
+        ]
+        assert self.runs == 3
+        assert [item for tag, item in events if tag == "receiver1"] == expected
+        assert [item for tag, item in events if tag == "receiver2"] == expected
+
+    @pytest.mark.anyio
+    @pytest.mark.xfail(
+        strict=True,
+        reason="materialized receiver yields only after full drain; incremental "
+        "streaming (interleaved delivery) is P7.3",
     )
+    def test_pubsub_incremental_streaming(self):
+        """
+        A receiver should observe items *as they arrive*, interleaved with the
+        sender's pushes — not in one burst after the sender finishes.
+
+        ``events`` records the global order of pushes (``send``) and receipts
+        (the receiver name). Under incremental streaming at least one receipt
+        precedes the last push. The materialized receiver (P7.2) drains fully
+        before yielding, so every receipt trails every push and this fails —
+        until P7.3 lands.
+        """
+        events = []
+        others = ["receiver1"]
+        receiver = partial(_async_receiver, events, "receiver1")
+        sender = partial(_async_sender, events, others, between=0.05)
+        run(_pubsub_session, receiver, sender)
+
+        tags = [tag for tag, _ in events]
+        first_recv = tags.index("receiver1")
+        last_send = len(tags) - 1 - tags[::-1].index("send")
+        assert first_recv < last_send
+
     def test_pstream(self):
         """Tests a parallel asynchronous stream pipeline."""
         result = {}
