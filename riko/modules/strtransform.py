@@ -57,7 +57,7 @@ ATTRS = {
 }
 
 
-def reducer(word, rule):
+def reducer(word: str, rule: StrTransformConfRule):
     if rule.transform in ATTRS:
         args = rule.args.split(",") if rule.args else []
         result = getattr(word, rule.transform)(*args)

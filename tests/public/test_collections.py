@@ -5,6 +5,7 @@ Provides pipeline collection tests.
 
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
+from typing import cast
 
 import pytest
 
@@ -260,8 +261,8 @@ class TestSyncCollections(_CollectionTest):
             .hash(assign="content")
         )
         result = list(stream)
-        actual_content = sorted(item["content"] for item in result)
-        expected_content = sorted(item["content"] for item in expected)
+        actual_content = sorted(cast(dict, item)["content"] for item in result)
+        expected_content = sorted(cast(dict, item)["content"] for item in expected)
         assert actual_content == expected_content
         assert self.runs == 3
 

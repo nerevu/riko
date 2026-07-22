@@ -63,6 +63,7 @@ OPTS = SourceOpts
 DEFAULTS: Defaults = {
     "type": "text",
     "default": "",
+    "prompt": "Enter text",
     "test": False,
     "input_key": "content",
 }

@@ -91,7 +91,6 @@ from collections.abc import (
     Callable,
     Generator,
     Iterable,
-    Iterator,
     Mapping,
 )
 from enum import StrEnum
@@ -396,8 +395,8 @@ class SyncPipe(PyPipe):
         self.pool_scope = pool_scope
         self.ordered = ordered
         self._iter: Generator[Item, None, None] | None = None
-        self._mapped: Iterator[Stream] | None = None
-        self.map: Callable[..., Iterator[Stream]]
+        self._mapped: Iterable[Stream] | None = None
+        self.map: Callable[..., Iterable[Stream]]
         self._in_context = False
         self._terminal = True
 
@@ -681,7 +680,7 @@ class SyncCollection(PyCollection):
         self.threads = threads
         self.ordered = ordered
         self._iter: Stream | None = None
-        self.map: Callable[..., Iterator[Stream]]
+        self.map: Callable[..., Iterable[Stream]]
         self._in_context = False
         self._pool_handle = _PoolHandle(pool, owned=False) if pool else None
 

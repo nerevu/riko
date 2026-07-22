@@ -346,14 +346,16 @@ def _gen_string_modules(
         }
 
 
-@overload  # noqa: E302
+@overload
 def _get_pyarg(  # noqa: E704
-    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs
+    *args, steps: None = ..., **kwargs
 ) -> Id: ...
 @overload  # noqa: E302
 def _get_pyarg(  # noqa: E704
-    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps, **kwargs
+    *args, steps: Steps, **kwargs
 ) -> ParserOutput | SyncPipeParser: ...
+@overload  # noqa: E302
+def _get_pyarg(*args, **kwargs) -> ParserOutput | SyncPipeParser | Id: ...  # noqa: E704
 def _get_pyarg(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
@@ -373,7 +375,7 @@ def _get_pyarg(  # noqa: E302
     return input_module if steps is not None else Id(input_module)
 
 
-@overload  # noqa: E302
+@overload
 def _gen_pykwargs(  # noqa: E704
     parsed_pipe_def: ParsedPipeDef, module_id: str, steps: None = ..., **kwargs
 ) -> Iterator[tuple[str, Id | Context | AnyModuleRawConf]]: ...
@@ -456,7 +458,16 @@ def _gen_pykwargs(  # noqa: E302
         yield ("splits", updated)
 
 
+# `output` is virtual → None; the broader `str` overloads below (real modules)
+# never return None, hence the intentional, suppressed overlap.
 @overload
+def _resolve_module(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+    module_name: Literal["output"],
+    pipe_name: str,
+    compile_missing: Literal[False] = ...,
+    file_path: Path | None = ...,
+) -> None: ...
+@overload  # noqa: E302
 def _resolve_module(  # noqa: E704
     module_name: str,
     pipe_name: Literal["pipe"],
@@ -493,6 +504,8 @@ def _resolve_module(  # noqa: E302
     module = parsed_pipe_def = None
 
     if module_name == "output":
+        # output is a virtual pipe, legacy from Yahoo Pipes; there's no real
+        # module — the compiler just makes it return its input stream.
         pass
     elif module_name.startswith("pipe_"):
         try:
@@ -523,6 +536,10 @@ def _resolve_module(  # noqa: E302
             raise UnsupportedModuleError(module_name) from e
 
     pipeline = getattr(module, pipe_name, None) if module else None
+
+    if module and pipeline is None:
+        raise UnsupportedModuleError(f"{module_name!r} has no {pipe_name!r}")
+
     return (pipeline, parsed_pipe_def) if compile_missing else pipeline
 
 
@@ -539,10 +556,11 @@ def _gen_steps(
 
     for module_id, module_name, pipe_name in zipped:
         pipeline = _resolve_module(module_name, pipe_name)
+        args = (parsed_pipe_def, module_id)
 
         if module_name == "output":
             # Legacy Yahoo Pipes. Its result is just its input stream.
-            pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
+            pyarg = _get_pyarg(*args, **kwargs)
             step = (module_id, pyarg)
         elif module_id in parsed_pipe_def["embed"]:
             # We need to wrap submodules (used by loops) so we can pass the
@@ -551,7 +569,7 @@ def _gen_steps(
             pipeline.__name__ = str(f"pipe_{module_id}")
             step = (module_id, pipeline)
         else:  # else this module is not embedded:
-            pyarg = _get_pyarg(parsed_pipe_def, module_id, **kwargs)
+            pyarg = _get_pyarg(*args, **kwargs)
             pykwargs = dict(_gen_pykwargs(parsed_pipe_def, module_id, **kwargs))
             step = (module_id, pipeline(pyarg, **pykwargs))
 

@@ -2,12 +2,23 @@ from collections.abc import Mapping
 from pprint import pprint
 
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import ItemBuilderConf, RegexRawConf, RegexRawRule
 
-p1_conf = {
-    "attrs": [{"value": "http://www.caltrain.com/Fares/farechart.html", "key": "url"}]
-}
+p1_conf = ItemBuilderConf(
+    {"attrs": [{"value": "http://www.caltrain.com/Fares/farechart.html", "key": "url"}]}
+)
 
-p2_conf = {"rule": {"field": "url", "match": {"subkey": "url"}, "replace": "farechart"}}
+p2_conf = RegexRawConf(
+    {
+        "rule": RegexRawRule(
+            {
+                "field": {"type": "text", "value": "url"},
+                "match": {"type": "text", "subkey": "url"},
+                "replace": {"type": "text", "value": "farechart"},
+            }
+        )
+    }
+)
 
 
 def pipe(test=False):

@@ -44,9 +44,9 @@ from typing import cast
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
-from riko.types.modules import FetchPageConf
+from riko.types.modules import FetchPageConf, StrReplaceConf, StrReplaceConfRule
 
-replace_conf = {"rule": {"find": "\n", "replace": " "}}
+replace_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="\n", replace=" ")})
 health = get_path("health.xml")
 caltrain = get_path("caltrain.html")
 start = '<body id="thebody" class="Level2">'

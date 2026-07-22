@@ -3,6 +3,7 @@
 from riko import Context
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.regex import pipe as regex
+from riko.types.modules import RegexRawConf, RegexRawRule
 
 
 def pipe_a3d1afa31f0a24cc51dcbe79f1590343(item=None, conf=None, context=None, **kwargs):
@@ -31,14 +32,18 @@ def pipe_a3d1afa31f0a24cc51dcbe79f1590343(item=None, conf=None, context=None, **
     )
 
     sw_134 = regex
-    sw_134_conf = {
-        "RULE": [
-            {
-                "match": {"type": "text", "subkey": "url"},
-                "replace": {"type": "text", "value": "fff"},
-            }
-        ]
-    }
+    sw_134_conf = RegexRawConf(
+        {
+            "rule": [
+                RegexRawRule(
+                    {
+                        "match": {"type": "text", "subkey": "url"},
+                        "replace": {"type": "text", "value": "fff"},
+                    }
+                )
+            ]
+        }
+    )
 
     output = (sw_134(i, conf=sw_134_conf, **kwargs) for i in sw_163)
     return output
