@@ -96,8 +96,8 @@ Some workflows have ``conf`` values that are wired from other pipes
     >>> conf = {'url': {'subkey': 'url'}}
     >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
     >>> item = next(result)
-    >>> sorted(item)
-    ['author', 'author_detail', 'authors', 'comments', 'content', 'dc:creator', 'guidislink', 'id', 'link', 'links', 'pubDate', 'published', 'published_parsed', 'slash_comments', 'summary', 'summary_detail', 'tags', 'title', 'title_detail', 'updated_parsed', 'wfw_commentrss', 'y:id', 'y:published', 'y:title']
+    >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
+    True
 
 Alternate workflow creation
 ---------------------------

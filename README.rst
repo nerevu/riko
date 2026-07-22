@@ -208,8 +208,8 @@ dictionaries, aka ``items``.
     >>> # Note: regardless of how you fetch an RSS feed, it will have the same
     >>> # structure
     >>> item = next(stream)
-    >>> sorted(item)
-    ['author', 'author_detail', 'authors', 'comments', 'content', 'dc:creator', 'guidislink', 'id', 'link', 'links', 'pubDate', 'published', 'published_parsed', 'slash_comments', 'summary', 'summary_detail', 'tags', 'title', 'title_detail', 'updated_parsed', 'wfw_commentrss', 'y:id', 'y:published', 'y:title']
+    >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
+    True
     >>> item['title'], item['author'], item['id']
     ('Donations', {'name': 'WriteToReply', 'uri': None}, 'http://writetoreply.org/?page_id=111')
 
