@@ -1017,7 +1017,7 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         pub_date = updated_date = None
 
         if "summary" not in entry:
-            entry["summary"] = entry["description"]
+            entry["summary"] = entry.get("description", "")
 
         if "published_parsed" in entry:
             pub_date = updated_date = entry["published_parsed"]
