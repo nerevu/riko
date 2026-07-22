@@ -249,23 +249,18 @@ def async_pipe(*args, **kwargs) -> Stream:
             stop (bool): stop after first failure (default: False)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the filtered items
+        Awaitable: iterator of the filtered items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
         ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
         ...     result = await async_pipe(items, conf={'rule': rule})
         ...     print(next(result)['title'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         Website Developer
 
     """

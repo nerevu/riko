@@ -94,22 +94,17 @@ def async_pipe(*args, **kwargs) -> str:
                 formatted (default: 'date')
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item with formatted date
+        Awaitable: item with formatted date
 
     Examples:
         >>> from datetime import date
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'date': date(2015, 5, 4)})
         ...     print(next(result)['dateformat'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         05/04/2015 00:00:00
 
     """

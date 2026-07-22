@@ -1,9 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 
-from collections.abc import Awaitable, Sequence
+from collections.abc import Sequence
 from functools import partial
 from pprint import pprint
-from typing import overload
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
@@ -556,7 +555,7 @@ def pipe(test=False, parallel=False, threads=False):
     return list(odesk_pipe.union(others=others))
 
 
-async def async_pipe(reactor, test=None):
+async def async_pipe(test=None):
     pipe = partial(AsyncPipe, "fetchdata")
     odesk_source = pipe(conf=odesk_conf)
     guru_source = pipe(conf=guru_conf)
@@ -577,21 +576,8 @@ def print_results(result) -> None:
     pprint(result[-1])
 
 
-@overload
-def main(*, test: bool = False) -> None: ...  # noqa: E704
-@overload
-def main(reactor, *, test: bool = False) -> Awaitable[None]: ...  # noqa: E704
-def main(reactor=None, *, test: bool = False) -> None | Awaitable[None]:  # noqa: E302
-    if reactor:
-
-        async def run() -> None:
-            print_results(await async_pipe(reactor, test=test))
-
-        result = run()
-    else:
-        result = print_results(pipe(test=test))
-
-    return result
+def main(*, test: bool = False) -> None:
+    print_results(pipe(test=test))
 
 
 if __name__ == "__main__":

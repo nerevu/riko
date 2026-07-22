@@ -69,25 +69,20 @@ async def async_parser(
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
-        >>> from riko.bado import react
+        >>> from riko.bado import run
         >>> from riko.dotdict import DotDict
-        >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     item = DotDict({'content': 'hello world'})
         ...     rule = {'field': 'content', 'newval': 'greeting'}
         ...     result = await async_parser(item, [Objectify(rule)], None, stream=item)
         ...     print(result)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'greeting': 'hello world'}
 
     """
@@ -149,22 +144,17 @@ async def async_pipe(*args, **kwargs) -> DotDict | Item:
                     (default: False)
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with renamed content
+       Awaitable: item with renamed content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
         ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
         ...     print(next(result)['greeting'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         hello world
 
     """

@@ -146,23 +146,18 @@ def async_pipe(*args, **kwargs) -> Stream:
         other (Iter[dict]): stream to join
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the merged streams
+        Awaitable: iterator of the merged streams
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'x': 'foo', 'sum': x} for x in range(5))
         ...     other = ({'x': 'foo', 'count': x + 5} for x in range(5))
         ...     result = await async_pipe(items, conf={'join_key': 'x'}, other=other)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'x': 'foo', 'sum': 0, 'count': 5}
 
     """

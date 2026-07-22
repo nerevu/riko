@@ -75,23 +75,18 @@ def async_pipe(*args, **kwargs) -> Stream:
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the number of
+        Awaitable: iterator of the number of
             counted items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'x': x} for x in range(5))
         ...     result = await async_pipe(items)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'x': 4}
 
     """

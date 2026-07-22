@@ -8,9 +8,9 @@ from timeit import repeat
 from typing import cast
 
 from riko import get_path
-from riko.bado import react
+from riko.bado import _isasync, async_sleep
+from riko.bado import run as async_run
 from riko.bado.itertools import async_map
-from riko.bado.util import async_sleep
 from riko.collections import (
     AsyncCollection,
     AsyncPipe,
@@ -129,7 +129,7 @@ def print_time(test, max_chars, run_time, units):
     print(msg.format(padded, NUMBER, LOOPS, run_time, units))
 
 
-async def run_async(reactor, tests, max_chars):
+async def run_async(tests, max_chars):
     for test in tests:
         results = []
 
@@ -159,8 +159,13 @@ def main():
         "par_sync_collection",
     ]
 
-    async_tests = [baseline_async, async_pipeline, async_pipe2, async_collection]
-    combined_tests = sync_tests + [f.__name__ for f in async_tests]
+    if _isasync:
+        async_tests = [baseline_async, async_pipeline, async_pipe2, async_collection]
+        combined_tests = sync_tests + [f.__name__ for f in async_tests]
+    else:
+        async_tests = []
+        combined_tests = sync_tests
+
     max_chars = max(list(map(len, combined_tests)))
 
     for test in sync_tests:
@@ -168,7 +173,8 @@ def main():
         run_time, units = parse_results(results)
         print_time(test, max_chars, run_time, units)
 
-    react(run_async, [async_tests, max_chars])
+    if _isasync:
+        async_run(run_async, async_tests, max_chars)
 
 
 if __name__ == "__main__":

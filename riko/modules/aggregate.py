@@ -97,20 +97,15 @@ def async_pipe(*args, **kwargs) -> Stream:
         func (callable): User defined function to apply to the stream.
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     func = lambda stream: ({'y': item['x'] + 3} for item in stream)
         ...     items = ({'x': x} for x in range(5))
         ...     result = await async_pipe(items, func=func)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'y': 3}
 
     """

@@ -44,8 +44,7 @@ Examples:
     async usage::
 
         >>> from riko import get_path
-        >>> from riko.bado import react, _issync
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run, _issync
         >>> from riko.collections import AsyncPipe, AsyncCollection
         >>>
         >>> fconf = {'url': get_path('gigs.json'), 'path': 'value.items'}
@@ -53,7 +52,7 @@ Examples:
         >>> str_kwargs = {'field': 'description', 'emit': True}
         >>> sort_conf = {'rule': {'field': 'title'}}
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     d = await (AsyncPipe('fetchdata', conf=fconf)
         ...         .sort(conf=sort_conf)
         ...         .tokenizer(conf=str_conf, **str_kwargs)
@@ -65,12 +64,9 @@ Examples:
         >>> if _issync:
         ...     [{'count': 169}]
         ... else:
-        ...     try:
-        ...         react(run, _reactor=FakeReactor())
-        ...     except SystemExit:
-        ...         pass
+        ...     run(main)
         [{'count': 169}]
-        >>> async def run(reactor):
+        >>> async def main():
         ...     fconf['type'] = 'fetchdata'
         ...     sources = [{'url': get_path('feed.xml')}, fconf]
         ...     s = await AsyncCollection(sources)
@@ -82,10 +78,7 @@ Examples:
         ...     print("Donations")
         ...     print(56)
         ... else:
-        ...     try:
-        ...         react(run, _reactor=FakeReactor())
-        ...     except SystemExit:
-        ...         pass
+        ...     run(main)
         Donations
         56
 

@@ -9,14 +9,11 @@ raises PipelineStateError on further iteration. Sync and async behave alike, so
 ``TestSyncLifecycle`` and ``TestAsyncLifecycle`` mirror each other test-for-test.
 """
 
-from typing import cast
-
 import pytest
 
 from riko import get_path
-from riko.bado import IReactorCore, _issync, react
+from riko.bado import _issync, run
 from riko.bado.itertools import async_iter
-from riko.bado.mock import FakeReactor
 from riko.collections import (
     AsyncCollection,
     AsyncPipe,
@@ -154,45 +151,33 @@ class TestSyncLifecycle:
 
 @pytest.mark.skipif(_issync, reason="async support not available")
 class TestAsyncLifecycle:
-    @pytest.fixture
-    def reactor(self) -> IReactorCore:
-        return cast(IReactorCore, FakeReactor())
-
     def test_new_state(self):
         assert AsyncPipe("itembuilder", conf=BUILDER_CONF).state is PipeState.NEW
 
-    def test_exhausted_after_full_iteration(self, reactor: IReactorCore):
+    def test_exhausted_after_full_iteration(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
             result["items"] = [item async for item in pipe]
             result["exhausted"] = pipe.exhausted
             result["state"] = pipe.state
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["items"]
         assert result["exhausted"]
         assert result["state"] is PipeState.EXHAUSTED
 
-    def test_exhausted_reiterates_empty_without_reexecution(
-        self, reactor: IReactorCore
-    ):
+    def test_exhausted_reiterates_empty_without_reexecution(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
             result["first"] = [item async for item in pipe]
             result["second"] = [item async for item in pipe]
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["first"]
         assert result["second"] == []
@@ -201,60 +186,51 @@ class TestAsyncLifecycle:
         chained = AsyncPipe("itembuilder", conf=BUILDER_CONF).hash()
         assert chained.state is PipeState.NEW
 
-    def test_chain_after_partial_iteration_wraps_remainder(self, reactor: IReactorCore):
+    def test_chain_after_partial_iteration_wraps_remainder(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
             await anext(pipe)
             result["state"] = pipe.state
             result["rest"] = [item async for item in pipe.count()]
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["state"] is PipeState.RUNNING
         assert result["rest"] == [{"count": 2}]
 
-    def test_chain_after_exhaustion_is_allowed(self, reactor: IReactorCore):
+    def test_chain_after_exhaustion_is_allowed(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
             [item async for item in pipe]
             result["rest"] = [item async for item in pipe.count()]
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["rest"] == [{"count": 0}]
 
-    def test_close_is_idempotent(self, reactor: IReactorCore):
+    def test_close_is_idempotent(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF)
             await pipe.aclose()
             await pipe.aclose()
             result["closed"] = pipe.closed
             result["state"] = pipe.state
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["closed"]
         assert result["state"] is PipeState.CLOSED
 
-    def test_chain_after_close_raises(self, reactor: IReactorCore):
+    def test_chain_after_close_raises(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF)
             await pipe.aclose()
 
@@ -263,20 +239,17 @@ class TestAsyncLifecycle:
             except PipelineStateError:
                 result["raised"] = True
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result.get("raised") is True
 
-    def test_chain_after_failure_raises(self, reactor: IReactorCore):
+    def test_chain_after_failure_raises(self):
         result = {}
 
         async def boom():
             raise RuntimeError("boom")
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe(source=boom())
 
             try:
@@ -289,37 +262,31 @@ class TestAsyncLifecycle:
             except PipelineStateError:
                 result["raised"] = True
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result.get("raised") is True
 
-    def test_iterate_after_run_then_close_is_empty(self, reactor: IReactorCore):
+    def test_iterate_after_run_then_close_is_empty(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("itembuilder", conf=BUILDER_CONF).tokenizer(emit=True)
             result["items"] = [item async for item in pipe]
             await pipe.aclose()
             result["after"] = [item async for item in pipe]
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["items"]
         assert result["after"] == []
 
-    def test_failed_state_reiterates_empty(self, reactor: IReactorCore):
+    def test_failed_state_reiterates_empty(self):
         result = {}
 
         async def boom():
             raise RuntimeError("boom")
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe(source=boom())
 
             try:
@@ -331,66 +298,54 @@ class TestAsyncLifecycle:
             result["state"] = pipe.state
             result["reiter"] = [item async for item in pipe]
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["state"] is PipeState.FAILED
         assert result["failed"]
         assert result["reiter"] == []
 
-    def test_context_manager_closes(self, reactor: IReactorCore):
+    def test_context_manager_closes(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             async with AsyncPipe("itembuilder", conf=BUILDER_CONF) as pipe:
                 result["items"] = [item async for item in pipe]
 
             result["closed"] = pipe.closed
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["items"]
         assert result["closed"]
 
-    def test_collection_lifecycle(self, reactor: IReactorCore):
+    def test_collection_lifecycle(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             stream = AsyncCollection([{"url": get_path("feed.xml")}])
             result["new"] = stream.state is PipeState.NEW
             result["items"] = [item async for item in stream]
             result["exhausted"] = stream.exhausted
             result["reiter"] = [item async for item in stream]
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["new"]
         assert result["items"]
         assert result["exhausted"]
         assert result["reiter"] == []
 
-    def test_collection_close_is_idempotent(self, reactor: IReactorCore):
+    def test_collection_close_is_idempotent(self):
         result = {}
 
-        async def run(reactor):
+        async def main():
             stream = AsyncCollection([{"url": get_path("feed.xml")}])
             await stream.aclose()
             await stream.aclose()
             result["closed"] = stream.closed
             result["state"] = stream.state
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["closed"]
         assert result["state"] is PipeState.CLOSED
@@ -404,30 +359,23 @@ class TestAsyncSourceAdapter:
     once resolved, so only the source-touching behaviors are exercised per kind.
     """
 
-    @pytest.fixture
-    def reactor(self) -> IReactorCore:
-        return cast(IReactorCore, FakeReactor())
-
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    def test_source_iterates(self, make_source, reactor: IReactorCore):
+    def test_source_iterates(self, make_source):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("hash", source=make_source())
             result["items"] = [item async for item in pipe]
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert len(result["items"]) == len(SRC)
 
     @pytest.mark.parametrize("make_source", RAISING_SOURCES)
-    def test_source_failure_propagates(self, make_source, reactor: IReactorCore):
+    def test_source_failure_propagates(self, make_source):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("hash", source=make_source())
 
             try:
@@ -435,27 +383,21 @@ class TestAsyncSourceAdapter:
             except RuntimeError:
                 result["failed"] = pipe.failed
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result.get("failed") is True
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
-    def test_source_closes(self, make_source, reactor: IReactorCore):
+    def test_source_closes(self, make_source):
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("hash", source=make_source())
             result["items"] = [item async for item in pipe]
             await pipe.aclose()
             result["closed"] = pipe.closed
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert len(result["items"]) == len(SRC)
         assert result["closed"] is True

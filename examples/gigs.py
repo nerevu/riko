@@ -1,6 +1,4 @@
-from collections.abc import Awaitable
 from pprint import pprint
-from typing import overload
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
@@ -27,7 +25,7 @@ def pipe(test=False):
     return list(stream)
 
 
-async def async_pipe(reactor, test=False):
+async def async_pipe(test=False):
     stream = await (
         AsyncPipe("fetchdata", conf=p1_conf, test=test)
         .uniq(conf=p2_conf)
@@ -43,21 +41,8 @@ def print_results(result) -> None:
         pprint(i)
 
 
-@overload
-def main(*, test: bool = False) -> None: ...  # noqa: E704
-@overload
-def main(reactor, *, test: bool = False) -> Awaitable[None]: ...  # noqa: E704
-def main(reactor=None, *, test: bool = False) -> None | Awaitable[None]:  # noqa: E302
-    if reactor:
-
-        async def run() -> None:
-            print_results(await async_pipe(reactor, test=test))
-
-        result = run()
-    else:
-        result = print_results(pipe(test=test))
-
-    return result
+def main(*, test: bool = False) -> None:
+    print_results(pipe(test=test))
 
 
 if __name__ == "__main__":

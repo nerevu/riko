@@ -5,13 +5,11 @@ Provides pipeline collection tests.
 
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
-from typing import cast
 
 import pytest
 
 from riko import get_path
-from riko.bado import IReactorCore, _issync, react
-from riko.bado.mock import FakeReactor
+from riko.bado import _issync, run
 from riko.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.types.general import Item
 from riko.types.modules import (
@@ -270,10 +268,6 @@ class TestSyncCollections(_CollectionTest):
 
 @pytest.mark.skipif(_issync, reason="async support not available")
 class TestAsyncCollections(_CollectionTest):
-    @pytest.fixture
-    def reactor(self) -> IReactorCore:
-        return cast(IReactorCore, FakeReactor())
-
     def test_pipes_use_loopability_for_mapping(self):
         async_transformer = AsyncPipe("strtransform")
         async_input_pipe = AsyncPipe("input")
@@ -283,10 +277,10 @@ class TestAsyncCollections(_CollectionTest):
         assert not async_input_pipe.loopable
         assert not async_input_pipe.mapify
 
-    def test_stream(self, capsys, reactor: IReactorCore):
+    def test_stream(self, capsys):
         """Tests a asynchronous stream pipeline."""
 
-        async def run(reactor):
+        async def main():
             stream = await (
                 AsyncPipe("itembuilder", conf=builder_conf)
                 .tokenizer(emit=True)
@@ -300,27 +294,21 @@ class TestAsyncCollections(_CollectionTest):
 
             print(next(stream))
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         captured = capsys.readouterr()
         assert self.runs == 9
         assert captured.out == "{'content': 396558121}\n"
 
-    def test_export(self, reactor: IReactorCore):
+    def test_export(self):
         """Tests exporting an asynchronous stream to a list."""
         result = {}
 
-        async def run(reactor):
+        async def main():
             pipe = AsyncPipe("itembuilder", conf=builder_conf).tokenizer(emit=True)
             result["items"] = await pipe.export()
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["items"] == [
             {"content": "once is 1x"},
@@ -328,10 +316,10 @@ class TestAsyncCollections(_CollectionTest):
             {"content": "thrice is 3x"},
         ]
 
-    def test_udf(self, reactor: IReactorCore):
+    def test_udf(self):
         result = {}
 
-        async def run(_reactor):
+        async def main():
             stream = await (
                 AsyncPipe("itembuilder", conf=builder_conf)
                 .tokenizer(emit=True)
@@ -339,17 +327,14 @@ class TestAsyncCollections(_CollectionTest):
             )
             result["first"] = next(stream)
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["first"] == "once is 1x"
 
-    def test_split(self, reactor: IReactorCore):
+    def test_split(self):
         result = {}
 
-        async def run(_reactor):
+        async def main():
             splits = await (
                 AsyncPipe("itembuilder", conf=builder_conf)
                 .tokenizer(emit=True)
@@ -360,10 +345,7 @@ class TestAsyncCollections(_CollectionTest):
             result["s1"] = next(stream1)
             result["s2"] = next(stream2)
 
-        try:
-            react(run, _reactor=reactor)
-        except SystemExit:
-            pass
+        run(main)
 
         assert result["s1"] == {"content": "once is 1x"}
         assert result["s2"] == {"content": "once is 1x"}
@@ -379,7 +361,23 @@ class TestAsyncCollections(_CollectionTest):
         reason="async parallel-stream parity needs the AnyIO capacity limiter (P7.2)"
     )
     def test_pstream(self):
-        """Async parallel execution lands with the AnyIO pass; see docs/P7_CHECKLIST.md."""
+        """Tests a parallel asynchronous stream pipeline."""
+        result = {}
+
+        async def main():
+            stream = await (
+                AsyncPipe("itembuilder", conf=builder_conf, parallel=True)
+                .tokenizer(emit=True)
+                .strreplace(conf=strr_conf, assign="content")
+                .slugify(assign="content")
+                .hash(assign="content")
+                .udf(func=self.udf)
+            )
+            result["first"] = next(stream)
+
+        run(main)
+        assert result["first"] == {"content": 396558121}
+        assert self.runs == 3
 
 
 class TestPoolLifecycle:

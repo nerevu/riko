@@ -29,7 +29,7 @@ from functools import reduce
 
 import pygogo as gogo
 
-from riko.bado import itertools as ait
+from riko.bado.itertools import coop_reduce
 from riko.cast import BasicCastType
 from riko.types.configs import RefindObjconf
 from riko.types.general import Defaults, Opts
@@ -98,30 +98,24 @@ async def async_parser(
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'find': '[aiou]'}}
         ...     rule = Objectify(conf['rule'])
         ...     result = await async_parser(item['content'], [rule], None, stream=item)
         ...     print(result)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         hell
 
     """
-    value = await ait.coop_reduce(reducer, rules, word)
-    return value
+    return await coop_reduce(reducer, rules, word)
 
 
 def parser(
@@ -183,22 +177,17 @@ async def async_pipe(*args, **kwargs) -> str:
         field (str): Item attribute to operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with transformed content
+       Awaitable: item with transformed content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'rule': {'find': '[aiou]'}}
         ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
         ...     print(next(result)['refind'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         hell
 
     """

@@ -103,22 +103,17 @@ def async_pipe(*args, **kwargs) -> Stream:
                 1024)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred stream
+        Awaitable: stream
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'x': x, 'mod': x % 2} for x in range(5))
         ...     result = await async_pipe(items, conf={'uniq_key': 'mod'})
         ...     print([i['mod'] for i in result])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         [0, 1]
 
     """

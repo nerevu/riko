@@ -101,22 +101,17 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
             attribute (default: False)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item with tokenized content
+        Awaitable: item with tokenized content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     result = await async_pipe(item)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'content': 'Once'}
 
     """

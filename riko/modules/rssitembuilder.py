@@ -117,22 +117,17 @@ def async_pipe(*args, **kwargs) -> DotDict:
             mediaThumbWidth (str): The item media thumbnail width
 
     Returns:
-        dict: twisted.internet.defer.Deferred an iterator of items
+        Awaitable: an iterator of items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'title': 'Hi', 'guid': 'a1', 'mediaThumbURL': 'image.png'}
         ...     result = await async_pipe(conf=conf)
         ...     print(next(result)['media:thumbnail'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'url': 'image.png'}
 
     """

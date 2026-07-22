@@ -59,21 +59,16 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('lorem.txt')
         ...     objconf = Objectify({'url': url, 'encoding': ENCODING})
         ...     result = await async_parser(None, None, objconf, assign='content')
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         What is Lorem Ipsum?
 
     """
@@ -137,23 +132,18 @@ async def async_pipe(*args, **kwargs) -> Iterator[str]:
 
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred stream of items
+        Awaitable: stream of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'url': get_path('lorem.txt')}
         ...     result = await async_pipe(conf=conf)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         What is Lorem Ipsum?
 
     """

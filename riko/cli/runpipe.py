@@ -5,7 +5,7 @@ from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 from os import path as p
 
-from riko.bado import react
+from riko.bado import run as async_run
 
 io_error = FileNotFoundError
 
@@ -54,8 +54,8 @@ def file2name(path):
     return p.splitext(p.basename(path))[0]
 
 
-async def runner(reactor, async_pipe, test=False, cb=None):
-    result = await async_pipe(reactor, test=test)
+async def runner(async_pipe, test=False, cb=None):
+    result = await async_pipe(test=test)
     cb(result) if callable(cb) else None
 
 
@@ -103,11 +103,11 @@ def run():
         except ImportError:
             sys.exit(f"Pipe examples.{args.pipeid} not found!")
 
-    if (main := getattr(module, "main", None)) and args.isasync:
-        react(runner, [main, args.test])
-    elif args.isasync:
-        react(runner, [module.async_pipe, args.test, emit_result])
-    elif main:
+    printer = getattr(module, "print_results", emit_result)
+
+    if args.isasync and (async_pipe := getattr(module, "async_pipe", None)):
+        async_run(runner, async_pipe, args.test, printer)
+    elif main := getattr(module, "main", None):
         main(test=args.test)
     else:
         emit_result(module.pipe(test=args.test))

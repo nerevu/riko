@@ -92,11 +92,10 @@ async def async_parser(
         >>> from traceback import format_exc
         >>>
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     xml_url = get_path('ouseful.xml')
         ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
         ...     xml_objconf = Objectify(xml_conf)
@@ -117,11 +116,7 @@ async def async_parser(
         ...         logger.error(format_exc())
         ...
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         Running “Native” Data Wrangling Applications
         Help Page -- ScienceDaily
 
@@ -132,26 +127,6 @@ async def async_parser(
         ext = "html"
 
     # TODO: centralize error handling and retry logic
-    """
-    from twisted.internet import error as inet_error
-
-    except (
-        inet_error.DNSLookupError,
-        inet_error.ConnectionRefusedError,
-        inet_error.TimeoutError,
-        inet_error.ConnectionLost,
-    ) as e:
-        logger.warning("Network error fetching %s: %s", objconf.url, e)
-        stream = iter(())
-
-    except UnicodeDecodeError as e:
-        logger.error("Encoding error fetching %s: %s", objconf.url, e)
-        stream = iter(())
-
-    except OSError as e:
-        logger.error("Filesystem error during fetch of %s: %s", objconf.url, e)
-        stream = iter(())
-    """
     f = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
     stream = auto_close(content, f)
@@ -221,16 +196,15 @@ async def async_pipe(*args, **kwargs) -> Stream:
         assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
-        dict: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
         >>> from traceback import format_exc
         >>>
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     xml_url = get_path('ouseful.xml')
         ...     xml_conf = {'url': xml_url, 'xpath': '/rss/channel/item'}
         ...     html_url = get_path('sciencedaily.html')
@@ -246,11 +220,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
         ...         logger.error(format_exc())
         ...
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         http://blog.ouseful.info/?p=12065
         Help Page -- ScienceDaily
 

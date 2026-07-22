@@ -67,11 +67,10 @@ async def async_parser(
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.bado import react, _issync
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run, _issync
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     kwargs = {'field': 'content', 'dir': 'desc'}
         ...     rule = Objectify(kwargs)
         ...     stream = ({'content': result} for result in range(5))
@@ -82,10 +81,7 @@ async def async_parser(
         >>> if _issync:
         ...     {'content': 4}
         ... else:
-        ...     try:
-        ...         react(run, _reactor=FakeReactor())
-        ...     except SystemExit:
-        ...         pass
+        ...     run(main)
         {'content': 4}
 
     """
@@ -160,22 +156,17 @@ def async_pipe(*args, **kwargs) -> Stream:
                     'desc' (default: 'asc').
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred stream
+        Awaitable: stream
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]
         ...     result = await async_pipe(items, conf={'rule': {'field': 'rank'}})
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'rank': 'a'}
 
     """

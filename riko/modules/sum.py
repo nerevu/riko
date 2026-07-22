@@ -117,22 +117,17 @@ def async_pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
             content)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the summed items
+        Awaitable: iterator of the summed items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'content': x} for x in range(5))
         ...     result = await async_pipe(items)
         ...     print(next(result)['sum'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         10
 
     """

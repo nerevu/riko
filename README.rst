@@ -42,7 +42,7 @@ Optional Dependencies
 ========================  ===================  ===========================
 Feature                   Dependency           Installation
 ========================  ===================  ===========================
-Async API                 `Twisted`_           ``pip install riko[async]``
+Async API                 `AnyIO`_, `httpx`_   ``pip install riko[async]``
 Accelerated xml parsing   `lxml`_ [#]_         ``pip install riko[perf]``
 Accelerated feed parsing  `speedparser`_ [#]_  ``pip install riko[perf]``
 ========================  ===================  ===========================
@@ -296,8 +296,7 @@ An example using ``riko``'s asynchronous API.
 .. code-block:: python
 
     >>> from riko import get_path
-    >>> from riko.bado import react, _issync
-    >>> from riko.bado.mock import FakeReactor
+    >>> from riko.bado import run, _issync
     >>> from riko.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
@@ -310,7 +309,7 @@ An example using ``riko``'s asynchronous API.
     >>> #   1. fetch a (cached) RSS feed
     >>> #   2. filter for items with an 'a' in the title
     >>> #   3. extract the first item's title
-    >>> async def run(reactor):
+    >>> async def main():
     ...     stream = await (
     ...         AsyncPipe('fetch', conf=fetch_conf)                 # 1
     ...             .filter(conf={'rule': filter_rule}))            # 2
@@ -319,10 +318,7 @@ An example using ``riko``'s asynchronous API.
     >>> if _issync:
     ...     print('Donations')
     ... else:
-    ...     try:
-    ...         react(run, _reactor=FakeReactor())
-    ...     except SystemExit:
-    ...         pass
+    ...     run(main)
     Donations
 
 Discovering modules

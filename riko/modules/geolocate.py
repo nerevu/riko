@@ -85,22 +85,17 @@ def async_pipe(*args, **kwargs) -> AnyLocation:
             operate on (default: 'content')
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item with formatted location
+        Awaitable: item with formatted location
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'type': 'currency'}
         ...     result = await async_pipe({'content': 'GBP'}, conf=conf)
         ...     print(next(result)['country'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         United Kingdom
 
     """
