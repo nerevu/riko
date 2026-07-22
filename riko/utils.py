@@ -1012,12 +1012,30 @@ def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
     return it.chain.from_iterable(sources)
 
 
+def _get_entry_text(entry: ParserRSSEntry) -> str:
+    text = str(entry.get("summary") or entry.get("description") or "")
+    content = entry.get("content") or []
+    first = next(iter(content), {})
+
+    if not text and isinstance(first, Mapping):
+        text = str(first.get("value") or "")
+
+    if not text:
+        text = str(entry.get("title") or "")
+
+    return text
+
+
 def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
     for entry in entries:
+        text = _get_entry_text(entry)
         pub_date = updated_date = None
 
-        if "summary" not in entry:
-            entry["summary"] = entry.get("description", "")
+        if not entry.get("summary"):
+            entry["summary"] = text
+
+        if not entry.get("description"):
+            entry["description"] = text
 
         if "published_parsed" in entry:
             pub_date = updated_date = entry["published_parsed"]

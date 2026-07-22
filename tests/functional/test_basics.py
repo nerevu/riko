@@ -20,7 +20,7 @@ from riko.compile import _resolve_module, build_pipeline
 from riko.exceptions import UnsupportedModuleError
 from riko.types.general import ParserOutput, PipelineDependencies
 from riko.types.values import StatefulItem
-from riko.utils import extract_dependencies, truncate_content
+from riko.utils import augment_entries, extract_dependencies, truncate_content
 
 try:
     import lxml as _lxml  # noqa: F401
@@ -106,6 +106,18 @@ class TestBasics:
         item = cast(dict, items[0])
         assert item["title"]
         assert item["summary"]
+
+    def test_augment_entries_without_description(self):
+        entries = [
+            {
+                "content": [{"value": "from content"}],
+                "link": "https://example.com/feed-item",
+                "title": "fallback title",
+            }
+        ]
+        item = cast(dict, next(augment_entries(entries)))
+        assert item["summary"] == "from content"
+        assert item["description"] == "from content"
 
     def test_loops_1(self):
         """Loads a pipeline containing a loop"""
@@ -335,7 +347,7 @@ class TestBasics:
         """Loads a pipeline containing a sort"""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
         items = self._get_pipeline(pipe_name)
-        self._load(items, pipe_name, 26, 0)
+        self._load(items, pipe_name, 36, 0)
         first, last = cast(dict, items[0]), cast(dict, items[-1])
         assert first["pubDate"] > last["pubDate"]
 
