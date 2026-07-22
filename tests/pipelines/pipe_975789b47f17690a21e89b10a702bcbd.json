@@ -228,14 +228,14 @@
                             }
                         }
                     }
-                },
-                "field": {
-                    "type": "text",
-                    "value": "title"
                 }
             },
             "id": "sw-470",
-            "type": "loop"
+            "type": "loop",
+            "field": {
+                "type": "text",
+                "value": "title"
+            }
         },
         {
             "conf": {

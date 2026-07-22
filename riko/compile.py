@@ -395,18 +395,11 @@ def _gen_pykwargs(  # noqa: E302
     tuple[str, ParserOutput | SyncPipeParser | Id | Context | AnyModuleRawConf]
 ]:
     module = parsed_pipe_def["modules"][module_id]
-    conf = module["conf"]
-    keys = ("emit", "assign")
+    yield ("conf", module["conf"])
 
-    if any(key in conf for key in keys):
-        yield ("conf", {k: v for k, v in conf.items() if k not in keys})
-
-        for key in keys:
-            if key in conf:
-                setting = cast(ConfArg, conf[key])
-                yield (key, setting["value"])
-    else:
-        yield ("conf", conf)
+    for key in ("emit", "assign", "field"):
+        if (setting := module.get(key)) is not None:
+            yield (key, cast(ConfArg, setting)["value"])
 
     context = context or Context(**kwargs)
     yield ("context", context)

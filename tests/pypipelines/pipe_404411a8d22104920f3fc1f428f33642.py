@@ -30,7 +30,7 @@ def pipe_404411a8d22104920f3fc1f428f33642(
             ),
             context=context,
         )
-        sw_569 = count(sw_561, conf=CountRawConf({}), context=context)
+        sw_569 = count(sw_561, conf=CountRawConf({}), emit=True, context=context)
         sw_502 = fetch(
             None,
             conf=FetchRawConf(

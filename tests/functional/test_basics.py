@@ -424,6 +424,14 @@ class TestBasics:
         assert item["summary"].startswith("<span><b>Description:</b> With this spe")
         assert item["summary"].endswith("ancer Location:</b> Worldwide<br></span>")
 
+    def test_wired_count_truncate_output(self):
+        """Truncates a 15-item feed to a wired count."""
+        pipe_name = "pipe_404411a8d22104920f3fc1f428f33642"
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 3, 0)
+        item = cast(dict, items[0])
+        assert item["title"] == "Markitekt - Architects of Marketing"
+
     def test_simplest(self):
         """
         Loads the RTW simple test pipeline and compiles and executes it to

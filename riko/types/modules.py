@@ -206,8 +206,6 @@ class Embed(TypedDict):
 class LoopRawConf(TypedDict):
     count: Value
     embed: Embed
-    assign: NotRequired[ConfArg]
-    field: NotRequired[ConfArg]
 
 
 class CountRawConf(TypedDict, total=False):

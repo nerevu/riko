@@ -118,18 +118,18 @@
                         "id": "sw-150",
                         "type": "fetchdata"
                     }
-                },
-                "assign": {
-                    "type": "text",
-                    "value": "info"
-                },
-                "emit": {
-                    "type": "bool",
-                    "value": false
                 }
             },
             "id": "sw-142",
-            "type": "loop"
+            "type": "loop",
+            "emit": {
+                "type": "bool",
+                "value": false
+            },
+            "assign": {
+                "type": "text",
+                "value": "info"
+            }
         },
         {
             "conf": {

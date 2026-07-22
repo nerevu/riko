@@ -143,9 +143,9 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
                             ),
                         },
                     },
-                    "field": {"type": "text", "value": "title"},
                 }
             ),
+            field="title",
             context=context,
             embed=tokenizer,
         )
