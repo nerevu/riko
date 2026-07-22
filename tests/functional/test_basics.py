@@ -15,7 +15,7 @@ from typing import cast
 
 import pytest
 
-from riko import Context, ExecutionMode, get_path, listize
+from riko import Context, ExecutionMode, listize
 from riko.compile import _resolve_module, build_pipeline
 from riko.exceptions import UnsupportedModuleError
 from riko.types.general import ParserOutput, PipelineDependencies

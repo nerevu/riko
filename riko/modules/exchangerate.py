@@ -25,6 +25,7 @@ from os import getenv
 from typing import TypedDict, cast
 
 import pygogo as gogo
+
 try:
     from twisted.web.iweb import IResponse
 except ImportError:
