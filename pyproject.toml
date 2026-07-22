@@ -79,7 +79,7 @@ manage = "riko.cli.manage:manager"
 runpipe = "riko.cli.runpipe:run"
 benchmark = "riko.cli.benchmark:main"
 compile = "riko.cli.compile:run"
-convert_dag = "riko.cli.convert_dag:run"
+convert-dag = "riko.cli.convert_dag:run"
 gen-config = "riko.cli.gen_config:main"
 
 [tool.ruff]

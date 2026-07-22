@@ -34,7 +34,7 @@ def run():
     """CLI DAG converter"""
     parser = ArgumentParser(
         description="description: Converts a bare-bones riko DAG into a JSON pipeline",
-        prog="convert_dag",
+        prog="convert-dag",
         usage="%(prog)s [path]",
         formatter_class=RawTextHelpFormatter,
     )

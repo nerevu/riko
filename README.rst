@@ -750,7 +750,7 @@ Compiling workflows
 Yahoo! Pipes-style ``{"modules": [...], "wires": [...]}`` format):
 
 - ``compile`` translates a JSON pipe definition into a runnable Python module.
-- ``convert_dag`` expands a *bare-bones DAG* into a full JSON pipe definition.
+- ``convert-dag`` expands a *bare-bones DAG* into a full JSON pipe definition.
 
 A bare-bones DAG is a minimal authoring format: a list of ``modules``
 (``id``/``type``/``conf``) plus optional ``[source, target]`` wire pairs. When
@@ -771,7 +771,7 @@ to stdout, or to a file via ``-o``):
 
 .. code-block:: bash
 
-    convert_dag flow.dag.json -o flow.json
+    convert-dag flow.dag.json -o flow.json
     compile flow.json -o flow.py
 
 See `docs/DAG_FORMAT.md`_ for the full format and expansion rules.
@@ -870,7 +870,7 @@ Project Structure
     │   ├── topsort.py
     │   ├── utils.py
     │   ├── bado             (async backend: __init__, io, itertools, mock, util)
-    │   ├── cli              (manage, runpipe, benchmark, compile, convert_dag)
+    │   ├── cli              (manage, runpipe, benchmark, compile, convert-dag)
     │   ├── data/*
     │   ├── modules/*        (the built-in pipes)
     │   ├── templates/*      (codegen Jinja templates)
