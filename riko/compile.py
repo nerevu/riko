@@ -158,8 +158,8 @@ class CustomEncoder(JSONEncoder):
         return JSONEncoder.default(self, o)
 
 
-def get_module_id(wire: Wire):
-    return pythonise(wire, key="src.moduleid")
+def get_module_id(wire: Wire, stem="src", base="moduleid"):
+    return pythonise(wire, key=f"{stem}.{base}")
 
 
 def write_file(data, path, pretty=False):
@@ -364,15 +364,24 @@ def _get_pyarg(  # noqa: E302
     **kwargs,
 ) -> ParserOutput | SyncPipeParser | Id:
     context = context or Context(**kwargs)
-    describe = context.mode is not ExecutionMode.RUN
 
-    # find the default input of this module
-    input_module = _get_input_module(parsed_pipe_def, module_id, steps)
-
-    if describe and steps:
+    if steps and context.mode is not ExecutionMode.RUN:
         print("You must not specify both describe and steps. Assuming steps.")
 
-    return input_module if steps is not None else Id(input_module)
+    return _get_input_module(parsed_pipe_def, module_id, steps)
+
+
+def _is_default(wire: Wire, module_id: str, in_and_out=False):
+    default_out = get_module_id(wire, stem="tgt") == module_id and wire["src"][
+        "id"
+    ].startswith("_OUTPUT")
+
+    if in_and_out:
+        result = default_out and wire["tgt"]["id"] == "_INPUT"
+    else:
+        result = default_out and wire["tgt"]["id"] != "_INPUT"
+
+    return result
 
 
 @overload
@@ -404,30 +413,19 @@ def _gen_pykwargs(  # noqa: E302
     context = context or Context(**kwargs)
     yield ("context", context)
 
-    describe = context.mode is not ExecutionMode.RUN
-
-    if describe and steps:
+    if steps and context.mode is not ExecutionMode.RUN:
         print("You must not specify both describe and steps. Assuming steps.")
 
-    tgt_module_id = module_id
     others = []
 
     # find the default input of this module
     for wire in parsed_pipe_def["wires"].values():
-        # todo? this equates the outputs
-        is_default_out_only = (
-            pythonise(wire, key="tgt.moduleid") == tgt_module_id
-            and wire["tgt"]["id"] != "_INPUT"
-            and wire["src"]["id"].startswith("_OUTPUT")
-        )
-
         # if the wire is to this module and it's *NOT* the default input
         # but it *is* the default output
-        if is_default_out_only:
-            # set the extra inputs of this module as pykwargs of this module
+        if _is_default(wire, module_id):
             src_module_id = get_module_id(wire)
-            pipe_id = pythonise(wire, key="tgt.id")
-            source = steps[src_module_id] if steps is not None else Id(src_module_id)
+            source = Id(src_module_id) if steps is None else steps[src_module_id]
+            pipe_id = get_module_id(wire, stem="tgt", base="id")
 
             if pipe_id.startswith("_OTHER"):
                 others.append(source)
@@ -447,7 +445,7 @@ def _gen_pykwargs(  # noqa: E302
         wires = parsed_pipe_def["wires"].values()
         filtered = [v for v in wires if module_id == get_module_id(v)]
         count = len(filtered)
-        updated = count if steps is not None else Id(count)
+        updated = Id(count) if steps is None else count
         yield ("splits", updated)
 
 
@@ -573,28 +571,20 @@ def _gen_steps(
 def _get_input_module(
     parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps | None = None
 ):
-    input_module = iter([{"forever": True}]) if steps is not None else None
+    source = None if steps is None else iter([{"forever": True}])
 
     if module_id in parsed_pipe_def["embed"]:
-        input_module = "_INPUT"
+        source = "_INPUT"
     else:
         for wire in parsed_pipe_def["wires"].values():
-            moduleid = get_module_id(wire)
-
-            # todo? this equates the outputs
-            is_default_in_and_out = (
-                pythonise(wire["tgt"]["moduleid"]) == module_id
-                and wire["tgt"]["id"] == "_INPUT"
-                and wire["src"]["id"].startswith("_OUTPUT")
-            )
-
             # if the wire is to this module and it's the default input and it's
             # the default output:
-            if is_default_in_and_out:
-                input_module = steps[moduleid] if steps is not None else moduleid
+            if _is_default(wire, module_id, True):
+                src_module_id = get_module_id(wire)
+                source = src_module_id if steps is None else steps[src_module_id]
                 break
 
-    return input_module
+    return Id(source) if steps is None else source
 
 
 def _wire(src: str, tgt: str, wid: str, sid="_OUTPUT", tid="_INPUT") -> Wire:
