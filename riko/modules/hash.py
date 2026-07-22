@@ -86,21 +86,16 @@ def async_pipe(*args, **kwargs) -> int:
         field (str): Item attribute to operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with hashed content
+       Awaitable: item with hashed content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'content': 'hello world'})
         ...     print(next(result)['hash'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         1921504423
 
     """

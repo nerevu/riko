@@ -103,21 +103,16 @@ def async_pipe(*args, **kwargs) -> struct_time:
         field (str): Item attribute to operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with date timetuples
+       Awaitable: item with date timetuples
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'content': '12/2/2014'})
         ...     print(next(result)['datebuilder'].tm_year)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         2014
 
     """

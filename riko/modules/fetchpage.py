@@ -73,11 +73,10 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('cnn.html')
         ...     conf = {'url': url, 'start': '<title>', 'end': '</title>'}
         ...     objconf = Objectify(conf)
@@ -85,11 +84,7 @@ async def async_parser(
         ...     result = await async_parser(None, None, objconf, **kwargs)
         ...     print(next(result)[:32])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         CNN.com International - Breaking
 
     """
@@ -162,24 +157,19 @@ async def async_pipe(*args, **kwargs) -> Iterator[str]:
         assign (str): Attribute to assign parsed content (default: content)
 
     Returns:
-        dict: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url, path = get_path('bbc.html'), 'value.items'
         ...     conf = {'url': url, 'start': 'DOCTYPE ', 'end': 'http'}
         ...     result = await async_pipe(conf=conf)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "
 
     """

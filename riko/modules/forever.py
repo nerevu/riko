@@ -82,21 +82,16 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, bool]]:
 
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of items
+        Awaitable: iterator of items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe()
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'forever': True}
 
     """

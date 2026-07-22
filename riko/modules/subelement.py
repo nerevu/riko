@@ -121,23 +121,18 @@ def async_pipe(*args, **kwargs) -> Stream:
         assign (str): Attribute to assign parsed content (default: subelement)
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred sub-element item
+       Awaitable: sub-element item
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
         ...     conf = {'path': 'stanzas.verses'}
         ...     result = await async_pipe(sonnet, conf=conf)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'content': 'verse1'}
 
     """

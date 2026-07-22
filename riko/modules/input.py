@@ -133,22 +133,17 @@ def async_pipe(*args, **kwargs) -> PrimitiveValue:
         verbose (bool): Show debug messages when running pipe
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred iterator of items of user input
+       Awaitable: iterator of items of user input
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'prompt': 'How old are you?', 'type': 'int'}
         ...     result = await async_pipe(conf=conf, inputs={'content': '30'})
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         30
 
     """

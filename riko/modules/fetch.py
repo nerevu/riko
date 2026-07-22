@@ -67,24 +67,19 @@ async def async_parser(
         conf (dict): The pipe configuration
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Iter[dict]
+        Awaitable: Iter[dict]
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
         ...     result = await async_parser(None, None, objconf)
         ...     print(next(result)['title'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         Donations
 
     """
@@ -155,22 +150,17 @@ async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
 
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of items
+        Awaitable: iterator of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe(conf={'url': get_path('feed.xml')})
         ...     print(sorted(keys.intersection(next(result))))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
 
     """

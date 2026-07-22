@@ -13,10 +13,7 @@ from os import path as p
 
 import pytest
 
-try:
-    from riko.bado import _issync
-except ImportError:
-    _issync = True
+from riko.bado import _issync
 
 PARENT_DIR = p.abspath(p.dirname(p.dirname(p.dirname(__file__))))
 DEMO_SCRIPT = "runpipe"
@@ -118,8 +115,8 @@ def test_demo_sync(value):
     assert_output_matches(output, expected, command=command)
 
 
-@pytest.mark.twisted
-@pytest.mark.skipif(_issync, reason="Twisted support not installed")
+@pytest.mark.anyio
+@pytest.mark.skipif(_issync, reason="async support not installed")
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_async(value):
     argument, expected = value

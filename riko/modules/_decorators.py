@@ -323,8 +323,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 input `item`.
 
         Examples:
-            >>> from riko.bado import react, async_return, _issync
-            >>> from riko.bado.mock import FakeReactor
+            >>> from riko.bado import run, async_return, _issync
             >>>
             >>> @processor()
             ... def pipe(item, extraction, objconf, **kwargs):
@@ -343,17 +342,14 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             >>> next(pipe(item, **kwargs))
             {'content': 'say "hello world" three times!'}
             >>>
-            >>> async def run(reactor):
+            >>> async def main():
             ...     result = await async_pipe(item, **kwargs)
             ...     print(next(result))
             ...
             >>> if _issync:
             ...     {'content': 'say "hello world" three times!'}
             ... else:
-            ...     try:
-            ...         react(run, _reactor=FakeReactor())
-            ...     except SystemExit:
-            ...         pass
+            ...     run(main)
             {'content': 'say "hello world" three times!'}
 
         """
@@ -498,8 +494,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import react, _issync
-            >>> from riko.bado.mock import FakeReactor
+            >>> from riko.bado import run, _issync
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
@@ -520,17 +515,14 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             >>> next(pipe(item, **kwargs))
             'say "hello world" three times!'
             >>>
-            >>> async def run(reactor):
+            >>> async def main():
             ...     result = await async_pipe(item, **kwargs)
             ...     print(next(result))
             ...
             >>> if _issync:
             ...     print('say "hello world" three times!')
             ... else:
-            ...     try:
-            ...         react(run, _reactor=FakeReactor())
-            ...     except SystemExit:
-            ...         pass
+            ...     run(main)
             say "hello world" three times!
 
         """
@@ -695,8 +687,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import react, async_return, _issync
-            >>> from riko.bado.mock import FakeReactor
+            >>> from riko.bado import run, async_return, _issync
             >>>
             >>> # emit is True by default
             >>> # and operators can't skip items, so the pipe is passed an
@@ -733,7 +724,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             >>> next(pipe2(items, **kwargs))
             {'content': 4}
             >>>
-            >>> async def run(reactor):
+            >>> async def main():
             ...     r1 = await async_pipe1(items, **kwargs)
             ...     print(next(r1))
             ...     r2 = await async_pipe2(items, **kwargs)
@@ -743,10 +734,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             ...     {'content': 'say "hello world" three times!'}
             ...     {'content': 4}
             ... else:
-            ...     try:
-            ...         react(run, _reactor=FakeReactor())
-            ...     except SystemExit:
-            ...         pass
+            ...     run(main)
             {'content': 'say "hello world" three times!'}
             {'content': 4}
 
@@ -865,8 +853,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
 
         Examples:
             >>> from riko import bado
-            >>> from riko.bado import react, _issync
-            >>> from riko.bado.mock import FakeReactor
+            >>> from riko.bado import run, _issync
             >>>
             >>> opts = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
@@ -910,7 +897,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             >>> wrapped_async_pipe1 = async_wrapper(async_pipe1)
             >>> wrapped_async_pipe2 = async_wrapper(async_pipe2)
             >>>
-            >>> async def run(reactor):
+            >>> async def main():
             ...     r1 = await wrapped_async_pipe1(items, **kwargs)
             ...     print(next(r1))
             ...     r2 = await wrapped_async_pipe2(items, **kwargs)
@@ -920,10 +907,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             ...     {'content': 'say "hello world" three times!'}
             ...     {'content': 4}
             ... else:
-            ...     try:
-            ...         react(run, _reactor=FakeReactor())
-            ...     except SystemExit:
-            ...         pass
+            ...     run(main)
             {'content': 'say "hello world" three times!'}
             {'content': 4}
 

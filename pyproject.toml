@@ -52,8 +52,8 @@ perf = [
 ]
 
 async = [
-    "treq>=26.0.0,<27.0.0",
-    "twisted>=26.0.0,<27.0.0",
+    "anyio>=4.0.0",
+    "httpx>=0.27.0",
 ]
 
 finance = [
@@ -200,7 +200,7 @@ testpaths = ["tests", "riko", "README.rst", "docs"]
 doctest_optionflags = ["ELLIPSIS"]
 timeout = 300
 markers = [
-    "twisted: requires the Twisted optional dependency",
+    "anyio: requires the async optional dependencies (anyio + httpx)",
 ]
 asyncio_default_fixture_loop_scope = "function"
 

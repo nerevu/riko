@@ -22,14 +22,9 @@ from collections.abc import Mapping
 from decimal import Decimal
 from json import load, loads
 from os import getenv
-from typing import TypedDict, cast
+from typing import TypedDict
 
 import pygogo as gogo
-
-try:
-    from twisted.web.iweb import IResponse
-except ImportError:
-    IResponse = None  # type: ignore[assignment,misc]
 
 from riko import ENCODING
 from riko.bado import async_get, async_json, io
@@ -113,15 +108,14 @@ async def async_parser(
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('quote.json')
         ...     conf = {'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
@@ -130,11 +124,7 @@ async def async_parser(
         ...     result = await async_parser(item['content'], None, objconf, **kwargs)
         ...     print(result)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         1.275201
 
     """
@@ -146,7 +136,7 @@ async def async_parser(
         rate = Decimal(1)
     elif objconf.url.startswith("http"):
         r = await async_get(objconf.url, params=objconf.param)
-        rates = await async_json(cast(IResponse, r))
+        rates = await async_json(r)
     else:
         content = await io.async_url_read(objconf.url, delay=objconf.delay)
         rates = loads(content).get("rates", {})
@@ -241,23 +231,18 @@ async def async_pipe(*args, **kwargs) -> Decimal:
             exchangerate)
 
     Returns:
-        dict: twisted.internet.defer.Deferred stream of items
+        Awaitable: stream of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('quote.json')
         ...     result = await async_pipe({'content': 'GBP'}, conf={'url': url})
         ...     print(next(result)['exchangerate'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         1.275201
 
     """

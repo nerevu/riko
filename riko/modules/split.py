@@ -90,21 +90,16 @@ def async_pipe(*args, **kwargs) -> Iterator[Stream]:
             splits (int): the number of copies to create (default: 2).
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterable of streams
+        Awaitable: iterable of streams
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'x': x} for x in range(5))
         ...     print(next(next(result)))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'x': 0}
 
     """

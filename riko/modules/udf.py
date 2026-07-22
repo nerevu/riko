@@ -73,22 +73,17 @@ def async_pipe(*args, **kwargs) -> Item:
         func (callable): User defined function to apply to each stream item.
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred truncated stream
+        Awaitable: truncated stream
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     func = lambda item: {'y': item['x'] + 3}
         ...     result = await async_pipe({'x': 0}, func=func)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'y': 3}
 
     """
