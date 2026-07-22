@@ -65,7 +65,11 @@
         {
             "conf": {},
             "id": "sw-569",
-            "type": "count"
+            "type": "count",
+            "emit": {
+                "type": "bool",
+                "value": true
+            }
         },
         {
             "conf": {
