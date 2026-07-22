@@ -1013,6 +1013,12 @@ def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
 
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:
+    """
+    Return the first non-empty text from summary, description, content, or title.
+
+    ``content`` is treated as a list of mappings and only the first item's
+    ``value`` is used as a fallback.
+    """
     text = str(entry.get("summary") or entry.get("description") or "")
     content = entry.get("content") or []
     first = next(iter(content), {})

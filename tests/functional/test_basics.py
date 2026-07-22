@@ -119,6 +119,18 @@ class TestBasics:
         assert item["summary"] == "from content"
         assert item["description"] == "from content"
 
+    def test_augment_entries_without_content(self):
+        entries = [{"link": "https://example.com/feed-item", "title": "fallback title"}]
+        item = cast(dict, next(augment_entries(entries)))
+        assert item["summary"] == "fallback title"
+        assert item["description"] == "fallback title"
+
+    def test_augment_entries_without_text(self):
+        entries = [{"link": "https://example.com/feed-item"}]
+        item = cast(dict, next(augment_entries(entries)))
+        assert item["summary"] == ""
+        assert item["description"] == ""
+
     def test_loops_1(self):
         """Loads a pipeline containing a loop"""
         pipe_name = "pipe_125e9fe8bb5f84526d21bebfec3ad116"
