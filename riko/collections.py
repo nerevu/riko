@@ -79,8 +79,8 @@ Examples:
         ...     print(len(d))
         ...
         >>> if _issync:
-        ...     Donations
-        ...     56
+        ...     print("Donations")
+        ...     print(56)
         ... else:
         ...     try:
         ...         react(run, _reactor=FakeReactor())
