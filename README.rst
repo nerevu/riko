@@ -34,7 +34,7 @@ Notes
 Requirements
 ------------
 
-``riko`` has been tested and is known to work on Python 3.7, 3.8, and 3.9; and PyPy3.7.
+``riko`` has been tested and is known to work on Python 3.12, 3.13, and 3.14.
 
 Optional Dependencies
 ^^^^^^^^^^^^^^^^^^^^^
@@ -128,7 +128,7 @@ applications such as Huginn, Flink, Spark, and Storm [#]_. Namely:
 - a small footprint (CPU and memory usage)
 - native RSS/Atom support
 - simple installation and usage
-- a pure python library with `pypy`_ support
+- a pure python library with supporting v3.12+
 - builtin modular ``pipes`` to filter, sort, and modify ``streams``
 
 The subsequent tradeoffs ``riko`` makes are:
@@ -915,7 +915,6 @@ License
 .. _alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#alternate-workflow-creation
 .. _Fetching data and feeds: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#fetching-data-and-feeds
 
-.. _pypy: http://pypy.org
 .. _Really Simple Syndication: https://en.wikipedia.org/wiki/RSS
 .. _Mashup (web application hybrid): https://en.wikipedia.org/wiki/Mashup_%28web_application_hybrid%29
 .. _pipe2py: https://github.com/ggaughan/pipe2py/
