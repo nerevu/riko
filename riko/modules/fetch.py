@@ -90,7 +90,7 @@ async def async_parser(
     """
     if objconf.url:
         content: str = await io.async_url_read(objconf.url, delay=objconf.delay)
-        result = augment_entries(parse_rss(content))
+        result = augment_entries(parse_rss(content=content))
     else:
         result = iter([])
 
