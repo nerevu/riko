@@ -11,7 +11,7 @@ import pygogo as gogo
 from riko.bado.io import async_url_open
 from riko.parsers import LinkParser
 from riko.types.general import Stream, StringFileTypes
-from riko.utils import Fetch
+from riko.utils import Fetch, auto_close
 
 TIMEOUT = 10
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -59,9 +59,9 @@ async def async_get_rss(
     try:
         f = await async_url_open(url, timeout=TIMEOUT)
     except ValueError:
-        f = filter(None, url.splitlines())
-
-    entries = file2entries(f, parser)
+        entries = file2entries(filter(None, url.splitlines()), parser)
+    else:
+        entries = auto_close(file2entries(f, parser), f)
 
     if auto_sort:
         entries = iter(sorted(entries, key=parser.keyfunc))
@@ -78,9 +78,10 @@ def get_rss(url: str, convert_charrefs=False, auto_sort=False, **kwargs) -> Stre
     try:
         f = Fetch(url, timeout=TIMEOUT)
     except ValueError:
-        f = filter(None, url.splitlines())
-
-    entries = file2entries(cast(StringFileTypes, f), parser)
+        entries = file2entries(filter(None, url.splitlines()), parser)
+    else:
+        stream = file2entries(cast(StringFileTypes, f), parser)
+        entries = auto_close(stream, f)
 
     if auto_sort:
         entries = iter(sorted(entries, key=parser.keyfunc))

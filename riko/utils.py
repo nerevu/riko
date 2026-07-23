@@ -560,7 +560,15 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
     def close(self):
         if self.file:
-            self.file.close()
+            response = getattr(self.file, "_r", None)
+
+            try:
+                self.file.close()
+            finally:
+                if response is not None:
+                    response.close()
+
+            self.file = None
 
     def __enter__(self):
         return self
