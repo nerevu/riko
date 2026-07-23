@@ -10,7 +10,7 @@ from typing import cast
 import pytest
 
 from riko import get_path
-from riko.bado import _issync, run
+from riko.bado import issync, run
 from riko.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.types.general import Item
 from riko.types.modules import (
@@ -267,7 +267,7 @@ class TestSyncCollections(_CollectionTest):
         assert self.runs == 3
 
 
-@pytest.mark.skipif(_issync, reason="async support not available")
+@pytest.mark.skipif(issync, reason="async support not available")
 class TestAsyncCollections(_CollectionTest):
     def test_pipes_use_loopability_for_mapping(self):
         async_transformer = AsyncPipe("strtransform")

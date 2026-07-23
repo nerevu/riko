@@ -37,12 +37,12 @@ async def async_iter[T](
         Any: Each element from *elements* in order.
 
     Examples:
-        >>> from riko.bado import _issync, run
+        >>> from riko.bado import issync, run
         >>>
         >>> async def main():
         ...     print([x async for x in async_iter(range(3))])
         >>>
-        >>> if _issync:
+        >>> if issync:
         ...     [0, 1, 2]
         ... else:
         ...     run(main)
@@ -80,12 +80,12 @@ async def coop_reduce[T, S](  # noqa: E302
         Any: The final accumulated value.
 
     Examples:
-        >>> from riko.bado import _issync, run
+        >>> from riko.bado import issync, run
         >>>
         >>> async def main():
         ...     print(await coop_reduce(lambda x, y: x + y, range(5)))
         >>>
-        >>> if _issync:
+        >>> if issync:
         ...     10
         ... else:
         ...     run(main)
@@ -124,12 +124,12 @@ def async_reduce[T, S](
         Awaitable[Any]: The final accumulated value.
 
     Examples:
-        >>> from riko.bado import _issync, run
+        >>> from riko.bado import issync, run
         >>>
         >>> async def main():
         ...     print(await async_reduce(lambda x, y: x + y, range(5)))
         >>>
-        >>> if _issync:
+        >>> if issync:
         ...     10
         ... else:
         ...     run(main)
@@ -169,7 +169,7 @@ async def async_map[T, S](
         list: Results in iteration order.
 
     Examples:
-        >>> from riko.bado import _issync, run
+        >>> from riko.bado import issync, run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -177,7 +177,7 @@ async def async_map[T, S](
         >>> async def main():
         ...     print(await async_map(double, range(3)))
         >>>
-        >>> if _issync:
+        >>> if issync:
         ...     [0, 2, 4]
         ... else:
         ...     run(main)
