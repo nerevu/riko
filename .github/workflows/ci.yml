@@ -5,15 +5,33 @@ on:
     branches-ignore:
       - "v[0-9]+*"
   pull_request:
+    branches: [ main ]
 
 env:
   PYTHONHASHSEED: "94967295"
 
 jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sort imports
+        run: uvx ruff check --select I --fix
+
+      - name: Fix style issues
+        run: uvx ruff check --fix
+
+      - name: Format
+        run: uvx ruff format
+
   test:
-    # Ported from the old .travis.yml matrix: {python} x {optional}.
-    # `optional=true` installs every extra (perf/async/finance), which brings
-    # in Twisted so the async tests run instead of self-skipping.
     name: py${{ matrix.python-version }} (optional=${{ matrix.optional }})
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental == true }}
@@ -29,6 +47,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
 
       - name: Reject unconditional skips
         run: |
