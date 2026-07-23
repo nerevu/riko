@@ -118,6 +118,7 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
 NON_SORTABLE = (Mapping, Sequence)
+INVALID_FILECHAR_PATTERN = re.compile(r'[<>:"/\\\|\*?%]')
 
 _registry: dict[str, Generator[None, Item | StatefulItem, None]] = {}
 _receive_queue: dict[str, deque[tuple[StreamState | None, Item]]] = {}
@@ -551,7 +552,8 @@ class Fetch[B: (Literal[True], Literal[False])]:
         except URLError as e:
             if "File name too long" in str(e.reason):
                 raise
-            logger.error(f"Error opening {url}: {e.reason}")
+
+            logger.error(f"Error opening {truncate_content(url)}: {e.reason}")
 
     def __getattr__(self, name: str):
         if self.file is not None:

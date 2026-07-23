@@ -93,7 +93,7 @@
                     },
                     "value": {
                         "type": "text",
-                        "value": "file://riko/data/feeds.delicious.com_v2_rss_psychemedia?count=15.xml"
+                        "value": "file://riko/data/feeds.delicious.com_v2_rss_psychemedia_count=15.xml"
                     }
                 }
             },
