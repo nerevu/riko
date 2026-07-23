@@ -24,7 +24,7 @@ def pipe_404411a8d22104920f3fc1f428f33642(
                 {
                     "url": {
                         "type": "url",
-                        "value": "file://riko/data/feeds.delicious.com_v2_rss_popular?count=3.xml",
+                        "value": "file://riko/data/feeds.delicious.com_v2_rss_popular_count=3.xml",
                     }
                 }
             ),
@@ -37,7 +37,7 @@ def pipe_404411a8d22104920f3fc1f428f33642(
                 {
                     "url": {
                         "type": "url",
-                        "value": "file://riko/data/feeds.delicious.com_v2_rss_popular?count=15.xml",
+                        "value": "file://riko/data/feeds.delicious.com_v2_rss_popular_count=15.xml",
                     }
                 }
             ),

@@ -79,8 +79,8 @@ Examples:
         ...     print(len(d))
         ...
         >>> if _issync:
-        ...     Donations
-        ...     56
+        ...     print("Donations")
+        ...     print(56)
         ... else:
         ...     try:
         ...         react(run, _reactor=FakeReactor())
@@ -441,7 +441,7 @@ class SyncPipe(PyPipe):
             if not (pool := self.pool):
                 raise RuntimeError("Cannot reuse a closed worker pool")
 
-            self.map = pool.imap if ordered else pool.imap_unordered
+            self.map = pool.map if ordered else pool.imap_unordered
         else:
             self.workers = workers
             self.chunksize = chunksize or 1
@@ -703,7 +703,7 @@ class SyncCollection(PyCollection):
             if not (pool := self.pool):
                 raise RuntimeError("Cannot reuse a closed worker pool")
 
-            self.map = pool.imap if ordered else pool.imap_unordered
+            self.map = pool.map if ordered else pool.imap_unordered
         else:
             self.map = map
 

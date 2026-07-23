@@ -25,7 +25,11 @@ from os import getenv
 from typing import TypedDict, cast
 
 import pygogo as gogo
-from twisted.web.iweb import IResponse
+
+try:
+    from twisted.web.iweb import IResponse
+except ImportError:
+    IResponse = None  # type: ignore[assignment,misc]
 
 from riko import ENCODING
 from riko.bado import async_get, async_json, io

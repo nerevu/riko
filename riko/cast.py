@@ -218,6 +218,7 @@ def cast_datetime(  # noqa: E302
     value: DateLike,
     as_date=False,
     as_datedict=False,
+    try_local_tz=False,
 ) -> date | dt | DateDict | None:
     tt = None
 
@@ -260,7 +261,7 @@ def cast_datetime(  # noqa: E302
             _date = _date.date()
 
     if isinstance(_date, dt):
-        _date = ensure_tzinfo(_date)
+        _date = ensure_tzinfo(_date, try_local_tz=try_local_tz)
 
     if _date and as_datedict:
         tt = tt or date_to_tt(_date)

@@ -60,7 +60,7 @@ def parser(
         parsed = NaN
     else:
         try:
-            parsed = format_currency(amount, objconf.currency)
+            parsed = format_currency(amount, objconf.currency, locale="en_US")
         except ValueError:
             parsed = NaN
 

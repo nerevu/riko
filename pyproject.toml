@@ -1,5 +1,5 @@
 [project]
-version = "0.71.1"
+version = "0.71.2"
 name = "riko"
 authors = [
     {name = "Reuben Cummings", email = "reubano@gmail.com"}
@@ -20,7 +20,6 @@ classifiers=[
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
     "Environment :: Console",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Intended Audience :: Developers",
@@ -62,16 +61,24 @@ finance = [
 ]
 
 [dependency-groups]
-dev = [
+test = [
     "coverage>=4.3.4,<8.0.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.0.0,<8.0.0",
-    "pylint>=4.0.5,<5.0.0",
-    "ruff>=0.13.1",
-    "pytest-xdist>=3.8.0",
     "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.8.0",
+]
+
+lint = [
+    "ruff>=0.13.1",
+]
+
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
     "ipython>=8.39.0",
+    "pylint>=4.0.5,<5.0.0",
 ]
 
 [project.scripts]
@@ -195,6 +202,7 @@ timeout = 300
 markers = [
     "twisted: requires the Twisted optional dependency",
 ]
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.pylint.format]
 max-line-length=88
@@ -209,6 +217,63 @@ disable = [
     "bad-whitespace",
     # external dependencies graph report
     "RP0401",
+]
+
+[tool.tox]
+requires = [
+    "tox>=4.22",
+    "tox-uv>=1.13",
+]
+env_list = [
+    "py312",
+    "py312-optional",
+    "py313",
+    "py313-optional",
+    "py314",
+    "py314-optional",
+    "lint",
+]
+
+[tool.tox.env_run_base]
+description = "run the test suite ({env_name})"
+runner = "uv-venv-lock-runner"
+dependency_groups = ["test"]
+set_env = {PYTHONHASHSEED = "94967295", PYTHONWARNINGS = "all"}
+
+commands = [
+    [
+        "pytest",
+        { replace = "posargs", default = [], extend = true },
+    ],
+]
+
+[tool.tox.env.py312-optional]
+extras = ["perf", "async", "finance"]
+
+[tool.tox.env.py313-optional]
+extras = ["perf", "async", "finance"]
+
+[tool.tox.env.py314-optional]
+extras = ["perf", "async", "finance"]
+
+[tool.tox.env.lint]
+description = "run ruff lint and format checks"
+runner = "uv-venv-lock-runner"
+skip_install = true
+dependency_groups = ["lint"]
+
+commands = [
+    [
+        "ruff",
+        "check",
+        { replace = "posargs", default = ["."], extend = true },
+    ],
+    [
+        "ruff",
+        "format",
+        "--check",
+        { replace = "posargs", default = ["."], extend = true },
+    ],
 ]
 
 [tool.setuptools]

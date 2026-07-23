@@ -525,7 +525,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             ...     print(next(result))
             ...
             >>> if _issync:
-            ...     {'content': 'say "hello world" three times!'}
+            ...     print('say "hello world" three times!')
             ... else:
             ...     try:
             ...         react(run, _reactor=FakeReactor())
