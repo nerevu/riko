@@ -44,7 +44,7 @@ Examples:
     async usage::
 
         >>> from riko import get_path
-        >>> from riko.bado import run, _issync
+        >>> from riko.bado import run, issync
         >>> from riko.collections import AsyncPipe, AsyncCollection
         >>>
         >>> fconf = {'url': get_path('gigs.json'), 'path': 'value.items'}
@@ -61,7 +61,7 @@ Examples:
         ...
         ...     print(list(d))
         ...
-        >>> if _issync:
+        >>> if issync:
         ...     [{'count': 169}]
         ... else:
         ...     run(main)
@@ -74,7 +74,7 @@ Examples:
         ...     print(d[0]['title'])
         ...     print(len(d))
         ...
-        >>> if _issync:
+        >>> if issync:
         ...     print("Donations")
         ...     print(56)
         ... else:

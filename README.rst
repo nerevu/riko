@@ -296,7 +296,7 @@ An example using ``riko``'s asynchronous API.
 .. code-block:: python
 
     >>> from riko import get_path
-    >>> from riko.bado import run, _issync
+    >>> from riko.bado import run, issync
     >>> from riko.collections import AsyncPipe
     >>>
     >>> ### Set the pipe configurations ###
@@ -315,7 +315,7 @@ An example using ``riko``'s asynchronous API.
     ...             .filter(conf={'rule': filter_rule}))            # 2
     ...     print(next(stream)['title'])                            # 3
     >>>
-    >>> if _issync:
+    >>> if issync:
     ...     print('Donations')
     ... else:
     ...     run(main)

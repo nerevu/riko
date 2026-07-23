@@ -16,7 +16,7 @@ from typing import cast
 import pytest
 
 from riko import Context, ExecutionMode, listize
-from riko.bado import _issync, run
+from riko.bado import issync, run
 from riko.compile import _resolve_module, abuild_pipeline, build_pipeline
 from riko.exceptions import UnsupportedModuleError
 from riko.types.general import (
@@ -279,7 +279,7 @@ class TestBasics:
         assert item["k:content"].startswith("<p>Hello, I need to fix an application")
         assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
 
-    @pytest.mark.skipif(_issync, reason="async support not installed")
+    @pytest.mark.skipif(issync, reason="async support not installed")
     def test_async_kazeeki1(self):
         """Loads the async kazeeki simple test fetchdata pipeline."""
         pipe_name = "pipe_async_kazeeki1"
@@ -315,7 +315,7 @@ class TestBasics:
         assert item["k:content"].startswith(" With this specification sheet we")
         assert item["k:content"].endswith("for implementing a website for a german...")
 
-    @pytest.mark.skipif(_issync, reason="async support not installed")
+    @pytest.mark.skipif(issync, reason="async support not installed")
     def test_async_kazeeki2(self):
         """Loads the async kazeeki simple test itembuilder pipeline."""
         pipe_name = "pipe_async_kazeeki2"

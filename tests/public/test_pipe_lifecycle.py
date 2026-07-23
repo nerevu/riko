@@ -12,7 +12,7 @@ raises PipelineStateError on further iteration. Sync and async behave alike, so
 import pytest
 
 from riko import get_path
-from riko.bado import _issync, run
+from riko.bado import issync, run
 from riko.bado.itertools import async_iter
 from riko.collections import (
     AsyncCollection,
@@ -149,7 +149,7 @@ class TestSyncLifecycle:
         assert stream.state is PipeState.CLOSED
 
 
-@pytest.mark.skipif(_issync, reason="async support not available")
+@pytest.mark.skipif(issync, reason="async support not available")
 class TestAsyncLifecycle:
     def test_new_state(self):
         assert AsyncPipe("itembuilder", conf=BUILDER_CONF).state is PipeState.NEW
@@ -351,7 +351,7 @@ class TestAsyncLifecycle:
         assert result["state"] is PipeState.CLOSED
 
 
-@pytest.mark.skipif(_issync, reason="async support not available")
+@pytest.mark.skipif(issync, reason="async support not available")
 class TestAsyncSourceAdapter:
     """
     ``AsyncPipe._resolve_source`` accepts a sync iterable (via ``async_iter``),

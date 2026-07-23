@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from riko.bado import _issync
+from riko.bado import issync
 
 PARENT_DIR = Path(__file__).parent.parent.parent.absolute()
 DEMO_SCRIPT = "runpipe"
@@ -117,7 +117,7 @@ def test_demo_sync(value):
 
 
 @pytest.mark.anyio
-@pytest.mark.skipif(_issync, reason="async support not installed")
+@pytest.mark.skipif(issync, reason="async support not installed")
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_async(value):
     argument, expected = value

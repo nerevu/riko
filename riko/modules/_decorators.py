@@ -323,7 +323,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
                 input `item`.
 
         Examples:
-            >>> from riko.bado import run, async_return, _issync
+            >>> from riko.bado import run, async_return, issync
             >>>
             >>> @processor()
             ... def pipe(item, extraction, objconf, **kwargs):
@@ -346,7 +346,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             ...     result = await async_pipe(item, **kwargs)
             ...     print(next(result))
             ...
-            >>> if _issync:
+            >>> if issync:
             ...     {'content': 'say "hello world" three times!'}
             ... else:
             ...     run(main)
@@ -494,7 +494,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import run, _issync
+            >>> from riko.bado import run, issync
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
@@ -519,7 +519,7 @@ class processor[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             ...     result = await async_pipe(item, **kwargs)
             ...     print(next(result))
             ...
-            >>> if _issync:
+            >>> if issync:
             ...     print('say "hello world" three times!')
             ... else:
             ...     run(main)
@@ -687,7 +687,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import run, async_return, _issync
+            >>> from riko.bado import run, async_return, issync
             >>>
             >>> # emit is True by default
             >>> # and operators can't skip items, so the pipe is passed an
@@ -730,7 +730,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             ...     r2 = await async_pipe2(items, **kwargs)
             ...     print(next(r2))
             ...
-            >>> if _issync:
+            >>> if issync:
             ...     {'content': 'say "hello world" three times!'}
             ...     {'content': 4}
             ... else:
@@ -853,7 +853,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
 
         Examples:
             >>> from riko import bado
-            >>> from riko.bado import run, _issync
+            >>> from riko.bado import run, issync
             >>>
             >>> opts = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
@@ -903,7 +903,7 @@ class operator[B: (Literal[True], Literal[False])](Module):  # noqa: N801
             ...     r2 = await wrapped_async_pipe2(items, **kwargs)
             ...     print(next(r2))
             ...
-            >>> if _issync:
+            >>> if issync:
             ...     {'content': 'say "hello world" three times!'}
             ...     {'content': 4}
             ... else:

@@ -8,7 +8,7 @@ from timeit import repeat
 from typing import cast
 
 from riko import get_path
-from riko.bado import _isasync, async_sleep
+from riko.bado import async_sleep, isasync
 from riko.bado import run as async_run
 from riko.bado.itertools import async_map
 from riko.collections import (
@@ -159,7 +159,7 @@ def main():
         "par_sync_collection",
     ]
 
-    if _isasync:
+    if isasync:
         async_tests = [baseline_async, async_pipeline, async_pipe2, async_collection]
         combined_tests = sync_tests + [f.__name__ for f in async_tests]
     else:
@@ -173,7 +173,7 @@ def main():
         run_time, units = parse_results(results)
         print_time(test, max_chars, run_time, units)
 
-    if _isasync:
+    if isasync:
         async_run(run_async, async_tests, max_chars)
 
 

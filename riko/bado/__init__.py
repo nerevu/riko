@@ -49,8 +49,8 @@ else:
 
 backend = "empty" if run is None else "anyio"
 async_partial = lambda f, **kwargs: partial(maybe_deferred, f, **kwargs)  # noqa: E731
-_issync = backend == "empty"
-_isasync = not _issync
+issync = backend == "empty"
+isasync = not issync
 
 __all__ = [
     "CapacityLimiter",
@@ -65,6 +65,8 @@ __all__ = [
     "create_memory_object_stream",
     "create_task_group",
     "gather_results",
+    "isasync",
+    "issync",
     "lowlevel",
     "maybe_deferred",
     "run",

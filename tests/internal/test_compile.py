@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from riko import Context
-from riko.bado import _issync
+from riko.bado import issync
 from riko.compile import (
     _resolve_module,
     _wire,
@@ -227,7 +227,7 @@ def test_convert_dag_generates_ids_when_omitted():
 
 
 @pytest.mark.anyio
-@pytest.mark.skipif(_issync, reason="async support not installed")
+@pytest.mark.skipif(issync, reason="async support not installed")
 def test_async_codegen_matches_sync():
     """
     ``compile(is_async=True)`` emits a runnable anyio pipeline whose output

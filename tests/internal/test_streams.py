@@ -6,10 +6,10 @@ concurrent mapping, order-independent results, and bounded-memory backpressure.
 
 import pytest
 
-from riko.bado import _isasync, lowlevel, run
+from riko.bado import isasync, lowlevel, run
 from riko.bado.streams import async_map_stream
 
-pytestmark = pytest.mark.skipif(not _isasync, reason="anyio not installed")
+pytestmark = pytest.mark.skipif(not isasync, reason="anyio not installed")
 
 
 async def _double(x: int) -> int:

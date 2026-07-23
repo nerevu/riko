@@ -1,6 +1,6 @@
 import pytest
 
-from riko.bado import _issync
+from riko.bado import issync
 from riko.utils import reset_pubsub
 
 try:
@@ -34,7 +34,7 @@ def pytest_collection_modifyitems(items):
 
         name = item.name
 
-        if _issync and ("async" in name or name in _TWISTED_ONLY_DOCTESTS):
+        if issync and ("async" in name or name in _TWISTED_ONLY_DOCTESTS):
             item.add_marker(skip_async)
         elif not _has_lxml and "xpathfetchpage" in name:
             item.add_marker(skip_lxml)
