@@ -12,10 +12,9 @@ raises PipelineStateError on further iteration. Sync and async behave alike, so
 from typing import cast
 
 import pytest
-from twisted.internet.interfaces import IReactorCore
 
 from riko import get_path
-from riko.bado import _issync, react
+from riko.bado import IReactorCore, _issync, react
 from riko.bado.itertools import async_iter
 from riko.bado.mock import FakeReactor
 from riko.collections import (

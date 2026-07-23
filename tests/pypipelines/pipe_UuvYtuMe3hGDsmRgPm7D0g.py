@@ -47,7 +47,7 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(
                 {
                     "url": {
                         "type": "url",
-                        "value": "file://riko/data/spreadsheets.google.com_pub?key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv",
+                        "value": "file://riko/data/spreadsheets.google.com_pub_key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv",
                     },
                     "other_sep": {"type": "text", "value": ""},
                     "col_names": [

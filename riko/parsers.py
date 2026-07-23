@@ -178,25 +178,38 @@ def get_text(html: str, convert_charrefs=False):
 # The overloads are so I can call parse_rss(**kwargs) with Pyright complaining.
 # https://stackoverflow.com/q/79673094
 @overload
-def parse_rss(url: str, **kwargs: BasicArg) -> list[ParserRSSEntry]: ...  # noqa: E704
+def parse_rss(  # noqa: E704
+    url: str, *, content: None = ..., **kwargs: BasicArg
+) -> list[ParserRSSEntry]: ...
+@overload  # noqa: E302
+def parse_rss(  # noqa: E704
+    *, content: str | bytes, **kwargs: BasicArg
+) -> list[ParserRSSEntry]: ...
 @overload
-def parse_rss(**kwargs: BasicArg) -> list[ParserRSSEntry]: ...  # noqa: E704
-def parse_rss(url: BasicArg = "", **kwargs: BasicArg) -> list[ParserRSSEntry]:  # noqa: E302
+def parse_rss(**kwargs) -> list[ParserRSSEntry]: ...  # noqa: E704
+def parse_rss(  # noqa: E302
+    url: BasicArg = "", *, content: str | bytes | None = None, **kwargs: BasicArg
+) -> list[ParserRSSEntry]:
     f = None
 
-    try:
-        f = Fetch(str(url), binary=True, **kwargs)
-    except URLError:
-        source, url = str(url), "content"
-    else:
-        if f.file and IS_FASTFEEDPARSER:
-            # include_content=True, include_tags=True, include_media=True,
-            # include_enclosures=True
-            source = f.read()
-        elif f.file:
-            source = f.file
+    if content is None:
+        source_name = str(url)
+
+        try:
+            f = Fetch(source_name, binary=True, **kwargs)
+        except URLError:
+            source, source_name = source_name, "content"
         else:
-            source = b""
+            if f.file and IS_FASTFEEDPARSER:
+                # include_content=True, include_tags=True, include_media=True,
+                # include_enclosures=True
+                source = f.read()
+            elif f.file:
+                source = f.file
+            else:
+                source = b""
+    else:
+        source, source_name = content, "content"
 
     try:
         parsed = rss_parser.parse(source)  # pyright: ignore[reportArgumentType]
@@ -208,16 +221,16 @@ def parse_rss(url: BasicArg = "", **kwargs: BasicArg) -> list[ParserRSSEntry]:  
     entry_count = len(parsed.entries)
 
     if bozo is False and not entry_count:
-        logger.warning(f"Parsed {url} successfully but no entries were found.")
+        logger.warning(f"Parsed {source_name} successfully but no entries were found.")
     elif (bozo is False) or (entry_count > 3):
         pass
     elif bozo_exception := parsed.get("bozo_exception"):
         if isinstance(bozo_exception, SAXParseException):
             msg = bozo_exception.getMessage()
-            logger.warning(f"Error parsing {url}: {msg}")
+            logger.warning(f"Error parsing {source_name}: {msg}")
         else:
             msg = str(bozo_exception)
-            logger.error(f"Error parsing {url}: {msg}")
+            logger.error(f"Error parsing {source_name}: {msg}")
 
         logger.warning(f"Content: {truncate_content(source)}")
 

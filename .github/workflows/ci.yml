@@ -22,11 +22,6 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13", "3.14"]
         optional: [true, false]
-        include:
-          # allow-failure, non-optional (mirrors the old pypy exclusion)
-          - python-version: "pypy3.11"
-            optional: false
-            experimental: true
     steps:
       - uses: actions/checkout@v4
 

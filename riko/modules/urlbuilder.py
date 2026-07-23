@@ -61,14 +61,13 @@ import pygogo as gogo
 from riko.types.configs import UrlBuilderObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import ObjconfParam
+from riko.utils import INVALID_FILECHAR_PATTERN
 
 from . import processor
 
 OPTS: Opts = {"extract": "param", "listize": True, "emit": True}
 DEFAULTS: Defaults = {}
 logger = gogo.Gogo(__name__, monolog=True).logger
-
-PATTERN = re.compile(r'[<>:"/\\\|\*%]')
 
 
 def parser(
@@ -114,7 +113,7 @@ def parser(
     stream = f"{joined}?{encoded}" if encoded else joined
 
     if objconf.ext:
-        substituted = re.sub(PATTERN, "_", stream)
+        substituted = re.sub(INVALID_FILECHAR_PATTERN, "_", stream)
         stream = f"{substituted}.{objconf.ext}"
 
     return stream

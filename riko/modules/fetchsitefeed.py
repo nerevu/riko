@@ -91,7 +91,7 @@ async def async_parser(
     rss = await autorss.async_get_rss(objconf.url)
     link = str(next(rss)["link"])
     content = await io.async_url_read(link)
-    entries = parse_rss(content)
+    entries = parse_rss(content=content)
     return augment_entries(entries)
 
 

@@ -1204,7 +1204,7 @@ wheels = [
 
 [[package]]
 name = "riko"
-version = "0.71.0"
+version = "0.71.1"
 source = { editable = "." }
 dependencies = [
     { name = "babel" },
@@ -1248,6 +1248,17 @@ dev = [
     { name = "pytest-xdist" },
     { name = "ruff" },
 ]
+lint = [
+    { name = "ruff" },
+]
+test = [
+    { name = "coverage" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-timeout" },
+    { name = "pytest-xdist" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1284,6 +1295,15 @@ dev = [
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.13.1" },
+]
+lint = [{ name = "ruff", specifier = ">=0.13.1" }]
+test = [
+    { name = "coverage", specifier = ">=4.3.4,<8.0.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "pytest-cov", specifier = ">=7.0.0,<8.0.0" },
+    { name = "pytest-timeout", specifier = ">=2.4.0" },
+    { name = "pytest-xdist", specifier = ">=3.8.0" },
 ]
 
 [[package]]

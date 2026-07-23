@@ -118,6 +118,7 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
 NON_SORTABLE = (Mapping, Sequence)
+INVALID_FILECHAR_PATTERN = re.compile(r'[<>:"/\\\|\*?%]')
 
 _registry: dict[str, Generator[None, Item | StatefulItem, None]] = {}
 _receive_queue: dict[str, deque[tuple[StreamState | None, Item]]] = {}
@@ -551,7 +552,8 @@ class Fetch[B: (Literal[True], Literal[False])]:
         except URLError as e:
             if "File name too long" in str(e.reason):
                 raise
-            logger.error(f"Error opening {url}: {e.reason}")
+
+            logger.error(f"Error opening {truncate_content(url)}: {e.reason}")
 
     def __getattr__(self, name: str):
         if self.file is not None:
@@ -560,7 +562,15 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
     def close(self):
         if self.file:
-            self.file.close()
+            response = getattr(self.file, "_r", None)
+
+            try:
+                self.file.close()
+            finally:
+                if response is not None:
+                    response.close()
+
+            self.file = None
 
     def __enter__(self):
         return self
@@ -1012,12 +1022,36 @@ def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
     return it.chain.from_iterable(sources)
 
 
+def _get_entry_text(entry: ParserRSSEntry) -> str:
+    """
+    Return the first non-empty text from summary, description, content, or title.
+
+    ``content`` is treated as a list of mappings and only the first item's
+    ``value`` is used as a fallback.
+    """
+    text = str(entry.get("summary") or entry.get("description") or "")
+    content = entry.get("content") or []
+    first = next(iter(content), {})
+
+    if not text and isinstance(first, Mapping):
+        text = str(first.get("value") or "")
+
+    if not text:
+        text = str(entry.get("title") or "")
+
+    return text
+
+
 def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
     for entry in entries:
+        text = _get_entry_text(entry)
         pub_date = updated_date = None
 
-        if "summary" not in entry:
-            entry["summary"] = entry["description"]
+        if not entry.get("summary"):
+            entry["summary"] = text
+
+        if not entry.get("description"):
+            entry["description"] = text
 
         if "published_parsed" in entry:
             pub_date = updated_date = entry["published_parsed"]

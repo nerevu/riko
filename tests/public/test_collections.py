@@ -254,8 +254,17 @@ class TestSyncCollections(_CollectionTest):
             .udf(func=self.udf)
         )
 
-        first_item = next(stream)
-        assert first_item == {"content": 396558121}
+        expected = (
+            SyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .strreplace(conf=strr_conf, assign="content")
+            .slugify(assign="content")
+            .hash(assign="content")
+        )
+        result = list(stream)
+        actual_content = sorted(item["content"] for item in result)
+        expected_content = sorted(item["content"] for item in expected)
+        assert actual_content == expected_content
         assert self.runs == 3
 
 

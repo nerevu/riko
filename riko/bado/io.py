@@ -36,7 +36,10 @@ CHUNK_SIZE = 32 * 1024  # 32KB
 # http://stackoverflow.com/q/26314586/408556
 # http://stackoverflow.com/q/8157197/408556
 # http://stackoverflow.com/a/33708936/408556
-class FileReader(testing.AccumulatingProtocol):
+_AccumulatingProtocol = testing.AccumulatingProtocol if testing is not None else object
+
+
+class FileReader(_AccumulatingProtocol):  # type: ignore[misc]
     transport: "StringTransport"  # type: ignore[reportIncompatibleVariableOverride]
     consumer: "IConsumer"  # set by registerProducer
     lastSent: bytes  # noqa: N815 set by FileSender.resumeProducing
