@@ -342,7 +342,9 @@ class TestBasics:
         for i in items:
             assert cast(dict, i) == {"forever": True}
 
-    @pytest.mark.xfail(reason="loop/regex-ref handling incomplete (see docs/ROADMAP.md)")
+    @pytest.mark.xfail(
+        reason="loop/regex-ref handling incomplete (see docs/ROADMAP.md)"
+    )
     def test_filtered_multiple_sources(self):
         """
         Loads the filter multiple sources pipeline and compiles and executes it to check
