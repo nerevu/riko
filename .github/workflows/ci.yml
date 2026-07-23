@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Lint
-        run: uv run manage lint
+        run: uv run manage lint -t
 
       - name: Test
         run: uv run manage test

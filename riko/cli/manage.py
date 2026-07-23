@@ -23,6 +23,7 @@ tox = shutil.which("tox")
 pytest = shutil.which("pytest")
 ruff = shutil.which("ruff")
 pylint = shutil.which("pylint")
+pyright = shutil.which("pyright")
 
 
 def parse_verbosity(verbose=0, quiet=None):
@@ -99,6 +100,7 @@ def check():
 @manager.command()
 @click.option("-w", "--where", help="Modules to check")
 @click.option("-F", "--unsafe-fixes", help="View unsafe fixes", is_flag=True)
+@click.option("-t", "--types", help="Check with pyright", is_flag=True)
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
 @click.option(
     "-p",
@@ -106,7 +108,7 @@ def check():
     help="Run linter in parallel in multiple processes",
     is_flag=True,
 )
-def lint(where=None, unsafe_fixes=False, strict=False, parallel=False):
+def lint(where=None, unsafe_fixes=False, strict=False, types=False, parallel=False):
     """Check style with linters"""
     where = where or ""
     r_args = ["check"]
@@ -124,6 +126,14 @@ def lint(where=None, unsafe_fixes=False, strict=False, parallel=False):
             exit(e.returncode)
     else:
         raise RuntimeError("ruff not found")
+
+    if types and pyright:
+        try:
+            check_call([pyright])
+        except CalledProcessError as e:
+            exit(e.returncode)
+    elif types:
+        raise RuntimeError("pyright not found")
 
     if strict and pylint:
         args = [pylint, "--rcfile=tests/standard.rc", "-rn", "-fparseable", "riko"]
