@@ -18,7 +18,10 @@ def reset_pubsub_state():
     reset_pubsub()
 
 
-_TWISTED_ONLY_DOCTESTS = {"riko.bado.itertools.ensure_deferred", "riko.bado.mock.FakeReactor"}
+_TWISTED_ONLY_DOCTESTS = {
+    "riko.bado.itertools.ensure_deferred",
+    "riko.bado.mock.FakeReactor",
+}
 
 
 def pytest_collection_modifyitems(items):
