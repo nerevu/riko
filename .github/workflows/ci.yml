@@ -63,9 +63,14 @@ jobs:
           else
             uv sync --group dev
           fi
+          # Force an editable install of riko so the run steps always use the
+          # current checkout. `uv sync` otherwise installs a built wheel that uv
+          # serves from the persisted cache keyed by the (unchanged) version,
+          # so source-only changes (new CLI options) never take effect on CI.
+          uv pip install --reinstall --no-deps --editable .
 
       - name: Lint
-        run: uv run manage lint
+        run: uv run --no-sync manage lint -t
 
       - name: Test
-        run: uv run manage test
+        run: uv run --no-sync manage test

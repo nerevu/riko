@@ -63,6 +63,7 @@ Python stream processing engine modeled after Yahoo! Pipes.
 
 ## Project Quirks
 
+- **uv** - prefix all `uv` commands with `--active` to use the currently active venv vs the default .venv folder
 - **Python 3.12+** — `requires-python = ">=3.12"`; use PEP 695 type params (`def f[T](...)`), `X | Y` unions, etc.
 - **`meza` pinned to git** — `pyproject.toml` sources meza from `github.com/reubano/meza` at a specific commit; meza owns conversion work (`docs/ROADMAP.md` §25)
 - **Doctests are tests** — `pytest --doctest-modules` runs all `>>>` blocks in source; keep them passing

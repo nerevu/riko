@@ -80,6 +80,7 @@ dev = [
     "ipython>=8.39.0",
     "pre-commit>=4.6.1",
     "pylint>=4.0.5,<5.0.0",
+    "pyright>=1.1.411",
 ]
 
 [project.scripts]
@@ -89,6 +90,13 @@ benchmark = "riko.cli.benchmark:main"
 compile-pipe = "riko.cli.compile:run"
 convert-dag = "riko.cli.convert_dag:run"
 gen-config = "riko.cli.gen_config:main"
+
+[tool.uv]
+# Rebuild the local `riko` install when any source file changes, not just when
+# pyproject.toml/setup.py change (uv's default). Without this, edits under
+# `riko/` (e.g. new CLI options) don't invalidate the cached build, so
+# `uv sync`/tox/CI keep reusing a stale wheel of the unchanged version.
+cache-keys = [{ file = "pyproject.toml" }, { file = "riko/**/*.py" }]
 
 [tool.ruff]
 extend-exclude = [
