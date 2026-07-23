@@ -20,7 +20,6 @@ sys.excepthook = partial(exception_hook, debug=False)
 
 uv = shutil.which("uv")
 tox = shutil.which("tox")
-detox = shutil.which("detox")
 pytest = shutil.which("pytest")
 ruff = shutil.which("ruff")
 pylint = shutil.which("pylint")
@@ -211,7 +210,6 @@ def prettify(where=None, sort=True):
     default=True,
 )
 @click.option("-t", "--tox", help="Run tox tests", is_flag=True)
-@click.option("-d", "--detox", help="Run detox tests", is_flag=True)
 @click.option("-v", "--verbose", help="Use detailed errors", is_flag=True)
 @click.option(
     "-p",
@@ -236,15 +234,11 @@ def test(where=None, stop=None, **kwargs):  # noqa: PT028
 
     try:
         if tox and kwargs.get("tox") and kwargs.get("parallel"):
-            check_call([tox, "-p", "auto"])
+            check_call([tox, "p"])
         elif tox and kwargs.get("tox"):
-            check_call([tox])
+            check_call([tox, "r"])
         elif kwargs.get("tox"):
             raise RuntimeError("tox not found")
-        elif detox and kwargs.get("detox"):
-            pass
-        elif kwargs.get("detox"):
-            raise RuntimeError("detox not found")
         elif pytest:
             cmd = opts
 
