@@ -78,6 +78,7 @@ dev = [
     { include-group = "test" },
     { include-group = "lint" },
     "ipython>=8.39.0",
+    "pre-commit>=4.6.1",
     "pylint>=4.0.5,<5.0.0",
 ]
 
