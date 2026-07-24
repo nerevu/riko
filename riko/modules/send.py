@@ -26,6 +26,7 @@ Examples:
 
 import pygogo as gogo
 
+from riko._pubsub import async_hub
 from riko.types.configs import SendObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from riko.utils import send
@@ -33,7 +34,7 @@ from riko.utils import send
 from . import operator
 
 OPTS: Opts = {"pollable": True, "emit": True}
-DEFAULTS: Defaults = {}
+DEFAULTS: Defaults = {"max_wait": 5}
 logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -132,3 +133,42 @@ def pipe(*args, **kwargs) -> Stream:
 
     """
     return parser(*args, **kwargs)
+
+
+async def async_parser(
+    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs
+) -> Stream:
+    """
+    Publishes each stream item to every target's AnyIO channel, then completes
+    (closes the channel) so receivers terminate. Publishing rendezvouses with
+    the receiver, so no startup ordering is needed; a target that is never
+    subscribed is bounded by ``objconf.max_wait`` and raises
+    ``ReceiverUnavailableError``. Returns the original items (passthrough).
+    """
+    others = kwargs["others"]
+    timeout = objconf.max_wait
+    sent = []
+
+    for item in stream:
+        await async_hub.publish(others, item, timeout=timeout)
+        sent.append(item)
+
+    await async_hub.complete(others)
+    return iter(sent)
+
+
+@operator(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args, **kwargs) -> Stream:
+    """
+    An async operator that pushes stream items to receiver targets over AnyIO
+    channels.
+
+    Kwargs:
+        others Iter[(str)]: Target names to receive each stream item.
+        conf (dict): The pipe configuration. May contain 'name' and 'max_wait'.
+
+    Yields:
+        dict: an item
+
+    """
+    return await async_parser(*args, **kwargs)

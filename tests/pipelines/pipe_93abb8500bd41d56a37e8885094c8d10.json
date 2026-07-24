@@ -59,14 +59,14 @@
                             "value": "terms"
                         }
                     }
-                },
-                "field": {
-                    "type": "text",
-                    "value": "title"
                 }
             },
             "id": "sw-500",
-            "type": "loop"
+            "type": "loop",
+            "field": {
+                "type": "text",
+                "value": "title"
+            }
         }
     ],
     "terminaldata": [

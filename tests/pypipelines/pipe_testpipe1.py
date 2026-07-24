@@ -13,9 +13,9 @@ def pipe_testpipe1(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetch", "filter"]
+        _OUTPUT = ["fetch", "filter"]
     else:
         sw_90 = fetch(
             None,
@@ -42,9 +42,8 @@ def pipe_testpipe1(
             context=context,
         )
         _OUTPUT = sw_102
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

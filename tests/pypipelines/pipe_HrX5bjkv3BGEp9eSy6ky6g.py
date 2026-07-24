@@ -22,9 +22,9 @@ def pipe_HrX5bjkv3BGEp9eSy6ky6g(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["feedautodiscovery", "loop", "sort", "truncate"]
+        _OUTPUT = ["feedautodiscovery", "loop", "sort", "truncate"]
     else:
         sw_149 = feedautodiscovery(
             None,
@@ -76,9 +76,8 @@ def pipe_HrX5bjkv3BGEp9eSy6ky6g(
             context=context,
         )
         _OUTPUT = sw_191
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

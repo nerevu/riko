@@ -69,11 +69,10 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('spreadsheet.csv')
         ...     conf = {
         ...         'url': url, 'sanitize': True, 'skip_rows': 0,
@@ -82,11 +81,7 @@ async def async_parser(
         ...     result = await async_parser(None, None, objconf, stream={})
         ...     print(next(result)['mileage'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         7213
 
     """
@@ -165,22 +160,17 @@ async def async_pipe(*args, **kwargs) -> Stream:
             col_names (List[str]): Custom column names (default: None).
 
     Returns:
-        dict: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe(conf={'url': get_path('spreadsheet.csv')})
         ...     print(next(result)['mileage'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         7213
 
     """

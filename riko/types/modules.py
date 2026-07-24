@@ -50,7 +50,7 @@ class InferenceSource(StrEnum):
 class ReturnInference:
     kind: OperatorReturnKind
     source: InferenceSource | None
-    reason: str | None = None
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,8 +206,6 @@ class Embed(TypedDict):
 class LoopRawConf(TypedDict):
     count: Value
     embed: Embed
-    assign: NotRequired[ConfArg]
-    field: NotRequired[ConfArg]
 
 
 class CountRawConf(TypedDict, total=False):
@@ -357,6 +355,7 @@ class RenameRawConf(TypedDict):
 
 class SendRawConf(TypedDict):
     name: Value
+    max_wait: NotRequired[Value]
 
 
 class SimpleMathRawConf(TypedDict):
@@ -601,8 +600,8 @@ class SortConf(TypedDict):
 
 
 class InputConf(TypedDict, total=False):
-    prompt: Required[str]
     type: Required["CastType"]
+    prompt: str
     default: str
     test: bool
     input_key: str
@@ -610,7 +609,7 @@ class InputConf(TypedDict, total=False):
 
 class FetchConf(TypedDict, total=False):
     url: str
-    delay: int
+    delay: float
 
 
 class TailConf(TypedDict):
@@ -717,8 +716,8 @@ class FetchTextConf(TypedDict):
 class FilterConf(TypedDict):
     rule: FilterConfRule | list[FilterConfRule]
     combine: Literal["and", "or"] = "and"
-    permit: bool = True
-    stop: bool = False
+    permit: NotRequired[bool] = True
+    stop: NotRequired[bool] = False
 
 
 class GeolocateConf(TypedDict):
@@ -752,8 +751,9 @@ class RenameConf(TypedDict):
     rule: RenameConfRule | list[RenameConfRule]
 
 
-class SendConf(TypedDict):
+class SendConf(TypedDict, total=False):
     name: str
+    max_wait: int | float = 5
 
 
 class SimpleMathConf(TypedDict):
@@ -834,7 +834,7 @@ class UdfConf(TypedDict):
 
 class UniqConf(TypedDict):
     uniq_key: str = "content"
-    limit: int = 1024
+    limit: NotRequired[int] = 1024
 
 
 class UrlBuilderConf(TypedDict, total=False):

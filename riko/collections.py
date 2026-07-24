@@ -44,8 +44,7 @@ Examples:
     async usage::
 
         >>> from riko import get_path
-        >>> from riko.bado import react, _issync
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run, issync
         >>> from riko.collections import AsyncPipe, AsyncCollection
         >>>
         >>> fconf = {'url': get_path('gigs.json'), 'path': 'value.items'}
@@ -53,7 +52,7 @@ Examples:
         >>> str_kwargs = {'field': 'description', 'emit': True}
         >>> sort_conf = {'rule': {'field': 'title'}}
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     d = await (AsyncPipe('fetchdata', conf=fconf)
         ...         .sort(conf=sort_conf)
         ...         .tokenizer(conf=str_conf, **str_kwargs)
@@ -62,15 +61,12 @@ Examples:
         ...
         ...     print(list(d))
         ...
-        >>> if _issync:
+        >>> if issync:
         ...     [{'count': 169}]
         ... else:
-        ...     try:
-        ...         react(run, _reactor=FakeReactor())
-        ...     except SystemExit:
-        ...         pass
+        ...     run(main)
         [{'count': 169}]
-        >>> async def run(reactor):
+        >>> async def main():
         ...     fconf['type'] = 'fetchdata'
         ...     sources = [{'url': get_path('feed.xml')}, fconf]
         ...     s = await AsyncCollection(sources)
@@ -78,14 +74,11 @@ Examples:
         ...     print(d[0]['title'])
         ...     print(len(d))
         ...
-        >>> if _issync:
+        >>> if issync:
         ...     print("Donations")
         ...     print(56)
         ... else:
-        ...     try:
-        ...         react(run, _reactor=FakeReactor())
-        ...     except SystemExit:
-        ...         pass
+        ...     run(main)
         Donations
         56
 
@@ -98,7 +91,6 @@ from collections.abc import (
     Callable,
     Generator,
     Iterable,
-    Iterator,
     Mapping,
 )
 from enum import StrEnum
@@ -129,6 +121,7 @@ from meza import convert as cv
 from meza import io
 
 from riko import Context
+from riko._pubsub import sync_hub
 from riko.bado import async_return
 from riko.bado.itertools import async_iter, async_map
 from riko.compile import _resolve_module
@@ -145,8 +138,8 @@ from riko.types.general import (
     Stream,
     SyncPipeParser,
 )
-from riko.types.values import BasicValue, StreamState
-from riko.utils import _ids, parse_context, send
+from riko.types.values import BasicValue
+from riko.utils import parse_context
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
@@ -350,7 +343,9 @@ class PyPipe(_Lifecycle):
     def __init__(
         self,
         name: str | None = None,
-        parallel=False,
+        source: AsyncItems | Awaitable[Items] | Items | None = None,
+        *,
+        parallel: bool = False,
         inputs: Mapping | None = None,
         context: Context | None = None,
         conf: Conf = None,
@@ -358,6 +353,7 @@ class PyPipe(_Lifecycle):
     ):
         self._state = PipeState.NEW
         self.name = name
+        self.source = source
         self.parallel = parallel
         self.verbose = kwargs.get("verbose")
         self.test = kwargs.get("test")
@@ -374,6 +370,11 @@ class PyPipe(_Lifecycle):
         self.kwargs.update(kwargs)
         return self
 
+    def _notify_subscribers(self) -> None:
+        if self.name == "send":
+            ids = cast(dict[str, int], self.kwargs.get("ids", {}))
+            sync_hub.notify_complete(ids)
+
 
 class SyncPipe(PyPipe):
     """A synchronous Pipe object"""
@@ -381,11 +382,8 @@ class SyncPipe(PyPipe):
     def __init__(
         self,
         name: str | None = None,
-        parallel: bool = False,
-        inputs: Mapping | None = None,
-        context: Context | None = None,
-        conf: Conf = None,
         source: Items | None = None,
+        *,
         workers: int | None = None,
         chunksize: int | None = None,
         threads: bool | None = True,
@@ -395,16 +393,13 @@ class SyncPipe(PyPipe):
         ordered: bool | None = False,
         **kwargs,
     ):
-        super().__init__(
-            name, parallel=parallel, inputs=inputs, context=context, conf=conf, **kwargs
-        )
-        self.source = source
+        super().__init__(name, source, **kwargs)
         self.threads = threads
         self.pool_scope = pool_scope
         self.ordered = ordered
         self._iter: Generator[Item, None, None] | None = None
-        self._mapped: Iterator[Stream] | None = None
-        self.map: Callable[..., Iterator[Stream]]
+        self._mapped: Iterable[Stream] | None = None
+        self.map: Callable[..., Iterable[Stream]]
         self._in_context = False
         self._terminal = True
 
@@ -567,12 +562,6 @@ class SyncPipe(PyPipe):
 
         return result
 
-    def _notify_subscribers(self):
-        if self.name == "send":
-            ids = cast(dict[str, int], self.kwargs.get("ids", {}))
-            targets = [t for t, tid in ids.items() if _ids.get(t) == tid]
-            [send(target, {"state": StreamState.DONE}) for target in targets]
-
     def _stream(self) -> Generator[Item, None, None]:
         if self.name == "send":
             self.kwargs.setdefault("ids", {})
@@ -650,6 +639,7 @@ class PyCollection(_Lifecycle):
     def __init__(
         self,
         sources: Iterable[Mapping[str, str]],
+        *,
         conf: Conf = None,
         parallel=False,
         workers=None,
@@ -678,17 +668,18 @@ class SyncCollection(PyCollection):
 
     def __init__(
         self,
-        *args,
+        sources,
+        *,
         threads: bool | None = True,
         ordered: bool | None = False,
         pool: AnyPool | None = None,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(sources, **kwargs)
         self.threads = threads
         self.ordered = ordered
         self._iter: Stream | None = None
-        self.map: Callable[..., Iterator[Stream]]
+        self.map: Callable[..., Iterable[Stream]]
         self._in_context = False
         self._pool_handle = _PoolHandle(pool, owned=False) if pool else None
 
@@ -787,8 +778,10 @@ class SyncCollection(PyCollection):
 
             yield from chain.from_iterable(mapped)
         except BaseException:
+            self._fail()
+
             if not self._in_context:
-                self.terminate()
+                self._terminate_pool()
 
             raise
         else:
@@ -819,18 +812,12 @@ class AsyncPipe(PyPipe):
     def __init__(
         self,
         name: str | None = None,
-        parallel: bool = False,
-        inputs: Mapping | None = None,
-        context: Context | None = None,
-        conf: Conf = None,
         source: AsyncItems | Awaitable[Items] | Items | None = None,
+        *,
         connections=16,
         **kwargs,
     ):
-        super().__init__(
-            name, parallel=parallel, inputs=inputs, context=context, conf=conf, **kwargs
-        )
-        self.source = source
+        super().__init__(name, source, **kwargs)
         self.connections = connections
         self._aiter: AsyncGenerator[Item, None] | None = None
 
@@ -964,7 +951,7 @@ class AsyncPipe(PyPipe):
 
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""
-        return iter([item async for item in self._stream()])
+        return iter([item async for item in self])
 
 
 class AsyncCollection(PyCollection):
@@ -973,12 +960,11 @@ class AsyncCollection(PyCollection):
     def __init__(
         self,
         sources,
+        *,
         connections=16,
-        conf: Conf = None,
-        parallel: bool = False,
         **kwargs,
     ):
-        super().__init__(sources, conf=conf, parallel=parallel, **kwargs)
+        super().__init__(sources, **kwargs)
         self.connections = connections
         self._aiter: AsyncGenerator[Item, None] | None = None
 
@@ -1013,7 +999,7 @@ class AsyncCollection(PyCollection):
 
     def async_pipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""
-        return AsyncPipe(source=self._await_stream(), **kwargs)
+        return AsyncPipe(source=self, **kwargs)
 
     @overload
     async def export(self) -> list[Item]: ...  # noqa: E704
@@ -1046,7 +1032,7 @@ class AsyncCollection(PyCollection):
 
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""
-        return iter([item async for item in self._stream()])
+        return iter([item async for item in self])
 
 
 def get_chunksize(length: int, workers: int) -> int:

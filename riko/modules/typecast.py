@@ -81,21 +81,16 @@ def async_pipe(*args, **kwargs) -> PrimitiveValue:
         field (str): Item attribute to operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with type casted content
+       Awaitable: item with type casted content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'content': '1.0'}, conf={'type': 'int'})
         ...     print(next(result)['typecast'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         1
 
     """

@@ -105,22 +105,17 @@ def async_pipe(*args, **kwargs) -> NumLike:
             operate on (default: 'content')
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item with formatted currency
+        Awaitable: item with formatted currency
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'op': 'divide', 'other': '5'}
         ...     result = await async_pipe({'content': '10'}, conf=conf)
         ...     print(next(result)['simplemath'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         2
 
     """

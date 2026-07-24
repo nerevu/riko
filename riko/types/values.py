@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum, auto
 from time import struct_time
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Required, TypedDict
 
 if TYPE_CHECKING:
     from fastfeedparser import FastFeedParserDict
@@ -19,9 +19,9 @@ class StreamState(Enum):
     DONE = auto()
 
 
-class EntryContent(TypedDict):
+class EntryContent(TypedDict, total=False):
+    value: Required[str]
     type: str
-    value: str
     language: str
     base: str
 
@@ -38,18 +38,18 @@ class AuthorDetail(TypedDict):
     email: str
 
 
-class CommonRSSEntry(TypedDict):
+class CommonRSSEntry(TypedDict, total=False):
+    link: Required[str]
     author: str | None
     title: str | None
     description: str | None
-    link: str
     content: list[EntryContent]
     enclosures: list[Enclosure]
     published: str | None
     updated: str | None
 
 
-class FeedParserRSSEntry(CommonRSSEntry):
+class FeedParserRSSEntry(CommonRSSEntry, total=False):
     id: str | None
     summary: str | None
     author_detail: AuthorDetail
@@ -61,7 +61,7 @@ class ExpandedRSSEntry(FeedParserRSSEntry):
     pubDate: struct_time | None
 
 
-class FasterFeedParserRSSEntry(CommonRSSEntry):
+class FasterFeedParserRSSEntry(CommonRSSEntry, total=False):
     media_content: list[EntryContent]
 
 

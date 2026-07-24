@@ -13,9 +13,9 @@ from riko.types.modules import FetchDataRawConf, FilterRawConf, SortRawConf, Uni
 
 def pipe_gigs(item=None, conf: Conf = None, context: Context | None = None, **kwargs):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetchdata", "filter", "sort", "uniq"]
+        _OUTPUT = ["fetchdata", "filter", "sort", "uniq"]
     else:
         sw_1 = fetchdata(
             None,
@@ -64,9 +64,8 @@ def pipe_gigs(item=None, conf: Conf = None, context: Context | None = None, **kw
             context=context,
         )
         _OUTPUT = sw_4
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

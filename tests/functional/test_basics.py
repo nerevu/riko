@@ -16,10 +16,17 @@ from typing import cast
 import pytest
 
 from riko import Context, ExecutionMode, listize
-from riko.compile import _resolve_module, build_pipeline
+from riko.bado import issync, run
+from riko.compile import _resolve_module, abuild_pipeline, build_pipeline
 from riko.exceptions import UnsupportedModuleError
-from riko.types.general import ParserOutput, PipelineDependencies
-from riko.types.values import StatefulItem
+from riko.types.general import (
+    AsyncPipelineDependencies,
+    AsyncPipeParser,
+    ParserOutput,
+    SyncPipelineDependencies,
+    SyncPipeParser,
+)
+from riko.types.values import FeedParserRSSEntry, StatefulItem
 from riko.utils import augment_entries, extract_dependencies, truncate_content
 
 try:
@@ -32,18 +39,48 @@ except ImportError:
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 PARENT = Path(__file__).parent.parent
 
+type Items = ParserOutput | StatefulItem
+
+
+def _extract_dependencies(pipe_name) -> list[str]:
+    pipe_file_name = PARENT / "pipelines" / f"{pipe_name}.json"
+
+    with pipe_file_name.open() as f:
+        pipe_def = loads(f.read())
+
+    return extract_dependencies(pipe_def)
+
+
+def _check_results(
+    pydeps: Sequence[str], items: Sequence[Items], pipe_name, value=0, check=1
+):
+    _check = Decimal(check)
+    compared = Decimal(len(items)).compare(Decimal(value))
+    assert pydeps, f"Expected to find dependencies for {pipe_name}, but got none."
+    actual, desired = COMPARISONS[compared], COMPARISONS[_check]
+    msg = f"pipeline length {actual} {value}, but expected {desired} {value}. Got "
+
+    try:
+        first = items[0]
+    except IndexError:
+        msg += f"{type(items)=}"
+    else:
+        msg += f"{len(items)} items. First item is {truncate_content(first)}"
+
+    assert compared == _check, msg
+
 
 class TestBasics:
     """Test a few sample pipelines"""
 
     def _get_pipeline(
         self, pipe_name: str, file_path: Path | None = None
-    ) -> list[ParserOutput | StatefulItem]:
+    ) -> list[Items]:
         args = (pipe_name, pipe_name, True)
         pipeline, parsed_pipe_def = _resolve_module(*args, file_path=file_path)
 
         if pipeline:
-            stream = pipeline(context=self.context)
+            stream = cast(SyncPipeParser, pipeline)(context=self.context)
         elif parsed_pipe_def:
             stream = build_pipeline(parsed_pipe_def, context=self.context)
         else:
@@ -51,37 +88,43 @@ class TestBasics:
 
         return list(listize(stream))
 
-    def _load(
-        self, items: Sequence[ParserOutput | StatefulItem], pipe_name, value=0, check=1
-    ):
-        _check = Decimal(check)
-        compared = Decimal(len(items)).compare(Decimal(value))
+    async def _aget_pipeline(
+        self, pipe_name: str, file_path: Path | None = None
+    ) -> list[Items]:
+        args = (pipe_name, pipe_name, True)
+        pipeline, parsed_pipe_def = _resolve_module(*args, file_path=file_path)
 
+        if pipeline:
+            stream = await cast(AsyncPipeParser, pipeline)(context=self.context)
+        elif parsed_pipe_def:
+            items = abuild_pipeline(parsed_pipe_def, context=self.context)
+            stream = [item async for item in items]
+        else:
+            stream = iter(())
+
+        return list(listize(stream))
+
+    def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
         try:
             module = import_module(f"tests.pypipelines.{pipe_name}")
         except ImportError:
-            pipe_file_name = PARENT / "pipelines" / f"{pipe_name}.json"
-
-            with pipe_file_name.open() as f:
-                pipe_def = loads(f.read())
-
-            pydeps = extract_dependencies(pipe_def)
+            pydeps = _extract_dependencies(pipe_name)
         else:
-            pipeline: PipelineDependencies = getattr(module, pipe_name)
+            pipeline: SyncPipelineDependencies = getattr(module, pipe_name)
             pydeps = extract_dependencies(pipeline=pipeline)
 
-        assert pydeps, f"Expected to find dependencies for {pipe_name}, but got none."
-        actual, desired = COMPARISONS[compared], COMPARISONS[_check]
-        msg = f"pipeline length {actual} {value}, but expected {desired} {value}. Got "
+        _check_results(pydeps, items, pipe_name, value=0, check=1)
 
+    async def _aload(self, items: Sequence[Items], pipe_name, value=0, check=1):
         try:
-            first = items[0]
-        except IndexError:
-            msg += f"{type(items)=}"
+            module = import_module(f"tests.pypipelines.{pipe_name}")
+        except ImportError:
+            pydeps = _extract_dependencies(pipe_name)
         else:
-            msg += f"{len(items)} items. First item is {truncate_content(first)}"
+            pipeline: AsyncPipelineDependencies = getattr(module, pipe_name)
+            pydeps = await extract_dependencies(pipeline=pipeline)
 
-        assert compared == _check, msg
+        _check_results(pydeps, items, pipe_name, value=0, check=1)
 
     def setup_method(self):
         """Compile common subpipe"""
@@ -109,24 +152,30 @@ class TestBasics:
 
     def test_augment_entries_without_description(self):
         entries = [
-            {
-                "content": [{"value": "from content"}],
-                "link": "https://example.com/feed-item",
-                "title": "fallback title",
-            }
+            FeedParserRSSEntry(
+                {
+                    "content": [{"value": "from content"}],
+                    "link": "https://example.com/feed-item",
+                    "title": "fallback title",
+                }
+            )
         ]
         item = cast(dict, next(augment_entries(entries)))
         assert item["summary"] == "from content"
         assert item["description"] == "from content"
 
     def test_augment_entries_without_content(self):
-        entries = [{"link": "https://example.com/feed-item", "title": "fallback title"}]
+        entries = [
+            FeedParserRSSEntry(
+                {"link": "https://example.com/feed-item", "title": "fallback title"}
+            )
+        ]
         item = cast(dict, next(augment_entries(entries)))
         assert item["summary"] == "fallback title"
         assert item["description"] == "fallback title"
 
     def test_augment_entries_without_text(self):
-        entries = [{"link": "https://example.com/feed-item"}]
+        entries = [FeedParserRSSEntry({"link": "https://example.com/feed-item"})]
         item = cast(dict, next(augment_entries(entries)))
         assert item["summary"] == ""
         assert item["description"] == ""
@@ -173,7 +222,7 @@ class TestBasics:
         )
 
     def test_kazeeki1(self):
-        """Loads the kazeeki simple test pipeline."""
+        """Loads the kazeeki simple test fetchdata pipeline."""
         pipe_name = "pipe_kazeeki1"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 5, 0)
@@ -202,10 +251,82 @@ class TestBasics:
         assert item["k:content"].endswith("for implementing a website for a german...")
 
     def test_kazeeki2(self):
-        """Loads the kazeeki simple test pipeline."""
+        """Loads the kazeeki simple test itembuilder pipeline."""
         pipe_name = "pipe_kazeeki2"
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 1, 0)
+
+        example = {
+            "author": None,
+            "dc:creator": None,
+            "k:author": "Need to fix Ionic Rss Reader Application - oDesk",
+            "k:budget_raw": "0 - 10 EUR",
+            "k:client_location": " Israel",
+            "k:due": "unknown",
+            "k:job_type": "unknown",
+            "k:marketplace": "odesk.com",
+            "k:posted": None,
+            "k:submissions": "unknown",
+            "k:tags": "Web-Development,Web-Programming",
+            "k:work_location": "unknown",
+        }
+
+        item = cast(dict, items[0])
+
+        for k, v in example.items():
+            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
+
+        assert item["k:content"].startswith("<p>Hello, I need to fix an application")
+        assert item["k:content"].endswith("are welcome to this project.<br><br><b>")
+
+    @pytest.mark.skipif(issync, reason="async support not installed")
+    def test_async_kazeeki1(self):
+        """Loads the async kazeeki simple test fetchdata pipeline."""
+        pipe_name = "pipe_async_kazeeki1"
+        items = []
+
+        async def main():
+            nonlocal items
+            items = await self._aget_pipeline(pipe_name)
+            await self._aload(items, pipe_name, 5, 0)
+
+        run(main)
+
+        example = {
+            "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
+            "dc:creator": "riko",
+            "k:author": "Homepage for a germansocial organization",
+            "k:budget_raw": "0 - $250",
+            "k:client_location": "unknown",
+            "k:due": "unknown",
+            "k:job_type": "fixed",
+            "k:marketplace": "guru.com",
+            "updated": "Tue, 06 Jan 2015 17:13:47 GMT",
+            "k:submissions": "unknown",
+            "k:tags": "Web,Software,IT",
+            "k:work_location": " Worldwide",
+        }
+
+        item = cast(dict, items[0])
+
+        for k, v in example.items():
+            assert item.get(k) == v, f"Expected {v} for key {k}, but got {item.get(k)}"
+
+        assert item["k:content"].startswith(" With this specification sheet we")
+        assert item["k:content"].endswith("for implementing a website for a german...")
+
+    @pytest.mark.skipif(issync, reason="async support not installed")
+    def test_async_kazeeki2(self):
+        """Loads the async kazeeki simple test itembuilder pipeline."""
+        pipe_name = "pipe_async_kazeeki2"
+        items = []
+
+        async def main():
+            nonlocal items
+            items = await self._aget_pipeline(pipe_name)
+            await self._aload(items, pipe_name, 1, 0)
+
+        run(main)
 
         example = {
             "author": None,
@@ -302,6 +423,14 @@ class TestBasics:
 
         assert item["summary"].startswith("<span><b>Description:</b> With this spe")
         assert item["summary"].endswith("ancer Location:</b> Worldwide<br></span>")
+
+    def test_wired_count_truncate_output(self):
+        """Truncates a 15-item feed to a wired count."""
+        pipe_name = "pipe_404411a8d22104920f3fc1f428f33642"
+        items = self._get_pipeline(pipe_name)
+        self._load(items, pipe_name, 3, 0)
+        item = cast(dict, items[0])
+        assert item["title"] == "Markitekt - Architects of Marketing"
 
     def test_simplest(self):
         """

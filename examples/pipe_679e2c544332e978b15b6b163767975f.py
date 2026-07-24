@@ -4,6 +4,7 @@
 from riko import Context
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strreplace import pipe as strreplace
+from riko.types.modules import StrReplaceRawConf, StrReplaceRawRule
 
 
 def pipe_679e2c544332e978b15b6b163767975f(item=None, conf=None, context=None, **kwargs):
@@ -37,18 +38,24 @@ def pipe_679e2c544332e978b15b6b163767975f(item=None, conf=None, context=None, **
         **kwargs,
     )
 
-    sw_421_conf = {
-        "field": {"type": "text", "value": "author"},
-        "rule": [
-            {
-                "find": {"type": "text", "value": "$"},
-                "param": {"type": "text", "value": "first"},
-                "replace": {"type": "text", "value": "USD"},
-            }
-        ],
-    }
+    sw_421_conf = StrReplaceRawConf(
+        {
+            "rule": StrReplaceRawRule(
+                {
+                    "find": {"type": "text", "value": "$"},
+                    "param": {"type": "text", "value": "first"},
+                    "replace": {"type": "text", "value": "USD"},
+                }
+            ),
+        }
+    )
 
-    output = (strreplace(i, conf=sw_421_conf, **kwargs) for i in sw_232)
+    output = (
+        strreplace(
+            i, conf=sw_421_conf, field={"type": "text", "value": "author"}, **kwargs
+        )
+        for i in sw_232
+    )
     return output
 
 

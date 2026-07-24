@@ -14,9 +14,9 @@ def pipe_404411a8d22104920f3fc1f428f33642(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["count", "fetch", "truncate"]
+        _OUTPUT = ["count", "fetch", "truncate"]
     else:
         sw_561 = fetch(
             None,
@@ -30,7 +30,7 @@ def pipe_404411a8d22104920f3fc1f428f33642(
             ),
             context=context,
         )
-        sw_569 = count(sw_561, conf=CountRawConf({}), context=context)
+        sw_569 = count(sw_561, conf=CountRawConf({}), emit=True, context=context)
         sw_502 = fetch(
             None,
             conf=FetchRawConf(
@@ -50,9 +50,8 @@ def pipe_404411a8d22104920f3fc1f428f33642(
             count=sw_569,
         )
         _OUTPUT = sw_583
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

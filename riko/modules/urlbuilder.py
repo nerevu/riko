@@ -141,13 +141,12 @@ def async_pipe(*args, **kwargs) -> str:
                 value (str): the parameter value
 
     Returns:
-        dict: twisted.internet.defer.Deferred an iterator of items
+        Awaitable: an iterator of items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     param = {'key': 's', 'value': 'gm'}
         ...     path = ['rss', 'headline']
         ...     base = 'http://finance.yahoo.com'
@@ -155,11 +154,7 @@ def async_pipe(*args, **kwargs) -> str:
         ...     result = await async_pipe(conf=conf)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         http://finance.yahoo.com/rss/headline?s=gm
 
     """

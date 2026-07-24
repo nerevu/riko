@@ -17,9 +17,9 @@ control the fold; understanding them is the key to reading loops.
 ``emit`` / ``assign`` -- where the submodule output goes. These exist at **two
 distinct levels**, and confusing them is the most common source of loop bugs:
 
-1. **Loop level** -- passed as ``loop(..., emit=, assign=)`` kwargs, or as
-   top-level ``conf["emit"]`` / ``conf["assign"]``. This controls how the loop
-   folds submodule output into the *parent* item:
+1. **Loop level** -- passed as ``loop(..., emit=, assign=)`` kwargs (like every
+   other module). This controls how the loop folds submodule output into the
+   *parent* item:
 
    * ``emit=True``            -- replace each source item with the submodule output
    * ``emit=False, assign="foo"`` -- store the submodule output at ``item["foo"]``
@@ -44,9 +44,10 @@ Canonical conf shape::
     loop(
         source,
         embed=itembuilder,
+        assign="info",  # loop-level fold options are module-level kwargs
+        emit=False,
         conf={
             "count": "all",
-            # optional top-level "assign"/"emit" -> loop-level fold options
             "embed": {
                 "type": "module",
                 "value": {
@@ -185,12 +186,12 @@ def pipe(*args, **kwargs) -> Stream:
             ``is_mapping`` (emit when the output is a mapping, i.e. effectively
             True for a normal item stream).
 
+        field (str): Loop-level source field to feed the submodule (a
+            module-level kwarg, like every other module).
+
         conf (dict): The loop configuration. May contain:
             "count": "all" (keep every submodule result, default) or "first"
                 (keep only the first).
-            "field": <looped field name or blank>.
-            "assign"/"emit": optional top-level (loop-level) fold options,
-                equivalent to the ``assign``/``emit`` kwargs.
             "embed": {"type": "module", "value": {"type", "id", "conf", and the
                 submodule's own "assign"/"emit"/"field"}}.
 

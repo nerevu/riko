@@ -1,6 +1,6 @@
 from typing import NotRequired, TypedDict
 
-from riko.types.modules import AnyModuleRawConf, ModuleName
+from riko.types.modules import AnyModuleRawConf, ConfArg, ModuleName
 
 
 class XY(TypedDict):
@@ -17,6 +17,9 @@ class PipeModule(TypedDict):
     id: str
     type: ModuleName
     conf: AnyModuleRawConf
+    emit: NotRequired[ConfArg]
+    assign: NotRequired[ConfArg]
+    field: NotRequired[ConfArg]
 
 
 class TypeCount(TypedDict):
@@ -110,6 +113,11 @@ class ParsedPipeDef(TypedDict):
     embed: dict[str, PipeModule]
     graph: dict[str, str | list[str]]
     wires: dict[str, Wire]
+
+
+class PipelineDescription(TypedDict):
+    inputs: list[str | tuple[str, ...]]
+    dependencies: list[str]
 
 
 class DagModule(TypedDict):

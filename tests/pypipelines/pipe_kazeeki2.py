@@ -1,6 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 
-
 from riko import Context
 from riko.collections import SyncPipe
 from riko.types.general import Conf

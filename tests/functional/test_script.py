@@ -10,15 +10,13 @@ import sys
 from difflib import SequenceMatcher, unified_diff
 from io import StringIO
 from os import path as p
+from pathlib import Path
 
 import pytest
 
-try:
-    from riko.bado import _issync
-except ImportError:
-    _issync = True
+from riko.bado import issync
 
-PARENT_DIR = p.abspath(p.dirname(p.dirname(p.dirname(__file__))))
+PARENT_DIR = Path(__file__).parent.parent.parent.absolute()
 DEMO_SCRIPT = "runpipe"
 BENCHMARK_SCRIPT = "benchmark"
 DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
@@ -118,8 +116,8 @@ def test_demo_sync(value):
     assert_output_matches(output, expected, command=command)
 
 
-@pytest.mark.twisted
-@pytest.mark.skipif(_issync, reason="Twisted support not installed")
+@pytest.mark.anyio
+@pytest.mark.skipif(issync, reason="async support not installed")
 @pytest.mark.parametrize("value", gen_params())
 def test_demo_async(value):
     argument, expected = value
@@ -139,7 +137,7 @@ def test_benchmark():
 
 
 def test_convert_dag_and_compile(tmp_path):
-    dag = p.join(PARENT_DIR, "tests", "dags", "pipe_forever.json")
+    dag = PARENT_DIR / "tests" / "dags" / "pipe_forever.json"
     pipe_file = tmp_path / "pipe_forever.json"
 
     convert = subprocess.run(

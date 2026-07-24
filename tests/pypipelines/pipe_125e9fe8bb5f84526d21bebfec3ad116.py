@@ -24,9 +24,9 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = [("", "textinput1", "Enter Text", "text", "defunkt")]
+        _OUTPUT = [("", "textinput1", "Enter Text", "text", "defunkt")]
     elif context and context.describe_dependencies:
-        result = ["input", "itembuilder", "loop", "rename"]
+        _OUTPUT = ["input", "itembuilder", "loop", "rename"]
     else:
         sw_479 = _input(
             None,
@@ -134,9 +134,8 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
             context=context,
         )
         _OUTPUT = sw_351
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

@@ -53,10 +53,19 @@ def run():
         help="Write the generated module to this path (default: stdout).\n\n",
     )
 
+    parser.add_argument(
+        "-a",
+        "--async",
+        dest="is_async",
+        action="store_true",
+        default=False,
+        help="Generate an async (anyio) pipeline module.\n\n",
+    )
+
     args = parser.parse_args()
     pipe_file = Path(args.path)
     pipe_def = loads(pipe_file.read_text(encoding="utf-8"))
-    source = compile_pipe(pipe_def, pipe_file.stem)
+    source = compile_pipe(pipe_def, pipe_file.stem, is_async=args.is_async)
 
     if args.output:
         Path(args.output).write_text(source, encoding="utf-8")

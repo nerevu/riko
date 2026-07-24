@@ -26,11 +26,11 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = [
+        _OUTPUT = [
             ("", "q", "Status update", "text", "Here's #: some #hashtags to play #with")
         ]
     elif context and context.describe_dependencies:
-        result = ["filter", "input", "itembuilder", "loop"]
+        _OUTPUT = ["filter", "input", "itembuilder", "loop"]
     else:
         sw_417 = _input(
             None,
@@ -143,9 +143,9 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
                             ),
                         },
                     },
-                    "field": {"type": "text", "value": "title"},
                 }
             ),
+            field="title",
             context=context,
             embed=tokenizer,
         )
@@ -203,9 +203,8 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
             embed=rename,
         )
         _OUTPUT = sw_501
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

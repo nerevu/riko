@@ -24,7 +24,7 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = [
+        _OUTPUT = [
             ("", "q", "Caption search term", "text", "maverick"),
             (
                 "",
@@ -35,7 +35,7 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
             ),
         ]
     elif context and context.describe_dependencies:
-        result = ["fetchdata", "filter", "input", "loop"]
+        _OUTPUT = ["fetchdata", "filter", "input", "loop"]
     else:
         sw_521 = _input(
             None,
@@ -173,9 +173,8 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
             embed=regex,
         )
         _OUTPUT = sw_606
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

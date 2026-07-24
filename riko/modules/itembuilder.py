@@ -94,13 +94,12 @@ def async_pipe(*args, **kwargs) -> RikoDict:
                 value (str): the attribute value
 
     Returns:
-        dict: twisted.internet.defer.Deferred an iterator of items
+        Awaitable: an iterator of items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     attrs = [
         ...         {'key': 'title', 'value': 'the title'},
         ...         {'key': 'desc.content', 'value': 'the desc'}]
@@ -108,11 +107,7 @@ def async_pipe(*args, **kwargs) -> RikoDict:
         ...     result = await async_pipe(conf={'attrs': attrs})
         ...     print(next(result)['title'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         the title
 
     """

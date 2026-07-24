@@ -27,9 +27,9 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
     item=None, conf: Conf = None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetch", "filter", "loop", "sort", "union", "uniq"]
+        _OUTPUT = ["fetch", "filter", "loop", "sort", "union", "uniq"]
     else:
         sw_233 = fetch(
             None,
@@ -190,9 +190,8 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
             context=context,
         )
         _OUTPUT = sw_191
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
 
 
 if __name__ == "__main__":

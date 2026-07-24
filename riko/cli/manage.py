@@ -20,10 +20,10 @@ sys.excepthook = partial(exception_hook, debug=False)
 
 uv = shutil.which("uv")
 tox = shutil.which("tox")
-detox = shutil.which("detox")
 pytest = shutil.which("pytest")
 ruff = shutil.which("ruff")
 pylint = shutil.which("pylint")
+pyright = shutil.which("pyright")
 
 
 def parse_verbosity(verbose=0, quiet=None):
@@ -99,13 +99,8 @@ def check():
 
 @manager.command()
 @click.option("-w", "--where", help="Modules to check")
-@click.option("-f", "--fix", help="Fix errors", is_flag=True)
-@click.option(
-    "-F",
-    "--unsafe-fixes",
-    help="View unsafe fixes (Applies unsafe fixes if --fix is also specified)",
-    is_flag=True,
-)
+@click.option("-F", "--unsafe-fixes", help="View unsafe fixes", is_flag=True)
+@click.option("-t", "--types", help="Check with pyright", is_flag=True)
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
 @click.option(
     "-p",
@@ -113,13 +108,10 @@ def check():
     help="Run linter in parallel in multiple processes",
     is_flag=True,
 )
-def lint(where=None, fix=False, unsafe_fixes=False, strict=False, parallel=False):
+def lint(where=None, unsafe_fixes=False, strict=False, types=False, parallel=False):
     """Check style with linters"""
     where = where or ""
     r_args = ["check"]
-
-    if fix:
-        r_args.append("--fix")
 
     if unsafe_fixes:
         r_args.append("--unsafe-fixes")
@@ -134,6 +126,14 @@ def lint(where=None, fix=False, unsafe_fixes=False, strict=False, parallel=False
             exit(e.returncode)
     else:
         raise RuntimeError("ruff not found")
+
+    if types and pyright:
+        try:
+            check_call([pyright])
+        except CalledProcessError as e:
+            exit(e.returncode)
+    elif types:
+        raise RuntimeError("pyright not found")
 
     if strict and pylint:
         args = [pylint, "--rcfile=tests/standard.rc", "-rn", "-fparseable", "riko"]
@@ -152,19 +152,26 @@ def lint(where=None, fix=False, unsafe_fixes=False, strict=False, parallel=False
 @manager.command()
 @click.option("-w", "--where", help="Modules to check", default=None)
 @click.option("-s", "--sort/--no-sort", help="Sort module imports", default=True)
-def prettify(where=None, sort=True):
+@click.option("-F", "--unsafe-fixes", help="Applies unsafe fixes", is_flag=True)
+def prettify(where=None, sort=True, unsafe_fixes=False):
     """Prettify code with ruff"""
     where = where or ""
     return_code = 0
 
     if sort and ruff:
-        cmd = [ruff, "check", "--select", "I", "--fix"]
+        sort_cmd = [ruff, "check", "--select", "I", "--fix"]
+        style_cmd = [ruff, "check", "--fix"]
+
+        if unsafe_fixes:
+            style_cmd.append("--unsafe-fixes")
 
         if where:
-            cmd.extend(where.split(" "))
+            sort_cmd.extend(where.split(" "))
+            style_cmd.extend(where.split(" "))
 
         try:
-            check_call(cmd)
+            check_call(sort_cmd)
+            check_call(style_cmd)
         except CalledProcessError as e:
             return_code = e.returncode
         else:
@@ -211,7 +218,6 @@ def prettify(where=None, sort=True):
     default=True,
 )
 @click.option("-t", "--tox", help="Run tox tests", is_flag=True)
-@click.option("-d", "--detox", help="Run detox tests", is_flag=True)
 @click.option("-v", "--verbose", help="Use detailed errors", is_flag=True)
 @click.option(
     "-p",
@@ -236,15 +242,11 @@ def test(where=None, stop=None, **kwargs):  # noqa: PT028
 
     try:
         if tox and kwargs.get("tox") and kwargs.get("parallel"):
-            check_call([tox, "-p", "auto"])
+            check_call([tox, "p"])
         elif tox and kwargs.get("tox"):
-            check_call([tox])
+            check_call([tox, "r"])
         elif kwargs.get("tox"):
             raise RuntimeError("tox not found")
-        elif detox and kwargs.get("detox"):
-            pass
-        elif kwargs.get("detox"):
-            raise RuntimeError("detox not found")
         elif pytest:
             cmd = opts
 

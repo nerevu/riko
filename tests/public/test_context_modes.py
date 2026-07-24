@@ -53,7 +53,7 @@ def test_describe_properties_are_read_only():
     context = Context()
 
     with pytest.raises(AttributeError):
-        context.describe_input = True
+        context.describe_input = True  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_orthogonal_flags_preserved():

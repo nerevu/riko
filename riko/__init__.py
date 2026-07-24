@@ -268,6 +268,8 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
 from riko.api import (  # noqa: E402
     AsyncCollection,
     AsyncPipe,
+    PipelineStateError,
+    PipeState,
     SyncCollection,
     SyncPipe,
     UnsupportedModuleError,
@@ -282,6 +284,8 @@ __all__ = [
     "AsyncPipe",
     "Context",
     "ExecutionMode",
+    "PipeState",
+    "PipelineStateError",
     "SyncCollection",
     "SyncPipe",
     "UnsupportedModuleError",
