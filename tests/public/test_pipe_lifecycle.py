@@ -350,6 +350,74 @@ class TestAsyncLifecycle:
         assert result["closed"]
         assert result["state"] is PipeState.CLOSED
 
+    def test_await_after_partial_iteration_consumes_remainder(self):
+        result = {}
+        runs = []
+
+        def count(item):
+            runs.append(1)
+            return item
+
+        async def main():
+            pipe = (
+                AsyncPipe("itembuilder", conf=BUILDER_CONF)
+                .tokenizer(emit=True)
+                .udf(func=count)
+            )
+            result["first"] = await anext(pipe)
+            result["rest"] = list(await pipe)
+            result["runs"] = len(runs)
+
+        run(main)
+
+        assert result["first"] == {"content": "a"}
+        assert result["rest"] == [{"content": "b"}, {"content": "c"}]
+        assert result["runs"] == 3
+
+    def test_await_twice_after_exhaustion_is_empty(self):
+        result = {}
+
+        async def main():
+            pipe = AsyncPipe(source=list(SRC))
+            result["first"] = list(await pipe)
+            result["second"] = list(await pipe)
+
+        run(main)
+
+        assert result["first"] == SRC
+        assert result["second"] == []
+
+    def test_collection_await_after_partial_iteration_consumes_remainder(self):
+        result = {}
+
+        async def main():
+            full = AsyncCollection([{"url": get_path("feed.xml")}])
+            result["total"] = len([item async for item in full])
+            stream = AsyncCollection([{"url": get_path("feed.xml")}])
+            await anext(stream)
+            result["rest"] = len(list(await stream))
+
+        run(main)
+
+        assert result["total"] > 1
+        assert result["rest"] == result["total"] - 1
+
+    def test_collection_async_pipe_after_partial_iteration_consumes_remainder(self):
+        result = {}
+
+        async def main():
+            full = AsyncCollection([{"url": get_path("feed.xml")}])
+            result["total"] = len([item async for item in full])
+            stream = AsyncCollection([{"url": get_path("feed.xml")}])
+            await anext(stream)
+            child = stream.async_pipe()
+            result["rest"] = len([item async for item in child])
+
+        run(main)
+
+        assert result["total"] > 1
+        assert result["rest"] == result["total"] - 1
+
 
 @pytest.mark.skipif(issync, reason="async support not available")
 class TestAsyncSourceAdapter:
