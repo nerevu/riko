@@ -18,6 +18,8 @@ STABLE = {
     "AsyncPipe",
     "Context",
     "ExecutionMode",
+    "PipeState",
+    "PipelineStateError",
     "SyncCollection",
     "SyncPipe",
     "UnsupportedModuleError",
