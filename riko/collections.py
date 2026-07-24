@@ -956,7 +956,7 @@ class AsyncPipe(PyPipe):
 
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""
-        return iter([item async for item in self._stream()])
+        return iter([item async for item in self])
 
 
 class AsyncCollection(PyCollection):
@@ -1005,7 +1005,7 @@ class AsyncCollection(PyCollection):
 
     def async_pipe(self, **kwargs):
         """Return an AsyncPipe primed with the source feed"""
-        return AsyncPipe(source=self._await_stream(), **kwargs)
+        return AsyncPipe(source=self, **kwargs)
 
     @overload
     async def export(self) -> list[Item]: ...  # noqa: E704
@@ -1038,7 +1038,7 @@ class AsyncCollection(PyCollection):
 
     async def _await_stream(self) -> Stream:
         """Converts the AsyncIterator stream to an Awaitable"""
-        return iter([item async for item in self._stream()])
+        return iter([item async for item in self])
 
 
 def get_chunksize(length: int, workers: int) -> int:
