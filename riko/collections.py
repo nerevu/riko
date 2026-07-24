@@ -778,8 +778,10 @@ class SyncCollection(PyCollection):
 
             yield from chain.from_iterable(mapped)
         except BaseException:
+            self._fail()
+
             if not self._in_context:
-                self.terminate()
+                self._terminate_pool()
 
             raise
         else:
