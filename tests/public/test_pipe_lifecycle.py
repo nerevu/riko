@@ -148,6 +148,22 @@ class TestSyncLifecycle:
         assert stream.closed
         assert stream.state is PipeState.CLOSED
 
+    def test_collection_failed_state(self):
+        def boom_sources():
+            raise RuntimeError("boom")
+            yield  # pragma: no cover
+
+        stream = SyncCollection(boom_sources())
+
+        try:
+            list(stream)
+        except RuntimeError:
+            pass
+
+        assert stream.state is PipeState.FAILED
+        assert stream.failed
+        assert list(stream) == []
+
 
 @pytest.mark.skipif(issync, reason="async support not available")
 class TestAsyncLifecycle:
