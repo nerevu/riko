@@ -30,19 +30,19 @@ Attributes:
 
 """
 
-from collections.abc import Callable, Generator, Iterator, Mapping
+from collections.abc import Callable, Generator, Iterator
 from inspect import signature
 from random import choice
 from time import sleep
-from typing import cast
 
 import pygogo as gogo
 from meza.fntools import dfilter
 
-from riko.bado import async_sleep
+from riko._pubsub import async_hub
 from riko.cast import BasicCastType
 from riko.types.configs import ReceiveObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
+from riko.types.guards import is_stateful_item
 from riko.types.values import StatefulItem, StreamState
 from riko.utils import _receive_queue, _registry, close, coroutine
 
@@ -107,17 +107,18 @@ def gen_name(count=2) -> Iterator[str]:
 
 
 def _apply(func: Callable, item: Item | StatefulItem, **fkwargs) -> Item:
-    try:
-        params = signature(func).parameters
-    except (TypeError, ValueError):
-        allowed = {}
-    else:
-        if any(p.kind == p.VAR_KEYWORD for p in params.values()):
-            allowed = fkwargs
+    if not is_stateful_item(item):
+        try:
+            params = signature(func).parameters
+        except (TypeError, ValueError):
+            allowed = {}
         else:
-            allowed = {k: v for k, v in fkwargs.items() if k in params}
+            if any(p.kind == p.VAR_KEYWORD for p in params.values()):
+                allowed = fkwargs
+            else:
+                allowed = {k: v for k, v in fkwargs.items() if k in params}
 
-    return func(item, **allowed)
+        return func(item, **allowed)
 
 
 def _register_receiver(name, objconf, func, kwargs) -> None:
@@ -131,11 +132,7 @@ def _register_receiver(name, objconf, func, kwargs) -> None:
                 item = yield
 
                 if item is not None:
-                    if isinstance(item, Mapping) and "state" in item:
-                        state = cast(StreamState, item["state"])
-                    else:
-                        state = None
-
+                    state = item["state"] if is_stateful_item(item) else None
                     result = _apply(func, item, **fkwargs) if func else item
                     queue = _receive_queue[name]
 
@@ -230,35 +227,19 @@ async def async_parser(
     """
     Asynchronously receives pushed items (materialized).
 
-    Polls the receive queue, yielding control via ``async_sleep`` between polls
-    (so a concurrent sender can run), and collects results until DONE or
-    ``max_wait``. Note: this is *materialized* — results are returned only once
-    draining completes; incremental (yield-as-received) delivery awaits P7.3.
+    Subscribes to the named AnyIO channel and collects items until the sender
+    completes (channel closure). Registration *is* readiness, so no polling,
+    sleep, or DONE sentinel is involved. Note: this is *materialized* — results
+    are returned only once the channel closes; incremental (yield-as-received)
+    delivery awaits P7.3.
     """
     name = objconf.name or "".join(gen_name())
-    wait = objconf.wait
-    max_wait = objconf.max_wait
-    total_waited = 0
+    fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
     results: list[Item] = []
 
-    _register_receiver(name, objconf, func, kwargs)
-
-    while True:
-        if _buf := _receive_queue[name]:
-            total_waited = 0
-            state, result = _buf.popleft()
-
-            if state is StreamState.DONE:
-                close(name)
-                break
-            else:
-                results.append(result)
-        elif total_waited >= max_wait:
-            close(name)
-            break
-        else:
-            await async_sleep(wait)
-            total_waited += wait
+    async with async_hub.subscribe(name) as receive_stream:
+        async for item in receive_stream:
+            results.append(_apply(func, item, **fkwargs) if func else item)
 
     return iter(results)
 

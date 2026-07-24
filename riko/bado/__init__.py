@@ -22,6 +22,7 @@ except ImportError:
     create_memory_object_stream = None
     create_task_group = None
     lowlevel = None
+    fail_after = None
 
     async def checkpoint() -> None:
         return None
@@ -31,6 +32,7 @@ else:
         Path,
         create_memory_object_stream,
         create_task_group,
+        fail_after,
         lowlevel,
     )
     from anyio import sleep as async_sleep
@@ -64,6 +66,7 @@ __all__ = [
     "checkpoint",
     "create_memory_object_stream",
     "create_task_group",
+    "fail_after",
     "gather_results",
     "isasync",
     "issync",

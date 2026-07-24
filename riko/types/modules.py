@@ -355,6 +355,7 @@ class RenameRawConf(TypedDict):
 
 class SendRawConf(TypedDict):
     name: Value
+    max_wait: NotRequired[Value]
 
 
 class SimpleMathRawConf(TypedDict):
@@ -750,8 +751,9 @@ class RenameConf(TypedDict):
     rule: RenameConfRule | list[RenameConfRule]
 
 
-class SendConf(TypedDict):
+class SendConf(TypedDict, total=False):
     name: str
+    max_wait: int | float = 5
 
 
 class SimpleMathConf(TypedDict):
