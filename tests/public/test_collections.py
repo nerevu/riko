@@ -3,7 +3,6 @@
 Provides pipeline collection tests.
 """
 
-from functools import partial
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
 from typing import cast
@@ -11,8 +10,10 @@ from typing import cast
 import pytest
 
 from riko import get_path
-from riko.bado import async_sleep, create_task_group, issync, run
+from riko._pubsub import async_hub
+from riko.bado import gather_results, issync, run
 from riko.collections import AsyncPipe, SyncCollection, SyncPipe
+from riko.exceptions import ReceiverUnavailableError
 from riko.types.general import Item
 from riko.types.modules import (
     ItemBuilderConf,
@@ -21,8 +22,8 @@ from riko.types.modules import (
     StrReplaceConf,
     StrReplaceConfRule,
 )
-from riko.types.values import StatefulItem, StreamState
-from riko.utils import _receive_queue, close, reset_pubsub, send
+from riko.types.values import StreamState
+from riko.utils import _receive_queue, close, reset_pubsub
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
@@ -31,34 +32,13 @@ recv_conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
 
 
-async def _pubsub_session(*tasks):
-    async with create_task_group() as tg:
-        for task in tasks:
-            tg.start_soon(task)
+async def _gather_pubsub(sender, *receivers):
+    results = await gather_results([*receivers, sender])
+    return [list(result) for result in results]
 
 
-async def _async_receiver(events, name):
-    pipe = AsyncPipe("receive", conf={"name": name, **recv_conf})
-
-    async for item in pipe:
-        events.append((name, item))
-
-
-async def _async_sender(events, others, func=None, before=0.0, between=0.0):
-    flow = AsyncPipe("itembuilder", conf=builder_conf).tokenizer(emit=True)
-    stream = (flow.udf(func=func) if func else flow).send(others=others)
-
-    if before:
-        await async_sleep(before)
-
-    async for item in stream:
-        events.append(("send", item))
-
-        if between:
-            await async_sleep(between)
-
-    for name in others:
-        send(name, StatefulItem(state=StreamState.DONE))
+async def _drain_ghost(sender):
+    return [item async for item in sender]
 
 
 class _CollectionTest:
@@ -79,43 +59,6 @@ class TestSyncCollections(_CollectionTest):
             .udf(func=itemgetter("content"))
         )
         assert next(stream) == "once is 1x"
-
-    def test_send(self):
-        SyncPipe("receive", conf={"name": "receiver"})
-        SyncPipe("receive", conf={"name": "printer"})
-
-        stream = (
-            SyncPipe("itembuilder", conf=builder_conf)
-            .tokenizer(emit=True)
-            .send(others=["receiver", "printer"])
-        )
-
-        assert next(stream) == {"content": "once is 1x"}
-
-    def test_receive(self, capsys):
-        _conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
-        receiver = SyncPipe("receive", conf=ReceiveConf({"name": "receiver", **_conf}))
-        changer = SyncPipe("receive", conf={"name": "changer", **_conf}, func=len)
-        printer = SyncPipe("receive", conf={"name": "printer", **_conf}, func=print)
-        assert next(receiver) == {"state": StreamState.PENDING}
-        assert next(printer) == {"state": StreamState.PENDING}
-        assert next(changer) == {"state": StreamState.PENDING}
-
-        stream = (
-            SyncPipe("itembuilder", conf=builder_conf)
-            .tokenizer(emit=True)
-            .send(others=["receiver", "changer", "printer"])
-        )
-
-        assert next(stream) == {"content": "once is 1x"}
-        assert next(receiver) == {"state": StreamState.PENDING}
-        assert next(receiver) == {"content": "once is 1x"}
-        assert next(changer) == {"state": StreamState.PENDING}
-        assert next(changer) == 1
-
-        next(printer)
-        captured = capsys.readouterr()
-        assert captured.out.split("\n")[0] == "{'content': 'once is 1x'}"
 
     def test_split(self):
         stream = (
@@ -140,19 +83,22 @@ class TestSyncCollections(_CollectionTest):
         ]
 
     def test_pubsub(self, caplog):
-        receiver1 = SyncPipe("receive", conf={"name": "receiver1", **recv_conf})
-        receiver2 = SyncPipe("receive", conf={"name": "receiver2", **recv_conf})
+        names = ["receiver1", "receiver2"]
+        receiver1, receiver2 = [
+            SyncPipe("receive", conf={"name": name, **recv_conf}) for name in names
+        ]
+
         assert next(receiver1) == {"state": StreamState.PENDING}
 
-        stream = (
+        sender = (
             SyncPipe("itembuilder", conf=builder_conf)
             .tokenizer(emit=True)
             .udf(func=self.udf)
-            .send(others=["receiver2", "receiver1"])
+            .send(others=names)
         )
 
-        assert next(stream) == {"content": "once is 1x"}
-        assert next(stream) == {"content": "twice is 2x"}
+        assert next(sender) == {"content": "once is 1x"}
+        assert next(sender) == {"content": "twice is 2x"}
         err_msg = (
             "Attempted to send {'content': 'once is 1x'} to non-existent 'receiver2'"
         )
@@ -163,19 +109,44 @@ class TestSyncCollections(_CollectionTest):
         assert next(receiver1) == {"content": "once is 1x"}
         assert next(receiver2) == {"state": StreamState.PENDING}
 
-        assert next(stream) == {"content": "thrice is 3x"}
+        assert next(sender) == {"content": "thrice is 3x"}
         assert next(receiver1) == {"content": "twice is 2x"}
         assert next(receiver2) == {"state": StreamState.PENDING}
 
         with pytest.raises(StopIteration):
-            next(stream)
+            next(sender)
 
         assert next(receiver1) == {"content": "thrice is 3x"}
 
         with pytest.raises(StopIteration):
             next(receiver1)
 
-        assert list(stream) == []
+        assert list(sender) == []
+
+    def test_pubsub_funcs(self, capsys):
+        receiver = SyncPipe("receive", conf={"name": "receiver", **recv_conf})
+        changer = SyncPipe("receive", conf={"name": "changer", **recv_conf}, func=len)
+        printer = SyncPipe("receive", conf={"name": "printer", **recv_conf}, func=print)
+        assert next(receiver) == {"state": StreamState.PENDING}
+        assert next(printer) == {"state": StreamState.PENDING}
+        assert next(changer) == {"state": StreamState.PENDING}
+
+        sender = (
+            SyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .send(others=["receiver", "changer", "printer"])
+        )
+
+        assert next(sender) == {"content": "once is 1x"}
+        assert next(receiver) == {"state": StreamState.PENDING}
+        assert next(receiver) == {"content": "once is 1x"}
+        assert next(changer) == {"state": StreamState.PENDING}
+        assert next(changer) == 1
+        assert next(printer) == {"state": StreamState.PENDING}
+        assert next(printer) is None
+
+        captured = capsys.readouterr()
+        assert captured.out.split("\n")[0] == "{'content': 'once is 1x'}"
 
     def test_send_signals_done_on_early_close(self):
         """
@@ -383,58 +354,90 @@ class TestAsyncCollections(_CollectionTest):
         assert self.runs == 3
 
     @pytest.mark.anyio
+    @pytest.mark.timeout(10)
     def test_pubsub(self):
         """
-        Two concurrent async receivers each collect every item a sender pushes.
+        Two concurrent async receivers each collect every item a sender pushes,
+        and the sender's own output is unchanged (passthrough).
 
-        Like the sync ``test_pubsub``, a sender pushes items to two receivers.
-        The receivers and sender run as sibling tasks in one task group; the
-        receivers' ``async_sleep`` polling yields control, so pushes land while
-        they are still draining. Delivery is materialized (P7.2): each receiver
-        returns its whole batch only once the sender signals DONE.
+        Each receiver has its own AnyIO rendezvous channel; publish and subscribe
+        converge on the same named slot, so startup needs no delay and completion
+        is channel closure (nothing coordinates startup or DONE by hand). If
+        completion regressed the receivers would block forever, so the timeout
+        marker makes that a failure rather than a hang. Delivery is materialized
+        (P7.2): each receiver returns its whole batch once the sender completes.
         """
-        events = []
-        recv_names = ["receiver1", "receiver2"]
-        receivers = [partial(_async_receiver, events, name) for name in recv_names]
-        sender = partial(_async_sender, events, recv_names, func=self.udf, before=0.05)
-        run(_pubsub_session, *receivers, sender)
+        names = ["receiver1", "receiver2"]
+        receivers = [
+            AsyncPipe("receive", conf={"name": name, **recv_conf}) for name in names
+        ]
+        sender = (
+            AsyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .udf(func=self.udf)
+            .send(others=["receiver1", "receiver2"])
+        )
 
         expected = [
             {"content": "once is 1x"},
             {"content": "twice is 2x"},
             {"content": "thrice is 3x"},
         ]
+
+        for result in run(_gather_pubsub, sender, *receivers):
+            assert result == expected
+
         assert self.runs == 3
-        assert [item for tag, item in events if tag == "receiver1"] == expected
-        assert [item for tag, item in events if tag == "receiver2"] == expected
+
+        # After a normal run no channel slot lingers in the async hub
+        assert not async_hub._slots
+
+    def test_pubsub_funcs(self, capsys):
+        receiver = AsyncPipe("receive", conf={"name": "receiver", **recv_conf})
+        changer = AsyncPipe("receive", conf={"name": "changer", **recv_conf}, func=len)
+        printer = AsyncPipe(
+            "receive", conf={"name": "printer", **recv_conf}, func=print
+        )
+
+        sender = (
+            AsyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .send(others=["receiver", "changer", "printer"])
+        )
+
+        expected_receiver = [
+            {"content": "once is 1x"},
+            {"content": "twice is 2x"},
+            {"content": "thrice is 3x"},
+        ]
+
+        expected_changer = [1, 1, 1]
+        expected_printer = [None, None, None]
+
+        results = run(_gather_pubsub, sender, receiver, changer, printer)
+        assert results[0] == expected_receiver
+        assert results[3] == expected_receiver
+        assert results[1] == expected_changer
+        assert results[2] == expected_printer
+
+        captured = capsys.readouterr()
+        assert captured.out.split("\n")[0] == "{'content': 'once is 1x'}"
 
     @pytest.mark.anyio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="materialized receiver yields only after full drain; incremental "
-        "streaming (interleaved delivery) is P7.3",
-    )
-    def test_pubsub_incremental_streaming(self):
+    @pytest.mark.timeout(10)
+    def test_pubsub_missing_receiver_times_out(self):
         """
-        A receiver should observe items *as they arrive*, interleaved with the
-        sender's pushes — not in one burst after the sender finishes.
-
-        ``events`` records the global order of pushes (``send``) and receipts
-        (the receiver name). Under incremental streaming at least one receipt
-        precedes the last push. The materialized receiver (P7.2) drains fully
-        before yielding, so every receipt trails every push and this fails —
-        until P7.3 lands.
+        A publish to a name that is never subscribed fails fast, bounded by
+        ``max_wait``, rather than dropping data or hanging.
         """
-        events = []
-        others = ["receiver1"]
-        receiver = partial(_async_receiver, events, "receiver1")
-        sender = partial(_async_sender, events, others, between=0.05)
-        run(_pubsub_session, receiver, sender)
+        sender = (
+            AsyncPipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .send(others=["ghost"], conf={"max_wait": 0.05})
+        )
 
-        tags = [tag for tag, _ in events]
-        first_recv = tags.index("receiver1")
-        last_send = len(tags) - 1 - tags[::-1].index("send")
-        assert first_recv < last_send
+        with pytest.raises(ReceiverUnavailableError):
+            run(_drain_ghost, sender)
 
     def test_pstream(self):
         """Tests a parallel asynchronous stream pipeline."""

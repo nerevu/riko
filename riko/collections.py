@@ -121,6 +121,7 @@ from meza import convert as cv
 from meza import io
 
 from riko import Context
+from riko._pubsub import sync_hub
 from riko.bado import async_return
 from riko.bado.itertools import async_iter, async_map
 from riko.compile import _resolve_module
@@ -137,8 +138,8 @@ from riko.types.general import (
     Stream,
     SyncPipeParser,
 )
-from riko.types.values import BasicValue, StreamState
-from riko.utils import _ids, parse_context, send
+from riko.types.values import BasicValue
+from riko.utils import parse_context
 
 if TYPE_CHECKING:
     from multiprocessing.dummy import Pool as ThreadPoolType
@@ -342,7 +343,9 @@ class PyPipe(_Lifecycle):
     def __init__(
         self,
         name: str | None = None,
-        parallel=False,
+        source: AsyncItems | Awaitable[Items] | Items | None = None,
+        *,
+        parallel: bool = False,
         inputs: Mapping | None = None,
         context: Context | None = None,
         conf: Conf = None,
@@ -350,6 +353,7 @@ class PyPipe(_Lifecycle):
     ):
         self._state = PipeState.NEW
         self.name = name
+        self.source = source
         self.parallel = parallel
         self.verbose = kwargs.get("verbose")
         self.test = kwargs.get("test")
@@ -366,6 +370,11 @@ class PyPipe(_Lifecycle):
         self.kwargs.update(kwargs)
         return self
 
+    def _notify_subscribers(self) -> None:
+        if self.name == "send":
+            ids = cast(dict[str, int], self.kwargs.get("ids", {}))
+            sync_hub.notify_complete(ids)
+
 
 class SyncPipe(PyPipe):
     """A synchronous Pipe object"""
@@ -373,11 +382,8 @@ class SyncPipe(PyPipe):
     def __init__(
         self,
         name: str | None = None,
-        parallel: bool = False,
-        inputs: Mapping | None = None,
-        context: Context | None = None,
-        conf: Conf = None,
         source: Items | None = None,
+        *,
         workers: int | None = None,
         chunksize: int | None = None,
         threads: bool | None = True,
@@ -387,10 +393,7 @@ class SyncPipe(PyPipe):
         ordered: bool | None = False,
         **kwargs,
     ):
-        super().__init__(
-            name, parallel=parallel, inputs=inputs, context=context, conf=conf, **kwargs
-        )
-        self.source = source
+        super().__init__(name, source, **kwargs)
         self.threads = threads
         self.pool_scope = pool_scope
         self.ordered = ordered
@@ -559,12 +562,6 @@ class SyncPipe(PyPipe):
 
         return result
 
-    def _notify_subscribers(self):
-        if self.name == "send":
-            ids = cast(dict[str, int], self.kwargs.get("ids", {}))
-            targets = [t for t, tid in ids.items() if _ids.get(t) == tid]
-            [send(target, {"state": StreamState.DONE}) for target in targets]
-
     def _stream(self) -> Generator[Item, None, None]:
         if self.name == "send":
             self.kwargs.setdefault("ids", {})
@@ -642,6 +639,7 @@ class PyCollection(_Lifecycle):
     def __init__(
         self,
         sources: Iterable[Mapping[str, str]],
+        *,
         conf: Conf = None,
         parallel=False,
         workers=None,
@@ -670,13 +668,14 @@ class SyncCollection(PyCollection):
 
     def __init__(
         self,
-        *args,
+        sources,
+        *,
         threads: bool | None = True,
         ordered: bool | None = False,
         pool: AnyPool | None = None,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(sources, **kwargs)
         self.threads = threads
         self.ordered = ordered
         self._iter: Stream | None = None
@@ -811,18 +810,12 @@ class AsyncPipe(PyPipe):
     def __init__(
         self,
         name: str | None = None,
-        parallel: bool = False,
-        inputs: Mapping | None = None,
-        context: Context | None = None,
-        conf: Conf = None,
         source: AsyncItems | Awaitable[Items] | Items | None = None,
+        *,
         connections=16,
         **kwargs,
     ):
-        super().__init__(
-            name, parallel=parallel, inputs=inputs, context=context, conf=conf, **kwargs
-        )
-        self.source = source
+        super().__init__(name, source, **kwargs)
         self.connections = connections
         self._aiter: AsyncGenerator[Item, None] | None = None
 
@@ -965,12 +958,11 @@ class AsyncCollection(PyCollection):
     def __init__(
         self,
         sources,
+        *,
         connections=16,
-        conf: Conf = None,
-        parallel: bool = False,
         **kwargs,
     ):
-        super().__init__(sources, conf=conf, parallel=parallel, **kwargs)
+        super().__init__(sources, **kwargs)
         self.connections = connections
         self._aiter: AsyncGenerator[Item, None] | None = None
 

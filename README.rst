@@ -533,40 +533,39 @@ lazy evaluation. ``riko`` solves this with the ``send`` and ``receive`` pipes.
 
 - ``send`` is a transparent pass-through ``operator``: it yields every item
   unchanged while pushing a copy to one or more named channels.
-- ``receive`` is an independent pull iterator that drains a named channel as items
+- ``receive`` is an independent pull iterator that drains a named receiver as items
   arrive.
 
-Under the hood, each ``receive`` channel is a generator-based coroutine (the same
+Under the hood, each ``receiver`` is a generator-based coroutine (the same
 push pattern used by `ijson`_). ``send`` calls ``.send(item)`` on the primed
 coroutine directly.
 
 .. code-block:: python
 
-    >>> from itertools import islice
-    >>> from riko.modules.receive import pipe as receiver
-    >>> from riko.modules.send import pipe as sender
+    >>> from riko.modules.receive import pipe as receive
+    >>> from riko.modules.send import pipe as send
     >>> from riko.utils import noop
-
-    >>> ### Prime a named channel ###
-    >>> alerts = receiver(conf={'name': 'alerts'}, func=noop)
-    >>> next(alerts)
-    {'state': <StreamState.PENDING: 1>}
-
-    >>> ### items flow through AND are pushed to 'alerts' ###
+    >>>
     >>> stream = [{'title': 'Gravity paper', 'score': 42},
     ...           {'title': 'Breaking: riko 4.0', 'score': 980}]
-    >>> source = sender(stream, others=['alerts'])
-
+    >>>
+    >>> ### Prime a named receiver ###
+    >>> receiver = receive(conf={'name': 'receiver'})
+    >>> next(receiver)
+    {'state': <StreamState.PENDING: 1>}
+    >>>
+    >>> ### sender pushes items to 'receiver' ###
+    >>> sender = send(stream, others=['receiver'])
+    >>>
     >>> ### Consuming the sender drives the push ###
-    >>> list(source)
+    >>> list(sender)
     [{'title': 'Gravity paper', 'score': 42}, {'title': 'Breaking: riko 4.0', 'score': 980}]
-
-    >>> ### Drain the alerts channel independently ###
-    >>> #
-    >>> # Note: an idle channel yields a `PENDING` state marker, so filter for
-    >>> # real items when draining
-    >>> [item for item in islice(alerts, 5) if 'state' not in item]
-    [{'title': 'Gravity paper', 'score': 42}, {'title': 'Breaking: riko 4.0', 'score': 980}]
+    >>>
+    >>> ### Drain the receiver independently ###
+    >>> # Note: an idle receiver yields a `PENDING` and `DONE` state markers, so filter
+    >>> # for real items when draining
+    >>> [item['title'] for item in receiver if 'title' in item]
+    ['Gravity paper', 'Breaking: riko 4.0']
 
 ``send`` composes naturally in a ``SyncPipe`` chain via ``.send(others=[...])``.
 The stream continues down the main pipeline while a copy flows to each named
@@ -574,24 +573,20 @@ receiver:
 
 .. code-block:: python
 
-    >>> from itertools import islice
     >>> from riko.collections import SyncPipe
-    >>> from riko.modules.receive import pipe as receiver
+    >>> from riko.modules.receive import pipe as receive
     >>> from riko.utils import noop
     >>>
     >>> ### `archive` and `notify` stand in for your real side effects ###
     >>> #
-    >>> # Note: a receiver `func` also sees `PENDING` state markers, so guard for
-    >>> # the field you care about
-    >>> archived, notified = [], []
-    >>> archive = lambda item: archived.append(item['title']) if 'title' in item else None
-    >>> notify = lambda item: notified.append(item['title']) if 'title' in item else None
+    >>> # Note: a receive `func` automatically filters away state markers, e.g., `PENDING`
+    >>> archived, alerted = [], []
     >>>
     >>> ### Prime two named channels ###
-    >>> everything = receiver(conf={'name': 'everything'}, func=archive)
+    >>> everything = receive(conf={'name': 'everything'}, func=archived.append)
     >>> next(everything)
     {'state': <StreamState.PENDING: 1>}
-    >>> breaking = receiver(conf={'name': 'breaking'}, func=notify)
+    >>> breaking = receive(conf={'name': 'breaking'}, func=alerted.append)
     >>> next(breaking)
     {'state': <StreamState.PENDING: 1>}
     >>>
@@ -600,7 +595,7 @@ receiver:
     ...     {'title': 'breaking: riko 4.0', 'score': 980},
     ...     {'title': 'also big', 'score': 750}]
     >>>
-    >>> ### Send ALL items to 'everything' and filter, then send matches to 'breaking' ###
+    >>> ### Send ALL items to 'everything', filter, then send matches to 'breaking' ###
     >>> flow = (
     ...     SyncPipe(source=items)
     ...         .send(others=['everything'])
@@ -612,12 +607,14 @@ receiver:
     >>> [item['title'] for item in flow]  # sorted high score items
     ['also big', 'breaking: riko 4.0']
     >>>
-    >>> ### Drain each channel: each `func` runs as items arrive ###
-    >>> _ = list(islice(everything, 5))
-    >>> archived  # all items in original order
+    >>> ### Drain each receiver: each `func` runs as items arrive ###
+    >>> # When passed `func`, receivers contain the func return value. In this case, our
+    >>> # funcs mutate lists, so we don't care about the return results.
+    >>> _ = list(everything)
+    >>> [item['title'] for item in archived]  # all items in original order
     ['quiet', 'breaking: riko 4.0', 'also big']
-    >>> _ = list(islice(breaking, 5))
-    >>> notified  # high score items in original order
+    >>> _ = list(breaking)
+    >>> [item['title'] for item in alerted]  # high score items in original order
     ['breaking: riko 4.0', 'also big']
 
 Multiple receivers can listen on different channels from the same ``send`` call by
@@ -625,9 +622,9 @@ passing additional names to ``others``:
 
 .. code-block:: python
 
-    source = sender(stream, others=['breaking', 'archive', 'metrics'])
+    sender = send(stream, others=['breaking', 'archive', 'metrics'])
 
-Each channel is drained independently; draining one does not affect the others.
+Each receiver is drained independently; draining one does not affect the others.
 
 ``split`` vs ``send``/``receive``
 ''''''''''''''''''''''''''''''''''
@@ -646,7 +643,7 @@ Each channel is drained independently; draining one does not affect the others.
     {'title': 'riko pt. 1'}
 
 The difference between them is that ``split`` calls ``list(stream)`` internally, so it
-**eagerly materialises** the entire stream into memory before handing out copies.
+**eagerly materializes** the entire stream into memory before handing out copies.
 ``send``/``receive`` are **lazy**: each item is pushed to receivers as it passes
 through, with no upfront buffering.
 
@@ -663,7 +660,7 @@ through, with no upfront buffering.
 | API                           | Returns N iterators       | Receivers primed upfront;  |
 |                               | in one call               | drained independently      |
 +-------------------------------+---------------------------+----------------------------+
-| Transform per branch          | No — identical copies     | Yes — ``func=`` in each    |
+| Transform per branch          | No. Identical copies.     | Yes — ``func=`` in each    |
 |                               |                           | ``receive``                |
 +-------------------------------+---------------------------+----------------------------+
 | SyncPipe chain                | Returns N streams;        | ``.send(others=[...])``    |

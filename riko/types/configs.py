@@ -42,8 +42,8 @@ class SortObjconf(DynamicConf):
 
 
 class InputObjconf(DynamicConf):
-    prompt: str
     type: CastType
+    prompt: str
     default: str
     test: bool
     input_key: str
@@ -195,6 +195,7 @@ class RenameObjconf(DynamicConf):
 
 class SendObjconf(DynamicConf):
     name: str
+    max_wait: int | float
 
 
 class SimpleMathObjconf(DynamicConf):
