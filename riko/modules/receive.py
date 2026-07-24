@@ -135,13 +135,10 @@ def _register_receiver(name, objconf, func, kwargs) -> None:
                     state = item["state"] if is_stateful_item(item) else None
                     result = _apply(func, item, **fkwargs) if func else item
                     queue = _receive_queue[name]
+                    maxlen = queue.maxlen if queue else None
 
-                    if (
-                        queue
-                        and queue.maxlen is not None
-                        and len(queue) >= queue.maxlen
-                    ):
-                        msg = f"Receiver {name!r} queue full (maxlen={queue.maxlen}); "
+                    if maxlen is not None and len(queue) >= maxlen:
+                        msg = f"Receiver {name!r} queue full ({maxlen=}); "
                         msg += "dropping oldest item."
                         logger.warning(msg)
 
