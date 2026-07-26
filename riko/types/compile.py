@@ -1,5 +1,7 @@
+from collections.abc import Sequence
 from typing import NotRequired, TypedDict
 
+from riko.types.general import PyInput
 from riko.types.modules import AnyModuleRawConf, ConfArg, ModuleName
 
 
@@ -20,6 +22,31 @@ class PipeModule(TypedDict):
     emit: NotRequired[ConfArg]
     assign: NotRequired[ConfArg]
     field: NotRequired[ConfArg]
+
+
+class AbbrevStringModule(TypedDict):
+    alias: str
+    name: str
+    pipe_name: str
+    sub_pipe: bool
+
+
+class StringModule(AbbrevStringModule):
+    id: str
+    expr: str
+    collection: bool
+
+
+class TemplateData(TypedDict):
+    uniq_modules: list[AbbrevStringModule]
+    modules: list[StringModule]
+    pipe_name: str
+    inputs: PyInput
+    dependencies: list[str]
+    embedded_pipes: dict[str, PipeModule]
+    last_module: str
+    raw_confs: list[str]
+    use_collection: bool
 
 
 class TypeCount(TypedDict):
@@ -111,7 +138,7 @@ class ParsedPipeDef(TypedDict):
     name: str
     modules: dict[str, PipeModule]
     embed: dict[str, PipeModule]
-    graph: dict[str, str | list[str]]
+    graph: dict[str, str | Sequence[str]]
     wires: dict[str, Wire]
 
 

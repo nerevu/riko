@@ -26,6 +26,8 @@ Attributes:
 """
 
 import ctypes
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -41,10 +43,12 @@ OPTS: Opts = {
     "field": "content",
 }
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(content: str, extraction: Extraction, objconf: DynamicConf, **kwargs) -> int:
+def parser(
+    content: str, extraction: Extraction, objconf: DynamicConf, **kwargs: object
+) -> int:
     """
     Parsers the pipe content
 
@@ -73,7 +77,7 @@ def parser(content: str, extraction: Extraction, objconf: DynamicConf, **kwargs)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> int:
+def async_pipe(*args: Any, **kwargs: object) -> int:
     """
     A processor module that asynchronously hashes the field of an item.
 
@@ -104,7 +108,7 @@ def async_pipe(*args, **kwargs) -> int:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> int:
+def pipe(*args: Any, **kwargs: object) -> int:
     """
     A processor that hashes the field of an item.
 

@@ -3,49 +3,52 @@
 from riko import Context
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.regex import pipe as regex
-from riko.types.modules import RegexRawConf, RegexRawRule
+from riko.types.general import Conf
+from riko.types.modules import ItemBuilderRawConf, RegexRawConf, RegexRawRule
 
 
-def pipe_a3d1afa31f0a24cc51dcbe79f1590343(item=None, conf=None, context=None, **kwargs):
-    conf = conf or {}
-    context = context or Context(**kwargs)
-
-    if context.describe_input:
-        return []
-
-    if context.describe_dependencies:
-        return ["itembuilder", "regex"]
-
-    sw_163 = itembuilder(
-        item,
-        conf={
-            "attrs": [
+def pipe_a3d1afa31f0a24cc51dcbe79f1590343(
+    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+):
+    if context and context.describe_input:
+        output = []
+    elif context and context.describe_dependencies:
+        output = ["itembuilder", "regex"]
+    else:
+        sw_163 = itembuilder(
+            item,
+            conf=ItemBuilderRawConf(
                 {
-                    "value": {
-                        "type": "text",
-                        "value": "http://www.caltrain.com/Fares/farechart.html",
-                    },
-                    "key": {"type": "text", "value": "url"},
+                    "attrs": [
+                        {
+                            "value": {
+                                "type": "text",
+                                "value": "http://www.caltrain.com/Fares/farechart.html",
+                            },
+                            "key": {"type": "text", "value": "url"},
+                        }
+                    ]
                 }
-            ]
-        },
-    )
+            ),
+        )
 
-    sw_134 = regex
-    sw_134_conf = RegexRawConf(
-        {
-            "rule": [
-                RegexRawRule(
-                    {
-                        "match": {"type": "text", "subkey": "url"},
-                        "replace": {"type": "text", "value": "fff"},
-                    }
-                )
-            ]
-        }
-    )
+        sw_134 = regex
 
-    output = (sw_134(i, conf=sw_134_conf, **kwargs) for i in sw_163)
+        sw_134_conf = RegexRawConf(
+            {
+                "rule": [
+                    RegexRawRule(
+                        {
+                            "match": {"type": "text", "subkey": "url"},
+                            "replace": {"type": "text", "value": "fff"},
+                        }
+                    )
+                ]
+            }
+        )
+
+        output = (sw_134(i, conf=sw_134_conf, **kwargs) for i in sw_163)
+
     return output
 
 

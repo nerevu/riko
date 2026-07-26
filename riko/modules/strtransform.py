@@ -21,6 +21,8 @@ Attributes:
 
 from collections.abc import Sequence
 from functools import reduce
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -39,7 +41,7 @@ OPTS: Opts = {
     "extract": "rule",
 }
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 ATTRS = {
     "capitalize",
@@ -57,7 +59,7 @@ ATTRS = {
 }
 
 
-def reducer(word: str, rule: StrTransformConfRule):
+def reducer(word: str, rule: StrTransformConfRule) -> str:
     if rule.transform in ATTRS:
         args = rule.args.split(",") if rule.args else []
         result = getattr(word, rule.transform)(*args)
@@ -72,8 +74,8 @@ async def async_parser(
     word: str,
     rules: Sequence[StrTransformConfRule],
     objconf: StrTransformObjconf,
-    **kwargs,
-):
+    **kwargs: object,
+) -> str:
     """
     Asynchronously parses the pipe content
 
@@ -111,7 +113,7 @@ def parser(
     word: str,
     rules: Sequence[StrTransformConfRule],
     objconf: StrTransformObjconf,
-    **kwargs,
+    **kwargs: object,
 ) -> str:
     """
     Parses the pipe content
@@ -144,7 +146,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> str:
+async def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously performs string transformations
     on the field of an item.
@@ -185,12 +187,11 @@ async def async_pipe(*args, **kwargs) -> str:
         Hello World
 
     """
-    parsed = await async_parser(*args, **kwargs)
-    return parsed
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor that performs string transformations on the field of an item.
 

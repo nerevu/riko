@@ -10,19 +10,28 @@ the entry point for async doctests/examples (``run(main)`` where ``main`` is a
 no-argument coroutine function) — anyio needs no reactor.
 """
 
-from functools import partial
+from collections.abc import Callable
+from typing import Any
 
 try:
     import anyio
 except ImportError:
-    run = Path = None
-    async_sleep = async_get = async_json = async_return = lambda *_: None
-    gather_results = maybe_deferred = lambda *_: None
-    CapacityLimiter = None
-    create_memory_object_stream = None
-    create_task_group = None
-    lowlevel = None
-    fail_after = None
+    async_get: Callable[..., Any] = lambda *_: None
+    async_json: Callable[..., Any] = lambda *_: None
+    async_partial: Callable[..., Any] = lambda *_: None
+    async_return: Callable[..., Any] = lambda *_: None
+    async_sleep: Callable[..., Any] = lambda *_: None
+    CapacityLimiter: type | None = None
+    create_memory_object_stream: Callable[..., Any] | None = None
+    create_task_group: Callable[..., Any] | None = None
+    fail_after: Callable[..., Any] | None = None
+    gather_results: Callable[..., Any] = lambda *_: None
+    lowlevel: Any = None
+    maybe_deferred: Callable[..., Any] = lambda *_: None
+    MemoryObjectReceiveStream: Any = None
+    MemoryObjectSendStream: Any = None
+    Path: type | None = None
+    run: Callable[..., Any] | None = None
 
     async def checkpoint() -> None:
         return None
@@ -37,10 +46,12 @@ else:
     )
     from anyio import sleep as async_sleep
     from anyio.lowlevel import checkpoint
+    from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
     from riko.bado._util import (
         async_get,
         async_json,
+        async_partial,
         async_return,
         gather_results,
         maybe_deferred,
@@ -49,13 +60,14 @@ else:
     run = anyio.run
 
 
-backend = "empty" if run is None else "anyio"
-async_partial = lambda f, **kwargs: partial(maybe_deferred, f, **kwargs)  # noqa: E731
-issync = backend == "empty"
-isasync = not issync
+backend: str = "empty" if run is None else "anyio"
+issync: bool = backend == "empty"
+isasync: bool = not issync
 
 __all__ = [
     "CapacityLimiter",
+    "MemoryObjectReceiveStream",
+    "MemoryObjectSendStream",
     "Path",
     "async_get",
     "async_json",

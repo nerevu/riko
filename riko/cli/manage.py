@@ -12,21 +12,22 @@ from sys import exit
 
 import click
 
+from riko.cli.gen_config import main as gen_config_main
 from riko.helpers import exception_hook
 
 BASEDIR = p.dirname(p.dirname(p.dirname(p.abspath(__file__))))
 
 sys.excepthook = partial(exception_hook, debug=False)
 
-uv = shutil.which("uv")
-tox = shutil.which("tox")
-pytest = shutil.which("pytest")
-ruff = shutil.which("ruff")
-pylint = shutil.which("pylint")
-pyright = shutil.which("pyright")
+uv: str | None = shutil.which("uv")
+tox: str | None = shutil.which("tox")
+pytest: str | None = shutil.which("pytest")
+ruff: str | None = shutil.which("ruff")
+pylint: str | None = shutil.which("pylint")
+pyright: str | None = shutil.which("pyright")
 
 
-def parse_verbosity(verbose=0, quiet=None):
+def parse_verbosity(verbose: int = 0, quiet: bool | None = None) -> str:
     if quiet:
         verbosity = "0"
     elif verbose:
@@ -45,7 +46,7 @@ def parse_verbosity(verbose=0, quiet=None):
     count=True,
 )
 @click.option("-q", "--quiet", help="Only log errors (overrides -v)", is_flag=True)
-def manager(verbose=0, quiet=False):
+def manager(verbose: int = 0, quiet: bool = False) -> None:
     environ["VERBOSITY"] = parse_verbosity(verbose, quiet)
 
 
@@ -100,7 +101,8 @@ def check():
 @manager.command()
 @click.option("-w", "--where", help="Modules to check")
 @click.option("-F", "--unsafe-fixes", help="View unsafe fixes", is_flag=True)
-@click.option("-t", "--types", help="Check with pyright", is_flag=True)
+@click.option("-t", "--check-types", help="Check with pyright", is_flag=True)
+@click.option("-T", "--verify-types", help="Verify with pyright", is_flag=True)
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
 @click.option(
     "-p",
@@ -108,34 +110,29 @@ def check():
     help="Run linter in parallel in multiple processes",
     is_flag=True,
 )
-def lint(where=None, unsafe_fixes=False, strict=False, types=False, parallel=False):
+def lint(
+    where=None,
+    unsafe_fixes=False,
+    strict=False,
+    check_types=False,
+    verify_types=False,
+    parallel=False,
+):
     """Check style with linters"""
     where = where or ""
-    r_args = ["check"]
-
-    if unsafe_fixes:
-        r_args.append("--unsafe-fixes")
-
-    if where:
-        r_args.extend(where.split(" "))
-
-    if ruff:
-        try:
-            check_call([ruff] + r_args)
-        except CalledProcessError as e:
-            exit(e.returncode)
-    else:
-        raise RuntimeError("ruff not found")
-
-    if types and pyright:
+    if check_types and pyright:
         try:
             check_call([pyright])
         except CalledProcessError as e:
             exit(e.returncode)
-    elif types:
+    elif verify_types and pyright:
+        try:
+            check_call([pyright, "--verifytypes", "riko", "--ignoreexternal"])
+        except CalledProcessError as e:
+            exit(e.returncode)
+    elif check_types or verify_types:
         raise RuntimeError("pyright not found")
-
-    if strict and pylint:
+    elif strict and pylint:
         args = [pylint, "--rcfile=tests/standard.rc", "-rn", "-fparseable", "riko"]
 
         if parallel:
@@ -147,18 +144,39 @@ def lint(where=None, unsafe_fixes=False, strict=False, types=False, parallel=Fal
             exit(e.returncode)
     elif strict:
         raise RuntimeError("pylint not found")
+    elif ruff:
+        r_args = ["check"]
+
+        if unsafe_fixes:
+            r_args.append("--unsafe-fixes")
+
+        if where:
+            r_args.extend(where.split(" "))
+
+        try:
+            check_call([ruff] + r_args)
+            check_call([ruff, "format", "--check"])
+        except CalledProcessError as e:
+            exit(e.returncode)
+    else:
+        raise RuntimeError("ruff not found")
 
 
 @manager.command()
 @click.option("-w", "--where", help="Modules to check", default=None)
+@click.option(
+    "-g", "--gen-config", help="Generate the configuration file", is_flag=True
+)
 @click.option("-s", "--sort/--no-sort", help="Sort module imports", default=True)
 @click.option("-F", "--unsafe-fixes", help="Applies unsafe fixes", is_flag=True)
-def prettify(where=None, sort=True, unsafe_fixes=False):
+def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
     """Prettify code with ruff"""
     where = where or ""
     return_code = 0
 
-    if sort and ruff:
+    if gen_config:
+        return_code = gen_config_main()
+    elif sort and ruff:
         sort_cmd = [ruff, "check", "--select", "I", "--fix"]
         style_cmd = [ruff, "check", "--fix"]
 
@@ -179,7 +197,11 @@ def prettify(where=None, sort=True, unsafe_fixes=False):
     elif sort:
         raise RuntimeError("ruff not found")
 
-    if ruff and not return_code:
+    if gen_config and return_code:
+        raise RuntimeError("Error updating configuration file!")
+    elif gen_config:
+        print("Successfully updated configuration file.")
+    elif ruff and not return_code:
         cmd = [ruff, "format"]
 
         if where:
@@ -218,7 +240,11 @@ def prettify(where=None, sort=True, unsafe_fixes=False):
     default=True,
 )
 @click.option("-t", "--tox", help="Run tox tests", is_flag=True)
+@click.option("-e", "--tox-env", help="Select tox test environment", default=None)
 @click.option("-v", "--verbose", help="Use detailed errors", is_flag=True)
+@click.option(
+    "-q", "--quiet", help="Suppress per-test output (overridden by -v)", is_flag=True
+)
 @click.option(
     "-p",
     "--parallel",
@@ -227,7 +253,9 @@ def prettify(where=None, sort=True, unsafe_fixes=False):
 )
 def test(where=None, stop=None, **kwargs):  # noqa: PT028
     """Run pytest, tox, and script tests"""
-    opts = "-xv" if stop else "-v"
+    quiet = kwargs.get("quiet") and not kwargs.get("verbose")
+    verbosity = "-q" if quiet else "-v"
+    opts = f"-x{verbosity}" if stop else verbosity
     opts += " --cov=riko" if kwargs.get("cover") else " --no-cov"
     opts += "" if kwargs.get("capture") else " -s"
     opts += " --last-failed" if kwargs.get("failed") else ""
@@ -241,10 +269,10 @@ def test(where=None, stop=None, **kwargs):  # noqa: PT028
     opts += f" {where}" if where else ""
 
     try:
-        if tox and kwargs.get("tox") and kwargs.get("parallel"):
-            check_call([tox, "p"])
-        elif tox and kwargs.get("tox"):
-            check_call([tox, "r"])
+        if tox and kwargs.get("tox"):
+            runner = ["p"] if kwargs.get("parallel") else ["r"]
+            topts = ["-e", tox_env] if (tox_env := kwargs.get("tox_env")) else []
+            check_call([tox] + topts + runner)
         elif kwargs.get("tox"):
             raise RuntimeError("tox not found")
         elif pytest:

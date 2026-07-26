@@ -21,6 +21,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -38,11 +40,12 @@ DEFAULTS: Defaults = {
     "token_key": "content",
 }
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: TokenizerObjconf, **kwargs
+    content: str, extraction: Extraction, objconf: TokenizerObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
     Parses the pipe content
@@ -72,7 +75,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
+def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
     A processor module that asynchronously splits a string by a delimiter.
 
@@ -119,7 +122,7 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
     A processor that splits a string by a delimiter.
 

@@ -72,6 +72,8 @@ test = [
 
 lint = [
     "ruff>=0.13.1",
+    "pylint>=4.0.5,<5.0.0",
+    "pyright>=1.1.411",
 ]
 
 dev = [
@@ -79,8 +81,6 @@ dev = [
     { include-group = "lint" },
     "ipython>=8.39.0",
     "pre-commit>=4.6.1",
-    "pylint>=4.0.5,<5.0.0",
-    "pyright>=1.1.411",
 ]
 
 [project.scripts]
@@ -229,16 +229,13 @@ disable = [
 ]
 
 [tool.tox]
-requires = [
-    "tox>=4.22",
-    "tox-uv>=1.13",
-]
+requires = ["tox>=4.22", "tox-uv>=1.13"]
 env_list = [
     "py312",
-    "py312-optional",
     "py313",
-    "py313-optional",
     "py314",
+    "py312-optional",
+    "py313-optional",
     "py314-optional",
     "lint",
 ]
@@ -248,42 +245,44 @@ description = "run the test suite ({env_name})"
 runner = "uv-venv-lock-runner"
 dependency_groups = ["test"]
 set_env = {PYTHONHASHSEED = "94967295", PYTHONWARNINGS = "all"}
-
-commands = [
-    [
-        "pytest",
-        { replace = "posargs", default = [], extend = true },
-    ],
-]
+commands = [["python", "-m", "riko.cli.manage", "test", "--no-cov", "--quiet"]]
 
 [tool.tox.env.py312-optional]
+description = "run test suite, linter, and format checks ({env_name})"
 extras = ["perf", "async", "finance"]
+dependency_groups = ["test", "lint"]
+commands = [
+    ["python", "-m", "riko.cli.manage", "test", "--no-cov", "--quiet"],
+    ["python", "-m", "riko.cli.manage", "lint", "--check-types"],
+    ["python", "-m", "riko.cli.manage", "lint", "--verify-types"],
+]
 
 [tool.tox.env.py313-optional]
+description = "run test suite, linter, and format checks ({env_name})"
 extras = ["perf", "async", "finance"]
+dependency_groups = ["test", "lint"]
+commands = [
+    ["python", "-m", "riko.cli.manage", "test", "--no-cov", "--quiet"],
+    ["python", "-m", "riko.cli.manage", "lint", "--check-types"],
+    ["python", "-m", "riko.cli.manage", "lint", "--verify-types"],
+]
 
 [tool.tox.env.py314-optional]
+description = "run test suite, linter, and format checks ({env_name})"
 extras = ["perf", "async", "finance"]
+dependency_groups = ["test", "lint"]
+commands = [
+    ["python", "-m", "riko.cli.manage", "test", "--no-cov", "--quiet"],
+    ["python", "-m", "riko.cli.manage", "lint", "--check-types"],
+    ["python", "-m", "riko.cli.manage", "lint", "--verify-types"],
+]
 
 [tool.tox.env.lint]
-description = "run ruff lint and format checks"
+description = "run linter"
 runner = "uv-venv-lock-runner"
-skip_install = true
 dependency_groups = ["lint"]
+commands = [["python", "-m", "riko.cli.manage", "lint"]]
 
-commands = [
-    [
-        "ruff",
-        "check",
-        { replace = "posargs", default = ["."], extend = true },
-    ],
-    [
-        "ruff",
-        "format",
-        "--check",
-        { replace = "posargs", default = ["."], extend = true },
-    ],
-]
 
 [tool.setuptools]
 packages = ["riko"]

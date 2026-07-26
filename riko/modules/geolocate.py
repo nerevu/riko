@@ -20,6 +20,9 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko.cast import BasicCastType, CastType, cast
@@ -31,11 +34,11 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"type": "street_address"}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    address: str, extraction: Extraction, objconf: GeolocateObjconf, **kwargs
+    address: str, extraction: Extraction, objconf: GeolocateObjconf, **kwargs: object
 ) -> AnyLocation:
     """
     Parses the pipe content
@@ -64,7 +67,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> AnyLocation:
+def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
     """
     A processor module that asynchronously obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.
@@ -103,7 +106,7 @@ def async_pipe(*args, **kwargs) -> AnyLocation:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> AnyLocation:
+def pipe(*args: Any, **kwargs: object) -> AnyLocation:
     """
     A processor module that obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.

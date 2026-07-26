@@ -31,7 +31,7 @@ from pathlib import Path
 from riko.compile import compile as compile_pipe
 
 
-def run():
+def run() -> None:
     """CLI compiler"""
     parser = ArgumentParser(
         description="description: Compiles a riko JSON pipeline into a Python module",

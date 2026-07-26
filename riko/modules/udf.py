@@ -15,7 +15,8 @@ Examples:
 """
 
 from collections.abc import Callable
-from typing import cast
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -26,10 +27,13 @@ from . import processor
 
 OPTS: Opts = {"listize": True, "emit": True}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs) -> Item:
+def parser(
+    item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
+) -> Item:
     """
     Parsers the pipe content
 
@@ -60,7 +64,7 @@ def parser(item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs) ->
 
 # TODO: add support for async functions
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Item:
+def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor that asynchronously performs an arbitrary (user-defined)
     function on an item.
@@ -91,7 +95,7 @@ def async_pipe(*args, **kwargs) -> Item:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Item:
+def pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor that performs an arbitrary (user-defined) function
     on an item.

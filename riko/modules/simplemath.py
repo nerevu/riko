@@ -22,6 +22,8 @@ Attributes:
 import operator
 from collections.abc import Callable
 from decimal import Decimal
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -33,12 +35,12 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def mean(*nums):
+def mean(*nums: NumLike) -> float:
     try:
-        return sum(nums) / len(nums)
+        return sum(nums) / len(nums)  # type: ignore[arg-type]
     except ZeroDivisionError:
         return float("inf")
 
@@ -56,7 +58,7 @@ OPS: dict[str, Callable[..., NumLike]] = {
 
 
 def parser(
-    num: Decimal, extraction: Extraction, objconf: SimpleMathObjconf, **kwargs
+    num: Decimal, extraction: Extraction, objconf: SimpleMathObjconf, **kwargs: object
 ) -> NumLike:
     """
     Parsers the pipe content
@@ -82,7 +84,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> NumLike:
+def async_pipe(*args: Any, **kwargs: object) -> NumLike:
     """
     A processor module that asynchronously performs basic arithmetic, such
     as addition and subtraction.
@@ -123,7 +125,7 @@ def async_pipe(*args, **kwargs) -> NumLike:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> NumLike:
+def pipe(*args: Any, **kwargs: object) -> NumLike:
     """
     A processor module that performs basic arithmetic, such as addition and
     subtraction.

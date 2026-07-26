@@ -21,8 +21,9 @@ Attributes:
 
 """
 
+from logging import Logger
 from os import path as p
-from typing import cast
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -31,18 +32,18 @@ from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import any2dict
 from riko.types.configs import FetchDataObjconf
-from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
+from riko.types.general import Defaults, Extraction, FileTypes, Item, Opts, Stream
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
-OPTS = SourceOpts
-DEFAULTS = Defaults({"encoding": ENCODING})
-logger = gogo.Gogo(__name__, monolog=True).logger
+OPTS: Opts = SourceOpts
+DEFAULTS: Defaults = Defaults({"encoding": ENCODING})
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchDataObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchDataObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -85,7 +86,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchDataObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchDataObjconf, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -124,7 +125,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -164,7 +165,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that fetches and parses an XML or JSON file to
     return the entries.

@@ -32,6 +32,8 @@ Attributes:
 """
 
 import datetime
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -43,11 +45,14 @@ from . import processor
 
 OPTS: Opts = {"field": "date", "ftype": BasicCastType.DATE}
 DEFAULTS: Defaults = {"format": "%m/%d/%Y %H:%M:%S"}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    date: datetime.date, extraction: Extraction, objconf: DateFormatObjconf, **kwargs
+    date: datetime.date,
+    extraction: Extraction,
+    objconf: DateFormatObjconf,
+    **kwargs: object,
 ) -> str:
     """
     Obtains the user input
@@ -72,7 +77,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> str:
+def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously formats a date.
 
@@ -112,7 +117,7 @@ def async_pipe(*args, **kwargs) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that formats a date.
 

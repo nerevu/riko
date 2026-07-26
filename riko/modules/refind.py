@@ -24,8 +24,10 @@ Attributes:
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import reduce
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -44,44 +46,47 @@ OPTS: Opts = {
     "extract": "rule",
 }
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-PARAMS = {
+PARAMS: dict[str, Callable[[str, FindConfRule], list[str]]] = {
     "first": lambda word, rule: re.split(rule.find, word, maxsplit=1),
     "last": lambda word, rule: re.split(rule.find, word),
 }
 
-AT_PARAMS = {
+AT_PARAMS: dict[
+    str, Callable[[str, FindConfRule], list[str] | re.Match[str] | None]
+] = {
     "first": lambda word, rule: re.search(rule.find, word),
     "last": lambda word, rule: re.findall(rule.find, word),
 }
 
-OPS = {
+OPS: dict[str, Callable[[list[str], FindConfRule], str]] = {
     "before": lambda splits, rule: rule.find.join(splits[: len(splits) - 1]),
     "after": lambda splits, _: splits[-1],
-    "at": lambda splits, _: splits,
 }
 
 
 def reducer(word: str, rule: FindConfRule) -> str:
     param = rule.param or "first"
-    splits = ""
+    is_first = param == "first"
 
     if rule.location == "at":
-        result = AT_PARAMS.get(param, AT_PARAMS["first"])(word, rule)
+        result = ""
+        splits = AT_PARAMS.get(param, AT_PARAMS["first"])(word, rule)
 
-        if result and param == "first":
-            splits = result.group(0)
-        elif result and param == "last":
-            splits = result[-1]
+        if splits and is_first:
+            result = splits[0]
+        elif splits:
+            result = splits[-1]
     else:
         splits = PARAMS.get(param, PARAMS["first"])(word, rule)
+        result = OPS.get(rule.location, OPS["before"])(splits, rule)
 
-    return OPS.get(rule.location, OPS["before"])(splits, rule).strip()
+    return result.strip()
 
 
 async def async_parser(
-    word: str, rules: Sequence[FindConfRule], objconf: RefindObjconf, **kwargs
+    word: str, rules: Sequence[FindConfRule], objconf: RefindObjconf, **kwargs: object
 ) -> str:
     """
     Asynchronously parses the pipe content
@@ -117,7 +122,7 @@ async def async_parser(
 
 
 def parser(
-    word: str, rules: Sequence[FindConfRule], objconf: RefindObjconf, **kwargs
+    word: str, rules: Sequence[FindConfRule], objconf: RefindObjconf, **kwargs: object
 ) -> str:
     """
     Parses the pipe content
@@ -148,7 +153,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> str:
+async def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously finds text within the field of an
     item using regex.
@@ -193,7 +198,7 @@ async def async_pipe(*args, **kwargs) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor that finds text within the field of an item using regex.
 

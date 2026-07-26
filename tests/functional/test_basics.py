@@ -22,6 +22,7 @@ from riko.exceptions import UnsupportedModuleError
 from riko.types.general import (
     AsyncPipelineDependencies,
     AsyncPipeParser,
+    ParserMaterializedOutput,
     ParserOutput,
     SyncPipelineDependencies,
     SyncPipeParser,
@@ -75,7 +76,7 @@ class TestBasics:
 
     def _get_pipeline(
         self, pipe_name: str, file_path: Path | None = None
-    ) -> list[Items]:
+    ) -> ParserMaterializedOutput:
         args = (pipe_name, pipe_name, True)
         pipeline, parsed_pipe_def = _resolve_module(*args, file_path=file_path)
 
@@ -86,23 +87,24 @@ class TestBasics:
         else:
             stream = iter(())
 
-        return list(listize(stream))
+        return cast(ParserMaterializedOutput, list(listize(stream)))
 
     async def _aget_pipeline(
         self, pipe_name: str, file_path: Path | None = None
-    ) -> list[Items]:
+    ) -> ParserMaterializedOutput:
         args = (pipe_name, pipe_name, True)
         pipeline, parsed_pipe_def = _resolve_module(*args, file_path=file_path)
 
         if pipeline:
-            stream = await cast(AsyncPipeParser, pipeline)(context=self.context)
+            _stream = await cast(AsyncPipeParser, pipeline)(context=self.context)
+            stream = list(listize(_stream))
         elif parsed_pipe_def:
             items = abuild_pipeline(parsed_pipe_def, context=self.context)
             stream = [item async for item in items]
         else:
-            stream = iter(())
+            stream = []
 
-        return list(listize(stream))
+        return cast(ParserMaterializedOutput, stream)
 
     def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
         try:

@@ -20,9 +20,13 @@ from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
 
-from riko.bado import create_memory_object_stream, fail_after
+from riko.bado import (
+    MemoryObjectReceiveStream,
+    MemoryObjectSendStream,
+    create_memory_object_stream,
+    fail_after,
+)
 from riko.exceptions import DuplicateReceiverError, ReceiverUnavailableError
 from riko.types.general import Item
 
@@ -37,8 +41,8 @@ class SubscriptionState(StrEnum):
 class _Slot:
     name: str
     generation: int
-    send_stream: Any
-    receive_stream: Any
+    send_stream: MemoryObjectSendStream
+    receive_stream: MemoryObjectReceiveStream
     state: SubscriptionState = field(default=SubscriptionState.PENDING)
 
 
@@ -83,7 +87,7 @@ class AsyncPubSubHub:
                 slot.state = SubscriptionState.CLOSED
 
     @asynccontextmanager
-    async def subscribe(self, name: str) -> AsyncIterator[Any]:
+    async def subscribe(self, name: str) -> AsyncIterator[MemoryObjectReceiveStream]:
         slot = self._get_or_create(name)
 
         if slot.state is SubscriptionState.SUBSCRIBED:

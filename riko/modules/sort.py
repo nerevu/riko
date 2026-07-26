@@ -19,6 +19,8 @@ Attributes:
 
 from collections.abc import Sequence
 from functools import reduce
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -31,7 +33,7 @@ from . import operator
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"rule": SortConfRule(dir="asc", field="content")}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:
@@ -41,7 +43,7 @@ def reducer(stream: Stream, rule: SortConfRule) -> Stream:
 
 
 async def async_parser(
-    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs
+    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -89,7 +91,7 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs
+    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -129,7 +131,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously and eagerly sorts the input source
     according to a specified key. Note that this pipe is not lazy.
@@ -174,7 +176,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that eagerly sorts a stream according to a specified
     key. Note that this pipe is not lazy.

@@ -10,7 +10,7 @@ import ast
 import builtins
 import textwrap
 from ast import AsyncFunctionDef, FunctionDef
-from collections.abc import Awaitable, Coroutine, Iterator
+from collections.abc import Awaitable, Callable, Coroutine, Iterator
 from inspect import getsource, isasyncgenfunction, isgeneratorfunction, unwrap
 from types import UnionType
 from typing import (
@@ -27,7 +27,6 @@ from typing import cast as cast_type
 
 import pygogo as gogo
 
-from riko.types.general import Pipeline
 from riko.types.modules import (
     Inference,
     InferenceSource,
@@ -179,7 +178,7 @@ def _infer_expression_kind(
     return kind, reason
 
 
-def _infer_from_source(pipe: Pipeline) -> ReturnInference:
+def _infer_from_source(pipe: Callable) -> ReturnInference:
     """
     Infer the return kind of a short, unannotated pipe from its source.
 
@@ -268,7 +267,7 @@ def _infer_from_source(pipe: Pipeline) -> ReturnInference:
     return result
 
 
-def gen_return_inferences(pipe: Pipeline) -> Iterator[ReturnInference]:
+def gen_return_inferences(pipe: Callable) -> Iterator[ReturnInference]:
     if isgeneratorfunction(pipe) or isasyncgenfunction(pipe):
         yield ReturnInference(OperatorReturnKind.STREAM, InferenceSource.GENERATOR)
     else:
@@ -297,6 +296,6 @@ def gen_return_inferences(pipe: Pipeline) -> Iterator[ReturnInference]:
             yield _infer_from_source(pipe)
 
 
-def _gen_operator_return_kinds(pipe: Pipeline) -> Iterator[OperatorReturnKind]:
+def _gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
     for inference in gen_return_inferences(pipe):
         yield inference.kind

@@ -9,6 +9,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
 from functools import reduce
+from logging import Logger
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -50,7 +51,7 @@ from riko.types.values import (
 if TYPE_CHECKING:
     from _typeshed import SupportsKeysAndGetItem
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 TV_KEYS = ("type", "value")
@@ -489,7 +490,7 @@ class DotDict(CaseInsensitiveDict[VT]):
 
         return result
 
-    def __setitem__(self, key: str, value: VT):
+    def __setitem__(self, key: str, value: VT) -> None:
         """
         >>> r = DotDict({'author': 'bar'})
         >>> r
@@ -623,7 +624,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     def copy(self) -> Self:
         return type(self)(self)
 
-    def delete(self, key: str):
+    def delete(self, key: str) -> None:
         """
         Delete a root or nested key. Matching is case-insensitive at every
         level, including nested plain-dict values.

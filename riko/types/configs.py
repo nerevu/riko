@@ -15,8 +15,8 @@ Edit those objects (not this file), then regenerate with ``gen-config``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Literal
 
 from riko import DynamicConf
 
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         EmbeddedModule,
         FilterConfRule,
         FindConfRule,
+        Function,
         ParsedParam,
         RegexConfRule,
         RenameConfRule,
@@ -86,7 +87,7 @@ class LoopObjconf(DynamicConf):
 
 
 class AggregateObjconf(DynamicConf):
-    func: Callable[..., Any]
+    func: Function
 
 
 class CountObjconf(DynamicConf):
@@ -214,7 +215,7 @@ class SplitObjconf(DynamicConf):
 
 
 class StrconcatObjconf(DynamicConf):
-    part: str | Subkey | Terminal | list[str | Subkey | Terminal]
+    part: str | Subkey | Terminal | Sequence[str | Subkey | Terminal]
 
 
 class StrfindObjconf(DynamicConf):
@@ -231,7 +232,7 @@ class StrTransformObjconf(DynamicConf):
 
 class SubelementObjconf(DynamicConf):
     path: str
-    token_key: str
+    token_key: str | None
 
 
 class SubstrObjconf(DynamicConf):
@@ -271,7 +272,7 @@ class TypecastObjconf(DynamicConf):
 
 
 class UdfObjconf(DynamicConf):
-    func: Callable[..., Any]
+    func: Function
 
 
 class UniqObjconf(DynamicConf):

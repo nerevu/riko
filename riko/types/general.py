@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from codecs import StreamReader
 from collections.abc import (
     AsyncIterable,
@@ -13,7 +15,6 @@ from typing import (
     TYPE_CHECKING,
     Literal,
     NamedTuple,
-    Optional,
     Protocol,
     TypedDict,
     TypeVar,
@@ -32,9 +33,10 @@ from riko.types.values import (
 )
 
 if TYPE_CHECKING:
-    from riko import Context, DotDict, DynamicConf
+    from riko import Context, DynamicConf
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
+    from riko.dotdict import DotDict
     from riko.types.modules import AnyConfRule, AnyModuleConf, AnyModuleRawConf, Skip
     from riko.utils import Fetch
 
@@ -56,7 +58,8 @@ type Feed = AsyncItems
 type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]
 type OperatorParserOutput = Stream | ItemOrValue | Iterator[StatefulItem]
 type SplitterParserOutput = Streams
-type ParserOutput = ProcessorParserOutput | OperatorParserOutput | SyncSplitterParser
+type ParserOutput = ProcessorParserOutput | OperatorParserOutput | SplitterParserOutput
+type ParserMaterializedOutput = list[StatefulItem | ItemOrValue | AnyLocation | Stream]
 
 type ProcessorWrapperOutput = StreamOrValueStream
 type OperatorWrapperOutput = StreamOrValueStream
@@ -72,23 +75,26 @@ type OperatorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
 
-type PipeTuple = tuple[Item, "DynamicConf"]
+type PipeTuple = tuple[Item, DynamicConf]
 type PipeTuples = Iterator[PipeTuple]
-type Objconfs = Sequence["DynamicConf"]
+type Objconfs = Sequence[DynamicConf]
 type Extraction = T
 type ConversionFunc = Callable[..., Items | StringIO]
 type Caster = Callable[[str | int], PrimitiveValue | AnyLocation]
 type NumericCaster = Callable[[str | NumLike], NumLike]
 type SkipFunc = Callable[[Item], bool]
-type SkipIf = SkipFunc | "Skip" | Iterable[SkipFunc] | Iterable["Skip"]
+type SkipIf = SkipFunc | Skip | Iterable[SkipFunc] | Iterable[Skip]
+type Function = Callable[..., object]
 
 # Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
 # TODO: add type hint overloads to Reencoder with decode=True -> str
 type BinaryFileTypes = BytesIO | RawIOBase
-type StringFileTypes = StringIO | StreamReader | TextIOBase | "NamedTextIOWrapper"
-type FileTypes = BinaryFileTypes | StringFileTypes | "Fetch"
+type StringFileTypes = StringIO | StreamReader | TextIOBase | NamedTextIOWrapper
+type FileTypes = (
+    BinaryFileTypes | StringFileTypes | Fetch[Literal[True]] | Fetch[Literal[False]]
+)
 type Opener = Callable[[str], tuple[FileTypes, str | None]]
-type Conf = "AnyModuleConf" | "AnyModuleRawConf" | None
+type Conf = AnyModuleConf | AnyModuleRawConf | None
 
 
 class PreCaster(TypedDict):
@@ -127,7 +133,7 @@ class Defaults(TypedDict, total=False):
     precision: int
     pubDate: str
     quotechar: str
-    rule: "AnyConfRule"
+    rule: AnyConfRule
     sanitize: bool
     separator: str
     skip_rows: int
@@ -145,8 +151,8 @@ class Defaults(TypedDict, total=False):
 
 
 class Opts(TypedDict, total=False):
-    ftype: "BasicCastType"
-    ptype: "BasicCastType"
+    ftype: BasicCastType
+    ptype: BasicCastType
     assign: str
     count: Literal["first", "all"]
     emit: bool
@@ -167,7 +173,7 @@ class Casted(NamedTuple):
 
 
 class Dispatched(NamedTuple):
-    item: "DotDict"
+    item: DotDict[RikoValue]
     casted: Casted
 
 
@@ -187,8 +193,9 @@ type SyncSplitterParser = Callable[
 
 type SyncPipeParser = Callable[..., ParserOutput]
 type SyncPipelineDependencies = Callable[..., list[str]]
-type SyncStep = tuple[str, ParserOutput] | tuple[str, SyncPipeParser]
+type SyncStep = tuple[str, ParserOutput | SyncPipeParser]
 type SyncSteps = dict[str, ParserOutput | SyncPipeParser]
+type SyncPyInput = list[str | tuple[str, ...]]
 
 
 class ModuleWrapper(Protocol):
@@ -206,8 +213,8 @@ class SyncProcessorWrapper(ModuleWrapper):
         self,
         item: ProcessorWrapperInput | None = None,
         conf: Conf = None,
-        context: Optional["Context"] = None,
-        **kwargs,
+        context: Context | None = None,
+        **kwargs: object,
     ) -> ProcessorWrapperOutput: ...
 
 
@@ -217,8 +224,8 @@ class SyncOperatorWrapper(ModuleWrapper):
         items: OperatorWrapperInput | None = None,
         conf: Conf = None,
         embed: SyncProcessorWrapper | None = None,
-        context: Optional["Context"] = None,
-        **kwargs,
+        context: Context | None = None,
+        **kwargs: object,
     ) -> OperatorWrapperOutput: ...
 
 
@@ -227,7 +234,7 @@ class SyncSplitterWrapper(ModuleWrapper):
         self,
         items: SplitterWrapperInput | None = None,
         conf: Conf = None,
-        **kwargs,
+        **kwargs: object,
     ) -> SplitterWrapperOutput: ...
 
 
@@ -257,8 +264,9 @@ type AsyncSplitterParser = Callable[
 type AsyncPipeItems = Awaitable[ParserOutput]
 type AsyncPipeParser = Callable[..., AsyncPipeItems]
 type AsyncPipelineDependencies = Callable[..., Awaitable[list[str]]]
-type AsyncStep = tuple[str, AsyncPipeItems] | tuple[str, AsyncPipeParser]
+type AsyncStep = tuple[str, AsyncPipeItems | AsyncPipeParser]
 type AsyncSteps = dict[str, AsyncPipeItems | AsyncPipeParser]
+type AsyncPyInput = Awaitable[list[str]]
 
 
 class AsyncProcessorWrapper(ModuleWrapper):
@@ -266,8 +274,8 @@ class AsyncProcessorWrapper(ModuleWrapper):
         self,
         item: ProcessorWrapperInput | None = None,
         conf: Conf = None,
-        context: Optional["Context"] = None,
-        **kwargs,
+        context: Context | None = None,
+        **kwargs: object,
     ) -> Awaitable[ProcessorWrapperOutput]: ...
 
 
@@ -277,8 +285,8 @@ class AsyncOperatorWrapper(ModuleWrapper):
         items: OperatorWrapperInput | None = None,
         conf: Conf = None,
         embed: AsyncProcessorWrapper | None = None,
-        context: Optional["Context"] = None,
-        **kwargs,
+        context: Context | None = None,
+        **kwargs: object,
     ) -> Awaitable[OperatorWrapperOutput]: ...
 
 
@@ -287,7 +295,7 @@ class AsyncSplitterWrapper(ModuleWrapper):
         self,
         items: SplitterWrapperInput | None = None,
         conf: Conf = None,
-        **kwargs,
+        **kwargs: object,
     ) -> Awaitable[SplitterWrapperOutput]: ...
 
 
@@ -300,5 +308,7 @@ type SplitterParser = SyncSplitterParser | AsyncSplitterParser
 type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
 type Pipeline = SyncPipeParser | AsyncPipeParser
 type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
-type Step = SyncStep | AsyncStep
-type Steps = SyncSteps | AsyncSteps
+type StepValue = ParserOutput | Pipeline | AsyncPipeItems
+type Step = tuple[str, StepValue]
+type Steps = dict[str, StepValue]
+type PyInput = SyncPyInput | AsyncPyInput

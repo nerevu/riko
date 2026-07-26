@@ -54,6 +54,8 @@ Attributes:
 
 import re
 from collections.abc import Mapping, Sequence
+from logging import Logger
+from typing import Any
 from urllib.parse import urlencode, urljoin
 
 import pygogo as gogo
@@ -67,11 +69,11 @@ from . import processor
 
 OPTS: Opts = {"extract": "param", "listize": True, "emit": True}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, param: Sequence[ObjconfParam], objconf: UrlBuilderObjconf, **kwargs
+    _: Item, param: Sequence[ObjconfParam], objconf: UrlBuilderObjconf, **kwargs: object
 ) -> str:
     """
     Parsers the pipe content
@@ -120,7 +122,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> str:
+def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A source that asynchronously builds a url.
 
@@ -162,7 +164,7 @@ def async_pipe(*args, **kwargs) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A source that builds a url.
 

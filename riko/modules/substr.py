@@ -27,6 +27,9 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko.cast import BasicCastType
@@ -41,10 +44,10 @@ OPTS: Opts = {
     "field": "content",
 }
 DEFAULTS: Defaults = {"start": 0, "length": 0}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word: str, _: Extraction, objconf: SubstrObjconf, **kwargs) -> str:
+def parser(word: str, _: Extraction, objconf: SubstrObjconf, **kwargs: object) -> str:
     """
     Parses the pipe content
 
@@ -74,7 +77,7 @@ def parser(word: str, _: Extraction, objconf: SubstrObjconf, **kwargs) -> str:
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> str:
+def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously returns a substring of a field
     of an item.
@@ -112,7 +115,7 @@ def async_pipe(*args, **kwargs) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor that returns a substring of a field of an item.
 

@@ -16,6 +16,9 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 from slugify import slugify
 
@@ -32,10 +35,10 @@ OPTS: Opts = {
     "objectify": False,
 }
 DEFAULTS: Defaults = {"separator": "-"}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(word: str, separator: str, objconf: SlugifyObjconf, **kwargs) -> str:
+def parser(word: str, separator: str, objconf: SlugifyObjconf, **kwargs: object) -> str:
     """
     Parsers the pipe content
 
@@ -63,7 +66,7 @@ def parser(word: str, separator: str, objconf: SlugifyObjconf, **kwargs) -> str:
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> str:
+def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously slugifies the field of an item.
 
@@ -93,7 +96,7 @@ def async_pipe(*args, **kwargs) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor that slugifies the field of an item.
 

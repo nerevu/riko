@@ -21,6 +21,8 @@ Attributes:
 """
 
 from itertools import islice
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -32,11 +34,12 @@ from . import operator
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {"start": 0, "count": 0}
-logger = gogo.Gogo(__name__, monolog=True).logger
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: TruncateObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: TruncateObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -76,7 +79,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously returns a specified number of items
     from a stream.
@@ -111,7 +114,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that returns a specified number of items from a stream.
 

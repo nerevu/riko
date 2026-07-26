@@ -20,7 +20,8 @@ Attributes:
 
 """
 
-from typing import cast
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -28,16 +29,17 @@ from riko.dates import NOW
 from riko.dotdict import DotDict
 from riko.types.configs import RssItemBuilderObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types.values import RikoValue
 
 from . import processor
 
 OPTS: Opts = {"emit": True}
 DEFAULTS: Defaults = {"pubDate": NOW.isoformat()}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 # yahoo style rss items (dots are for sub-levels)
-rss = {
+rss: dict[str, str] = {
     "author": "author",
     "description": "description",
     "guid": "y:id",
@@ -57,8 +59,8 @@ RSS = cast(dict[str, str], DotDict(rss))
 
 
 def parser(
-    item: Item, extraction: Extraction, objconf: RssItemBuilderObjconf, **kwargs
-) -> DotDict:
+    item: Item, extraction: Extraction, objconf: RssItemBuilderObjconf, **kwargs: object
+) -> DotDict[RikoValue]:
     """
     Parses the pipe content
 
@@ -86,12 +88,11 @@ def parser(
 
     """
     rdict = {RSS[k]: v for k, v in objconf.iteritems() if k in RSS}
-    stream = DotDict(rdict)
-    return stream
+    return DotDict(rdict)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> DotDict:
+def async_pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
     """
     A source that asynchronously builds an rss item.
 
@@ -135,7 +136,7 @@ def async_pipe(*args, **kwargs) -> DotDict:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> DotDict:
+def pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
     """
     A source that builds an rss item.
 

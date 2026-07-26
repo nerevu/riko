@@ -44,8 +44,9 @@ Attributes:
 
 """
 
+from logging import Logger
 from os.path import splitext
-from typing import cast
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -61,7 +62,7 @@ from . import processor
 
 OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING})
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 # TODO: convert relative links to absolute
@@ -70,7 +71,7 @@ logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -134,7 +135,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: XpathFetchPageObjconf, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -174,7 +175,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that asynchronously fetches the content of a given website as
     DOM nodes or a string.
@@ -230,7 +231,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that fetches the content of a given website as DOM nodes or a
     string.

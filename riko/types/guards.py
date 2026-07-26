@@ -43,7 +43,7 @@ def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:
 
 def is_mapping_seq(
     val: list[Any] | tuple[Any, ...],
-) -> TypeGuard[list[Mapping[Any, Any]] | tuple[Mapping[Any, Any], ...]]:
+) -> TypeGuard[list[Mapping[Any, object]] | tuple[Mapping[Any, object], ...]]:
     return bool(val and is_mapping(val[0]))
 
 
@@ -53,17 +53,17 @@ def is_value_seq(
     return bool(val and isinstance(val[0], BasicValueType))
 
 
-def is_sentinal[VT](val: Mapping[str, VT], **kwargs) -> TypeGuard[Sentinal]:
+def is_sentinal[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentinal]:
     if SentinalValue in val:
         sentinal = str(val[SentinalValue])
         key = replacer(sentinal, "")
     else:
         key = None
 
-    return all([key, (len(val) == 2), key in kwargs])
+    return all([key, (len(val) in {2, 3}), key in kwargs])
 
 
-def is_type_value(val: Mapping) -> TypeGuard[ConfArg]:
+def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
     n = len(val)
     double = n == 2 and "type" in val and "value" in val
     return double or (n == 1 and "value" in val)

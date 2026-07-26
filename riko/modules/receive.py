@@ -11,7 +11,7 @@ Examples:
         >>> from riko.utils import noop
         >>>
         >>> conf = {'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}
-        >>> target = receiver(conf=conf, func=noop)
+        >>> target = receiver(conf=conf)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
@@ -32,8 +32,11 @@ Attributes:
 
 from collections.abc import Callable, Generator, Iterator
 from inspect import signature
+from logging import Logger
 from random import choice
 from time import sleep
+from typing import Any
+from typing import cast as cast_type
 
 import pygogo as gogo
 from meza.fntools import dfilter
@@ -50,7 +53,7 @@ from . import operator
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 ONSETS = (
     "b",
@@ -98,7 +101,7 @@ ADJECTIVES = [
 ]
 
 
-def gen_name(count=2) -> Iterator[str]:
+def gen_name(count: int = 2) -> Iterator[str]:
     yield choice(ADJECTIVES)  # noqa: S311
     yield "-"
 
@@ -106,19 +109,19 @@ def gen_name(count=2) -> Iterator[str]:
         yield "".join(map(choice, [ONSETS, VOWELS, CODAS]))  # noqa: S311
 
 
-def _apply(func: Callable, item: Item | StatefulItem, **fkwargs) -> Item:
+def _apply(func: Callable, item: Item | StatefulItem, **fkwargs: object) -> Item | None:
     if not is_stateful_item(item):
         try:
             params = signature(func).parameters
         except (TypeError, ValueError):
-            allowed = {}
+            kwargs = {}
         else:
             if any(p.kind == p.VAR_KEYWORD for p in params.values()):
-                allowed = fkwargs
+                kwargs = fkwargs
             else:
-                allowed = {k: v for k, v in fkwargs.items() if k in params}
+                kwargs = {k: v for k, v in fkwargs.items() if k in params}
 
-        return func(item, **allowed)
+        return func(item, **kwargs)
 
 
 def _register_receiver(name, objconf, func, kwargs) -> None:
@@ -142,7 +145,7 @@ def _register_receiver(name, objconf, func, kwargs) -> None:
                         msg += "dropping oldest item."
                         logger.warning(msg)
 
-                    queue.append((state, result))
+                    queue.append((state, cast_type(Item, result)))
 
         receiver()
 
@@ -152,7 +155,7 @@ def parser(
     objconf: ReceiveObjconf,
     tuples: PipeTuples,
     func: Callable[[Item | StatefulItem], Item] | None = None,
-    **kwargs,
+    **kwargs: object,
 ) -> Stream | Iterator[StatefulItem]:
     """
     Parses the pipe content
@@ -178,7 +181,7 @@ def parser(
         >>> from meza.fntools import Objectify
         >>>
         >>> conf = {'wait': 0.01, 'max_wait': 2, 'name': 'receiver2'}
-        >>> target = parser(None, Objectify(conf), None, func=noop)
+        >>> target = parser(None, Objectify(conf), None)
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
@@ -219,7 +222,7 @@ async def async_parser(
     objconf: ReceiveObjconf,
     tuples: PipeTuples,
     func: Callable[[Item | StatefulItem], Item] | None = None,
-    **kwargs,
+    **kwargs: object,
 ) -> Stream:
     """
     Asynchronously receives pushed items (materialized).
@@ -236,13 +239,15 @@ async def async_parser(
 
     async with async_hub.subscribe(name) as receive_stream:
         async for item in receive_stream:
-            results.append(_apply(func, item, **fkwargs) if func else item)
+            results.append(
+                cast_type(Item, _apply(func, item, **fkwargs) if func else item)
+            )
 
     return iter(results)
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream | Iterator[StatefulItem]:
+def pipe(*args: Any, **kwargs: object) -> Stream | Iterator[StatefulItem]:
     """
     A source that fetches and parses the first feed found on a site.
 
@@ -263,7 +268,7 @@ def pipe(*args, **kwargs) -> Stream | Iterator[StatefulItem]:
         >>> from riko.modules.send import pipe as sender
         >>> from riko.utils import noop
         >>>
-        >>> target = pipe(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2}, func=noop)
+        >>> target = pipe(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> source = sender([{'x': 0}], others=['receiver3'])
@@ -279,6 +284,6 @@ def pipe(*args, **kwargs) -> Stream | Iterator[StatefulItem]:
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """An async operator that receives pushed stream items (materialized)."""
     return await async_parser(*args, **kwargs)

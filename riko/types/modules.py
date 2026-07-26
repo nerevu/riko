@@ -1,14 +1,15 @@
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from re import RegexFlag
-from typing import TYPE_CHECKING, Any, Literal, NotRequired, Required, TypedDict, Union
+from re import Pattern, RegexFlag
+from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict, Union
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from riko.cast import CastType, LocationType, SortableCastType
     from riko.types.compile import PipeModule
+    from riko.types.general import Function
     from riko.types.values import BasicValue
 
 
@@ -96,6 +97,7 @@ class ConfArg(TypedDict):
 class Terminal(TypedDict):
     terminal: str
     type: str
+    path: NotRequired[str]
 
 
 class Subkey(TypedDict):
@@ -111,9 +113,11 @@ class Param(TypedDict):
     value: Value
 
 
-class Skip(TypedDict):
-    field: str
-    include: NotRequired[bool]
+class Skip(TypedDict, total=False):
+    field: Required[str]
+    text: str
+    op: Literal["intersection", "contains", "search"]
+    include: bool
 
 
 class ObjconfParam:
@@ -131,7 +135,7 @@ class RegexRule(TypedDict):
     default: str
     field: str
     flags: int | RegexFlag
-    match: str
+    match: Pattern[str]
     offset: int
     replace: str
     series: bool
@@ -644,7 +648,7 @@ class LoopConf(TypedDict):
 
 
 class AggregateConf(TypedDict):
-    func: Callable[..., Any]
+    func: "Function"
 
 
 class CountConf(TypedDict, total=False):
@@ -671,7 +675,7 @@ class DateFormatConf(TypedDict):
     format: str = "%m/%d/%Y %H:%M:%S"
 
 
-class ExchangeRateConf(TypedDict):
+class ExchangeRateConf(TypedDict, total=False):
     url: str
     param: dict[str, str]
     currency: str = "USD"
@@ -772,7 +776,7 @@ class SplitConf(TypedDict):
 
 
 class StrconcatConf(TypedDict):
-    part: str | Subkey | Terminal | list[str | Subkey | Terminal]
+    part: str | Subkey | Terminal | Sequence[str | Subkey | Terminal]
 
 
 class StrfindConf(TypedDict):
@@ -789,7 +793,7 @@ class StrTransformConf(TypedDict):
 
 class SubelementConf(TypedDict):
     path: str
-    token_key: str = "content"  # noqa: S105
+    token_key: str | None = "content"  # noqa: S105
 
 
 class SubstrConf(TypedDict):
@@ -812,14 +816,14 @@ class TimeoutConf(TypedDict, total=False):
     weeks: int
 
 
-class TokenizerConf(TypedDict):
+class TokenizerConf(TypedDict, total=False):
     delimiter: str = ","
     dedupe: bool = False
     sort: bool = False
     token_key: str = "content"  # noqa: S105
 
 
-class TruncateConf(TypedDict):
+class TruncateConf(TypedDict, total=False):
     count: int = 0
     start: int = 0
 
@@ -829,12 +833,12 @@ class TypecastConf(TypedDict):
 
 
 class UdfConf(TypedDict):
-    func: Callable[..., Any]
+    func: "Function"
 
 
-class UniqConf(TypedDict):
+class UniqConf(TypedDict, total=False):
     uniq_key: str = "content"
-    limit: NotRequired[int] = 1024
+    limit: int = 1024
 
 
 class UrlBuilderConf(TypedDict, total=False):
@@ -844,13 +848,13 @@ class UrlBuilderConf(TypedDict, total=False):
     param: ParsedParam | list[ParsedParam]
 
 
-class UrlParseConf(TypedDict):
+class UrlParseConf(TypedDict, total=False):
     parse_key: str = "content"
 
 
-class XpathFetchPageConf(TypedDict):
-    url: str
-    xpath: NotRequired[str]
+class XpathFetchPageConf(TypedDict, total=False):
+    url: Required[str]
+    xpath: str
     html5: bool = False
 
 

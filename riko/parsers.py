@@ -11,8 +11,10 @@ from html.parser import HTMLParser
 from io import BytesIO, RawIOBase, StringIO
 from itertools import chain
 from json import JSONDecodeError, load, loads
+from logging import Logger
 from time import struct_time
-from typing import TYPE_CHECKING, Literal, cast, overload
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 from urllib.error import URLError
 from xml.sax import SAXParseException  # noqa: S406
 
@@ -43,20 +45,20 @@ from riko.utils import Fetch, repr_cache, truncate_content
 try:
     from lxml import etree, html  # type: ignore[import-untyped]
 except ImportError:
-    html5parser = None
+    html5parser: ModuleType | None = None
 
     import xml.etree.ElementTree as etree  # noqa: N813, S405
     from xml.etree.ElementTree import ElementTree  # noqa: S405
 
     import html5lib as html
 
-    IS_LXML = False
-    XML_PARSER = None
+    IS_LXML: bool = False
+    XML_PARSER: Any = None
 else:
     from lxml.html import html5parser
 
     ElementTree = None
-    IS_LXML = True
+    IS_LXML: bool = True
     XML_PARSER = etree.XMLParser(  # noqa: S314
         resolve_entities=False,
         no_network=True,
@@ -68,10 +70,10 @@ else:
 try:
     import fastfeedparser
 except ImportError:
-    rss_parser = feedparser
+    rss_parser: ModuleType = feedparser
     IS_FASTFEEDPARSER = False
 else:
-    rss_parser = fastfeedparser
+    rss_parser: ModuleType = fastfeedparser
     IS_FASTFEEDPARSER = True
 
 try:
@@ -93,7 +95,7 @@ if TYPE_CHECKING:
 type AnyElementTree = "nativeElementTree" | "lxmlElementTree"
 type AnyElement = "nativeElement" | "lxmlElement"
 
-logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
 
@@ -103,20 +105,26 @@ ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
     "contains": lambda text, value: text.lower() in value.lower(),
     "intersection": lambda text, value: bool(set(text).intersection(value)),
-    "re.search": lambda text, value: re.search(text, value, re.IGNORECASE) is not None,
+    "search": lambda text, value: re.search(text, value, re.IGNORECASE) is not None,
 }
 
 
 class LinkParser(HTMLParser):
+    strict: bool
+    external_only: bool
+    link_type: tuple[str, ...]
+    entry: Iterator[Mapping[str, str | None]]
+    data: StringIO
+
     def __init__(
         self,
-        *args,
-        external_only=True,
-        strict=True,
-        rss_only=False,
+        *args: Any,
+        external_only: bool = True,
+        strict: bool = True,
+        rss_only: bool = False,
         link_type: str | Iterable[str] | None = None,
-        **kwargs,
-    ):
+        **kwargs: object,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.strict = strict
         self.external_only = external_only
@@ -130,19 +138,21 @@ class LinkParser(HTMLParser):
         else:
             self.link_type = ()
 
-    def keyfunc(self, entry):
+    def keyfunc(self, entry: Item) -> int:
         # sort according to the order of self.link_type
         count = len(self.link_type)
         enumerated = enumerate(self.link_type)
-        pos = (i for i, t in enumerated if entry.get("type", "").endswith(t))
+        pos = (i for i, t in enumerated if str(entry.get("type", "")).endswith(t))
         return next(pos, count)
 
-    def reset(self):
+    def reset(self) -> None:
         HTMLParser.reset(self)
         self.entry = iter(())
         self.data = StringIO()
 
-    def handle_starttag(self, tag: str, attrs: Sequence[tuple[str, str | None]]):
+    def handle_starttag(
+        self, tag: str, attrs: Sequence[tuple[str, str | None]]
+    ) -> None:
         entry = dict(attrs)
         link = entry.get("href")
         _type = entry.get("type", "")
@@ -158,11 +168,11 @@ class LinkParser(HTMLParser):
             entry["tag"] = tag
             self.entry = chain(self.entry, [entry])
 
-    def handle_data(self, data: str):
+    def handle_data(self, data: str) -> None:
         self.data.write(f"{data}\n")
 
 
-def get_text(html: str, convert_charrefs=False):
+def get_text(html: str, convert_charrefs: bool = False) -> str:
     try:
         parser = LinkParser(convert_charrefs=convert_charrefs)
     except TypeError:
@@ -183,7 +193,7 @@ def parse_rss(  # noqa: E704
     *, content: str | bytes, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]: ...
 @overload
-def parse_rss(**kwargs) -> list[ParserRSSEntry]: ...  # noqa: E704
+def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...  # noqa: E704
 def parse_rss(  # noqa: E302
     url: BasicArg = "", *, content: str | bytes | None = None, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]:
@@ -315,10 +325,10 @@ def verify_pos(tree: AnyElementTree, pos: int, *tags: str) -> int:
 
 def xpath(
     tree: AnyElementTree,
-    path="/",
+    path: str = "/",
     pos: int | None = None,
     namespace: str | None = None,
-    ns_prefix="ns",
+    ns_prefix: str = "ns",
 ) -> Iterator[AnyElement]:
     """
     Yields elements matching *path* from *tree* across multiple XML backends.
@@ -527,7 +537,7 @@ def etree2dict(element: AnyElement) -> StringyDict:
 def any2dict(
     content: FileTypes | RikoDict | list[RikoDict],
     ext: str | None = "xml",
-    html5=False,
+    html5: bool = False,
     path: str | None = None,
 ) -> Stream:
     """Path should be the location to a list of items"""
@@ -600,7 +610,7 @@ def any2dict(
         raise TypeError("No file type provided!")
 
 
-def _conf_is_dynamic_uncached(conf: object, **kwargs: bool) -> bool:
+def _conf_is_dynamic_uncached(conf: object, **kwargs: object) -> bool:
     is_dynamic = False
 
     if isinstance(conf, Mapping):
@@ -616,11 +626,11 @@ def _conf_is_dynamic_uncached(conf: object, **kwargs: bool) -> bool:
 
 
 @repr_cache
-def _conf_is_dynamic_cached(conf: object, **kwargs: bool) -> bool:
+def _conf_is_dynamic_cached(conf: object, **kwargs: object) -> bool:
     return _conf_is_dynamic_uncached(conf, **kwargs)
 
 
-def conf_is_dynamic(conf: object, memoize=False, **kwargs) -> bool:
+def conf_is_dynamic(conf: object, memoize: bool = False, **kwargs: object) -> bool:
     """
     Examples:
         >>> _conf_is_dynamic_cached.cache_clear()
@@ -680,8 +690,8 @@ def _parse_conf_uncached[VT](
 def _parse_conf_cached[VT](
     item: Item | None = None,
     conf: VT | None = None,
-    default=None,
-    **kwargs,
+    default: VT | None = None,
+    **kwargs: VT,
 ) -> VT | dict[str, VT] | list[VT] | None:
     return _parse_conf_uncached(item, conf, default=default, **kwargs)
 
@@ -689,9 +699,9 @@ def _parse_conf_cached[VT](
 def parse_conf[VT](
     item: Item | None = None,
     conf: VT | None = None,
-    default=None,
-    memoize=None,
-    **kwargs,
+    default: VT | None = None,
+    memoize: bool | None = None,
+    **kwargs: VT,
 ) -> VT | dict[str, VT] | list[VT] | None:
     """
     Examples
@@ -740,13 +750,13 @@ def parse_conf[VT](
 
     """
     if memoize is None:
-        memoize = not conf_is_dynamic(conf, **kwargs)
+        memoize = not conf_is_dynamic(conf, memoize=False, **kwargs)
 
     func = _parse_conf_cached if memoize else _parse_conf_uncached
     return func(item, conf, default=default, **kwargs)
 
 
-def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_) -> bool:
+def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> bool:
     """
     Determine whether or not to skip an item
 
@@ -804,7 +814,9 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_) -> bool:
     return skip
 
 
-def get_field(item: ItemOrValue | None = None, field="", **kwargs) -> ItemOrValue:
+def get_field(
+    item: ItemOrValue | None = None, field: str = "", **kwargs: ItemOrValue
+) -> ItemOrValue:
     if field and isinstance(item, DotDict):
         value = item.get(field, **kwargs)
     elif field and isinstance(item, dict):

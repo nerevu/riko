@@ -40,22 +40,25 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko import autorss
 from riko.cast import SourceOpts
 from riko.types.configs import FeedAutoDiscoveryObjconf
-from riko.types.general import Defaults, Extraction, Item, Stream
+from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 
 from . import processor
 
-OPTS = SourceOpts
+OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"strict": True}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -87,12 +90,12 @@ async def async_parser(
 
     """
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = await autorss.async_get_rss(objconf.url, **rkwargs)
+    stream = await autorss.async_get_rss(objconf.url, link_type=None, **rkwargs)
     return stream
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -126,12 +129,12 @@ def parser(
 
     """
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = autorss.get_rss(objconf.url, **rkwargs)
+    stream = autorss.get_rss(objconf.url, link_type=None, **rkwargs)
     return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that fetches and parses the first feed found on a site.
 
@@ -163,7 +166,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that fetches and parses the first feed found on a site.
 

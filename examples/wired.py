@@ -2,14 +2,16 @@ from pprint import pprint
 
 from riko.cast import CastType
 from riko.collections import AsyncPipe, SyncPipe
-from riko.types.modules import InputConf, ItemBuilderRawConf, Param
+from riko.types.modules import DateFormatRawConf, InputConf, ItemBuilderRawConf, Param
 
 format_conf = InputConf({"type": CastType.TEXT, "input_key": "format", "test": True})
 format_in = {"format": "%B %d, %Y"}
 date_conf = InputConf(
     {"type": CastType.DATE, "default": "5/4/82", "prompt": "enter a date", "test": True}
 )
-dynamic_conf = {"format": {"terminal": "format", "path": "format"}}
+date_fmt_conf = DateFormatRawConf(
+    {"format": {"terminal": "format", "type": "text", "path": "format"}}
+)
 build_conf = ItemBuilderRawConf(
     {
         "attrs": Param(
@@ -24,10 +26,9 @@ build_conf = ItemBuilderRawConf(
 
 def pipe(test=False):
     format_stream = SyncPipe("input", conf=format_conf, inputs=format_in)
-    date_stream = SyncPipe("input", conf=date_conf)
 
-    formatted = date_stream.dateformat(
-        conf=dynamic_conf, format=format_stream, field="content", emit=True
+    formatted = SyncPipe("input", conf=date_conf).dateformat(
+        conf=date_fmt_conf, format=format_stream, field="content", emit=True
     )
 
     stream = SyncPipe("itembuilder", conf=build_conf, formatted=formatted, test=test)
@@ -36,10 +37,9 @@ def pipe(test=False):
 
 async def async_pipe(test=False):
     format_stream = AsyncPipe("input", conf=format_conf, inputs=format_in)
-    date_stream = AsyncPipe("input", conf=date_conf)
 
-    formatted = await date_stream.dateformat(
-        conf=dynamic_conf, format=format_stream, field="content", emit=True
+    formatted = await AsyncPipe("input", conf=date_conf).dateformat(
+        conf=date_fmt_conf, format=format_stream, field="content", emit=True
     )
 
     stream = await AsyncPipe(

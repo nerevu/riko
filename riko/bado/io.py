@@ -13,6 +13,7 @@ Examples:
 """
 
 from io import BytesIO, TextIOWrapper
+from logging import Logger
 from typing import Literal, overload
 
 import pygogo as gogo
@@ -20,7 +21,7 @@ import pygogo as gogo
 from riko import ENCODING, get_abspath
 from riko.bado import Path, async_get, async_sleep
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class NamedTextIOWrapper(TextIOWrapper):
@@ -53,7 +54,7 @@ async def async_url_open(  # noqa: E704
     encoding: str = ...,
     *,
     binary: Literal[True],
-    **kwargs,
+    **kwargs: object,
 ) -> BytesIO: ...
 @overload  # noqa: E302
 async def async_url_open(  # noqa: E704
@@ -61,14 +62,14 @@ async def async_url_open(  # noqa: E704
     timeout: float = ...,
     encoding: str = ...,
     binary: Literal[False] = ...,
-    **kwargs,
+    **kwargs: object,
 ) -> NamedTextIOWrapper: ...
 async def async_url_open(  # noqa: E302
     url: str,
     timeout: float = 0,
     encoding: str = ENCODING,
     binary: bool = False,
-    **kwargs,
+    **kwargs: object,
 ) -> BytesIO | NamedTextIOWrapper:
     data, name = await _read_bytes(url, timeout)
 
@@ -82,7 +83,11 @@ async def async_url_open(  # noqa: E302
 
 
 async def async_url_read(
-    url: str, timeout: float = 0, encoding: str = ENCODING, delay: float = 0, **kwargs
+    url: str,
+    timeout: float = 0,
+    encoding: str = ENCODING,
+    delay: float = 0,
+    **kwargs: object,
 ) -> str:
     if delay:
         await async_sleep(delay)

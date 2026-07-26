@@ -14,7 +14,7 @@ runtime.
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from functools import partial
 from inspect import isawaitable
-from typing import Any, overload
+from typing import overload
 
 from riko.bado import CapacityLimiter, async_sleep, checkpoint, create_task_group
 
@@ -62,11 +62,11 @@ async def coop_reduce[T, S](  # noqa: E704
 ) -> T: ...
 @overload  # noqa: E302
 async def coop_reduce[T, S](  # noqa: E704
-    func: Callable[[T, S], T], content: Iterable[S], initial: None = ...
-) -> T | None: ...
-async def coop_reduce[T, S](  # noqa: E302
-    func: Callable[[T, S], T], content: Iterable[S], initial: T | None = None
-) -> T | None:
+    func: Callable[[T | S | None, S], T], content: Iterable[S], initial: None = ...
+) -> T | S | None: ...
+async def coop_reduce[T, S](  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
+    func: Callable[[T | S | None, S], T], content: Iterable[S], initial: T | None = None
+) -> T | S | None:
     """
     Reduces *content* with *func*, yielding control between steps.
 
@@ -93,7 +93,7 @@ async def coop_reduce[T, S](  # noqa: E302
 
     """
     items = iter(content)
-    value: Any = next(items, None) if initial is None else initial
+    value: T | S | None = next(items, None) if initial is None else initial
 
     for item in items:
         value = func(value, item)
@@ -153,7 +153,7 @@ async def async_map[T, S](
     func: Callable[[T], Awaitable[S]],
     content: Iterable[T],
     connections: int = 0,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> list[S]:
     """
     Maps *func* over *content* concurrently, returning results in order.
@@ -186,7 +186,7 @@ async def async_map[T, S](
     """
     _func = partial(func, **kwargs) if kwargs else func
     items = list(content)
-    results: list[Any] = [None] * len(items)
+    results: list[S | None] = [None] * len(items)
     limiter = CapacityLimiter(connections) if connections else None
 
     async def work(index: int, item: T) -> None:
@@ -200,4 +200,4 @@ async def async_map[T, S](
         for index, item in enumerate(items):
             tg.start_soon(work, index, item)
 
-    return results
+    return [r for r in results if r is not None]

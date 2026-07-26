@@ -50,16 +50,21 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+from typing import cast as cast_type
+
 import pygogo as gogo
 
-from riko.cast import CastType, SourceOpts, cast
+from riko.cast import CastType, SourceOpts
+from riko.cast import cast as cast_value
 from riko.types.configs import InputObjconf
-from riko.types.general import Defaults, Extraction, Item
-from riko.types.values import PrimitiveValue
+from riko.types.general import Defaults, Extraction, Item, Opts
+from riko.types.values import Inputs, PrimitiveValue
 
 from . import processor
 
-OPTS = SourceOpts
+OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {
     "type": "text",
     "default": "",
@@ -67,11 +72,15 @@ DEFAULTS: Defaults = {
     "test": False,
     "input_key": "content",
 }
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: InputObjconf, skip=False, **kwargs
+    _: Item,
+    extraction: Extraction,
+    objconf: InputObjconf,
+    skip: bool = False,
+    **kwargs: object,
 ) -> PrimitiveValue:
     """
     Obtains the user input
@@ -95,19 +104,19 @@ def parser(
         30
 
     """
-    if kwargs.get("inputs"):
-        value = kwargs["inputs"].get(objconf.input_key, objconf.default)
+    if inputs := cast_type(Inputs | None, kwargs.get("inputs")):
+        value = inputs.get(objconf.input_key, objconf.default)
     elif objconf.test or skip or kwargs.get("test"):
         value = objconf.default
     else:
         raw = input(f"{objconf.prompt} (default={objconf.default}) ")
         value = raw or objconf.default
 
-    return cast(value, CastType(objconf.type)) if objconf.type else value
+    return cast_value(value, CastType(objconf.type)) if objconf.type else value
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> PrimitiveValue:
+def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
     A processor module that asynchronously prompts for text and parses it
     into a variety of different types, e.g., int, bool, date, etc.
@@ -152,7 +161,7 @@ def async_pipe(*args, **kwargs) -> PrimitiveValue:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> PrimitiveValue:
+def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
     A processor module that prompts for text and parses it into a variety of
     different types, e.g., int, bool, date, etc.

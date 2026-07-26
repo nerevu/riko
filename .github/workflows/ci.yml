@@ -31,6 +31,43 @@ jobs:
       - name: Format
         run: uvx ruff format
 
+  lint:
+    name: lint (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Type-check on every supported version so version-specific type errors
+        # aren't hidden (pyright infers its target version from the interpreter).
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Install
+        # All extras are required so pyright can resolve optional-dependency
+        # imports (anyio, lxml, httpx, csv2ofx); editable so the checkout's
+        # source is type-checked rather than a cached wheel.
+        run: |
+          uv sync --group dev --all-extras
+          uv pip install --reinstall --no-deps --editable .
+
+      - name: Lint
+        # ruff is config-driven, not runner-Python-specific, so run it once.
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync manage lint
+
+      - name: Check types
+        run: uv run --no-sync manage lint --check-types
+
+      - name: Verify types
+        run: uv run --no-sync manage lint --verify-types
+
   test:
     name: py${{ matrix.python-version }} (optional=${{ matrix.optional }})
     runs-on: ubuntu-latest
@@ -69,8 +106,5 @@ jobs:
           # so source-only changes (new CLI options) never take effect on CI.
           uv pip install --reinstall --no-deps --editable .
 
-      - name: Lint
-        run: uv run --no-sync manage lint -t
-
       - name: Test
-        run: uv run --no-sync manage test
+        run: uv run --no-sync manage test --no-cov

@@ -23,8 +23,10 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import reduce
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -43,21 +45,24 @@ OPTS: Opts = {
     "extract": "rule",
 }
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-OPS = {
+OPS: dict[str, Callable[[str, StrReplaceConfRule], str]] = {
     "first": lambda word, rule: word.replace(rule.find, rule.replace, 1),
     "last": lambda word, rule: rule.replace.join(word.rsplit(rule.find, 1)),
     "every": lambda word, rule: word.replace(rule.find, rule.replace),
 }
 
 
-def reducer(word: str, rule: StrReplaceConfRule):
+def reducer(word: str, rule: StrReplaceConfRule) -> str:
     return OPS.get(rule.param, OPS["every"])(word, rule)
 
 
 async def async_parser(
-    word: str, rules: Sequence[StrReplaceConfRule], objconf: StrReplaceObjconf, **kwargs
+    word: str,
+    rules: Sequence[StrReplaceConfRule],
+    objconf: StrReplaceObjconf,
+    **kwargs: object,
 ) -> str:
     """
     Asynchronously parses the pipe content
@@ -93,7 +98,10 @@ async def async_parser(
 
 
 def parser(
-    word: str, rules: Sequence[StrReplaceConfRule], objconf: StrReplaceObjconf, **kwargs
+    word: str,
+    rules: Sequence[StrReplaceConfRule],
+    objconf: StrReplaceObjconf,
+    **kwargs: object,
 ) -> str:
     """
     Parses the pipe content
@@ -124,7 +132,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> str:
+async def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously replaces the text of a field of
     an item.
@@ -166,7 +174,7 @@ async def async_pipe(*args, **kwargs) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor that replaces the text of a field of an item.
 

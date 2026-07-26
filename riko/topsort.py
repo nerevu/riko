@@ -8,13 +8,14 @@ Public domain, do with it as you will
 
 from collections.abc import Iterable
 from graphlib import CycleError, TopologicalSorter
+from typing import Literal, overload
 
 import networkx as nx
 
 from riko.types.modules import SCC, Graph, NodeList
 
 
-def scc_sort[T: str | int](graph: Graph[T], reverse=False) -> SCC[T]:
+def scc_sort[T: str | int](graph: Graph[T], reverse: bool | None = False) -> SCC[T]:
     """
     Identify strongly connected components in a graph using Tarjan's algorithm.
 
@@ -61,7 +62,7 @@ def scc_sort[T: str | int](graph: Graph[T], reverse=False) -> SCC[T]:
 
 
 def native_topological_sort[T: str | int](
-    graph: Graph[T], reverse=False
+    graph: Graph[T], reverse: bool | None = False
 ) -> NodeList[T]:
     """
     # A --> B --> C --> D
@@ -108,7 +109,29 @@ def native_topological_sort[T: str | int](
     return static_order if reverse else static_order[::-1]
 
 
-def topological_sort[T: str | int](graph: Graph[T], **kwargs) -> NodeList[T] | SCC[T]:
+@overload
+def topological_sort[T: str | int](  # noqa: E704
+    graph: Graph[T], *, ssc: Literal[True]
+) -> SCC[T]: ...
+@overload  # noqa: E302
+def topological_sort[T: str | int](  # noqa: E704
+    graph: Graph[T], *, strict: Literal[True]
+) -> NodeList[T]: ...
+@overload  # noqa: E302
+def topological_sort[T: str | int](  # noqa: E704
+    graph: Graph[T], *, ssc: bool = ...
+) -> NodeList[T] | SCC[T]: ...
+@overload  # noqa: E302
+def topological_sort[T: str | int](  # noqa: E704
+    graph: Graph[T], *, ssc: bool = ..., strict: bool = ...
+) -> NodeList[T] | SCC[T]: ...
+def topological_sort[T: str | int](  # noqa: E302
+    graph: Graph[T],
+    *,
+    reverse: bool | None = False,
+    ssc: bool | None = False,
+    strict: bool | None = False,
+) -> NodeList[T] | SCC[T]:
     """
     # A --> B --> C --> D
     >>> graph = {"A": {"B"}, "B": {"C"}, "C": {"D"}}
@@ -145,9 +168,15 @@ def topological_sort[T: str | int](graph: Graph[T], **kwargs) -> NodeList[T] | S
     >>> topological_sort(graph)
     [0, 5, 1, 6, 4, 2, 3]
     """
-    try:
-        result = native_topological_sort(graph, **kwargs)
-    except CycleError:
-        result = scc_sort(graph, **kwargs)
+    if ssc:
+        result = scc_sort(graph, reverse=reverse)
+    else:
+        try:
+            result = native_topological_sort(graph, reverse=reverse)
+        except CycleError:
+            if strict:
+                raise
+
+            result = scc_sort(graph, reverse=reverse)
 
     return result

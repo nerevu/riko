@@ -51,21 +51,25 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko.types.configs import SubelementObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
+from riko.types.values import RikoValue
 from riko.utils import gen_items
 
 from . import processor
 
 OPTS: Opts = {"emit": True}
 DEFAULTS: Defaults = {"token_key": "content"}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    item: Item, extraction: Extraction, objconf: SubelementObjconf, **kwargs
+    item: Item, extraction: Extraction, objconf: SubelementObjconf, **kwargs: RikoValue
 ) -> Stream:
     """
     Parses the pipe content
@@ -97,12 +101,11 @@ def parser(
     """
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
     element = item.get(path, **kwargs)
-    stream = gen_items(element, objconf.token_key)
-    return stream
+    return gen_items(element, objconf.token_key or "")
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     """
     A processor that asynchronously extracts sub-elements from an item.
 
@@ -140,7 +143,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     """
     A processor that extracts sub-elements from an item.
 

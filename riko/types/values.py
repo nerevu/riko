@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum, auto
 from time import struct_time
-from typing import TYPE_CHECKING, Required, TypedDict
+from typing import TYPE_CHECKING, NotRequired, Required, TypedDict
 
 if TYPE_CHECKING:
     from fastfeedparser import FastFeedParserDict
@@ -84,15 +84,20 @@ class StatefulItem(TypedDict):
     state: StreamState
 
 
-SentinalValue = "terminal"
-Sentinal = TypedDict("Sentinal", {SentinalValue: str, "type": str})
+class Sentinal(TypedDict):
+    terminal: str
+    type: str
+    path: NotRequired[str]
 
+
+SentinalValue: str = "terminal"
 
 type RSSEntry = ExpandedRSSEntry | YahooRSSEntry
 type RSSParseResult = "FeedParserDict" | "FastFeedParserDict"
 type DateDict = dict[str, str | int | date | bool]
 type Key = str | dict[str, str]
 type Hashable = int | float | str | Decimal | date | struct_time | None
+type Inputs = Mapping[str, str | int | bool]
 
 # Leafs
 type BasicValue = str | int
@@ -142,14 +147,22 @@ type RikoList = BasicList | list[BasicDict] | StringyList
 type RikoValue = PrimitiveValue | RikoDict | RikoList
 
 # Instance Types
-BasicValueType = (str, int)
-TemporalType = (datetime, date, struct_time)
-DateLikeType = (str, int, datetime, date, struct_time)
-NumLikeType = (float, int, Decimal)
-PrimitiveValueType = (str, int, float, Decimal, datetime, date, struct_time)
-HashableType = (str, int, float, Decimal, date, struct_time)
+BasicValueType: tuple[type, ...] = (str, int)
+TemporalType: tuple[type, ...] = (datetime, date, struct_time)
+DateLikeType: tuple[type, ...] = (str, int, datetime, date, struct_time)
+NumLikeType: tuple[type, ...] = (float, int, Decimal)
+PrimitiveValueType: tuple[type, ...] = (
+    str,
+    int,
+    float,
+    Decimal,
+    datetime,
+    date,
+    struct_time,
+)
+HashableType: tuple[type, ...] = (str, int, float, Decimal, date, struct_time)
 
-NonstreamExpressions = (
+NonstreamExpressions: tuple[type, ...] = (
     ast.BinOp,
     ast.Compare,
     ast.Constant,

@@ -98,15 +98,17 @@ from functools import partial
 from inspect import isawaitable
 from io import StringIO
 from itertools import chain, repeat
+from logging import Logger
 from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import length_hint
-from typing import TYPE_CHECKING, Any, Literal, Self, cast, overload
+from typing import Any, Literal, Self, cast, overload
 
 import pygogo as gogo
 
 from riko import listize
+from riko.context import ExecutionMode
 
 try:
     from csv2ofx.ofx import OFX
@@ -116,6 +118,9 @@ else:
     from csv2ofx.mappings.default import mapping
     from csv2ofx.qif import QIF
     from csv2ofx.utils import gen_data
+
+from multiprocessing.pool import Pool as CPUPoolType
+from multiprocessing.pool import ThreadPool as ThreadPoolType
 
 from meza import convert as cv
 from meza import io
@@ -128,26 +133,25 @@ from riko.compile import _resolve_module
 from riko.exceptions import PipelineStateError
 from riko.types.general import (
     AsyncItems,
+    AsyncPipeParser,
     AsyncStream,
     Conf,
     ConversionFunc,
+    Function,
     Item,
     Items,
     ParserOutput,
+    SkipIf,
     SplitterParserOutput,
     Stream,
     SyncPipeParser,
 )
-from riko.types.values import BasicValue
+from riko.types.values import BasicValue, Inputs
 from riko.utils import parse_context
 
-if TYPE_CHECKING:
-    from multiprocessing.dummy import Pool as ThreadPoolType
-    from multiprocessing.pool import Pool as CPUPoolType
+type AnyPool = ThreadPoolType | CPUPoolType
 
-type AnyPool = "ThreadPoolType" | "CPUPoolType"
-
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 __all__ = [
     "AsyncCollection",
@@ -228,7 +232,7 @@ class _PoolHandle:
         self.pool: AnyPool | None = pool
         self.owned = owned
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self.pool is not None
 
     def close(self) -> None:
@@ -244,7 +248,7 @@ class _PoolHandle:
             self.pool = None
 
 
-def records2ofx(items, **_) -> Iterable[str]:
+def records2ofx(items: Items, **_: object) -> Iterable[str]:
     ofx = OFX(mapping)
     groups = ofx.gen_groups(items)
     trxns = ofx.gen_trxns(groups)
@@ -253,7 +257,7 @@ def records2ofx(items, **_) -> Iterable[str]:
     return chain(ofx.header(), ofx.gen_body(data), ofx.footer())
 
 
-def records2qif(items, **_) -> Iterable[str]:
+def records2qif(items: Items, **_: object) -> Iterable[str]:
     qif = QIF(mapping)
     groups = qif.gen_groups(items)
     trxns = qif.gen_trxns(groups)
@@ -286,29 +290,32 @@ def list_targets() -> tuple[str, ...]:
 @overload
 def export(items: Items) -> list[Item]: ...  # noqa: E704
 @overload
-def export(items: Items, **kwargs) -> list[Item]: ...  # noqa: E704
+def export(items: Items, **kwargs: Any) -> list[Item]: ...  # noqa: E704
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["list"], **kwargs
+    items: Items, _type: Literal["list"], **kwargs: Any
 ) -> list[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["tuple"], **kwargs
+    items: Items, _type: Literal["tuple"], **kwargs: Any
 ) -> tuple[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
+    items: Items, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: Any
 ) -> int: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["csv", "json", "geojson"], f: None = ..., **kwargs
+    items: Items,
+    _type: Literal["csv", "json", "geojson"],
+    f: None = ...,
+    **kwargs: Any,
 ) -> StringIO: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: str = ..., **kwargs
+    items: Items, _type: str = ..., **kwargs: Any
 ) -> StringIO | Items | None: ...
 def export(  # noqa: E302
-    items: Items, _type: str = "list", f: str | None = None, **kwargs
+    items: Items, _type: str = "list", f: str | None = None, **kwargs: Any
 ) -> int | StringIO | Items | None:
     result = None
 
@@ -345,28 +352,82 @@ class PyPipe(_Lifecycle):
         name: str | None = None,
         source: AsyncItems | Awaitable[Items] | Items | None = None,
         *,
-        parallel: bool = False,
-        inputs: Mapping | None = None,
-        context: Context | None = None,
+        assign: str | None = None,
         conf: Conf = None,
-        **kwargs,
+        context: Context | None = None,
+        field: str | None = None,
+        func: Function | None = None,
+        inputs: Inputs | None = None,
+        mode: ExecutionMode | None = None,
+        others: Iterable[str] | Iterable[Stream] | None = None,
+        parallel: bool = False,
+        skip_if: SkipIf | None = None,
+        submodule: bool | None = False,
+        test: bool | None = False,
+        verbose: bool | None = False,
+        **kwargs: object,
     ):
+
         self._state = PipeState.NEW
         self.name = name
         self.source = source
         self.parallel = parallel
-        self.verbose = kwargs.get("verbose")
-        self.test = kwargs.get("test")
-        self.conf = conf or {}
-        self.context = parse_context(context, inputs=inputs, **kwargs)
-        self.inputs = self.context.inputs
-        self.describe_input = self.context.describe_input
-        self.describe_dependencies = self.context.describe_dependencies
+        self.conf: Conf = conf or {}
+        self.context: Context = parse_context(
+            context,
+            mode=mode,
+            inputs=inputs,
+            verbose=verbose,
+            test=test,
+            submodule=submodule,
+            describe_input=bool(kwargs.get("describe_input")),
+            describe_dependencies=bool(kwargs.get("describe_dependencies")),
+        )
+        self.inputs: Inputs = self.context.inputs
+        self.verbose: bool = bool(verbose)
+        self.test: bool = bool(test)
+        self.describe_input: bool = self.context.describe_input
+        self.describe_dependencies: bool = self.context.describe_dependencies
         self.kwargs = kwargs
-        updates = {"conf": self.conf, "inputs": self.inputs, "context": self.context}
+        updates = {
+            "assign": assign,
+            "conf": self.conf,
+            "context": self.context,
+            "field": field,
+            "func": func,
+            "inputs": self.inputs,
+            "mode": mode,
+            "others": others,
+            "skip_if": skip_if,
+        }
         self.kwargs.update(updates)
 
-    def __call__(self, **kwargs):
+    def __call__(
+        self,
+        context: Context | None = None,
+        conf: Conf = None,
+        *,
+        assign: str | None = None,
+        field: str | None = None,
+        func: Function | None = None,
+        inputs: Inputs | None = None,
+        mode: ExecutionMode | None = None,
+        others: Iterable[str] | Iterable[Stream] | None = None,
+        skip_if: SkipIf | None = None,
+        **kwargs: object,
+    ) -> Self:
+        updates = {
+            "assign": assign,
+            "conf": conf,
+            "context": context,
+            "field": field,
+            "func": func,
+            "inputs": inputs,
+            "mode": mode,
+            "others": others,
+            "skip_if": skip_if,
+        }
+        self.kwargs.update(updates)
         self.kwargs.update(kwargs)
         return self
 
@@ -383,25 +444,56 @@ class SyncPipe(PyPipe):
         self,
         name: str | None = None,
         source: Items | None = None,
+        conf: Conf | None = None,
         *,
-        workers: int | None = None,
-        chunksize: int | None = None,
-        threads: bool | None = True,
-        pool_scope=PoolScope.PIPELINE,
-        pool: AnyPool | None = None,
         _pool_handle: _PoolHandle | None = None,
+        assign: str | None = None,
+        chunksize: int | None = None,
+        context: Context | None = None,
+        field: str | None = None,
+        func: Function | None = None,
+        inputs: Inputs | None = None,
+        mode: ExecutionMode | None = None,
         ordered: bool | None = False,
-        **kwargs,
+        others: Iterable[str] | Iterable[Stream] | None = None,
+        parallel: bool = False,
+        pool: AnyPool | None = None,
+        pool_scope: PoolScope = PoolScope.PIPELINE,
+        skip_if: SkipIf | None = None,
+        submodule: bool | None = False,
+        test: bool | None = False,
+        threads: bool | None = True,
+        verbose: bool | None = False,
+        workers: int | None = None,
+        **kwargs: object,
     ):
-        super().__init__(name, source, **kwargs)
-        self.threads = threads
-        self.pool_scope = pool_scope
+        super().__init__(
+            name,
+            source,
+            assign=assign,
+            conf=conf,
+            context=context,
+            field=field,
+            func=func,
+            inputs=inputs,
+            mode=mode,
+            others=others,
+            parallel=parallel,
+            skip_if=skip_if,
+            submodule=submodule,
+            test=test,
+            verbose=verbose,
+            **kwargs,
+        )
+        self.threads: bool = bool(threads)
+        self.pool_scope: PoolScope = pool_scope
         self.ordered = ordered
         self._iter: Generator[Item, None, None] | None = None
         self._mapped: Iterable[Stream] | None = None
         self.map: Callable[..., Iterable[Stream]]
-        self._in_context = False
-        self._terminal = True
+        self._in_context: bool = False
+        self._terminal: bool = True
+        self.source: Item = cast(Item, self.source)
 
         if pool_scope not in {"stage", "pipeline"}:
             raise ValueError("pool_scope must be either 'stage' or 'pipeline'")
@@ -409,15 +501,15 @@ class SyncPipe(PyPipe):
         if pool and _pool_handle:
             raise TypeError("pool and _pool_handle cannot both be provided")
         elif pool:
-            self._pool_handle = _PoolHandle(pool, owned=False)
+            self._pool_handle: _PoolHandle | None = _PoolHandle(pool, owned=False)
         else:
             self._pool_handle = _pool_handle
 
         if self.name:
-            self.pipe = _resolve_module(self.name, "pipe")
+            self.pipe: SyncPipeParser = _resolve_module(self.name, "pipe")
             self.pollable: bool = getattr(self.pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self.pipe, "loopable")  # noqa: B009
-            self.mapify = self.loopable and self.source is not None
+            self.mapify: bool = self.loopable and self.source is not None
             self.parallelize: bool = self.parallel and self.mapify
         else:
             self.pipe = lambda source, **kw: source
@@ -426,12 +518,12 @@ class SyncPipe(PyPipe):
         if self.parallelize:
             length = length_hint(self.source)
             def_pool = ThreadPool if self.threads else CPUPool
-            self.workers = workers or get_worker_cnt(length, self.threads)
-            self.chunksize = chunksize or get_chunksize(length, self.workers)
+            self.workers: int | None = workers or get_worker_cnt(length, self.threads)
+            self.chunksize: int = chunksize or get_chunksize(length, self.workers)
 
             if not self._pool_handle:
-                pool = def_pool(self.workers)
-                self._pool_handle = _PoolHandle(pool, owned=True)
+                new_pool = cast(AnyPool, def_pool(self.workers))
+                self._pool_handle = _PoolHandle(new_pool, owned=True)
 
             if not (pool := self.pool):
                 raise RuntimeError("Cannot reuse a closed worker pool")
@@ -446,7 +538,7 @@ class SyncPipe(PyPipe):
     def pool(self) -> AnyPool | None:
         return self._pool_handle.pool if self._pool_handle else None
 
-    def _chain(self, name: str, **kwargs) -> "SyncPipe":
+    def _chain(self, name: str, **kwargs: object) -> "SyncPipe":
         """
         Create the next pipe stage, propagating all runtime and execution
         settings. Context (and its inputs) stays authoritative across the chain.
@@ -490,28 +582,28 @@ class SyncPipe(PyPipe):
 
         return child
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> "SyncPipe":
         if name.startswith("_") or name in {"keys", "values", "items", "get"}:
             raise AttributeError(name)
 
         return self._chain(name)
 
-    def _release_pool(self):
+    def _release_pool(self) -> None:
         if self._pool_handle:
             self._pool_handle.close()
 
-    def _terminate_pool(self):
+    def _terminate_pool(self) -> None:
         if self._pool_handle:
             self._pool_handle.terminate()
 
-    def close(self):
+    def close(self) -> None:
         if self._iter is not None:
             self._iter.close()
 
         self._release_pool()
         self._close()
 
-    def terminate(self):
+    def terminate(self) -> None:
         if self._iter is not None:
             self._iter.close()
 
@@ -547,7 +639,12 @@ class SyncPipe(PyPipe):
         self._in_context = True
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object,
+    ) -> Literal[False]:
         self._in_context = False
         self.close() if exc_type is None else self.terminate()
         return False
@@ -611,7 +708,7 @@ class SyncPipe(PyPipe):
 
         return next(self._iter)
 
-    def split(self, **kwargs) -> SplitterParserOutput:
+    def split(self, **kwargs: object) -> SplitterParserOutput:
         splits = self._chain("split", **kwargs)
         return cast(SplitterParserOutput, splits)
 
@@ -619,10 +716,10 @@ class SyncPipe(PyPipe):
     def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
+        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     def export(  # noqa: E301
-        self, *args, **kwargs
+        self, *args: Any, **kwargs: object
     ) -> int | StringIO | Items | None:
         try:
             result = export(self, *args, **kwargs)
@@ -641,16 +738,16 @@ class PyCollection(_Lifecycle):
         sources: Iterable[Mapping[str, str]],
         *,
         conf: Conf = None,
-        parallel=False,
-        workers=None,
-        **kwargs,
+        workers: int | None = None,
+        parallel: bool = False,
+        **kwargs: object,
     ):
         self._state = PipeState.NEW
-        self.parallel = parallel
-        self.conf = conf or cast(Conf, {})
-        self.sources = sources
-        self.length = length_hint(self.sources)
-        self.workers = workers or get_worker_cnt(self.length)
+        self.parallel: bool = parallel
+        self.conf: Conf = conf or cast(Conf, {})
+        self.sources: Iterable[Mapping[str, str]] = sources
+        self.length: int = length_hint(self.sources)
+        self.workers: int = workers or get_worker_cnt(self.length)
 
 
 class SyncCollection(PyCollection):
@@ -668,28 +765,35 @@ class SyncCollection(PyCollection):
 
     def __init__(
         self,
-        sources,
+        sources: Iterable[Mapping[str, str]],
         *,
+        conf: Conf = None,
+        workers: int | None = None,
+        parallel: bool = False,
         threads: bool | None = True,
         ordered: bool | None = False,
         pool: AnyPool | None = None,
-        **kwargs,
+        **kwargs: object,
     ):
-        super().__init__(sources, **kwargs)
-        self.threads = threads
-        self.ordered = ordered
+        super().__init__(
+            sources, conf=conf, workers=workers, parallel=parallel, **kwargs
+        )
+        self.threads: bool = bool(threads)
+        self.ordered: bool = bool(ordered)
         self._iter: Stream | None = None
         self.map: Callable[..., Iterable[Stream]]
-        self._in_context = False
-        self._pool_handle = _PoolHandle(pool, owned=False) if pool else None
+        self._in_context: bool = False
+        self._pool_handle: _PoolHandle | None = (
+            _PoolHandle(pool, owned=False) if pool else None
+        )
 
         if self.parallel:
-            self.chunksize = get_chunksize(self.length, self.workers)
+            self.chunksize: int = get_chunksize(self.length, self.workers)
             def_pool = ThreadPool if self.threads else CPUPool
 
             if not self._pool_handle:
-                pool = def_pool(self.workers)
-                self._pool_handle = _PoolHandle(pool, owned=True)
+                new_pool = cast(AnyPool, def_pool(self.workers))
+                self._pool_handle = _PoolHandle(new_pool, owned=True)
 
             if not (pool := self.pool):
                 raise RuntimeError("Cannot reuse a closed worker pool")
@@ -714,19 +818,19 @@ class SyncCollection(PyCollection):
 
         return next(self._iter)
 
-    def _release_pool(self):
+    def _release_pool(self) -> None:
         if self._pool_handle:
             self._pool_handle.close()
 
-    def _terminate_pool(self):
+    def _terminate_pool(self) -> None:
         if self._pool_handle:
             self._pool_handle.terminate()
 
-    def close(self):
+    def close(self) -> None:
         self._release_pool()
         self._close()
 
-    def terminate(self):
+    def terminate(self) -> None:
         self._terminate_pool()
         self._close()
 
@@ -759,7 +863,12 @@ class SyncCollection(PyCollection):
         self._in_context = True
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object,
+    ) -> Literal[False]:
         self._in_context = False
         self.close() if exc_type is None else self.terminate()
         return False
@@ -790,7 +899,7 @@ class SyncCollection(PyCollection):
             if not self._in_context:
                 self._release_pool()
 
-    def pipe(self, **kwargs):
+    def pipe(self, **kwargs: Any) -> "SyncPipe":
         """Return a SyncPipe primed with the source feed"""
         return SyncPipe(source=self._stream(), **kwargs)
 
@@ -798,10 +907,10 @@ class SyncCollection(PyCollection):
     def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
+        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     def export(  # noqa: E301
-        self, *args, **kwargs
+        self, *args: Any, **kwargs: object
     ) -> int | StringIO | Items | None:
         return export(self, *args, **kwargs)
 
@@ -813,24 +922,54 @@ class AsyncPipe(PyPipe):
         self,
         name: str | None = None,
         source: AsyncItems | Awaitable[Items] | Items | None = None,
+        conf: Conf | None = None,
         *,
-        connections=16,
-        **kwargs,
+        assign: str | None = None,
+        connections: int = 16,
+        context: Context | None = None,
+        field: str | None = None,
+        func: Function | None = None,
+        inputs: Inputs | None = None,
+        mode: ExecutionMode | None = None,
+        others: Iterable[str] | Iterable[Stream] | None = None,
+        parallel: bool = False,
+        skip_if: SkipIf | None = None,
+        submodule: bool | None = False,
+        test: bool | None = False,
+        verbose: bool | None = False,
+        **kwargs: object,
     ):
-        super().__init__(name, source, **kwargs)
-        self.connections = connections
+        super().__init__(
+            name,
+            source,
+            assign=assign,
+            conf=conf,
+            context=context,
+            field=field,
+            func=func,
+            inputs=inputs,
+            mode=mode,
+            others=others,
+            parallel=parallel,
+            skip_if=skip_if,
+            submodule=submodule,
+            test=test,
+            verbose=verbose,
+            **kwargs,
+        )
+        self.connections: int = connections
         self._aiter: AsyncGenerator[Item, None] | None = None
 
         if self.name:
-            self.async_pipe = _resolve_module(self.name, "async_pipe")
+            self.async_pipe: AsyncPipeParser = _resolve_module(self.name, "async_pipe")
             self.pollable: bool = getattr(self.async_pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self.async_pipe, "loopable")  # noqa: B009
-            self.mapify = self.loopable
+            self.mapify: bool = self.loopable
         else:
             self.async_pipe = lambda source, **kw: async_return(source)
             self.pollable = self.loopable = self.mapify = False
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> "AsyncPipe":
         if name.startswith("_"):
             raise AttributeError(name)
 
@@ -854,7 +993,12 @@ class AsyncPipe(PyPipe):
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object,
+    ) -> bool:
         await self.aclose()
         return False
 
@@ -865,7 +1009,7 @@ class AsyncPipe(PyPipe):
 
         self._close()
 
-    async def split(self, **kwargs) -> SplitterParserOutput:
+    async def split(self, **kwargs: object) -> SplitterParserOutput:
         splits = await self._chain("split", **kwargs)
         return cast(SplitterParserOutput, splits)
 
@@ -873,10 +1017,10 @@ class AsyncPipe(PyPipe):
     async def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     async def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
+        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     async def export(  # noqa: E301
-        self, *args, **kwargs
+        self, *args: Any, **kwargs: object
     ) -> int | StringIO | Items | None:
         items = [item async for item in self]
 
@@ -888,7 +1032,7 @@ class AsyncPipe(PyPipe):
 
         return result
 
-    def _chain(self, name: str, **kwargs) -> "AsyncPipe":
+    def _chain(self, name: str, **kwargs: object) -> "AsyncPipe":
         """
         Create the next async pipe stage, propagating runtime and execution
         settings and consuming this pipe's single execution (not restarting it).
@@ -959,13 +1103,18 @@ class AsyncCollection(PyCollection):
 
     def __init__(
         self,
-        sources,
+        sources: Iterable[Mapping[str, str]],
         *,
-        connections=16,
-        **kwargs,
+        conf: Conf = None,
+        workers: int | None = None,
+        parallel: bool = False,
+        connections: int = 16,
+        **kwargs: object,
     ):
-        super().__init__(sources, **kwargs)
-        self.connections = connections
+        super().__init__(
+            sources, conf=conf, workers=workers, parallel=parallel, **kwargs
+        )
+        self.connections: int = connections
         self._aiter: AsyncGenerator[Item, None] | None = None
 
     def __aiter__(self) -> AsyncStream:
@@ -986,7 +1135,12 @@ class AsyncCollection(PyCollection):
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object,
+    ) -> bool:
         await self.aclose()
         return False
 
@@ -997,7 +1151,7 @@ class AsyncCollection(PyCollection):
 
         self._close()
 
-    def async_pipe(self, **kwargs):
+    def async_pipe(self, **kwargs: Any) -> "AsyncPipe":
         """Return an AsyncPipe primed with the source feed"""
         return AsyncPipe(source=self, **kwargs)
 
@@ -1005,10 +1159,10 @@ class AsyncCollection(PyCollection):
     async def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     async def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs
+        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     async def export(  # noqa: E301
-        self, *args, **kwargs
+        self, *args: Any, **kwargs: object
     ) -> int | StringIO | Items | None:
         items = [item async for item in self]
         return export(items, *args, **kwargs)

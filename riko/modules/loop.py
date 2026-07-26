@@ -121,6 +121,9 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko.types.configs import LoopObjconf
@@ -129,12 +132,12 @@ from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from . import operator
 
 OPTS: Opts = {"listize": False, "parse": False}
-DEFAULTS = Defaults({})
-logger = gogo.Gogo(__name__, monolog=True).logger
+DEFAULTS: Defaults = Defaults({})
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: LoopObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: LoopObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -165,7 +168,7 @@ def parser(
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that creates submodules from existing pipes.
 

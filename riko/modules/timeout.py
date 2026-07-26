@@ -35,8 +35,9 @@ from collections.abc import (
     Iterator,
 )
 from datetime import timedelta
+from logging import Logger
 from time import monotonic_ns
-from typing import Self, cast
+from typing import Any, Self, cast
 
 import pygogo as gogo
 
@@ -49,13 +50,16 @@ from . import operator
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 MS_PER_SECOND = 1_000
 NS_PER_MS = 1_000_000
 
 
 class AsyncTimeoutIterator[T](AsyncIterator[T]):
+    aiter: AsyncIterator[T]
+    timeout_ns: int
+
     def __init__(
         self,
         elements: AsyncIterable[T] | Iterable[T],
@@ -95,6 +99,8 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
 
 
 class TimeoutIterator[T](Iterator[T]):
+    timeout_ns: int
+
     def __init__(self, elements: Iterable[T], timeout_ms: int = 0) -> None:
         self.iter: Iterator[T] = iter(elements)
         self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
@@ -120,7 +126,7 @@ class TimeoutIterator[T](Iterator[T]):
 
 
 async def async_parser(
-    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -169,7 +175,7 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -214,7 +220,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously returns items from a stream until a
         certain amount of time has passed.
@@ -267,7 +273,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that returns items from a stream until a certain amount of
         time has passed.

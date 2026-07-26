@@ -16,9 +16,12 @@ Attributes:
 
 """
 
+import datetime
 from datetime import UTC, timedelta
 from datetime import datetime as dt
+from logging import Logger
 from time import struct_time
+from typing import Any
 
 import pygogo as gogo
 
@@ -31,7 +34,7 @@ from . import processor
 
 # TODO: Make timezone settable and add more options (e.g. 'next week', 'last month',
 # etc.)
-SWITCH = {
+SWITCH: dict[str, datetime.date | datetime.datetime] = {
     "today": TODAY,
     "tomorrow": TODAY + timedelta(days=1),
     "yesterday": TODAY + timedelta(days=-1),
@@ -40,11 +43,11 @@ SWITCH = {
 
 OPTS: Opts = {"ptype": BasicCastType.NONE, "field": "content"}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    text: str, extraction: Extraction, objconf: DynamicConf, **kwargs
+    text: str, extraction: Extraction, objconf: DynamicConf, **kwargs: object
 ) -> struct_time:
     """
     Parsers the pipe content
@@ -90,7 +93,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> struct_time:
+def async_pipe(*args: Any, **kwargs: object) -> struct_time:
     """
     A processor module that asynchronously converts a text string into a datetime.
 
@@ -120,7 +123,7 @@ def async_pipe(*args, **kwargs) -> struct_time:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> struct_time:
+def pipe(*args: Any, **kwargs: object) -> struct_time:
     """
     A processor that converts a text string into a datetime.
 

@@ -1175,6 +1175,8 @@ dev = [
     { name = "ruff" },
 ]
 lint = [
+    { name = "pylint" },
+    { name = "pyright" },
     { name = "ruff" },
 ]
 test = [
@@ -1224,7 +1226,11 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.13.1" },
 ]
-lint = [{ name = "ruff", specifier = ">=0.13.1" }]
+lint = [
+    { name = "pylint", specifier = ">=4.0.5,<5.0.0" },
+    { name = "pyright", specifier = ">=1.1.411" },
+    { name = "ruff", specifier = ">=0.13.1" },
+]
 test = [
     { name = "coverage", specifier = ">=4.3.4,<8.0.0" },
     { name = "pytest", specifier = ">=8.0.0" },

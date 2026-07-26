@@ -370,7 +370,7 @@ class TestAsyncLifecycle:
         result = {}
         runs = []
 
-        def count(item):
+        def count[T](item: T) -> T:
             runs.append(1)
             return item
 

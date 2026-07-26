@@ -14,7 +14,7 @@ from riko._pubsub import async_hub
 from riko.bado import gather_results, issync, run
 from riko.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.exceptions import ReceiverUnavailableError
-from riko.types.general import Item
+from riko.types.general import Item, Items
 from riko.types.modules import (
     ItemBuilderConf,
     ParsedParam,
@@ -32,12 +32,12 @@ recv_conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
 
 
-async def _gather_pubsub(sender, *receivers):
+async def _gather_pubsub(sender: AsyncPipe, *receivers: AsyncPipe) -> list[Items]:
     results = await gather_results([*receivers, sender])
     return [list(result) for result in results]
 
 
-async def _drain_ghost(sender):
+async def _drain_ghost(sender: AsyncPipe) -> Items:
     return [item async for item in sender]
 
 

@@ -4,6 +4,7 @@ Tests module discovery, derived metadata, and export target listing.
 """
 
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
@@ -167,15 +168,15 @@ def test_loopable_metadata():
 
 def test_operator_metadata_is_derived():
     @operator()
-    def value_pipe(*args, **kwargs) -> int:
+    def value_pipe(*args: Any, **kwargs: object) -> int:
         return 1
 
     @operator()
-    def mapping_pipe(*args, **kwargs) -> dict[str, int]:
+    def mapping_pipe(*args: Any, **kwargs: object) -> dict[str, int]:
         return {"count": 1}
 
     @operator()
-    def stream_pipe(*args, **kwargs) -> Iterator[dict[str, int]]:
+    def stream_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, int]]:
         yield {"count": 1}
 
     @operator()

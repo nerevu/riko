@@ -24,6 +24,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -32,14 +34,14 @@ from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import get_text
 from riko.types.configs import FetchPageObjconf
-from riko.types.general import Defaults, Extraction, Item
+from riko.types.general import Defaults, Extraction, Item, Opts
 from riko.utils import Fetch, betwix
 
 from . import processor
 
-OPTS = SourceOpts
-DEFAULTS = Defaults({"encoding": ENCODING})
-logger = gogo.Gogo(__name__, monolog=True).logger
+OPTS: Opts = SourceOpts
+DEFAULTS: Defaults = Defaults({"encoding": ENCODING})
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def get_string(content: str, start: str, end: str) -> str:
@@ -53,7 +55,7 @@ def get_string(content: str, start: str, end: str) -> str:
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchPageObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchPageObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Asynchronously parses the pipe content
@@ -96,7 +98,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchPageObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchPageObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Parses the pipe content
@@ -133,7 +135,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Iterator[str]:
+async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     A source that asynchronously fetches the content of a given web site as
     a string.
@@ -177,7 +179,7 @@ async def async_pipe(*args, **kwargs) -> Iterator[str]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[str]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     A source that fetches the content of a given web site as a string.
 

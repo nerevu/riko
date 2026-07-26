@@ -22,6 +22,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -36,11 +38,11 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "assign": "content"}
 DEFAULTS: Defaults = {"encoding": ENCODING}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Asynchronously parses the pipe content
@@ -78,7 +80,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Parses the pipe content
@@ -112,7 +114,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Iterator[str]:
+async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -151,7 +153,7 @@ async def async_pipe(*args, **kwargs) -> Iterator[str]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[str]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     A source that fetches and parses an XML or JSON file to
     return the entries.

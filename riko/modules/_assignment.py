@@ -29,7 +29,7 @@ from riko.types.general import (
     ValueStream,
 )
 from riko.types.modules import ConfValues
-from riko.types.values import PrimitiveValue, StatefulItem
+from riko.types.values import PrimitiveValue, RikoValue, StatefulItem
 
 
 @overload
@@ -51,7 +51,7 @@ def _get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
 
 @overload
 def get_assignment(  # noqa: E704
-    items: Stream | Iterator[StatefulItem] | DotDict, skip: bool = ...
+    items: Stream | Iterator[StatefulItem] | DotDict[RikoValue], skip: bool = ...
 ) -> tuple[bool, Stream]: ...
 @overload  # noqa: E302
 def get_assignment(  # noqa: E704
@@ -59,10 +59,11 @@ def get_assignment(  # noqa: E704
 ) -> tuple[bool, ValueStream]: ...
 @overload  # noqa: E302
 def get_assignment(  # noqa: E704
-    items: ProcessorParserOutput | OperatorParserOutput | DotDict, skip: bool = ...
+    items: ProcessorParserOutput | OperatorParserOutput | DotDict[RikoValue],
+    skip: bool = ...,
 ) -> tuple[bool, StreamOrValueStream]: ...
 def get_assignment(  # noqa: E302
-    items: ProcessorParserOutput | OperatorParserOutput | DotDict,
+    items: ProcessorParserOutput | OperatorParserOutput | DotDict[RikoValue],
     skip=False,
     **conf: ConfValues,
 ) -> tuple[bool, StreamOrValueStream]:
@@ -97,23 +98,26 @@ def get_assignment(  # noqa: E302
 
 @overload
 def gen_assignments[T: StreamOrValueStream](  # noqa: E704
-    item: DotDict, assignment: T, assign: str = ..., one: Literal[False] = ...
+    item: DotDict[RikoValue],
+    assignment: T,
+    assign: str = ...,
+    one: Literal[False] = ...,
 ) -> T: ...
 @overload  # noqa: E302
 def gen_assignments(  # noqa: E704
-    item: DotDict,
+    item: DotDict[RikoValue],
     assignment: StreamOrValueStream,
     assign: str = ...,
     *,
     one: Literal[True],
 ) -> Stream: ...
 def gen_assignments(  # noqa: E302
-    item: DotDict,
+    item: DotDict[RikoValue],
     assignment: Item | StreamOrValueStream,
     assign: str | None = None,
     one=False,
     **_,
-) -> Stream:
+) -> StreamOrValueStream:
     if one and isinstance(assignment, Iterator):
         value = next(assignment, None)
     else:
@@ -127,7 +131,7 @@ def gen_assignments(  # noqa: E302
         elif item and value_is_iterator:
             yield item | {assign: list(value)}
         elif value_is_iterator:
-            yield from ({assign: v} for v in value)
+            yield from cast_type(StreamOrValueStream, ({assign: v} for v in value))
         else:
             yield item | {assign: value}
     elif value_is_iterator:

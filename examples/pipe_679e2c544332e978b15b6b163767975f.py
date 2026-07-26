@@ -4,58 +4,60 @@
 from riko import Context
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strreplace import pipe as strreplace
-from riko.types.modules import StrReplaceRawConf, StrReplaceRawRule
+from riko.types.general import Conf
+from riko.types.modules import ItemBuilderRawConf, StrReplaceRawConf, StrReplaceRawRule
 
 
-def pipe_679e2c544332e978b15b6b163767975f(item=None, conf=None, context=None, **kwargs):
-    conf = conf or {}
-    context = context or Context(**kwargs)
-
-    if context.describe_input:
-        return []
-
-    if context.describe_dependencies:
-        return ["itembuilder", "strreplace"]
-
-    sw_232 = itembuilder(
-        item,
-        conf={
-            "attrs": [
+def pipe_679e2c544332e978b15b6b163767975f(
+    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+):
+    if context and context.describe_input:
+        output = []
+    elif context and context.describe_dependencies:
+        output = ["itembuilder", "strreplace"]
+    else:
+        sw_232 = itembuilder(
+            item,
+            conf=ItemBuilderRawConf(
                 {
-                    "value": {"type": "text", "value": "www.google.com"},
-                    "key": {"type": "text", "value": "link"},
-                },
-                {
-                    "value": {"type": "text", "value": "google"},
-                    "key": {"type": "text", "value": "title"},
-                },
-                {
-                    "value": {"type": "text", "value": "$"},
-                    "key": {"type": "text", "value": "author"},
-                },
-            ]
-        },
-        **kwargs,
-    )
-
-    sw_421_conf = StrReplaceRawConf(
-        {
-            "rule": StrReplaceRawRule(
-                {
-                    "find": {"type": "text", "value": "$"},
-                    "param": {"type": "text", "value": "first"},
-                    "replace": {"type": "text", "value": "USD"},
+                    "attrs": [
+                        {
+                            "value": {"type": "text", "value": "www.google.com"},
+                            "key": {"type": "text", "value": "link"},
+                        },
+                        {
+                            "value": {"type": "text", "value": "google"},
+                            "key": {"type": "text", "value": "title"},
+                        },
+                        {
+                            "value": {"type": "text", "value": "$"},
+                            "key": {"type": "text", "value": "author"},
+                        },
+                    ]
                 }
             ),
-        }
-    )
-
-    output = (
-        strreplace(
-            i, conf=sw_421_conf, field={"type": "text", "value": "author"}, **kwargs
+            **kwargs,
         )
-        for i in sw_232
-    )
+
+        sw_421_conf = StrReplaceRawConf(
+            {
+                "rule": StrReplaceRawRule(
+                    {
+                        "find": {"type": "text", "value": "$"},
+                        "param": {"type": "text", "value": "first"},
+                        "replace": {"type": "text", "value": "USD"},
+                    }
+                ),
+            }
+        )
+
+        output = (
+            strreplace(
+                i, conf=sw_421_conf, field={"type": "text", "value": "author"}, **kwargs
+            )
+            for i in sw_232
+        )
+
     return output
 
 

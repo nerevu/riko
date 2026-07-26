@@ -25,6 +25,7 @@ from riko.types.general import (
     Conf,
     Defaults,
     Dispatched,
+    Extraction,
     Item,
     Opts,
     ParseFuncs,
@@ -32,7 +33,7 @@ from riko.types.general import (
     SyncArgFunc,
     SyncConfCastFunc,
 )
-from riko.types.values import BasicReturn
+from riko.types.values import BasicReturn, RikoValue
 from riko.utils import broadcast, dispatch
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -71,14 +72,14 @@ def get_pieces_or_conf(
 @dataclass(frozen=True)
 class PreparedModule:
     name: str
-    conf: DotDict
+    conf: DotDict[RikoValue]
     opts: Opts
     parsers: ParseFuncs
     casters: CastFuncs | None
     assign: str
     emit: bool | Callable[[ParserOutput], bool] | None
     is_source: bool
-    static_casted: tuple | None
+    static_casted: tuple[SyncArgFunc, Extraction, Conf] | None
 
 
 def _dispatch(
@@ -89,7 +90,7 @@ def _dispatch(
     casters: CastFuncs | None = None,
     defaults: Defaults | None = None,
     field: str | None = None,
-    **kwargs,
+    **kwargs: object,
 ) -> Dispatched:
     defaults = defaults or Defaults({})
     field = field or opts.get("field")
@@ -103,10 +104,10 @@ def _dispatch(
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
     conf = cast_type(Conf, casted[2])
-    return Dispatched(item, Casted(casted[0], casted[1], conf))
+    return Dispatched(cast_type(DotDict, item), Casted(casted[0], casted[1], conf))
 
 
-def get_parsers(opts: Opts, conf: Conf, **kwargs) -> ParseFuncs:
+def get_parsers(opts: Opts, conf: Conf, **kwargs: bool) -> ParseFuncs:
     conf = conf or {}
 
     if opts.get("ftype") == BasicCastType.NONE:

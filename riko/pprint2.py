@@ -8,34 +8,34 @@ from functools import total_ordering
 from time import struct_time
 
 
-def cmp(a, b):
-    return (a > b) - (a < b)
+def cmp(a: object, b: object) -> int:
+    return (a > b) - (a < b)  # type: ignore[operator]
 
 
 @total_ordering
 class Id:
     """An object that is not quoted as literal by repr"""
 
-    def __init__(self, name):
+    def __init__(self, name: object) -> None:
         self.name = name
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self.name)
 
-    def __lt__(self, other):
+    def __lt__(self, other: object) -> int:
         if isinstance(other, Id):
             return cmp(self.name, other.name)
         else:
             return -1
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, Id):
             return self.name == other.name
         else:
             return False
 
 
-def repr_args(*args: object):
+def repr_args(*args: object) -> str:
     """
     Formats a list of function arguments prettily but as working code
     """
@@ -74,7 +74,7 @@ def repr_arg(arg: object) -> str:
     return value
 
 
-def str_args(*args: object):
+def str_args(*args: object) -> str:
     """
     Formats a list of function arguments prettily not as code
 
@@ -96,7 +96,7 @@ def str_args(*args: object):
     return ", ".join(res)
 
 
-def str_arg(arg: object):
+def str_arg(arg: object) -> str | None:
     """
     Formats a function argument prettily not as code
 
@@ -123,7 +123,7 @@ def str_arg(arg: object):
         if len(arg) == 1:
             res = str_arg(arg[0])
         else:
-            res = "[{}]".format(", ".join(map(str_arg, arg)))
+            res = "[{}]".format(", ".join(map(str_arg, arg)))  # type: ignore[arg-type]
     else:
         res = repr(arg) if arg else None
 

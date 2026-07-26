@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from functools import partial
 from json import loads
+from logging import Logger
 from operator import add, sub
 from time import gmtime, struct_time
 from typing import Literal, TypeVar, overload
@@ -55,8 +56,8 @@ GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
 
 T = TypeVar("T")
 
-url_quote = lambda url: quote(url, safe=URL_SAFE)
-logger = gogo.Gogo(__name__, monolog=True).logger
+url_quote: Callable[[str | int], str] = lambda url: quote(url, safe=URL_SAFE)  # type: ignore[arg-type]
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class LocationType(StrEnum):
@@ -156,7 +157,7 @@ def lookup_ip_address(_: str) -> IPAddress:
 
 
 def lookup_coordinates(
-    latlon="", lat: float | None = None, lon: float | None = None
+    latlon: str = "", lat: float | None = None, lon: float | None = None
 ) -> Location:
     if "," in latlon:
         try:
@@ -272,7 +273,7 @@ def cast_datetime(  # noqa: E302
     return result
 
 
-cast_date = cast_type(
+cast_date: Callable[[DateLike], date | None] = cast_type(
     Callable[[DateLike], date | None], partial(cast_datetime, as_date=True)
 )
 
@@ -298,60 +299,60 @@ def cast(content: object) -> str: ...  # noqa: E704
 def cast[T](  # noqa: E704
     content: T,
     _type: Literal[CastType.PASS],
-    **kwargs,
+    **kwargs: object,
 ) -> T: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
     content: object,
     _type: Literal[CastType.NONE],
-    **kwargs,
+    **kwargs: object,
 ) -> None: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
     content: object,
     _type: Literal[CastType.TEXT],
-    **kwargs,
+    **kwargs: object,
 ) -> str: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
     content: object,
     _type: Literal[CastType.FLOAT],
-    **kwargs,
+    **kwargs: object,
 ) -> float: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: object, _type: Literal[CastType.DECIMAL], **kwargs
+    content: object, _type: Literal[CastType.DECIMAL], **kwargs: object
 ) -> Decimal: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: object, _type: Literal[CastType.INT], **kwargs
+    content: object, _type: Literal[CastType.INT], **kwargs: object
 ) -> int: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: object, _type: Literal[CastType.DATETIME], **kwargs
+    content: object, _type: Literal[CastType.DATETIME], **kwargs: object
 ) -> dt: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: object, _type: Literal[CastType.DATE], **kwargs
+    content: object, _type: Literal[CastType.DATE], **kwargs: object
 ) -> date: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: object, _type: Literal[CastType.URL], **kwargs
+    content: object, _type: Literal[CastType.URL], **kwargs: object
 ) -> str: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: object, _type: Literal[CastType.LOCATION], **kwargs
+    content: object, _type: Literal[CastType.LOCATION], **kwargs: object
 ) -> AnyLocation: ...
 @overload  # noqa: E302
 def cast(  # noqa: E704
-    content: object, _type: Literal[CastType.BOOL], **kwargs
+    content: object, _type: Literal[CastType.BOOL], **kwargs: object
 ) -> bool: ...
 @overload  # noqa: E302
 def cast[T](  # noqa: E704
-    content: T, _type: CastType, **kwargs
+    content: T, _type: CastType, **kwargs: object
 ) -> T | PrimitiveValue: ...
 def cast[T](  # noqa: E302
-    content: T, _type: CastType = CastType.TEXT, **kwargs
+    content: T, _type: CastType = CastType.TEXT, **kwargs: object
 ) -> T | PrimitiveValue | AnyLocation:
     """
     Convert content from one type to another
@@ -422,7 +423,5 @@ def cast[T](  # noqa: E302
     return value
 
 
-cast_none = cast_type(Callable[..., None], partial(cast, _type=CastType.NONE))
-
-
-cast_pass = cast_type(Callable[[T], T], partial(cast, _type=CastType.PASS))
+cast_none: Callable[..., None] = partial(cast, _type=CastType.NONE)
+cast_pass: Callable[[T], T] = partial(cast, _type=CastType.PASS)

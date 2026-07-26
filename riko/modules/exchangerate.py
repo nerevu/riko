@@ -21,8 +21,9 @@ Attributes:
 from collections.abc import Mapping
 from decimal import Decimal
 from json import load, loads
+from logging import Logger
 from os import getenv
-from typing import TypedDict
+from typing import Any, TypedDict, cast
 
 import pygogo as gogo
 
@@ -49,7 +50,7 @@ DEFAULTS: Defaults = {
     "encoding": ENCODING,
 }
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class RatesJson(TypedDict):
@@ -68,7 +69,7 @@ def parse_response(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
     return resp
 
 
-def get_rate(currency, **rates: Decimal) -> Decimal:
+def get_rate(currency: str, **rates: Decimal) -> Decimal:
     rate = rates.get(currency, Decimal("nan"))
 
     if not rate:
@@ -78,7 +79,7 @@ def get_rate(currency, **rates: Decimal) -> Decimal:
 
 
 def calc_rate(
-    from_cur: str, to_cur: str, places=Decimal("0.0001"), **rates: Decimal
+    from_cur: str, to_cur: str, places: Decimal = Decimal("0.0001"), **rates: Decimal
 ) -> Decimal:
     if from_cur == to_cur:
         rate = Decimal(1)
@@ -93,7 +94,7 @@ def calc_rate(
 
 
 async def async_parser(
-    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs
+    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs: object
 ) -> Decimal:
     """
     Asynchronously parses the pipe content
@@ -139,7 +140,7 @@ async def async_parser(
         rates = await async_json(r)
     else:
         content = await io.async_url_read(objconf.url, delay=objconf.delay)
-        rates = loads(content).get("rates", {})
+        rates = cast(dict[str, Any], loads(content).get("rates", {}))
 
     if rates and not same_currency:
         places = Decimal(10) ** -objconf.precision
@@ -150,7 +151,7 @@ async def async_parser(
 
 
 def parser(
-    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs
+    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs: object
 ) -> Decimal:
     """
     Parses the pipe content
@@ -198,7 +199,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Decimal:
+async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
     """
     A processor that asynchronously retrieves the current exchange rate
     for a given currency pair.
@@ -250,7 +251,7 @@ async def async_pipe(*args, **kwargs) -> Decimal:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Decimal:
+def pipe(*args: Any, **kwargs: object) -> Decimal:
     """
     A processor that retrieves the current exchange rate for a given
     currency pair.

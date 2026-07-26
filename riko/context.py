@@ -7,6 +7,8 @@ The execution context for a pipeline.
 
 from enum import StrEnum
 
+from riko.types.values import Inputs
+
 
 class ExecutionMode(StrEnum):
     RUN = "run"
@@ -15,9 +17,9 @@ class ExecutionMode(StrEnum):
     DESCRIBE = "describe"
 
 
-def _mode_from_kwargs(kwargs) -> ExecutionMode:
-    inputs = bool(kwargs.get("describe_input"))
-    dependencies = bool(kwargs.get("describe_dependencies"))
+def _mode_from_kwargs(**kwargs: bool | None) -> ExecutionMode:
+    inputs = kwargs.get("describe_input")
+    dependencies = kwargs.get("describe_dependencies")
 
     if inputs and dependencies:
         mode = ExecutionMode.DESCRIBE
@@ -42,12 +44,20 @@ class Context:
     submodule = takes input values from inputs (or default)
     """
 
-    def __init__(self, mode: ExecutionMode | None = None, **kwargs):
-        self.mode = mode or _mode_from_kwargs(kwargs)
-        self.verbose = bool(kwargs.get("verbose"))
-        self.test = bool(kwargs.get("test"))
-        self.inputs = dict(kwargs.get("inputs") or {})
-        self.submodule = kwargs.get("submodule", False)
+    def __init__(
+        self,
+        mode: ExecutionMode | None = None,
+        inputs: Inputs | None = None,
+        verbose: bool | None = False,
+        test: bool | None = False,
+        submodule: bool | None = False,
+        **kwargs: bool | None,
+    ) -> None:
+        self.mode: ExecutionMode = mode or _mode_from_kwargs(**kwargs)
+        self.verbose: bool = bool(verbose)
+        self.test: bool = bool(test)
+        self.inputs: Inputs = inputs or {}
+        self.submodule: bool = bool(submodule)
 
     @property
     def describe_input(self) -> bool:
@@ -60,7 +70,7 @@ class Context:
             ExecutionMode.DESCRIBE,
         }
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         content = f"mode={self.mode}, verbose={self.verbose}, test={self.test}, "
         content += f"inputs={self.inputs}, submodule={self.submodule}"
         return f"Context({content})"
