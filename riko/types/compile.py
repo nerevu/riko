@@ -28,13 +28,13 @@ class AbbrevStringModule(TypedDict):
     alias: str
     name: str
     pipe_name: str
-    sub_pipe: bool
+    is_sub_pipe: bool
 
 
 class StringModule(AbbrevStringModule):
     id: str
     expr: str
-    collection: bool
+    is_collection: bool
 
 
 class TemplateData(TypedDict):

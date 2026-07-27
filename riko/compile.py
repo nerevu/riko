@@ -263,13 +263,21 @@ def _gen_embed_module_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
             yield embed_type
 
 
+def _get_sources(
+    conf: AnyModuleRawConf | None,
+) -> list[dict[str, object]] | None:
+    if conf and (url := conf.get("url")) and isinstance(url, list):
+        urls = cast(list[Value], url)
+        return [{"url": url["value"]} for url in urls]
+
+
 def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
     used = set()
 
     for module in parsed_pipe_def["modules"].values():
         conf = module["conf"] or {}
 
-        if _collection_sources(conf) is not None:
+        if _get_sources(conf) is not None:
             continue
 
         if raw := _RAW_CONFS.get(module["type"]):
@@ -283,14 +291,6 @@ def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
             used.add(embed_raw)
 
     return used
-
-
-def _collection_sources(
-    conf: AnyModuleRawConf | None,
-) -> list[dict[str, object]] | None:
-    if conf and (url := conf.get("url")) and isinstance(url, list):
-        urls = cast(list[Value], url)
-        return [{"url": url["value"]} for url in urls]
 
 
 def _render_args(
@@ -334,16 +334,16 @@ def _gen_string_modules(
             continue
 
         args = (parsed_pipe_def, module_id)
-        sub_pipe = module_name.startswith("pipe")
+        is_sub_pipe = module_name.startswith("pipe")
         pyarg = _get_pyarg(*args, steps=None, **kwargs)
         conf = parsed_pipe_def["modules"][module_id]["conf"]
-        sources = _collection_sources(conf)
+        sources = _get_sources(conf)
 
-        if collection := sources is not None:
+        if is_collection := sources is not None:
             expr = f"SyncCollection({repr_arg(sources)}, context=context)"
         elif module_name == "output":
             expr = repr_arg(pyarg)
-        elif sub_pipe:
+        elif is_sub_pipe:
             pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
             expr = f"{pipe_name}({_render_args(module_name, None, pykwargs)})"
         else:
@@ -356,8 +356,8 @@ def _gen_string_modules(
                 "id": module_id,
                 "expr": expr,
                 "alias": _module_alias(module_name),
-                "sub_pipe": sub_pipe,
-                "collection": collection,
+                "is_sub_pipe": is_sub_pipe,
+                "is_collection": is_collection,
                 "name": module_name,
                 "pipe_name": pipe_name,
             }
@@ -855,11 +855,11 @@ def stringify_pipe(
     )
 
     string_modules = list(_string_modules)
-    single_source_names = {m["name"] for m in string_modules if not m["collection"]}
+    single_source_names = {m["name"] for m in string_modules if not m["is_collection"]}
     embed_names = set(_gen_embed_module_names(parsed_pipe_def)) - single_source_names
-    keys = ["sub_pipe", "name", "pipe_name", "alias"]
+    keys = ["is_sub_pipe", "name", "pipe_name", "alias"]
     single_sources = {
-        tuple(m[k] for k in keys) for m in string_modules if not m["collection"]
+        tuple(m[k] for k in keys) for m in string_modules if not m["is_collection"]
     }
     embeds = {(False, n, n, _module_alias(n)) for n in embed_names}
     _uniq_modules = sorted(single_sources | embeds)
@@ -875,7 +875,7 @@ def stringify_pipe(
             "embedded_pipes": parsed_pipe_def["embed"],
             "last_module": module_ids[-1],
             "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),
-            "use_collection": any(m["collection"] for m in string_modules),
+            "use_collection": any(m["is_collection"] for m in string_modules),
         }
     )
 

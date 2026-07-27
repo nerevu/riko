@@ -7,7 +7,7 @@ from riko import Context
 from riko.collections import SyncCollection
 {%- endif %}
 {%- for module in uniq_modules %}
-{%- if module.sub_pipe %}
+{%- if module.is_sub_pipe %}
 from riko.pypipelines.{{ module.name }} import {{ module.pipe_name }}
 {%- elif module.name != "output" %}
 from riko.modules.{{ module.name }} import pipe as {{ module.alias }}
