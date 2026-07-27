@@ -19,14 +19,12 @@ from typing import (
     cast,
     overload,
 )
-from typing import cast as cast_type
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
 from riko import Objectify, replacer
-from riko.cast import CAST_SWITCH, CastType
-from riko.cast import cast as cast_value
+from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.types.general import Item, Stream
 from riko.types.guards import (
     is_known_sequence,
@@ -65,12 +63,10 @@ type Data = Iterable[tuple[str, VT]] | RSSEntry
 
 def parse_key(key: Key | None = None) -> list[str]:
     if isinstance(key, str):
-        if not key:
-            keys = []
-        elif "." not in key:
-            keys = [key]
-        else:
+        if "." in key:
             keys = key.rstrip(".").split(".")
+        else:
+            keys = [key] if key else []
     elif key and (subkey := key.get("subkey")):
         keys = [subkey]
     else:
@@ -123,7 +119,7 @@ def parse_sentinel[D, VT](  # noqa: E302
         key = replacer(value[SentinalValue], "")
 
         if stream := kwargs.get(key):
-            stream = cast_type(Stream, stream)
+            stream = cast(Stream, stream)
             parsed = next(stream, default)
         else:
             parsed = default
@@ -708,7 +704,7 @@ class DotDict(CaseInsensitiveDict[VT]):
                 else:
                     return self._store.update(data._store)
             elif kwargs or any("." in k for k in data):
-                _dict = cast_type(dict[str, VT], {**data, **kwargs})
+                _dict = cast(dict[str, VT], {**data, **kwargs})
             else:
                 for key, value in data.items():
                     CaseInsensitiveDict.__setitem__(self, key, value)

@@ -19,11 +19,11 @@ from typing import (
     NamedTuple,
     TypeAliasType,
     Union,
+    cast,
     get_args,
     get_origin,
     get_type_hints,
 )
-from typing import cast as cast_type
 
 import pygogo as gogo
 
@@ -230,13 +230,13 @@ def _infer_from_source(pipe: Callable) -> ReturnInference:
         module = ast.parse(textwrap.dedent(getsource(unwrap(pipe))))
 
         if function := next(builtins.filter(is_func, module.body), None):
-            statement = cast_type(FunctionDef, function).body[-1]
+            statement = cast(FunctionDef, function).body[-1]
     except (OSError, TypeError, SyntaxError, IndexError) as exc:
         exc_type = type(exc).__name__
         reason = f"source could not be inspected or parsed: {exc_type}: {exc}"
     else:
         if function := next(builtins.filter(is_func, module.body), None):
-            function = cast_type(FunctionDef | AsyncFunctionDef, function)
+            function = cast(FunctionDef | AsyncFunctionDef, function)
 
             if not function.body:
                 reason = "function body is empty"

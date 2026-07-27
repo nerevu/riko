@@ -14,8 +14,7 @@ from json import loads
 from logging import Logger
 from operator import add, sub
 from time import gmtime, struct_time
-from typing import Literal, TypeVar, overload
-from typing import cast as cast_type
+from typing import Literal, TypeVar, cast, overload
 from urllib.parse import quote, urlparse
 
 import pygogo as gogo
@@ -273,7 +272,7 @@ def cast_datetime(  # noqa: E302
     return result
 
 
-cast_date: Callable[[DateLike], date | None] = cast_type(
+cast_date: Callable[[DateLike], date | None] = cast(
     Callable[[DateLike], date | None], partial(cast_datetime, as_date=True)
 )
 
@@ -294,64 +293,64 @@ CAST_SWITCH: dict[str, PreCaster] = {
 
 
 @overload
-def cast(content: object) -> str: ...  # noqa: E704
+def cast_value(content: object) -> str: ...  # noqa: E704
 @overload  # noqa: E302
-def cast[T](  # noqa: E704
+def cast_value[T](  # noqa: E704
     content: T,
     _type: Literal[CastType.PASS],
     **kwargs: object,
 ) -> T: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object,
     _type: Literal[CastType.NONE],
     **kwargs: object,
 ) -> None: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object,
     _type: Literal[CastType.TEXT],
     **kwargs: object,
 ) -> str: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object,
     _type: Literal[CastType.FLOAT],
     **kwargs: object,
 ) -> float: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object, _type: Literal[CastType.DECIMAL], **kwargs: object
 ) -> Decimal: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object, _type: Literal[CastType.INT], **kwargs: object
 ) -> int: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object, _type: Literal[CastType.DATETIME], **kwargs: object
 ) -> dt: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object, _type: Literal[CastType.DATE], **kwargs: object
 ) -> date: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object, _type: Literal[CastType.URL], **kwargs: object
 ) -> str: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object, _type: Literal[CastType.LOCATION], **kwargs: object
 ) -> AnyLocation: ...
 @overload  # noqa: E302
-def cast(  # noqa: E704
+def cast_value(  # noqa: E704
     content: object, _type: Literal[CastType.BOOL], **kwargs: object
 ) -> bool: ...
 @overload  # noqa: E302
-def cast[T](  # noqa: E704
+def cast_value[T](  # noqa: E704
     content: T, _type: CastType, **kwargs: object
 ) -> T | PrimitiveValue: ...
-def cast[T](  # noqa: E302
+def cast_value[T](  # noqa: E302
     content: T, _type: CastType = CastType.TEXT, **kwargs: object
 ) -> T | PrimitiveValue | AnyLocation:
     """
@@ -368,27 +367,27 @@ def cast[T](  # noqa: E302
 
     Examples:
         >>> content = '12.25'
-        >>> cast(content, 'float')
+        >>> cast_value(content, 'float')
         12.25
-        >>> cast(content, 'decimal')
+        >>> cast_value(content, 'decimal')
         Decimal('12.25')
-        >>> cast(content, 'int')
+        >>> cast_value(content, 'int')
         12
-        >>> cast(content, 'text')
+        >>> cast_value(content, 'text')
         '12.25'
-        >>> cast(content, 'bool')
+        >>> cast_value(content, 'bool')
         True
-        >>> cast('foo', 'float')
+        >>> cast_value('foo', 'float')
         nan
-        >>> cast('foo', 'decimal')
+        >>> cast_value('foo', 'decimal')
         Decimal('NaN')
-        >>> cast('foo', 'int')
+        >>> cast_value('foo', 'int')
         0
-        >>> cast(12.25, 'text')
+        >>> cast_value(12.25, 'text')
         '12.25'
-        >>> cast(Decimal('12.25'), 'text')
+        >>> cast_value(Decimal('12.25'), 'text')
         '12.25'
-        >>> cast(12.25, 'int')
+        >>> cast_value(12.25, 'int')
         12
 
     """
@@ -423,5 +422,5 @@ def cast[T](  # noqa: E302
     return value
 
 
-cast_none: Callable[..., None] = partial(cast, _type=CastType.NONE)
-cast_pass: Callable[[T], T] = partial(cast, _type=CastType.PASS)
+cast_none: Callable[..., None] = partial(cast_value, _type=CastType.NONE)
+cast_pass: Callable[[T], T] = partial(cast_value, _type=CastType.PASS)

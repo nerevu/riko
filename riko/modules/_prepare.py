@@ -10,13 +10,19 @@ conf into the callables a wrapper applies to each item.
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import cast as cast_type
+from typing import cast
 
 import pygogo as gogo
 
 from riko import listize, objectify
-from riko.cast import CAST_SWITCH, BasicCastType, CastType, cast_none, cast_pass
-from riko.cast import cast as cast_value
+from riko.cast import (
+    CAST_SWITCH,
+    BasicCastType,
+    CastType,
+    cast_none,
+    cast_pass,
+    cast_value,
+)
 from riko.dotdict import DotDict, is_mapping
 from riko.parsers import conf_is_dynamic, get_field, parse_conf
 from riko.types.general import (
@@ -46,7 +52,7 @@ def get_pieces_or_conf(
     Conf | Defaults,
 ]:
     if is_mapping(parsed_conf):
-        merged_conf = cast_type(Conf, {**defaults, **parsed_conf})
+        merged_conf = cast(Conf, {**defaults, **parsed_conf})
     else:
         merged_conf = defaults
 
@@ -57,10 +63,10 @@ def get_pieces_or_conf(
             logger.error(f"{extract=} not found in conf {merged_conf}")
             pieces = None
         else:
-            pieces = cast_type(BasicReturn, pieces)
+            pieces = cast(BasicReturn, pieces)
 
         if pieces and opts.get("listize"):
-            pieces_or_conf = cast_type(list[BasicReturn], listize(pieces))
+            pieces_or_conf = cast(list[BasicReturn], listize(pieces))
         else:
             pieces_or_conf = pieces
     else:
@@ -103,8 +109,8 @@ def _dispatch(
     pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
-    conf = cast_type(Conf, casted[2])
-    return Dispatched(cast_type(DotDict, item), Casted(casted[0], casted[1], conf))
+    conf = cast(Conf, casted[2])
+    return Dispatched(cast(DotDict, item), Casted(casted[0], casted[1], conf))
 
 
 def get_parsers(opts: Opts, conf: Conf, **kwargs: bool) -> ParseFuncs:
@@ -139,7 +145,7 @@ def get_casters(opts: Opts) -> CastFuncs:
 
         _field_func = cast_pass
 
-    field_func = cast_type(SyncArgFunc, _field_func)
+    field_func = cast(SyncArgFunc, _field_func)
 
     if ptype in CAST_SWITCH:
         _caster = partial(cast_value, _type=CastType(ptype))
@@ -149,7 +155,7 @@ def get_casters(opts: Opts) -> CastFuncs:
 
         _caster = cast_pass
 
-    caster = cast_type(SyncArgFunc, _caster)
+    caster = cast(SyncArgFunc, _caster)
 
     if ptype == BasicCastType.NONE:
         extract_caster = cast_none
@@ -164,5 +170,5 @@ def get_casters(opts: Opts) -> CastFuncs:
         extract_caster = caster
         _conf_caster = cast_pass
 
-    conf_caster = cast_type(SyncConfCastFunc, _conf_caster)
+    conf_caster = cast(SyncConfCastFunc, _conf_caster)
     return CastFuncs(field_func, extract_caster, conf_caster)

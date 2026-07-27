@@ -46,7 +46,6 @@ from typing import (
     get_type_hints,
     overload,
 )
-from typing import cast as cast_type
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 from urllib.response import addinfourl
@@ -77,8 +76,7 @@ from riko import (
     replacer,
 )
 from riko._pubsub import async_hub, sync_hub
-from riko.cast import CAST_SWITCH, CastType
-from riko.cast import cast as cast_value
+from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.context import ExecutionMode
 from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
@@ -688,7 +686,7 @@ def _resolve_default(
         logger.warning(f"Invalid cast type={_type}. Setting default to empty string.")
     elif _type and default is None:
         _default = CAST_SWITCH[_type].get("default")
-        resolved = cast_type(PrimitiveValue, _default) or ""
+        resolved = cast(PrimitiveValue, _default) or ""
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     elif default is not None:
@@ -720,7 +718,7 @@ def def_itemgetter(
             casted = _resolve_uncastable(value, msg, default)
         elif _type:
             _casted = cast_value(value, CastType(_type))
-            casted = cast_type(PrimitiveValue, _casted)
+            casted = cast(PrimitiveValue, _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
         elif isinstance(value, NON_SORTABLE):
@@ -1384,7 +1382,7 @@ def gen_modules(  # noqa: E302
 ) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
         if embedded and module["type"] == "loop":
-            conf = cast_type(LoopRawConf, module["conf"])
+            conf = cast(LoopRawConf, module["conf"])
             embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), embed)
         elif not embedded:
@@ -1410,7 +1408,7 @@ def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
 
         # make the loop dependent on its embedded module
         if module["type"] == "loop":
-            conf = cast_type(LoopRawConf, module["conf"])
+            conf = cast(LoopRawConf, module["conf"])
             embed = conf["embed"]["value"]
             yield (pythonise(embed["id"]), [module_id])
 

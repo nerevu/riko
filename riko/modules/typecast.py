@@ -22,7 +22,7 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import CastType, cast
+from riko.cast import CastType, cast_value
 from riko.types.configs import TypecastObjconf
 from riko.types.general import Defaults, Extraction, Opts
 from riko.types.values import PrimitiveValue
@@ -63,7 +63,7 @@ def parser(
         1
 
     """
-    return cast(content, CastType(objconf.type)) if objconf.type else content
+    return cast_value(content, CastType(objconf.type)) if objconf.type else content
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

@@ -27,7 +27,7 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType, CastType, cast
+from riko.cast import BasicCastType, CastType, cast_value
 from riko.types.configs import SimpleMathObjconf
 from riko.types.general import Defaults, Extraction, NumLike, Opts
 
@@ -79,7 +79,7 @@ def parser(
 
     """
     operation = OPS[objconf.op]
-    other = cast(objconf.other, _type=CastType.DECIMAL)
+    other = cast_value(objconf.other, _type=CastType.DECIMAL)
     return operation(num, other)
 
 

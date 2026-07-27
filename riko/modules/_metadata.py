@@ -12,8 +12,7 @@ from collections.abc import Iterator
 from functools import partial
 from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
-from typing import Literal, overload
-from typing import cast as cast_type
+from typing import Literal, cast, overload
 
 from riko.cast import BasicCastType
 from riko.modules._inference import _gen_operator_return_kinds
@@ -73,9 +72,9 @@ def _derive_subtypes(
     if module_type == "processor":
         none_ftype = kwargs.get("ftype") == BasicCastType.NONE
         subtype: ModuleSubtype | None = "source" if none_ftype else "transformer"
-        result = subtype, cast_type(ModuleSubtypes, {subtype})
+        result = subtype, cast(ModuleSubtypes, {subtype})
     elif module_type == "splitter":
-        result = "splitter", cast_type(ModuleSubtypes, {"splitter"})
+        result = "splitter", cast(ModuleSubtypes, {"splitter"})
     else:
         result = _derive_operator_subtypes(pipe)
 
@@ -85,7 +84,7 @@ def _derive_subtypes(
 def _get_module_metadata(name: str) -> ModuleMetadata | None:
     module = import_module(f"{_PACKAGE}.{name}")
     pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
-    targets = tuple(cast_type(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
+    targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
     attrs = ("name", "type", "subtype", "subtypes", "pollable", "loopable")
 
     if len(targets) == 2:

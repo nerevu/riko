@@ -11,8 +11,7 @@ from collections.abc import Awaitable, Iterator
 from copy import copy
 from functools import partial
 from itertools import chain, islice
-from typing import Literal, overload
-from typing import cast as cast_type
+from typing import Literal, cast, overload
 
 from riko.context import Context
 from riko.dotdict import DotDict
@@ -70,9 +69,9 @@ def get_assignment(  # noqa: E302
     count = conf.get("count")
 
     if isinstance(items, Iterator):
-        dictized = cast_type(Stream, map(DotDict.dictize, items))
+        dictized = cast(Stream, map(DotDict.dictize, items))
     else:
-        dictized = cast_type(StreamOrValueStream, iter([DotDict.dictize(items)]))
+        dictized = cast(StreamOrValueStream, iter([DotDict.dictize(items)]))
 
     if skip:
         one = False
@@ -131,7 +130,7 @@ def gen_assignments(  # noqa: E302
         elif item and value_is_iterator:
             yield item | {assign: list(value)}
         elif value_is_iterator:
-            yield from cast_type(StreamOrValueStream, ({assign: v} for v in value))
+            yield from cast(StreamOrValueStream, ({assign: v} for v in value))
         else:
             yield item | {assign: value}
     elif value_is_iterator:

@@ -25,7 +25,7 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType, CastType, cast
+from riko.cast import BasicCastType, CastType, cast_value
 from riko.types.configs import GeolocateObjconf
 from riko.types.general import Defaults, Extraction, Opts
 from riko.types.values import AnyLocation
@@ -63,7 +63,7 @@ def parser(
         'United Kingdom'
 
     """
-    return cast(address, CastType.LOCATION, loc_type=objconf.type)
+    return cast_value(address, CastType.LOCATION, loc_type=objconf.type)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

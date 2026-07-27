@@ -51,13 +51,11 @@ Attributes:
 """
 
 from logging import Logger
-from typing import Any
-from typing import cast as cast_type
+from typing import Any, cast
 
 import pygogo as gogo
 
-from riko.cast import CastType, SourceOpts
-from riko.cast import cast as cast_value
+from riko.cast import CastType, SourceOpts, cast_value
 from riko.types.configs import InputObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
 from riko.types.values import Inputs, PrimitiveValue
@@ -104,7 +102,7 @@ def parser(
         30
 
     """
-    if inputs := cast_type(Inputs | None, kwargs.get("inputs")):
+    if inputs := cast(Inputs | None, kwargs.get("inputs")):
         value = inputs.get(objconf.input_key, objconf.default)
     elif objconf.test or skip or kwargs.get("test"):
         value = objconf.default

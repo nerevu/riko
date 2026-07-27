@@ -6,8 +6,14 @@ riko.modules
 
 from riko import Context, DynamicConf, listize, objectify
 from riko.bado.itertools import async_map
-from riko.cast import CAST_SWITCH, BasicCastType, CastType, cast_none, cast_pass
-from riko.cast import cast as cast_value
+from riko.cast import (
+    CAST_SWITCH,
+    BasicCastType,
+    CastType,
+    cast_none,
+    cast_pass,
+    cast_value,
+)
 from riko.dotdict import DotDict, is_mapping
 from riko.modules._assignment import _get_subpipe, gen_assignments, get_assignment
 from riko.modules._decorators import Module, operator, processor, splitter

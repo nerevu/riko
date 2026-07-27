@@ -35,8 +35,7 @@ from inspect import signature
 from logging import Logger
 from random import choice
 from time import sleep
-from typing import Any
-from typing import cast as cast_type
+from typing import Any, cast
 
 import pygogo as gogo
 from meza.fntools import dfilter
@@ -145,7 +144,7 @@ def _register_receiver(name, objconf, func, kwargs) -> None:
                         msg += "dropping oldest item."
                         logger.warning(msg)
 
-                    queue.append((state, cast_type(Item, result)))
+                    queue.append((state, cast(Item, result)))
 
         receiver()
 
@@ -239,9 +238,7 @@ async def async_parser(
 
     async with async_hub.subscribe(name) as receive_stream:
         async for item in receive_stream:
-            results.append(
-                cast_type(Item, _apply(func, item, **fkwargs) if func else item)
-            )
+            results.append(cast(Item, _apply(func, item, **fkwargs) if func else item))
 
     return iter(results)
 
