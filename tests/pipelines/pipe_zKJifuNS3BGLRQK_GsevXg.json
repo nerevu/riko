@@ -58,12 +58,13 @@
                     "value": "modulo"
                 },
                 "OTHER": {
-                    "type": "number",
-                    "value": "5"
+                    "type": "float",
+                    "value": "6"
                 }
             },
             "id": "sw-94",
-            "type": "simplemath"
+            "type": "simplemath",
+            "emit": {"type": "bool", "value": true}
         },
         {
             "conf": null,
@@ -78,17 +79,18 @@
                 },
                 "OTHER": {
                     "terminal": "OTHER",
-                    "type": "number"
+                    "type": "float"
                 }
             },
             "id": "sw-169",
-            "type": "simplemath"
+            "type": "simplemath",
+            "emit": {"type": "bool", "value": true}
         },
         {
             "conf": {
                 "URL": {
                     "type": "url",
-                    "value": "file://riko/data/www.sciencedaily.com_rss_computers_math.html"
+                    "value": "file://riko/data/TheEdTechie.xml"
                 }
             },
             "id": "sw-224",
@@ -98,7 +100,7 @@
             "conf": {
                 "count": {
                     "terminal": "count",
-                    "type": "number"
+                    "type": "float"
                 }
             },
             "id": "sw-232",
@@ -106,8 +108,14 @@
         },
         {
             "conf": null,
+            "id": "sw-242",
+            "type": "count",
+            "assign": {"type": "text", "value": "content"}
+        },
+        {
+            "conf": null,
             "id": "sw-243",
-            "type": "count"
+            "type": "split"
         },
         {
             "conf": null,
@@ -464,6 +472,17 @@
             }
         },
         {
+            "id": "_w8",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-242"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-243"
+            }
+        },
+        {
             "id": "_w3",
             "src": {
                 "id": "_OUTPUT",
@@ -515,7 +534,7 @@
             },
             "tgt": {
                 "id": "_INPUT",
-                "moduleid": "sw-243"
+                "moduleid": "sw-242"
             }
         }
     ]

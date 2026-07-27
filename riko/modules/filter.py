@@ -202,15 +202,13 @@ def parser(
             parse_arg(rule.value, rule.op, memoize=True)
 
     for item, objconf in tuples:
-        results = (parse_rule(rule, item, **kwargs) for rule in extract)
-
         try:
             func = COMBINE_BOOLEAN[objconf.combine]
         except KeyError:
             msg = f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')"
             logger.error(msg)
         else:
-            result = func(results)
+            result = func(parse_rule(rule, item, **kwargs) for rule in extract)
 
             if (result and objconf.permit) or not (result or objconf.permit):
                 yield item

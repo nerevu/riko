@@ -33,7 +33,6 @@ PARENT = Path(__file__).parent.parent
 PIPELINE_DIR = PARENT / "pipelines"
 PYPIPELINE_DIR = PARENT / "pypipelines"
 DAG_DIR = PARENT / "dags"
-HAND_MAINTAINED = {"pipe_QMrlL_FS3BGlpwryODY80A", "pipe_zKJifuNS3BGLRQK_GsevXg"}
 
 FOREVER = PipeDef(
     {
@@ -121,8 +120,7 @@ def test_codegen_matches_executor(pipe_name):
 def _codegen_pairs():
     pipe_files = sorted(PIPELINE_DIR.glob("pipe_*.json"))
     exists = lambda pfile: (PYPIPELINE_DIR / f"{pfile.stem}.py").exists()
-    filterer = lambda pfile: exists(pfile) and pfile.stem not in HAND_MAINTAINED
-    return list(filter(filterer, pipe_files))
+    return list(filter(exists, pipe_files))
 
 
 @pytest.mark.parametrize("pipe_name", _codegen_pairs())

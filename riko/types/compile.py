@@ -34,6 +34,7 @@ class AbbrevStringModule(TypedDict):
 class StringModule(AbbrevStringModule):
     id: str
     expr: str
+    splits: int
     is_collection: bool
 
 

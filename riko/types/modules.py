@@ -372,7 +372,7 @@ class SlugifyRawConf(TypedDict, total=False):
 
 
 class SplitRawConf(TypedDict, total=False):
-    splits: Value
+    splits: ConfArg
 
 
 class StrconcatRawConf(TypedDict):

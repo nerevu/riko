@@ -38,7 +38,7 @@ import keyword
 import subprocess
 from codecs import open
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 from importlib import import_module
@@ -53,8 +53,9 @@ from jinja2 import Environment, PackageLoader
 
 from riko import Context
 from riko.context import ExecutionMode
+from riko.dotdict import DotDict
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
-from riko.pprint2 import Id, repr_arg
+from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
 from riko.types.compile import (
     AbbrevStringModule,
@@ -83,8 +84,8 @@ from riko.types.modules import (
     AnyModuleRawConf,
     ConfArg,
     Embed,
-    LoopConf,
     LoopRawConf,
+    ModuleName,
     Value,
 )
 from riko.types.values import Inputs
@@ -216,39 +217,47 @@ def _lower_keys[T](obj: T) -> T:
 
 
 def _render_embed(embed: Embed) -> str:
-    value = embed.get("value")
-    embed_type = value.get("type")
+    value = embed["value"]
+    embed_type = value["type"]
     parts = []
 
     for key, val in value.items():
-        rendered = _conf_source(embed_type, val) if key == "conf" else repr_arg(val)
+        if key == "conf":
+            rendered = _conf_source(embed_type, cast(AnyModuleRawConf, val))
+        else:
+            rendered = repr_arg(cast(str | ModuleName | ConfArg, val))
+
         parts.append(f"{repr_arg(key)}: {rendered}")
 
     return f"{{'type': 'module', 'value': {{{', '.join(parts)}}}}}"
 
 
-def _render_loop(conf: LoopConf) -> str:
+def _render_loop(conf: LoopRawConf) -> str:
     parts = []
 
     for key, val in conf.items():
-        rendered = _render_embed(cast(Embed, val)) if key == "embed" else repr_arg(val)
+        if key == "embed":
+            rendered = _render_embed(cast(Embed, val))
+        else:
+            rendered = repr_arg(cast(Value, val))
+
         parts.append(f"{repr_arg(key)}: {rendered}")
 
     return f"{{{', '.join(parts)}}}"
 
 
-def _conf_source(module_name: str, conf: object) -> str:
+def _conf_source(module_name: str, conf: AnyModuleRawConf | Id | Context) -> str:
     raw = _RAW_CONFS.get(module_name)
 
     if module_name == "loop" and isinstance(conf, dict) and "embed" in conf:
-        inner = _render_loop(cast(LoopConf, conf))
+        inner = _render_loop(conf)
     else:
         inner = repr_arg(conf)
 
     return f"{raw}({inner})" if raw else inner
 
 
-def _render_conf(module_name: str, conf: object) -> str:
+def _render_conf(module_name: str, conf: AnyModuleRawConf | Id | Context) -> str:
     return _conf_source(module_name, _lower_keys(conf))
 
 
@@ -265,10 +274,10 @@ def _gen_embed_module_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
 
 def _get_sources(
     conf: AnyModuleRawConf | None,
-) -> list[dict[str, object]] | None:
+) -> list[dict[str, str]] | None:
     if conf and (url := conf.get("url")) and isinstance(url, list):
         urls = cast(list[Value], url)
-        return [{"url": url["value"]} for url in urls]
+        return [{"url": cast(str, url["value"])} for url in urls]
 
 
 def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
@@ -294,7 +303,9 @@ def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
 
 
 def _render_args(
-    module_name: str, pyarg: object, pykwargs: Iterable[tuple[str, object]]
+    module_name: str,
+    pyarg: Id | None,
+    pykwargs: Iterable[tuple[str, AnyModuleRawConf | Id | Context]],
 ) -> str:
     parts = []
     rendered = repr_arg(pyarg)
@@ -328,6 +339,7 @@ def _gen_string_modules(
 ) -> Iterator[StringModule]:
     zipped = zip(module_ids, module_names, pipe_names, strict=False)
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
+    split_ids = defaultdict(int)
 
     for module_id, module_name, pipe_name in zipped:
         if module_id in parsed_pipe_def["embed"]:
@@ -335,21 +347,36 @@ def _gen_string_modules(
 
         args = (parsed_pipe_def, module_id)
         is_sub_pipe = module_name.startswith("pipe")
-        pyarg = _get_pyarg(*args, steps=None, **kwargs)
+        pyarg = _get_pyarg(*args, split_ids=split_ids, steps=None, **kwargs)
+
         conf = parsed_pipe_def["modules"][module_id]["conf"]
         sources = _get_sources(conf)
 
         if is_collection := sources is not None:
-            expr = f"SyncCollection({repr_arg(sources)}, context=context)"
+            expr = f"SyncCollection({repr_args(*sources)}, context=context)"
         elif module_name == "output":
             expr = repr_arg(pyarg)
         elif is_sub_pipe:
             pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
             expr = f"{pipe_name}({_render_args(module_name, None, pykwargs)})"
         else:
+            pyarg_expr = repr_arg(pyarg)
+
+            if split_ids and "_" in pyarg_expr:
+                split_id = "_".join(pyarg_expr.split("_")[:-1])
+
+                if split_id in split_ids:
+                    split_ids[split_id] += 1
+
             pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
             alias = _module_alias(module_name)
             expr = f"{alias}({_render_args(module_name, pyarg, pykwargs)})"
+
+        if module_name == "split":
+            splits = DotDict(conf).get("splits", 2)
+            split_ids[module_id] = 0
+        else:
+            splits = 0
 
         yield StringModule(
             {
@@ -360,6 +387,7 @@ def _gen_string_modules(
                 "is_collection": is_collection,
                 "name": module_name,
                 "pipe_name": pipe_name,
+                "splits": splits,
             }
         )
 
@@ -380,6 +408,7 @@ def _get_pyarg(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
     *,
+    split_ids: Mapping[str, int] | None = None,
     steps: Steps | None = None,
     context: Context | None = None,
     mode: ExecutionMode | None = None,
@@ -387,11 +416,12 @@ def _get_pyarg(  # noqa: E302
     **kwargs: bool,
 ) -> StepValue | Id | None:
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
+    split_ids = split_ids or {}
 
     if steps and context.mode is not ExecutionMode.RUN:
         print("You must not specify both describe and steps. Assuming steps.")
 
-    return _get_input_module(parsed_pipe_def, module_id, steps)
+    return _get_input_module(parsed_pipe_def, module_id, steps, **split_ids)
 
 
 def _is_default(wire: Wire, module_id: str, in_and_out: bool = False) -> bool:
@@ -461,13 +491,6 @@ def _gen_pykwargs(  # noqa: E302
         pipe_id = pythonise(value["id"])
         updated = Id(_module_alias(value["type"])) if steps is None else steps[pipe_id]
         yield ("embed", updated)
-
-    if module["type"] == "split":
-        wires = parsed_pipe_def["wires"].values()
-        filtered = [v for v in wires if module_id == get_module_id(v)]
-        count = len(filtered)
-        updated = Id(count) if steps is None else count
-        yield ("splits", updated)
 
 
 # `output` is virtual → None; the broader `str` overloads below (real modules)
@@ -594,7 +617,10 @@ def _gen_steps(
 
 
 def _get_input_module(
-    parsed_pipe_def: ParsedPipeDef, module_id: str, steps: Steps | None = None
+    parsed_pipe_def: ParsedPipeDef,
+    module_id: str,
+    steps: Steps | None = None,
+    **split_ids: int,
 ) -> Id | StepValue | None:
     source = None if steps is None else iter([{"forever": True}])
 
@@ -606,7 +632,15 @@ def _get_input_module(
             # the default output:
             if _is_default(wire, module_id, True):
                 src_module_id = get_module_id(wire)
-                source = src_module_id if steps is None else steps[src_module_id]
+
+                if steps is None and src_module_id in split_ids:
+                    pos = split_ids[src_module_id]
+                    source = f"{src_module_id}_{pos}"
+                elif steps is None:
+                    source = src_module_id
+                else:
+                    source = steps[src_module_id]
+
                 break
 
     return Id(source) if steps is None else source

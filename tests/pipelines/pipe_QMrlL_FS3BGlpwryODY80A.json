@@ -91,7 +91,7 @@
                 "RULE": {
                     "field": {
                         "type": "text",
-                        "value": "description"
+                        "value": "summary"
                     },
                     "op": {
                         "type": "text",
@@ -119,7 +119,7 @@
                 "RULE": {
                     "field": {
                         "type": "text",
-                        "value": "description"
+                        "value": "summary"
                     },
                     "op": {
                         "type": "text",

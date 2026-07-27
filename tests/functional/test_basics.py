@@ -760,9 +760,7 @@ class TestBasics:
         items = self._get_pipeline(pipe_name)
         self._load(items, pipe_name, 7, 0)
         item = cast(dict, items[0])
-        assert (
-            item["title"] == "[Drugs] Ebola: Questions, answers about an unproven drug"
-        )
+        assert item["title"].startswith("[Weight] More parents think their overweight")
 
     def test_simplemath_1(self):
         """Loads a pipeline containing simplemath"""

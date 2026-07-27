@@ -31,7 +31,14 @@ async def {{ pipe_name }}(item=None, conf: Conf = None, context: Context | None 
         {{ last_module }} = {{ dependencies }}
     else:
 {%- for module in modules %}
+    {%- if module.splits %}
+        splits = {{ module.expr }}
+    {%- for i in range(module.splits) %}
+        {{ module.id }}_{{ i }} = next(splits)
+    {%- endfor %}
+    {%- else %}
         {{ module.id }} = {% if module.name == "output" %}{{ module.expr }}{% else %}await {{ module.expr }}{% endif %}
+    {%- endif %}
 {%- endfor %}
 
     return {{ last_module }}
