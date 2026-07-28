@@ -169,7 +169,7 @@ Usage
 -----
 
 ``riko`` is intended to be used either directly as a Python library or in the console
-the via `runpipe` CLI.
+the via `run-pipe` CLI.
 
 Usage Index
 ^^^^^^^^^^^
@@ -687,14 +687,14 @@ to the branched items without touching the main flow.
 Command-line Interface
 ----------------------
 
-``riko`` provides a command, ``runpipe``, to execute ``workflows``. A
+``riko`` provides a command, ``run-pipe``, to execute ``workflows``. A
 ``workflow`` is simply a file containing a function named ``pipe`` that creates
 a ``flow`` and processes the resulting ``stream``.
 
 CLI Usage
 ^^^^^^^^^
 
-  usage: runpipe [pipeid]
+  usage: run-pipe [pipeid]
 
   description: Runs a riko pipe
 
@@ -729,15 +729,15 @@ CLI Setup
 CLI Examples
 ^^^^^^^^^^^^
 
-Now to execute ``flow.py``, type the command ``runpipe flow``. You should
+Now to execute ``flow.py``, type the command ``run-pipe flow``. You should
 then see the following output in your terminal:
 
 .. code-block:: bash
 
     https://google.co.uk
 
-``runpipe`` will also search the ``examples`` directory for ``workflows``. Type
-``runpipe demo`` and you should see the following output:
+``run-pipe`` will also search the ``examples`` directory for ``workflows``. Type
+``run-pipe demo`` and you should see the following output:
 
 .. code-block:: bash
 
@@ -870,7 +870,7 @@ Project Structure
     │   ├── topsort.py
     │   ├── utils.py
     │   ├── bado             (async backend: __init__, io, itertools, mock, util)
-    │   ├── cli              (manage, runpipe, benchmark, compile, convert-dag)
+    │   ├── cli              (manage, run-pipe, benchmark, compile, convert-dag)
     │   ├── data/*
     │   ├── modules/*        (the built-in pipes)
     │   ├── templates/*      (codegen Jinja templates)

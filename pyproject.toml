@@ -83,9 +83,9 @@ dev = [
 
 [project.scripts]
 manage = "riko.cli.manage:manager"
-runpipe = "riko.cli.runpipe:run"
+run-pipe = "riko.cli.runpipe:run"
 benchmark = "riko.cli.benchmark:main"
-compile = "riko.cli.compile:run"
+compile-pipe = "riko.cli.compile:run"
 convert-dag = "riko.cli.convert_dag:run"
 gen-config = "riko.cli.gen_config:main"
 

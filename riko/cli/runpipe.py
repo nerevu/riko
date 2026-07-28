@@ -63,7 +63,7 @@ def run():
     """CLI runner"""
     parser = ArgumentParser(
         description="description: Runs a riko pipe",
-        prog="runpipe",
+        prog="run-pipe",
         usage="%(prog)s [pipeid]",
         formatter_class=RawTextHelpFormatter,
     )
