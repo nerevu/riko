@@ -134,7 +134,7 @@ def pipe_QMrlL_FS3BGlpwryODY80A(
             context=context,
             embed=regex,
         )
-        sw_170 = union(None, context=context, OTHERS=[sw_189, sw_204])
+        sw_170 = union(None, context=context, others=[sw_189, sw_204])
         _OUTPUT = sw_170
 
     return _OUTPUT

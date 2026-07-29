@@ -69,7 +69,7 @@ def pipe_b96287458de001ad62a637095df33ad5(
             context=context,
             attrs_3_value=sw_605,
         )
-        sw_613 = union(sw_551, conf={}, context=context, OTHERS=[sw_632])
+        sw_613 = union(sw_551, conf={}, context=context, others=[sw_632])
         _OUTPUT = sw_613
 
     return _OUTPUT

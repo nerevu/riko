@@ -59,7 +59,7 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(
             ],
             context=context,
         )
-        sw_580 = union(sw_550, conf={}, context=context, OTHERS=[sw_572])
+        sw_580 = union(sw_550, conf={}, context=context, others=[sw_572])
         sw_565 = sort(
             sw_580,
             conf=SortRawConf(

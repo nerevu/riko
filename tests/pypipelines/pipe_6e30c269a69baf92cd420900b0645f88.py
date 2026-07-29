@@ -55,7 +55,7 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
             ),
             context=context,
         )
-        sw_154 = union(None, conf={}, context=context, OTHERS=[sw_135, sw_233])
+        sw_154 = union(None, conf={}, context=context, others=[sw_135, sw_233])
         sw_173 = uniq(
             sw_154,
             conf=UniqRawConf({"uniq_key": {"type": "text", "value": "title"}}),

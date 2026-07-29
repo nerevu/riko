@@ -55,7 +55,7 @@ def pipe_1166de33b0ea6936d96808717355beaa(
             ),
             context=context,
         )
-        sw_637 = union(sw_554, conf={}, context=context, OTHERS=[sw_569])
+        sw_637 = union(sw_554, conf={}, context=context, others=[sw_569])
         sw_656 = loop(
             sw_637,
             conf=LoopRawConf(
@@ -167,7 +167,7 @@ def pipe_1166de33b0ea6936d96808717355beaa(
             context=context,
             embed=itembuilder,
         )
-        sw_730 = union(sw_674, conf={}, context=context, OTHERS=[sw_688])
+        sw_730 = union(sw_674, conf={}, context=context, others=[sw_688])
         _OUTPUT = sw_730
 
     return _OUTPUT

@@ -484,7 +484,7 @@ def _gen_pykwargs(  # noqa: E302
                 yield (pipe_id, source)
 
     if others:
-        yield ("OTHERS", others)
+        yield ("others", others)
 
     if module["type"] == "loop":
         value = cast(LoopRawConf, module["conf"])["embed"]["value"]
