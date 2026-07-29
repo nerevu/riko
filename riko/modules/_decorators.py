@@ -12,7 +12,7 @@ from functools import partial, wraps
 from inspect import (
     isawaitable,
 )
-from itertools import chain, islice
+from itertools import islice
 from logging import Logger
 from typing import (
     Literal,
@@ -23,11 +23,11 @@ from typing import (
 import pygogo as gogo
 
 from riko import Context, DynamicConf
-from riko.bado.itertools import async_map
 from riko.cast import BasicCastType
 from riko.context import ExecutionMode
 from riko.dotdict import DotDict, is_mapping
-from riko.modules._assignment import _get_subpipe, gen_assignments, get_assignment
+from riko.modules._assignment import gen_assignments, get_assignment
+from riko.modules._loop import loop_embed_async_eager, loop_embed_sync
 from riko.modules._metadata import (
     _derive_loopable,
     _derive_subtypes,
@@ -983,22 +983,12 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             tuples, orig_stream, casted = self.setup(
                 prepared, stream, inputs=inputs, **kwargs
             )
-            embed_type = getattr(embed, "type", None)
+            handled, embed_stream = await loop_embed_async_eager(
+                embed, dict(embedded_kwargs or {}), context, _input, op_module_name
+            )
 
-            if embed and embed_type and embed.loopable:
-                embed = cast(AsyncProcessorWrapper, embed)
-                embedder = _get_subpipe(embed, context, **embedded_kwargs)
-                stream_map = await async_map(embedder, _input)
-                stream = cast(ProcessorParserOutput, chain.from_iterable(stream_map))
-            elif embed and embed_type:
-                logger.error(f"{embed.name} is not loopable and can't be embedded.")
-            elif embed and callable(embed):
-                if name := getattr(embed, "__name__", None):
-                    logger.error(f"{name} is a custom pipe and can't be embedded.")
-                else:
-                    logger.error("Custom embedded pipes are not currently supported.")
-            elif op_module_name == "loop":
-                logger.error("No embedded pipe provided!")
+            if handled:
+                stream = cast(ProcessorParserOutput, embed_stream)
             else:
                 async_pipe = cast(AsyncOperatorParser, pipe)
                 pkwargs: dict[str, object] = {"inputs": inputs, **kwargs}
@@ -1041,22 +1031,12 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             tuples, orig_stream, casted = self.setup(
                 prepared, stream, inputs=inputs, **kwargs
             )
-            embed_type = getattr(embed, "type", None)
+            handled, embed_stream = loop_embed_sync(
+                embed, dict(embedded_kwargs or {}), context, _input, op_module_name
+            )
 
-            if embed and embed_type and embed.loopable:
-                embed = cast(SyncProcessorWrapper, embed)
-                embedder = _get_subpipe(embed, context, **embedded_kwargs)
-                stream_map = map(embedder, _input)
-                stream = cast(ProcessorParserOutput, chain.from_iterable(stream_map))
-            elif embed_type:
-                logger.error(f"{embed.name} is not loopable and can't be embedded.")
-            elif embed and callable(embed):
-                if name := getattr(embed, "__name__", None):
-                    logger.error(f"{name} is a custom pipe and can't be embedded.")
-                else:
-                    logger.error("Custom embedded pipes are not currently supported.")
-            elif op_module_name == "loop":
-                logger.error("No embedded pipe provided!")
+            if handled:
+                stream = cast(ProcessorParserOutput, embed_stream)
             else:
                 sync_pipe = cast(SyncOperatorParser, pipe)
                 pkwargs: dict[str, object] = {"inputs": inputs, **kwargs}
