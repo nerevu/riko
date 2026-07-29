@@ -35,7 +35,7 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
                     "debug": {"type": "text", "value": ""},
                     "default": {"type": "text", "value": "defunkt"},
                     "name": {"type": "text", "value": "textinput1"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {"type": "text", "value": "Enter Text"},
                 }
             ),

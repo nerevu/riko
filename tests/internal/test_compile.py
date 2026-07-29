@@ -42,7 +42,7 @@ FOREVER = PipeDef(
                 {
                     "id": "sw-2",
                     "type": "truncate",
-                    "conf": {"count": {"type": "number", "value": "2"}},
+                    "conf": {"count": {"type": "float", "value": "2"}},
                 }
             ),
             PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
@@ -182,7 +182,7 @@ def test_convert_dag_linear_default_matches_explicit_wires():
             {
                 "id": "sw-2",
                 "type": "truncate",
-                "conf": {"count": {"type": "number", "value": "3"}},
+                "conf": {"count": {"type": "float", "value": "3"}},
             }
         ),
     ]
@@ -208,7 +208,7 @@ def test_convert_dag_generates_ids_when_omitted():
                 DagModule(
                     {
                         "type": "truncate",
-                        "conf": {"count": {"type": "number", "value": "3"}},
+                        "conf": {"count": {"type": "float", "value": "3"}},
                     }
                 ),
             ]

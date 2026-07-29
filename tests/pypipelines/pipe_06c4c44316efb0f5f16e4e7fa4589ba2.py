@@ -16,13 +16,7 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
 ):
     if context and context.describe_input:
         _OUTPUT = [
-            (
-                "",
-                "numberinput1",
-                "How many items do you want in the feed?",
-                "number",
-                "5",
-            )
+            ("", "numberinput1", "How many items do you want in the feed?", "int", "5")
         ]
     elif context and context.describe_dependencies:
         _OUTPUT = ["fetch", "input", "sort", "tail"]
@@ -57,10 +51,10 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
             None,
             conf=InputRawConf(
                 {
-                    "debug": {"type": "number", "value": ""},
-                    "default": {"type": "number", "value": "5"},
+                    "debug": {"type": "int", "value": ""},
+                    "default": {"type": "int", "value": "5"},
                     "name": {"type": "text", "value": "numberinput1"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {
                         "type": "text",
                         "value": "How many items do you want in the feed?",
@@ -71,7 +65,7 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
         )
         sw_106 = tail(
             sw_135,
-            conf=TailRawConf({"count": {"terminal": "count", "type": "number"}}),
+            conf=TailRawConf({"count": {"terminal": "count", "type": "float"}}),
             context=context,
             count=sw_131,
         )

@@ -75,7 +75,7 @@
             "conf": {
                 "count": {
                     "terminal": "count",
-                    "type": "number"
+                    "type": "float"
                 }
             },
             "id": "sw-583",

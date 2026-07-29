@@ -73,7 +73,7 @@
                     "value": "q"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {

@@ -42,7 +42,7 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
                         "value": "Here's #: some #hashtags to play #with",
                     },
                     "name": {"type": "text", "value": "q"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {"type": "text", "value": "Status update"},
                 }
             ),

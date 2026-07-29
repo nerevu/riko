@@ -82,7 +82,7 @@
                     "value": "gid"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {

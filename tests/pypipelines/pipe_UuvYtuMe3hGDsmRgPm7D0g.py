@@ -35,7 +35,7 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(
                     "debug": {"type": "text", "value": ""},
                     "default": {"type": "text", "value": "Lancaster"},
                     "name": {"type": "text", "value": "name"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {"type": "text", "value": "Name"},
                 }
             ),

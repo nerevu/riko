@@ -25,7 +25,7 @@ def pipe_e519dd393f943315f7e4128d19db2eac(
                     "debug": {"type": "text", "value": ""},
                     "default": {"type": "text", "value": "enterprise mashup"},
                     "name": {"type": "text", "value": "q"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {"type": "text", "value": "Search term:"},
                 }
             ),

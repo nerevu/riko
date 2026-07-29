@@ -55,11 +55,11 @@
         {
             "conf": {
                 "debug": {
-                    "type": "number",
+                    "type": "int",
                     "value": ""
                 },
                 "default": {
-                    "type": "number",
+                    "type": "int",
                     "value": "5"
                 },
                 "name": {
@@ -67,7 +67,7 @@
                     "value": "numberinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {
@@ -100,7 +100,7 @@
             "conf": {
                 "count": {
                     "terminal": "count",
-                    "type": "number"
+                    "type": "float"
                 }
             },
             "id": "sw-106",

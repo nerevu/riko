@@ -32,7 +32,7 @@ DEF_CUR_CODE = "USD"
 def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
     return SimpleMathRawConf(
         {
-            "other": {"subkey": other, "type": "number"},
+            "other": {"subkey": other, "type": "float"},
             "op": {"value": op, "type": "text"},
         }
     )

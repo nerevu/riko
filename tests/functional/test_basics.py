@@ -660,7 +660,7 @@ class TestBasics:
                 "location",
                 "isle of wight, uk",
             ),
-            ("", "numberinput1", "numberinput1", "number", "12121"),
+            ("", "numberinput1", "numberinput1", "float", "12121"),
             ("", "privateinput1", "privateinput1", "text", ""),
             (
                 "",
@@ -692,7 +692,7 @@ class TestBasics:
         inputs = [
             ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
             ("", "locationinput1", "locationinput1", "location", "isle of wight, uk"),
-            ("", "numberinput1", "numberinput1", "number", "12121"),
+            ("", "numberinput1", "numberinput1", "float", "12121"),
             ("", "privateinput1", "privateinput1", "text", ""),
             (
                 "",

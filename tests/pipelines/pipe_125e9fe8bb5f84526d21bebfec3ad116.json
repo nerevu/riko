@@ -164,7 +164,7 @@
                     "value": "textinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {

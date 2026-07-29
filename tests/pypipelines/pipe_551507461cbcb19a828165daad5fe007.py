@@ -39,7 +39,7 @@ def pipe_551507461cbcb19a828165daad5fe007(
                         "value": "file://riko/data/www.bbc.co.uk_news.html",
                     },
                     "name": {"type": "text", "value": "urlinput1"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {"type": "text", "value": "Enter a URL"},
                 }
             ),
@@ -53,7 +53,7 @@ def pipe_551507461cbcb19a828165daad5fe007(
         )
         sw_246 = truncate(
             sw_234,
-            conf=TruncateRawConf({"count": {"type": "number", "value": "5"}}),
+            conf=TruncateRawConf({"count": {"type": "float", "value": "5"}}),
             context=context,
         )
         _OUTPUT = sw_246

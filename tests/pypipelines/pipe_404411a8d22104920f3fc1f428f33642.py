@@ -45,7 +45,7 @@ def pipe_404411a8d22104920f3fc1f428f33642(
         )
         sw_583 = truncate(
             sw_502,
-            conf=TruncateRawConf({"count": {"terminal": "count", "type": "number"}}),
+            conf=TruncateRawConf({"count": {"terminal": "count", "type": "float"}}),
             context=context,
             count=sw_569,
         )

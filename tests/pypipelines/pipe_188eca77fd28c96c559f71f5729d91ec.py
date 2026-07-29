@@ -74,7 +74,7 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
         )
         sw_287 = truncate(
             sw_111,
-            conf=TruncateRawConf({"count": {"type": "number", "value": "100"}}),
+            conf=TruncateRawConf({"count": {"type": "float", "value": "100"}}),
             context=context,
         )
         _OUTPUT = sw_287

@@ -25,7 +25,7 @@ def pipe_bd0834cfe6cdacb0bea5569505d330b8(
                     "debug": {"type": "text", "value": ""},
                     "default": {"type": "text", "value": "1276"},
                     "name": {"type": "text", "value": "gid"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {"type": "text", "value": "MP Guardian ID"},
                 }
             ),

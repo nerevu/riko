@@ -76,7 +76,7 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(
         )
         sw_596 = truncate(
             sw_565,
-            conf=TruncateRawConf({"count": {"type": "number", "value": "3"}}),
+            conf=TruncateRawConf({"count": {"type": "float", "value": "3"}}),
             context=context,
         )
         sw_625 = reverse(sw_596, conf={}, context=context)

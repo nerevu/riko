@@ -47,7 +47,7 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
                         "value": "file://riko/data/rsc-ne-scotland.org.uk_mashe_ititle_xml_jisc10bean.xml",
                     },
                     "name": {"type": "text", "value": "url"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {"type": "text", "value": "Caption URL"},
                 }
             ),
@@ -60,7 +60,7 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
                     "debug": {"type": "text", "value": ""},
                     "default": {"type": "text", "value": "maverick"},
                     "name": {"type": "text", "value": "q"},
-                    "position": {"type": "number", "value": ""},
+                    "position": {"type": "float", "value": ""},
                     "prompt": {"type": "text", "value": "Caption search term"},
                 }
             ),
