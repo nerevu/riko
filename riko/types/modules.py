@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from riko.cast import CastType, LocationType, SortableCastType
-    from riko.types.compile import PipeModule
+    from riko.types.compile import EmbeddedModule, PipeModule
     from riko.types.general import Function
     from riko.types.values import BasicValue
 
@@ -92,6 +92,11 @@ ModuleName = Literal[
 class ConfArg(TypedDict):
     type: str
     value: int | str | bool
+
+
+class CountArg(TypedDict):
+    type: Literal["text"]
+    value: Literal["first", "all"]
 
 
 class Terminal(TypedDict):
@@ -193,22 +198,13 @@ class RssItemBuilderRawConf(TypedDict, total=False):
     title: Value
 
 
-class EmbeddedModule(TypedDict):
-    id: str
-    type: ModuleName
-    conf: "AnyModuleRawConf"
-    assign: NotRequired[ConfArg]
-    emit: NotRequired[ConfArg]
-    field: NotRequired[ConfArg]
-
-
 class Embed(TypedDict):
     type: Literal["module"]
-    value: EmbeddedModule
+    value: "EmbeddedModule"
 
 
 class LoopRawConf(TypedDict):
-    count: Value
+    count: CountArg
     embed: Embed
 
 
@@ -643,7 +639,7 @@ class RssItemBuilderConf(TypedDict, total=False):
 class LoopConf(TypedDict):
     count: str
     assign: str
-    embed: EmbeddedModule
+    embed: "EmbeddedModule"
     field: str
 
 

@@ -24,6 +24,10 @@ class PipeModule(TypedDict):
     field: NotRequired[ConfArg]
 
 
+class EmbeddedModule(PipeModule):
+    """The legacy nested submodule descriptor (``conf.embed.value``)."""
+
+
 class AbbrevStringModule(TypedDict):
     alias: str
     name: str

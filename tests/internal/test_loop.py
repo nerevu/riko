@@ -17,11 +17,11 @@ from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import pipe as tokenizer
+from riko.types.compile import EmbeddedModule
 from riko.types.modules import (
     AnyModuleRawConf,
     ConfArg,
     Embed,
-    EmbeddedModule,
     LoopRawConf,
     ModuleName,
     RegexRawConf,
