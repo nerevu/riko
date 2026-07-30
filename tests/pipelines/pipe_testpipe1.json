@@ -24,7 +24,7 @@
     ],
     "modules": [
         {
-            "conf": [],
+            "conf": null,
             "id": "_OUTPUT",
             "type": "output"
         },

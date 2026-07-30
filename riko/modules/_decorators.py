@@ -969,7 +969,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             assign: str | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
-            embed: ProcessorWrapper | None = None,
+            embed: AsyncProcessorWrapper | None = None,
             **kwargs: bool,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)
@@ -1017,7 +1017,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             assign: str | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
-            embed: ProcessorWrapper | None = None,
+            embed: SyncProcessorWrapper | None = None,
             **kwargs: bool,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)
@@ -1056,7 +1056,11 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
             yield from processed
 
-        wrapper = wraps(pipe)(async_wrapper if self.isasync else sync_wrapper)
+        if self.isasync:
+            wrapper = wraps(pipe)(async_wrapper)
+        else:
+            wrapper = wraps(pipe)(sync_wrapper)
+
         self._set_wrapper_metadata(wrapper, pipe)
         return cast(OperatorWrapper, wrapper)
 

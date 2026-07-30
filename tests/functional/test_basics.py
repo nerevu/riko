@@ -19,6 +19,7 @@ from riko import Context, ExecutionMode, listize
 from riko.bado import issync, run
 from riko.compile import _resolve_module, abuild_pipeline, build_pipeline
 from riko.exceptions import UnsupportedModuleError
+from riko.parsers import IS_LXML
 from riko.types.general import (
     AsyncPipelineDependencies,
     AsyncPipeParser,
@@ -29,13 +30,6 @@ from riko.types.general import (
 )
 from riko.types.values import FeedParserRSSEntry, StatefulItem
 from riko.utils import augment_entries, extract_dependencies, truncate_content
-
-try:
-    import lxml as _lxml  # noqa: F401
-
-    _has_lxml = True
-except ImportError:
-    _has_lxml = False
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 PARENT = Path(__file__).parent.parent
@@ -445,7 +439,7 @@ class TestBasics:
         item = cast(dict, items[0])
         assert item["title"].startswith("Running “Native” Data Wrangling Applicati")
 
-    @pytest.mark.skipif(not _has_lxml, reason="lxml not installed")
+    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
     def test_feed(self):
         """
         Loads a simple test pipeline and compiles and executes it to check
@@ -484,7 +478,7 @@ class TestBasics:
         item = cast(dict, items[0])
         assert item["title"].startswith("Running “Native” Data Wrangling Applicat")
 
-    @pytest.mark.skipif(not _has_lxml, reason="lxml not installed")
+    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
     def test_european_performance_cars(self):
         """Loads a pipeline containing a sort"""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
@@ -835,7 +829,7 @@ class TestBasics:
             f'<img src="{chart_url}" alt="QRcode" /><br/>'
         )
 
-    @pytest.mark.skipif(not _has_lxml, reason="lxml not installed")
+    @pytest.mark.skipif(not IS_LXML, reason="lxml not installed")
     def test_createrss(self):
         """
         Loads a pipeline containing rssitembuilder

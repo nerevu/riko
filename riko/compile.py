@@ -284,7 +284,7 @@ def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
     used = set()
 
     for module in parsed_pipe_def["modules"].values():
-        conf = module["conf"] or {}
+        conf = module["conf"]
 
         if _get_sources(conf) is not None:
             continue
@@ -293,7 +293,7 @@ def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
             used.add(raw)
 
         if (
-            (embed := cast(LoopRawConf, conf).get("embed"))
+            (embed := cast(LoopRawConf, conf or {}).get("embed"))
             and (embed_type := embed.get("value", {}).get("type"))
             and (embed_raw := _RAW_CONFS.get(embed_type))
         ):

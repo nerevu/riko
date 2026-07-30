@@ -1,14 +1,8 @@
 import pytest
 
 from riko.bado import issync
+from riko.parsers import IS_LXML
 from riko.utils import reset_pubsub
-
-try:
-    import lxml as _lxml  # noqa: F401
-
-    _has_lxml = True
-except ImportError:
-    _has_lxml = False
 
 
 @pytest.fixture(autouse=True)
@@ -36,5 +30,5 @@ def pytest_collection_modifyitems(items):
 
         if issync and ("async" in name or name in _TWISTED_ONLY_DOCTESTS):
             item.add_marker(skip_async)
-        elif not _has_lxml and "xpathfetchpage" in name:
+        elif not IS_LXML and "xpathfetchpage" in name:
             item.add_marker(skip_lxml)
