@@ -7,12 +7,11 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.rssitembuilder import pipe as rssitembuilder
 from riko.modules.union import pipe as union
-from riko.types.general import Conf
 from riko.types.modules import ItemBuilderRawConf, LoopRawConf, RssItemBuilderRawConf
 
 
 def pipe_1166de33b0ea6936d96808717355beaa(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -20,7 +19,7 @@ def pipe_1166de33b0ea6936d96808717355beaa(
         _OUTPUT = ["itembuilder", "loop", "rssitembuilder", "union"]
     else:
         sw_569 = itembuilder(
-            None,
+            item,
             conf=ItemBuilderRawConf(
                 {
                     "attrs": [

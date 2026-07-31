@@ -6,12 +6,11 @@ from riko import Context
 from riko.modules.count import pipe as count
 from riko.modules.fetch import pipe as fetch
 from riko.modules.truncate import pipe as truncate
-from riko.types.general import Conf
 from riko.types.modules import CountRawConf, FetchRawConf, TruncateRawConf
 
 
 def pipe_404411a8d22104920f3fc1f428f33642(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -19,7 +18,7 @@ def pipe_404411a8d22104920f3fc1f428f33642(
         _OUTPUT = ["count", "fetch", "truncate"]
     else:
         sw_561 = fetch(
-            None,
+            item,
             conf=FetchRawConf(
                 {
                     "url": {

@@ -9,7 +9,6 @@ from riko.modules.input import pipe as _input
 from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
-from riko.types.general import Conf
 from riko.types.modules import (
     FetchDataRawConf,
     FilterRawConf,
@@ -21,7 +20,7 @@ from riko.types.modules import (
 
 
 def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = [
@@ -38,7 +37,7 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
         _OUTPUT = ["fetchdata", "filter", "input", "loop"]
     else:
         sw_521 = _input(
-            None,
+            item,
             conf=InputRawConf(
                 {
                     "debug": {"type": "url", "value": ""},

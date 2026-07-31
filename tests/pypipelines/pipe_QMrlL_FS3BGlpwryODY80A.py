@@ -9,7 +9,6 @@ from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.split import pipe as split
 from riko.modules.union import pipe as union
-from riko.types.general import Conf
 from riko.types.modules import (
     FetchRawConf,
     FilterRawConf,
@@ -19,16 +18,14 @@ from riko.types.modules import (
 )
 
 
-def pipe_QMrlL_FS3BGlpwryODY80A(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_QMrlL_FS3BGlpwryODY80A(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
         _OUTPUT = ["fetch", "filter", "loop", "split", "union"]
     else:
         sw_140 = fetch(
-            None,
+            item,
             conf=FetchRawConf(
                 {
                     "url": {

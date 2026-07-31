@@ -6,12 +6,11 @@ from riko import Context
 from riko.modules.fetchsitefeed import pipe as fetchsitefeed
 from riko.modules.input import pipe as _input
 from riko.modules.truncate import pipe as truncate
-from riko.types.general import Conf
 from riko.types.modules import FetchSiteFeedRawConf, InputRawConf, TruncateRawConf
 
 
 def pipe_551507461cbcb19a828165daad5fe007(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = [
@@ -27,7 +26,7 @@ def pipe_551507461cbcb19a828165daad5fe007(
         _OUTPUT = ["fetchsitefeed", "input", "truncate"]
     else:
         sw_242 = _input(
-            None,
+            item,
             conf=InputRawConf(
                 {
                     "debug": {

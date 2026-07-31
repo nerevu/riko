@@ -5,20 +5,17 @@
 from riko import Context
 from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
-from riko.types.general import Conf
 from riko.types.modules import FetchRawConf, FilterRawConf
 
 
-def pipe_testpipe1(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_testpipe1(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
         _OUTPUT = ["fetch", "filter"]
     else:
         sw_90 = fetch(
-            None,
+            item,
             conf=FetchRawConf(
                 {"url": {"type": "url", "value": "file://riko/data/feed.xml"}}
             ),

@@ -5,12 +5,11 @@
 from riko import Context
 from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.truncate import pipe as truncate
-from riko.types.general import Conf
 from riko.types.modules import FetchPageRawConf, TruncateRawConf
 
 
 def pipe_9420a757a49ddf11d8b98349abb5bcf4(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -18,7 +17,7 @@ def pipe_9420a757a49ddf11d8b98349abb5bcf4(
         _OUTPUT = ["fetchpage", "truncate"]
     else:
         sw_266 = fetchpage(
-            None,
+            item,
             conf=FetchPageRawConf(
                 {
                     "url": {

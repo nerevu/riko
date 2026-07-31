@@ -5,7 +5,7 @@ from pprint import pprint
 
 from riko import Context, get_path
 from riko.collections import SyncPipe
-from riko.types.general import Conf, SkipIf
+from riko.types.general import SkipIf
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
@@ -42,7 +42,7 @@ def make_substring(start: str | int, length: str | int) -> SubstrConf:
     return SubstrConf({"start": int(start), "length": int(length)})
 
 
-def make_exchangerate(quote: str = DEF_CUR_CODE, offline=True) -> ExchangeRateConf:
+def make_exchangerate(quote: str = DEF_CUR_CODE) -> ExchangeRateConf:
     return ExchangeRateConf({"currency": quote})
 
 
@@ -235,7 +235,7 @@ substring2_conf = make_substring("1", "1")
 currencyformat1_conf = CurrencyFormatRawConf(
     {"currency": {"subkey": "k:cur_code", "type": "text"}}
 )
-exchangerate_conf = make_exchangerate(DEF_CUR_CODE, True)
+exchangerate_conf = make_exchangerate(DEF_CUR_CODE)
 currencyformat2_conf = CurrencyFormatConf({"currency": DEF_CUR_CODE})
 simplemath1_conf = make_simplemath("k:budget_raw2_num", "mean")
 simplemath2_conf = make_simplemath("k:rate", "multiply")
@@ -348,9 +348,7 @@ def print_content(output):
     print("count", len(pipe))
 
 
-def pipe_kazeeki_full(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_kazeeki_full(context: Context | None = None, **_):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:

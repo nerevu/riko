@@ -6,13 +6,10 @@ from riko import Context
 from riko.collections import SyncCollection
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
-from riko.types.general import Conf
 from riko.types.modules import FilterRawConf, SortRawConf
 
 
-def pipe_8NMkiTW32xGvMbDKruymrA(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_8NMkiTW32xGvMbDKruymrA(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:

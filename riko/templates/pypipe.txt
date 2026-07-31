@@ -13,7 +13,6 @@ from riko.pypipelines.{{ module.name }} import {{ module.pipe_name }}
 from riko.modules.{{ module.name }} import pipe as {{ module.alias }}
 {%- endif %}
 {%- endfor %}
-from riko.types.general import Conf
 {%- if raw_confs %}
 from riko.types.modules import (
 {%- for raw_conf in raw_confs %}
@@ -23,7 +22,7 @@ from riko.types.modules import (
 {%- endif %}
 
 
-def {{ pipe_name }}(item=None, conf: Conf = None, context: Context | None = None, **kwargs):
+def {{ pipe_name }}(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         {{ last_module }} = {{ inputs }}
     elif context and context.describe_dependencies:

@@ -11,7 +11,6 @@ from riko.modules.rename import pipe as rename
 from riko.modules.sort import pipe as sort
 from riko.modules.union import pipe as union
 from riko.modules.uniq import pipe as uniq
-from riko.types.general import Conf
 from riko.types.modules import (
     FetchRawConf,
     FilterRawConf,
@@ -24,7 +23,7 @@ from riko.types.modules import (
 
 
 def pipe_6e30c269a69baf92cd420900b0645f88(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -32,7 +31,7 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
         _OUTPUT = ["fetch", "filter", "loop", "sort", "union", "uniq"]
     else:
         sw_233 = fetch(
-            None,
+            item,
             conf=FetchRawConf(
                 {
                     "url": {

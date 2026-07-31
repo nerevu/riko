@@ -4,12 +4,11 @@
 
 from riko import Context
 from riko.modules.fetch import pipe as fetch
-from riko.types.general import Conf
 from riko.types.modules import FetchRawConf
 
 
 def pipe_2de0e4517ed76082dcddf66f7b218057(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -17,7 +16,7 @@ def pipe_2de0e4517ed76082dcddf66f7b218057(
         _OUTPUT = ["fetch"]
     else:
         sw_478 = fetch(
-            None,
+            item,
             conf=FetchRawConf(
                 {
                     "url": {

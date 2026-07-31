@@ -7,9 +7,6 @@ from riko.types.modules import FetchRawConf, FilterRawConf, FilterRawRule
 
 
 def pipe_testpipe1(context=None, conf=None):
-    # todo: insert pipeline description here
-    conf = conf or {}
-
     if context and (context.describe_input or context.describe_dependencies):
         return []
 

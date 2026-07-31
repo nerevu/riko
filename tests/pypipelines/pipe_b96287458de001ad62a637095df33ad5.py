@@ -6,12 +6,11 @@ from riko import Context
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.union import pipe as union
-from riko.types.general import Conf
 from riko.types.modules import ItemBuilderRawConf, StrconcatRawConf
 
 
 def pipe_b96287458de001ad62a637095df33ad5(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -19,7 +18,7 @@ def pipe_b96287458de001ad62a637095df33ad5(
         _OUTPUT = ["itembuilder", "strconcat", "union"]
     else:
         sw_605 = strconcat(
-            None,
+            item,
             conf=StrconcatRawConf({"part": {"type": "text", "value": "extVal"}}),
             emit=True,
             context=context,

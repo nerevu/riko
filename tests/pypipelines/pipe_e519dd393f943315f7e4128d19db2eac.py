@@ -6,12 +6,11 @@ from riko import Context
 from riko.modules.fetch import pipe as fetch
 from riko.modules.input import pipe as _input
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.types.general import Conf
 from riko.types.modules import FetchRawConf, InputRawConf, UrlBuilderRawConf
 
 
 def pipe_e519dd393f943315f7e4128d19db2eac(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = [("", "q", "Search term:", "text", "enterprise mashup")]
@@ -19,7 +18,7 @@ def pipe_e519dd393f943315f7e4128d19db2eac(
         _OUTPUT = ["fetch", "input", "urlbuilder"]
     else:
         sw_552 = _input(
-            None,
+            item,
             conf=InputRawConf(
                 {
                     "debug": {"type": "text", "value": ""},

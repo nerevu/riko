@@ -8,7 +8,6 @@ from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.types.general import Conf
 from riko.types.modules import (
     FetchRawConf,
     LoopRawConf,
@@ -19,7 +18,7 @@ from riko.types.modules import (
 
 
 def pipe_e65397e116d7754da0dd23425f1f0af1(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -27,7 +26,7 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
         _OUTPUT = ["fetch", "loop"]
     else:
         sw_565 = fetch(
-            None,
+            item,
             conf=FetchRawConf(
                 {
                     "url": {

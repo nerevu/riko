@@ -4,12 +4,11 @@ from riko import Context
 from riko.modules.datebuilder import pipe as datebuilder
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.itembuilder import pipe as itembuilder
-from riko.types.general import Conf
 from riko.types.modules import DateFormatRawConf, ItemBuilderRawConf
 
 
 def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
         output = []

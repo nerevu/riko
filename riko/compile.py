@@ -340,6 +340,7 @@ def _gen_string_modules(
     zipped = zip(module_ids, module_names, pipe_names, strict=False)
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     split_ids = defaultdict(int)
+    checked = False
 
     for module_id, module_name, pipe_name in zipped:
         if module_id in parsed_pipe_def["embed"]:
@@ -348,6 +349,10 @@ def _gen_string_modules(
         args = (parsed_pipe_def, module_id)
         is_sub_pipe = module_name.startswith("pipe")
         pyarg = _get_pyarg(*args, split_ids=split_ids, steps=None, **kwargs)
+
+        if not checked:
+            pyarg = Id("item") if pyarg == Id(None) else pyarg
+            checked = True
 
         conf = parsed_pipe_def["modules"][module_id]["conf"]
         sources = _get_sources(conf)

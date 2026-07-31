@@ -8,7 +8,6 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.loop import pipe as loop
 from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
-from riko.types.general import Conf
 from riko.types.modules import (
     FeedAutoDiscoveryRawConf,
     FetchRawConf,
@@ -18,16 +17,14 @@ from riko.types.modules import (
 )
 
 
-def pipe_HrX5bjkv3BGEp9eSy6ky6g(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_HrX5bjkv3BGEp9eSy6ky6g(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
         _OUTPUT = ["feedautodiscovery", "loop", "sort", "truncate"]
     else:
         sw_149 = feedautodiscovery(
-            None,
+            item,
             conf=FeedAutoDiscoveryRawConf(
                 {"url": {"type": "url", "value": "file://riko/data/edition.cnn.html"}}
             ),

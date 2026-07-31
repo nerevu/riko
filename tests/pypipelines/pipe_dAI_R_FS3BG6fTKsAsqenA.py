@@ -7,7 +7,6 @@ from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.strconcat import pipe as strconcat
-from riko.types.general import Conf
 from riko.types.modules import (
     FetchDataRawConf,
     LoopRawConf,
@@ -16,16 +15,14 @@ from riko.types.modules import (
 )
 
 
-def pipe_dAI_R_FS3BG6fTKsAsqenA(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_dAI_R_FS3BG6fTKsAsqenA(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
         _OUTPUT = ["fetchdata", "loop"]
     else:
         sw_286 = fetchdata(
-            None,
+            item,
             conf=FetchDataRawConf(
                 {
                     "url": {

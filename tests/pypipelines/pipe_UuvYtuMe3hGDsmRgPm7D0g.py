@@ -9,7 +9,6 @@ from riko.modules.input import pipe as _input
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.strconcat import pipe as strconcat
-from riko.types.general import Conf
 from riko.types.modules import (
     CsvRawConf,
     FilterRawConf,
@@ -20,16 +19,14 @@ from riko.types.modules import (
 )
 
 
-def pipe_UuvYtuMe3hGDsmRgPm7D0g(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_UuvYtuMe3hGDsmRgPm7D0g(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = [("", "name", "Name", "text", "Lancaster")]
     elif context and context.describe_dependencies:
         _OUTPUT = ["csv", "filter", "input", "loop"]
     else:
         sw_371 = _input(
-            None,
+            item,
             conf=InputRawConf(
                 {
                     "debug": {"type": "text", "value": ""},

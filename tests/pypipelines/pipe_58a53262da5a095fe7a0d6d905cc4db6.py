@@ -10,7 +10,6 @@ from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
 from riko.modules.union import pipe as union
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.types.general import Conf
 from riko.types.modules import (
     FetchRawConf,
     SortRawConf,
@@ -20,7 +19,7 @@ from riko.types.modules import (
 
 
 def pipe_58a53262da5a095fe7a0d6d905cc4db6(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -28,7 +27,7 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(
         _OUTPUT = ["fetch", "reverse", "sort", "truncate", "union", "urlbuilder"]
     else:
         sw_606 = urlbuilder(
-            None,
+            item,
             conf=UrlBuilderRawConf(
                 {
                     "base": {

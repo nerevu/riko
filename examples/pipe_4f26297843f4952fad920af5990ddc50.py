@@ -5,12 +5,11 @@ from riko.modules.datebuilder import pipe as datebuilder
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.input import pipe as _input
 from riko.modules.itembuilder import pipe as itembuilder
-from riko.types.general import Conf
 from riko.types.modules import DateFormatRawConf, InputRawConf, ItemBuilderRawConf
 
 
 def pipe_4f26297843f4952fad920af5990ddc50(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         output = [

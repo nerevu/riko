@@ -4,12 +4,11 @@
 from riko import Context
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strreplace import pipe as strreplace
-from riko.types.general import Conf
 from riko.types.modules import ItemBuilderRawConf, StrReplaceRawConf, StrReplaceRawRule
 
 
 def pipe_679e2c544332e978b15b6b163767975f(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
         output = []

@@ -3,13 +3,10 @@
 from riko import Context
 from riko.bado import run
 from riko.collections import AsyncPipe
-from riko.types.general import Conf
 from tests.pypipelines._pipe_kazeeki import itembuilder_conf, regex_conf, rename_conf
 
 
-async def pipe_async_kazeeki2(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+async def pipe_async_kazeeki2(context: Context | None = None, **_):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:

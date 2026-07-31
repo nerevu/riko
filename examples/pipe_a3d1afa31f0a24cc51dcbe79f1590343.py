@@ -3,12 +3,11 @@
 from riko import Context
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.regex import pipe as regex
-from riko.types.general import Conf
 from riko.types.modules import ItemBuilderRawConf, RegexRawConf, RegexRawRule
 
 
 def pipe_a3d1afa31f0a24cc51dcbe79f1590343(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **kwargs
 ):
     if context and context.describe_input:
         output = []

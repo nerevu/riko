@@ -20,7 +20,7 @@ runnable module whose function is named after the pipe:
 ... }
 >>> source = compile(pipe_def, "pipe_demo")
 >>> print(next(line for line in source.splitlines() if line.startswith("def ")))
-def pipe_demo(item=None, conf: Conf = None, context: Context | None = None, **kwargs):
+def pipe_demo(item=None, context: Context | None = None, **_):
 """
 
 import sys

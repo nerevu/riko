@@ -5,20 +5,17 @@
 from riko import Context
 from riko.modules.input import pipe as _input
 from riko.modules.itembuilder import pipe as itembuilder
-from riko.types.general import Conf
 from riko.types.modules import InputRawConf, ItemBuilderRawConf
 
 
-def pipe_1LNyRuNS3BGdkTKaAsqenA(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_1LNyRuNS3BGdkTKaAsqenA(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
         _OUTPUT = ["input", "itembuilder"]
     else:
         sw_1 = _input(
-            None,
+            item,
             conf=InputRawConf(
                 {
                     "test": {"type": "bool", "value": "true"},

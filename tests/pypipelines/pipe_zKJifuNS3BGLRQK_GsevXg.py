@@ -8,7 +8,6 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.simplemath import pipe as simplemath
 from riko.modules.split import pipe as split
 from riko.modules.truncate import pipe as truncate
-from riko.types.general import Conf
 from riko.types.modules import (
     CountRawConf,
     FetchRawConf,
@@ -18,16 +17,14 @@ from riko.types.modules import (
 )
 
 
-def pipe_zKJifuNS3BGLRQK_GsevXg(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_zKJifuNS3BGLRQK_GsevXg(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
         _OUTPUT = ["count", "fetch", "simplemath", "split", "truncate"]
     else:
         sw_224 = fetch(
-            None,
+            item,
             conf=FetchRawConf(
                 {"url": {"type": "url", "value": "file://riko/data/TheEdTechie.xml"}}
             ),

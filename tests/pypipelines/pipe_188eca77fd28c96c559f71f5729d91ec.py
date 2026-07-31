@@ -7,7 +7,6 @@ from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.truncate import pipe as truncate
-from riko.types.general import Conf
 from riko.types.modules import (
     FetchPageRawConf,
     ItemBuilderRawConf,
@@ -17,7 +16,7 @@ from riko.types.modules import (
 
 
 def pipe_188eca77fd28c96c559f71f5729d91ec(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = []
@@ -25,7 +24,7 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
         _OUTPUT = ["itembuilder", "loop", "truncate"]
     else:
         sw_163 = itembuilder(
-            None,
+            item,
             conf=ItemBuilderRawConf(
                 {
                     "attrs": {

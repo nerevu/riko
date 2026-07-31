@@ -7,12 +7,11 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.input import pipe as _input
 from riko.modules.sort import pipe as sort
 from riko.modules.tail import pipe as tail
-from riko.types.general import Conf
 from riko.types.modules import FetchRawConf, InputRawConf, SortRawConf, TailRawConf
 
 
 def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = [
@@ -22,7 +21,7 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
         _OUTPUT = ["fetch", "input", "sort", "tail"]
     else:
         sw_123 = fetch(
-            None,
+            item,
             conf=FetchRawConf(
                 {
                     "url": {

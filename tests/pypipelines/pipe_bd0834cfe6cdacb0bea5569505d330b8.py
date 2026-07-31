@@ -6,12 +6,11 @@ from riko import Context
 from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.input import pipe as _input
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.types.general import Conf
 from riko.types.modules import FetchDataRawConf, InputRawConf, UrlBuilderRawConf
 
 
 def pipe_bd0834cfe6cdacb0bea5569505d330b8(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = [("", "gid", "MP Guardian ID", "text", "1276")]
@@ -19,7 +18,7 @@ def pipe_bd0834cfe6cdacb0bea5569505d330b8(
         _OUTPUT = ["fetchdata", "input", "urlbuilder"]
     else:
         sw_606 = _input(
-            None,
+            item,
             conf=InputRawConf(
                 {
                     "debug": {"type": "text", "value": ""},

@@ -10,7 +10,6 @@ from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.tokenizer import pipe as tokenizer
-from riko.types.general import Conf
 from riko.types.modules import (
     FilterRawConf,
     InputRawConf,
@@ -23,7 +22,7 @@ from riko.types.modules import (
 
 
 def pipe_975789b47f17690a21e89b10a702bcbd(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
         _OUTPUT = [
@@ -33,7 +32,7 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
         _OUTPUT = ["filter", "input", "itembuilder", "loop"]
     else:
         sw_417 = _input(
-            None,
+            item,
             conf=InputRawConf(
                 {
                     "debug": {"type": "text", "value": ""},
