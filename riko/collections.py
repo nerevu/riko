@@ -274,8 +274,8 @@ CONVERSION_FUNCS: dict[str, ConversionFunc] = {
     # 'ical': cv.records2ical,
     "json": cv.records2json,
     # 'kml': cv.records2kml,
-    "list": lambda items, **kw: list(items),
-    "tuple": lambda items, **kw: tuple(items),
+    "list": lambda items, **_: list(items),
+    "tuple": lambda items, **_: tuple(items),
 }
 
 if OFX is not None:
@@ -512,7 +512,7 @@ class SyncPipe(PyPipe):
             self.mapify: bool = self.loopable and self.source is not None
             self.parallelize: bool = self.parallel and self.mapify
         else:
-            self.pipe = lambda source, **kw: source
+            self.pipe = lambda source, **_: source
             self.pollable = self.loopable = self.mapify = self.parallelize = False
 
         if self.parallelize:
@@ -640,10 +640,7 @@ class SyncPipe(PyPipe):
         return self
 
     def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: object,
+        self, exc_type: type[BaseException] | None, *_: object
     ) -> Literal[False]:
         self._in_context = False
         self.close() if exc_type is None else self.terminate()
@@ -740,7 +737,7 @@ class PyCollection(_Lifecycle):
         conf: Conf = None,
         workers: int | None = None,
         parallel: bool = False,
-        **kwargs: object,
+        **_: object,
     ):
         self._state = PipeState.NEW
         self.parallel: bool = parallel
@@ -864,10 +861,7 @@ class SyncCollection(PyCollection):
         return self
 
     def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: object,
+        self, exc_type: type[BaseException] | None, *_: object
     ) -> Literal[False]:
         self._in_context = False
         self.close() if exc_type is None else self.terminate()
@@ -966,7 +960,7 @@ class AsyncPipe(PyPipe):
             self.loopable: bool = getattr(self.async_pipe, "loopable")  # noqa: B009
             self.mapify: bool = self.loopable
         else:
-            self.async_pipe = lambda source, **kw: async_return(source)
+            self.async_pipe = lambda source, **_: async_return(source)
             self.pollable = self.loopable = self.mapify = False
 
     def __getattr__(self, name: str) -> "AsyncPipe":
@@ -993,12 +987,7 @@ class AsyncPipe(PyPipe):
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: object,
-    ) -> bool:
+    async def __aexit__(self, *_: object) -> bool:
         await self.aclose()
         return False
 
@@ -1135,12 +1124,7 @@ class AsyncCollection(PyCollection):
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: object,
-    ) -> bool:
+    async def __aexit__(self, *_: object) -> bool:
         await self.aclose()
         return False
 

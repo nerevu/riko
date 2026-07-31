@@ -401,7 +401,7 @@ def opener(  # noqa: E704
     *,
     binary: Literal[True],
     timeout: float | None = None,
-    **kwargs: object,
+    **_: object,
 ) -> tuple[BytesIO, str | None]: ...
 @overload  # noqa: E302
 def opener(  # noqa: E704
@@ -414,7 +414,7 @@ def opener(  # noqa: E704
     *,
     binary: Literal[True],
     timeout: float | None = None,
-    **kwargs: object,
+    **_: object,
 ) -> tuple[RawIOBase, str | None]: ...
 @overload  # noqa: E302
 def opener(  # noqa: E704
@@ -426,7 +426,7 @@ def opener(  # noqa: E704
     offline: bool = ...,
     binary: Literal[False] = ...,
     timeout: float | None = None,
-    **kwargs: object,
+    **_: object,
 ) -> tuple[StringIO, str | None]: ...
 @overload  # noqa: E302
 def opener(  # noqa: E704
@@ -438,7 +438,7 @@ def opener(  # noqa: E704
     offline: bool = ...,
     binary: Literal[False] = ...,
     timeout: float | None = None,
-    **kwargs: object,
+    **_: object,
 ) -> tuple[StreamReader, str | None]: ...
 def opener(  # noqa: E302
     url: str,
@@ -449,7 +449,7 @@ def opener(  # noqa: E302
     offline: bool = True,
     binary: bool = False,
     timeout: float | None = None,
-    **kwargs: object,
+    **_: object,
 ) -> tuple[FileTypes, str | None]:
     params = params or {}
     url = get_abspath(url, offline=offline)

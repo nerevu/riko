@@ -6,7 +6,7 @@ from riko.modules.filter import pipe as _filter
 from riko.types.modules import FetchRawConf, FilterRawConf, FilterRawRule
 
 
-def pipe_testpipe1(context=None, conf=None):
+def pipe_testpipe1(context=None, **_):
     if context and (context.describe_input or context.describe_dependencies):
         return []
 
@@ -40,7 +40,7 @@ def pipe_testpipe1(context=None, conf=None):
 
 if __name__ == "__main__":
     context = Context()
-    pipeline = pipe_testpipe1(context, None)
+    pipeline = pipe_testpipe1(context)
 
     for i in pipeline:
         print(i)

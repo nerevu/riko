@@ -136,10 +136,10 @@ async def run_async(tests: list[AsyncPipeParser], max_chars: int) -> None:
     for test in tests:
         results = []
 
-        for _i in range(LOOPS):
+        for _ in range(LOOPS):
             loop = 0
 
-            for _j in range(NUMBER):
+            for _ in range(NUMBER):
                 start = time()
                 await test()
                 loop += time() - start
