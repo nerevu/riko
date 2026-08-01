@@ -17,9 +17,9 @@ from typing import Annotated, Any
 import pytest
 
 from riko.modules._inference import (
-    _gen_operator_return_kinds,
-    _infer_from_source,
+    gen_operator_return_kinds,
     gen_return_inferences,
+    infer_from_source,
 )
 from riko.types.modules import InferenceSource, OperatorReturnKind
 
@@ -183,14 +183,14 @@ def test_gen_operator_return_kinds_yields_bare_kinds():
     def pipe(items) -> Iterator[int] | int:
         return iter(items)
 
-    assert set(_gen_operator_return_kinds(pipe)) == {STREAM, NONSTREAM}
+    assert set(gen_operator_return_kinds(pipe)) == {STREAM, NONSTREAM}
 
 
 def test_infer_from_source_direct():
     def pipe(items):
         return sorted(items)
 
-    inference = _infer_from_source(pipe)
+    inference = infer_from_source(pipe)
     assert inference.kind is NONSTREAM
     assert inference.source is InferenceSource.AST
 

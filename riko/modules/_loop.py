@@ -19,7 +19,7 @@ import pygogo as gogo
 
 from riko.bado.itertools import async_map
 from riko.context import Context
-from riko.modules._assignment import _get_subpipe
+from riko.modules._assignment import get_subpipe
 from riko.types.general import (
     AsyncProcessorWrapper,
     Stream,
@@ -51,7 +51,7 @@ def loop_embed_sync(
     stream = source
 
     if embed and embed_type and embed.loopable:
-        embedder = _get_subpipe(embed, context, **embedded_kwargs)
+        embedder = get_subpipe(embed, context, **embedded_kwargs)
         stream = chain.from_iterable(map(embedder, source))
     elif embed_type:
         logger.error(f"{embed.name} is not loopable and can't be embedded.")
@@ -85,7 +85,7 @@ async def loop_embed_async_eager(
     stream = source
 
     if embed and embed_type and embed.loopable:
-        embedder = _get_subpipe(embed, context, **embedded_kwargs)
+        embedder = get_subpipe(embed, context, **embedded_kwargs)
         stream_map = await async_map(embedder, source)
         stream = chain.from_iterable(stream_map)
     elif embed_type:

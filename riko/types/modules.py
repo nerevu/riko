@@ -88,6 +88,8 @@ ModuleName = Literal[
     "urlbuilder",
 ]
 
+CountValues = Literal["first", "all"]
+
 
 class ConfArg(TypedDict):
     type: str
@@ -96,7 +98,7 @@ class ConfArg(TypedDict):
 
 class CountArg(TypedDict):
     type: Literal["text"]
-    value: Literal["first", "all"]
+    value: CountValues
 
 
 class Terminal(TypedDict):
@@ -637,7 +639,7 @@ class RssItemBuilderConf(TypedDict, total=False):
 
 
 class LoopConf(TypedDict):
-    count: str
+    count: CountValues
     assign: str
     embed: "EmbeddedModule"
     field: str

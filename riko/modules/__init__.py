@@ -15,21 +15,21 @@ from riko.cast import (
     cast_value,
 )
 from riko.dotdict import DotDict, is_mapping
-from riko.modules._assignment import _get_subpipe, gen_assignments, get_assignment
+from riko.modules._assignment import gen_assignments, get_assignment, get_subpipe
 from riko.modules._decorators import Module, operator, processor, splitter
-from riko.modules._inference import _gen_operator_return_kinds
+from riko.modules._inference import gen_operator_return_kinds
 from riko.modules._metadata import (
-    _derive_loopable,
-    _derive_subtypes,
+    derive_loopable,
+    derive_subtypes,
     gen_module_catalog,
     list_modules,
 )
 from riko.modules._prepare import (
     PreparedModule,
-    _dispatch,
     get_casters,
     get_parsers,
     get_pieces_or_conf,
+    parse_and_cast,
 )
 from riko.parsers import conf_is_dynamic, get_field, get_skip, parse_conf
 from riko.types.general import (
@@ -43,7 +43,6 @@ from riko.types.general import (
     CastFuncs,
     Conf,
     Defaults,
-    Dispatched,
     Item,
     ItemOrValue,
     ModuleWrapper,
@@ -113,7 +112,6 @@ __all__ = [
     "ConfValues",
     "Context",
     "Defaults",
-    "Dispatched",
     "DotDict",
     "DynamicConf",
     "Embed",
@@ -161,31 +159,31 @@ __all__ = [
     "SyncSplitterParser",
     "SyncSplitterWrapper",
     "ValueStream",
-    "_derive_loopable",
-    "_derive_subtypes",
-    "_dispatch",
-    "_gen_operator_return_kinds",
-    "_get_subpipe",
     "async_map",
     "broadcast",
     "cast_none",
     "cast_pass",
     "cast_value",
     "conf_is_dynamic",
+    "derive_loopable",
+    "derive_subtypes",
     "dispatch",
     "gen_assignments",
     "gen_module_catalog",
+    "gen_operator_return_kinds",
     "get_assignment",
     "get_casters",
     "get_field",
     "get_parsers",
     "get_pieces_or_conf",
     "get_skip",
+    "get_subpipe",
     "is_mapping",
     "list_modules",
     "listize",
     "objectify",
     "operator",
+    "parse_and_cast",
     "parse_conf",
     "parse_context",
     "processor",

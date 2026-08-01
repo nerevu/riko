@@ -88,7 +88,7 @@ class PreparedModule:
     static_casted: tuple[SyncArgFunc, Extraction, Conf] | None
 
 
-def _dispatch(
+def parse_and_cast(  # noqa: E302
     item: Item,
     opts: Opts,
     conf: Conf,

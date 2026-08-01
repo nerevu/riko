@@ -178,7 +178,7 @@ def _infer_expression_kind(
     return kind, reason
 
 
-def _infer_from_source(pipe: Callable) -> ReturnInference:
+def infer_from_source(pipe: Callable) -> ReturnInference:
     """
     Infer the return kind of a short, unannotated pipe from its source.
 
@@ -204,17 +204,20 @@ def _infer_from_source(pipe: Callable) -> ReturnInference:
     Examples:
         >>> def mapped(items):
         ...     return map(str, items)
-        >>> _infer_from_source(mapped)
+        >>>
+        >>> infer_from_source(mapped)
         ReturnInference(kind=<OperatorReturnKind.STREAM: 'stream'>, source=<InferenceSource.AST: 'ast'>, reason='')
 
         >>> def counted(items):
         ...     return sum(items)
-        >>> _infer_from_source(counted).kind.value
+        >>>
+        >>> infer_from_source(counted).kind.value
         'nonstream'
 
         >>> def ambiguous(items):
         ...     return build_result(items)
-        >>> inference = _infer_from_source(ambiguous)
+        >>>
+        >>> inference = infer_from_source(ambiguous)
         >>> inference.kind.value, inference.source
         ('unknown', None)
         >>> print(inference.reason)
@@ -293,9 +296,9 @@ def gen_return_inferences(pipe: Callable) -> Iterator[ReturnInference]:
                         OperatorReturnKind.NONSTREAM, InferenceSource.ANNOTATION
                     )
         else:
-            yield _infer_from_source(pipe)
+            yield infer_from_source(pipe)
 
 
-def _gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
+def gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
     for inference in gen_return_inferences(pipe):
         yield inference.kind

@@ -28,16 +28,13 @@ from riko.context import ExecutionMode
 from riko.dotdict import DotDict, is_mapping
 from riko.modules._assignment import gen_assignments, get_assignment
 from riko.modules._loop import loop_embed_async_eager, loop_embed_sync
-from riko.modules._metadata import (
-    _derive_loopable,
-    _derive_subtypes,
-)
+from riko.modules._metadata import derive_loopable, derive_subtypes
 from riko.modules._prepare import (
     PreparedModule,
-    _dispatch,
     get_casters,
     get_parsers,
     get_pieces_or_conf,
+    parse_and_cast,
 )
 from riko.parsers import get_field, get_skip
 from riko.types.general import (
@@ -153,11 +150,11 @@ class Module[B: (Literal[True], Literal[False])]:
             raise TypeError(f"Unsupported module type: {raw_type!r}")
 
         module_type = cast(ModuleType, raw_type)
-        subtype, subtypes = _derive_subtypes(
+        subtype, subtypes = derive_subtypes(
             cast(Pipeline, pipe), module_type, **self._opts
         )
         name = pipe.__module__.rsplit(".", 1)[-1]
-        loopable = _derive_loopable(name, module_type)
+        loopable = derive_loopable(name, module_type)
 
         setattr(wrapper, "name", name)  # noqa: B010
         setattr(wrapper, "type", module_type)  # noqa: B010
@@ -416,7 +413,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         else:
             conf = cast(Conf, prepared.conf.asdict())
             args = (_input, prepared.opts, conf)
-            orig_item, casted = _dispatch(
+            orig_item, casted = parse_and_cast(
                 *args,
                 parsers=prepared.parsers,
                 casters=prepared.casters,
@@ -808,7 +805,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         else:
             conf = cast(Conf, prepared.conf.asdict())
             _dispatcher = partial(
-                _dispatch,
+                parse_and_cast,
                 conf=conf,
                 parsers=prepared.parsers,
                 casters=prepared.casters,
@@ -1104,7 +1101,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         _stream = cast(Stream, _input)
         conf = cast(Conf, prepared.conf.asdict())
         _dispatcher = partial(
-            _dispatch,
+            parse_and_cast,
             conf=conf,
             parsers=prepared.parsers,
             casters=prepared.casters,

@@ -23,6 +23,7 @@ from riko import DynamicConf
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
     from riko.types.modules import (
+        CountValues,
         EmbeddedModule,
         FilterConfRule,
         FindConfRule,
@@ -80,7 +81,7 @@ class RssItemBuilderObjconf(DynamicConf):
 
 
 class LoopObjconf(DynamicConf):
-    count: str
+    count: CountValues
     assign: str
     embed: EmbeddedModule
     field: str

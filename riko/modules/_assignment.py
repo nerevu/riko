@@ -32,14 +32,14 @@ from riko.types.values import PrimitiveValue, RikoValue, StatefulItem
 
 
 @overload
-def _get_subpipe(  # noqa: E704
+def get_subpipe(  # noqa: E704
     embed: SyncProcessorWrapper, context: Context, **embedded_kwargs
 ) -> partial[ProcessorWrapperOutput]: ...
 @overload  # noqa: E302
-def _get_subpipe(  # noqa: E704
+def get_subpipe(  # noqa: E704
     embed: AsyncProcessorWrapper, context: Context, **embedded_kwargs
 ) -> partial[Awaitable[ProcessorWrapperOutput]]: ...
-def _get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
+def get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
     embed: ProcessorWrapper, context: Context, **embedded_kwargs
 ) -> partial[ProcessorWrapperOutput | Awaitable[ProcessorWrapperOutput]]:
     embed_context = copy(context)
