@@ -27,6 +27,7 @@ from riko.compile import (
 from riko.compile import compile as compile_pipe
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.types.compile import DagModule, PipeDag, PipeDef, PipeModule
+from riko.types.modules import ItemBuilderRawConf, Param, TruncateRawConf
 from riko.utils import listize
 
 PARENT = Path(__file__).parent.parent
@@ -42,7 +43,7 @@ FOREVER = PipeDef(
                 {
                     "id": "sw-2",
                     "type": "truncate",
-                    "conf": {"count": {"type": "float", "value": "2"}},
+                    "conf": TruncateRawConf({"count": {"type": "float", "value": "2"}}),
                 }
             ),
             PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
@@ -58,12 +59,16 @@ ITEMBUILDER = PipeDef(
                 {
                     "id": "sw-1",
                     "type": "itembuilder",
-                    "conf": {
-                        "attrs": {
-                            "key": {"type": "text", "value": "title"},
-                            "value": {"type": "text", "value": "hello"},
+                    "conf": ItemBuilderRawConf(
+                        {
+                            "attrs": Param(
+                                {
+                                    "key": {"type": "text", "value": "title"},
+                                    "value": {"type": "text", "value": "hello"},
+                                }
+                            )
                         }
-                    },
+                    ),
                 }
             ),
             PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),

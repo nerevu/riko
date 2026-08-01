@@ -638,10 +638,10 @@ class RssItemBuilderConf(TypedDict, total=False):
     title: str
 
 
-class LoopConf(TypedDict):
+class LoopConf(TypedDict, total=False):
+    embed: Required["PipeModule"]
     count: CountValues
     assign: str
-    embed: "EmbeddedModule"
     field: str
 
 

@@ -430,9 +430,8 @@ def _get_pyarg(  # noqa: E302
 
 
 def _is_default(wire: Wire, module_id: str, in_and_out: bool = False) -> bool:
-    default_out = get_module_id(wire, stem="tgt") == module_id and wire["src"][
-        "id"
-    ].startswith("_OUTPUT")
+    id_match = get_module_id(wire, stem="tgt") == module_id
+    default_out = id_match and wire["src"]["id"].startswith("_OUTPUT")
 
     if in_and_out:
         result = default_out and wire["tgt"]["id"] == "_INPUT"
@@ -492,9 +491,13 @@ def _gen_pykwargs(  # noqa: E302
         yield ("others", others)
 
     if module["type"] == "loop":
-        value = cast(LoopRawConf, module["conf"])["embed"]["value"]
-        pipe_id = pythonise(value["id"])
-        updated = Id(_module_alias(value["type"])) if steps is None else steps[pipe_id]
+        embedded_module = cast(LoopRawConf, module["conf"])["embed"]["value"]
+        pipe_id = pythonise(embedded_module["id"])
+        updated = (
+            Id(_module_alias(embedded_module["type"]))
+            if steps is None
+            else steps[pipe_id]
+        )
         yield ("embed", updated)
 
 

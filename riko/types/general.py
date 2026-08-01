@@ -27,6 +27,7 @@ from riko.types.values import (
     NumLike,
     PrimitiveValue,
     RikoDict,
+    RikoList,
     RikoValue,
     RSSEntry,
     StatefulItem,
@@ -37,7 +38,13 @@ if TYPE_CHECKING:
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
     from riko.dotdict import DotDict
-    from riko.types.modules import AnyConfRule, AnyModuleConf, AnyModuleRawConf, Skip
+    from riko.types.modules import (
+        AnyConfRule,
+        AnyModuleConf,
+        AnyModuleRawConf,
+        CountValues,
+        Skip,
+    )
     from riko.utils import Fetch
 
 T = TypeVar("T")
@@ -46,6 +53,7 @@ T = TypeVar("T")
 type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
 type ItemOrValue = Item | RikoValue
 type Items = Iterable[Item]
+type ItemsOrValues = Iterable[ItemOrValue]
 type ValueStream = Iterator[RikoValue]
 type Stream = Iterator[Item]
 type StreamOrValueStream = Iterator[ItemOrValue]
@@ -94,7 +102,7 @@ type FileTypes = (
     BinaryFileTypes | StringFileTypes | Fetch[Literal[True]] | Fetch[Literal[False]]
 )
 type Opener = Callable[[str], tuple[FileTypes, str | None]]
-type Conf = AnyModuleConf | AnyModuleRawConf | None
+type Conf = AnyModuleConf | AnyModuleRawConf
 
 
 class PreCaster(TypedDict):
@@ -154,7 +162,7 @@ class Opts(TypedDict, total=False):
     ftype: BasicCastType
     ptype: BasicCastType
     assign: str
-    count: Literal["first", "all"]
+    count: CountValues
     emit: bool
     extract: str
     field: str
@@ -169,21 +177,31 @@ class Opts(TypedDict, total=False):
 class Casted(NamedTuple):
     field: T
     extraction: Extraction
-    conf: Conf
+    conf: DynamicConf
 
 
-class Dispatched(NamedTuple):
-    item: DotDict[RikoValue]
+class ItemDispatch(NamedTuple):
+    item: Item | RikoDict
     casted: Casted
+
+
+class ValueDispatch(NamedTuple):
+    item: PrimitiveValue | RikoList
+    casted: Casted
+
+
+type ItemOrValueDispatch = ItemDispatch | ValueDispatch
 
 
 # Sync
 type SyncItemParseFunc = Callable[..., ItemOrValue]
 type SyncArgFunc = Callable[..., ItemOrValue]
-type SyncConfCastFunc = Callable[..., Conf]
-type SyncConfParseFunc = Callable[..., Conf | dict[str, Conf] | list[Conf] | None]
+type SyncConfCastFunc = Callable[..., DynamicConf]
+type SyncConfParseFunc = Callable[
+    ..., DynamicConf | dict[str, DynamicConf] | list[DynamicConf] | None
+]
 
-type SyncProcessorParser = Callable[[T, Extraction, Conf], ProcessorParserOutput]
+type SyncProcessorParser = Callable[[T, Extraction, DynamicConf], ProcessorParserOutput]
 type SyncOperatorParser = Callable[
     [Stream, Extraction, PipeTuples], OperatorParserOutput
 ]
@@ -212,30 +230,36 @@ class SyncProcessorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
-        conf: Conf = None,
+        conf: Conf | None = None,
         context: Context | None = None,
-        **kwargs: object,
-    ) -> ProcessorWrapperOutput: ...
+        **__: object,
+    ) -> ProcessorWrapperOutput:
+        _ = (item, conf, context)
+        return iter(())
 
 
 class SyncOperatorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: OperatorWrapperInput | None = None,
-        conf: Conf = None,
+        conf: Conf | None = None,
         embed: SyncProcessorWrapper | None = None,
         context: Context | None = None,
-        **kwargs: object,
-    ) -> OperatorWrapperOutput: ...
+        **__: object,
+    ) -> OperatorWrapperOutput:
+        _ = (items, conf, embed, context)
+        return iter(())
 
 
 class SyncSplitterWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: SplitterWrapperInput | None = None,
-        conf: Conf = None,
-        **kwargs: object,
-    ) -> SplitterWrapperOutput: ...
+        conf: Conf | None = None,
+        **__: object,
+    ) -> SplitterWrapperOutput:
+        _ = (items, conf)
+        return iter(())
 
 
 class ParseFuncs(NamedTuple):
@@ -251,7 +275,8 @@ class CastFuncs(NamedTuple):
 
 # Async
 type AsyncProcessorParser = Callable[
-    [T, Extraction, Conf], ProcessorParserOutput | Awaitable[ProcessorParserOutput]
+    [T, Extraction, DynamicConf],
+    ProcessorParserOutput | Awaitable[ProcessorParserOutput],
 ]
 type AsyncOperatorParser = Callable[
     [Stream, Extraction, PipeTuples],
@@ -270,33 +295,39 @@ type AsyncPyInput = Awaitable[list[str]]
 
 
 class AsyncProcessorWrapper(ModuleWrapper):
-    def __call__(  # noqa: E704
+    async def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
-        conf: Conf = None,
+        conf: Conf | None = None,
         context: Context | None = None,
-        **kwargs: object,
-    ) -> Awaitable[ProcessorWrapperOutput]: ...
+        **__: object,
+    ) -> ProcessorWrapperOutput:
+        _ = (item, conf, context)
+        return iter(())
 
 
 class AsyncOperatorWrapper(ModuleWrapper):
-    def __call__(  # noqa: E704
+    async def __call__(  # noqa: E704
         self,
         items: OperatorWrapperInput | None = None,
-        conf: Conf = None,
+        conf: Conf | None = None,
         embed: AsyncProcessorWrapper | None = None,
         context: Context | None = None,
-        **kwargs: object,
-    ) -> Awaitable[OperatorWrapperOutput]: ...
+        **__: object,
+    ) -> OperatorWrapperOutput:
+        _ = (items, conf, embed, context)
+        return iter(())
 
 
 class AsyncSplitterWrapper(ModuleWrapper):
-    def __call__(  # noqa: E704
+    async def __call__(  # noqa: E704
         self,
         items: SplitterWrapperInput | None = None,
-        conf: Conf = None,
-        **kwargs: object,
-    ) -> Awaitable[SplitterWrapperOutput]: ...
+        conf: Conf | None = None,
+        **__: object,
+    ) -> SplitterWrapperOutput:
+        _ = (items, conf)
+        return iter(())
 
 
 # Both

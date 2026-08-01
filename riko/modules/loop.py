@@ -108,10 +108,11 @@ Scenarios:
         ... }
         >>> item = {"title": "a b c"}
         >>> list(pipe([item], embed=tokenizer, conf=conf, assign="first", emit=False))
-        [{'first': {'content': 'a'}}]
+        [{'title': 'a b c', 'first': {'content': 'a'}}]
 
-       Swapping ``count`` to ``"all"`` keeps every result instead (one output
-       item per token). This is exactly the shape used by real pipelines that
+       The source item is preserved and the kept result is stored under
+       ``assign`` (Phase 2 per-parent fold). Swapping ``count`` to ``"all"`` keeps
+       every result instead — one preserved-parent copy per token. This is exactly the shape used by real pipelines that
        loop ``fetchdata`` to attach a lookup: ``assign="info"``, ``emit=False``,
        ``count="first"`` stores the first fetched record at ``item["info"]``.
 

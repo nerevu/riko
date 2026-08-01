@@ -15,17 +15,24 @@ class LayoutItem(TypedDict):
     xy: tuple[int, int]
 
 
-class PipeModule(TypedDict):
+class EmbedRef(TypedDict):
     id: str
     type: ModuleName
     conf: AnyModuleRawConf
-    emit: NotRequired[ConfArg]
-    assign: NotRequired[ConfArg]
-    field: NotRequired[ConfArg]
 
 
-class EmbeddedModule(PipeModule):
+class PipeModule(EmbedRef, total=False):
+    emit: bool
+    assign: str
+    field: str
+
+
+class EmbeddedModule(EmbedRef, total=False):
     """The legacy nested submodule descriptor (``conf.embed.value``)."""
+
+    emit: ConfArg
+    assign: ConfArg
+    field: ConfArg
 
 
 class AbbrevStringModule(TypedDict):

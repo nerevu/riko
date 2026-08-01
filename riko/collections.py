@@ -353,7 +353,7 @@ class PyPipe(_Lifecycle):
         source: AsyncItems | Awaitable[Items] | Items | None = None,
         *,
         assign: str | None = None,
-        conf: Conf = None,
+        conf: Conf | None = None,
         context: Context | None = None,
         field: str | None = None,
         func: Function | None = None,
@@ -405,7 +405,7 @@ class PyPipe(_Lifecycle):
     def __call__(
         self,
         context: Context | None = None,
-        conf: Conf = None,
+        conf: Conf | None = None,
         *,
         assign: str | None = None,
         field: str | None = None,
@@ -490,10 +490,11 @@ class SyncPipe(PyPipe):
         self.ordered = ordered
         self._iter: Generator[Item, None, None] | None = None
         self._mapped: Iterable[Stream] | None = None
-        self.map: Callable[..., Iterable[Stream]]
         self._in_context: bool = False
         self._terminal: bool = True
-        self.source: Item = cast(Item, self.source)
+        self.source: Items = cast(Items, self.source)
+
+        self.map: Callable[..., Iterable[Stream]]
 
         if pool_scope not in {"stage", "pipeline"}:
             raise ValueError("pool_scope must be either 'stage' or 'pipeline'")
@@ -734,7 +735,7 @@ class PyCollection(_Lifecycle):
         self,
         sources: Iterable[Mapping[str, str]],
         *,
-        conf: Conf = None,
+        conf: Conf | None = None,
         workers: int | None = None,
         parallel: bool = False,
         **_: object,
@@ -764,7 +765,7 @@ class SyncCollection(PyCollection):
         self,
         sources: Iterable[Mapping[str, str]],
         *,
-        conf: Conf = None,
+        conf: Conf | None = None,
         workers: int | None = None,
         parallel: bool = False,
         threads: bool | None = True,
@@ -1094,7 +1095,7 @@ class AsyncCollection(PyCollection):
         self,
         sources: Iterable[Mapping[str, str]],
         *,
-        conf: Conf = None,
+        conf: Conf | None = None,
         workers: int | None = None,
         parallel: bool = False,
         connections: int = 16,

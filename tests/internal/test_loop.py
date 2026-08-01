@@ -100,7 +100,7 @@ class TestLoopCharacterization:
             {"content": "d"},
         ]
 
-    def test_loop_count_first_is_global_current_behavior(self):
+    def test_loop_count_first_per_parent(self):
         conf = LoopRawConf(
             {
                 "count": {"type": "text", "value": "first"},
@@ -108,11 +108,10 @@ class TestLoopCharacterization:
             }
         )
         result = list(loop(iter(PARENTS), embed=tokenizer, conf=conf))
-        # Current: count="first" applies once to the *flattened* stream.
-        # Phase 2 target: per-parent first -> [{"content": "a"}, {"content": "c"}]
-        assert result == [{"content": "a"}]
+        # Phase 2: count="first" keeps the first result *per parent*.
+        assert result == [{"content": "a"}, {"content": "c"}]
 
-    def test_loop_assign_count_first_drops_parent_current_behavior(self):
+    def test_loop_assign_count_first_preserves_parent(self):
         conf = LoopRawConf(
             {
                 "count": {"type": "text", "value": "first"},
@@ -122,14 +121,13 @@ class TestLoopCharacterization:
         result = list(
             loop(iter(PARENTS), embed=tokenizer, conf=conf, assign="first", emit=False)
         )
-        # Current: assign folds onto an empty dict (parent lost) and count is
-        # global, so only one item survives.
-        # Phase 2 target:
-        #   [{"title": "a b", "first": {"content": "a"}},
-        #    {"title": "c d", "first": {"content": "c"}}]
-        assert result == [{"first": {"content": "a"}}]
+        # Phase 2: the first result per parent is assigned onto the preserved parent.
+        assert result == [
+            {"title": "a b", "first": {"content": "a"}},
+            {"title": "c d", "first": {"content": "c"}},
+        ]
 
-    def test_loop_assign_count_all_drops_parent_current_behavior(self):
+    def test_loop_assign_count_all_preserves_parent(self):
         conf = LoopRawConf(
             {
                 "count": {"type": "text", "value": "all"},
@@ -139,18 +137,15 @@ class TestLoopCharacterization:
         result = list(
             loop(iter(PARENTS), embed=tokenizer, conf=conf, assign="x", emit=False)
         )
-        # Current: every child result becomes {"x": ...} with no parent.
-        # Phase 2 target: one parent copy per result, e.g.
-        #   [{"title": "a b", "x": {"content": "a"}},
-        #    {"title": "a b", "x": {"content": "b"}}, ...]
+        # Phase 2: one preserved-parent copy per child result.
         assert result == [
-            {"x": {"content": "a"}},
-            {"x": {"content": "b"}},
-            {"x": {"content": "c"}},
-            {"x": {"content": "d"}},
+            {"title": "a b", "x": {"content": "a"}},
+            {"title": "a b", "x": {"content": "b"}},
+            {"title": "c d", "x": {"content": "c"}},
+            {"title": "c d", "x": {"content": "d"}},
         ]
 
-    def test_loop_level_field_is_dropped_current_behavior(self):
+    def test_loop_level_field_selects_child_input(self):
         conf = LoopRawConf(
             {
                 "count": {"type": "text", "value": "all"},
@@ -164,10 +159,14 @@ class TestLoopCharacterization:
             }
         )
         result = list(loop(iter(PARENTS), embed=tokenizer, conf=conf, field="title"))
-        # Current: loop-level `field` is not forwarded to the embed, so the
-        # tokenizer gets no field and yields nothing.
-        # Phase 2 target: field selects child input -> a, b, c, d
-        assert result == []
+        # Phase 2: loop-level `field` is forwarded to the embed (no embed field
+        # needed), so the tokenizer operates on parent["title"].
+        assert result == [
+            {"content": "a"},
+            {"content": "b"},
+            {"content": "c"},
+            {"content": "d"},
+        ]
 
     def test_loop_embed_level_field_current_behavior(self):
         conf = LoopRawConf(

@@ -1382,8 +1382,8 @@ def gen_modules(  # noqa: E302
     for module in listize(pipe_def["modules"]):
         if embedded and module["type"] == "loop":
             conf = cast(LoopRawConf, module["conf"])
-            embed = conf["embed"]["value"]
-            yield (pythonise(embed["id"]), embed)
+            embedded_module = conf["embed"]["value"]
+            yield (pythonise(embedded_module["id"]), embedded_module)
         elif not embedded:
             yield (pythonise(module["id"]), module)
 
@@ -1408,8 +1408,8 @@ def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
         # make the loop dependent on its embedded module
         if module["type"] == "loop":
             conf = cast(LoopRawConf, module["conf"])
-            embed = conf["embed"]["value"]
-            yield (pythonise(embed["id"]), [module_id])
+            embedded_module = conf["embed"]["value"]
+            yield (pythonise(embedded_module["id"]), [module_id])
 
 
 def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:

@@ -10,11 +10,11 @@ conf into the callables a wrapper applies to each item.
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import cast
+from typing import cast, overload
 
 import pygogo as gogo
 
-from riko import listize, objectify
+from riko import DynamicConf, listize, objectify
 from riko.cast import (
     CAST_SWITCH,
     BasicCastType,
@@ -30,16 +30,19 @@ from riko.types.general import (
     CastFuncs,
     Conf,
     Defaults,
-    Dispatched,
     Extraction,
     Item,
+    ItemDispatch,
+    ItemOrValue,
+    ItemOrValueDispatch,
     Opts,
     ParseFuncs,
     ParserOutput,
     SyncArgFunc,
     SyncConfCastFunc,
+    ValueDispatch,
 )
-from riko.types.values import BasicReturn, RikoValue
+from riko.types.values import BasicReturn, PrimitiveValue, RikoDict, RikoList, RikoValue
 from riko.utils import broadcast, dispatch
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -78,26 +81,48 @@ def get_pieces_or_conf(
 @dataclass(frozen=True)
 class PreparedModule:
     name: str
-    conf: DotDict[RikoValue]
+    conf: DynamicConf
     opts: Opts
     parsers: ParseFuncs
     casters: CastFuncs | None
     assign: str
     emit: bool | Callable[[ParserOutput], bool] | None
     is_source: bool
-    static_casted: tuple[SyncArgFunc, Extraction, Conf] | None
+    static_casted: tuple[SyncArgFunc, Extraction, DynamicConf] | None
 
 
-def parse_and_cast(  # noqa: E302
-    item: Item,
+@overload
+def parse_and_cast(  # noqa: E704
+    item: Item | RikoDict | DotDict[RikoValue],
     opts: Opts,
-    conf: Conf,
+    conf: DynamicConf,
+    parsers: ParseFuncs | None = ...,
+    casters: CastFuncs | None = ...,
+    defaults: Defaults | None = ...,
+    field: str | None = ...,
+    **kwargs: object,
+) -> ItemDispatch: ...
+@overload  # noqa: E302
+def parse_and_cast(  # noqa: E704
+    item: PrimitiveValue | RikoList,
+    opts: Opts,
+    conf: DynamicConf,
+    parsers: ParseFuncs | None = ...,
+    casters: CastFuncs | None = ...,
+    defaults: Defaults | None = ...,
+    field: str | None = ...,
+    **kwargs: object,
+) -> ValueDispatch: ...
+def parse_and_cast(  # noqa: E302
+    item: ItemOrValue,
+    opts: Opts,
+    conf: DynamicConf,
     parsers: ParseFuncs | None = None,
     casters: CastFuncs | None = None,
     defaults: Defaults | None = None,
     field: str | None = None,
     **kwargs: object,
-) -> Dispatched:
+) -> ItemOrValueDispatch:
     defaults = defaults or Defaults({})
     field = field or opts.get("field")
 
@@ -109,13 +134,17 @@ def parse_and_cast(  # noqa: E302
     pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
-    conf = cast(Conf, casted[2])
-    return Dispatched(cast(DotDict, item), Casted(casted[0], casted[1], conf))
+    _conf = cast(DynamicConf, casted[2])
+
+    if is_mapping(item):
+        dispatched = ItemDispatch(item, Casted(casted[0], casted[1], _conf))
+    else:
+        dispatched = ValueDispatch(item, Casted(casted[0], casted[1], _conf))
+
+    return dispatched
 
 
-def get_parsers(opts: Opts, conf: Conf, **kwargs: bool) -> ParseFuncs:
-    conf = conf or {}
-
+def get_parsers(opts: Opts, conf: DynamicConf, **kwargs: bool) -> ParseFuncs:
     if opts.get("ftype") == BasicCastType.NONE:
         field_parser = cast_none
     else:

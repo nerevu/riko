@@ -7,45 +7,80 @@ decides whether a parser result is a single value or a stream and how it is
 assigned onto the item.
 """
 
-from collections.abc import Awaitable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from copy import copy
 from functools import partial
 from itertools import chain, islice
+from logging import Logger
 from typing import Literal, cast, overload
 
+import pygogo as gogo
+
+from riko import DynamicConf
 from riko.context import Context
 from riko.dotdict import DotDict
+from riko.types.compile import PipeModule
 from riko.types.general import (
     AsyncProcessorWrapper,
     Item,
     OperatorParserOutput,
+    OperatorWrapperInput,
     ProcessorParserOutput,
     ProcessorWrapper,
+    ProcessorWrapperInput,
     ProcessorWrapperOutput,
     Stream,
     StreamOrValueStream,
     SyncProcessorWrapper,
     ValueStream,
 )
-from riko.types.modules import ConfValues
 from riko.types.values import PrimitiveValue, RikoValue, StatefulItem
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @overload
 def get_subpipe(  # noqa: E704
-    embed: SyncProcessorWrapper, context: Context, **embedded_kwargs
+    embed: SyncProcessorWrapper,
+    context: Context,
+    embedded_kwargs: PipeModule | None = ...,
+    field: str | None = ...,
 ) -> partial[ProcessorWrapperOutput]: ...
 @overload  # noqa: E302
 def get_subpipe(  # noqa: E704
-    embed: AsyncProcessorWrapper, context: Context, **embedded_kwargs
+    embed: AsyncProcessorWrapper,
+    context: Context,
+    embedded_kwargs: PipeModule | None = ...,
+    field: str | None = ...,
 ) -> partial[Awaitable[ProcessorWrapperOutput]]: ...
 def get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
-    embed: ProcessorWrapper, context: Context, **embedded_kwargs
-) -> partial[ProcessorWrapperOutput | Awaitable[ProcessorWrapperOutput]]:
+    embed: ProcessorWrapper,
+    context: Context,
+    embedded_kwargs: PipeModule | None = None,
+    field: str | None = None,
+) -> Callable[
+    [ProcessorWrapperInput], ProcessorWrapperOutput | Awaitable[ProcessorWrapperOutput]
+]:
+    if embedded_kwargs and "field" in embedded_kwargs:
+        embed_field = embedded_kwargs["field"]
+
+        if embed_field and field is not None and embed_field != field:
+            logger.warning(f"Loop {field=} overrides {embed_field=}.")
+            embedded_kwargs["field"] = field
+
+        kwargs = {**embedded_kwargs}
+    elif embedded_kwargs and field is not None:
+        kwargs = {**embedded_kwargs, "field": field}
+    elif embedded_kwargs:
+        kwargs = {**embedded_kwargs}
+    elif field:
+        kwargs = {"field": field}
+    else:
+        kwargs = {}
+
     embed_context = copy(context)
     embed_context.submodule = True
-    embedded_kwargs["context"] = embed_context
-    return partial(embed, **embedded_kwargs)
+    return partial(embed, **kwargs, context=embed_context)
 
 
 @overload
@@ -58,15 +93,21 @@ def get_assignment(  # noqa: E704
 ) -> tuple[bool, ValueStream]: ...
 @overload  # noqa: E302
 def get_assignment(  # noqa: E704
-    items: ProcessorParserOutput | OperatorParserOutput | DotDict[RikoValue],
+    items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip: bool = ...,
 ) -> tuple[bool, StreamOrValueStream]: ...
+@overload  # noqa: E302
+def get_assignment(  # noqa: E704
+    items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
+    skip: bool = ...,
+    conf: DynamicConf | None = ...,
+) -> tuple[bool, StreamOrValueStream]: ...
 def get_assignment(  # noqa: E302
-    items: ProcessorParserOutput | OperatorParserOutput | DotDict[RikoValue],
+    items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip=False,
-    **conf: ConfValues,
+    conf: DynamicConf | None = None,
 ) -> tuple[bool, StreamOrValueStream]:
-    count = conf.get("count")
+    count = conf.get("count") if conf else None
 
     if isinstance(items, Iterator):
         dictized = cast(Stream, map(DotDict.dictize, items))
