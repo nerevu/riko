@@ -17,22 +17,6 @@ class ExecutionMode(StrEnum):
     DESCRIBE = "describe"
 
 
-def _mode_from_kwargs(**kwargs: bool | None) -> ExecutionMode:
-    inputs = kwargs.get("describe_input")
-    dependencies = kwargs.get("describe_dependencies")
-
-    if inputs and dependencies:
-        mode = ExecutionMode.DESCRIBE
-    elif inputs:
-        mode = ExecutionMode.DESCRIBE_INPUTS
-    elif dependencies:
-        mode = ExecutionMode.DESCRIBE_DEPENDENCIES
-    else:
-        mode = ExecutionMode.RUN
-
-    return mode
-
-
 class Context:
     """
     The context of a pipeline
@@ -51,9 +35,9 @@ class Context:
         verbose: bool | None = False,
         test: bool | None = False,
         submodule: bool | None = False,
-        **kwargs: bool | None,
+        **kwargs: object,
     ) -> None:
-        self.mode: ExecutionMode = mode or _mode_from_kwargs(**kwargs)
+        self.mode: ExecutionMode = mode or ExecutionMode.RUN
         self.verbose: bool = bool(verbose)
         self.test: bool = bool(test)
         self.inputs: Inputs = inputs or {}

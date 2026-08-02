@@ -3,9 +3,9 @@
 Execution-mode tests for the Phase 6 contract (docs/P6_CHECKLIST.md).
 
 Context carries a single ExecutionMode instead of independent describe_* bools,
-so contradictory inspection states are unrepresentable. Legacy bool kwargs are
-still accepted and translated; describe_input/describe_dependencies remain as
-read-only compatibility properties derived from the mode.
+so contradictory inspection states are unrepresentable. The legacy bool kwargs
+have been removed; describe_input/describe_dependencies remain as read-only
+properties derived from the mode.
 """
 
 import pytest
@@ -31,22 +31,10 @@ def test_mode_drives_describe_properties(mode, wants_input, wants_deps):
     assert context.describe_dependencies is wants_deps
 
 
-def test_legacy_describe_input_kwarg():
-    context = Context(describe_input=True)
-    assert context.mode is ExecutionMode.DESCRIBE_INPUTS
-    assert context.describe_input is True
-
-
-def test_legacy_describe_dependencies_kwarg():
-    context = Context(describe_dependencies=True)
-    assert context.mode is ExecutionMode.DESCRIBE_DEPENDENCIES
-
-
-def test_legacy_both_kwargs_is_describe():
-    context = Context(describe_input=True, describe_dependencies=True)
-    assert context.mode is ExecutionMode.DESCRIBE
-    assert context.describe_input is True
-    assert context.describe_dependencies is True
+def test_legacy_describe_kwargs_are_ignored():
+    # The bool-kwarg translation is gone; describe mode comes from `mode` only.
+    assert Context(describe_input=True).mode is ExecutionMode.RUN
+    assert Context(describe_dependencies=True).describe_input is False
 
 
 def test_describe_properties_are_read_only():

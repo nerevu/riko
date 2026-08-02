@@ -380,8 +380,6 @@ class PyPipe(_Lifecycle):
             verbose=verbose,
             test=test,
             submodule=submodule,
-            describe_input=bool(kwargs.get("describe_input")),
-            describe_dependencies=bool(kwargs.get("describe_dependencies")),
         )
         self.inputs: Inputs = self.context.inputs
         self.verbose: bool = bool(verbose)
