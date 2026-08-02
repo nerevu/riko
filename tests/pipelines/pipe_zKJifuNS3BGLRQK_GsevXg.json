@@ -64,7 +64,7 @@
             },
             "id": "sw-94",
             "type": "simplemath",
-            "emit": {"type": "bool", "value": true}
+            "emit": true
         },
         {
             "conf": null,
@@ -84,7 +84,7 @@
             },
             "id": "sw-169",
             "type": "simplemath",
-            "emit": {"type": "bool", "value": true}
+            "emit": true
         },
         {
             "conf": {
@@ -110,7 +110,7 @@
             "conf": null,
             "id": "sw-242",
             "type": "count",
-            "assign": {"type": "text", "value": "content"}
+            "assign": "content"
         },
         {
             "conf": null,

@@ -5,14 +5,8 @@
 from riko import Context
 from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.itembuilder import pipe as itembuilder
-from riko.modules.loop import pipe as loop
 from riko.modules.truncate import pipe as truncate
-from riko.types.modules import (
-    FetchPageRawConf,
-    ItemBuilderRawConf,
-    LoopRawConf,
-    TruncateRawConf,
-)
+from riko.types.modules import FetchPageRawConf, ItemBuilderRawConf, TruncateRawConf
 
 
 def pipe_188eca77fd28c96c559f71f5729d91ec(
@@ -21,7 +15,7 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["itembuilder", "loop", "truncate"]
+        _OUTPUT = ["fetchpage", "itembuilder", "truncate"]
     else:
         sw_163 = itembuilder(
             item,
@@ -38,38 +32,23 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
             ),
             context=context,
         )
-        sw_111 = loop(
+        sw_111 = fetchpage(
             sw_163,
-            conf=LoopRawConf(
+            conf=FetchPageRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "conf": FetchPageRawConf(
-                                {
-                                    "url": {"subkey": "url", "type": "url"},
-                                    "start": {
-                                        "type": "text",
-                                        "value": "One Way</span>",
-                                    },
-                                    "end": {"type": "text", "value": "</tr>"},
-                                    "token": {
-                                        "type": "text",
-                                        "value": '<td style="text-align: center;">',
-                                    },
-                                }
-                            ),
-                            "id": "sw-119",
-                            "type": "fetchpage",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:fetchpage"},
-                        },
+                    "url": {"subkey": "url", "type": "url"},
+                    "start": {"type": "text", "value": "One Way</span>"},
+                    "end": {"type": "text", "value": "</tr>"},
+                    "token": {
+                        "type": "text",
+                        "value": '<td style="text-align: center;">',
                     },
                 }
             ),
+            emit=True,
+            assign="loop:fetchpage",
+            count="all",
             context=context,
-            embed=fetchpage,
         )
         sw_287 = truncate(
             sw_111,

@@ -80,7 +80,7 @@ from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.context import ExecutionMode
 from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
-from riko.types.compile import EmbeddedModule, ParsedPipeDef, PipeDef, PipeModule, Wire
+from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
 from riko.types.general import (
     AsyncPipelineDependencies,
     AsyncPyInput,
@@ -98,6 +98,7 @@ from riko.types.general import (
 )
 from riko.types.modules import (
     ConfArg,
+    EmbeddedModule,
     Graph,
     InputRawConf,
     LoopRawConf,

@@ -5,13 +5,11 @@
 from riko import Context
 from riko.modules.feedautodiscovery import pipe as feedautodiscovery
 from riko.modules.fetch import pipe as fetch
-from riko.modules.loop import pipe as loop
 from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
 from riko.types.modules import (
     FeedAutoDiscoveryRawConf,
     FetchRawConf,
-    LoopRawConf,
     SortRawConf,
     TruncateRawConf,
 )
@@ -21,7 +19,7 @@ def pipe_HrX5bjkv3BGEp9eSy6ky6g(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["feedautodiscovery", "loop", "sort", "truncate"]
+        _OUTPUT = ["feedautodiscovery", "fetch", "sort", "truncate"]
     else:
         sw_149 = feedautodiscovery(
             item,
@@ -30,27 +28,13 @@ def pipe_HrX5bjkv3BGEp9eSy6ky6g(item=None, context: Context | None = None, **_):
             ),
             context=context,
         )
-        sw_157 = loop(
+        sw_157 = fetch(
             sw_149,
-            conf=LoopRawConf(
-                {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "conf": FetchRawConf(
-                                {"url": {"subkey": "link", "type": "url"}}
-                            ),
-                            "id": "sw-165",
-                            "type": "fetch",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:fetch"},
-                        },
-                    },
-                }
-            ),
+            conf=FetchRawConf({"url": {"subkey": "link", "type": "url"}}),
+            emit=True,
+            assign="loop:fetch",
+            count="all",
             context=context,
-            embed=fetch,
         )
         sw_174 = sort(
             sw_157,

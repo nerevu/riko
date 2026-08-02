@@ -23,7 +23,7 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["fetch", "loop"]
+        _OUTPUT = ["fetch", "loop", "regex", "rename"]
     else:
         sw_565 = fetch(
             item,
@@ -82,77 +82,44 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
             context=context,
             embed=urlbuilder,
         )
-        sw_592 = loop(
+        sw_592 = rename(
             sw_626,
-            conf=LoopRawConf(
+            conf=RenameRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "rename",
-                            "id": "sw-592e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:rename"},
-                            "conf": RenameRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "media:content.url",
-                                            },
-                                            "copy": {"type": "bool", "value": True},
-                                            "newval": {
-                                                "type": "text",
-                                                "value": "description",
-                                            },
-                                        }
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "media:content.url"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "description"},
+                        }
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:rename",
+            count="all",
             context=context,
-            embed=rename,
         )
-        sw_636 = loop(
+        sw_636 = regex(
             sw_592,
-            conf=LoopRawConf(
+            conf=RegexRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "regex",
-                            "id": "sw-636e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:regex"},
-                            "conf": RegexRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "description",
-                                            },
-                                            "match": {"type": "text", "value": "(.*)"},
-                                            "replace": {
-                                                "type": "text",
-                                                "value": '<img src="$1" alt="QRcode" /><br/>${title}',
-                                            },
-                                        }
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "description"},
+                            "match": {"type": "text", "value": "(.*)"},
+                            "replace": {
+                                "type": "text",
+                                "value": '<img src="$1" alt="QRcode" /><br/>${title}',
+                            },
+                        }
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:regex",
+            count="all",
             context=context,
-            embed=regex,
         )
         _OUTPUT = sw_636
 

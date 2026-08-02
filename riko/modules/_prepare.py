@@ -144,7 +144,11 @@ def parse_and_cast(  # noqa: E302
     return dispatched
 
 
-def get_parsers(opts: Opts, conf: DynamicConf, **kwargs: bool) -> ParseFuncs:
+def get_parsers(
+    opts: Opts, conf: DynamicConf, **kwargs: object
+) -> tuple[ParseFuncs, bool]:
+    is_dynamic = False
+
     if opts.get("ftype") == BasicCastType.NONE:
         field_parser = cast_none
     else:
@@ -152,13 +156,14 @@ def get_parsers(opts: Opts, conf: DynamicConf, **kwargs: bool) -> ParseFuncs:
 
     if opts.get("ptype") == BasicCastType.NONE:
         conf_parser = cast_none
-    elif conf_is_dynamic(conf, **kwargs):
+    elif conf_is_dynamic(conf, memoize=False, **kwargs):
         conf_parser = partial(parse_conf, conf=conf, memoize=False)
+        is_dynamic = True
     else:
         pre_parsed = parse_conf(None, conf=conf, memoize=True)
         conf_parser = lambda _, **__: pre_parsed
 
-    return ParseFuncs(field_parser, conf_parser)
+    return ParseFuncs(field_parser, conf_parser), is_dynamic
 
 
 def get_casters(opts: Opts) -> CastFuncs:

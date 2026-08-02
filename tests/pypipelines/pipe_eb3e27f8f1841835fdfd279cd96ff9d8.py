@@ -6,14 +6,12 @@ from riko import Context
 from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.filter import pipe as _filter
 from riko.modules.input import pipe as _input
-from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.types.modules import (
     FetchDataRawConf,
     FilterRawConf,
     InputRawConf,
-    LoopRawConf,
     RegexRawConf,
     RenameRawConf,
 )
@@ -34,7 +32,7 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
             ),
         ]
     elif context and context.describe_dependencies:
-        _OUTPUT = ["fetchdata", "filter", "input", "loop"]
+        _OUTPUT = ["fetchdata", "filter", "input", "regex", "rename"]
     else:
         sw_521 = _input(
             item,
@@ -94,82 +92,46 @@ def pipe_eb3e27f8f1841835fdfd279cd96ff9d8(
             context=context,
             RULE_1_value=sw_621,
         )
-        sw_595 = loop(
+        sw_595 = rename(
             sw_584,
-            conf=LoopRawConf(
+            conf=RenameRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "rename",
-                            "id": "sw-595e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:rename"},
-                            "conf": RenameRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {"type": "text", "value": "begin"},
-                                            "copy": {"type": "bool", "value": True},
-                                            "newval": {
-                                                "type": "text",
-                                                "value": "ctime",
-                                            },
-                                        },
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "content",
-                                            },
-                                            "copy": {"type": "bool", "value": True},
-                                            "newval": {
-                                                "type": "text",
-                                                "value": "title",
-                                            },
-                                        },
-                                    ]
-                                }
-                            ),
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "begin"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "ctime"},
                         },
-                    },
+                        {
+                            "field": {"type": "text", "value": "content"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "title"},
+                        },
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:rename",
+            count="all",
             context=context,
-            embed=rename,
         )
-        sw_606 = loop(
+        sw_606 = regex(
             sw_595,
-            conf=LoopRawConf(
+            conf=RegexRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "regex",
-                            "id": "sw-606e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:regex"},
-                            "conf": RegexRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {"type": "text", "value": "ctime"},
-                                            "match": {"type": "text", "value": "(.*)"},
-                                            "replace": {
-                                                "type": "text",
-                                                "value": "&time=$1",
-                                            },
-                                        }
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "ctime"},
+                            "match": {"type": "text", "value": "(.*)"},
+                            "replace": {"type": "text", "value": "&time=$1"},
+                        }
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:regex",
+            count="all",
             context=context,
-            embed=regex,
         )
         _OUTPUT = sw_606
 

@@ -25,7 +25,7 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
     if context and context.describe_input:
         _OUTPUT = [("", "textinput1", "Enter Text", "text", "defunkt")]
     elif context and context.describe_dependencies:
-        _OUTPUT = ["input", "itembuilder", "loop", "rename"]
+        _OUTPUT = ["fetchdata", "input", "itembuilder", "loop", "rename"]
     else:
         sw_479 = _input(
             item,
@@ -92,30 +92,18 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
             context=context,
             embed=urlbuilder,
         )
-        sw_142 = loop(
+        sw_142 = fetchdata(
             sw_61,
-            conf=LoopRawConf(
+            conf=FetchDataRawConf(
                 {
-                    "count": {"type": "text", "value": "first"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "conf": FetchDataRawConf(
-                                {
-                                    "url": {"subkey": "api", "type": "url"},
-                                    "path": {"type": "text", "value": "items"},
-                                }
-                            ),
-                            "id": "sw-150",
-                            "type": "fetchdata",
-                        },
-                    },
+                    "url": {"subkey": "api", "type": "url"},
+                    "path": {"type": "text", "value": "items"},
                 }
             ),
             emit=False,
             assign="info",
+            count="first",
             context=context,
-            embed=fetchdata,
         )
         sw_351 = rename(
             sw_142,

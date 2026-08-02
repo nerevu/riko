@@ -19,7 +19,7 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["fetchdata", "loop"]
+        _OUTPUT = ["fetchdata", "loop", "rename"]
     else:
         sw_286 = fetchdata(
             item,
@@ -63,41 +63,23 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(item=None, context: Context | None = None, **_):
             context=context,
             embed=strconcat,
         )
-        sw_180 = loop(
+        sw_180 = rename(
             sw_138,
-            conf=LoopRawConf(
+            conf=RenameRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "rename",
-                            "id": "sw-180e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:rename"},
-                            "conf": RenameRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "expires",
-                                            },
-                                            "copy": {"type": "bool", "value": False},
-                                            "newval": {
-                                                "type": "text",
-                                                "value": "pubDate",
-                                            },
-                                        }
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "expires"},
+                            "copy": {"type": "bool", "value": False},
+                            "newval": {"type": "text", "value": "pubDate"},
+                        }
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:rename",
+            count="all",
             context=context,
-            embed=rename,
         )
         _OUTPUT = sw_180
 

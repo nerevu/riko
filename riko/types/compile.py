@@ -1,8 +1,13 @@
 from collections.abc import Sequence
-from typing import NotRequired, TypedDict
+from typing import NotRequired, Required, TypedDict
 
 from riko.types.general import PyInput
-from riko.types.modules import AnyModuleRawConf, ConfArg, ModuleName
+from riko.types.modules import (
+    AnyModuleRawConf,
+    CountValues,
+    EmbedRef,
+    ModuleName,
+)
 
 
 class XY(TypedDict):
@@ -15,24 +20,23 @@ class LayoutItem(TypedDict):
     xy: tuple[int, int]
 
 
-class EmbedRef(TypedDict):
-    id: str
-    type: ModuleName
-    conf: AnyModuleRawConf
-
-
 class PipeModule(EmbedRef, total=False):
+    conf: Required[AnyModuleRawConf]
     emit: bool
     assign: str
     field: str
+    count: CountValues
 
 
-class EmbeddedModule(EmbedRef, total=False):
-    """The legacy nested submodule descriptor (``conf.embed.value``)."""
+class LoopModule(PipeModule, total=False):
+    embed: Required[EmbedRef]
 
-    emit: ConfArg
-    assign: ConfArg
-    field: ConfArg
+
+class CanonicalOptions(TypedDict):
+    emit: bool | None
+    assign: str | None
+    field: str | None
+    count: CountValues | None
 
 
 class AbbrevStringModule(TypedDict):

@@ -10,13 +10,14 @@ sync/async module callables the framework executes.
 from collections.abc import Callable, Iterator
 from functools import partial, wraps
 from inspect import isawaitable
-from itertools import islice
+from itertools import chain, islice
 from logging import Logger
 from typing import Literal, cast, overload
 
 import pygogo as gogo
 
 from riko import Context, DynamicConf
+from riko.bado.itertools import async_map
 from riko.cast import BasicCastType
 from riko.context import ExecutionMode
 from riko.dotdict import DotDict, is_mapping
@@ -70,7 +71,7 @@ from riko.types.general import (
     SyncSplitterWrapper,
     ValueStream,
 )
-from riko.types.modules import LoopConf, ModuleType
+from riko.types.modules import CountValues, LoopConf, ModuleType
 from riko.types.values import Inputs, PrimitiveValue, RikoValue, StatefulItem
 from riko.utils import dispatch, parse_context
 
@@ -153,7 +154,7 @@ class Module[B: (Literal[True], Literal[False])]:
         *,
         assign: str | None = "",
         emit: bool | None = None,
-        **kwargs: bool,
+        **kwargs: object,
     ) -> PreparedModule:
         """
         Resolve invocation state into an immutable ``PreparedModule``. Each call
@@ -210,7 +211,8 @@ class Module[B: (Literal[True], Literal[False])]:
         opts["emit"] = _emit
         opts["assign"] = _assign
         opts.update(cast(Opts, kwargs))
-        parsers = get_parsers(opts, conf=_conf, **kwargs)
+
+        parsers, is_dynamic = get_parsers(opts, conf=_conf, **kwargs)
         static_casted = None
 
         if opts.get("ptype") == BasicCastType.NONE:
@@ -218,7 +220,7 @@ class Module[B: (Literal[True], Literal[False])]:
         else:
             casters = get_casters(opts)
 
-            if casters and not isinstance(parsers.conf_parser, partial):
+            if casters and not is_dynamic:
                 parsed_conf = parsers.conf_parser({})
                 args = (parsed_conf, self.defaults, opts)
                 parsed = get_pieces_or_conf(*args)
@@ -449,6 +451,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         assign: str,
         emit: Literal[True],
         skip: Literal[True],
+        count: CountValues | None = None,
     ) -> ValueStream: ...
     @overload  # noqa: E301
     def process(  # noqa: E704
@@ -458,6 +461,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         assign: str,
         emit: bool = ...,
         skip: bool = ...,
+        count: CountValues | None = None,
         conf: DynamicConf | None = ...,
     ) -> ProcessorWrapperOutput: ...
     def process(  # noqa: E301
@@ -467,12 +471,13 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         assign: str,
         emit: bool = False,
         skip: bool = False,
+        count: CountValues | None = None,
         conf: DynamicConf | None = None,
     ) -> ProcessorWrapperOutput:
         if skip or emit:
-            _, result = get_assignment(stream, skip=skip, conf=conf)
+            _, result = get_assignment(stream, skip=skip, conf=conf, count=count)
         else:
-            one, assignment = get_assignment(stream, skip=False, conf=conf)
+            one, assignment = get_assignment(stream, skip=False, conf=conf, count=count)
             result = gen_assignments(_input, assignment, assign=assign, one=one)
 
         return result
@@ -538,44 +543,71 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             *,
             assign: str | None = None,
             field: str | None = None,
+            count: CountValues | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
             **kwargs: bool,
         ) -> ProcessorWrapperOutput:
-            _input = self.parse(item, module_name)
-            prepared = self.prepare(module_name, conf=conf, assign=assign, **kwargs)
-            assign = prepared.assign
-            orig_item, casted, skip = self.setup(
-                prepared, _input, field=field, **kwargs
-            )
+            if isinstance(item, Iterator):
+                _wrapper = partial(
+                    async_wrapper,
+                    conf=conf,
+                    context=context,
+                    assign=assign,
+                    field=field,
+                    count=count,
+                    mode=mode,
+                    inputs=inputs,
+                    **kwargs,
+                )
 
-            if prepared.static_casted:
-                _conf = prepared.static_casted[2]
+                mapped = await async_map(_wrapper, item)
+                processed = chain.from_iterable(mapped)
             else:
-                _conf = prepared.conf
+                _input = self.parse(item, module_name)
+                prepared = self.prepare(
+                    module_name, conf=conf, assign=assign, count=count, **kwargs
+                )
+                assign = prepared.assign
+                orig_item, casted, skip = self.setup(
+                    prepared, _input, field=field, count=count, **kwargs
+                )
 
-            if skip:
-                args = (_input, orig_item, assign)
-                processed = self.process(*args, emit=True, skip=True, conf=_conf)
-            else:
-                aync_pipe = cast(AsyncProcessorParser, pipe)
-                context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
-                inputs = context.inputs
-                kwargs["test"] = context.test
-                pkwargs: dict[str, object] = {"inputs": inputs, **kwargs}
-                result = aync_pipe(*casted, **pkwargs)
-                stream = (await result) if isawaitable(result) else result
-                args = (_input, stream, assign)
-
-                if callable(prepared.emit) and not isinstance(stream, Iterator):
-                    emit = prepared.emit(stream)
+                if prepared.static_casted:
+                    _conf = prepared.static_casted[2]
                 else:
-                    emit = bool(prepared.emit)
+                    _conf = prepared.conf
 
-                if emit:
-                    processed = self.process(*args, emit=True, skip=False, conf=_conf)
+                if skip:
+                    args = (_input, orig_item, assign)
+                    processed = self.process(*args, emit=True, skip=True, conf=_conf)
                 else:
-                    processed = self.process(*args, emit=False, skip=False, conf=_conf)
+                    aync_pipe = cast(AsyncProcessorParser, pipe)
+                    context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
+                    inputs = context.inputs
+                    kwargs["test"] = context.test
+                    pkwargs: dict[str, object] = {
+                        "inputs": inputs,
+                        "count": count,
+                        **kwargs,
+                    }
+                    result = aync_pipe(*casted, **pkwargs)
+                    stream = (await result) if isawaitable(result) else result
+                    args = (_input, stream, assign)
+
+                    if callable(prepared.emit) and not isinstance(stream, Iterator):
+                        emit = prepared.emit(stream)
+                    else:
+                        emit = bool(prepared.emit)
+
+                    if emit:
+                        processed = self.process(
+                            *args, emit=True, skip=False, count=count, conf=_conf
+                        )
+                    else:
+                        processed = self.process(
+                            *args, emit=False, skip=False, count=count, conf=_conf
+                        )
 
             return processed
 
@@ -586,43 +618,69 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             *,
             assign: str | None = None,
             field: str | None = None,
+            count: CountValues | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
             **kwargs: bool,
         ) -> ProcessorWrapperOutput:
-            _input = self.parse(item, module_name)
-            prepared = self.prepare(module_name, conf=conf, assign=assign, **kwargs)
-            assign = prepared.assign
-            orig_item, casted, skip = self.setup(
-                prepared, _input, field=field, **kwargs
-            )
+            if isinstance(item, Iterator):
+                _wrapper = partial(
+                    sync_wrapper,
+                    conf=conf,
+                    context=context,
+                    assign=assign,
+                    field=field,
+                    count=count,
+                    mode=mode,
+                    inputs=inputs,
+                    **kwargs,
+                )
 
-            if prepared.static_casted:
-                _conf = prepared.static_casted[2]
+                processed = chain.from_iterable(map(_wrapper, item))
             else:
-                _conf = prepared.conf
+                _input = self.parse(item, module_name)
+                prepared = self.prepare(
+                    module_name, conf=conf, assign=assign, count=count, **kwargs
+                )
+                assign = prepared.assign
+                orig_item, casted, skip = self.setup(
+                    prepared, _input, field=field, **kwargs
+                )
 
-            if skip:
-                args = (_input, orig_item, assign)
-                processed = self.process(*args, emit=True, skip=True, conf=_conf)
-            else:
-                sync_pipe = cast(SyncProcessorParser, pipe)
-                context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
-                inputs = context.inputs
-                kwargs["test"] = context.test
-                pkwargs: dict[str, object] = {"inputs": inputs, **kwargs}
-                stream = sync_pipe(*casted, **pkwargs)
-                args = (_input, stream, assign)
-
-                if callable(prepared.emit) and not isinstance(stream, Iterator):
-                    emit = prepared.emit(stream)
+                if prepared.static_casted:
+                    _conf = prepared.static_casted[2]
                 else:
-                    emit = bool(prepared.emit)
+                    _conf = prepared.conf
 
-                if emit:
-                    processed = self.process(*args, emit=True, skip=False, conf=_conf)
+                if skip:
+                    args = (_input, orig_item, assign)
+                    processed = self.process(*args, emit=True, skip=True, conf=_conf)
                 else:
-                    processed = self.process(*args, emit=False, skip=False, conf=_conf)
+                    sync_pipe = cast(SyncProcessorParser, pipe)
+                    context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
+                    inputs = context.inputs
+                    kwargs["test"] = context.test
+                    pkwargs: dict[str, object] = {
+                        "inputs": inputs,
+                        "count": count,
+                        **kwargs,
+                    }
+                    stream = sync_pipe(*casted, **pkwargs)
+                    args = (_input, stream, assign)
+
+                    if callable(prepared.emit) and not isinstance(stream, Iterator):
+                        emit = prepared.emit(stream)
+                    else:
+                        emit = bool(prepared.emit)
+
+                    if emit:
+                        processed = self.process(
+                            *args, emit=True, skip=False, count=count, conf=_conf
+                        )
+                    else:
+                        processed = self.process(
+                            *args, emit=False, skip=False, count=count, conf=_conf
+                        )
 
             yield from processed
 
@@ -814,6 +872,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         stream: Stream | Iterator[StatefulItem],
         assign: str,
         emit: bool = ...,
+        conf: DynamicConf | None = ...,
+        is_loop: bool = ...,
     ) -> Stream: ...
     @overload  # noqa: E301
     def process(  # noqa: E704
@@ -821,7 +881,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         stream: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
         assign: str,
         emit: Literal[False] = ...,
-        conf: DynamicConf | None = None,
+        conf: DynamicConf | None = ...,
+        is_loop: bool = ...,
     ) -> Stream: ...
     @overload  # noqa: E301
     def process(  # noqa: E704
@@ -829,7 +890,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         stream: PrimitiveValue,
         assign: str,
         emit: Literal[True],
-        conf: DynamicConf | None = None,
+        conf: DynamicConf | None = ...,
+        is_loop: bool = ...,
     ) -> ValueStream: ...
     @overload  # noqa: E301
     def process(  # noqa: E704
@@ -837,7 +899,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         stream: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
         assign: str,
         emit: bool = ...,
-        conf: DynamicConf | None = None,
+        conf: DynamicConf | None = ...,
+        is_loop: bool = ...,
     ) -> OperatorWrapperOutput: ...
     def process(  # noqa: E301
         self,
@@ -845,9 +908,10 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         assign: str,
         emit: bool = False,
         conf: DynamicConf | None = None,
+        is_loop: bool = False,
     ) -> OperatorWrapperOutput:
         items = stream
-        one, assignment = get_assignment(items, skip=False, conf=conf)
+        one, assignment = get_assignment(items, skip=False, conf=conf, is_loop=is_loop)
 
         if emit:
             result = assignment
@@ -938,6 +1002,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         """
         op_module_name = pipe.__module__.split(".")[-1]
+        is_loop = op_module_name == "loop"
 
         async def async_wrapper(
             items: OperatorWrapperInput | None = None,
@@ -946,21 +1011,24 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             *,
             assign: str | None = None,
             field: str | None = None,
+            count: CountValues | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
             embed: AsyncProcessorWrapper | None = None,
             **kwargs: bool,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)
-            prepared = self.prepare(op_module_name, conf=conf, assign=assign, **kwargs)
+            prepared = self.prepare(
+                op_module_name, conf=conf, assign=assign, count=count, **kwargs
+            )
             assign = prepared.assign
             _conf = cast(LoopConf, prepared.conf)
             embedded_kwargs = _conf.get("embed")
-
+            count = count or (_conf.get("count") if is_loop else None)
             context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
             inputs = context.inputs
             tuples, orig_stream, casted = self.setup(
-                prepared, _input, inputs=inputs, field=field, **kwargs
+                prepared, _input, inputs=inputs, field=field, count=count, **kwargs
             )
             handled, looped, embed_stream = await loop_embed_async_eager(
                 embed,
@@ -974,7 +1042,11 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 stream = embed_stream
             else:
                 async_pipe = cast(AsyncOperatorParser, pipe)
-                pkwargs: dict[str, object] = {"inputs": inputs, **kwargs}
+                pkwargs: dict[str, object] = {
+                    "inputs": inputs,
+                    "count": count,
+                    **kwargs,
+                }
                 result = async_pipe(orig_stream, casted.extraction, tuples, **pkwargs)
                 stream = (await result) if isawaitable(result) else result
 
@@ -988,7 +1060,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 else:
                     emit = bool(prepared.emit)
 
-                processed = self.process(stream, assign, emit=emit, conf=prepared.conf)
+                processed = self.process(
+                    stream, assign, emit=emit, conf=prepared.conf, is_loop=is_loop
+                )
 
             return processed
 
@@ -999,22 +1073,25 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             *,
             assign: str | None = None,
             field: str | None = None,
+            count: CountValues | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
             embed: SyncProcessorWrapper | None = None,
             **kwargs: bool,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)
-            prepared = self.prepare(op_module_name, conf=conf, assign=assign, **kwargs)
+            prepared = self.prepare(
+                op_module_name, conf=conf, assign=assign, count=count, **kwargs
+            )
             assign = prepared.assign
             _conf = cast(LoopConf, prepared.conf)
             embedded_kwargs = _conf.get("embed")
-
+            count = count or (_conf.get("count") if is_loop else None)
             context = parse_context(context, mode=mode, inputs=inputs, **kwargs)
             inputs = context.inputs
             stream = _input
             tuples, orig_stream, casted = self.setup(
-                prepared, stream, inputs=inputs, field=field, **kwargs
+                prepared, stream, inputs=inputs, field=field, count=count, **kwargs
             )
             handled, looped, embed_stream = loop_embed_sync(
                 embed,
@@ -1025,14 +1102,18 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 field=field,
                 assign=assign,
                 emit=bool(prepared.emit),
-                count=_conf.get("count"),
+                count=count,
             )
 
             if handled:
                 stream = embed_stream
             else:
                 sync_pipe = cast(SyncOperatorParser, pipe)
-                pkwargs: dict[str, object] = {"inputs": inputs, **kwargs}
+                pkwargs: dict[str, object] = {
+                    "inputs": inputs,
+                    "count": count,
+                    **kwargs,
+                }
                 stream = sync_pipe(orig_stream, casted.extraction, tuples, **pkwargs)
 
             if looped:
@@ -1045,7 +1126,9 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 else:
                     emit = bool(prepared.emit)
 
-                processed = self.process(stream, assign, emit=emit, conf=prepared.conf)
+                processed = self.process(
+                    stream, assign, emit=emit, conf=prepared.conf, is_loop=is_loop
+                )
 
             yield from processed
 

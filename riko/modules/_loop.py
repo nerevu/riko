@@ -75,15 +75,15 @@ def _run_loop_sync(
     source: Stream,
     *,
     field: str | None,
-    assign: str,
-    emit: bool,
+    assign: str | None = None,
+    emit: bool | None = None,
     count: CountValues | None,
 ) -> StreamOrValueStream:
     embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
 
     for parent in source:
         results = _take(embedder(parent), count)
-        yield from _fold_parent(parent, results, assign, emit)
+        yield from _fold_parent(parent, results, assign or "", bool(emit))
 
 
 def loop_embed_sync(
@@ -93,10 +93,10 @@ def loop_embed_sync(
     source: Stream,
     op_module_name: str,
     *,
-    field: str | None,
-    assign: str,
-    emit: bool,
-    count: CountValues | None,
+    field: str | None = None,
+    assign: str | None = None,
+    emit: bool | None = None,
+    count: CountValues | None = None,
 ) -> tuple[bool, bool, StreamOrValueStream]:
     """
     Resolve the sync embedded stream for an operator invocation.

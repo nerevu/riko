@@ -17,11 +17,11 @@ from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import pipe as tokenizer
-from riko.types.compile import EmbeddedModule
 from riko.types.modules import (
     AnyModuleRawConf,
     ConfArg,
     Embed,
+    EmbeddedModule,
     LoopRawConf,
     ModuleName,
     RegexRawConf,
@@ -145,6 +145,34 @@ class TestLoopCharacterization:
             {"title": "c d", "x": {"content": "d"}},
         ]
 
+    def test_loop_zero_results_emit_skips_parent(self):
+        parents = iter([{"title": ""}, {"title": "x y"}])
+        conf = LoopRawConf(
+            {
+                "count": {"type": "text", "value": "all"},
+                "embed": _tokenizer_embed(emit={"type": "bool", "value": True}),
+            }
+        )
+        result = list(loop(parents, embed=tokenizer, conf=conf))
+        # Phase 2: a parent with no child results emits nothing (emit mode).
+        assert result == [{"content": "x"}, {"content": "y"}]
+
+    def test_loop_zero_results_assign_preserves_parent(self):
+        parents = iter([{"title": ""}, {"title": "x y"}])
+        conf = LoopRawConf(
+            {
+                "count": {"type": "text", "value": "all"},
+                "embed": _tokenizer_embed(emit={"type": "bool", "value": True}),
+            }
+        )
+        result = list(loop(parents, embed=tokenizer, conf=conf, assign="w", emit=False))
+        # Phase 2: a parent with no child results is yielded unchanged once.
+        assert result == [
+            {"title": ""},
+            {"title": "x y", "w": {"content": "x"}},
+            {"title": "x y", "w": {"content": "y"}},
+        ]
+
     def test_loop_level_field_selects_child_input(self):
         conf = LoopRawConf(
             {
@@ -209,3 +237,106 @@ class TestLoopCharacterization:
         # Current: the loop module is sync-only; async loop is unimplemented.
         # Phase 3 target: an async_pipe with lazy per-parent streaming.
         assert not hasattr(loop_module, "async_pipe")
+
+
+class TestProcessorTopLevelCount:
+    """
+    A direct processor node honors a first-class top-level ``count`` kwarg —
+    the runtime enabler for compact-form processor-loop migration.
+    """
+
+    def test_count_first_keeps_first(self):
+        item = {"title": "a b c"}
+        conf = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
+        result = list(
+            tokenizer(item, conf=conf, field="title", count="first", emit=True)
+        )
+        assert result == [{"content": "a"}]
+
+    def test_count_all_keeps_all(self):
+        item = {"title": "a b c"}
+        conf = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
+        result = list(tokenizer(item, conf=conf, field="title", count="all", emit=True))
+        assert result == [{"content": "a"}, {"content": "b"}, {"content": "c"}]
+
+    def test_count_first_assign_preserves_item(self):
+        item = {"title": "a b c"}
+        conf = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
+        result = list(
+            tokenizer(
+                item, conf=conf, field="title", count="first", assign="w", emit=False
+            )
+        )
+        assert result == [{"title": "a b c", "w": {"content": "a"}}]
+
+
+class TestImplicitLooping:
+    """
+    A processor stage fed a *stream* maps itself over each item, exactly like
+    ``loop(source, embed=<processor>)`` (docs/gameplans/implicit-looping.md).
+    """
+
+    def _conf(self):
+        return TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
+
+    def test_maps_over_every_item(self):
+        stream = iter([{"title": "a b"}, {"title": "c d"}])
+        result = list(tokenizer(stream, conf=self._conf(), field="title", emit=True))
+        assert result == [
+            {"content": "a"},
+            {"content": "b"},
+            {"content": "c"},
+            {"content": "d"},
+        ]
+
+    def test_count_first_is_per_item(self):
+        stream = iter([{"title": "a b"}, {"title": "c d"}])
+        result = list(
+            tokenizer(
+                stream, conf=self._conf(), field="title", count="first", emit=True
+            )
+        )
+        assert result == [{"content": "a"}, {"content": "c"}]
+
+    def test_assign_folds_onto_each_item(self):
+        stream = iter([{"title": "a b"}, {"title": "c d"}])
+        result = list(
+            tokenizer(
+                stream,
+                conf=self._conf(),
+                field="title",
+                count="first",
+                assign="w",
+                emit=False,
+            )
+        )
+        assert result == [
+            {"title": "a b", "w": {"content": "a"}},
+            {"title": "c d", "w": {"content": "c"}},
+        ]
+
+    def test_matches_explicit_loop(self):
+        parents = [{"title": "a b"}, {"title": "c d"}]
+        implicit = list(
+            tokenizer(
+                iter(parents),
+                conf=self._conf(),
+                field="title",
+                count="first",
+                emit=True,
+            )
+        )
+        loop_conf = LoopRawConf(
+            {
+                "count": {"type": "text", "value": "first"},
+                "embed": _tokenizer_embed(emit={"type": "bool", "value": True}),
+            }
+        )
+        explicit = list(loop(iter(parents), embed=tokenizer, conf=loop_conf))
+        assert implicit == explicit
+
+    def test_single_item_is_not_double_mapped(self):
+        # a loop passes single items to the embedder; the single-item path applies
+        item = {"title": "a b"}
+        result = list(tokenizer(item, conf=self._conf(), field="title", emit=True))
+        assert result == [{"content": "a"}, {"content": "b"}]

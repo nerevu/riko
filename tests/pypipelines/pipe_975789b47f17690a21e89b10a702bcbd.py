@@ -6,7 +6,6 @@ from riko import Context
 from riko.modules.filter import pipe as _filter
 from riko.modules.input import pipe as _input
 from riko.modules.itembuilder import pipe as itembuilder
-from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.tokenizer import pipe as tokenizer
@@ -14,7 +13,6 @@ from riko.types.modules import (
     FilterRawConf,
     InputRawConf,
     ItemBuilderRawConf,
-    LoopRawConf,
     RegexRawConf,
     RenameRawConf,
     TokenizerRawConf,
@@ -29,7 +27,7 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
             ("", "q", "Status update", "text", "Here's #: some #hashtags to play #with")
         ]
     elif context and context.describe_dependencies:
-        _OUTPUT = ["filter", "input", "itembuilder", "loop"]
+        _OUTPUT = ["filter", "input", "itembuilder", "regex", "rename", "tokenizer"]
     else:
         sw_417 = _input(
             item,
@@ -79,74 +77,38 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
             ),
             context=context,
         )
-        sw_447 = loop(
+        sw_447 = regex(
             sw_436,
-            conf=LoopRawConf(
+            conf=RegexRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "regex",
-                            "id": "sw-448",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:regex"},
-                            "conf": RegexRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {"type": "text", "value": "title"},
-                                            "singlematch": {
-                                                "type": "bool",
-                                                "value": False,
-                                            },
-                                            "match": {
-                                                "type": "text",
-                                                "value": " [^#]*",
-                                            },
-                                            "replace": {"type": "text", "value": " "},
-                                        },
-                                        {
-                                            "field": {"type": "text", "value": "title"},
-                                            "match": {
-                                                "type": "text",
-                                                "value": "^[^#]*",
-                                            },
-                                            "replace": {"type": "text", "value": ""},
-                                        },
-                                    ]
-                                }
-                            ),
-                        },
-                    },
-                }
-            ),
-            context=context,
-            embed=regex,
-        )
-        sw_470 = loop(
-            sw_447,
-            conf=LoopRawConf(
-                {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "tokenizer",
-                            "id": "sw-478",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:tokenizer"},
+                    "rule": [
+                        {
                             "field": {"type": "text", "value": "title"},
-                            "conf": TokenizerRawConf(
-                                {"delimiter": {"type": "text", "value": " "}}
-                            ),
+                            "singlematch": {"type": "bool", "value": False},
+                            "match": {"type": "text", "value": " [^#]*"},
+                            "replace": {"type": "text", "value": " "},
                         },
-                    },
+                        {
+                            "field": {"type": "text", "value": "title"},
+                            "match": {"type": "text", "value": "^[^#]*"},
+                            "replace": {"type": "text", "value": ""},
+                        },
+                    ]
                 }
             ),
-            field="title",
+            emit=True,
+            assign="loop:regex",
+            count="all",
             context=context,
-            embed=tokenizer,
+        )
+        sw_470 = tokenizer(
+            sw_447,
+            conf=TokenizerRawConf({"delimiter": {"type": "text", "value": " "}}),
+            emit=True,
+            assign="loop:tokenizer",
+            field="title",
+            count="all",
+            context=context,
         )
         sw_490 = _filter(
             sw_470,
@@ -165,41 +127,23 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
             ),
             context=context,
         )
-        sw_501 = loop(
+        sw_501 = rename(
             sw_490,
-            conf=LoopRawConf(
+            conf=RenameRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "rename",
-                            "id": "sw-502",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:rename"},
-                            "conf": RenameRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "content",
-                                            },
-                                            "copy": {"type": "bool", "value": False},
-                                            "newval": {
-                                                "type": "text",
-                                                "value": "title",
-                                            },
-                                        }
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "content"},
+                            "copy": {"type": "bool", "value": False},
+                            "newval": {"type": "text", "value": "title"},
+                        }
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:rename",
+            count="all",
             context=context,
-            embed=rename,
         )
         _OUTPUT = sw_501
 

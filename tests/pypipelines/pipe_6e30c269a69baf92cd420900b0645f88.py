@@ -5,7 +5,6 @@
 from riko import Context
 from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
-from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
 from riko.modules.sort import pipe as sort
@@ -14,7 +13,6 @@ from riko.modules.uniq import pipe as uniq
 from riko.types.modules import (
     FetchRawConf,
     FilterRawConf,
-    LoopRawConf,
     RegexRawConf,
     RenameRawConf,
     SortRawConf,
@@ -28,7 +26,7 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["fetch", "filter", "loop", "sort", "union", "uniq"]
+        _OUTPUT = ["fetch", "filter", "regex", "rename", "sort", "union", "uniq"]
     else:
         sw_233 = fetch(
             item,
@@ -82,97 +80,49 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
             ),
             context=context,
         )
-        sw_210 = loop(
+        sw_210 = rename(
             sw_180,
-            conf=LoopRawConf(
+            conf=RenameRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "rename",
-                            "id": "sw-210e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:rename"},
-                            "conf": RenameRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "y:id.value",
-                                            },
-                                            "copy": {"type": "bool", "value": True},
-                                            "newval": {"type": "text", "value": "link"},
-                                        }
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "y:id.value"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "link"},
+                        }
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:rename",
+            count="all",
             context=context,
-            embed=rename,
         )
-        sw_195 = loop(
+        sw_195 = regex(
             sw_210,
-            conf=LoopRawConf(
+            conf=RegexRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "regex",
-                            "id": "sw-195e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:regex"},
-                            "conf": RegexRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "singlelinematch": {
-                                                "type": "bool",
-                                                "value": True,
-                                            },
-                                            "singlematch": {
-                                                "type": "bool",
-                                                "value": False,
-                                            },
-                                            "replace": {"type": "text", "value": ""},
-                                            "field": {
-                                                "type": "text",
-                                                "value": "description",
-                                            },
-                                            "casematch": {
-                                                "type": "bool",
-                                                "value": True,
-                                            },
-                                            "match": {
-                                                "type": "text",
-                                                "value": "</div>.*$",
-                                            },
-                                        },
-                                        {
-                                            "field": {"type": "text", "value": "link"},
-                                            "match": {
-                                                "type": "text",
-                                                "value": "^(.*\\/.*)\\/",
-                                            },
-                                            "replace": {
-                                                "type": "text",
-                                                "value": "$1/2.220/",
-                                            },
-                                        },
-                                    ]
-                                }
-                            ),
+                    "rule": [
+                        {
+                            "singlelinematch": {"type": "bool", "value": True},
+                            "singlematch": {"type": "bool", "value": False},
+                            "replace": {"type": "text", "value": ""},
+                            "field": {"type": "text", "value": "description"},
+                            "casematch": {"type": "bool", "value": True},
+                            "match": {"type": "text", "value": "</div>.*$"},
                         },
-                    },
+                        {
+                            "field": {"type": "text", "value": "link"},
+                            "match": {"type": "text", "value": "^(.*\\/.*)\\/"},
+                            "replace": {"type": "text", "value": "$1/2.220/"},
+                        },
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:regex",
+            count="all",
             context=context,
-            embed=regex,
         )
         sw_191 = sort(
             sw_195,

@@ -4,15 +4,9 @@
 
 from riko import Context
 from riko.modules.fetchdata import pipe as fetchdata
-from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
-from riko.types.modules import (
-    FetchDataRawConf,
-    LoopRawConf,
-    RegexRawConf,
-    RenameRawConf,
-)
+from riko.types.modules import FetchDataRawConf, RegexRawConf, RenameRawConf
 
 
 def pipe_402e244d09a4146cd80421c6628eb6d9(
@@ -21,7 +15,7 @@ def pipe_402e244d09a4146cd80421c6628eb6d9(
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["fetchdata", "loop"]
+        _OUTPUT = ["fetchdata", "regex", "rename"]
     else:
         sw_572 = fetchdata(
             item,
@@ -36,93 +30,57 @@ def pipe_402e244d09a4146cd80421c6628eb6d9(
             ),
             context=context,
         )
-        sw_587 = loop(
+        sw_587 = rename(
             sw_572,
-            conf=LoopRawConf(
+            conf=RenameRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "rename",
-                            "id": "sw-587e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:rename"},
-                            "conf": RenameRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "programme.title",
-                                            },
-                                            "copy": {"type": "bool", "value": True},
-                                            "newval": {
-                                                "type": "text",
-                                                "value": "title",
-                                            },
-                                        },
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "programme.pid",
-                                            },
-                                            "copy": {"type": "bool", "value": True},
-                                            "newval": {"type": "text", "value": "link"},
-                                        },
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "programme.short_synopsis",
-                                            },
-                                            "copy": {"type": "bool", "value": True},
-                                            "newval": {
-                                                "type": "text",
-                                                "value": "description",
-                                            },
-                                        },
-                                    ]
-                                }
-                            ),
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "programme.title"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "title"},
                         },
-                    },
+                        {
+                            "field": {"type": "text", "value": "programme.pid"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "link"},
+                        },
+                        {
+                            "field": {
+                                "type": "text",
+                                "value": "programme.short_synopsis",
+                            },
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "description"},
+                        },
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:rename",
+            count="all",
             context=context,
-            embed=rename,
         )
-        sw_598 = loop(
+        sw_598 = regex(
             sw_587,
-            conf=LoopRawConf(
+            conf=RegexRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "regex",
-                            "id": "sw-598e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:regex"},
-                            "conf": RegexRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {"type": "text", "value": "link"},
-                                            "match": {"type": "text", "value": "(.*)"},
-                                            "replace": {
-                                                "type": "text",
-                                                "value": "http://www.bbc.co.uk/programmes/$1",
-                                            },
-                                        }
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "link"},
+                            "match": {"type": "text", "value": "(.*)"},
+                            "replace": {
+                                "type": "text",
+                                "value": "http://www.bbc.co.uk/programmes/$1",
+                            },
+                        }
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:regex",
+            count="all",
             context=context,
-            embed=regex,
         )
         _OUTPUT = sw_598
 

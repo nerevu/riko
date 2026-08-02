@@ -5,24 +5,17 @@
 from riko import Context
 from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
-from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.split import pipe as split
 from riko.modules.union import pipe as union
-from riko.types.modules import (
-    FetchRawConf,
-    FilterRawConf,
-    LoopRawConf,
-    RegexRawConf,
-    SplitRawConf,
-)
+from riko.types.modules import FetchRawConf, FilterRawConf, RegexRawConf, SplitRawConf
 
 
 def pipe_QMrlL_FS3BGlpwryODY80A(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["fetch", "filter", "loop", "split", "union"]
+        _OUTPUT = ["fetch", "filter", "regex", "split", "union"]
     else:
         sw_140 = fetch(
             item,
@@ -69,67 +62,37 @@ def pipe_QMrlL_FS3BGlpwryODY80A(item=None, context: Context | None = None, **_):
             ),
             context=context,
         )
-        sw_204 = loop(
+        sw_204 = regex(
             sw_159,
-            conf=LoopRawConf(
+            conf=RegexRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "regex",
-                            "id": "sw-204e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:regex"},
-                            "conf": RegexRawConf(
-                                {
-                                    "rule": {
-                                        "field": {"type": "text", "value": "title"},
-                                        "match": {"type": "text", "value": "(.+)"},
-                                        "replace": {
-                                            "type": "text",
-                                            "value": "[Drugs] $1",
-                                        },
-                                    }
-                                }
-                            ),
-                        },
-                    },
+                    "rule": {
+                        "field": {"type": "text", "value": "title"},
+                        "match": {"type": "text", "value": "(.+)"},
+                        "replace": {"type": "text", "value": "[Drugs] $1"},
+                    }
                 }
             ),
+            emit=True,
+            assign="loop:regex",
+            count="all",
             context=context,
-            embed=regex,
         )
-        sw_189 = loop(
+        sw_189 = regex(
             sw_148,
-            conf=LoopRawConf(
+            conf=RegexRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "regex",
-                            "id": "sw-189e",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:regex"},
-                            "conf": RegexRawConf(
-                                {
-                                    "rule": {
-                                        "field": {"type": "text", "value": "title"},
-                                        "match": {"type": "text", "value": "(.+)"},
-                                        "replace": {
-                                            "type": "text",
-                                            "value": "[Weight] $1",
-                                        },
-                                    }
-                                }
-                            ),
-                        },
-                    },
+                    "rule": {
+                        "field": {"type": "text", "value": "title"},
+                        "match": {"type": "text", "value": "(.+)"},
+                        "replace": {"type": "text", "value": "[Weight] $1"},
+                    }
                 }
             ),
+            emit=True,
+            assign="loop:regex",
+            count="all",
             context=context,
-            embed=regex,
         )
         sw_170 = union(None, context=context, others=[sw_189, sw_204])
         _OUTPUT = sw_170

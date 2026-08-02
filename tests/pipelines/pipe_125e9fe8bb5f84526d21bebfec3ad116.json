@@ -122,14 +122,8 @@
             },
             "id": "sw-142",
             "type": "loop",
-            "emit": {
-                "type": "bool",
-                "value": false
-            },
-            "assign": {
-                "type": "text",
-                "value": "info"
-            }
+            "emit": false,
+            "assign": "info"
         },
         {
             "conf": {

@@ -2,13 +2,21 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from re import Pattern, RegexFlag
-from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict, Union
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+    NewType,
+    NotRequired,
+    Required,
+    TypedDict,
+    Union,
+)
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from riko.cast import CastType, LocationType, SortableCastType
-    from riko.types.compile import EmbeddedModule, PipeModule
+    from riko.types.compile import PipeModule
     from riko.types.general import Function
     from riko.types.values import BasicValue
 
@@ -69,24 +77,30 @@ class ModuleMetadata:
         return subtype in self.subtypes
 
 
-ModuleName = Literal[
-    "fetch",
-    "fetchdata",
-    "fetchpage",
-    "forever",
-    "input",
-    "itembuilder",
-    "loop",
-    "output",
-    "regex",
-    "rename",
-    "sort",
-    "strconcat",
-    "tail",
-    "tokenizer",
-    "truncate",
-    "urlbuilder",
-]
+PipeId = NewType("PipeId", str)
+
+
+ModuleName = (
+    Literal[
+        "fetch",
+        "fetchdata",
+        "fetchpage",
+        "forever",
+        "input",
+        "itembuilder",
+        "loop",
+        "output",
+        "regex",
+        "rename",
+        "sort",
+        "strconcat",
+        "tail",
+        "tokenizer",
+        "truncate",
+        "urlbuilder",
+    ]
+    | PipeId
+)
 
 CountValues = Literal["first", "all"]
 
@@ -205,9 +219,11 @@ class Embed(TypedDict):
     value: "EmbeddedModule"
 
 
-class LoopRawConf(TypedDict):
+class LoopRawConf(TypedDict, total=False):
+    embed: Required[Embed]
     count: CountArg
-    embed: Embed
+    assign: ConfArg
+    field: ConfArg
 
 
 class CountRawConf(TypedDict, total=False):
@@ -405,6 +421,10 @@ class SubelementRawConf(TypedDict):
     token_key: NotRequired[Value]
 
 
+class SubModuleRawConf(TypedDict):
+    gid: Value
+
+
 class SubstrRawConf(TypedDict, total=False):
     start: Value
     length: Value
@@ -497,6 +517,7 @@ type AnyModuleRawConf = (
     | StrReplaceRawConf
     | StrTransformRawConf
     | SubelementRawConf
+    | SubModuleRawConf
     | SubstrRawConf
     | SumRawConf
     | TailRawConf
@@ -510,6 +531,20 @@ type AnyModuleRawConf = (
     | UrlParseRawConf
     | XpathFetchPageRawConf
 )
+
+
+class EmbedRef(TypedDict):
+    id: str
+    type: ModuleName
+
+
+class EmbeddedModule(EmbedRef, total=False):
+    """The legacy nested submodule descriptor (``conf.embed.value``)."""
+
+    conf: Required[AnyModuleRawConf]
+    emit: ConfArg
+    assign: ConfArg
+    field: ConfArg
 
 
 # Parsed

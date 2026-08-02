@@ -23,7 +23,7 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = [("", "name", "Name", "text", "Lancaster")]
     elif context and context.describe_dependencies:
-        _OUTPUT = ["csv", "filter", "input", "loop"]
+        _OUTPUT = ["csv", "filter", "input", "loop", "rename"]
     else:
         sw_371 = _input(
             item,
@@ -101,40 +101,22 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(item=None, context: Context | None = None, **_):
             context=context,
             RULE_1_value=sw_371,
         )
-        sw_385 = loop(
+        sw_385 = rename(
             sw_375,
-            conf=LoopRawConf(
+            conf=RenameRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "rename",
-                            "emit": {"type": "bool", "value": True},
-                            "conf": RenameRawConf(
-                                {
-                                    "rule": [
-                                        {
-                                            "field": {
-                                                "type": "text",
-                                                "value": "Member",
-                                            },
-                                            "copy": {"type": "bool", "value": True},
-                                            "newval": {
-                                                "type": "text",
-                                                "value": "title",
-                                            },
-                                        }
-                                    ]
-                                }
-                            ),
-                            "id": "sw-385e",
-                        },
-                    },
+                    "rule": [
+                        {
+                            "field": {"type": "text", "value": "Member"},
+                            "copy": {"type": "bool", "value": True},
+                            "newval": {"type": "text", "value": "title"},
+                        }
+                    ]
                 }
             ),
+            emit=True,
+            count="all",
             context=context,
-            embed=rename,
         )
         sw_400 = loop(
             sw_385,

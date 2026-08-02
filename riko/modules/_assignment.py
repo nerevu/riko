@@ -34,6 +34,7 @@ from riko.types.general import (
     SyncProcessorWrapper,
     ValueStream,
 )
+from riko.types.modules import CountValues
 from riko.types.values import PrimitiveValue, RikoValue, StatefulItem
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
@@ -95,19 +96,24 @@ def get_assignment(  # noqa: E704
 def get_assignment(  # noqa: E704
     items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip: bool = ...,
+    count: CountValues | None = ...,
 ) -> tuple[bool, StreamOrValueStream]: ...
 @overload  # noqa: E302
 def get_assignment(  # noqa: E704
     items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip: bool = ...,
+    count: CountValues | None = ...,
     conf: DynamicConf | None = ...,
+    is_loop: bool = ...,
 ) -> tuple[bool, StreamOrValueStream]: ...
 def get_assignment(  # noqa: E302
     items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip=False,
+    count: CountValues | None = None,
     conf: DynamicConf | None = None,
+    is_loop: bool = False,
 ) -> tuple[bool, StreamOrValueStream]:
-    count = conf.get("count") if conf else None
+    count = count or (conf.get("count") if is_loop else None)
 
     if isinstance(items, Iterator):
         dictized = cast(Stream, map(DotDict.dictize, items))

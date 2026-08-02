@@ -59,6 +59,9 @@ from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
 from riko.types.compile import (
     AbbrevStringModule,
+    CanonicalOptions,
+    EmbedRef,
+    LoopModule,
     ParsedPipeDef,
     PipeDag,
     PipeDef,
@@ -83,6 +86,8 @@ from riko.types.general import (
 from riko.types.modules import (
     AnyModuleRawConf,
     ConfArg,
+    CountArg,
+    CountValues,
     Embed,
     LoopRawConf,
     ModuleName,
@@ -98,6 +103,7 @@ from riko.utils import (
     gen_names,
     gen_parented_graph,
     gen_wires,
+    listize,
     pythonise,
 )
 
@@ -432,13 +438,8 @@ def _get_pyarg(  # noqa: E302
 def _is_default(wire: Wire, module_id: str, in_and_out: bool = False) -> bool:
     id_match = get_module_id(wire, stem="tgt") == module_id
     default_out = id_match and wire["src"]["id"].startswith("_OUTPUT")
-
-    if in_and_out:
-        result = default_out and wire["tgt"]["id"] == "_INPUT"
-    else:
-        result = default_out and wire["tgt"]["id"] != "_INPUT"
-
-    return result
+    is_input = wire["tgt"]["id"] == "_INPUT"
+    return default_out and (is_input if in_and_out else not is_input)
 
 
 @overload
@@ -461,9 +462,9 @@ def _gen_pykwargs(  # noqa: E302
     module = parsed_pipe_def["modules"][module_id]
     yield ("conf", module["conf"])
 
-    for key in ("emit", "assign", "field"):
+    for key in ("emit", "assign", "field", "count"):
         if (setting := module.get(key)) is not None:
-            yield (key, cast(ConfArg, setting)["value"])
+            yield (key, cast(bool | str | CountValues, setting))
 
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
     yield ("context", context)
@@ -501,44 +502,42 @@ def _gen_pykwargs(  # noqa: E302
         yield ("embed", updated)
 
 
-# `output` is virtual → None; the broader `str` overloads below (real modules)
-# never return None, hence the intentional, suppressed overlap.
 @overload
-def _resolve_module(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+def resolve_module(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
     module_name: Literal["output"],
     pipe_name: str,
     compile_missing: Literal[False] = ...,
     file_path: Path | None = ...,
 ) -> None: ...
 @overload  # noqa: E302
-def _resolve_module(  # noqa: E704
+def resolve_module(  # noqa: E704
     module_name: str,
     pipe_name: Literal["pipe"],
     compile_missing: Literal[False] = ...,
     file_path: Path | None = ...,
 ) -> SyncPipeParser: ...
 @overload  # noqa: E302
-def _resolve_module(  # noqa: E704
+def resolve_module(  # noqa: E704
     module_name: str,
     pipe_name: Literal["async_pipe"],
     compile_missing: Literal[False] = ...,
     file_path: Path | None = ...,
 ) -> AsyncPipeParser: ...
 @overload  # noqa: E302
-def _resolve_module(  # noqa: E704
+def resolve_module(  # noqa: E704
     module_name: str,
     pipe_name: str,
     compile_missing: Literal[False] = ...,
     file_path: Path | None = ...,
 ) -> Pipeline: ...
 @overload  # noqa: E302
-def _resolve_module(  # noqa: E704
+def resolve_module(  # noqa: E704
     module_name: str,
     pipe_name: str,
     compile_missing: Literal[True],
     file_path: Path | None = ...,
 ) -> tuple[Pipeline | None, ParsedPipeDef | None]: ...
-def _resolve_module(  # noqa: E302
+def resolve_module(  # noqa: E302
     module_name: str,
     pipe_name: str,
     compile_missing=False,
@@ -600,7 +599,7 @@ def _gen_steps(
     steps = steps or {}
 
     for module_id, module_name, pipe_name in zipped:
-        pipeline = _resolve_module(module_name, pipe_name)
+        pipeline = resolve_module(module_name, pipe_name)
         args = (parsed_pipe_def, module_id)
 
         if module_name == "output":
@@ -654,7 +653,7 @@ def _get_input_module(
     return Id(source) if steps is None else source
 
 
-def _wire(
+def get_wire(
     src: str, tgt: str, wid: str, sid: str = "_OUTPUT", tid: str = "_INPUT"
 ) -> Wire:
     return Wire(
@@ -695,8 +694,94 @@ def convert_dag(dag: PipeDag) -> PipeDef:
     zipped = zip(dag["modules"], module_ids, strict=False)
     modules = [PipeModule({**module, "id": mid}) for module, mid in zipped] + [output]
     edge_pairs = enumerate(edges, 1)
-    full_wires = [_wire(src, tgt, f"_w{index}") for index, (src, tgt) in edge_pairs]
+    full_wires = [get_wire(src, tgt, f"_w{index}") for index, (src, tgt) in edge_pairs]
     return PipeDef({"modules": modules, "wires": full_wires})
+
+
+@overload
+def _arg_value(arg: None) -> None: ...  # noqa: E704
+@overload
+def _arg_value(arg: CountArg) -> str: ...  # noqa: E704
+@overload
+def _arg_value(arg: ConfArg) -> int | str | bool: ...  # noqa: E704
+@overload
+def _arg_value[T](arg: T) -> T: ...  # noqa: E704
+def _arg_value[T](  # noqa: E302
+    arg: ConfArg | CountArg | T | None,
+) -> T | int | str | bool | None:
+    return arg.get("value") if isinstance(arg, dict) else arg
+
+
+def _canonical_options(module: PipeModule) -> CanonicalOptions:
+    conf = cast(LoopRawConf, module["conf"])
+    embedded_module = conf["embed"]["value"]
+    opts = cast(CanonicalOptions, {})
+
+    for key in ("field", "assign", "emit"):
+        if (value := cast(str | None, module.get(key))) is None:
+            value = cast(ConfArg | None, embedded_module.get(key))
+
+        opts[key] = None if value is None else _arg_value(value)
+
+    opts["count"] = _arg_value(conf.get("count"))
+    return opts
+
+
+def legacy_loop_to_canonical(module: PipeModule) -> PipeModule | LoopModule:
+    opts = _canonical_options(module)
+    conf = cast(LoopRawConf, module["conf"])
+    embedded_module = conf["embed"]["value"]
+    module_name = embedded_module["type"]
+    embed_conf = embedded_module["conf"]
+
+    # A pipe embed always stays a loop. A processor embed collapses to a direct
+    # node only when its own fold matches the loop's per-parent fold — i.e. it
+    # emits results or keeps just the first. With assign + count!="first" the
+    # processor list-wraps into one item while the loop yields one copy per
+    # result, so that case must stay a loop embedding the processor.
+    emit_false = opts["emit"] is False
+    keeps_many = opts["count"] != "first"
+    is_loop = module_name.startswith("pipe") or (emit_false and keeps_many)
+    _type = "loop" if is_loop else module_name
+    result = PipeModule({"id": module["id"], "type": _type, "conf": embed_conf})
+
+    if is_loop:
+        result["embed"] = EmbedRef({"id": embedded_module["id"], "type": module_name})
+
+    for k, v in opts.items():
+        if v is not None:
+            result[k] = v
+
+    return cast(LoopModule, result) if is_loop else result
+
+
+def normalize_raw_module(module: PipeModule) -> PipeModule | LoopModule:
+    """
+    Lift a legacy nested loop (``conf.embed.value``) to the canonical form the
+    compiler consumes. ``_legacy_loop_to_canonical`` collapses a processor loop
+    whose fold matches the loop (``emit`` mode or ``count="first"``) into a
+    **direct processor node** (``count``/``field``/``assign``/``emit`` hoisted,
+    embed conf flattened up, loop id kept). Ordinary modules pass through.
+
+    The compact-loop cases (any ``pipe:<id>`` embed, or ``count=all``+``assign``)
+    are **left legacy for now** — the compiler still reads the top-level ``embed``
+    ref from `conf.embed.value`, so lifting them to a compact node waits on that
+    consumption step. See docs/gameplans/loop-restructure.md.
+    """
+    result = module
+
+    if module["type"] == "loop" and "embed" in module["conf"]:
+        canonical = legacy_loop_to_canonical(module)
+
+        if canonical.get("type") != "loop":
+            result = canonical
+
+    return result
+
+
+def normalize_pipe_def(pipe_def: PipeDef) -> PipeDef:
+    modules = [normalize_raw_module(m) for m in listize(pipe_def["modules"])]
+    return cast(PipeDef, {**pipe_def, "modules": modules})
 
 
 def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPipeDef:
@@ -713,6 +798,7 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
     pipe -- an internal representation of a pipe
 
     """
+    pipe_def = normalize_pipe_def(pipe_def)
     graph = defaultdict(list, gen_embed_graph(pipe_def))
     [graph[k].append(v) for k, v in gen_graph(pipe_def)]
     modules = {
@@ -795,6 +881,17 @@ def _get_descriptions(
     return pipeline
 
 
+def _resolve_leaf_modules(parsed_pipe_def: ParsedPipeDef) -> None:
+    # Fail fast on unsupported leaf modules, including ones disconnected from the
+    # output graph that the lazy per-step build never reaches. `output` and
+    # `pipe`-prefixed sub-pipelines resolve via their own paths.
+    for module in parsed_pipe_def["modules"].values():
+        module_name = module["type"]
+
+        if module_name != "output" and not module_name.startswith("pipe"):
+            resolve_module(module_name, "pipe")
+
+
 def build_pipeline(
     parsed_pipe_def: ParsedPipeDef,
     context: Context | None = None,
@@ -812,6 +909,7 @@ def build_pipeline(
     module_ids = topological_sort(parsed_pipe_def["graph"])
 
     if context.mode is ExecutionMode.RUN:
+        _resolve_leaf_modules(parsed_pipe_def)
         module_names = gen_names(module_ids, parsed_pipe_def)
         args = (parsed_pipe_def, module_names, module_ids)
         pipeline = _build_pipeline(*args, is_async=False, context=context, **kwargs)
@@ -839,6 +937,7 @@ async def abuild_pipeline(
     module_ids = topological_sort(parsed_pipe_def["graph"])
 
     if context.mode is ExecutionMode.RUN:
+        _resolve_leaf_modules(parsed_pipe_def)
         module_names = gen_names(module_ids, parsed_pipe_def)
         args = (parsed_pipe_def, module_names, module_ids)
         pipeline = await _build_pipeline(

@@ -55,47 +55,26 @@ def pipe_1166de33b0ea6936d96808717355beaa(
             context=context,
         )
         sw_637 = union(sw_554, conf={}, context=context, others=[sw_569])
-        sw_656 = loop(
+        sw_656 = itembuilder(
             sw_637,
-            conf=LoopRawConf(
+            conf=ItemBuilderRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "conf": ItemBuilderRawConf(
-                                {
-                                    "attrs": [
-                                        {
-                                            "key": {
-                                                "type": "text",
-                                                "value": "newtitle",
-                                            },
-                                            "value": {
-                                                "type": "text",
-                                                "value": "NEWTITLE",
-                                            },
-                                        },
-                                        {
-                                            "key": {"type": "text", "value": "title"},
-                                            "value": {
-                                                "subkey": "title",
-                                                "type": "text",
-                                            },
-                                        },
-                                    ]
-                                }
-                            ),
-                            "id": "sw-696",
-                            "type": "itembuilder",
-                            "emit": {"type": "bool", "value": True},
-                            "assign": {"type": "text", "value": "loop:itembuilder"},
+                    "attrs": [
+                        {
+                            "key": {"type": "text", "value": "newtitle"},
+                            "value": {"type": "text", "value": "NEWTITLE"},
                         },
-                    },
+                        {
+                            "key": {"type": "text", "value": "title"},
+                            "value": {"subkey": "title", "type": "text"},
+                        },
+                    ]
                 }
             ),
+            emit=True,
+            assign="loop:itembuilder",
+            count="all",
             context=context,
-            embed=itembuilder,
         )
         sw_674 = rssitembuilder(
             None,

@@ -17,7 +17,7 @@ import pytest
 
 from riko import Context, ExecutionMode, listize
 from riko.bado import issync, run
-from riko.compile import _resolve_module, abuild_pipeline, build_pipeline
+from riko.compile import abuild_pipeline, build_pipeline, resolve_module
 from riko.exceptions import UnsupportedModuleError
 from riko.parsers import IS_LXML
 from riko.types.general import (
@@ -72,7 +72,7 @@ class TestBasics:
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
         args = (pipe_name, pipe_name, True)
-        pipeline, parsed_pipe_def = _resolve_module(*args, file_path=file_path)
+        pipeline, parsed_pipe_def = resolve_module(*args, file_path=file_path)
 
         if pipeline:
             stream = cast(SyncPipeParser, pipeline)(context=self.context)
@@ -87,7 +87,7 @@ class TestBasics:
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
         args = (pipe_name, pipe_name, True)
-        pipeline, parsed_pipe_def = _resolve_module(*args, file_path=file_path)
+        pipeline, parsed_pipe_def = resolve_module(*args, file_path=file_path)
 
         if pipeline:
             _stream = await cast(AsyncPipeParser, pipeline)(context=self.context)

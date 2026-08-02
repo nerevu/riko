@@ -99,10 +99,7 @@
             },
             "id": "sw-605",
             "type": "strconcat",
-            "emit": {
-                "type": "bool",
-                "value": true
-            }
+            "emit": true
         },
         {
             "conf": {},
