@@ -4,6 +4,7 @@
 
 from riko import Context
 from riko.collections import SyncCollection
+from riko.modules._subpipe import mark_subpipe
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
 from riko.types.modules import FilterRawConf, SortRawConf
@@ -112,6 +113,9 @@ def pipe_8NMkiTW32xGvMbDKruymrA(item=None, context: Context | None = None, **_):
         _OUTPUT = sw_105
 
     return _OUTPUT
+
+
+mark_subpipe(pipe_8NMkiTW32xGvMbDKruymrA, subtype="source")
 
 
 if __name__ == "__main__":

@@ -238,12 +238,19 @@ class SyncProcessorWrapper(ModuleWrapper):
         return iter(())
 
 
+class SubPipe(ModuleWrapper):
+    def __call__(  # noqa: E704
+        self, *_: object, **__: object
+    ) -> ProcessorWrapperOutput:
+        return iter(())
+
+
 class SyncOperatorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: OperatorWrapperInput | None = None,
         conf: Conf | None = None,
-        embed: SyncProcessorWrapper | None = None,
+        embed: SyncProcessorWrapper | SubPipe | None = None,
         context: Context | None = None,
         **__: object,
     ) -> OperatorWrapperOutput:

@@ -13,10 +13,13 @@ global-vs-per-parent ``count`` gap.
 """
 
 import riko.modules.loop as loop_module
+from riko.context import Context
+from riko.modules._subpipe import mark_subpipe
 from riko.modules.loop import pipe as loop
 from riko.modules.regex import pipe as regex
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import pipe as tokenizer
+from riko.types.general import Item, Stream
 from riko.types.modules import (
     AnyModuleRawConf,
     ConfArg,
@@ -24,6 +27,7 @@ from riko.types.modules import (
     EmbeddedModule,
     LoopRawConf,
     ModuleName,
+    PipeId,
     RegexRawConf,
     RegexRawRule,
     StrconcatRawConf,
@@ -340,3 +344,56 @@ class TestImplicitLooping:
         item = {"title": "a b"}
         result = list(tokenizer(item, conf=self._conf(), field="title", emit=True))
         assert result == [{"content": "a"}, {"content": "b"}]
+
+
+class TestSubpipeLoop:
+    """
+    A loop may embed a *sub-pipeline* — a compiled ``pipe_*`` callable with no
+    ``type``/``loopable`` attrs. It runs once per parent (like a loopable
+    processor), and the loop applies the same per-parent ``count``/``emit``/
+    ``assign`` fold to its output stream.
+    """
+
+    @staticmethod
+    @mark_subpipe
+    def _subpipe(item: Item, context: Context | None = None, **_) -> Stream:
+        title = str(item.get("title", ""))
+        return iter([{"content": title.upper()}, {"content": title[::-1]}])
+
+    def _count(self, value):
+        return LoopRawConf(
+            {
+                "count": {"type": "text", "value": value},
+                "embed": {
+                    "type": "module",
+                    "value": {"id": "1", "type": PipeId("1"), "conf": {}},
+                },
+            }
+        )
+
+    def test_emit_all_flattens_per_parent(self):
+        parents = [{"title": "ab"}, {"title": "cd"}]
+        result = list(loop(iter(parents), embed=self._subpipe, conf=self._count("all")))
+        assert result == [
+            {"content": "AB"},
+            {"content": "ba"},
+            {"content": "CD"},
+            {"content": "dc"},
+        ]
+
+    def test_emit_first_keeps_first_per_parent(self):
+        parents = [{"title": "ab"}, {"title": "cd"}]
+        conf = self._count("first")
+        result = list(loop(iter(parents), embed=self._subpipe, conf=conf))
+        assert result == [{"content": "AB"}, {"content": "CD"}]
+
+    def test_assign_folds_first_onto_parent(self):
+        parents = [{"title": "ab"}, {"title": "cd"}]
+        conf = self._count("first")
+        result = list(
+            loop(iter(parents), embed=self._subpipe, conf=conf, assign="up", emit=False)
+        )
+        assert result == [
+            {"title": "ab", "up": {"content": "AB"}},
+            {"title": "cd", "up": {"content": "CD"}},
+        ]

@@ -4,6 +4,7 @@
 
 from riko import Context
 from riko.collections import SyncCollection
+from riko.modules._subpipe import mark_subpipe
 from riko.modules.fetch import pipe as fetch
 from riko.modules.reverse import pipe as reverse
 from riko.modules.sort import pipe as sort
@@ -82,6 +83,9 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(
         _OUTPUT = sw_625
 
     return _OUTPUT
+
+
+mark_subpipe(pipe_58a53262da5a095fe7a0d6d905cc4db6, subtype="source")
 
 
 if __name__ == "__main__":

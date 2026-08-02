@@ -63,6 +63,7 @@ from riko.types.general import (
     Stream,
     StreamOrValueStream,
     Streams,
+    SubPipe,
     SyncOperatorParser,
     SyncOperatorWrapper,
     SyncProcessorParser,
@@ -1076,7 +1077,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             count: CountValues | None = None,
             mode: ExecutionMode | None = None,
             inputs: Inputs | None = None,
-            embed: SyncProcessorWrapper | None = None,
+            embed: SyncProcessorWrapper | SubPipe | None = None,
             **kwargs: bool,
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)

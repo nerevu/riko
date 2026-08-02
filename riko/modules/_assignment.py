@@ -31,6 +31,7 @@ from riko.types.general import (
     ProcessorWrapperOutput,
     Stream,
     StreamOrValueStream,
+    SubPipe,
     SyncProcessorWrapper,
     ValueStream,
 )
@@ -42,7 +43,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 @overload
 def get_subpipe(  # noqa: E704
-    embed: SyncProcessorWrapper,
+    embed: SyncProcessorWrapper | SubPipe,
     context: Context,
     embedded_kwargs: PipeModule | None = ...,
     field: str | None = ...,
@@ -55,7 +56,7 @@ def get_subpipe(  # noqa: E704
     field: str | None = ...,
 ) -> partial[Awaitable[ProcessorWrapperOutput]]: ...
 def get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
-    embed: ProcessorWrapper,
+    embed: ProcessorWrapper | SubPipe,
     context: Context,
     embedded_kwargs: PipeModule | None = None,
     field: str | None = None,

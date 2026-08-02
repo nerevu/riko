@@ -7,6 +7,7 @@ from riko.bado import run
 {%- if use_collection %}
 from riko.collections import AsyncCollection
 {%- endif %}
+from riko.modules._subpipe import mark_subpipe
 {%- for module in uniq_modules %}
 {%- if module.is_sub_pipe %}
 from riko.pypipelines.{{ module.name }} import {{ module.pipe_name }}
@@ -41,6 +42,9 @@ async def {{ pipe_name }}(item=None, context: Context | None = None, **_):
 {%- endfor %}
 
     return {{ last_module }}
+
+
+mark_subpipe({{ pipe_name }}, subtype="{{ subtype }}")
 
 
 async def _main():

@@ -55,6 +55,7 @@ from riko import Context
 from riko.context import ExecutionMode
 from riko.dotdict import DotDict
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.modules._subpipe import is_subpipe, mark_subpipe
 from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
 from riko.types.compile import (
@@ -582,6 +583,12 @@ def resolve_module(  # noqa: E302
     if module and pipeline is None:
         raise UnsupportedModuleError(f"{module_name!r} has no {pipe_name!r}")
 
+    is_pipe = module_name.startswith("pipe_")
+
+    if pipeline is not None and is_pipe and not is_subpipe(pipeline):
+        no_input = parsed_pipe_def is None or not extract_input(parsed_pipe_def)
+        mark_subpipe(pipeline, subtype="source" if no_input else "transformer")
+
     return (pipeline, parsed_pipe_def) if compile_missing else pipeline
 
 
@@ -1006,17 +1013,19 @@ def stringify_pipe(
     _uniq_modules = sorted(single_sources | embeds)
     uniq_modules = [dict(zip(keys, m, strict=False)) for m in _uniq_modules]
 
+    pyinput = extract_input(parsed_pipe_def)
     data = TemplateData(
         {
             "uniq_modules": [cast(AbbrevStringModule, m) for m in uniq_modules],
             "modules": string_modules,
             "pipe_name": parsed_pipe_def["name"],
-            "inputs": extract_input(parsed_pipe_def),
+            "inputs": pyinput,
             "dependencies": extract_dependencies(parsed_pipe_def),
             "embedded_pipes": parsed_pipe_def["embed"],
             "last_module": module_ids[-1],
             "raw_confs": sorted(_used_raw_confs(parsed_pipe_def)),
             "use_collection": any(m["is_collection"] for m in string_modules),
+            "subtype": "source" if not pyinput else "transformer",
         }
     )
 

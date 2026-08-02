@@ -63,6 +63,7 @@ class TemplateData(TypedDict):
     last_module: str
     raw_confs: list[str]
     use_collection: bool
+    subtype: str
 
 
 class TypeCount(TypedDict):
