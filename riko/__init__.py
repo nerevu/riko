@@ -38,7 +38,6 @@ from importlib.metadata import PackageMetadata, metadata, version
 from os import path as p
 from time import struct_time
 from typing import TYPE_CHECKING, Any, TypeVar, overload
-from warnings import warn
 
 from meza.fntools import Objectify as _Objectify
 from requests.structures import CaseInsensitiveDict
@@ -177,17 +176,6 @@ class DynamicConf(Objectify[Any]):
     access. The base type every parsed module config is, and the fallback
     config type for modules without a precise config.
     """
-
-
-def Objconf[VT](  # noqa: N802
-    values: Mapping[str, VT], *args: Any, **kwargs: object
-) -> DynamicConf:
-    warn(
-        "Objconf is deprecated; use riko.ext.config.DynamicConf",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return DynamicConf(values, *args, **kwargs)
 
 
 @overload

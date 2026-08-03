@@ -53,157 +53,107 @@
             "type": "output"
         },
         {
-            "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "rename",
-                        "id": "sw-592e",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "loop:rename"
-                        },
-                        "conf": {
-                            "RULE": [
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "media:content.url"
-                                    },
-                                    "copy": {
-                                        "type": "bool",
-                                        "value": true
-                                    },
-                                    "newval": {
-                                        "type": "text",
-                                        "value": "description"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
             "id": "sw-592",
-            "type": "loop"
-        },
-        {
+            "type": "rename",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "urlbuilder",
-                        "id": "sw-634",
-                        "assign": {
+                "RULE": [
+                    {
+                        "field": {
                             "type": "text",
                             "value": "media:content.url"
                         },
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "conf": {
-                            "PATH": {
-                                "type": "text",
-                                "value": ""
-                            },
-                            "BASE": {
-                                "type": "text",
-                                "value": "https://example.invalid/chart"
-                            },
-                            "PARAM": [
-                                {
-                                    "value": {
-                                        "type": "text",
-                                        "value": "qr"
-                                    },
-                                    "key": {
-                                        "type": "text",
-                                        "value": "cht"
-                                    }
-                                },
-                                {
-                                    "value": {
-                                        "type": "text",
-                                        "value": "200x200"
-                                    },
-                                    "key": {
-                                        "type": "text",
-                                        "value": "chs"
-                                    }
-                                },
-                                {
-                                    "value": {
-                                        "type": "text",
-                                        "subkey": "link"
-                                    },
-                                    "key": {
-                                        "type": "text",
-                                        "value": "chl"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "id": "sw-626",
-            "type": "loop"
-        },
-        {
-            "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "regex",
-                        "id": "sw-636e",
-                        "emit": {
+                        "copy": {
                             "type": "bool",
                             "value": true
                         },
-                        "assign": {
+                        "newval": {
                             "type": "text",
-                            "value": "loop:regex"
-                        },
-                        "conf": {
-                            "RULE": [
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "description"
-                                    },
-                                    "match": {
-                                        "type": "text",
-                                        "value": "(.*)"
-                                    },
-                                    "replace": {
-                                        "type": "text",
-                                        "value": "<img src=\"$1\" alt=\"QRcode\" /><br/>${title}"
-                                    }
-                                }
-                            ]
+                            "value": "description"
                         }
                     }
-                }
+                ]
             },
+            "assign": "loop:rename",
+            "emit": true,
+            "count": "all"
+        },
+        {
+            "id": "sw-626",
+            "type": "loop",
+            "conf": {
+                "PATH": {
+                    "type": "text",
+                    "value": ""
+                },
+                "BASE": {
+                    "type": "text",
+                    "value": "https://example.invalid/chart"
+                },
+                "PARAM": [
+                    {
+                        "value": {
+                            "type": "text",
+                            "value": "qr"
+                        },
+                        "key": {
+                            "type": "text",
+                            "value": "cht"
+                        }
+                    },
+                    {
+                        "value": {
+                            "type": "text",
+                            "value": "200x200"
+                        },
+                        "key": {
+                            "type": "text",
+                            "value": "chs"
+                        }
+                    },
+                    {
+                        "value": {
+                            "type": "text",
+                            "subkey": "link"
+                        },
+                        "key": {
+                            "type": "text",
+                            "value": "chl"
+                        }
+                    }
+                ]
+            },
+            "embed": {
+                "id": "sw-634",
+                "type": "urlbuilder"
+            },
+            "assign": "media:content.url",
+            "emit": false,
+            "count": "all"
+        },
+        {
             "id": "sw-636",
-            "type": "loop"
+            "type": "regex",
+            "conf": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "(.*)"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "<img src=\"$1\" alt=\"QRcode\" /><br/>${title}"
+                        }
+                    }
+                ]
+            },
+            "assign": "loop:regex",
+            "emit": true,
+            "count": "all"
         }
     ],
     "terminaldata": [

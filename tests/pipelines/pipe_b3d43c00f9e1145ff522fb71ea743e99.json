@@ -71,66 +71,34 @@
             "type": "output"
         },
         {
+            "id": "sw-595",
+            "type": "loop",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "first"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "gid": {
-                                "subkey": "result.winning-mp.aristotle-id",
-                                "type": "text"
-                            }
-                        },
-                        "id": "sw-603",
-                        "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "mpdetails"
-                        }
-                    }
+                "gid": {
+                    "subkey": "result.winning-mp.aristotle-id",
+                    "type": "text"
                 }
             },
-            "id": "sw-595",
-            "type": "loop"
+            "embed": {
+                "id": "sw-603",
+                "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8"
+            },
+            "assign": "mpdetails",
+            "emit": false,
+            "count": "first"
         },
         {
+            "id": "sw-619",
+            "type": "locationbuilder",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "first"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "LOCATION": {
-                                "subkey": "mpdetails.university",
-                                "type": "text"
-                            }
-                        },
-                        "id": "sw-692",
-                        "type": "locationbuilder",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "y:location"
-                        }
-                    }
+                "LOCATION": {
+                    "subkey": "mpdetails.university",
+                    "type": "text"
                 }
             },
-            "id": "sw-619",
-            "type": "loop"
+            "assign": "y:location",
+            "emit": false,
+            "count": "first"
         },
         {
             "conf": {

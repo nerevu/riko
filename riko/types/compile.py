@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import NotRequired, Required, TypedDict
 
-from riko.types.general import PyInput
+from riko.types.general import Conf, PyInput
 from riko.types.modules import (
     AnyModuleRawConf,
     CountValues,
@@ -32,11 +32,12 @@ class LoopModule(PipeModule, total=False):
     embed: Required[EmbedRef]
 
 
-class CanonicalOptions(TypedDict):
-    emit: bool | None
-    assign: str | None
-    field: str | None
-    count: CountValues | None
+class EmbedKwargs(TypedDict, total=False):
+    """Kwargs a loop passes to its embed per parent — not a full module descriptor."""
+
+    conf: Conf
+    field: str
+    emit: bool
 
 
 class AbbrevStringModule(TypedDict):

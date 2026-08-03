@@ -45,51 +45,37 @@
     ],
     "modules": [
         {
+            "id": "sw-61",
+            "type": "loop",
             "conf": {
-                "count": {
+                "BASE": {
                     "type": "text",
-                    "value": "all"
+                    "value": "api.github.com_search_users"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "BASE": {
-                                "type": "text",
-                                "value": "api.github.com_search_users"
-                            },
-                            "PARAM": [
-                                {
-                                    "key": {
-                                        "type": "text",
-                                        "value": "q"
-                                    },
-                                    "value": {
-                                        "subkey": "title",
-                                        "type": "text"
-                                    }
-                                }
-                            ],
-                            "EXT": {
-                                "type": "text",
-                                "value": "json"
-                            }
-                        },
-                        "id": "sw-72",
-                        "type": "urlbuilder",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
+                "PARAM": [
+                    {
+                        "key": {
                             "type": "text",
-                            "value": "api"
+                            "value": "q"
+                        },
+                        "value": {
+                            "subkey": "title",
+                            "type": "text"
                         }
                     }
+                ],
+                "EXT": {
+                    "type": "text",
+                    "value": "json"
                 }
             },
-            "id": "sw-61",
-            "type": "loop"
+            "embed": {
+                "id": "sw-72",
+                "type": "urlbuilder"
+            },
+            "assign": "api",
+            "emit": false,
+            "count": "all"
         },
         {
             "conf": {},
@@ -97,33 +83,21 @@
             "type": "output"
         },
         {
+            "id": "sw-142",
+            "type": "fetchdata",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "first"
+                "URL": {
+                    "subkey": "api",
+                    "type": "url"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "URL": {
-                                "subkey": "api",
-                                "type": "url"
-                            },
-                            "path": {
-                                "type": "text",
-                                "value": "items"
-                            }
-                        },
-                        "id": "sw-150",
-                        "type": "fetchdata"
-                    }
+                "path": {
+                    "type": "text",
+                    "value": "items"
                 }
             },
-            "id": "sw-142",
-            "type": "loop",
+            "assign": "info",
             "emit": false,
-            "assign": "info"
+            "count": "first"
         },
         {
             "conf": {

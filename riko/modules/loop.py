@@ -4,66 +4,33 @@ Provides functions for creating submodules from existing pipes
 
     http://pipes.yahoo.com/pipes/docs?doc=operators#Loop
 
-A ``loop`` runs a processor *submodule* (``embed``) once per source item and
-folds the submodule's output back into the stream. Any loopable processor may
-be embedded (i.e. everything except ``*input``). Two independent settings
-control the fold; understanding them is the key to reading loops.
+A ``loop`` runs a processor or sub-pipeline *submodule* (``embed``) once per
+source item and folds the submodule's output back into the stream. Any loopable
+processor (everything except ``*input``) or a compiled sub-pipeline may be
+embedded. The loop is configured entirely with **top-level kwargs** (the compact
+form):
 
-``count`` -- how many submodule results to keep per source item:
+``embed`` -- the submodule callable.
+``conf``  -- the submodule's own configuration.
+``field`` -- the source field fed to the submodule.
+``count`` -- how many submodule results to keep per source item: ``"all"``
+    (default) or ``"first"``.
+``emit`` / ``assign`` -- how each kept result folds back onto the parent item:
 
-* ``"all"``   -- keep every result (default)
-* ``"first"`` -- keep only the first result
+* ``emit=True``                -- replace each source item with the submodule
+  output.
+* ``emit=False, assign="foo"`` -- store each result at ``item["foo"]`` (one
+  preserved-parent copy per result).
 
-``emit`` / ``assign`` -- where the submodule output goes. These exist at **two
-distinct levels**, and confusing them is the most common source of loop bugs:
-
-1. **Loop level** -- passed as ``loop(..., emit=, assign=)`` kwargs (like every
-   other module). This controls how the loop folds submodule output into the
-   *parent* item:
-
-   * ``emit=True``            -- replace each source item with the submodule output
-   * ``emit=False, assign="foo"`` -- store the submodule output at ``item["foo"]``
-
-   The default is ``is_mapping`` -- emit when the submodule output is a mapping,
-   which is effectively ``True`` for the usual stream of item dicts. Pass
-   ``emit=False`` explicitly to fold into a subkey instead.
-
-2. **Embed level** -- ``conf["embed"]["value"]["emit"]`` / ``["assign"]``. These
-   are the *submodule's own* options, applied while the submodule runs, before
-   the loop folds its result.
-
-Rule of thumb: if the submodule yields exactly **one** value per item
-(``rename``, ``strconcat``, ``urlbuilder``, ``regex``), embed-level ``assign`` is
-enough and ``count`` is irrelevant. If the submodule yields **many** values
-(``fetchdata``, ``tokenizer``) and you want a single result folded into a
-subkey, use **loop-level** ``assign`` together with ``count="first"`` -- the
-``count`` reduction happens as the loop folds, which only the loop level sees.
-
-Canonical conf shape::
-
-    loop(
-        source,
-        embed=itembuilder,
-        assign="info",  # loop-level fold options are module-level kwargs
-        emit=False,
-        conf={
-            "count": "all",
-            "embed": {
-                "type": "module",
-                "value": {
-                    "type": "itembuilder",
-                    "id": "sw-1",
-                    "assign": "loop:itembuilder",  # submodule (embed-level) opts
-                    "emit": False,
-                    "conf": {"attrs": [...]},       # submodule conf
-                },
-            },
-        },
-    )
+Rule of thumb: if the submodule yields exactly **one** value per item (``rename``,
+``strconcat``, ``urlbuilder``, ``regex``), ``emit=True`` replaces the item and
+``count`` is irrelevant. If it yields **many** (``tokenizer``, ``fetchdata``) and
+you want them folded into a subkey, use ``emit=False`` + ``assign`` (with
+``count="first"`` to keep only the first).
 
 Scenarios:
-    1. Transform a field in place -- ``emit=True`` makes the loop yield the
-       submodule's transformed items (each source item is replaced)::
+    1. Transform a field in place -- ``emit=True`` yields the submodule's
+       transformed items (each source item is replaced)::
 
         >>> from riko.modules.loop import pipe
         >>> from riko.modules.regex import pipe as regex
@@ -74,47 +41,23 @@ Scenarios:
         ...     "match": {"type": "text", "value": "l"},
         ...     "replace": {"type": "text", "value": "L"},
         ... }
-        >>> conf = {
-        ...     "embed": {
-        ...         "type": "module",
-        ...         "value": {
-        ...             "type": "regex",
-        ...             "id": "r",
-        ...             "emit": {"type": "bool", "value": True},
-        ...             "conf": {"rule": [rule]},
-        ...         },
-        ...     }
-        ... }
-        >>> list(pipe(items, embed=regex, conf=conf))
+        >>> list(pipe(items, embed=regex, conf={"rule": [rule]}, emit=True))
         [{'title': 'heLLo'}, {'title': 'yeLLow'}]
 
     2. Enrich each item with the first of many submodule results --
-       ``emit=False`` + ``assign`` at the **loop level** with ``count="first"``.
-       The submodule (``tokenizer``) yields several values; the loop keeps the
-       first and stores it under the ``assign`` subkey::
+       ``emit=False`` + ``assign`` + ``count="first"``. The submodule
+       (``tokenizer``) yields several values; the loop keeps the first and stores
+       it under the ``assign`` subkey::
 
         >>> from riko.modules.tokenizer import pipe as tokenizer
         >>>
-        >>> value = {
-        ...     "type": "tokenizer",
-        ...     "id": "t",
-        ...     "emit": {"type": "bool", "value": True},
-        ...     "field": {"type": "text", "value": "title"},
-        ...     "conf": {"delimiter": {"type": "text", "value": " "}},
-        ... }
-        >>> conf = {
-        ...     "count": {"type": "text", "value": "first"},
-        ...     "embed": {"type": "module", "value": value},
-        ... }
         >>> item = {"title": "a b c"}
-        >>> list(pipe([item], embed=tokenizer, conf=conf, assign="first", emit=False))
+        >>> conf = {"delimiter": {"type": "text", "value": " "}}
+        >>> list(pipe(
+        ...     [item], embed=tokenizer, conf=conf, field="title",
+        ...     count="first", assign="first", emit=False,
+        ... ))
         [{'title': 'a b c', 'first': {'content': 'a'}}]
-
-       The source item is preserved and the kept result is stored under
-       ``assign`` (Phase 2 per-parent fold). Swapping ``count`` to ``"all"`` keeps
-       every result instead — one preserved-parent copy per token. This is exactly the shape used by real pipelines that
-       loop ``fetchdata`` to attach a lookup: ``assign="info"``, ``emit=False``,
-       ``count="first"`` stores the first fetched record at ``item["info"]``.
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -179,25 +122,32 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Kwargs:
         embed: the submodule. Any loopable processor (everything except
-            ``*input``) can be a submodule.
+            ``*input``) or a compiled sub-pipeline can be a submodule.
 
-        assign (str): Loop-level subkey to fold the submodule output into (used
-            when ``emit`` is False). See the module docstring for the loop-level
-            vs embed-level distinction.
+        conf (dict): The submodule's own configuration.
 
-        emit (bool): Loop-level fold mode. True replaces each source item with
-            the submodule output; False stores it under ``assign``. Default:
+        field (str): The source field fed to the submodule.
+
+        count (str): How many submodule results to keep per source item —
+            ``"all"`` (default) or ``"first"``.
+
+        assign (str): Subkey to fold each kept result into (when ``emit`` is
+            False).
+
+        emit (bool): Fold mode. True replaces each source item with the submodule
+            output; False stores each result under ``assign``. Default:
             ``is_mapping`` (emit when the output is a mapping, i.e. effectively
             True for a normal item stream).
 
-        field (str): Loop-level source field to feed the submodule (a
-            module-level kwarg, like every other module).
+    """
+    return parser(*args, **kwargs)
 
-        conf (dict): The loop configuration. May contain:
-            "count": "all" (keep every submodule result, default) or "first"
-                (keep only the first).
-            "embed": {"type": "module", "value": {"type", "id", "conf", and the
-                submodule's own "assign"/"emit"/"field"}}.
 
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
+    """
+    Async counterpart of ``pipe`` — creates submodules from existing pipes,
+    running the embed once per parent (eagerly, concurrently) and applying the
+    same per-parent ``count``/``emit``/``assign`` fold. See ``pipe`` for kwargs.
     """
     return parser(*args, **kwargs)

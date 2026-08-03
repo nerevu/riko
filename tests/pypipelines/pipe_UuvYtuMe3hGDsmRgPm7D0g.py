@@ -14,7 +14,6 @@ from riko.types.modules import (
     CsvRawConf,
     FilterRawConf,
     InputRawConf,
-    LoopRawConf,
     RenameRawConf,
     StrconcatRawConf,
 )
@@ -121,116 +120,61 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(item=None, context: Context | None = None, **_):
         )
         sw_400 = loop(
             sw_385,
-            conf=LoopRawConf(
+            conf=StrconcatRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "strconcat",
-                            "id": "sw-408",
-                            "assign": {"type": "text", "value": "description"},
-                            "emit": {"type": "bool", "value": False},
-                            "conf": StrconcatRawConf(
-                                {
-                                    "part": [
-                                        {
-                                            "type": "text",
-                                            "value": "Total allowances claimed, inc travel: ",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "subkey": "TotalAllowancesClaimedIncTravel",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "value": "<br>Total basic allowances claimed, ex travel: ",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "subkey": "TotalBasicAllowancesExcTravel",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "value": "<br>Total Travel claimed: ",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "subkey": "TotalTravelClaimed",
-                                        },
-                                        {"type": "text", "value": "<br>MP Mileage: "},
-                                        {"type": "text", "subkey": "Mileage"},
-                                        {
-                                            "type": "text",
-                                            "value": "<br>MP Rail Travel: ",
-                                        },
-                                        {"type": "text", "subkey": "MPRail"},
-                                        {
-                                            "type": "text",
-                                            "value": "<br>MP Air Travel: ",
-                                        },
-                                        {"type": "text", "subkey": "MPAir"},
-                                        {
-                                            "type": "text",
-                                            "value": "<br>Cost of staying away from main home: ",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "subkey": "CostofStayingAwayFromMainHome",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "value": "<br>London Supplement: ",
-                                        },
-                                        {"type": "text", "subkey": "LondonSupplement"},
-                                        {
-                                            "type": "text",
-                                            "value": "<br>Office Running Costs: ",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "subkey": "OfficeRunningCosts",
-                                        },
-                                        {
-                                            "type": "text",
-                                            "value": "<br>Staffing Costs: ",
-                                        },
-                                        {"type": "text", "subkey": "StaffingCosts"},
-                                    ]
-                                }
-                            ),
+                    "part": [
+                        {
+                            "type": "text",
+                            "value": "Total allowances claimed, inc travel: ",
                         },
-                    },
+                        {"type": "text", "subkey": "TotalAllowancesClaimedIncTravel"},
+                        {
+                            "type": "text",
+                            "value": "<br>Total basic allowances claimed, ex travel: ",
+                        },
+                        {"type": "text", "subkey": "TotalBasicAllowancesExcTravel"},
+                        {"type": "text", "value": "<br>Total Travel claimed: "},
+                        {"type": "text", "subkey": "TotalTravelClaimed"},
+                        {"type": "text", "value": "<br>MP Mileage: "},
+                        {"type": "text", "subkey": "Mileage"},
+                        {"type": "text", "value": "<br>MP Rail Travel: "},
+                        {"type": "text", "subkey": "MPRail"},
+                        {"type": "text", "value": "<br>MP Air Travel: "},
+                        {"type": "text", "subkey": "MPAir"},
+                        {
+                            "type": "text",
+                            "value": "<br>Cost of staying away from main home: ",
+                        },
+                        {"type": "text", "subkey": "CostofStayingAwayFromMainHome"},
+                        {"type": "text", "value": "<br>London Supplement: "},
+                        {"type": "text", "subkey": "LondonSupplement"},
+                        {"type": "text", "value": "<br>Office Running Costs: "},
+                        {"type": "text", "subkey": "OfficeRunningCosts"},
+                        {"type": "text", "value": "<br>Staffing Costs: "},
+                        {"type": "text", "subkey": "StaffingCosts"},
+                    ]
                 }
             ),
+            emit=False,
+            assign="description",
+            count="all",
             context=context,
             embed=strconcat,
         )
         sw_573 = loop(
             sw_400,
-            conf=LoopRawConf(
+            conf=StrconcatRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "strconcat",
-                            "id": "sw-581",
-                            "assign": {"type": "text", "value": "title"},
-                            "emit": {"type": "bool", "value": False},
-                            "conf": StrconcatRawConf(
-                                {
-                                    "part": [
-                                        {"type": "text", "subkey": "firstName"},
-                                        {"type": "text", "value": " "},
-                                        {"type": "text", "subkey": "Member"},
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "part": [
+                        {"type": "text", "subkey": "firstName"},
+                        {"type": "text", "value": " "},
+                        {"type": "text", "subkey": "Member"},
+                    ]
                 }
             ),
+            emit=False,
+            assign="title",
+            count="all",
             context=context,
             embed=strconcat,
         )

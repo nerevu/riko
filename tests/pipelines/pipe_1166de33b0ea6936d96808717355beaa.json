@@ -125,102 +125,70 @@
             "type": "union"
         },
         {
+            "id": "sw-656",
+            "type": "itembuilder",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "attrs": [
-                                {
-                                    "key": {
-                                        "type": "text",
-                                        "value": "newtitle"
-                                    },
-                                    "value": {
-                                        "type": "text",
-                                        "value": "NEWTITLE"
-                                    }
-                                },
-                                {
-                                    "key": {
-                                        "type": "text",
-                                        "value": "title"
-                                    },
-                                    "value": {
-                                        "subkey": "title",
-                                        "type": "text"
-                                    }
-                                }
-                            ]
-                        },
-                        "id": "sw-696",
-                        "type": "itembuilder",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
+                "attrs": [
+                    {
+                        "key": {
                             "type": "text",
-                            "value": "loop:itembuilder"
+                            "value": "newtitle"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "NEWTITLE"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "subkey": "title",
+                            "type": "text"
                         }
                     }
-                }
+                ]
             },
-            "id": "sw-656",
-            "type": "loop"
+            "assign": "loop:itembuilder",
+            "emit": true,
+            "count": "all"
         },
         {
+            "id": "sw-688",
+            "type": "loop",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "attrs": [
-                                {
-                                    "key": {
-                                        "type": "text",
-                                        "value": "title"
-                                    },
-                                    "value": {
-                                        "subkey": "newtitle",
-                                        "type": "text"
-                                    }
-                                },
-                                {
-                                    "key": {
-                                        "type": "text",
-                                        "value": "description.content"
-                                    },
-                                    "value": {
-                                        "type": "text",
-                                        "value": "DESCRIPTION"
-                                    }
-                                }
-                            ]
-                        },
-                        "id": "sw-710",
-                        "type": "itembuilder",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
+                "attrs": [
+                    {
+                        "key": {
                             "type": "text",
-                            "value": "loop:itembuilder"
+                            "value": "title"
+                        },
+                        "value": {
+                            "subkey": "newtitle",
+                            "type": "text"
+                        }
+                    },
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "description.content"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "DESCRIPTION"
                         }
                     }
-                }
+                ]
             },
-            "id": "sw-688",
-            "type": "loop"
+            "embed": {
+                "id": "sw-710",
+                "type": "itembuilder"
+            },
+            "assign": "loop:itembuilder",
+            "emit": false,
+            "count": "all"
         },
         {
             "conf": {

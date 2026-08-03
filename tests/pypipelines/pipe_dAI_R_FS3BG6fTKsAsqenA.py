@@ -8,12 +8,7 @@ from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.strconcat import pipe as strconcat
-from riko.types.modules import (
-    FetchDataRawConf,
-    LoopRawConf,
-    RenameRawConf,
-    StrconcatRawConf,
-)
+from riko.types.modules import FetchDataRawConf, RenameRawConf, StrconcatRawConf
 
 
 def pipe_dAI_R_FS3BG6fTKsAsqenA(item=None, context: Context | None = None, **_):
@@ -37,30 +32,19 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(item=None, context: Context | None = None, **_):
         )
         sw_138 = loop(
             sw_286,
-            conf=LoopRawConf(
+            conf=StrconcatRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "strconcat",
-                            "id": "sw-138e",
-                            "emit": {"type": "bool", "value": False},
-                            "assign": {"type": "text", "value": "title"},
-                            "conf": StrconcatRawConf(
-                                {
-                                    "part": [
-                                        {"type": "text", "subkey": "headline"},
-                                        {"type": "text", "value": " ("},
-                                        {"type": "text", "subkey": "severity"},
-                                        {"type": "text", "value": ")"},
-                                    ]
-                                }
-                            ),
-                        },
-                    },
+                    "part": [
+                        {"type": "text", "subkey": "headline"},
+                        {"type": "text", "value": " ("},
+                        {"type": "text", "subkey": "severity"},
+                        {"type": "text", "value": ")"},
+                    ]
                 }
             ),
+            emit=False,
+            assign="title",
+            count="all",
             context=context,
             embed=strconcat,
         )

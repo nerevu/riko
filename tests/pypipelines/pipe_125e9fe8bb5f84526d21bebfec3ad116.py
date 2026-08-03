@@ -14,7 +14,6 @@ from riko.types.modules import (
     FetchDataRawConf,
     InputRawConf,
     ItemBuilderRawConf,
-    LoopRawConf,
     RenameRawConf,
     UrlBuilderRawConf,
 )
@@ -58,38 +57,21 @@ def pipe_125e9fe8bb5f84526d21bebfec3ad116(
         )
         sw_61 = loop(
             sw_467,
-            conf=LoopRawConf(
+            conf=UrlBuilderRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "conf": UrlBuilderRawConf(
-                                {
-                                    "base": {
-                                        "type": "text",
-                                        "value": "api.github.com_search_users",
-                                    },
-                                    "param": [
-                                        {
-                                            "key": {"type": "text", "value": "q"},
-                                            "value": {
-                                                "subkey": "title",
-                                                "type": "text",
-                                            },
-                                        }
-                                    ],
-                                    "ext": {"type": "text", "value": "json"},
-                                }
-                            ),
-                            "id": "sw-72",
-                            "type": "urlbuilder",
-                            "emit": {"type": "bool", "value": False},
-                            "assign": {"type": "text", "value": "api"},
-                        },
-                    },
+                    "base": {"type": "text", "value": "api.github.com_search_users"},
+                    "param": [
+                        {
+                            "key": {"type": "text", "value": "q"},
+                            "value": {"subkey": "title", "type": "text"},
+                        }
+                    ],
+                    "ext": {"type": "text", "value": "json"},
                 }
             ),
+            emit=False,
+            assign="api",
+            count="all",
             context=context,
             embed=urlbuilder,
         )

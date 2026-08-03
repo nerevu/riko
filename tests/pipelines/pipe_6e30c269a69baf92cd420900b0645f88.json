@@ -158,116 +158,80 @@
             "type": "sort"
         },
         {
+            "id": "sw-195",
+            "type": "regex",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "regex",
-                        "id": "sw-195e",
-                        "emit": {
+                "RULE": [
+                    {
+                        "singlelinematch": {
                             "type": "bool",
                             "value": true
                         },
-                        "assign": {
-                            "type": "text",
-                            "value": "loop:regex"
+                        "singlematch": {
+                            "type": "bool",
+                            "value": false
                         },
-                        "conf": {
-                            "RULE": [
-                                {
-                                    "singlelinematch": {
-                                        "type": "bool",
-                                        "value": true
-                                    },
-                                    "singlematch": {
-                                        "type": "bool",
-                                        "value": false
-                                    },
-                                    "replace": {
-                                        "type": "text",
-                                        "value": ""
-                                    },
-                                    "field": {
-                                        "type": "text",
-                                        "value": "description"
-                                    },
-                                    "casematch": {
-                                        "type": "bool",
-                                        "value": true
-                                    },
-                                    "match": {
-                                        "type": "text",
-                                        "value": "</div>.*$"
-                                    }
-                                },
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "link"
-                                    },
-                                    "match": {
-                                        "type": "text",
-                                        "value": "^(.*\\/.*)\\/"
-                                    },
-                                    "replace": {
-                                        "type": "text",
-                                        "value": "$1/2.220/"
-                                    }
-                                }
-                            ]
+                        "replace": {
+                            "type": "text",
+                            "value": ""
+                        },
+                        "field": {
+                            "type": "text",
+                            "value": "description"
+                        },
+                        "casematch": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "</div>.*$"
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "link"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "^(.*\\/.*)\\/"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "$1/2.220/"
                         }
                     }
-                }
+                ]
             },
-            "id": "sw-195",
-            "type": "loop"
+            "assign": "loop:regex",
+            "emit": true,
+            "count": "all"
         },
         {
+            "id": "sw-210",
+            "type": "rename",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "rename",
-                        "id": "sw-210e",
-                        "emit": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "y:id.value"
+                        },
+                        "copy": {
                             "type": "bool",
                             "value": true
                         },
-                        "assign": {
+                        "newval": {
                             "type": "text",
-                            "value": "loop:rename"
-                        },
-                        "conf": {
-                            "RULE": [
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "y:id.value"
-                                    },
-                                    "copy": {
-                                        "type": "bool",
-                                        "value": true
-                                    },
-                                    "newval": {
-                                        "type": "text",
-                                        "value": "link"
-                                    }
-                                }
-                            ]
+                            "value": "link"
                         }
                     }
-                }
+                ]
             },
-            "id": "sw-210",
-            "type": "loop"
+            "assign": "loop:rename",
+            "emit": true,
+            "count": "all"
         },
         {
             "conf": {

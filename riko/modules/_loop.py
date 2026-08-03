@@ -6,13 +6,13 @@ Loop-specific execution, extracted from the generic operator decorator. Owns
 embedded-target validation, child-context creation (via ``_get_subpipe``), and
 the per-parent fold of an embedded processor over the source stream.
 
-Phase 2 (sync): the loop runs the embed once per parent and folds its results
-back against *that parent* — ``count`` reduces per parent, ``emit`` yields the
-child results, and ``assign`` stores each result on a preserved copy of the
-parent (one copy per result). This is the Yahoo per-parent contract. Loop-level
-``field`` selection and the async per-parent fold arrive in later Phase 2 commits
-(see docs/gameplans/loop-restructure.md); the async path here is still the eager
-flatten (unreached — the loop module is sync-only until its ``async_pipe`` lands).
+Phase 2: the loop runs the embed once per parent and folds its results back
+against *that parent* — ``count`` reduces per parent, ``emit`` yields the child
+results, and ``assign`` stores each result on a preserved copy of the parent (one
+copy per result). This is the Yahoo per-parent contract, applied by both the sync
+loop and the eager-async loop (``loop.async_pipe``, which runs the embeds
+concurrently via ``async_map``). Lazy per-parent async streaming lands in Phase 3
+(see docs/gameplans/loop-restructure.md).
 """
 
 from functools import partial
@@ -26,16 +26,17 @@ from riko.bado.itertools import async_map
 from riko.context import Context
 from riko.modules._assignment import get_subpipe
 from riko.modules._subpipe import is_subpipe
-from riko.types.compile import PipeModule
+from riko.types.compile import EmbedKwargs
 from riko.types.general import (
     AsyncProcessorWrapper,
+    AsyncSubPipe,
     Item,
     Items,
     ItemsOrValues,
     Stream,
     StreamOrValueStream,
-    SubPipe,
     SyncProcessorWrapper,
+    SyncSubPipe,
 )
 from riko.types.modules import CountValues
 
@@ -72,8 +73,8 @@ def _fold_parent(  # noqa: E302
 
 
 def _run_loop_sync(
-    embed: SyncProcessorWrapper | SubPipe,
-    embedded_kwargs: PipeModule | None,
+    embed: SyncProcessorWrapper | SyncSubPipe,
+    embedded_kwargs: EmbedKwargs | None,
     context: Context,
     source: Stream,
     *,
@@ -85,13 +86,34 @@ def _run_loop_sync(
     embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
 
     for parent in source:
-        results = _take(embedder(parent), count)
-        yield from _fold_parent(parent, results, assign or "", bool(emit))
+        items = _take(embedder(parent), count)
+        yield from _fold_parent(parent, items, assign or "", bool(emit))
+
+
+async def _run_loop_async_eager(
+    embed: AsyncProcessorWrapper | AsyncSubPipe,
+    embedded_kwargs: EmbedKwargs | None,
+    context: Context,
+    source: Stream,
+    *,
+    field: str | None,
+    assign: str | None = None,
+    emit: bool | None = None,
+    count: CountValues | None,
+) -> StreamOrValueStream:
+    embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
+    parents = list(source)
+    per_parent = await async_map(embedder, parents)
+
+    return chain.from_iterable(
+        _fold_parent(parent, _take(results, count), assign or "", bool(emit))
+        for parent, results in zip(parents, per_parent, strict=True)
+    )
 
 
 def loop_embed_sync(
-    embed: SyncProcessorWrapper | SubPipe | None,
-    embedded_kwargs: PipeModule | None,
+    embed: SyncProcessorWrapper | SyncSubPipe | None,
+    embedded_kwargs: EmbedKwargs | None,
     context: Context,
     source: Stream,
     op_module_name: str,
@@ -119,7 +141,7 @@ def loop_embed_sync(
     if is_subpipe(embed):
         # A sub-pipeline embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
-        stream = loop(cast(SyncProcessorWrapper, embed), None, context, source)
+        stream = loop(cast(SyncSubPipe, embed), None, context, source)
         looped = True
     elif embed and embed_type and embed.loopable:
         stream = loop(embed, embedded_kwargs, context, source)
@@ -137,33 +159,38 @@ def loop_embed_sync(
 
 
 async def loop_embed_async_eager(
-    embed: AsyncProcessorWrapper | None,
-    embedded_kwargs: PipeModule | None,
+    embed: AsyncProcessorWrapper | AsyncSubPipe | None,
+    embedded_kwargs: EmbedKwargs | None,
     context: Context,
     source: Stream,
     op_module_name: str,
+    *,
+    field: str | None = None,
+    assign: str | None = None,
+    emit: bool | None = None,
+    count: CountValues | None = None,
 ) -> tuple[bool, bool, StreamOrValueStream]:
     """
-    Eager-async counterpart of ``loop_embed_sync``. The per-parent async loop and
-    the ``async_pipe`` loop land in a later Phase 2 commit; today this keeps the
-    eager flatten (``looped`` False) and is unreached (the loop module is
-    sync-only). See the module docstring for the trajectory.
+    Eager-async counterpart of ``loop_embed_sync``: runs the embed once per parent
+    (concurrently via ``async_map``) and applies the same per-parent fold. Parents
+    are materialized eagerly; the lazy per-parent async stream lands in Phase 3.
     """
     embed_type = getattr(embed, "type", None)
     handled = True
     looped = False
     stream = source
+    loop = partial(
+        _run_loop_async_eager, field=field, assign=assign, emit=emit, count=count
+    )
 
     if is_subpipe(embed):
         # A sub-pipeline embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
-        embedder = get_subpipe(cast(AsyncProcessorWrapper, embed), context, None)
-        stream_map = await async_map(embedder, source)
-        stream = chain.from_iterable(stream_map)
+        stream = await loop(cast(AsyncSubPipe, embed), None, context, source)
+        looped = True
     elif embed and embed_type and embed.loopable:
-        embedder = get_subpipe(embed, context, embedded_kwargs)
-        stream_map = await async_map(embedder, source)
-        stream = chain.from_iterable(stream_map)
+        stream = await loop(embed, embedded_kwargs, context, source)
+        looped = True
     elif embed_type:
         logger.error(f"{embed.name} is not loopable and can't be embedded.")
     elif embed and callable(embed):

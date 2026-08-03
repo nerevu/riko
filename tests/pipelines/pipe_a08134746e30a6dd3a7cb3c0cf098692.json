@@ -43,120 +43,91 @@
             "type": "output"
         },
         {
+            "id": "sw-443",
+            "type": "rssitembuilder",
             "conf": {
-                "count": {
+                "author": {
                     "type": "text",
-                    "value": "all"
+                    "value": ""
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "rssitembuilder",
-                        "id": "sw-444",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "conf": {
-                            "author": {
-                                "type": "text",
-                                "value": ""
-                            },
-                            "description": {
-                                "subkey": "description",
-                                "type": "text"
-                            },
-                            "guid": {
-                                "type": "text",
-                                "value": ""
-                            },
-                            "link": {
-                                "subkey": "link",
-                                "type": "url"
-                            },
-                            "mediaContentHeight": {
-                                "subkey": "img.height",
-                                "type": "text"
-                            },
-                            "mediaContentType": {
-                                "type": "text",
-                                "value": ""
-                            },
-                            "mediaContentURL": {
-                                "subkey": "img.src",
-                                "type": "url"
-                            },
-                            "mediaContentWidth": {
-                                "subkey": "img.width",
-                                "type": "text"
-                            },
-                            "mediaThumbHeight": {
-                                "type": "text",
-                                "value": ""
-                            },
-                            "mediaThumbURL": {
-                                "type": "text",
-                                "value": ""
-                            },
-                            "mediaThumbWidth": {
-                                "type": "text",
-                                "value": ""
-                            },
-                            "pubdate": {
-                                "type": "text",
-                                "value": ""
-                            },
-                            "title": {
-                                "subkey": "img.alt",
-                                "type": "text"
-                            }
-                        }
-                    }
+                "description": {
+                    "subkey": "description",
+                    "type": "text"
+                },
+                "guid": {
+                    "type": "text",
+                    "value": ""
+                },
+                "link": {
+                    "subkey": "link",
+                    "type": "url"
+                },
+                "mediaContentHeight": {
+                    "subkey": "img.height",
+                    "type": "text"
+                },
+                "mediaContentType": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaContentURL": {
+                    "subkey": "img.src",
+                    "type": "url"
+                },
+                "mediaContentWidth": {
+                    "subkey": "img.width",
+                    "type": "text"
+                },
+                "mediaThumbHeight": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbURL": {
+                    "type": "text",
+                    "value": ""
+                },
+                "mediaThumbWidth": {
+                    "type": "text",
+                    "value": ""
+                },
+                "pubdate": {
+                    "type": "text",
+                    "value": ""
+                },
+                "title": {
+                    "subkey": "img.alt",
+                    "type": "text"
                 }
             },
-            "id": "sw-443",
-            "type": "loop"
+            "emit": true,
+            "count": "all"
         },
         {
-            "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "part": [
-                                {
-                                    "type": "text",
-                                    "value": "<img src=\""
-                                },
-                                {
-                                    "subkey": "img.src",
-                                    "type": "text"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": "\">"
-                                }
-                            ]
-                        },
-                        "id": "sw-515",
-                        "type": "strconcat",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "description"
-                        }
-                    }
-                }
-            },
             "id": "sw-507",
-            "type": "loop"
+            "type": "loop",
+            "conf": {
+                "part": [
+                    {
+                        "type": "text",
+                        "value": "<img src=\""
+                    },
+                    {
+                        "subkey": "img.src",
+                        "type": "text"
+                    },
+                    {
+                        "type": "text",
+                        "value": "\">"
+                    }
+                ]
+            },
+            "embed": {
+                "id": "sw-515",
+                "type": "strconcat"
+            },
+            "assign": "description",
+            "emit": false,
+            "count": "all"
         },
         {
             "conf": {
@@ -173,41 +144,26 @@
             "type": "xpathfetchpage"
         },
         {
+            "id": "sw-303",
+            "type": "rename",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "rename",
-                        "id": "sw-304",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "conf": {
-                            "RULE": {
-                                "field": {
-                                    "type": "text",
-                                    "value": "href"
-                                },
-                                "newval": {
-                                    "type": "text",
-                                    "value": "link"
-                                },
-                                "op": {
-                                    "type": "text",
-                                    "value": "rename"
-                                }
-                            }
-                        }
+                "RULE": {
+                    "field": {
+                        "type": "text",
+                        "value": "href"
+                    },
+                    "newval": {
+                        "type": "text",
+                        "value": "link"
+                    },
+                    "op": {
+                        "type": "text",
+                        "value": "rename"
                     }
                 }
             },
-            "id": "sw-303",
-            "type": "loop"
+            "emit": true,
+            "count": "all"
         }
     ],
     "wires": [

@@ -50,118 +50,82 @@
             "type": "output"
         },
         {
+            "id": "sw-587",
+            "type": "rename",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "rename",
-                        "id": "sw-587e",
-                        "emit": {
+                "RULE": [
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "programme.title"
+                        },
+                        "copy": {
                             "type": "bool",
                             "value": true
                         },
-                        "assign": {
+                        "newval": {
                             "type": "text",
-                            "value": "loop:rename"
+                            "value": "title"
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "programme.pid"
                         },
-                        "conf": {
-                            "RULE": [
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "programme.title"
-                                    },
-                                    "copy": {
-                                        "type": "bool",
-                                        "value": true
-                                    },
-                                    "newval": {
-                                        "type": "text",
-                                        "value": "title"
-                                    }
-                                },
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "programme.pid"
-                                    },
-                                    "copy": {
-                                        "type": "bool",
-                                        "value": true
-                                    },
-                                    "newval": {
-                                        "type": "text",
-                                        "value": "link"
-                                    }
-                                },
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "programme.short_synopsis"
-                                    },
-                                    "copy": {
-                                        "type": "bool",
-                                        "value": true
-                                    },
-                                    "newval": {
-                                        "type": "text",
-                                        "value": "description"
-                                    }
-                                }
-                            ]
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "link"
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "programme.short_synopsis"
+                        },
+                        "copy": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "description"
                         }
                     }
-                }
+                ]
             },
-            "id": "sw-587",
-            "type": "loop"
+            "assign": "loop:rename",
+            "emit": true,
+            "count": "all"
         },
         {
+            "id": "sw-598",
+            "type": "regex",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "regex",
-                        "id": "sw-598e",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
+                "RULE": [
+                    {
+                        "field": {
                             "type": "text",
-                            "value": "loop:regex"
+                            "value": "link"
                         },
-                        "conf": {
-                            "RULE": [
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "link"
-                                    },
-                                    "match": {
-                                        "type": "text",
-                                        "value": "(.*)"
-                                    },
-                                    "replace": {
-                                        "type": "text",
-                                        "value": "http://www.bbc.co.uk/programmes/$1"
-                                    }
-                                }
-                            ]
+                        "match": {
+                            "type": "text",
+                            "value": "(.*)"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": "http://www.bbc.co.uk/programmes/$1"
                         }
                     }
-                }
+                ]
             },
-            "id": "sw-598",
-            "type": "loop"
+            "assign": "loop:regex",
+            "emit": true,
+            "count": "all"
         }
     ],
     "terminaldata": [

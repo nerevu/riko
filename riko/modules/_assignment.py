@@ -16,12 +16,12 @@ from typing import Literal, cast, overload
 
 import pygogo as gogo
 
-from riko import DynamicConf
 from riko.context import Context
 from riko.dotdict import DotDict
-from riko.types.compile import PipeModule
+from riko.types.compile import EmbedKwargs
 from riko.types.general import (
     AsyncProcessorWrapper,
+    AsyncSubPipe,
     Item,
     OperatorParserOutput,
     OperatorWrapperInput,
@@ -33,6 +33,7 @@ from riko.types.general import (
     StreamOrValueStream,
     SubPipe,
     SyncProcessorWrapper,
+    SyncSubPipe,
     ValueStream,
 )
 from riko.types.modules import CountValues
@@ -43,22 +44,22 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 @overload
 def get_subpipe(  # noqa: E704
-    embed: SyncProcessorWrapper | SubPipe,
+    embed: SyncProcessorWrapper | SyncSubPipe,
     context: Context,
-    embedded_kwargs: PipeModule | None = ...,
+    embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
 ) -> partial[ProcessorWrapperOutput]: ...
 @overload  # noqa: E302
 def get_subpipe(  # noqa: E704
-    embed: AsyncProcessorWrapper,
+    embed: AsyncProcessorWrapper | AsyncSubPipe,
     context: Context,
-    embedded_kwargs: PipeModule | None = ...,
+    embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
 ) -> partial[Awaitable[ProcessorWrapperOutput]]: ...
 def get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
     embed: ProcessorWrapper | SubPipe,
     context: Context,
-    embedded_kwargs: PipeModule | None = None,
+    embedded_kwargs: EmbedKwargs | None = None,
     field: str | None = None,
 ) -> Callable[
     [ProcessorWrapperInput], ProcessorWrapperOutput | Awaitable[ProcessorWrapperOutput]
@@ -99,23 +100,11 @@ def get_assignment(  # noqa: E704
     skip: bool = ...,
     count: CountValues | None = ...,
 ) -> tuple[bool, StreamOrValueStream]: ...
-@overload  # noqa: E302
-def get_assignment(  # noqa: E704
-    items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
-    skip: bool = ...,
-    count: CountValues | None = ...,
-    conf: DynamicConf | None = ...,
-    is_loop: bool = ...,
-) -> tuple[bool, StreamOrValueStream]: ...
 def get_assignment(  # noqa: E302
     items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip=False,
     count: CountValues | None = None,
-    conf: DynamicConf | None = None,
-    is_loop: bool = False,
 ) -> tuple[bool, StreamOrValueStream]:
-    count = count or (conf.get("count") if is_loop else None)
-
     if isinstance(items, Iterator):
         dictized = cast(Stream, map(DotDict.dictize, items))
     else:

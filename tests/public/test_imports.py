@@ -47,7 +47,7 @@ EXTENSION = {
     "splitter",
 }
 
-DEMOTED = {"Objectify", "Objconf", "objectify", "listize", "get_path"}
+DEMOTED = {"Objectify", "objectify", "listize", "get_path"}
 
 
 def test_stable_all_matches_api():
