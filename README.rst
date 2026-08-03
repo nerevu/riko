@@ -544,7 +544,6 @@ coroutine directly.
 
     >>> from riko.modules.receive import pipe as receive
     >>> from riko.modules.send import pipe as send
-    >>> from riko.utils import noop
     >>>
     >>> stream = [{'title': 'Gravity paper', 'score': 42},
     ...           {'title': 'Breaking: riko 4.0', 'score': 980}]
@@ -575,7 +574,6 @@ receiver:
 
     >>> from riko.collections import SyncPipe
     >>> from riko.modules.receive import pipe as receive
-    >>> from riko.utils import noop
     >>>
     >>> ### `archive` and `notify` stand in for your real side effects ###
     >>> #

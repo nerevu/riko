@@ -23,6 +23,9 @@ import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
 from riko import listize
+from riko._feed import truncate_content
+from riko._io import Fetch
+from riko._serialize import repr_cache
 from riko.dotdict import DotDict, is_sentinal, is_type_value
 from riko.types.general import (
     FileTypes,
@@ -40,7 +43,6 @@ from riko.types.values import (
     Stringy,
     StringyDict,
 )
-from riko.utils import Fetch, repr_cache, truncate_content
 
 try:
     from lxml import etree, html  # type: ignore[import-untyped]

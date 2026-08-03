@@ -8,7 +8,7 @@ Examples:
 
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
-        >>> from riko.utils import noop
+        >>> from riko._iterutils import noop
         >>>
         >>> conf = {'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}
         >>> target = receiver(conf=conf)
@@ -40,13 +40,12 @@ from typing import Any, cast
 import pygogo as gogo
 from meza.fntools import dfilter
 
-from riko._pubsub import async_hub
+from riko._pubsub import _receive_queue, _registry, async_hub, close, coroutine
 from riko.cast import BasicCastType
 from riko.types.configs import ReceiveObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 from riko.types.guards import is_stateful_item
 from riko.types.values import StatefulItem, StreamState
-from riko.utils import _receive_queue, _registry, close, coroutine
 
 from . import operator
 
@@ -176,7 +175,7 @@ def parser(
     Examples:
         >>> from itertools import repeat
         >>> from riko.modules.send import pipe as sender
-        >>> from riko.utils import noop
+        >>> from riko._iterutils import noop
         >>> from meza.fntools import Objectify
         >>>
         >>> conf = {'wait': 0.01, 'max_wait': 2, 'name': 'receiver2'}
@@ -263,7 +262,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream | Iterator[StatefulItem]:
 
     Examples:
         >>> from riko.modules.send import pipe as sender
-        >>> from riko.utils import noop
+        >>> from riko._iterutils import noop
         >>>
         >>> target = pipe(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)

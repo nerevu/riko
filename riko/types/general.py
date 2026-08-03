@@ -34,6 +34,7 @@ from riko.types.values import (
 
 if TYPE_CHECKING:
     from riko import Context, DynamicConf
+    from riko._io import Fetch
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
     from riko.dotdict import DotDict
@@ -44,7 +45,6 @@ if TYPE_CHECKING:
         CountValues,
         Skip,
     )
-    from riko.utils import Fetch
 
 T = TypeVar("T")
 

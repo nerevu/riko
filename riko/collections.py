@@ -130,6 +130,7 @@ from riko._pubsub import sync_hub
 from riko.bado import async_return
 from riko.bado.itertools import async_iter, async_map
 from riko.compile import resolve_module
+from riko.context import parse_context
 from riko.exceptions import PipelineStateError
 from riko.types.general import (
     AsyncItems,
@@ -147,7 +148,6 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import BasicValue, Inputs
-from riko.utils import parse_context
 
 type AnyPool = ThreadPoolType | CPUPoolType
 

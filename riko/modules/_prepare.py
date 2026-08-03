@@ -15,6 +15,7 @@ from typing import cast, overload
 import pygogo as gogo
 
 from riko import DynamicConf, listize, objectify
+from riko._iterutils import broadcast, dispatch
 from riko.cast import (
     CAST_SWITCH,
     BasicCastType,
@@ -44,7 +45,6 @@ from riko.types.general import (
 )
 from riko.types.modules import AnyModuleConf
 from riko.types.values import BasicReturn, PrimitiveValue, RikoDict, RikoList, RikoValue
-from riko.utils import broadcast, dispatch
 
 logger = gogo.Gogo(__name__, monolog=True).logger
 

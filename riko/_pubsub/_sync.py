@@ -3,7 +3,7 @@
 Synchronous pub/sub backend.
 
 A generator-coroutine push adapter: receivers are primed generators (via the
-``coroutine`` decorator in ``riko.utils``) whose pushed items land in a bounded
+``coroutine`` decorator in ``riko._pubsub``) whose pushed items land in a bounded
 ``deque``. This is the right tool for synchronous pipelines and push-based
 parsers (e.g. ijson); it has no native awaitable channel, so completion uses a
 DONE sentinel and per-receiver identity tokens. The async backend
@@ -25,7 +25,7 @@ logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 class SyncPubSubHub:
     """
     Owns synchronous pub/sub state: receiver generators, per-name receive
-    queues, and minted receiver ids. ``riko.utils`` exposes thin
+    queues, and minted receiver ids. ``riko._pubsub`` exposes thin
     ``send``/``close``/``coroutine``/``reset_pubsub`` shims plus
     ``_registry``/``_receive_queue``/``_ids`` aliases over the dicts here;
     ``reset`` clears them in place so those aliases stay valid.

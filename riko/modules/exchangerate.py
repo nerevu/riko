@@ -28,11 +28,11 @@ from typing import Any, TypedDict, cast
 import pygogo as gogo
 
 from riko import ENCODING
+from riko._io import Fetch
 from riko.bado import async_get, async_json, io
 from riko.cast import BasicCastType
 from riko.types.configs import ExchangeRateObjconf
 from riko.types.general import Defaults, Extraction, Opts
-from riko.utils import Fetch
 
 from . import processor
 

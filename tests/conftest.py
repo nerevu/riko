@@ -1,6 +1,6 @@
 import pytest
 
-from riko.utils import reset_pubsub
+from riko._pubsub import reset_pubsub
 
 
 @pytest.fixture(autouse=True)

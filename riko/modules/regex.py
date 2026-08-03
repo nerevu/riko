@@ -32,13 +32,14 @@ from typing import Any, cast
 
 import pygogo as gogo
 
+from riko._iterutils import group_by
+from riko._regex import get_regex_rule, multi_substitute, substitute
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.dotdict import DotDict
 from riko.types.configs import RegexObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RegexConfRule, RegexRule
 from riko.types.values import RikoValue
-from riko.utils import get_regex_rule, group_by, multi_substitute, substitute
 
 from . import processor
 

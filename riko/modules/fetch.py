@@ -28,13 +28,13 @@ from typing import Any
 import pygogo as gogo
 
 from riko import ENCODING
+from riko._feed import augment_entries
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import parse_rss
 from riko.types.configs import FetchObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
 from riko.types.values import RSSEntry
-from riko.utils import augment_entries
 
 from . import processor
 

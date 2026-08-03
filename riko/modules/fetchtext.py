@@ -28,11 +28,11 @@ from typing import Any
 import pygogo as gogo
 
 from riko import ENCODING
+from riko._io import Fetch, auto_close
 from riko.bado import io
 from riko.cast import BasicCastType
 from riko.types.configs import FetchTextObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.utils import Fetch, auto_close
 
 from . import processor
 

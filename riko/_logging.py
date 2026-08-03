@@ -1,10 +1,14 @@
+# vim: sw=4:ts=4:expandtab
 """
-Provides misc helper functions
+riko._logging
+~~~~~~~~~~~~~
+Colorized logging formatter, verbosity parsing, a ``log`` helper, and the
+``exception_hook`` used by the dev CLI (pdb on error when ``debug``).
 """
 
 import pdb  # noqa: T100
 import sys
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable
 from json.decoder import JSONDecodeError
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING, Formatter, Logger, LogRecord
 from traceback import format_exception
@@ -104,18 +108,3 @@ def exception_hook(
         pdb.post_mortem(tb)
 
     callback() if callback else None
-
-
-def slugify(text: str) -> str:
-    return text.lower().strip().replace(" ", "-")
-
-
-def select_by_id[T](
-    _result: Iterable[Mapping[str, T]], _id: T, id_field: str
-) -> Mapping[str, T]:
-    try:
-        result = next(r for r in _result if _id == r[id_field])
-    except StopIteration:
-        result = {}
-
-    return result

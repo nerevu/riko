@@ -28,12 +28,12 @@ from typing import Any, cast
 import pygogo as gogo
 
 from riko import ENCODING, listize
+from riko._io import Fetch, auto_close
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import any2dict
 from riko.types.configs import FetchDataObjconf
 from riko.types.general import Defaults, Extraction, FileTypes, Item, Opts, Stream
-from riko.utils import Fetch, auto_close
 
 from . import processor
 

@@ -14,6 +14,7 @@ from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
 from typing import Literal, cast, overload
 
+from riko._iterutils import broadcast
 from riko.cast import BasicCastType
 from riko.modules._inference import gen_operator_return_kinds
 from riko.types.general import (
@@ -30,7 +31,6 @@ from riko.types.modules import (
     ModuleType,
     OperatorReturnKind,
 )
-from riko.utils import broadcast
 
 _PACKAGE = "riko.modules"
 

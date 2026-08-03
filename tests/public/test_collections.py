@@ -10,7 +10,7 @@ from typing import cast
 import pytest
 
 from riko import get_path
-from riko._pubsub import async_hub
+from riko._pubsub import _receive_queue, async_hub, close, reset_pubsub
 from riko.bado import gather_results, issync, run
 from riko.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.exceptions import ReceiverUnavailableError
@@ -23,7 +23,6 @@ from riko.types.modules import (
     StrReplaceConfRule,
 )
 from riko.types.values import StreamState
-from riko.utils import _receive_queue, close, reset_pubsub
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})

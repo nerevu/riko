@@ -16,8 +16,14 @@ from typing import cast
 import pytest
 
 from riko import Context, ExecutionMode, listize
+from riko._feed import augment_entries, truncate_content
 from riko.bado import issync, run
-from riko.compile import abuild_pipeline, build_pipeline, resolve_module
+from riko.compile import (
+    abuild_pipeline,
+    build_pipeline,
+    extract_dependencies,
+    resolve_module,
+)
 from riko.exceptions import UnsupportedModuleError
 from riko.parsers import IS_LXML
 from riko.types.general import (
@@ -29,7 +35,6 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import FeedParserRSSEntry, StatefulItem
-from riko.utils import augment_entries, extract_dependencies, truncate_content
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 PARENT = Path(__file__).parent.parent

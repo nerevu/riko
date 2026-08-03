@@ -5,6 +5,7 @@ riko.context
 The execution context for a pipeline.
 """
 
+from copy import copy
 from enum import StrEnum
 
 from riko.types.values import Inputs
@@ -60,4 +61,17 @@ class Context:
         return f"Context({content})"
 
 
-__all__ = ["Context", "ExecutionMode"]
+def parse_context(
+    context: "Context | None" = None,
+    mode: "ExecutionMode | None" = None,
+    inputs: Inputs | None = None,
+    **kwargs: bool | None,
+) -> "Context":
+    # Prevents mutating caller-supplied Context
+    new_context = copy(context) if context else Context(mode, inputs=inputs, **kwargs)
+    new_inputs = new_context.inputs if inputs is None else dict(inputs)
+    new_context.inputs = new_inputs
+    return new_context
+
+
+__all__ = ["Context", "ExecutionMode", "parse_context"]

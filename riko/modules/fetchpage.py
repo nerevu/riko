@@ -30,12 +30,13 @@ from typing import Any
 import pygogo as gogo
 
 from riko import ENCODING
+from riko._io import Fetch
+from riko._iterutils import betwix
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import get_text
 from riko.types.configs import FetchPageObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
-from riko.utils import Fetch, betwix
 
 from . import processor
 

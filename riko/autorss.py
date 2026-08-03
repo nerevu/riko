@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, cast
 
 import pygogo as gogo
 
+from riko._io import Fetch, auto_close
 from riko.bado.io import async_url_open
 from riko.parsers import LinkParser
 from riko.types.general import Stream, StringFileTypes
-from riko.utils import Fetch, auto_close
 
 if TYPE_CHECKING:
     from xml.dom.minidom import Node

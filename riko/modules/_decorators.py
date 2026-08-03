@@ -17,9 +17,10 @@ from typing import Literal, cast, overload
 import pygogo as gogo
 
 from riko import Context, DynamicConf
+from riko._iterutils import dispatch
 from riko.bado.itertools import async_map
 from riko.cast import BasicCastType
-from riko.context import ExecutionMode
+from riko.context import ExecutionMode, parse_context
 from riko.dotdict import DotDict, is_mapping
 from riko.modules._assignment import gen_assignments, get_assignment
 from riko.modules._loop import loop_embed_async_eager, loop_embed_sync
@@ -77,7 +78,6 @@ from riko.types.general import (
 )
 from riko.types.modules import CountValues, ModuleType
 from riko.types.values import Inputs, PrimitiveValue, RikoValue, StatefulItem
-from riko.utils import dispatch, parse_context
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 

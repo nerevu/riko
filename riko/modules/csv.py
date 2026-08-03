@@ -25,11 +25,11 @@ import pygogo as gogo
 from meza.io import read_csv
 
 from riko import ENCODING
+from riko._io import Fetch, auto_close
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.types.configs import CsvObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
-from riko.utils import Fetch, auto_close
 
 from . import processor
 

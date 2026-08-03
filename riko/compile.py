@@ -18,11 +18,6 @@ parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
 pipeline = build_pipeline(parsed_pipe_def)
 print(list(pipeline))
 
-Instead of passing a filename, a pipe id can be passed (-p) to fetch the
-JSON from Yahoo, e.g.
-
-python compile.py -p 2de0e4517ed76082dcddf66f7b218057
-
 Author: Greg Gaughan
 Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/
 starting-to-think-about-a-yahoo-pipes-code-generator)
@@ -38,10 +33,12 @@ import keyword
 import subprocess
 from codecs import open
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Awaitable, Iterable, Iterator, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
+from functools import reduce
 from importlib import import_module
+from inspect import isawaitable
 from itertools import pairwise
 from json import JSONEncoder, dumps, loads
 from pathlib import Path
@@ -51,7 +48,7 @@ from typing import Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
-from riko import Context
+from riko import Context, listize, replacer
 from riko.context import ExecutionMode
 from riko.dotdict import DotDict
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
@@ -72,33 +69,33 @@ from riko.types.compile import (
 )
 from riko.types.general import (
     AsyncPipeItems,
+    AsyncPipelineDependencies,
     AsyncPipeParser,
+    AsyncPyInput,
     AsyncStream,
     ParserOutput,
     Pipeline,
+    PipelineDependencies,
+    PyInput,
     Step,
     Steps,
     StepValue,
     Stream,
+    SyncPipelineDependencies,
     SyncPipeParser,
+    SyncPyInput,
 )
 from riko.types.modules import (
     AnyModuleRawConf,
+    ConfArg,
     CountValues,
+    EmbeddedModule,
+    Graph,
+    InputRawConf,
+    Nodes,
     Value,
 )
 from riko.types.values import Inputs
-from riko.utils import (
-    extract_dependencies,
-    extract_input,
-    gen_embed_graph,
-    gen_graph,
-    gen_modules,
-    gen_names,
-    gen_parented_graph,
-    gen_wires,
-    pythonise,
-)
 
 _RAW_CONFS = {
     "count": "CountRawConf",
@@ -168,6 +165,236 @@ class CustomEncoder(JSONEncoder):
             result = super().default(o)
 
         return result
+
+
+def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
+    modules = pipe_def["modules"]
+
+    if isinstance(modules, dict):
+        embed = pipe_def.get("embed") or {}
+        modules = [module for key, module in modules.items() if key not in embed]
+
+    for module in modules:
+        dep = module if isinstance(module, str) else module["type"]
+
+        if dep != "output":
+            yield dep
+
+
+@overload
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+) -> list[str]: ...
+@overload  # noqa: E302
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: AsyncPipelineDependencies,
+) -> Awaitable[list[str]]: ...
+@overload  # noqa: E302
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: SyncPipelineDependencies,
+) -> list[str]: ...
+def extract_dependencies(  # noqa: E302
+    pipe_def: PipeDef | ParsedPipeDef | None = None,
+    pipeline: PipelineDependencies | None = None,
+) -> Awaitable[list[str]] | list[str]:
+    """Extract modules used by a pipe"""
+    if pipe_def:
+        pydeps = gen_dependencies(pipe_def)
+    elif pipeline:
+        pydeps = pipeline(context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES))
+    else:
+        raise TypeError("Must supply at least one kwarg!")
+
+    return pydeps if isawaitable(pydeps) else sorted(set(pydeps))
+
+
+def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str, ...]]:
+    fields = ["position", "name", "prompt"]
+    values = ["type", "value"]
+    modules = pipe_def["modules"]
+
+    if isinstance(modules, dict):
+        embed = pipe_def.get("embed") or {}
+        modules = [m for k, m in modules.items() if k not in embed]
+
+    for module in modules:
+        # Note: there seems to be no need to recursively collate inputs
+        # from subpipelines
+        conf = module["conf"]
+
+        try:
+            module_confs: list[str] = [conf[x]["value"] for x in fields]
+        except (KeyError, TypeError):
+            pass
+        else:
+            if default := conf.get("default"):
+                module_confs.extend(default[x] for x in values)
+
+            yield tuple(module_confs)
+
+
+def get_input(conf: InputRawConf, **kwargs: object) -> str | int | bool:
+    """
+    Gets a user parameter, either from the console or from an outer
+     submodule/system
+
+    Assumes conf has name, default, prompt and debug
+    """
+    name = str(conf["name"]["value"])
+    prompt = conf["prompt"]["value"]
+    __default = ConfArg({"type": "text", "value": ""})
+    _default = conf.get("default") or conf.get("debug") or __default
+    default = _default.get("value")
+
+    if inputs := kwargs.get("inputs"):
+        value = cast(Inputs, inputs).get(name, default)
+    elif not kwargs.get("test"):
+        # we skip user interaction during tests
+        raw = input(f"{prompt} (default={default}) ")
+        value = raw or default
+    else:
+        value = default
+
+    return value
+
+
+@overload
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+) -> SyncPyInput: ...
+@overload  # noqa: E302
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: AsyncPipelineDependencies,
+) -> AsyncPyInput: ...
+@overload  # noqa: E302
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: SyncPipelineDependencies,
+) -> SyncPyInput: ...
+def extract_input(  # noqa: E302
+    pipe_def: PipeDef | ParsedPipeDef | None = None,
+    pipeline: PipelineDependencies | None = None,
+) -> PyInput:
+    """Extract inputs required by a pipe"""
+    if pipe_def:
+        pyinput = gen_input(pipe_def)
+    elif pipeline:
+        pyinput = pipeline(Context(mode=ExecutionMode.DESCRIBE_INPUTS))
+    else:
+        raise TypeError("Must supply at least one kwarg!")
+
+    return pyinput if isawaitable(pyinput) else sorted(pyinput)
+
+
+def pythonise(
+    content: str | Mapping[str, object],
+    encoding: str = "ascii",
+    replace: Sequence[str] = ("-", ":", "/", ""),
+    key: str | None = None,
+) -> str:
+    """Return a Python-friendly id"""
+    if not isinstance(content, str):
+        if key:
+            resolved = DotDict(content).get(key)
+
+            if isinstance(resolved, str):
+                content = resolved
+            elif isinstance(resolved, (Mapping, Sequence)):
+                _type = type(resolved).__name__
+                raise TypeError(f"Key '{key}' resolved to unsupported type {_type}.")
+            else:
+                content = str(resolved)
+        else:
+            raise ValueError("Received a dict without a key.")
+    elif key:
+        raise ValueError("Received a key without a dict.")
+
+    reduced = reduce(replacer, replace, content)
+    return reduced.encode(encoding, "replace").decode(encoding)
+
+
+def gen_names(
+    module_ids: Sequence[str] | Sequence[tuple[str, ...]],
+    parsed_pipe_def: ParsedPipeDef,
+    ntype: Literal["module", "pipe", "async_pipe"] = "module",
+) -> Iterator[str]:
+    for module_id in module_ids:
+        if isinstance(module_id, str):
+            module_id = (module_id,)
+
+        for _module_id in module_id:
+            module_type = parsed_pipe_def["modules"][_module_id]["type"]
+
+            if module_type.startswith("pipe:"):
+                name = pythonise(module_type)
+            elif ntype == "module":
+                name = module_type
+            elif ntype in {"pipe", "async_pipe"}:
+                name = ntype
+            else:
+                msg = f"Invalid {ntype=}. (Expected 'module', 'pipe', or 'async_pipe')"
+                raise ValueError(msg)
+
+            yield name
+
+
+@overload
+def gen_modules(  # noqa: E704
+    pipe_def: PipeDef, embedded: Literal[False] = ...
+) -> Iterator[tuple[str, PipeModule]]: ...
+@overload  # noqa: E302
+def gen_modules(  # noqa: E704
+    pipe_def: PipeDef, embedded: Literal[True]
+) -> Iterator[tuple[str, EmbeddedModule]]: ...
+def gen_modules(  # noqa: E302
+    pipe_def: PipeDef, embedded=False
+) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
+    for module in listize(pipe_def["modules"]):
+        if embedded and module["type"] == "loop":
+            embed = cast(LoopModule, module)["embed"]
+            embedded_module = EmbeddedModule(
+                {"id": embed["id"], "type": embed["type"], "conf": module["conf"]}
+            )
+            yield (pythonise(embedded_module["id"]), embedded_module)
+        elif not embedded:
+            yield (pythonise(module["id"]), module)
+
+
+def gen_wires(pipe_def: PipeDef) -> Iterator[tuple[str, Wire]]:
+    for wire in pipe_def["wires"]:
+        yield (pythonise(wire["id"]), wire)
+
+
+def gen_graph(pipe_def: PipeDef) -> Iterator[tuple[str, str]]:
+    for wire in pipe_def["wires"]:
+        src_id = pythonise(wire["src"]["moduleid"])
+        tgt_id = pythonise(wire["tgt"]["moduleid"])
+        yield (src_id, tgt_id)
+
+
+def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
+    for module in listize(pipe_def["modules"]):
+        module_id = pythonise(module["id"])
+        yield (module_id, [])
+
+        # make the loop dependent on its embedded module
+        if module["type"] == "loop":
+            embed = cast(LoopModule, module)["embed"]
+            yield (pythonise(embed["id"]), [module_id])
+
+
+def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:
+    """Remove any orphan nodes"""
+    for node, value in graph.items():
+        if value or any(node in v for v in graph.values()):
+            yield (node, value)
 
 
 def get_module_id(wire: Wire, stem: str = "src", base: str = "moduleid") -> str:

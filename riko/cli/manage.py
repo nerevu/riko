@@ -13,8 +13,8 @@ from sys import exit
 
 import click
 
+from riko._logging import exception_hook
 from riko.cli.gen_config import main as gen_config_main
-from riko.helpers import exception_hook
 
 BASEDIR = p.dirname(p.dirname(p.dirname(p.abspath(__file__))))
 
@@ -302,8 +302,10 @@ def test(where=None, stop=None, **kwargs):  # noqa: PT028
 
     if kwargs.get("watch") and kwargs.get("capture"):
         opts += " --looponfail"
-    elif kwargs.get("debug"):
-        opts += " --pdb"
+
+    if kwargs.get("debug"):
+        # -s disables capture so the pdb prompt is interactive in the subprocess
+        opts += " --pdb -s"
 
     opts += f" {where}" if where else ""
 

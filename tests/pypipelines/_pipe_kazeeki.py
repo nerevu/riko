@@ -4,6 +4,7 @@
 from os import path as p
 
 from riko import get_path
+from riko._regex import make_regex_rule
 from riko.compile import write_file
 from riko.types.modules import (
     FetchDataConf,
@@ -13,7 +14,6 @@ from riko.types.modules import (
     RenameConf,
     RenameConfRule,
 )
-from riko.utils import make_regex_rule
 
 PARENT = p.dirname(p.dirname(p.dirname(__file__)))
 
