@@ -28,8 +28,10 @@ Attributes:
 
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from functools import reduce
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 from meza.fntools import remove_keys
@@ -44,19 +46,22 @@ from . import processor
 
 OPTS: Opts = {"extract": "rule", "listize": True, "emit": True}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def reducer(item: Mapping, rule: RenameConfRule) -> DotDict:
+def reducer(item: Item, rule: RenameConfRule) -> Item:
     reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
     new_dict = {rule.newval: item.get(rule.field)} if rule.newval else {}
     reduced.update(new_dict)
-    return reduced
+    return cast(Item, reduced)
 
 
 async def async_parser(
-    item: Item, rules: Sequence[RenameConfRule], objconf: RenameObjconf, **kwargs
-) -> DotDict | Item:
+    item: Item,
+    rules: Sequence[RenameConfRule],
+    objconf: RenameObjconf,
+    **kwargs: object,
+) -> Item:
     """
     Asynchronously parses the pipe content
 
@@ -69,25 +74,20 @@ async def async_parser(
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
-        >>> from riko.bado import react
+        >>> from riko.bado import run
         >>> from riko.dotdict import DotDict
-        >>> from riko.bado.mock import FakeReactor
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     item = DotDict({'content': 'hello world'})
         ...     rule = {'field': 'content', 'newval': 'greeting'}
         ...     result = await async_parser(item, [Objectify(rule)], None, stream=item)
         ...     print(result)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'greeting': 'hello world'}
 
     """
@@ -95,8 +95,11 @@ async def async_parser(
 
 
 def parser(
-    item: Item, rules: Sequence[RenameConfRule], objconf: RenameObjconf, **kwargs
-) -> DotDict | Item:
+    item: Item,
+    rules: Sequence[RenameConfRule],
+    objconf: RenameObjconf,
+    **kwargs: object,
+) -> Item:
     """
     Parsers the pipe content
 
@@ -126,7 +129,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> DotDict | Item:
+async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor module that asynchronously renames or copies fields in an
     item.
@@ -149,22 +152,17 @@ async def async_pipe(*args, **kwargs) -> DotDict | Item:
                     (default: False)
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with renamed content
+       Awaitable: item with renamed content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
         ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
         ...     print(next(result)['greeting'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         hello world
 
     """
@@ -172,7 +170,7 @@ async def async_pipe(*args, **kwargs) -> DotDict | Item:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> DotDict | Item:
+def pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor that renames or copies fields in an item.
 

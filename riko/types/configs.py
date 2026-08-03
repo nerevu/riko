@@ -15,18 +15,20 @@ Edit those objects (not this file), then regenerate with ``gen-config``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Literal
 
 from riko import DynamicConf
 
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
     from riko.types.modules import (
-        EmbeddedModule,
+        CountValues,
         FilterConfRule,
         FindConfRule,
+        Function,
         ParsedParam,
+        PipeModule,
         RegexConfRule,
         RenameConfRule,
         SortConfRule,
@@ -42,8 +44,8 @@ class SortObjconf(DynamicConf):
 
 
 class InputObjconf(DynamicConf):
-    prompt: str
     type: CastType
+    prompt: str
     default: str
     test: bool
     input_key: str
@@ -51,7 +53,7 @@ class InputObjconf(DynamicConf):
 
 class FetchObjconf(DynamicConf):
     url: str
-    delay: int
+    delay: float
 
 
 class TailObjconf(DynamicConf):
@@ -79,14 +81,14 @@ class RssItemBuilderObjconf(DynamicConf):
 
 
 class LoopObjconf(DynamicConf):
-    count: str
+    count: CountValues
     assign: str
-    embed: EmbeddedModule
+    embed: PipeModule
     field: str
 
 
 class AggregateObjconf(DynamicConf):
-    func: Callable[..., Any]
+    func: Function
 
 
 class CountObjconf(DynamicConf):
@@ -195,6 +197,7 @@ class RenameObjconf(DynamicConf):
 
 class SendObjconf(DynamicConf):
     name: str
+    max_wait: int | float
 
 
 class SimpleMathObjconf(DynamicConf):
@@ -213,7 +216,7 @@ class SplitObjconf(DynamicConf):
 
 
 class StrconcatObjconf(DynamicConf):
-    part: str | Subkey | Terminal | list[str | Subkey | Terminal]
+    part: str | Subkey | Terminal | Sequence[str | Subkey | Terminal]
 
 
 class StrfindObjconf(DynamicConf):
@@ -230,7 +233,7 @@ class StrTransformObjconf(DynamicConf):
 
 class SubelementObjconf(DynamicConf):
     path: str
-    token_key: str
+    token_key: str | None
 
 
 class SubstrObjconf(DynamicConf):
@@ -270,7 +273,7 @@ class TypecastObjconf(DynamicConf):
 
 
 class UdfObjconf(DynamicConf):
-    func: Callable[..., Any]
+    func: Function
 
 
 class UniqObjconf(DynamicConf):

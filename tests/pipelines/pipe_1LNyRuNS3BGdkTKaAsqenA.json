@@ -1,6 +1,6 @@
 {
   "modules": [
-    {"conf": [], "id": "_OUTPUT", "type": "output"},
+    {"conf": null, "id": "_OUTPUT", "type": "output"},
     {
       "conf": {
         "test": {"type": "bool", "value": "true"},

@@ -18,6 +18,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -28,11 +30,11 @@ from . import operator
 
 OPTS: Opts = {"extract": "count_key"}
 DEFAULTS: Defaults = {"count_key": None}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, count_key: str, tuples: PipeTuples, **kwargs
+    stream: Stream, count_key: str, tuples: PipeTuples, **kwargs: object
 ) -> int | Iterator[dict[str, int]]:
     """
     Parses the pipe content
@@ -84,7 +86,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
+def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
     """
     An operator that asynchronously and eagerly counts the number of items
     in a stream. Note that this pipe is not lazy.
@@ -105,23 +107,18 @@ def async_pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
             content)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the number of
+        Awaitable: iterator of the number of
             counted items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'x': x} for x in range(5))
         ...     result = await async_pipe(items)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'count': 5}
 
     """
@@ -129,7 +126,7 @@ def async_pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> int | Iterator[dict[str, int]]:
+def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
     """
     An operator that eagerly counts the number of items in a stream.
     Note that this pipe is not lazy.

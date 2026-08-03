@@ -21,15 +21,11 @@ Attributes:
 from collections.abc import Mapping
 from decimal import Decimal
 from json import load, loads
+from logging import Logger
 from os import getenv
-from typing import TypedDict, cast
+from typing import Any, TypedDict, cast
 
 import pygogo as gogo
-
-try:
-    from twisted.web.iweb import IResponse
-except ImportError:
-    IResponse = None  # type: ignore[assignment,misc]
 
 from riko import ENCODING
 from riko.bado import async_get, async_json, io
@@ -54,7 +50,7 @@ DEFAULTS: Defaults = {
     "encoding": ENCODING,
 }
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 class RatesJson(TypedDict):
@@ -73,7 +69,7 @@ def parse_response(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
     return resp
 
 
-def get_rate(currency, **rates: Decimal) -> Decimal:
+def get_rate(currency: str, **rates: Decimal) -> Decimal:
     rate = rates.get(currency, Decimal("nan"))
 
     if not rate:
@@ -83,7 +79,7 @@ def get_rate(currency, **rates: Decimal) -> Decimal:
 
 
 def calc_rate(
-    from_cur: str, to_cur: str, places=Decimal("0.0001"), **rates: Decimal
+    from_cur: str, to_cur: str, places: Decimal = Decimal("0.0001"), **rates: Decimal
 ) -> Decimal:
     if from_cur == to_cur:
         rate = Decimal(1)
@@ -98,7 +94,7 @@ def calc_rate(
 
 
 async def async_parser(
-    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs
+    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs: object
 ) -> Decimal:
     """
     Asynchronously parses the pipe content
@@ -113,15 +109,14 @@ async def async_parser(
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('quote.json')
         ...     conf = {'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
         ...     item = {'content': 'GBP'}
@@ -130,11 +125,7 @@ async def async_parser(
         ...     result = await async_parser(item['content'], None, objconf, **kwargs)
         ...     print(result)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         1.275201
 
     """
@@ -146,10 +137,10 @@ async def async_parser(
         rate = Decimal(1)
     elif objconf.url.startswith("http"):
         r = await async_get(objconf.url, params=objconf.param)
-        rates = await async_json(cast(IResponse, r))
+        rates = await async_json(r)
     else:
         content = await io.async_url_read(objconf.url, delay=objconf.delay)
-        rates = loads(content).get("rates", {})
+        rates = cast(dict[str, Any], loads(content).get("rates", {}))
 
     if rates and not same_currency:
         places = Decimal(10) ** -objconf.precision
@@ -160,7 +151,7 @@ async def async_parser(
 
 
 def parser(
-    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs
+    base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs: object
 ) -> Decimal:
     """
     Parses the pipe content
@@ -208,7 +199,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Decimal:
+async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
     """
     A processor that asynchronously retrieves the current exchange rate
     for a given currency pair.
@@ -241,23 +232,18 @@ async def async_pipe(*args, **kwargs) -> Decimal:
             exchangerate)
 
     Returns:
-        dict: twisted.internet.defer.Deferred stream of items
+        Awaitable: stream of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('quote.json')
         ...     result = await async_pipe({'content': 'GBP'}, conf={'url': url})
         ...     print(next(result)['exchangerate'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         1.275201
 
     """
@@ -265,7 +251,7 @@ async def async_pipe(*args, **kwargs) -> Decimal:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Decimal:
+def pipe(*args: Any, **kwargs: object) -> Decimal:
     """
     A processor that retrieves the current exchange rate for a given
     currency pair.

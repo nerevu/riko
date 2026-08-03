@@ -27,6 +27,8 @@ Attributes:
 
 from collections.abc import Sequence
 from functools import reduce
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -35,20 +37,21 @@ from riko.dotdict import DotDict
 from riko.types.configs import RegexObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import RegexConfRule, RegexRule
+from riko.types.values import RikoValue
 from riko.utils import get_regex_rule, group_by, multi_substitute, substitute
 
 from . import processor
 
 OPTS: Opts = {"listize": True, "extract": "rule", "emit": True}
 DEFAULTS: Defaults = {"convert": True, "multi": False}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
     item: Item,
     rules: Sequence[RegexConfRule],
     objconf: RegexObjconf,
-    **kwargs,
+    **kwargs: object,
 ) -> Item:
     """
     Asynchronously parsers the pipe content
@@ -62,18 +65,17 @@ async def async_parser(
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred dict
+        Awaitable: dict
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
         >>> match = r'(\\w+)\\s(\\w+)'
         >>> replace = '$2wide'
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     rule = {'field': 'content', 'match': match, 'replace': replace}
         ...     conf = {'rule': rule, 'multi': False, 'convert': True}
         ...     objconf = Objectify(conf)
@@ -82,44 +84,40 @@ async def async_parser(
         ...     result = await async_parser(item, rules, objconf, **kwargs)
         ...     print(result['content'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         worldwide
 
     """
     multi = objconf.multi
     recompile = not multi
 
-    async def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict:
+    async def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = rules[0]["field"]
         word = item.get(field, **kwargs)
 
         if word is None:
             replacement = None
-        else:
+        elif multi:
             grouped = group_by(rules, "flags")
-            group_rules = [g[1] for g in grouped] if multi else rules
-            reducer = multi_substitute if multi else substitute
-            replacement = await coop_reduce(reducer, group_rules, str(word))
+            group_rules = [g[1] for g in grouped]
+            replacement = await coop_reduce(multi_substitute, group_rules, str(word))
+        else:
+            replacement = await coop_reduce(substitute, rules, str(word))
 
         result = DotDict({**item, field: replacement})
-        return result
+        return cast(DotDict[RikoValue], result)
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")
     field_rules = [g[1] for g in grouped]
-    item = await async_reduce(reducer, field_rules, item)
-    return item
+    return await async_reduce(reducer, field_rules, item)
 
 
 def parser(
     item: Item,
     rules: Sequence[RegexConfRule],
     objconf: RegexObjconf,
-    **kwargs,
+    **kwargs: object,
 ) -> Item:
     """
     Parsers the pipe content
@@ -156,30 +154,30 @@ def parser(
     multi = objconf.multi
     recompile = not multi
 
-    def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict:
+    def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = str(rules[0]["field"])
         word = item.get(field, **kwargs)
 
         if word is None:
             replacement = None
-        else:
+        elif multi:
             grouped = group_by(rules, "flags")
-            group_rules = [g[1] for g in grouped] if multi else rules
-            reducer = multi_substitute if multi else substitute
-            replacement = reduce(reducer, group_rules, str(word))
+            group_rules = [g[1] for g in grouped]
+            replacement = reduce(multi_substitute, group_rules, str(word))
+        else:
+            replacement = reduce(substitute, rules, str(word))
 
         result = DotDict({**item, field: replacement})
-        return result
+        return cast(DotDict[RikoValue], result)
 
     regex_rules = [get_regex_rule(r, recompile=recompile) for r in rules]
     grouped = group_by(regex_rules, "field")
     field_rules = [g[1] for g in grouped]
-    item = reduce(reducer, field_rules, item)
-    return item
+    return reduce(reducer, field_rules, item)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Item:
+async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor that asynchronously replaces text in fields of an item
     using regexes.
@@ -212,27 +210,22 @@ async def async_pipe(*args, **kwargs) -> Item:
                 (default: True)
 
     Yields:
-        Deferred: twisted.internet.defer.Deferred item with replaced content
+        Awaitable: item with replaced content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
         >>> item = {'content': 'hello world', 'title': 'greeting'}
         >>> match = r'(\\w+)\\s(\\w+)'
         >>> replace = '$2wide'
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     rule = {'field': 'content', 'match': match, 'replace': replace}
         ...     conf = {'rule': rule, 'multi': False, 'convert': True}
         ...     result = await async_pipe(item, conf=conf)
         ...     print(next(result)['content'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         worldwide
 
     """
@@ -240,7 +233,7 @@ async def async_pipe(*args, **kwargs) -> Item:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Item:
+def pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor that replaces text in fields of an item using regexes.
 

@@ -18,6 +18,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 from urllib.parse import urlparse
 
 import pygogo as gogo
@@ -30,11 +32,11 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"parse_key": "content"}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    url: str, extraction: Extraction, objconf: UrlParseObjconf, **kwargs
+    url: str, extraction: Extraction, objconf: UrlParseObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
     Parsers the pipe content
@@ -67,7 +69,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
+def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
     A processor module that asynchronously parses a URL into its components.
 
@@ -80,21 +82,16 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
         field (str): Item attribute to operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with parsed content
+       Awaitable: item with parsed content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'content': 'http://yahoo.com'})
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'component': 'scheme', 'content': 'http'}
 
     """
@@ -102,7 +99,7 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
     A processor that parses a URL into its components.
 

@@ -19,6 +19,8 @@ Attributes:
 
 from collections.abc import Iterator
 from decimal import Decimal
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -28,13 +30,13 @@ from riko.utils import group_by
 
 from . import operator
 
-OPTS = Opts()
+OPTS: Opts = Opts()
 DEFAULTS: Defaults = {"sum_key": "content", "group_key": None}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: SumObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: SumObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     Parses the pipe content
@@ -93,7 +95,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
+def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     An operator that asynchronously and eagerly sums fields of items
     in a stream. Note that this pipe is not lazy if `group_key` is specified.
@@ -117,22 +119,17 @@ def async_pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
             content)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the summed items
+        Awaitable: iterator of the summed items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'content': x} for x in range(5))
         ...     result = await async_pipe(items)
         ...     print(next(result)['sum'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         10
 
     """
@@ -140,7 +137,7 @@ def async_pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Decimal | Iterator[dict[str, Decimal]]:
+def pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     An operator that eagerly sums fields of items in a stream.
     Note that this pipe is not lazy if `group_key` is specified.

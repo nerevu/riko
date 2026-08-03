@@ -40,22 +40,25 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko import autorss
 from riko.cast import SourceOpts
 from riko.types.configs import FeedAutoDiscoveryObjconf
-from riko.types.general import Defaults, Extraction, Item, Stream
+from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 
 from . import processor
 
-OPTS = SourceOpts
+OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"strict": True}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -74,30 +77,25 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     objconf = Objectify({'url': get_path('bbc.html'), 'strict': True})
         ...     result = await async_parser(None, None, objconf)
         ...     print(next(result)['link'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         file://riko/data/bbci.co.uk.xml
 
     """
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = await autorss.async_get_rss(objconf.url, **rkwargs)
+    stream = await autorss.async_get_rss(objconf.url, link_type=None, **rkwargs)
     return stream
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -131,12 +129,12 @@ def parser(
 
     """
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = autorss.get_rss(objconf.url, **rkwargs)
+    stream = autorss.get_rss(objconf.url, link_type=None, **rkwargs)
     return stream
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that fetches and parses the first feed found on a site.
 
@@ -150,22 +148,17 @@ async def async_pipe(*args, **kwargs) -> Stream:
             url (str): The web site to fetch]
 
     Returns:
-        dict: twisted.internet.defer.Deferred an iterator of items
+        Awaitable: an iterator of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe(conf={'url': get_path('bbc.html')})
         ...     print(next(result)['link'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         file://riko/data/bbci.co.uk.xml
 
     """
@@ -173,7 +166,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that fetches and parses the first feed found on a site.
 

@@ -1,91 +1,88 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for creating asynchronous riko pipes
+riko.bado
+~~~~~~~~~
+AnyIO-backed async runtime for riko pipes.
 
-Examples:
-    basic usage::
-
-        >>> from riko import get_path
-        >>> from riko.bado import react
-
+Async support is available when the ``async`` extra (``anyio`` + ``httpx``) is
+installed; otherwise ``backend == "empty"`` and riko runs sync-only. ``run`` is
+the entry point for async doctests/examples (``run(main)`` where ``main`` is a
+no-argument coroutine function) — anyio needs no reactor.
 """
 
-from functools import partial
+from collections.abc import Callable
+from typing import Any
 
 try:
-    from treq import get as async_get
-    from treq import json_content as async_json
-    from twisted.internet import defer
+    import anyio
 except ImportError:
-    async_get = lambda _: lambda: None
-    async_json = lambda _: lambda: None
-    async_none = lambda _: lambda: None
-    async_return = lambda _: lambda: None
-    backend = "empty"
-    defer = None
-    Deferred = None
-    failure = None
-    FileSender = None
-    gather_results = None
-    get_process_output = None
-    maybe_deferred = lambda *_: None
-    MemoryReactorClock = object
-    react = lambda _, _reactor=None: None
-    reactor = None
-    testing = None
-    real_task = None
-    implementer = None
-    IReactorCore = None
+    async_get: Callable[..., Any] = lambda *_: None
+    async_json: Callable[..., Any] = lambda *_: None
+    async_partial: Callable[..., Any] = lambda *_: None
+    async_return: Callable[..., Any] = lambda *_: None
+    async_sleep: Callable[..., Any] = lambda *_: None
+    CapacityLimiter: type | None = None
+    create_memory_object_stream: Callable[..., Any] | None = None
+    create_task_group: Callable[..., Any] | None = None
+    fail_after: Callable[..., Any] | None = None
+    gather_results: Callable[..., Any] = lambda *_: None
+    lowlevel: Any = None
+    maybe_deferred: Callable[..., Any] = lambda *_: None
+    MemoryObjectReceiveStream: Any = None
+    MemoryObjectSendStream: Any = None
+    Path: type | None = None
+    run: Callable[..., Any] | None = None
 
-    class Reactor:
-        fake = False
-
-    reactor = Reactor()
-
+    async def checkpoint() -> None:
+        return None
 else:
-    from twisted.internet import defer, reactor, testing
-    from twisted.internet import task as real_task
-    from twisted.internet.defer import Deferred
-    from twisted.internet.defer import gatherResults as gather_results  # noqa: N813
-    from twisted.internet.defer import maybeDeferred as maybe_deferred  # noqa: N813
-    from twisted.internet.interfaces import IReactorCore
-    from twisted.internet.task import react
-    from twisted.internet.testing import MemoryReactorClock
-    from twisted.internet.utils import (
-        getProcessOutput as get_process_output,  # noqa: N813
+    from anyio import (
+        CapacityLimiter,
+        Path,
+        create_memory_object_stream,
+        create_task_group,
+        fail_after,
+        lowlevel,
     )
-    from twisted.protocols.basic import FileSender
-    from twisted.python import failure
-    from zope.interface import implementer
+    from anyio import sleep as async_sleep
+    from anyio.lowlevel import checkpoint
+    from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
-    async_none = defer.succeed(None)
-    async_return = partial(defer.succeed)
-    backend = "twisted"
-    reactor.fake = False
+    from riko.bado._util import (
+        async_get,
+        async_json,
+        async_partial,
+        async_return,
+        gather_results,
+        maybe_deferred,
+    )
 
-async_partial = lambda f, **kwargs: partial(maybe_deferred, f, **kwargs)
-_issync = backend == "empty"
-_isasync = not _issync
+    run = anyio.run
+
+
+backend: str = "empty" if run is None else "anyio"
+issync: bool = backend == "empty"
+isasync: bool = not issync
 
 __all__ = [
-    "Deferred",
-    "FileSender",
-    "IReactorCore",
-    "MemoryReactorClock",
+    "CapacityLimiter",
+    "MemoryObjectReceiveStream",
+    "MemoryObjectSendStream",
+    "Path",
     "async_get",
     "async_json",
-    "async_none",
     "async_partial",
     "async_return",
+    "async_sleep",
     "backend",
-    "defer",
-    "failure",
+    "checkpoint",
+    "create_memory_object_stream",
+    "create_task_group",
+    "fail_after",
     "gather_results",
-    "get_process_output",
-    "implementer",
+    "isasync",
+    "issync",
+    "lowlevel",
     "maybe_deferred",
-    "react",
-    "reactor",
-    "real_task",
-    "testing",
+    "run",
 ]

@@ -21,6 +21,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -38,11 +40,12 @@ DEFAULTS: Defaults = {
     "token_key": "content",
 }
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: TokenizerObjconf, **kwargs
+    content: str, extraction: Extraction, objconf: TokenizerObjconf, **kwargs: object
 ) -> Iterator[dict[str, str]]:
     """
     Parses the pipe content
@@ -72,7 +75,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
+def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
     A processor module that asynchronously splits a string by a delimiter.
 
@@ -101,22 +104,17 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
             attribute (default: False)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item with tokenized content
+        Awaitable: item with tokenized content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     item = {'content': 'Once,twice,thrice,no more'}
         ...     result = await async_pipe(item)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'content': 'Once'}
 
     """
@@ -124,7 +122,7 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[dict[str, str]]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
     A processor that splits a string by a delimiter.
 

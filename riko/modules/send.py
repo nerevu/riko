@@ -10,7 +10,7 @@ Examples:
         >>> from riko.modules.send import pipe as sender
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}, func=noop)
+        >>> target = receiver(conf={'name': 'receiver1', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
@@ -24,8 +24,12 @@ Examples:
 
 """
 
+from logging import Logger
+from typing import Any, cast
+
 import pygogo as gogo
 
+from riko._pubsub import async_hub
 from riko.types.configs import SendObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from riko.utils import send
@@ -33,12 +37,12 @@ from riko.utils import send
 from . import operator
 
 OPTS: Opts = {"pollable": True, "emit": True}
-DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+DEFAULTS: Defaults = {"max_wait": 5}
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -69,7 +73,7 @@ def parser(
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver2', 'wait': 0.01, 'max_wait': 2}, func=noop)
+        >>> target = receiver(conf={'name': 'receiver2', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> stream = ({'x': x} for x in range(5))
@@ -83,8 +87,8 @@ def parser(
         {'x': 0}
 
     """
-    others = kwargs["others"]
-    ids = kwargs.get("ids")
+    others = cast(list[str], kwargs["others"])
+    ids = cast(dict[str, int] | None, kwargs.get("ids"))
 
     for item in stream:
         for target in others:
@@ -97,7 +101,7 @@ def parser(
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: str) -> Stream:
     """
     An operator that pushes items of a stream to a function using generator based
     coroutines.
@@ -119,7 +123,7 @@ def pipe(*args, **kwargs) -> Stream:
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.utils import noop
         >>>
-        >>> target = receiver(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2}, func=noop)
+        >>> target = receiver(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)
         {'state': <StreamState.PENDING: 1>}
         >>> source = pipe([{'x': 0}], others=['receiver3'])
@@ -132,3 +136,42 @@ def pipe(*args, **kwargs) -> Stream:
 
     """
     return parser(*args, **kwargs)
+
+
+async def async_parser(
+    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: str
+) -> Stream:
+    """
+    Publishes each stream item to every target's AnyIO channel, then completes
+    (closes the channel) so receivers terminate. Publishing rendezvouses with
+    the receiver, so no startup ordering is needed; a target that is never
+    subscribed is bounded by ``objconf.max_wait`` and raises
+    ``ReceiverUnavailableError``. Returns the original items (passthrough).
+    """
+    others = kwargs["others"]
+    timeout = objconf.max_wait
+    sent = []
+
+    for item in stream:
+        await async_hub.publish(others, item, timeout=timeout)
+        sent.append(item)
+
+    await async_hub.complete(others)
+    return iter(sent)
+
+
+@operator(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args: Any, **kwargs: str) -> Stream:
+    """
+    An async operator that pushes stream items to receiver targets over AnyIO
+    channels.
+
+    Kwargs:
+        others Iter[(str)]: Target names to receive each stream item.
+        conf (dict): The pipe configuration. May contain 'name' and 'max_wait'.
+
+    Yields:
+        dict: an item
+
+    """
+    return await async_parser(*args, **kwargs)

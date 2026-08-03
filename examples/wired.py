@@ -1,41 +1,45 @@
-from collections.abc import Awaitable
 from pprint import pprint
-from typing import overload
 
+from riko.cast import CastType
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import DateFormatRawConf, InputConf, ItemBuilderRawConf, Param
 
-format_conf = {"type": "text", "input_key": "format", "test": True}
+format_conf = InputConf({"type": CastType.TEXT, "input_key": "format", "test": True})
 format_in = {"format": "%B %d, %Y"}
-date_conf = {
-    "type": "date",
-    "default": "5/4/82",
-    "prompt": "enter a date",
-    "test": True,
-}
-dynamic_conf = {"format": {"terminal": "format", "path": "format"}}
-build_conf = {
-    "attrs": {"value": {"terminal": "formatted", "type": "text"}, "key": "date"}
-}
+date_conf = InputConf(
+    {"type": CastType.DATE, "default": "5/4/82", "prompt": "enter a date", "test": True}
+)
+date_fmt_conf = DateFormatRawConf(
+    {"format": {"terminal": "format", "type": "text", "path": "format"}}
+)
+build_conf = ItemBuilderRawConf(
+    {
+        "attrs": Param(
+            {
+                "value": {"terminal": "formatted", "type": "text"},
+                "key": {"type": "text", "value": "date"},
+            }
+        )
+    }
+)
 
 
 def pipe(test=False):
     format_stream = SyncPipe("input", conf=format_conf, inputs=format_in)
-    date_stream = SyncPipe("input", conf=date_conf)
 
-    formatted = date_stream.dateformat(
-        conf=dynamic_conf, format=format_stream, field="content", emit=True
+    formatted = SyncPipe("input", conf=date_conf).dateformat(
+        conf=date_fmt_conf, format=format_stream, field="content", emit=True
     )
 
     stream = SyncPipe("itembuilder", conf=build_conf, formatted=formatted, test=test)
     return list(stream)
 
 
-async def async_pipe(reactor, test=False):
+async def async_pipe(test=False):
     format_stream = AsyncPipe("input", conf=format_conf, inputs=format_in)
-    date_stream = AsyncPipe("input", conf=date_conf)
 
-    formatted = await date_stream.dateformat(
-        conf=dynamic_conf, format=format_stream, field="content", emit=True
+    formatted = await AsyncPipe("input", conf=date_conf).dateformat(
+        conf=date_fmt_conf, format=format_stream, field="content", emit=True
     )
 
     stream = await AsyncPipe(
@@ -49,21 +53,8 @@ def print_results(result) -> None:
         pprint(i)
 
 
-@overload
-def main(*, test: bool = False) -> None: ...  # noqa: E704
-@overload
-def main(reactor, *, test: bool = False) -> Awaitable[None]: ...  # noqa: E704
-def main(reactor=None, *, test: bool = False) -> None | Awaitable[None]:  # noqa: E302
-    if reactor:
-
-        async def run() -> None:
-            print_results(await async_pipe(reactor, test=test))
-
-        result = run()
-    else:
-        result = print_results(pipe(test=test))
-
-    return result
+def main(*, test: bool = False) -> None:
+    print_results(pipe(test=test))
 
 
 if __name__ == "__main__":

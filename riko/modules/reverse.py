@@ -16,6 +16,9 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko import DynamicConf
@@ -23,13 +26,13 @@ from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator
 
-OPTS = Opts()
-DEFAULTS = Defaults({})
-logger = gogo.Gogo(__name__, monolog=True).logger
+OPTS: Opts = Opts()
+DEFAULTS: Defaults = Defaults({})
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -65,7 +68,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously reverses the order of source items in
     a stream. Note that this pipe is not lazy.
@@ -75,23 +78,18 @@ def async_pipe(*args, **kwargs) -> Stream:
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the number of
+        Awaitable: iterator of the number of
             counted items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'x': x} for x in range(5))
         ...     result = await async_pipe(items)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'x': 4}
 
     """
@@ -99,7 +97,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that eagerly reverses the order of source items in a stream.
 

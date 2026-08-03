@@ -8,8 +8,9 @@ import itertools as it
 import re
 import sys
 from codecs import StreamReader
-from collections import defaultdict, deque
+from collections import defaultdict
 from collections.abc import (
+    Awaitable,
     Callable,
     Generator,
     ItemsView,
@@ -24,14 +25,16 @@ from datetime import datetime as dt
 from decimal import Decimal
 from functools import cache, partial, reduce, wraps
 from http.client import HTTPResponse
-from inspect import signature
+from inspect import isawaitable, signature
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
+from logging import Logger
 from math import isnan
 from operator import itemgetter
 from time import struct_time
 from types import UnionType
 from typing import (
     TYPE_CHECKING,
+    Any,
     Literal,
     Protocol,
     TypeGuard,
@@ -43,7 +46,6 @@ from typing import (
     get_type_hints,
     overload,
 )
-from typing import cast as cast_type
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 from urllib.response import addinfourl
@@ -73,25 +75,34 @@ from riko import (
     listize,
     replacer,
 )
-from riko.cast import CAST_SWITCH, CastType
-from riko.cast import cast as cast_value
+from riko._pubsub import async_hub, sync_hub
+from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.context import ExecutionMode
 from riko.dates import ensure_tzinfo
 from riko.dotdict import DotDict
 from riko.types.compile import ParsedPipeDef, PipeDef, PipeModule, Wire
 from riko.types.general import (
+    AsyncPipelineDependencies,
+    AsyncPyInput,
     FileTypes,
+    Function,
     Item,
     Opener,
     PipelineDependencies,
+    PyInput,
     Stream,
     StreamOrValueStream,
+    SyncPipelineDependencies,
+    SyncPyInput,
     ValueStream,
 )
 from riko.types.modules import (
+    ConfArg,
     EmbeddedModule,
+    Graph,
     InputRawConf,
     LoopRawConf,
+    Nodes,
     RegexConfRule,
     RegexRule,
 )
@@ -101,6 +112,7 @@ from riko.types.values import (
     BasicValue,
     Hashable,
     HashableType,
+    Inputs,
     ParserRSSEntry,
     PrimitiveValue,
     RikoDict,
@@ -109,7 +121,6 @@ from riko.types.values import (
     RSSEntry,
     SortableValue,
     StatefulItem,
-    StreamState,
     StringyDict,
     StringyList,
 )
@@ -120,13 +131,13 @@ if TYPE_CHECKING:
 NON_SORTABLE = (Mapping, Sequence)
 INVALID_FILECHAR_PATTERN = re.compile(r'[<>:"/\\\|\*?%]')
 
-_registry: dict[str, Generator[None, Item | StatefulItem, None]] = {}
-_receive_queue: dict[str, deque[tuple[StreamState | None, Item]]] = {}
-_ids: dict[str, int] = {}
-_counter = it.count()
 
-logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
-noop = lambda item: item
+_registry = sync_hub.receivers
+_receive_queue = sync_hub.queues
+_ids = sync_hub.ids
+
+logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+noop: Callable[[Item], Item] = lambda item: item
 
 T_co = TypeVar("T_co", covariant=True)
 B = TypeVar("B", Literal[True], Literal[False])
@@ -139,7 +150,7 @@ type CollectionTuple = tuple[type, InnerPairs | tuple[HashableOrTuple, ...]]
 type HashableOrTuple = Hashable | CollectionTuple | DataclassTuple
 
 
-def is_dataclass_tuple(obj: tuple) -> TypeGuard[DataclassTuple]:
+def is_dataclass_tuple(obj: tuple[Any, ...]) -> TypeGuard[DataclassTuple]:
     return obj[0] == "dataclass"
 
 
@@ -199,12 +210,12 @@ def fromdict(
 
 
 def _to_hashable(obj: object) -> HashableOrTuple:
-    hashed = None
+    hashed: HashableOrTuple = None
 
     if obj is None:
         pass
     elif isinstance(obj, HashableType):
-        hashed = obj
+        hashed = cast(Hashable, obj)
     elif isinstance(obj, DotDict):
         inner = sorted((k, _to_hashable(v)) for k, v in obj._store.values())
         hashed = (DotDict, tuple(inner))
@@ -275,7 +286,7 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
 
 # https://trac.edgewall.org/ticket/2066#comment:1
 # http://stackoverflow.com/a/22675049/408556
-def make_blocking(f):
+def make_blocking(f: RawIOBase | TextIOBase) -> None:
     if fcntl is not None:
         fd = f.fileno()
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -285,7 +296,7 @@ def make_blocking(f):
             fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
 
 
-def default_user_agent(name="riko"):
+def default_user_agent(name: str = "riko") -> str:
     """
     Return a string representing the default user agent.
     :rtype: str
@@ -294,18 +305,22 @@ def default_user_agent(name="riko"):
 
 
 class Chainable:
-    def __init__(self, data, method=None):
+    data: object
+    method: Function | None
+    list: builtins.list[object]
+
+    def __init__(self, data: object, method: Function | None = None) -> None:
         self.data = data
         self.method = method
-        self.list = list(data)
+        self.list = listize(data)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> "Chainable":
         funcs = (partial(getattr, x) for x in [self.data, builtins, it])
         zipped = zip(funcs, it.repeat(AttributeError))
         method = multi_try(name, zipped, default=None)
         return Chainable(self.data, method)
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: object) -> "Chainable":
         method = self.method
 
         if method is None:
@@ -327,11 +342,15 @@ class Chainable:
         return result
 
 
-def invert_dict(d):
+def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:
     return {v: k for k, v in d.items()}
 
 
-def multi_try(source, zipped, default=None):
+def multi_try[T, S](
+    source: object,
+    zipped: Iterable[tuple[Callable[..., T], type[Exception]]],
+    default: S = None,
+) -> T | S:
     for func, error in zipped:
         try:
             value = func(source)
@@ -350,7 +369,9 @@ def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) 
     return content_type.lower()
 
 
-def get_response_encoding(r: HTTPResponse | addinfourl, def_encoding=ENCODING) -> str:
+def get_response_encoding(
+    r: HTTPResponse | addinfourl, def_encoding: str = ENCODING
+) -> str:
     content_type = get_response_content_type(r)
 
     if "charset=" in content_type:
@@ -376,66 +397,62 @@ def opener(  # noqa: E704
     memoize: Literal[True],
     delay: int = ...,
     encoding: str = ...,
-    params: dict | None = ...,
+    params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
     *,
     binary: Literal[True],
-    **kwargs,
+    timeout: float | None = None,
+    **_: object,
 ) -> tuple[BytesIO, str | None]: ...
-
-
-@overload
+@overload  # noqa: E302
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[False] = ...,
     delay: int = ...,
     encoding: str = ...,
-    params: dict | None = ...,
+    params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
     *,
     binary: Literal[True],
-    **kwargs,
+    timeout: float | None = None,
+    **_: object,
 ) -> tuple[RawIOBase, str | None]: ...
-
-
-@overload
+@overload  # noqa: E302
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[True],
     delay: int = ...,
     encoding: str = ...,
-    params: dict | None = ...,
+    params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
     binary: Literal[False] = ...,
-    **kwargs,
+    timeout: float | None = None,
+    **_: object,
 ) -> tuple[StringIO, str | None]: ...
-
-
-@overload
+@overload  # noqa: E302
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[False] = ...,
     delay: int = ...,
     encoding: str = ...,
-    params: dict | None = ...,
+    params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
     binary: Literal[False] = ...,
-    **kwargs,
+    timeout: float | None = None,
+    **_: object,
 ) -> tuple[StreamReader, str | None]: ...
-
-
 def opener(  # noqa: E302
     url: str,
-    memoize=False,
-    delay=0,
-    encoding=ENCODING,
-    params=None,
-    offline=True,
+    memoize: bool = False,
+    delay: int = 0,
+    encoding: str = ENCODING,
+    params: Mapping[str, str | bytes | int | float] | None = None,
+    offline: bool = True,
     binary: bool = False,
-    **kwargs,
+    timeout: float | None = None,
+    **_: object,
 ) -> tuple[FileTypes, str | None]:
     params = params or {}
-    timeout = kwargs.get("timeout")
     url = get_abspath(url, offline=offline)
     r = None
 
@@ -486,7 +503,7 @@ def opener(  # noqa: E302
 
 
 @repr_cache
-def get_opener(memoize=False, **kwargs) -> Opener:
+def get_opener(memoize: bool = False, **kwargs: object) -> Opener:
     """
     Examples:
         >>> get_opener.cache_clear()
@@ -516,6 +533,8 @@ def get_opener(memoize=False, **kwargs) -> Opener:
 
 class Fetch[B: (Literal[True], Literal[False])]:
     binary: B
+    file: FileTypes | None
+    content_type: str | None
 
     @overload
     def __init__(  # noqa: E704
@@ -540,7 +559,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
         memoize: BasicArg = False,
         binary: bool = False,
         **kwargs: BasicArg,
-    ):
+    ) -> None:
         # TODO: need to use separate timeouts for memoize and urlopen
         self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]
         self.content_type = None
@@ -555,12 +574,13 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
             logger.error(f"Error opening {truncate_content(url)}: {e.reason}")
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> object:
         if self.file is not None:
             return getattr(self.file, name)
+
         raise AttributeError(name)
 
-    def close(self):
+    def close(self) -> None:
         if self.file:
             response = getattr(self.file, "_r", None)
 
@@ -572,10 +592,10 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
             self.file = None
 
-    def __enter__(self):
+    def __enter__(self) -> "Fetch[B]":
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, *_: object) -> None:
         self.close()
 
     @overload
@@ -617,7 +637,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
         return result
 
     @property
-    def ext(self):
+    def ext(self) -> str | None:
         if not self.content_type:
             ext = None
         elif "xml" in self.content_type:
@@ -666,7 +686,7 @@ def _resolve_default(
         logger.warning(f"Invalid cast type={_type}. Setting default to empty string.")
     elif _type and default is None:
         _default = CAST_SWITCH[_type].get("default")
-        resolved = cast_type(PrimitiveValue, _default) or ""
+        resolved = cast(PrimitiveValue, _default) or ""
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     elif default is not None:
@@ -698,7 +718,7 @@ def def_itemgetter(
             casted = _resolve_uncastable(value, msg, default)
         elif _type:
             _casted = cast_value(value, CastType(_type))
-            casted = cast_type(PrimitiveValue, _casted)
+            casted = cast(PrimitiveValue, _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
         elif isinstance(value, NON_SORTABLE):
@@ -718,7 +738,7 @@ def def_itemgetter(
 
 # TODO: move this to meza.process.group
 def group_by[T: Mapping | PrimitiveValue](
-    content: Iterable[T], attr: str, default=None
+    content: Iterable[T], attr: str, default: PrimitiveValue | None = None
 ) -> ItemsView[str, list[T]]:
     keyfunc = def_itemgetter(attr, default)
     groups = defaultdict(list)
@@ -751,7 +771,12 @@ def unique_everseen[T](  # noqa: E302
             yield k
 
 
-def betwix(iterable, start=None, stop=None, inc=False):
+def betwix[T](
+    iterable: Iterable[T],
+    start: str | None = None,
+    stop: str | None = None,
+    inc: bool = False,
+) -> Iterator[T]:
     """
     Extract selected elements from an iterable. But unlike `islice`,
     extract based on the element's value instead of its position.
@@ -783,7 +808,9 @@ def betwix(iterable, start=None, stop=None, inc=False):
 
     """
 
-    def inc_takewhile(predicate, _iter):
+    def inc_takewhile(
+        predicate: Callable[[T], bool], _iter: Iterable[T]
+    ) -> Iterator[T]:
         for x in _iter:
             yield x
 
@@ -795,11 +822,11 @@ def betwix(iterable, start=None, stop=None, inc=False):
     first = it.dropwhile(get_pred(start), iterable) if start else iterable
 
     if stop and inc:
-        last = inc_takewhile(pred, first)
+        last: Iterator[T] = inc_takewhile(pred, first)
     elif stop:
         last = it.takewhile(pred, first)
     else:
-        last = first
+        last = iter(first)
 
     return last
 
@@ -834,7 +861,9 @@ def dispatch[T, VT](split: Sequence[VT], *funcs: Callable[[VT], T]) -> tuple[T, 
     return tuple(func(item) for item, func in zip(split, funcs, strict=False))
 
 
-def broadcast[T, VT](item: VT, *funcs: Callable[[VT], T], **kwargs) -> tuple[T, ...]:
+def broadcast[T, VT](
+    item: VT, *funcs: Callable[[VT], T], **kwargs: object
+) -> tuple[T, ...]:
     r"""
     Delivers the same item to different functions.
 
@@ -871,7 +900,7 @@ def _gen_words(match, splits: Iterable[BasicValue]):
         yield word
 
 
-def multi_substitute(word: str, rules):
+def multi_substitute(word: str, rules: Sequence[RegexRule]) -> str:
     """
     Apply multiple regex rules to 'word'
     http://code.activestate.com/recipes/
@@ -964,7 +993,7 @@ def multi_substitute(word: str, rules):
     return word
 
 
-def substitute(word: str, rule):
+def substitute(word: str, rule: RegexRule) -> str:
     if word:
         result = rule["match"].subn(rule["replace"], word, rule["count"])
         replaced, replacements = result
@@ -978,7 +1007,7 @@ def substitute(word: str, rule):
 
 
 def make_regex_rule(
-    f: str, m: str, r: str, seriesmatch: bool = True, default=None
+    f: str, m: str, r: str, seriesmatch: bool = True, default: str | None = None
 ) -> RegexConfRule:
     return RegexConfRule(
         field=f, match=m, replace=r, seriesmatch=seriesmatch, default=default
@@ -986,7 +1015,9 @@ def make_regex_rule(
 
 
 # @memoize(TIMEOUT)
-def get_regex_rule(rule: DynamicConf | RegexConfRule, recompile=False) -> RegexRule:
+def get_regex_rule(
+    rule: DynamicConf | RegexConfRule, recompile: bool = False
+) -> RegexRule:
     rule = rule if is_dataclass(rule) else RegexConfRule(**rule)
     flags = 0 if rule.casematch else re.IGNORECASE
 
@@ -1108,55 +1139,38 @@ def gen_items(  # noqa: E302
 
 
 def send(target: str, item: Item | StatefulItem) -> int | None:
-    target_id = None
-    gen = _registry.get(target)
-
-    if gen is None:
-        logger.error(f"Attempted to send {item} to non-existent '{target}'")
-    else:
-        try:
-            gen.send(item)
-        except StopIteration:
-            _registry.pop(target, None)
-            _ids.pop(target, None)
-        else:
-            target_id = _ids.get(target)
-
-    return target_id
+    return sync_hub.send(target, item)
 
 
-def close(name: str):
-    if (gen := _registry.pop(name, None)) is not None:
-        gen.close()
-
-    _receive_queue.pop(name, None)
-    _ids.pop(name, None)
+def close(name: str) -> None:
+    sync_hub.close(name)
 
 
 def reset_pubsub() -> None:
-    for name in tuple(_registry):
-        close(name)
-
-    _registry.clear()
-    _receive_queue.clear()
-    _ids.clear()
+    sync_hub.reset()
+    async_hub.reset()
 
 
-def coroutine(registry_name: str | None = None, maxlen=256):
+def coroutine(
+    registry_name: str | None = None, maxlen: int = 256
+) -> Callable[
+    [Callable[..., Generator[None, Item | StatefulItem, None]]],
+    Callable[..., Generator[None, Item | StatefulItem, None]],
+]:
     """Decorator for generator-based coroutines."""
 
     def decorator(
         func: Callable[..., Generator[None, Item | StatefulItem, None]],
-    ):
+    ) -> Callable[..., Generator[None, Item | StatefulItem, None]]:
         name = registry_name or func.__name__
 
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(
+            *args: Any, **kwargs: object
+        ) -> Generator[None, Item | StatefulItem, None]:
             gen = func(*args, **kwargs)
             next(gen)
-            _registry[name] = gen
-            _receive_queue[name] = deque(maxlen=maxlen)
-            _ids[name] = next(_counter)
+            sync_hub.seed(name, gen, maxlen)
             return gen
 
         return wrapper
@@ -1165,10 +1179,13 @@ def coroutine(registry_name: str | None = None, maxlen=256):
 
 
 def parse_context(
-    context: Context | None = None, inputs: Mapping | None = None, **kwargs
+    context: Context | None = None,
+    mode: ExecutionMode | None = None,
+    inputs: Inputs | None = None,
+    **kwargs: bool | None,
 ) -> Context:
     # Prevents mutating caller-supplied Context
-    new_context = Context(**kwargs) if context is None else copy(context)
+    new_context = copy(context) if context else Context(mode, inputs=inputs, **kwargs)
     new_inputs = new_context.inputs if inputs is None else dict(inputs)
     new_context.inputs = new_inputs
     return new_context
@@ -1188,10 +1205,26 @@ def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
             yield dep
 
 
-def extract_dependencies(
+@overload
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+) -> list[str]: ...
+@overload  # noqa: E302
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: AsyncPipelineDependencies,
+) -> Awaitable[list[str]]: ...
+@overload  # noqa: E302
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: SyncPipelineDependencies,
+) -> list[str]: ...
+def extract_dependencies(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
-) -> list[str]:
+) -> Awaitable[list[str]] | list[str]:
     """Extract modules used by a pipe"""
     if pipe_def:
         pydeps = gen_dependencies(pipe_def)
@@ -1200,10 +1233,10 @@ def extract_dependencies(
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return sorted(set(pydeps))
+    return pydeps if isawaitable(pydeps) else sorted(set(pydeps))
 
 
-def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str]]:
+def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str, ...]]:
     fields = ["position", "name", "prompt"]
     values = ["type", "value"]
     modules = pipe_def["modules"]
@@ -1218,7 +1251,7 @@ def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str]]:
         conf = module["conf"]
 
         try:
-            module_confs = [conf[x]["value"] for x in fields]
+            module_confs: list[str] = [conf[x]["value"] for x in fields]
         except (KeyError, TypeError):
             pass
         else:
@@ -1228,20 +1261,21 @@ def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str]]:
             yield tuple(module_confs)
 
 
-def get_input(conf: InputRawConf, **kwargs):
+def get_input(conf: InputRawConf, **kwargs: object) -> str | int | bool:
     """
     Gets a user parameter, either from the console or from an outer
      submodule/system
 
     Assumes conf has name, default, prompt and debug
     """
-    name = conf["name"]["value"]
+    name = str(conf["name"]["value"])
     prompt = conf["prompt"]["value"]
-    _default = conf.get("default") or conf.get("debug") or {}
+    __default = ConfArg({"type": "text", "value": ""})
+    _default = conf.get("default") or conf.get("debug") or __default
     default = _default.get("value")
 
     if inputs := kwargs.get("inputs"):
-        value = inputs.get(name, default)
+        value = cast(Inputs, inputs).get(name, default)
     elif not kwargs.get("test"):
         # we skip user interaction during tests
         raw = input(f"{prompt} (default={default}) ")
@@ -1252,10 +1286,26 @@ def get_input(conf: InputRawConf, **kwargs):
     return value
 
 
-def extract_input(
+@overload
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+) -> SyncPyInput: ...
+@overload  # noqa: E302
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: AsyncPipelineDependencies,
+) -> AsyncPyInput: ...
+@overload  # noqa: E302
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: SyncPipelineDependencies,
+) -> SyncPyInput: ...
+def extract_input(  # noqa: E302
     pipe_def: PipeDef | ParsedPipeDef | None = None,
     pipeline: PipelineDependencies | None = None,
-) -> Sequence[str | tuple[str]]:
+) -> PyInput:
     """Extract inputs required by a pipe"""
     if pipe_def:
         pyinput = gen_input(pipe_def)
@@ -1264,12 +1314,12 @@ def extract_input(
     else:
         raise TypeError("Must supply at least one kwarg!")
 
-    return sorted(pyinput)
+    return pyinput if isawaitable(pyinput) else sorted(pyinput)
 
 
 def pythonise(
-    content: str | Mapping,
-    encoding="ascii",
+    content: str | Mapping[str, object],
+    encoding: str = "ascii",
     replace: Sequence[str] = ("-", ":", "/", ""),
     key: str | None = None,
 ) -> str:
@@ -1297,7 +1347,7 @@ def pythonise(
 def gen_names(
     module_ids: Sequence[str] | Sequence[tuple[str, ...]],
     parsed_pipe_def: ParsedPipeDef,
-    ntype="module",
+    ntype: Literal["module", "pipe", "async_pipe"] = "module",
 ) -> Iterator[str]:
     for module_id in module_ids:
         if isinstance(module_id, str):
@@ -1310,10 +1360,11 @@ def gen_names(
                 name = pythonise(module_type)
             elif ntype == "module":
                 name = module_type
-            elif ntype == "pipe":
-                name = "pipe"
+            elif ntype in {"pipe", "async_pipe"}:
+                name = ntype
             else:
-                raise ValueError(f"Invalid {ntype=}. (Expected 'module' or 'pipe')")
+                msg = f"Invalid {ntype=}. (Expected 'module', 'pipe', or 'async_pipe')"
+                raise ValueError(msg)
 
             yield name
 
@@ -1331,9 +1382,9 @@ def gen_modules(  # noqa: E302
 ) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
     for module in listize(pipe_def["modules"]):
         if embedded and module["type"] == "loop":
-            conf = cast_type(LoopRawConf, module["conf"])
-            embed = conf["embed"]["value"]
-            yield (pythonise(embed["id"]), embed)
+            conf = cast(LoopRawConf, module["conf"])
+            embedded_module = conf["embed"]["value"]
+            yield (pythonise(embedded_module["id"]), embedded_module)
         elif not embedded:
             yield (pythonise(module["id"]), module)
 
@@ -1350,19 +1401,19 @@ def gen_graph(pipe_def: PipeDef) -> Iterator[tuple[str, str]]:
         yield (src_id, tgt_id)
 
 
-def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list]]:
+def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
     for module in listize(pipe_def["modules"]):
         module_id = pythonise(module["id"])
         yield (module_id, [])
 
         # make the loop dependent on its embedded module
         if module["type"] == "loop":
-            conf = cast_type(LoopRawConf, module["conf"])
-            embed = conf["embed"]["value"]
-            yield (pythonise(embed["id"]), [module_id])
+            conf = cast(LoopRawConf, module["conf"])
+            embedded_module = conf["embed"]["value"]
+            yield (pythonise(embedded_module["id"]), [module_id])
 
 
-def gen_parented_graph(graph):
+def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:
     """Remove any orphan nodes"""
     for node, value in graph.items():
         if value or any(node in v for v in graph.values()):

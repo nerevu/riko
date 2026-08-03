@@ -22,6 +22,8 @@ Attributes:
 """
 
 from collections import deque
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -30,13 +32,13 @@ from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator
 
-OPTS = Opts()
+OPTS: Opts = Opts()
 DEFAULTS: Defaults = {"uniq_key": "content", "limit": 1024}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: UniqObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: UniqObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -83,7 +85,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously filters out non unique items according
     to a specified field.
@@ -103,22 +105,17 @@ def async_pipe(*args, **kwargs) -> Stream:
                 1024)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred stream
+        Awaitable: stream
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'x': x, 'mod': x % 2} for x in range(5))
         ...     result = await async_pipe(items, conf={'uniq_key': 'mod'})
         ...     print([i['mod'] for i in result])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         [0, 1]
 
     """
@@ -126,7 +123,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that filters out non unique items according to a specified
     field.

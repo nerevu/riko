@@ -32,6 +32,8 @@ import re
 from collections.abc import Callable, Sequence
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 from dateutil.parser import ParserError
@@ -74,7 +76,7 @@ DATE_OPS = {"after", "before"}
 PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
 TRUTHINESS_OPS = {"truthy", "falsy"}
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def _parse_arg_uncached[VT](arg: VT, op: str) -> str | date | Decimal | VT | None:
@@ -110,12 +112,14 @@ def _parse_arg_cached[VT](arg: VT, op: str) -> str | date | Decimal | VT | None:
     return _parse_arg_uncached(arg, op)
 
 
-def parse_arg[VT](arg: VT, op: str, memoize=False) -> str | date | Decimal | VT | None:
+def parse_arg[VT](
+    arg: VT, op: str, memoize: bool = False
+) -> str | date | Decimal | VT | None:
     func = _parse_arg_cached if memoize else _parse_arg_uncached
     return func(arg, op)
 
 
-def parse_rule(rule: FilterConfRule, item: Item, **kwargs) -> bool:
+def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     truthiness = rule.op in TRUTHINESS_OPS
     _y = rule.value
 
@@ -152,7 +156,7 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs) -> bool:
 
 
 def parser(
-    _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs
+    _: Stream, extract: Sequence[FilterConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -198,15 +202,13 @@ def parser(
             parse_arg(rule.value, rule.op, memoize=True)
 
     for item, objconf in tuples:
-        results = (parse_rule(rule, item, **kwargs) for rule in extract)
-
         try:
             func = COMBINE_BOOLEAN[objconf.combine]
         except KeyError:
             msg = f"Invalid combine: '{objconf.combine}'. (Expected 'and' or 'or')"
             logger.error(msg)
         else:
-            result = func(results)
+            result = func(parse_rule(rule, item, **kwargs) for rule in extract)
 
             if (result and objconf.permit) or not (result or objconf.permit):
                 yield item
@@ -215,7 +217,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously filters for source items matching
     the given rules.
@@ -249,23 +251,18 @@ def async_pipe(*args, **kwargs) -> Stream:
             stop (bool): stop after first failure (default: False)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the filtered items
+        Awaitable: iterator of the filtered items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]
         ...     rule = {'field': 'title', 'op': 'contains', 'value': 'web'}
         ...     result = await async_pipe(items, conf={'rule': rule})
         ...     print(next(result)['title'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         Website Developer
 
     """
@@ -273,7 +270,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that extracts items matching the given rules.
 

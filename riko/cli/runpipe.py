@@ -4,13 +4,15 @@ from collections.abc import Iterable, Mapping
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 from os import path as p
+from types import ModuleType
 
-from riko.bado import react
+from riko.bado import run as async_run
+from riko.types.general import AsyncPipeParser, Function
 
 io_error = FileNotFoundError
 
 
-def emit_result(result) -> None:
+def emit_result(result: object) -> None:
     """
     Print a pipe result, expanding iterables item by item.
 
@@ -32,7 +34,7 @@ def emit_result(result) -> None:
         print(result)
 
 
-def load_file(name, src):
+def load_file(name: str, src: str) -> ModuleType | None:
     location = f"examples/{src}.py"
 
     if spec := spec_from_file_location(name, location):
@@ -44,7 +46,7 @@ def load_file(name, src):
     return module
 
 
-def file2name(path):
+def file2name(path: str) -> str:
     """
     Return the base module name for a file path.
 
@@ -54,16 +56,20 @@ def file2name(path):
     return p.splitext(p.basename(path))[0]
 
 
-async def runner(reactor, async_pipe, test=False, cb=None):
-    result = await async_pipe(reactor, test=test)
+async def runner(
+    async_pipe: AsyncPipeParser,
+    test: bool = False,
+    cb: Function | None = None,
+) -> None:
+    result = await async_pipe(test=test)
     cb(result) if callable(cb) else None
 
 
-def run():
+def run() -> None:
     """CLI runner"""
     parser = ArgumentParser(
         description="description: Runs a riko pipe",
-        prog="runpipe",
+        prog="run-pipe",
         usage="%(prog)s [pipeid]",
         formatter_class=RawTextHelpFormatter,
     )
@@ -103,11 +109,11 @@ def run():
         except ImportError:
             sys.exit(f"Pipe examples.{args.pipeid} not found!")
 
-    if (main := getattr(module, "main", None)) and args.isasync:
-        react(runner, [main, args.test])
-    elif args.isasync:
-        react(runner, [module.async_pipe, args.test, emit_result])
-    elif main:
+    printer = getattr(module, "print_results", emit_result)
+
+    if args.isasync and (async_pipe := getattr(module, "async_pipe", None)):
+        async_run(runner, async_pipe, args.test, printer)
+    elif main := getattr(module, "main", None):
         main(test=args.test)
     else:
         emit_result(module.pipe(test=args.test))

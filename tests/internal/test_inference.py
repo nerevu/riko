@@ -17,9 +17,9 @@ from typing import Annotated, Any
 import pytest
 
 from riko.modules._inference import (
-    _gen_operator_return_kinds,
-    _infer_from_source,
+    gen_operator_return_kinds,
     gen_return_inferences,
+    infer_from_source,
 )
 from riko.types.modules import InferenceSource, OperatorReturnKind
 
@@ -146,7 +146,7 @@ def test_unavailable_source_is_unknown_with_hint():
 
 def test_ambiguous_call_is_unknown_with_hint():
     def pipe(items):
-        return build_result(items)  # noqa: F821
+        return build_result(items)  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
 
     inference = only(pipe)
     assert inference.kind is UNKNOWN
@@ -171,7 +171,7 @@ def test_nested_decorator_with_wraps():
 
 
 def test_unresolvable_annotation_falls_back_to_ast():
-    def pipe(items) -> "Nonexistent":  # noqa: F821
+    def pipe(items) -> "Nonexistent":  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
         return sum(items)
 
     inference = only(pipe)
@@ -183,19 +183,22 @@ def test_gen_operator_return_kinds_yields_bare_kinds():
     def pipe(items) -> Iterator[int] | int:
         return iter(items)
 
-    assert set(_gen_operator_return_kinds(pipe)) == {STREAM, NONSTREAM}
+    assert set(gen_operator_return_kinds(pipe)) == {STREAM, NONSTREAM}
 
 
 def test_infer_from_source_direct():
     def pipe(items):
         return sorted(items)
 
-    inference = _infer_from_source(pipe)
+    inference = infer_from_source(pipe)
     assert inference.kind is NONSTREAM
     assert inference.source is InferenceSource.AST
 
 
-@pytest.mark.parametrize("pipe", [len, lambda items: undefined(items)])  # noqa: F821
+@pytest.mark.parametrize(
+    "pipe",
+    [len, lambda items: undefined(items)],  # noqa: F821 # pyright: ignore[reportUndefinedVariable]
+)
 def test_every_unknown_is_actionable(pipe):
     for inference in gen_return_inferences(pipe):
         if inference.kind is UNKNOWN:

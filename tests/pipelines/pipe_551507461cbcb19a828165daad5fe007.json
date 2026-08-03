@@ -60,7 +60,7 @@
                     "value": "urlinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {
@@ -74,7 +74,7 @@
         {
             "conf": {
                 "count": {
-                    "type": "number",
+                    "type": "float",
                     "value": "5"
                 }
             },

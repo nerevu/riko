@@ -5,75 +5,83 @@ from pprint import pprint
 
 from riko import Context, get_path
 from riko.collections import SyncPipe
-from riko.types.general import Conf
-from riko.types.modules import FetchConf, FetchDataConf
+from riko.types.general import SkipIf
+from riko.types.modules import (
+    CurrencyFormatConf,
+    CurrencyFormatRawConf,
+    ExchangeRateConf,
+    FetchConf,
+    FetchDataConf,
+    RegexConf,
+    RegexConfRule,
+    RenameConf,
+    RenameConfRule,
+    SimpleMathRawConf,
+    StrconcatConf,
+    StrReplaceConf,
+    StrReplaceConfRule,
+    SubstrConf,
+    TokenizerConf,
+)
 from riko.utils import make_regex_rule
 
 PARENT = p.dirname(p.dirname(p.dirname(__file__)))
-
-
-def make_simplemath(other, op):
-    return {"OTHER": {"subkey": other, "type": "number"}, "OP": op}
-
-
-def make_substring(start, length):
-    return {"start": start, "length": length}
-
-
-def make_exchangerate(quote, offline=True):
-    return {"quote": quote, "default": DEF_CUR_CODE, "offline": offline}
-
-
-def make_tokenizer(delimiter, dedupe=False, sort=False):
-    return {"delimiter": delimiter, "dedupe": dedupe, "sort": sort}
-
-
-def make_loop(field, assign, embed_conf, skip_if=None):
-    conf = {
-        "count": "all",
-        "field": field,
-        "embed": {"conf": embed_conf},
-        "skip_if": skip_if,
-    }
-
-    kwargs = {"emit": False, "assign": assign}
-    return conf, kwargs
-
-
 DEF_CUR_CODE = "USD"
 
+
+def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
+    return SimpleMathRawConf(
+        {
+            "other": {"subkey": other, "type": "float"},
+            "op": {"value": op, "type": "text"},
+        }
+    )
+
+
+def make_substring(start: str | int, length: str | int) -> SubstrConf:
+    return SubstrConf({"start": int(start), "length": int(length)})
+
+
+def make_exchangerate(quote: str = DEF_CUR_CODE) -> ExchangeRateConf:
+    return ExchangeRateConf({"currency": quote})
+
+
+def make_tokenizer(delimiter: str, dedupe=False, sort=False) -> TokenizerConf:
+    return TokenizerConf({"delimiter": delimiter, "dedupe": dedupe, "sort": sort})
+
+
 rename1_rule = [
-    {"newval": "", "field": "y:title", "copy": False},
-    {"newval": "", "field": "content", "copy": False},
-    {"newval": "k:posted", "field": "y:published", "copy": False},
-    {"newval": "k:job_type", "field": "summary", "copy": True},
-    {"newval": "k:content", "field": "summary", "copy": True},
-    {"newval": "k:work_location", "field": "summary", "copy": True},
-    {"newval": "k:client_location", "field": "summary", "copy": True},
-    # {"newval": "k:category", "field": "summary", "copy": True},
-    {"newval": "k:tags", "field": "summary", "copy": True},
-    {"newval": "k:due", "field": "summary", "copy": True},
-    {"newval": "k:submissions", "field": "summary", "copy": True},
-    {"newval": "k:budget_raw", "field": "summary", "copy": True},
-    {"newval": "k:marketplace", "field": "link", "copy": True},
-    {"newval": "k:author", "field": "title", "copy": True},
+    RenameConfRule(newval="", field="y:title", copy=False),
+    RenameConfRule(newval="", field="content", copy=False),
+    RenameConfRule(newval="k:posted", field="y:published", copy=False),
+    RenameConfRule(newval="k:job_type", field="summary", copy=True),
+    RenameConfRule(newval="k:content", field="summary", copy=True),
+    RenameConfRule(newval="k:work_location", field="summary", copy=True),
+    RenameConfRule(newval="k:client_location", field="summary", copy=True),
+    # RenameConfRule(newval="k:category", field="summary", copy=True),
+    RenameConfRule(newval="k:tags", field="summary", copy=True),
+    RenameConfRule(newval="k:due", field="summary", copy=True),
+    RenameConfRule(newval="k:submissions", field="summary", copy=True),
+    RenameConfRule(newval="k:budget_raw", field="summary", copy=True),
+    RenameConfRule(newval="k:marketplace", field="link", copy=True),
+    RenameConfRule(newval="k:author", field="title", copy=True),
 ]
 
 rename2_rule = [
-    {"newval": "k:budget_raw1", "field": "k:budget_raw", "copy": True},
-    {"newval": "k:budget_raw2", "field": "k:budget_raw", "copy": True},
+    RenameConfRule(newval="k:budget_raw1", field="k:budget_raw", copy=True),
+    RenameConfRule(newval="k:budget_raw2", field="k:budget_raw", copy=True),
 ]
 
 rename3_rule = [
-    {"newval": "k:budget_raw1_num", "field": "k:budget_raw1", "copy": True},
-    {"newval": "k:budget_raw1_sym", "field": "k:budget_raw1", "copy": True},
-    {"newval": "k:budget_raw1_code", "field": "k:budget_raw1", "copy": True},
-    {"newval": "k:budget_raw2_num", "field": "k:budget_raw2", "copy": True},
-    {"newval": "k:budget_raw2_sym", "field": "k:budget_raw2", "copy": True},
-    {"newval": "k:budget_raw2_code", "field": "k:budget_raw2", "copy": True},
+    RenameConfRule(newval="k:budget_raw1_num", field="k:budget_raw1", copy=True),
+    RenameConfRule(newval="k:budget_raw1_sym", field="k:budget_raw1", copy=True),
+    RenameConfRule(newval="k:budget_raw1_code", field="k:budget_raw1", copy=True),
+    RenameConfRule(newval="k:budget_raw2_num", field="k:budget_raw2", copy=True),
+    RenameConfRule(newval="k:budget_raw2_sym", field="k:budget_raw2", copy=True),
+    RenameConfRule(newval="k:budget_raw2_code", field="k:budget_raw2", copy=True),
 ]
 
-rename4_rule = [{"newval": "k:budget_full", "field": "k:budget_w_sym", "copy": True}]
+rename4_rule = RenameConfRule(newval="k:budget_full", field="k:budget_w_sym", copy=True)
 
 match1_01 = "(.*)( - oDesk|\\| Elance Job)"
 match1_02 = (
@@ -167,55 +175,74 @@ regex3_rule = [
 
 regex4_rule = [make_regex_rule("k:cur_code", "^(?![A-Z]{3}\\b)(.*)", DEF_CUR_CODE)]
 
-strreplace_conf = {
-    "RULE": [
-        {"find": "$", "replace": "USD"},
-        {"find": "£", "replace": "GBP"},
-        {"find": "€", "replace": "EUR"},
-        {"find": "₹", "replace": "INR"},
-    ]
-}
+strreplace_conf = StrReplaceConf(
+    {
+        "rule": [
+            StrReplaceConfRule(find="$", replace="USD"),
+            StrReplaceConfRule(find="£", replace="GBP"),
+            StrReplaceConfRule(find="€", replace="EUR"),
+            StrReplaceConfRule(find="₹", replace="INR"),
+        ]
+    }
+)
 
 
-regex4_conf = {
-    "RULE": [
-        {"field": "k:job_type_code", "match": "fixed", "replace": "1"},
-        {"field": "k:job_type_code", "match": "hourly", "replace": "2"},
-        {"field": "k:job_type_code", "match": "unknown", "replace": "3"},
-    ]
-}
+regex4_conf = RegexConf(
+    {
+        "rule": [
+            RegexConfRule(field="k:job_type_code", match="fixed", replace="1"),
+            RegexConfRule(field="k:job_type_code", match="hourly", replace="2"),
+            RegexConfRule(field="k:job_type_code", match="unknown", replace="3"),
+        ]
+    }
+)
 
-strconcat1_conf = {
-    "part": [{"subkey": "k:budget_raw1_code"}, {"subkey": "k:budget_raw2_code"}]
-}
+strconcat1_conf = StrconcatConf(
+    {
+        "part": [
+            {"subkey": "k:budget_raw1_code", "type": "text"},
+            {"subkey": "k:budget_raw2_code", "type": "text"},
+        ]
+    }
+)
 
-strconcat2_conf = {
-    "part": [{"subkey": "k:budget_raw1_sym"}, {"subkey": "k:budget_raw2_sym"}]
-}
+strconcat2_conf = StrconcatConf(
+    {
+        "part": [
+            {"subkey": "k:budget_raw1_sym", "type": "text"},
+            {"subkey": "k:budget_raw2_sym", "type": "text"},
+        ]
+    }
+)
 
-strconcat3_conf = {
-    "part": [
-        {"subkey": "k:budget_w_sym"},
-        " (",
-        {"subkey": "k:budget_converted_w_sym"},
-        ")",
-    ]
-}
+strconcat3_conf = StrconcatConf(
+    {
+        "part": [
+            {"subkey": "k:budget_w_sym", "type": "text"},
+            " (",
+            {"subkey": "k:budget_converted_w_sym", "type": "text"},
+            ")",
+        ]
+    }
+)
 
-strconcat4_conf = {"part": [{"subkey": "k:budget_full"}, " / hr"]}
-
+strconcat4_conf = StrconcatConf(
+    {"part": [{"subkey": "k:budget_full", "type": "text"}, " / hr"]}
+)
 tokenizer_conf = make_tokenizer(",", True, True)
 substring1_conf = make_substring("0", "3")
 substring2_conf = make_substring("1", "1")
-currencyformat1_conf = {"currency": {"subkey": "k:cur_code"}}
-exchangerate_conf = make_exchangerate(DEF_CUR_CODE, True)
-currencyformat2_conf = {"currency": DEF_CUR_CODE}
+currencyformat1_conf = CurrencyFormatRawConf(
+    {"currency": {"subkey": "k:cur_code", "type": "text"}}
+)
+exchangerate_conf = make_exchangerate(DEF_CUR_CODE)
+currencyformat2_conf = CurrencyFormatConf({"currency": DEF_CUR_CODE})
 simplemath1_conf = make_simplemath("k:budget_raw2_num", "mean")
 simplemath2_conf = make_simplemath("k:rate", "multiply")
-test1 = lambda item: item.get("k:cur_code")
-test2 = lambda item: item.get("k:cur_code") != DEF_CUR_CODE
-test3 = lambda item: item.get("k:cur_code") == DEF_CUR_CODE
-test4 = lambda item: item.get("k:job_type") != "hourly"
+test1: SkipIf = lambda item: bool(item.get("k:cur_code"))
+test2: SkipIf = lambda item: item.get("k:cur_code") != DEF_CUR_CODE
+test3: SkipIf = lambda item: item.get("k:cur_code") == DEF_CUR_CODE
+test4: SkipIf = lambda item: item.get("k:job_type") != "hourly"
 
 my_item = {
     "content": (
@@ -262,32 +289,36 @@ fetchdata_conf = FetchDataConf({"url": get_path("kazeeki2.json"), "path": "items
 
 def parse_source(source: SyncPipe):
     pipe = (
-        source.rename(conf={"RULE": rename1_rule})
-        .regex(conf={"RULE": regex1_rule})
-        .rename(conf={"RULE": rename2_rule})
-        .regex(conf={"RULE": regex2_rule})
-        .rename(conf={"RULE": rename3_rule})
-        .regex(conf={"RULE": regex3_rule})
+        source.rename(conf=RenameConf({"rule": rename1_rule}))
+        .regex(conf=RegexConf({"rule": regex1_rule}))
+        .rename(conf=RenameConf({"rule": rename2_rule}))
+        .regex(conf=RegexConf({"rule": regex2_rule}))
+        .rename(conf=RenameConf({"rule": rename3_rule}))
+        .regex(conf=RegexConf({"rule": regex3_rule}))
         .tokenizer(conf=tokenizer_conf, emit=False, assign="k:tags", field="k:tags")
         .simplemath(conf=simplemath1_conf, field="k:budget_raw1_num", assign="k:budget")
         .strconcat(conf=strconcat2_conf, assign="k:budget_sym")
         .substr(conf=substring2_conf, assign="k:budget_sym", field="k:budget_sym")
         .rename(
-            conf={
-                "RULE": {"newval": "k:cur_code", "field": "k:budget_sym", "copy": True}
-            },
+            conf=RenameConf(
+                {
+                    "rule": RenameConfRule(
+                        newval="k:cur_code", field="k:budget_sym", copy=True
+                    )
+                }
+            ),
             skip_if=test1,
         )
         .strreplace(conf=strreplace_conf, field="k:cur_code", assign="k:cur_code")
-        .regex(conf={"RULE": regex4_rule})
+        .regex(conf=RegexConf({"rule": regex4_rule}))
         .rename(
-            conf={
-                "RULE": {
-                    "newval": "k:job_type_code",
-                    "field": "k:job_type",
-                    "copy": True,
+            conf=RenameConf(
+                {
+                    "rule": RenameConfRule(
+                        newval="k:job_type_code", field="k:job_type", copy=True
+                    )
                 }
-            }
+            )
         )
         .regex(conf=regex4_conf)
         .hash(field="link", assign="id")
@@ -303,7 +334,7 @@ def parse_source(source: SyncPipe):
             field="k:budget_converted",
             assign="k:budget_converted_w_sym",
         )
-        .rename(conf={"RULE": rename4_rule}, skip_if=test2)
+        .rename(conf=RenameConf({"rule": rename4_rule}), skip_if=test2)
         .strconcat(conf=strconcat3_conf, assign="k:budget_full", skip_if=test3)
         .strconcat(conf=strconcat4_conf, assign="k:budget_full", skip_if=test4)
     )
@@ -317,9 +348,7 @@ def print_content(output):
     print("count", len(pipe))
 
 
-def pipe_kazeeki_full(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_kazeeki_full(context: Context | None = None, **_):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:

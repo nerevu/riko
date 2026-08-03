@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from codecs import StreamReader
 from collections.abc import (
     AsyncIterable,
@@ -13,7 +15,6 @@ from typing import (
     TYPE_CHECKING,
     Literal,
     NamedTuple,
-    Optional,
     Protocol,
     TypedDict,
     TypeVar,
@@ -26,16 +27,24 @@ from riko.types.values import (
     NumLike,
     PrimitiveValue,
     RikoDict,
+    RikoList,
     RikoValue,
     RSSEntry,
     StatefulItem,
 )
 
 if TYPE_CHECKING:
-    from riko import Context, DotDict, DynamicConf
+    from riko import Context, DynamicConf
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
-    from riko.types.modules import AnyConfRule, AnyModuleConf, AnyModuleRawConf, Skip
+    from riko.dotdict import DotDict
+    from riko.types.modules import (
+        AnyConfRule,
+        AnyModuleConf,
+        AnyModuleRawConf,
+        CountValues,
+        Skip,
+    )
     from riko.utils import Fetch
 
 T = TypeVar("T")
@@ -44,6 +53,7 @@ T = TypeVar("T")
 type Item = RikoDict | dict[str, RikoValue] | RSSEntry | DotDict[RikoValue]
 type ItemOrValue = Item | RikoValue
 type Items = Iterable[Item]
+type ItemsOrValues = Iterable[ItemOrValue]
 type ValueStream = Iterator[RikoValue]
 type Stream = Iterator[Item]
 type StreamOrValueStream = Iterator[ItemOrValue]
@@ -56,7 +66,8 @@ type Feed = AsyncItems
 type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]
 type OperatorParserOutput = Stream | ItemOrValue | Iterator[StatefulItem]
 type SplitterParserOutput = Streams
-type ParserOutput = ProcessorParserOutput | OperatorParserOutput | SyncSplitterParser
+type ParserOutput = ProcessorParserOutput | OperatorParserOutput | SplitterParserOutput
+type ParserMaterializedOutput = list[StatefulItem | ItemOrValue | AnyLocation | Stream]
 
 type ProcessorWrapperOutput = StreamOrValueStream
 type OperatorWrapperOutput = StreamOrValueStream
@@ -65,28 +76,33 @@ type WrapperOutput = (
     ProcessorWrapperOutput | OperatorWrapperOutput | SplitterWrapperOutput
 )
 
-type ProcessorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
+type ProcessorWrapperInput = (
+    ProcessorWrapperOutput | OperatorWrapperOutput | ItemOrValue
+)
 type OperatorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
 
-type PipeTuple = tuple[Item, "DynamicConf"]
+type PipeTuple = tuple[Item, DynamicConf]
 type PipeTuples = Iterator[PipeTuple]
-type Objconfs = Sequence["DynamicConf"]
+type Objconfs = Sequence[DynamicConf]
 type Extraction = T
 type ConversionFunc = Callable[..., Items | StringIO]
 type Caster = Callable[[str | int], PrimitiveValue | AnyLocation]
 type NumericCaster = Callable[[str | NumLike], NumLike]
 type SkipFunc = Callable[[Item], bool]
-type SkipIf = SkipFunc | "Skip" | Iterable[SkipFunc] | Iterable["Skip"]
+type SkipIf = SkipFunc | Skip | Iterable[SkipFunc] | Iterable[Skip]
+type Function = Callable[..., object]
 
 # Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
 # TODO: add type hint overloads to Reencoder with decode=True -> str
 type BinaryFileTypes = BytesIO | RawIOBase
-type StringFileTypes = StringIO | StreamReader | TextIOBase | "NamedTextIOWrapper"
-type FileTypes = BinaryFileTypes | StringFileTypes | "Fetch"
+type StringFileTypes = StringIO | StreamReader | TextIOBase | NamedTextIOWrapper
+type FileTypes = (
+    BinaryFileTypes | StringFileTypes | Fetch[Literal[True]] | Fetch[Literal[False]]
+)
 type Opener = Callable[[str], tuple[FileTypes, str | None]]
-type Conf = "AnyModuleConf" | "AnyModuleRawConf" | None
+type Conf = AnyModuleConf | AnyModuleRawConf
 
 
 class PreCaster(TypedDict):
@@ -118,13 +134,14 @@ class Defaults(TypedDict, total=False):
     memoize: bool
     multi: bool
     name: str
+    prompt: str
     param: dict[str, str | None]
     parse_key: str
     permit: bool
     precision: int
     pubDate: str
     quotechar: str
-    rule: "AnyConfRule"
+    rule: AnyConfRule
     sanitize: bool
     separator: str
     skip_rows: int
@@ -142,10 +159,10 @@ class Defaults(TypedDict, total=False):
 
 
 class Opts(TypedDict, total=False):
-    ftype: "BasicCastType"
-    ptype: "BasicCastType"
+    ftype: BasicCastType
+    ptype: BasicCastType
     assign: str
-    count: Literal["first", "all"]
+    count: CountValues
     emit: bool
     extract: str
     field: str
@@ -160,21 +177,31 @@ class Opts(TypedDict, total=False):
 class Casted(NamedTuple):
     field: T
     extraction: Extraction
-    conf: Conf
+    conf: DynamicConf
 
 
-class Dispatched(NamedTuple):
-    item: "DotDict"
+class ItemDispatch(NamedTuple):
+    item: Item | RikoDict
     casted: Casted
+
+
+class ValueDispatch(NamedTuple):
+    item: PrimitiveValue | RikoList
+    casted: Casted
+
+
+type ItemOrValueDispatch = ItemDispatch | ValueDispatch
 
 
 # Sync
 type SyncItemParseFunc = Callable[..., ItemOrValue]
 type SyncArgFunc = Callable[..., ItemOrValue]
-type SyncConfCastFunc = Callable[..., Conf]
-type SyncConfParseFunc = Callable[..., Conf | dict[str, Conf] | list[Conf] | None]
+type SyncConfCastFunc = Callable[..., DynamicConf]
+type SyncConfParseFunc = Callable[
+    ..., DynamicConf | dict[str, DynamicConf] | list[DynamicConf] | None
+]
 
-type SyncProcessorParser = Callable[[T, Extraction, Conf], ProcessorParserOutput]
+type SyncProcessorParser = Callable[[T, Extraction, DynamicConf], ProcessorParserOutput]
 type SyncOperatorParser = Callable[
     [Stream, Extraction, PipeTuples], OperatorParserOutput
 ]
@@ -183,10 +210,10 @@ type SyncSplitterParser = Callable[
 ]
 
 type SyncPipeParser = Callable[..., ParserOutput]
-
-type PipelineDependencies = Callable[..., list[str]]
-type Step = tuple[str, ParserOutput] | tuple[str, SyncPipeParser]
-type Steps = dict[str, ParserOutput | SyncPipeParser]
+type SyncPipelineDependencies = Callable[..., list[str]]
+type SyncStep = tuple[str, ParserOutput | SyncPipeParser]
+type SyncSteps = dict[str, ParserOutput | SyncPipeParser]
+type SyncPyInput = list[str | tuple[str, ...]]
 
 
 class ModuleWrapper(Protocol):
@@ -203,30 +230,43 @@ class SyncProcessorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
-        conf: Conf = None,
-        context: Optional["Context"] = None,
-        **kwargs,
-    ) -> ProcessorWrapperOutput: ...
+        conf: Conf | None = None,
+        context: Context | None = None,
+        **__: object,
+    ) -> ProcessorWrapperOutput:
+        _ = (item, conf, context)
+        return iter(())
+
+
+class SubPipe(ModuleWrapper):
+    def __call__(  # noqa: E704
+        self, *_: object, **__: object
+    ) -> ProcessorWrapperOutput:
+        return iter(())
 
 
 class SyncOperatorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: OperatorWrapperInput | None = None,
-        conf: Conf = None,
-        embed: SyncProcessorWrapper | None = None,
-        context: Optional["Context"] = None,
-        **kwargs,
-    ) -> OperatorWrapperOutput: ...
+        conf: Conf | None = None,
+        embed: SyncProcessorWrapper | SubPipe | None = None,
+        context: Context | None = None,
+        **__: object,
+    ) -> OperatorWrapperOutput:
+        _ = (items, conf, embed, context)
+        return iter(())
 
 
 class SyncSplitterWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         items: SplitterWrapperInput | None = None,
-        conf: Conf = None,
-        **kwargs,
-    ) -> SplitterWrapperOutput: ...
+        conf: Conf | None = None,
+        **__: object,
+    ) -> SplitterWrapperOutput:
+        _ = (items, conf)
+        return iter(())
 
 
 class ParseFuncs(NamedTuple):
@@ -242,7 +282,8 @@ class CastFuncs(NamedTuple):
 
 # Async
 type AsyncProcessorParser = Callable[
-    [T, Extraction, Conf], ProcessorParserOutput | Awaitable[ProcessorParserOutput]
+    [T, Extraction, DynamicConf],
+    ProcessorParserOutput | Awaitable[ProcessorParserOutput],
 ]
 type AsyncOperatorParser = Callable[
     [Stream, Extraction, PipeTuples],
@@ -254,36 +295,46 @@ type AsyncSplitterParser = Callable[
 ]
 type AsyncPipeItems = Awaitable[ParserOutput]
 type AsyncPipeParser = Callable[..., AsyncPipeItems]
+type AsyncPipelineDependencies = Callable[..., Awaitable[list[str]]]
+type AsyncStep = tuple[str, AsyncPipeItems | AsyncPipeParser]
+type AsyncSteps = dict[str, AsyncPipeItems | AsyncPipeParser]
+type AsyncPyInput = Awaitable[list[str]]
 
 
 class AsyncProcessorWrapper(ModuleWrapper):
-    def __call__(  # noqa: E704
+    async def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
-        conf: Conf = None,
-        context: Optional["Context"] = None,
-        **kwargs,
-    ) -> Awaitable[ProcessorWrapperOutput]: ...
+        conf: Conf | None = None,
+        context: Context | None = None,
+        **__: object,
+    ) -> ProcessorWrapperOutput:
+        _ = (item, conf, context)
+        return iter(())
 
 
 class AsyncOperatorWrapper(ModuleWrapper):
-    def __call__(  # noqa: E704
+    async def __call__(  # noqa: E704
         self,
         items: OperatorWrapperInput | None = None,
-        conf: Conf = None,
+        conf: Conf | None = None,
         embed: AsyncProcessorWrapper | None = None,
-        context: Optional["Context"] = None,
-        **kwargs,
-    ) -> Awaitable[OperatorWrapperOutput]: ...
+        context: Context | None = None,
+        **__: object,
+    ) -> OperatorWrapperOutput:
+        _ = (items, conf, embed, context)
+        return iter(())
 
 
 class AsyncSplitterWrapper(ModuleWrapper):
-    def __call__(  # noqa: E704
+    async def __call__(  # noqa: E704
         self,
         items: SplitterWrapperInput | None = None,
-        conf: Conf = None,
-        **kwargs,
-    ) -> Awaitable[SplitterWrapperOutput]: ...
+        conf: Conf | None = None,
+        **__: object,
+    ) -> SplitterWrapperOutput:
+        _ = (items, conf)
+        return iter(())
 
 
 # Both
@@ -294,3 +345,8 @@ type OperatorWrapper = SyncOperatorWrapper | AsyncOperatorWrapper
 type SplitterParser = SyncSplitterParser | AsyncSplitterParser
 type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
 type Pipeline = SyncPipeParser | AsyncPipeParser
+type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
+type StepValue = ParserOutput | Pipeline | AsyncPipeItems
+type Step = tuple[str, StepValue]
+type Steps = dict[str, StepValue]
+type PyInput = SyncPyInput | AsyncPyInput

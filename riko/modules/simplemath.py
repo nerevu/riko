@@ -22,10 +22,12 @@ Attributes:
 import operator
 from collections.abc import Callable
 from decimal import Decimal
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
-from riko.cast import BasicCastType, CastType, cast
+from riko.cast import BasicCastType, CastType, cast_value
 from riko.types.configs import SimpleMathObjconf
 from riko.types.general import Defaults, Extraction, NumLike, Opts
 
@@ -33,17 +35,17 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def mean(*nums):
+def mean(*nums: NumLike) -> float:
     try:
-        return sum(nums) / len(nums)
+        return sum(nums) / len(nums)  # type: ignore[arg-type]
     except ZeroDivisionError:
         return float("inf")
 
 
-OPS: dict[str, Callable[..., NumLike]] = {
+OPS: dict[str, Callable[[Any, Any], NumLike]] = {
     "add": operator.add,
     "subtract": operator.sub,
     "multiply": operator.mul,
@@ -56,7 +58,7 @@ OPS: dict[str, Callable[..., NumLike]] = {
 
 
 def parser(
-    num: Decimal, extraction: Extraction, objconf: SimpleMathObjconf, **kwargs
+    num: Decimal, extraction: Extraction, objconf: SimpleMathObjconf, **kwargs: object
 ) -> NumLike:
     """
     Parsers the pipe content
@@ -77,12 +79,12 @@ def parser(
 
     """
     operation = OPS[objconf.op]
-    other = cast(objconf.other, _type=CastType.DECIMAL)
+    other = cast_value(objconf.other, _type=CastType.DECIMAL)
     return operation(num, other)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> NumLike:
+def async_pipe(*args: Any, **kwargs: object) -> NumLike:
     """
     A processor module that asynchronously performs basic arithmetic, such
     as addition and subtraction.
@@ -105,22 +107,17 @@ def async_pipe(*args, **kwargs) -> NumLike:
             operate on (default: 'content')
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item with formatted currency
+        Awaitable: item with formatted currency
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'op': 'divide', 'other': '5'}
         ...     result = await async_pipe({'content': '10'}, conf=conf)
         ...     print(next(result)['simplemath'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         2
 
     """
@@ -128,7 +125,7 @@ def async_pipe(*args, **kwargs) -> NumLike:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> NumLike:
+def pipe(*args: Any, **kwargs: object) -> NumLike:
     """
     A processor module that performs basic arithmetic, such as addition and
     subtraction.

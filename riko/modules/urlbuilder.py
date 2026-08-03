@@ -54,6 +54,8 @@ Attributes:
 
 import re
 from collections.abc import Mapping, Sequence
+from logging import Logger
+from typing import Any
 from urllib.parse import urlencode, urljoin
 
 import pygogo as gogo
@@ -67,11 +69,11 @@ from . import processor
 
 OPTS: Opts = {"extract": "param", "listize": True, "emit": True}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, param: Sequence[ObjconfParam], objconf: UrlBuilderObjconf, **kwargs
+    _: Item, param: Sequence[ObjconfParam], objconf: UrlBuilderObjconf, **kwargs: object
 ) -> str:
     """
     Parsers the pipe content
@@ -120,7 +122,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> str:
+def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A source that asynchronously builds a url.
 
@@ -141,13 +143,12 @@ def async_pipe(*args, **kwargs) -> str:
                 value (str): the parameter value
 
     Returns:
-        dict: twisted.internet.defer.Deferred an iterator of items
+        Awaitable: an iterator of items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     param = {'key': 's', 'value': 'gm'}
         ...     path = ['rss', 'headline']
         ...     base = 'http://finance.yahoo.com'
@@ -155,11 +156,7 @@ def async_pipe(*args, **kwargs) -> str:
         ...     result = await async_pipe(conf=conf)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         http://finance.yahoo.com/rss/headline?s=gm
 
     """
@@ -167,7 +164,7 @@ def async_pipe(*args, **kwargs) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A source that builds a url.
 

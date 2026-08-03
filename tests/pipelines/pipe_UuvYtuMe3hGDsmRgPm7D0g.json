@@ -207,7 +207,7 @@
                     "value": "name"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {

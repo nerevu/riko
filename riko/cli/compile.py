@@ -20,7 +20,7 @@ runnable module whose function is named after the pipe:
 ... }
 >>> source = compile(pipe_def, "pipe_demo")
 >>> print(next(line for line in source.splitlines() if line.startswith("def ")))
-def pipe_demo(item=None, conf: Conf = None, context: Context | None = None, **kwargs):
+def pipe_demo(item=None, context: Context | None = None, **_):
 """
 
 import sys
@@ -31,7 +31,7 @@ from pathlib import Path
 from riko.compile import compile as compile_pipe
 
 
-def run():
+def run() -> None:
     """CLI compiler"""
     parser = ArgumentParser(
         description="description: Compiles a riko JSON pipeline into a Python module",
@@ -53,10 +53,19 @@ def run():
         help="Write the generated module to this path (default: stdout).\n\n",
     )
 
+    parser.add_argument(
+        "-a",
+        "--async",
+        dest="is_async",
+        action="store_true",
+        default=False,
+        help="Generate an async (anyio) pipeline module.\n\n",
+    )
+
     args = parser.parse_args()
     pipe_file = Path(args.path)
     pipe_def = loads(pipe_file.read_text(encoding="utf-8"))
-    source = compile_pipe(pipe_def, pipe_file.stem)
+    source = compile_pipe(pipe_def, pipe_file.stem, is_async=args.is_async)
 
     if args.output:
         Path(args.output).write_text(source, encoding="utf-8")

@@ -110,6 +110,8 @@ Python2
 .. code-block:: bash
 
     manage lint
+    manage lint -t
+    manage lint -T
     manage test
 
     # or to run the full integration tests

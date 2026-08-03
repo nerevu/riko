@@ -22,6 +22,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -30,16 +32,16 @@ from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import parse_rss
 from riko.types.configs import FetchObjconf
-from riko.types.general import Defaults, Extraction, Item
+from riko.types.general import Defaults, Extraction, Item, Opts
 from riko.types.values import RSSEntry
 from riko.utils import augment_entries
 
 from . import processor
 
-OPTS = SourceOpts
+OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING, "delay": 0}
-logger = gogo.Gogo(__name__, monolog=True).logger
-keys = {
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+keys: set[str] = {
     "author",
     "dc:creator",
     "id",
@@ -51,7 +53,7 @@ keys = {
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Asynchronously parses the pipe content
@@ -67,24 +69,19 @@ async def async_parser(
         conf (dict): The pipe configuration
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred Iter[dict]
+        Awaitable: Iter[dict]
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
         ...     result = await async_parser(None, None, objconf)
         ...     print(next(result)['title'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         Donations
 
     """
@@ -98,7 +95,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Parses the pipe content
@@ -136,7 +133,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
+async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
     A source that asynchronously fetches and parses a feed to return the
     entries.
@@ -155,22 +152,17 @@ async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
 
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of items
+        Awaitable: iterator of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe(conf={'url': get_path('feed.xml')})
         ...     print(sorted(keys.intersection(next(result))))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
 
     """
@@ -179,7 +171,7 @@ async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[RSSEntry]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
     A source that fetches and parses a feed to return the entries.
 

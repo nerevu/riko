@@ -10,13 +10,19 @@ conf into the callables a wrapper applies to each item.
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import cast as cast_type
+from typing import cast, overload
 
 import pygogo as gogo
 
-from riko import listize, objectify
-from riko.cast import CAST_SWITCH, BasicCastType, CastType, cast_none, cast_pass
-from riko.cast import cast as cast_value
+from riko import DynamicConf, listize, objectify
+from riko.cast import (
+    CAST_SWITCH,
+    BasicCastType,
+    CastType,
+    cast_none,
+    cast_pass,
+    cast_value,
+)
 from riko.dotdict import DotDict, is_mapping
 from riko.parsers import conf_is_dynamic, get_field, parse_conf
 from riko.types.general import (
@@ -24,15 +30,19 @@ from riko.types.general import (
     CastFuncs,
     Conf,
     Defaults,
-    Dispatched,
+    Extraction,
     Item,
+    ItemDispatch,
+    ItemOrValue,
+    ItemOrValueDispatch,
     Opts,
     ParseFuncs,
     ParserOutput,
     SyncArgFunc,
     SyncConfCastFunc,
+    ValueDispatch,
 )
-from riko.types.values import BasicReturn
+from riko.types.values import BasicReturn, PrimitiveValue, RikoDict, RikoList, RikoValue
 from riko.utils import broadcast, dispatch
 
 logger = gogo.Gogo(__name__, monolog=True).logger
@@ -45,7 +55,7 @@ def get_pieces_or_conf(
     Conf | Defaults,
 ]:
     if is_mapping(parsed_conf):
-        merged_conf = cast_type(Conf, {**defaults, **parsed_conf})
+        merged_conf = cast(Conf, {**defaults, **parsed_conf})
     else:
         merged_conf = defaults
 
@@ -56,10 +66,10 @@ def get_pieces_or_conf(
             logger.error(f"{extract=} not found in conf {merged_conf}")
             pieces = None
         else:
-            pieces = cast_type(BasicReturn, pieces)
+            pieces = cast(BasicReturn, pieces)
 
         if pieces and opts.get("listize"):
-            pieces_or_conf = cast_type(list[BasicReturn], listize(pieces))
+            pieces_or_conf = cast(list[BasicReturn], listize(pieces))
         else:
             pieces_or_conf = pieces
     else:
@@ -71,26 +81,48 @@ def get_pieces_or_conf(
 @dataclass(frozen=True)
 class PreparedModule:
     name: str
-    conf: DotDict
+    conf: DynamicConf
     opts: Opts
     parsers: ParseFuncs
     casters: CastFuncs | None
     assign: str
     emit: bool | Callable[[ParserOutput], bool] | None
     is_source: bool
-    static_casted: tuple | None
+    static_casted: tuple[SyncArgFunc, Extraction, DynamicConf] | None
 
 
-def _dispatch(
-    item: Item,
+@overload
+def parse_and_cast(  # noqa: E704
+    item: Item | RikoDict | DotDict[RikoValue],
     opts: Opts,
-    conf: Conf,
+    conf: DynamicConf,
+    parsers: ParseFuncs | None = ...,
+    casters: CastFuncs | None = ...,
+    defaults: Defaults | None = ...,
+    field: str | None = ...,
+    **kwargs: object,
+) -> ItemDispatch: ...
+@overload  # noqa: E302
+def parse_and_cast(  # noqa: E704
+    item: PrimitiveValue | RikoList,
+    opts: Opts,
+    conf: DynamicConf,
+    parsers: ParseFuncs | None = ...,
+    casters: CastFuncs | None = ...,
+    defaults: Defaults | None = ...,
+    field: str | None = ...,
+    **kwargs: object,
+) -> ValueDispatch: ...
+def parse_and_cast(  # noqa: E302
+    item: ItemOrValue,
+    opts: Opts,
+    conf: DynamicConf,
     parsers: ParseFuncs | None = None,
     casters: CastFuncs | None = None,
     defaults: Defaults | None = None,
     field: str | None = None,
-    **kwargs,
-) -> Dispatched:
+    **kwargs: object,
+) -> ItemOrValueDispatch:
     defaults = defaults or Defaults({})
     field = field or opts.get("field")
 
@@ -102,12 +134,20 @@ def _dispatch(
     pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
-    conf = cast_type(Conf, casted[2])
-    return Dispatched(item, Casted(casted[0], casted[1], conf))
+    _conf = cast(DynamicConf, casted[2])
+
+    if is_mapping(item):
+        dispatched = ItemDispatch(item, Casted(casted[0], casted[1], _conf))
+    else:
+        dispatched = ValueDispatch(item, Casted(casted[0], casted[1], _conf))
+
+    return dispatched
 
 
-def get_parsers(opts: Opts, conf: Conf, **kwargs) -> ParseFuncs:
-    conf = conf or {}
+def get_parsers(
+    opts: Opts, conf: DynamicConf, **kwargs: object
+) -> tuple[ParseFuncs, bool]:
+    is_dynamic = False
 
     if opts.get("ftype") == BasicCastType.NONE:
         field_parser = cast_none
@@ -116,13 +156,14 @@ def get_parsers(opts: Opts, conf: Conf, **kwargs) -> ParseFuncs:
 
     if opts.get("ptype") == BasicCastType.NONE:
         conf_parser = cast_none
-    elif conf_is_dynamic(conf, **kwargs):
+    elif conf_is_dynamic(conf, memoize=False, **kwargs):
         conf_parser = partial(parse_conf, conf=conf, memoize=False)
+        is_dynamic = True
     else:
         pre_parsed = parse_conf(None, conf=conf, memoize=True)
         conf_parser = lambda _, **__: pre_parsed
 
-    return ParseFuncs(field_parser, conf_parser)
+    return ParseFuncs(field_parser, conf_parser), is_dynamic
 
 
 def get_casters(opts: Opts) -> CastFuncs:
@@ -138,7 +179,7 @@ def get_casters(opts: Opts) -> CastFuncs:
 
         _field_func = cast_pass
 
-    field_func = cast_type(SyncArgFunc, _field_func)
+    field_func = cast(SyncArgFunc, _field_func)
 
     if ptype in CAST_SWITCH:
         _caster = partial(cast_value, _type=CastType(ptype))
@@ -148,7 +189,7 @@ def get_casters(opts: Opts) -> CastFuncs:
 
         _caster = cast_pass
 
-    caster = cast_type(SyncArgFunc, _caster)
+    caster = cast(SyncArgFunc, _caster)
 
     if ptype == BasicCastType.NONE:
         extract_caster = cast_none
@@ -163,5 +204,5 @@ def get_casters(opts: Opts) -> CastFuncs:
         extract_caster = caster
         _conf_caster = cast_pass
 
-    conf_caster = cast_type(SyncConfCastFunc, _conf_caster)
+    conf_caster = cast(SyncConfCastFunc, _conf_caster)
     return CastFuncs(field_func, extract_caster, conf_caster)

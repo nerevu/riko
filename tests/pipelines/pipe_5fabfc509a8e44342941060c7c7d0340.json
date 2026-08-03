@@ -77,7 +77,7 @@
                     "value": "dateinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {
@@ -112,7 +112,7 @@
                     "value": "locationinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {
@@ -126,11 +126,11 @@
         {
             "conf": {
                 "debug": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "default": {
-                    "type": "number",
+                    "type": "float",
                     "value": "12121"
                 },
                 "type": {
@@ -142,7 +142,7 @@
                     "value": "numberinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {
@@ -168,7 +168,7 @@
                     "value": "privateinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "private_default": {
@@ -198,7 +198,7 @@
                     "value": "textinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {
@@ -228,7 +228,7 @@
                     "value": "urlinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {

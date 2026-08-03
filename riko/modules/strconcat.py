@@ -21,6 +21,9 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko.types.configs import StrconcatObjconf
@@ -30,10 +33,12 @@ from . import processor
 
 OPTS: Opts = {"listize": True, "extract": "part"}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(_: Item, extraction: Extraction, objconf: StrconcatObjconf, **kwargs) -> str:
+def parser(
+    _: Item, extraction: Extraction, objconf: StrconcatObjconf, **kwargs: object
+) -> str:
     """
     Parses the pipe content
 
@@ -57,7 +62,7 @@ def parser(_: Item, extraction: Extraction, objconf: StrconcatObjconf, **kwargs)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> str:
+def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously concatenates strings.
 
@@ -80,23 +85,18 @@ def async_pipe(*args, **kwargs) -> str:
         assign (str): Attribute to assign parsed content (default: strconcat)
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with concatenated content
+       Awaitable: item with concatenated content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     item = {'title': 'Hello world'}
         ...     part = [{'subkey': 'title', 'type': 'text'}, 's']
         ...     result = await async_pipe(item, conf={'part': part})
         ...     print(next(result)['strconcat'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         Hello worlds
 
     """
@@ -104,7 +104,7 @@ def async_pipe(*args, **kwargs) -> str:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor that concatenates strings.
 

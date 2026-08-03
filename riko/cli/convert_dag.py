@@ -30,7 +30,7 @@ from pathlib import Path
 from riko.compile import convert_dag
 
 
-def run():
+def run() -> None:
     """CLI DAG converter"""
     parser = ArgumentParser(
         description="description: Converts a bare-bones riko DAG into a JSON pipeline",

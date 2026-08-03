@@ -7,51 +7,87 @@ decides whether a parser result is a single value or a stream and how it is
 assigned onto the item.
 """
 
-from collections.abc import Awaitable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from copy import copy
 from functools import partial
 from itertools import chain, islice
-from typing import Literal, overload
-from typing import cast as cast_type
+from logging import Logger
+from typing import Literal, cast, overload
 
+import pygogo as gogo
+
+from riko import DynamicConf
 from riko.context import Context
 from riko.dotdict import DotDict
+from riko.types.compile import PipeModule
 from riko.types.general import (
     AsyncProcessorWrapper,
     Item,
     OperatorParserOutput,
+    OperatorWrapperInput,
     ProcessorParserOutput,
     ProcessorWrapper,
+    ProcessorWrapperInput,
     ProcessorWrapperOutput,
     Stream,
     StreamOrValueStream,
+    SubPipe,
     SyncProcessorWrapper,
     ValueStream,
 )
-from riko.types.modules import ConfValues
-from riko.types.values import PrimitiveValue, StatefulItem
+from riko.types.modules import CountValues
+from riko.types.values import PrimitiveValue, RikoValue, StatefulItem
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 @overload
-def _get_subpipe(  # noqa: E704
-    embed: SyncProcessorWrapper, context: Context, **embedded_kwargs
+def get_subpipe(  # noqa: E704
+    embed: SyncProcessorWrapper | SubPipe,
+    context: Context,
+    embedded_kwargs: PipeModule | None = ...,
+    field: str | None = ...,
 ) -> partial[ProcessorWrapperOutput]: ...
 @overload  # noqa: E302
-def _get_subpipe(  # noqa: E704
-    embed: AsyncProcessorWrapper, context: Context, **embedded_kwargs
+def get_subpipe(  # noqa: E704
+    embed: AsyncProcessorWrapper,
+    context: Context,
+    embedded_kwargs: PipeModule | None = ...,
+    field: str | None = ...,
 ) -> partial[Awaitable[ProcessorWrapperOutput]]: ...
-def _get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
-    embed: ProcessorWrapper, context: Context, **embedded_kwargs
-) -> partial[ProcessorWrapperOutput | Awaitable[ProcessorWrapperOutput]]:
+def get_subpipe(  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
+    embed: ProcessorWrapper | SubPipe,
+    context: Context,
+    embedded_kwargs: PipeModule | None = None,
+    field: str | None = None,
+) -> Callable[
+    [ProcessorWrapperInput], ProcessorWrapperOutput | Awaitable[ProcessorWrapperOutput]
+]:
+    if embedded_kwargs and "field" in embedded_kwargs:
+        embed_field = embedded_kwargs["field"]
+
+        if embed_field and field is not None and embed_field != field:
+            logger.warning(f"Loop {field=} overrides {embed_field=}.")
+            embedded_kwargs["field"] = field
+
+        kwargs = {**embedded_kwargs}
+    elif embedded_kwargs and field is not None:
+        kwargs = {**embedded_kwargs, "field": field}
+    elif embedded_kwargs:
+        kwargs = {**embedded_kwargs}
+    elif field:
+        kwargs = {"field": field}
+    else:
+        kwargs = {}
+
     embed_context = copy(context)
     embed_context.submodule = True
-    embedded_kwargs["context"] = embed_context
-    return partial(embed, **embedded_kwargs)
+    return partial(embed, **kwargs, context=embed_context)
 
 
 @overload
 def get_assignment(  # noqa: E704
-    items: Stream | Iterator[StatefulItem] | DotDict, skip: bool = ...
+    items: Stream | Iterator[StatefulItem] | DotDict[RikoValue], skip: bool = ...
 ) -> tuple[bool, Stream]: ...
 @overload  # noqa: E302
 def get_assignment(  # noqa: E704
@@ -59,19 +95,31 @@ def get_assignment(  # noqa: E704
 ) -> tuple[bool, ValueStream]: ...
 @overload  # noqa: E302
 def get_assignment(  # noqa: E704
-    items: ProcessorParserOutput | OperatorParserOutput | DotDict, skip: bool = ...
+    items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
+    skip: bool = ...,
+    count: CountValues | None = ...,
+) -> tuple[bool, StreamOrValueStream]: ...
+@overload  # noqa: E302
+def get_assignment(  # noqa: E704
+    items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
+    skip: bool = ...,
+    count: CountValues | None = ...,
+    conf: DynamicConf | None = ...,
+    is_loop: bool = ...,
 ) -> tuple[bool, StreamOrValueStream]: ...
 def get_assignment(  # noqa: E302
-    items: ProcessorParserOutput | OperatorParserOutput | DotDict,
+    items: ProcessorParserOutput | OperatorParserOutput | OperatorWrapperInput,
     skip=False,
-    **conf: ConfValues,
+    count: CountValues | None = None,
+    conf: DynamicConf | None = None,
+    is_loop: bool = False,
 ) -> tuple[bool, StreamOrValueStream]:
-    count = conf.get("count")
+    count = count or (conf.get("count") if is_loop else None)
 
     if isinstance(items, Iterator):
-        dictized = cast_type(Stream, map(DotDict.dictize, items))
+        dictized = cast(Stream, map(DotDict.dictize, items))
     else:
-        dictized = cast_type(StreamOrValueStream, iter([DotDict.dictize(items)]))
+        dictized = cast(StreamOrValueStream, iter([DotDict.dictize(items)]))
 
     if skip:
         one = False
@@ -97,23 +145,26 @@ def get_assignment(  # noqa: E302
 
 @overload
 def gen_assignments[T: StreamOrValueStream](  # noqa: E704
-    item: DotDict, assignment: T, assign: str = ..., one: Literal[False] = ...
+    item: DotDict[RikoValue],
+    assignment: T,
+    assign: str = ...,
+    one: Literal[False] = ...,
 ) -> T: ...
 @overload  # noqa: E302
 def gen_assignments(  # noqa: E704
-    item: DotDict,
+    item: DotDict[RikoValue],
     assignment: StreamOrValueStream,
     assign: str = ...,
     *,
     one: Literal[True],
 ) -> Stream: ...
 def gen_assignments(  # noqa: E302
-    item: DotDict,
+    item: DotDict[RikoValue],
     assignment: Item | StreamOrValueStream,
     assign: str | None = None,
     one=False,
     **_,
-) -> Stream:
+) -> StreamOrValueStream:
     if one and isinstance(assignment, Iterator):
         value = next(assignment, None)
     else:
@@ -127,7 +178,7 @@ def gen_assignments(  # noqa: E302
         elif item and value_is_iterator:
             yield item | {assign: list(value)}
         elif value_is_iterator:
-            yield from ({assign: v} for v in value)
+            yield from cast(StreamOrValueStream, ({assign: v} for v in value))
         else:
             yield item | {assign: value}
     elif value_is_iterator:

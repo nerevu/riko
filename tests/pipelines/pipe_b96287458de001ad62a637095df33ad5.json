@@ -95,14 +95,11 @@
                 "part": {
                     "type": "text",
                     "value": "extVal"
-                },
-                "emit": {
-                    "type": "bool",
-                    "value": true
                 }
             },
             "id": "sw-605",
-            "type": "strconcat"
+            "type": "strconcat",
+            "emit": true
         },
         {
             "conf": {},

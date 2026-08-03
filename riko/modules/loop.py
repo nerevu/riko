@@ -17,9 +17,9 @@ control the fold; understanding them is the key to reading loops.
 ``emit`` / ``assign`` -- where the submodule output goes. These exist at **two
 distinct levels**, and confusing them is the most common source of loop bugs:
 
-1. **Loop level** -- passed as ``loop(..., emit=, assign=)`` kwargs, or as
-   top-level ``conf["emit"]`` / ``conf["assign"]``. This controls how the loop
-   folds submodule output into the *parent* item:
+1. **Loop level** -- passed as ``loop(..., emit=, assign=)`` kwargs (like every
+   other module). This controls how the loop folds submodule output into the
+   *parent* item:
 
    * ``emit=True``            -- replace each source item with the submodule output
    * ``emit=False, assign="foo"`` -- store the submodule output at ``item["foo"]``
@@ -44,9 +44,10 @@ Canonical conf shape::
     loop(
         source,
         embed=itembuilder,
+        assign="info",  # loop-level fold options are module-level kwargs
+        emit=False,
         conf={
             "count": "all",
-            # optional top-level "assign"/"emit" -> loop-level fold options
             "embed": {
                 "type": "module",
                 "value": {
@@ -107,10 +108,11 @@ Scenarios:
         ... }
         >>> item = {"title": "a b c"}
         >>> list(pipe([item], embed=tokenizer, conf=conf, assign="first", emit=False))
-        [{'first': {'content': 'a'}}]
+        [{'title': 'a b c', 'first': {'content': 'a'}}]
 
-       Swapping ``count`` to ``"all"`` keeps every result instead (one output
-       item per token). This is exactly the shape used by real pipelines that
+       The source item is preserved and the kept result is stored under
+       ``assign`` (Phase 2 per-parent fold). Swapping ``count`` to ``"all"`` keeps
+       every result instead — one preserved-parent copy per token. This is exactly the shape used by real pipelines that
        loop ``fetchdata`` to attach a lookup: ``assign="info"``, ``emit=False``,
        ``count="first"`` stores the first fetched record at ``item["info"]``.
 
@@ -120,6 +122,9 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
 from riko.types.configs import LoopObjconf
@@ -128,12 +133,12 @@ from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from . import operator
 
 OPTS: Opts = {"listize": False, "parse": False}
-DEFAULTS = Defaults({})
-logger = gogo.Gogo(__name__, monolog=True).logger
+DEFAULTS: Defaults = Defaults({})
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: LoopObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: LoopObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -164,7 +169,7 @@ def parser(
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that creates submodules from existing pipes.
 
@@ -185,12 +190,12 @@ def pipe(*args, **kwargs) -> Stream:
             ``is_mapping`` (emit when the output is a mapping, i.e. effectively
             True for a normal item stream).
 
+        field (str): Loop-level source field to feed the submodule (a
+            module-level kwarg, like every other module).
+
         conf (dict): The loop configuration. May contain:
             "count": "all" (keep every submodule result, default) or "first"
                 (keep only the first).
-            "field": <looped field name or blank>.
-            "assign"/"emit": optional top-level (loop-level) fold options,
-                equivalent to the ``assign``/``emit`` kwargs.
             "embed": {"type": "module", "value": {"type", "id", "conf", and the
                 submodule's own "assign"/"emit"/"field"}}.
 

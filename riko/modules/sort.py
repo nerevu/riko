@@ -19,6 +19,8 @@ Attributes:
 
 from collections.abc import Sequence
 from functools import reduce
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -31,7 +33,7 @@ from . import operator
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"rule": SortConfRule(dir="asc", field="content")}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:
@@ -41,7 +43,7 @@ def reducer(stream: Stream, rule: SortConfRule) -> Stream:
 
 
 async def async_parser(
-    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs
+    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -67,11 +69,10 @@ async def async_parser(
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.bado import react, _issync
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run, issync
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     kwargs = {'field': 'content', 'dir': 'desc'}
         ...     rule = Objectify(kwargs)
         ...     stream = ({'content': result} for result in range(5))
@@ -79,13 +80,10 @@ async def async_parser(
         ...     result = await async_parser(stream, [rule], tuples, **kwargs)
         ...     print(next(result))
         >>>
-        >>> if _issync:
+        >>> if issync:
         ...     {'content': 4}
         ... else:
-        ...     try:
-        ...         react(run, _reactor=FakeReactor())
-        ...     except SystemExit:
-        ...         pass
+        ...     run(main)
         {'content': 4}
 
     """
@@ -93,7 +91,7 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs
+    stream: Stream, rules: Sequence[SortConfRule], tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -133,7 +131,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously and eagerly sorts the input source
     according to a specified key. Note that this pipe is not lazy.
@@ -160,22 +158,17 @@ def async_pipe(*args, **kwargs) -> Stream:
                     'desc' (default: 'asc').
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred stream
+        Awaitable: stream
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]
         ...     result = await async_pipe(items, conf={'rule': {'field': 'rank'}})
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'rank': 'a'}
 
     """
@@ -183,7 +176,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that eagerly sorts a stream according to a specified
     key. Note that this pipe is not lazy.

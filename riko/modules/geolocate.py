@@ -20,9 +20,12 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
-from riko.cast import BasicCastType, CastType, cast
+from riko.cast import BasicCastType, CastType, cast_value
 from riko.types.configs import GeolocateObjconf
 from riko.types.general import Defaults, Extraction, Opts
 from riko.types.values import AnyLocation
@@ -31,11 +34,11 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"type": "street_address"}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    address: str, extraction: Extraction, objconf: GeolocateObjconf, **kwargs
+    address: str, extraction: Extraction, objconf: GeolocateObjconf, **kwargs: object
 ) -> AnyLocation:
     """
     Parses the pipe content
@@ -60,11 +63,11 @@ def parser(
         'United Kingdom'
 
     """
-    return cast(address, CastType.LOCATION, loc_type=objconf.type)
+    return cast_value(address, CastType.LOCATION, loc_type=objconf.type)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> AnyLocation:
+def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
     """
     A processor module that asynchronously obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.
@@ -85,22 +88,17 @@ def async_pipe(*args, **kwargs) -> AnyLocation:
             operate on (default: 'content')
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item with formatted location
+        Awaitable: item with formatted location
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'type': 'currency'}
         ...     result = await async_pipe({'content': 'GBP'}, conf=conf)
         ...     print(next(result)['country'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         United Kingdom
 
     """
@@ -108,7 +106,7 @@ def async_pipe(*args, **kwargs) -> AnyLocation:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> AnyLocation:
+def pipe(*args: Any, **kwargs: object) -> AnyLocation:
     """
     A processor module that obtains the geo location of an ip address, street
     address, currency code, or lat/lon coordinates.

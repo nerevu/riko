@@ -6,14 +6,14 @@ from riko import Context
 {%- if use_collection %}
 from riko.collections import SyncCollection
 {%- endif %}
+from riko.modules._subpipe import mark_subpipe
 {%- for module in uniq_modules %}
-{%- if module.sub_pipe %}
+{%- if module.is_sub_pipe %}
 from riko.pypipelines.{{ module.name }} import {{ module.pipe_name }}
 {%- elif module.name != "output" %}
 from riko.modules.{{ module.name }} import pipe as {{ module.alias }}
 {%- endif %}
 {%- endfor %}
-from riko.types.general import Conf
 {%- if raw_confs %}
 from riko.types.modules import (
 {%- for raw_conf in raw_confs %}
@@ -23,18 +23,27 @@ from riko.types.modules import (
 {%- endif %}
 
 
-def {{ pipe_name }}(item=None, conf: Conf = None, context: Context | None = None, **kwargs):
+def {{ pipe_name }}(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
-        result = {{ inputs }}
+        {{ last_module }} = {{ inputs }}
     elif context and context.describe_dependencies:
-        result = {{ dependencies }}
+        {{ last_module }} = {{ dependencies }}
     else:
 {%- for module in modules %}
+    {%- if module.splits %}
+        splits = {{ module.expr }}
+    {%- for i in range(module.splits) %}
+        {{ module.id }}_{{ i }} = next(splits)
+    {%- endfor %}
+    {%- else %}
         {{ module.id }} = {{ module.expr }}
+    {%- endif %}
 {%- endfor %}
-        result = {{ last_module }}
 
-    return result
+    return {{ last_module }}
+
+
+mark_subpipe({{ pipe_name }}, subtype="{{ subtype }}")
 
 
 if __name__ == "__main__":

@@ -32,6 +32,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -40,19 +42,19 @@ from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import parse_rss
 from riko.types.configs import FetchSiteFeedObjconf
-from riko.types.general import Defaults, Extraction, Item
+from riko.types.general import Defaults, Extraction, Item, Opts
 from riko.types.values import RSSEntry
 from riko.utils import augment_entries
 
 from . import processor
 
-OPTS = SourceOpts
+OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchSiteFeedObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchSiteFeedObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Asynchronously parses the pipe content
@@ -71,20 +73,15 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     objconf = Objectify({'url': get_path('bbc.html')})
         ...     result = await async_parser(None, None, objconf)
         ...     print(next(result)['title'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         EU sets out 'phased' Brexit strategy
 
     """
@@ -96,7 +93,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchSiteFeedObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchSiteFeedObjconf, **kwargs: object
 ) -> Iterator[RSSEntry]:
     """
     Parses the pipe content
@@ -130,7 +127,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
+async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
     A source that fetches and parses the first feed found on a site.
 
@@ -144,22 +141,17 @@ async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
             url (str): The web site to fetch
 
     Returns:
-        dict: twisted.internet.defer.Deferred an iterator of items
+        Awaitable: an iterator of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe(conf={'url': get_path('bbc.html')})
         ...     print(next(result)['title'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         EU sets out 'phased' Brexit strategy
 
     """
@@ -167,7 +159,7 @@ async def async_pipe(*args, **kwargs) -> Iterator[RSSEntry]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[RSSEntry]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
     A source that fetches and parses the first feed found on a site.
 

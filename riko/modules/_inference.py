@@ -10,7 +10,7 @@ import ast
 import builtins
 import textwrap
 from ast import AsyncFunctionDef, FunctionDef
-from collections.abc import Awaitable, Coroutine, Iterator
+from collections.abc import Awaitable, Callable, Coroutine, Iterator
 from inspect import getsource, isasyncgenfunction, isgeneratorfunction, unwrap
 from types import UnionType
 from typing import (
@@ -19,15 +19,14 @@ from typing import (
     NamedTuple,
     TypeAliasType,
     Union,
+    cast,
     get_args,
     get_origin,
     get_type_hints,
 )
-from typing import cast as cast_type
 
 import pygogo as gogo
 
-from riko.types.general import Pipeline
 from riko.types.modules import (
     Inference,
     InferenceSource,
@@ -179,7 +178,7 @@ def _infer_expression_kind(
     return kind, reason
 
 
-def _infer_from_source(pipe: Pipeline) -> ReturnInference:
+def infer_from_source(pipe: Callable) -> ReturnInference:
     """
     Infer the return kind of a short, unannotated pipe from its source.
 
@@ -205,17 +204,20 @@ def _infer_from_source(pipe: Pipeline) -> ReturnInference:
     Examples:
         >>> def mapped(items):
         ...     return map(str, items)
-        >>> _infer_from_source(mapped)
-        ReturnInference(kind=<OperatorReturnKind.STREAM: 'stream'>, source=<InferenceSource.AST: 'ast'>, reason=None)
+        >>>
+        >>> infer_from_source(mapped)
+        ReturnInference(kind=<OperatorReturnKind.STREAM: 'stream'>, source=<InferenceSource.AST: 'ast'>, reason='')
 
         >>> def counted(items):
         ...     return sum(items)
-        >>> _infer_from_source(counted).kind.value
+        >>>
+        >>> infer_from_source(counted).kind.value
         'nonstream'
 
         >>> def ambiguous(items):
         ...     return build_result(items)
-        >>> inference = _infer_from_source(ambiguous)
+        >>>
+        >>> inference = infer_from_source(ambiguous)
         >>> inference.kind.value, inference.source
         ('unknown', None)
         >>> print(inference.reason)
@@ -231,13 +233,13 @@ def _infer_from_source(pipe: Pipeline) -> ReturnInference:
         module = ast.parse(textwrap.dedent(getsource(unwrap(pipe))))
 
         if function := next(builtins.filter(is_func, module.body), None):
-            statement = cast_type(FunctionDef, function).body[-1]
+            statement = cast(FunctionDef, function).body[-1]
     except (OSError, TypeError, SyntaxError, IndexError) as exc:
         exc_type = type(exc).__name__
         reason = f"source could not be inspected or parsed: {exc_type}: {exc}"
     else:
         if function := next(builtins.filter(is_func, module.body), None):
-            function = cast_type(FunctionDef | AsyncFunctionDef, function)
+            function = cast(FunctionDef | AsyncFunctionDef, function)
 
             if not function.body:
                 reason = "function body is empty"
@@ -268,7 +270,7 @@ def _infer_from_source(pipe: Pipeline) -> ReturnInference:
     return result
 
 
-def gen_return_inferences(pipe: Pipeline) -> Iterator[ReturnInference]:
+def gen_return_inferences(pipe: Callable) -> Iterator[ReturnInference]:
     if isgeneratorfunction(pipe) or isasyncgenfunction(pipe):
         yield ReturnInference(OperatorReturnKind.STREAM, InferenceSource.GENERATOR)
     else:
@@ -294,9 +296,9 @@ def gen_return_inferences(pipe: Pipeline) -> Iterator[ReturnInference]:
                         OperatorReturnKind.NONSTREAM, InferenceSource.ANNOTATION
                     )
         else:
-            yield _infer_from_source(pipe)
+            yield infer_from_source(pipe)
 
 
-def _gen_operator_return_kinds(pipe: Pipeline) -> Iterator[OperatorReturnKind]:
+def gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
     for inference in gen_return_inferences(pipe):
         yield inference.kind

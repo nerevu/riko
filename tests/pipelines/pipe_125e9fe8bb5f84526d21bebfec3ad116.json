@@ -118,18 +118,12 @@
                         "id": "sw-150",
                         "type": "fetchdata"
                     }
-                },
-                "assign": {
-                    "type": "text",
-                    "value": "info"
-                },
-                "emit": {
-                    "type": "bool",
-                    "value": false
                 }
             },
             "id": "sw-142",
-            "type": "loop"
+            "type": "loop",
+            "emit": false,
+            "assign": "info"
         },
         {
             "conf": {
@@ -164,7 +158,7 @@
                     "value": "textinput1"
                 },
                 "position": {
-                    "type": "number",
+                    "type": "float",
                     "value": ""
                 },
                 "prompt": {

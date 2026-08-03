@@ -1,19 +1,27 @@
-from collections.abc import Awaitable
 from pprint import pprint
-from typing import overload
 
 from riko import get_path
 from riko.collections import AsyncPipe, SyncPipe
+from riko.types.modules import (
+    FetchDataConf,
+    FilterConf,
+    FilterConfRule,
+    SortConf,
+    SortConfRule,
+    UniqConf,
+)
 
-p1_conf = {"url": get_path("gigs.json"), "path": "value.items"}
-p2_conf = {"uniq_key": "link"}
-p3_conf = {
-    "combine": "or",
-    "permit": False,
-    "rule": [{"field": "title", "value": "php", "op": "contains"}],
-}
+p1_conf = FetchDataConf({"url": get_path("gigs.json"), "path": "value.items"})
+p2_conf = UniqConf({"uniq_key": "link"})
+p3_conf = FilterConf(
+    {
+        "combine": "or",
+        "permit": False,
+        "rule": FilterConfRule(field="title", value="php", op="contains"),
+    }
+)
 
-p4_conf = {"rule": [{"field": "pubDate", "dir": "desc"}]}
+p4_conf = SortConf({"rule": SortConfRule(field="", dir="desc")})
 
 
 def pipe(test=False):
@@ -27,7 +35,7 @@ def pipe(test=False):
     return list(stream)
 
 
-async def async_pipe(reactor, test=False):
+async def async_pipe(test=False):
     stream = await (
         AsyncPipe("fetchdata", conf=p1_conf, test=test)
         .uniq(conf=p2_conf)
@@ -43,21 +51,8 @@ def print_results(result) -> None:
         pprint(i)
 
 
-@overload
-def main(*, test: bool = False) -> None: ...  # noqa: E704
-@overload
-def main(reactor, *, test: bool = False) -> Awaitable[None]: ...  # noqa: E704
-def main(reactor=None, *, test: bool = False) -> None | Awaitable[None]:  # noqa: E302
-    if reactor:
-
-        async def run() -> None:
-            print_results(await async_pipe(reactor, test=test))
-
-        result = run()
-    else:
-        result = print_results(pipe(test=test))
-
-    return result
+def main(*, test: bool = False) -> None:
+    print_results(pipe(test=test))
 
 
 if __name__ == "__main__":

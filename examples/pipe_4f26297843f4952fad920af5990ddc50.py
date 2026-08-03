@@ -5,75 +5,84 @@ from riko.modules.datebuilder import pipe as datebuilder
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.input import pipe as _input
 from riko.modules.itembuilder import pipe as itembuilder
+from riko.types.modules import DateFormatRawConf, InputRawConf, ItemBuilderRawConf
 
 
-def pipe_4f26297843f4952fad920af5990ddc50(item=None, conf=None, context=None, **kwargs):
-    conf = conf or {}
-    context = context or Context(**kwargs)
-
-    if context.describe_input:
-        return [
+def pipe_4f26297843f4952fad920af5990ddc50(
+    item=None, context: Context | None = None, **_
+):
+    if context and context.describe_input:
+        output = [
             ("1", "format_input", "enter date format", "text", "%B %d, %Y"),
             ("2", "zone_input", "enter time zone", "text", "EST"),
         ]
-
-    if context.describe_dependencies:
-        return [
+    elif context and context.describe_dependencies:
+        output = [
             "datebuilder",
             "dateformat",
             "itembuilder",
             "output",
             "input",
         ]
-
-    sw_120 = _input(
-        conf={
-            "test": {"type": "bool", "value": "true"},
-            "default": {"type": "text", "value": "%B %d, %Y"},
-            "position": {"type": "int", "value": "1"},
-            "prompt": {"type": "text", "value": "enter date format"},
-            "name": {"type": "text", "value": "format_input"},
-            "debug": {"type": "text", "value": "%B %d, %Y"},
-        },
-    )
-
-    sw_124 = _input(
-        conf={
-            "test": {"type": "bool", "value": "true"},
-            "default": {"type": "text", "value": "EST"},
-            "position": {"type": "int", "value": "2"},
-            "prompt": {"type": "text", "value": "enter time zone"},
-            "name": {"type": "text", "value": "zone_input"},
-            "debug": {"type": "text", "value": "EST"},
-        },
-    )
-
-    sw_112 = datebuilder(conf={"DATE": {"type": "datetime", "value": "12/3/2014"}})
-
-    sw_151 = dateformat(
-        sw_112,
-        timezone=sw_124,
-        conf={
-            "timezone": {"terminal": "timezone", "type": "text"},
-            "format": {"terminal": "format", "type": "text"},
-        },
-        format=sw_120,
-    )
-
-    sw_100 = itembuilder(
-        item,
-        conf={
-            "attrs": [
+    else:
+        sw_120 = _input(
+            conf=InputRawConf(
                 {
-                    "value": {"terminal": "attrs_1_value", "type": "text"},
-                    "key": {"type": "text", "value": "date"},
+                    "test": {"type": "bool", "value": "true"},
+                    "default": {"type": "text", "value": "%B %d, %Y"},
+                    "position": {"type": "int", "value": "1"},
+                    "prompt": {"type": "text", "value": "enter date format"},
+                    "name": {"type": "text", "value": "format_input"},
+                    "debug": {"type": "text", "value": "%B %d, %Y"},
                 }
-            ]
-        },
-        attrs_1_value=sw_151,
-    )
+            ),
+        )
 
-    return sw_100
+        sw_124 = _input(
+            conf=InputRawConf(
+                {
+                    "test": {"type": "bool", "value": "true"},
+                    "default": {"type": "text", "value": "EST"},
+                    "position": {"type": "int", "value": "2"},
+                    "prompt": {"type": "text", "value": "enter time zone"},
+                    "name": {"type": "text", "value": "zone_input"},
+                    "debug": {"type": "text", "value": "EST"},
+                }
+            ),
+        )
+
+        sw_112 = datebuilder({"content": "12/3/2014"}, emit=True)
+
+        sw_151 = dateformat(
+            sw_112,
+            timezone=sw_124,
+            conf=DateFormatRawConf(
+                {
+                    # "timezone": {"terminal": "timezone", "type": "text"},
+                    "format": {"terminal": "format", "type": "text"},
+                }
+            ),
+            format=sw_120,
+        )
+
+        sw_100 = itembuilder(
+            item,
+            conf=ItemBuilderRawConf(
+                {
+                    "attrs": [
+                        {
+                            "value": {"terminal": "attrs_1_value", "type": "text"},
+                            "key": {"type": "text", "value": "date"},
+                        }
+                    ]
+                }
+            ),
+            attrs_1_value=sw_151,
+        )
+
+        output = sw_100
+
+    return output
 
 
 if __name__ == "__main__":

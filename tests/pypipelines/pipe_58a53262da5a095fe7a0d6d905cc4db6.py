@@ -4,13 +4,13 @@
 
 from riko import Context
 from riko.collections import SyncCollection
+from riko.modules._subpipe import mark_subpipe
 from riko.modules.fetch import pipe as fetch
 from riko.modules.reverse import pipe as reverse
 from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
 from riko.modules.union import pipe as union
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.types.general import Conf
 from riko.types.modules import (
     FetchRawConf,
     SortRawConf,
@@ -20,15 +20,15 @@ from riko.types.modules import (
 
 
 def pipe_58a53262da5a095fe7a0d6d905cc4db6(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
+    item=None, context: Context | None = None, **_
 ):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetch", "reverse", "sort", "truncate", "union", "urlbuilder"]
+        _OUTPUT = ["fetch", "reverse", "sort", "truncate", "union", "urlbuilder"]
     else:
         sw_606 = urlbuilder(
-            None,
+            item,
             conf=UrlBuilderRawConf(
                 {
                     "base": {
@@ -59,7 +59,7 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(
             ],
             context=context,
         )
-        sw_580 = union(sw_550, conf={}, context=context, OTHERS=[sw_572])
+        sw_580 = union(sw_550, conf={}, context=context, others=[sw_572])
         sw_565 = sort(
             sw_580,
             conf=SortRawConf(
@@ -76,14 +76,16 @@ def pipe_58a53262da5a095fe7a0d6d905cc4db6(
         )
         sw_596 = truncate(
             sw_565,
-            conf=TruncateRawConf({"count": {"type": "number", "value": "3"}}),
+            conf=TruncateRawConf({"count": {"type": "float", "value": "3"}}),
             context=context,
         )
         sw_625 = reverse(sw_596, conf={}, context=context)
         _OUTPUT = sw_625
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
+
+
+mark_subpipe(pipe_58a53262da5a095fe7a0d6d905cc4db6, subtype="source")
 
 
 if __name__ == "__main__":

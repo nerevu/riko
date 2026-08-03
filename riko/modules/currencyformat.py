@@ -17,6 +17,8 @@ Attributes:
 """
 
 from decimal import Decimal
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 from babel.numbers import format_currency
@@ -29,13 +31,16 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {"currency": "USD"}
-NaN = Decimal("NaN")
+NaN: Decimal = Decimal("NaN")
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    amount, extraction: Extraction, objconf: CurrencyFormatObjconf, **kwargs
+    amount: Decimal | None,
+    extraction: Extraction,
+    objconf: CurrencyFormatObjconf,
+    **kwargs: object,
 ) -> str | Decimal:
     """
     Parsers the pipe content
@@ -68,7 +73,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> str | Decimal:
+def async_pipe(*args: Any, **kwargs: object) -> str | Decimal:
     """
     A processor module that asynchronously formats a number to a given
     currency string.
@@ -89,22 +94,17 @@ def async_pipe(*args, **kwargs) -> str | Decimal:
             formatted (default: 'content')
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item with formatted currency
+        Awaitable: item with formatted currency
 
     Examples:
         >>> from datetime import date
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'content': '10.33'})
         ...     print(next(result)['currencyformat'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         $10.33
 
     """
@@ -112,7 +112,7 @@ def async_pipe(*args, **kwargs) -> str | Decimal:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str | Decimal:
+def pipe(*args: Any, **kwargs: object) -> str | Decimal:
     """
     A processor module that formats a number to a given currency string.
 

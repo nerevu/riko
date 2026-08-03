@@ -1,5 +1,5 @@
 [project]
-version = "0.71.2"
+version = "0.72.0"
 name = "riko"
 authors = [
     {name = "Reuben Cummings", email = "reubano@gmail.com"}
@@ -52,8 +52,8 @@ perf = [
 ]
 
 async = [
-    "treq>=26.0.0,<27.0.0",
-    "twisted>=26.0.0,<27.0.0",
+    "anyio>=4.0.0",
+    "httpx>=0.27.0",
 ]
 
 finance = [
@@ -72,22 +72,31 @@ test = [
 
 lint = [
     "ruff>=0.13.1",
+    "pylint>=4.0.5,<5.0.0",
+    "pyright>=1.1.411",
 ]
 
 dev = [
     { include-group = "test" },
     { include-group = "lint" },
     "ipython>=8.39.0",
-    "pylint>=4.0.5,<5.0.0",
+    "pre-commit>=4.6.1",
 ]
 
 [project.scripts]
 manage = "riko.cli.manage:manager"
-runpipe = "riko.cli.runpipe:run"
+run-pipe = "riko.cli.runpipe:run"
 benchmark = "riko.cli.benchmark:main"
-compile = "riko.cli.compile:run"
+compile-pipe = "riko.cli.compile:run"
 convert-dag = "riko.cli.convert_dag:run"
 gen-config = "riko.cli.gen_config:main"
+
+[tool.uv]
+# Rebuild the local `riko` install when any source file changes, not just when
+# pyproject.toml/setup.py change (uv's default). Without this, edits under
+# `riko/` (e.g. new CLI options) don't invalidate the cached build, so
+# `uv sync`/tox/CI keep reusing a stale wheel of the unchanged version.
+cache-keys = [{ file = "pyproject.toml" }, { file = "riko/**/*.py" }]
 
 [tool.ruff]
 extend-exclude = [
@@ -200,7 +209,7 @@ testpaths = ["tests", "riko", "README.rst", "docs"]
 doctest_optionflags = ["ELLIPSIS"]
 timeout = 300
 markers = [
-    "twisted: requires the Twisted optional dependency",
+    "anyio: requires the async optional dependencies (anyio + httpx)",
 ]
 asyncio_default_fixture_loop_scope = "function"
 
@@ -220,16 +229,13 @@ disable = [
 ]
 
 [tool.tox]
-requires = [
-    "tox>=4.22",
-    "tox-uv>=1.13",
-]
+requires = ["tox>=4.22", "tox-uv>=1.13"]
 env_list = [
     "py312",
-    "py312-optional",
     "py313",
-    "py313-optional",
     "py314",
+    "py312-optional",
+    "py313-optional",
     "py314-optional",
     "lint",
 ]
@@ -239,42 +245,44 @@ description = "run the test suite ({env_name})"
 runner = "uv-venv-lock-runner"
 dependency_groups = ["test"]
 set_env = {PYTHONHASHSEED = "94967295", PYTHONWARNINGS = "all"}
-
-commands = [
-    [
-        "pytest",
-        { replace = "posargs", default = [], extend = true },
-    ],
-]
+commands = [["python", "-m", "riko.cli.manage", "test", "--no-cov", "--quiet"]]
 
 [tool.tox.env.py312-optional]
+description = "run test suite, linter, and format checks ({env_name})"
 extras = ["perf", "async", "finance"]
+dependency_groups = ["test", "lint"]
+commands = [
+    ["python", "-m", "riko.cli.manage", "test", "--no-cov", "--quiet"],
+    ["python", "-m", "riko.cli.manage", "lint", "--check-types"],
+    ["python", "-m", "riko.cli.manage", "lint", "--verify-types"],
+]
 
 [tool.tox.env.py313-optional]
+description = "run test suite, linter, and format checks ({env_name})"
 extras = ["perf", "async", "finance"]
+dependency_groups = ["test", "lint"]
+commands = [
+    ["python", "-m", "riko.cli.manage", "test", "--no-cov", "--quiet"],
+    ["python", "-m", "riko.cli.manage", "lint", "--check-types"],
+    ["python", "-m", "riko.cli.manage", "lint", "--verify-types"],
+]
 
 [tool.tox.env.py314-optional]
+description = "run test suite, linter, and format checks ({env_name})"
 extras = ["perf", "async", "finance"]
+dependency_groups = ["test", "lint"]
+commands = [
+    ["python", "-m", "riko.cli.manage", "test", "--no-cov", "--quiet"],
+    ["python", "-m", "riko.cli.manage", "lint", "--check-types"],
+    ["python", "-m", "riko.cli.manage", "lint", "--verify-types"],
+]
 
 [tool.tox.env.lint]
-description = "run ruff lint and format checks"
+description = "run linter"
 runner = "uv-venv-lock-runner"
-skip_install = true
 dependency_groups = ["lint"]
+commands = [["python", "-m", "riko.cli.manage", "lint"]]
 
-commands = [
-    [
-        "ruff",
-        "check",
-        { replace = "posargs", default = ["."], extend = true },
-    ],
-    [
-        "ruff",
-        "format",
-        "--check",
-        { replace = "posargs", default = ["."], extend = true },
-    ],
-]
 
 [tool.setuptools]
 packages = ["riko"]

@@ -18,7 +18,8 @@ Attributes:
 
 """
 
-from typing import cast
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 from meza.io import read_csv
@@ -27,12 +28,12 @@ from riko import ENCODING
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.types.configs import CsvObjconf
-from riko.types.general import Defaults, Extraction, Item, Stream
+from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 from riko.utils import Fetch, auto_close
 
 from . import processor
 
-OPTS = SourceOpts
+OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {
     "delimiter": ",",
     "quotechar": '"',
@@ -44,11 +45,11 @@ DEFAULTS: Defaults = {
     "has_header": True,
 }
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -67,11 +68,10 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('spreadsheet.csv')
         ...     conf = {
         ...         'url': url, 'sanitize': True, 'skip_rows': 0,
@@ -80,11 +80,7 @@ async def async_parser(
         ...     result = await async_parser(None, None, objconf)
         ...     print(next(result)['mileage'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         7213
 
     """
@@ -97,7 +93,9 @@ async def async_parser(
     return stream
 
 
-def parser(_: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs) -> Stream:
+def parser(
+    _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs: object
+) -> Stream:
     """
     Parses the pipe content
 
@@ -134,7 +132,7 @@ def parser(_: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs) -> St
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that asynchronously fetches the content of a given web site as
     a string.
@@ -163,22 +161,17 @@ async def async_pipe(*args, **kwargs) -> Stream:
             col_names (List[str]): Custom column names (default: None).
 
     Returns:
-        dict: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe(conf={'url': get_path('spreadsheet.csv')})
         ...     print(next(result)['mileage'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         7213
 
     """
@@ -186,7 +179,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     A source that fetches and parses a csv file to yield items.
 

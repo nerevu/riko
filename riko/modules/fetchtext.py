@@ -22,6 +22,8 @@ Attributes:
 """
 
 from collections.abc import Iterator
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -36,11 +38,11 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "assign": "content"}
 DEFAULTS: Defaults = {"encoding": ENCODING}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 async def async_parser(
-    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Asynchronously parses the pipe content
@@ -59,21 +61,16 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     url = get_path('lorem.txt')
         ...     objconf = Objectify({'url': url, 'encoding': ENCODING})
         ...     result = await async_parser(None, None, objconf, assign='content')
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         What is Lorem Ipsum?
 
     """
@@ -83,7 +80,7 @@ async def async_parser(
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs
+    _: Item, extraction: Extraction, objconf: FetchTextObjconf, **kwargs: object
 ) -> Iterator[str]:
     """
     Parses the pipe content
@@ -117,7 +114,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Iterator[str]:
+async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     A source that asynchronously fetches and parses an XML or JSON file to
     return the entries.
@@ -137,23 +134,18 @@ async def async_pipe(*args, **kwargs) -> Iterator[str]:
 
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred stream of items
+        Awaitable: stream of items
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'url': get_path('lorem.txt')}
         ...     result = await async_pipe(conf=conf)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         What is Lorem Ipsum?
 
     """
@@ -161,7 +153,7 @@ async def async_pipe(*args, **kwargs) -> Iterator[str]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[str]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     A source that fetches and parses an XML or JSON file to
     return the entries.

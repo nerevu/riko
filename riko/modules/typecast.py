@@ -17,9 +17,12 @@ Attributes:
 
 """
 
+from logging import Logger
+from typing import Any
+
 import pygogo as gogo
 
-from riko.cast import CastType, cast
+from riko.cast import CastType, cast_value
 from riko.types.configs import TypecastObjconf
 from riko.types.general import Defaults, Extraction, Opts
 from riko.types.values import PrimitiveValue
@@ -28,11 +31,12 @@ from . import processor
 
 OPTS: Opts = {"field": "content"}
 DEFAULTS: Defaults = {"type": "text"}
-logger = gogo.Gogo(__name__, monolog=True).logger
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    content: str, extraction: Extraction, objconf: TypecastObjconf, **kwargs
+    content: str, extraction: Extraction, objconf: TypecastObjconf, **kwargs: object
 ) -> PrimitiveValue:
     """
     Parsers the pipe content
@@ -59,11 +63,11 @@ def parser(
         1
 
     """
-    return cast(content, CastType(objconf.type)) if objconf.type else content
+    return cast_value(content, CastType(objconf.type)) if objconf.type else content
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> PrimitiveValue:
+def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
     A processor that asynchronously converts a text string into a variety of
     different types, e.g., int, bool, date, etc. Useful as terminal data. Loopable.
@@ -81,21 +85,16 @@ def async_pipe(*args, **kwargs) -> PrimitiveValue:
         field (str): Item attribute to operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with type casted content
+       Awaitable: item with type casted content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'content': '1.0'}, conf={'type': 'int'})
         ...     print(next(result)['typecast'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         1
 
     """
@@ -103,7 +102,7 @@ def async_pipe(*args, **kwargs) -> PrimitiveValue:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> PrimitiveValue:
+def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
     A processor that converts a text string into a variety of different types, e.g.,
     int, bool, date, etc. Useful as terminal data. Loopable.

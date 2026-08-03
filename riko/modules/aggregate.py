@@ -16,7 +16,8 @@ Examples:
 
 from collections.abc import Callable
 from inspect import iscoroutinefunction
-from typing import cast
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -26,12 +27,12 @@ from riko.types.general import Defaults, Item, PipeTuples, Stream
 
 from . import operator
 
-DEFAULTS = Defaults()
-logger = gogo.Gogo(__name__, monolog=True).logger
+DEFAULTS: Defaults = Defaults()
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -70,7 +71,7 @@ def parser(
 
 
 async def async_parser(
-    stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     func = cast(Callable[[Stream], Item], kwargs["func"])
 
@@ -84,7 +85,7 @@ async def async_parser(
 
 
 @operator(DEFAULTS, isasync=True)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously performs an arbitrary (user-defined) function on
     a stream.
@@ -97,20 +98,15 @@ def async_pipe(*args, **kwargs) -> Stream:
         func (callable): User defined function to apply to the stream.
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     func = lambda stream: ({'y': item['x'] + 3} for item in stream)
         ...     items = ({'x': x} for x in range(5))
         ...     result = await async_pipe(items, func=func)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'y': 3}
 
     """
@@ -118,7 +114,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that performs an arbitrary (user-defined) function on a stream.
 

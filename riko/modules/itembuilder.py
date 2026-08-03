@@ -27,7 +27,8 @@ Attributes:
 """
 
 from collections.abc import Sequence
-from typing import cast
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -42,11 +43,14 @@ from . import processor
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "listize": True, "extract": "attrs"}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _, extraction: Sequence[ParsedParam], objconf: ItemBuilderObjconf, **kwargs
+    _: object,
+    extraction: Sequence[ParsedParam],
+    objconf: ItemBuilderObjconf,
+    **kwargs: object,
 ) -> RikoDict:
     """
     Parses the pipe content
@@ -76,7 +80,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> RikoDict:
+def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
     """
     A source that asynchronously builds an item.
 
@@ -94,13 +98,12 @@ def async_pipe(*args, **kwargs) -> RikoDict:
                 value (str): the attribute value
 
     Returns:
-        dict: twisted.internet.defer.Deferred an iterator of items
+        Awaitable: an iterator of items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     attrs = [
         ...         {'key': 'title', 'value': 'the title'},
         ...         {'key': 'desc.content', 'value': 'the desc'}]
@@ -108,11 +111,7 @@ def async_pipe(*args, **kwargs) -> RikoDict:
         ...     result = await async_pipe(conf={'attrs': attrs})
         ...     print(next(result)['title'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         the title
 
     """
@@ -120,7 +119,7 @@ def async_pipe(*args, **kwargs) -> RikoDict:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> RikoDict:
+def pipe(*args: Any, **kwargs: object) -> RikoDict:
     """
     A source that builds an item.
 

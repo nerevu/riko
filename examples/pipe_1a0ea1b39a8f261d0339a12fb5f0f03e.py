@@ -4,49 +4,52 @@ from riko import Context
 from riko.modules.datebuilder import pipe as datebuilder
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.itembuilder import pipe as itembuilder
+from riko.types.modules import DateFormatRawConf, ItemBuilderRawConf
 
 
-def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(item=None, conf=None, context=None, **kwargs):
-    conf = conf or {}
-    context = context or Context(**kwargs)
+def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(
+    item=None, context: Context | None = None, **kwargs
+):
+    if context and context.describe_input:
+        output = []
+    elif context and context.describe_dependencies:
+        output = ["datebuilder", "dateformat", "itembuilder"]
+    else:
+        sw_385 = datebuilder({"content": "12/2/2014"}, emit=True)
 
-    if context.describe_input:
-        return []
-
-    if context.describe_dependencies:
-        return ["pipedatebuilder", "pipedateformat", "itembuilder"]
-
-    sw_385 = datebuilder(
-        context=context, conf={"DATE": {"type": "datetime", "value": "12/2/2014"}}
-    )
-
-    sw_405 = dateformat(
-        sw_385,
-        conf={
-            "timezone": {"type": "text", "value": ""},
-            "format": {"type": "text", "value": "%B %d, %Y"},
-        },
-    )
-
-    sw_393 = itembuilder(
-        item,
-        conf={
-            "attrs": [
+        sw_405 = dateformat(
+            sw_385,
+            conf=DateFormatRawConf(
                 {
-                    "value": {"terminal": "attrs_1_value", "type": "text"},
-                    "key": {"type": "text", "value": "date"},
-                },
-                {
-                    "value": {"value": "1201", "type": "text"},
-                    "key": {"type": "text", "value": "year"},
-                },
-            ]
-        },
-        attrs_1_value=sw_405,
-        **kwargs,
-    )
+                    # "timezone": {"type": "text", "value": ""},
+                    "format": {"type": "text", "value": "%B %d, %Y"},
+                }
+            ),
+        )
 
-    return sw_393
+        sw_393 = itembuilder(
+            item,
+            conf=ItemBuilderRawConf(
+                {
+                    "attrs": [
+                        {
+                            "value": {"terminal": "attrs_1_value", "type": "text"},
+                            "key": {"type": "text", "value": "date"},
+                        },
+                        {
+                            "value": {"value": "1201", "type": "text"},
+                            "key": {"type": "text", "value": "year"},
+                        },
+                    ]
+                }
+            ),
+            attrs_1_value=sw_405,
+            **kwargs,
+        )
+
+        output = sw_393
+
+    return output
 
 
 if __name__ == "__main__":

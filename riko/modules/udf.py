@@ -15,7 +15,8 @@ Examples:
 """
 
 from collections.abc import Callable
-from typing import cast
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -26,10 +27,13 @@ from . import processor
 
 OPTS: Opts = {"listize": True, "emit": True}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs) -> Item:
+def parser(
+    item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
+) -> Item:
     """
     Parsers the pipe content
 
@@ -60,7 +64,7 @@ def parser(item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs) ->
 
 # TODO: add support for async functions
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Item:
+def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor that asynchronously performs an arbitrary (user-defined)
     function on an item.
@@ -73,22 +77,17 @@ def async_pipe(*args, **kwargs) -> Item:
         func (callable): User defined function to apply to each stream item.
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred truncated stream
+        Awaitable: truncated stream
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     func = lambda item: {'y': item['x'] + 3}
         ...     result = await async_pipe({'x': 0}, func=func)
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'y': 3}
 
     """
@@ -96,7 +95,7 @@ def async_pipe(*args, **kwargs) -> Item:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Item:
+def pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor that performs an arbitrary (user-defined) function
     on an item.

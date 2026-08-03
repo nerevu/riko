@@ -20,22 +20,24 @@ Attributes:
 
 from collections.abc import Iterator
 from itertools import repeat, takewhile
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
 from riko import DynamicConf
 from riko.cast import SourceOpts
-from riko.types.general import Defaults, Extraction, Item
+from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
 
-OPTS = SourceOpts
+OPTS: Opts = SourceOpts
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    _: Item, extraction: Extraction, objconf: DynamicConf, **kwargs
+    _: Item, extraction: Extraction, objconf: DynamicConf, **kwargs: object
 ) -> Iterator[dict[str, bool]]:
     """
     Parses the pipe content
@@ -63,7 +65,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Iterator[dict[str, bool]]:
+def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     """
     A source that asynchronously fetches and parses a feed to return the
     entries.
@@ -82,21 +84,16 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, bool]]:
 
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of items
+        Awaitable: iterator of items
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe()
         ...     print(next(result))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'forever': True}
 
     """
@@ -104,7 +101,7 @@ def async_pipe(*args, **kwargs) -> Iterator[dict[str, bool]]:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[dict[str, bool]]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     """
     A source that fetches and parses a feed to return the entries.
 

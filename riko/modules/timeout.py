@@ -35,13 +35,13 @@ from collections.abc import (
     Iterator,
 )
 from datetime import timedelta
+from logging import Logger
 from time import monotonic_ns
-from typing import Self, cast
+from typing import Any, Self, cast
 
 import pygogo as gogo
 
-from riko.bado.itertools import async_iter, ensure_deferred
-from riko.bado.util import async_sleep
+from riko.bado.itertools import async_iter
 from riko.cast import BasicCastType
 from riko.types.configs import TimeoutObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
@@ -50,13 +50,16 @@ from . import operator
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 MS_PER_SECOND = 1_000
 NS_PER_MS = 1_000_000
 
 
 class AsyncTimeoutIterator[T](AsyncIterator[T]):
+    aiter: AsyncIterator[T]
+    timeout_ns: int
+
     def __init__(
         self,
         elements: AsyncIterable[T] | Iterable[T],
@@ -67,24 +70,19 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
         else:
             self.aiter = async_iter(elements, cooperative=True)
 
-        self.timeout_ms = max(timeout_ms, 0)
-        self.timed_out = False
-        self.timeout_started = False
+        self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
+        self.deadline: int | None = None
 
     async def _collect(self) -> Iterator[T]:
         return iter([item async for item in self])
 
-    async def _expire(self) -> None:
-        await async_sleep(self.timeout_ms / MS_PER_SECOND)
-        self.timed_out = True
-
     def _raise_if_expired(self) -> None:
-        if self.timeout_ms:
-            if not self.timeout_started:
-                self.timeout_started = True
-                ensure_deferred(self._expire())
+        if self.timeout_ns:
+            now = monotonic_ns()
 
-            if self.timed_out:
+            if self.deadline is None:
+                self.deadline = now + self.timeout_ns
+            elif now >= self.deadline:
                 raise StopAsyncIteration
 
     def __await__(self) -> Generator[None, None, Iterator[T]]:
@@ -101,6 +99,8 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
 
 
 class TimeoutIterator[T](Iterator[T]):
+    timeout_ns: int
+
     def __init__(self, elements: Iterable[T], timeout_ms: int = 0) -> None:
         self.iter: Iterator[T] = iter(elements)
         self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
@@ -126,7 +126,7 @@ class TimeoutIterator[T](Iterator[T]):
 
 
 async def async_parser(
-    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content
@@ -150,9 +150,7 @@ async def async_parser(
 
     Examples:
         >>> from itertools import count
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
-        >>> from riko.bado.util import async_sleep
+        >>> from riko.bado import async_sleep, run
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'milliseconds': 250})
@@ -163,14 +161,11 @@ async def async_parser(
         ...         await async_sleep(0.1)
         ...         yield {'page': page, 'data': f'result_{page}'}
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_parser(paginated_api(), objconf, iter(()))
         ...     print(len(list(result)))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
+        >>> run(main)
         2
 
     """
@@ -180,7 +175,7 @@ async def async_parser(
 
 
 def parser(
-    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -225,7 +220,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> Stream:
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously returns items from a stream until a
         certain amount of time has passed.
@@ -254,22 +249,23 @@ async def async_pipe(*args, **kwargs) -> Stream:
                 (default: 0)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred stream
+        Awaitable: stream
 
     Examples:
         >>> from itertools import count
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from time import sleep
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
-        ...     items = ({'x': x} for x in count())
-        ...     result = await async_pipe(items, conf={'milliseconds': 250})
+        >>> def gen_stream():
+        ...     for x in count():
+        ...         sleep(0.1)
+        ...         yield {'x': x}
+        >>>
+        >>> async def main():
+        ...     result = await async_pipe(gen_stream(), conf={'milliseconds': 250})
         ...     print(len(list(result)))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
+        >>> run(main)
         2
 
     """
@@ -277,7 +273,7 @@ async def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that returns items from a stream until a certain amount of
         time has passed.

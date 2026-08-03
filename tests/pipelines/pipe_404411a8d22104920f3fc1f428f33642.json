@@ -65,13 +65,14 @@
         {
             "conf": {},
             "id": "sw-569",
-            "type": "count"
+            "type": "count",
+            "emit": true
         },
         {
             "conf": {
                 "count": {
                     "terminal": "count",
-                    "type": "number"
+                    "type": "float"
                 }
             },
             "id": "sw-583",

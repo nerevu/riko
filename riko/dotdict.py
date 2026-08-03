@@ -9,22 +9,34 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Self, TypeGuard, TypeVar, cast, overload
-from typing import cast as cast_type
+from logging import Logger
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Self,
+    TypeGuard,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
-from typing_extensions import TypeIs
 
 from riko import Objectify, replacer
-from riko.cast import CAST_SWITCH, CastType
-from riko.cast import cast as cast_value
+from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.types.general import Item, Stream
+from riko.types.guards import (
+    is_known_sequence,
+    is_mapping,
+    is_mapping_seq,
+    is_sentinal,
+    is_type_value,
+    is_value_seq,
+)
 from riko.types.modules import ConfArg
 from riko.types.values import (
-    BasicList,
     BasicValue,
-    BasicValueType,
     Key,
     PrimitiveValue,
     RikoList,
@@ -37,7 +49,7 @@ from riko.types.values import (
 if TYPE_CHECKING:
     from _typeshed import SupportsKeysAndGetItem
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 TV_KEYS = ("type", "value")
@@ -49,56 +61,12 @@ VT = TypeVar("VT")
 type Data = Iterable[tuple[str, VT]] | RSSEntry
 
 
-def is_mapping[D, VT](val: Mapping[D, VT] | object) -> TypeIs[Mapping[D, VT]]:
-    failure = False
-
-    # Delay calling isinstance(val, Mapping) as much as possible
-    if not (success := isinstance(val, (dict, CaseInsensitiveDict, Objectify))):
-        failure = isinstance(val, (str, int, float))
-
-    return success or (False if failure else isinstance(val, Mapping))
-
-
-def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:
-    return isinstance(val, (list, tuple))
-
-
-def is_mapping_seq(
-    val: list[Any] | tuple[Any, ...],
-) -> TypeGuard[list[Mapping[Any, Any]] | tuple[Mapping[Any, Any], ...]]:
-    return bool(val and is_mapping(val[0]))
-
-
-def is_value_seq(
-    val: list[Any] | tuple[Any, ...],
-) -> TypeGuard[BasicList | tuple[BasicValue, BasicValue]]:
-    return bool(val and isinstance(val[0], BasicValueType))
-
-
-def is_sentinal[VT](val: Mapping[str, VT], **kwargs) -> TypeGuard[Sentinal]:
-    if SentinalValue in val:
-        sentinal = str(val[SentinalValue])
-        key = replacer(sentinal, "")
-    else:
-        key = None
-
-    return all([key, (len(val) == 2), key in kwargs])
-
-
-def is_type_value(val: Mapping) -> TypeGuard[ConfArg]:
-    n = len(val)
-    double = n == 2 and "type" in val and "value" in val
-    return double or (n == 1 and "value" in val)
-
-
 def parse_key(key: Key | None = None) -> list[str]:
     if isinstance(key, str):
-        if not key:
-            keys = []
-        elif "." not in key:
-            keys = [key]
-        else:
+        if "." in key:
             keys = key.rstrip(".").split(".")
+        else:
+            keys = [key] if key else []
     elif key and (subkey := key.get("subkey")):
         keys = [subkey]
     else:
@@ -151,7 +119,7 @@ def parse_sentinel[D, VT](  # noqa: E302
         key = replacer(value[SentinalValue], "")
 
         if stream := kwargs.get(key):
-            stream = cast_type(Stream, stream)
+            stream = cast(Stream, stream)
             parsed = next(stream, default)
         else:
             parsed = default
@@ -315,10 +283,6 @@ def gen_dict[VT](  # noqa: E302
         yield data
 
 
-# def is_stateful_item(val: dict | CaseInsensitiveDict) -> TypeIs[StatefulItem]:
-#     return len(val) == 1 and "state" in val
-#
-#
 # def is_wire(val) -> TypeIs[Wire]:
 #     if is_mapping(val) and len(val) == 3 and all(s in val for s in WIRE_KEYS):
 #         x = val["src"]
@@ -522,7 +486,7 @@ class DotDict(CaseInsensitiveDict[VT]):
 
         return result
 
-    def __setitem__(self, key: str, value: VT):
+    def __setitem__(self, key: str, value: VT) -> None:
         """
         >>> r = DotDict({'author': 'bar'})
         >>> r
@@ -656,7 +620,7 @@ class DotDict(CaseInsensitiveDict[VT]):
     def copy(self) -> Self:
         return type(self)(self)
 
-    def delete(self, key: str):
+    def delete(self, key: str) -> None:
         """
         Delete a root or nested key. Matching is case-insensitive at every
         level, including nested plain-dict values.
@@ -740,7 +704,7 @@ class DotDict(CaseInsensitiveDict[VT]):
                 else:
                     return self._store.update(data._store)
             elif kwargs or any("." in k for k in data):
-                _dict = cast_type(dict[str, VT], {**data, **kwargs})
+                _dict = cast(dict[str, VT], {**data, **kwargs})
             else:
                 for key, value in data.items():
                     CaseInsensitiveDict.__setitem__(self, key, value)

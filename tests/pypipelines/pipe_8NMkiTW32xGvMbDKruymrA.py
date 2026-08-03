@@ -4,19 +4,17 @@
 
 from riko import Context
 from riko.collections import SyncCollection
+from riko.modules._subpipe import mark_subpipe
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
-from riko.types.general import Conf
 from riko.types.modules import FilterRawConf, SortRawConf
 
 
-def pipe_8NMkiTW32xGvMbDKruymrA(
-    item=None, conf: Conf = None, context: Context | None = None, **kwargs
-):
+def pipe_8NMkiTW32xGvMbDKruymrA(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
-        result = []
+        _OUTPUT = []
     elif context and context.describe_dependencies:
-        result = ["fetch", "filter", "sort"]
+        _OUTPUT = ["fetch", "filter", "sort"]
     else:
         sw_35 = SyncCollection(
             [
@@ -113,9 +111,11 @@ def pipe_8NMkiTW32xGvMbDKruymrA(
             context=context,
         )
         _OUTPUT = sw_105
-        result = _OUTPUT
 
-    return result
+    return _OUTPUT
+
+
+mark_subpipe(pipe_8NMkiTW32xGvMbDKruymrA, subtype="source")
 
 
 if __name__ == "__main__":

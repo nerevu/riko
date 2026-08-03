@@ -116,8 +116,14 @@
                     "value": {
                         "type": "fetch",
                         "id": "sw-487",
-                        "emit": true,
-                        "assign": "loop:fetch",
+                        "emit": {
+                            "type": "bool",
+                            "value": true
+                        },
+                        "assign": {
+                            "type": "text",
+                            "value": "loop:fetch"
+                        },
                         "conf": {
                             "URL": {
                                 "subkey": "link",

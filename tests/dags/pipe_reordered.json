@@ -5,7 +5,7 @@
             "type": "truncate",
             "conf": {
                 "count": {
-                    "type": "number",
+                    "type": "float",
                     "value": "2"
                 }
             }

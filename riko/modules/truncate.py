@@ -21,6 +21,8 @@ Attributes:
 """
 
 from itertools import islice
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
@@ -32,11 +34,12 @@ from . import operator
 
 OPTS: Opts = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {"start": 0, "count": 0}
-logger = gogo.Gogo(__name__, monolog=True).logger
+
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: TruncateObjconf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: TruncateObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -76,7 +79,7 @@ def parser(
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously returns a specified number of items
     from a stream.
@@ -93,22 +96,17 @@ def async_pipe(*args, **kwargs) -> Stream:
             start (int): starting location (default: 0)
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred truncated stream
+        Awaitable: truncated stream
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'x': x} for x in range(5))
         ...     result = await async_pipe(items, conf={'count': 4})
         ...     print(len(list(result)))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         4
 
     """
@@ -116,7 +114,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that returns a specified number of items from a stream.
 

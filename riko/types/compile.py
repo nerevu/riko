@@ -1,6 +1,13 @@
-from typing import NotRequired, TypedDict
+from collections.abc import Sequence
+from typing import NotRequired, Required, TypedDict
 
-from riko.types.modules import AnyModuleRawConf, ModuleName
+from riko.types.general import PyInput
+from riko.types.modules import (
+    AnyModuleRawConf,
+    CountValues,
+    EmbedRef,
+    ModuleName,
+)
 
 
 class XY(TypedDict):
@@ -13,10 +20,50 @@ class LayoutItem(TypedDict):
     xy: tuple[int, int]
 
 
-class PipeModule(TypedDict):
+class PipeModule(EmbedRef, total=False):
+    conf: Required[AnyModuleRawConf]
+    emit: bool
+    assign: str
+    field: str
+    count: CountValues
+
+
+class LoopModule(PipeModule, total=False):
+    embed: Required[EmbedRef]
+
+
+class CanonicalOptions(TypedDict):
+    emit: bool | None
+    assign: str | None
+    field: str | None
+    count: CountValues | None
+
+
+class AbbrevStringModule(TypedDict):
+    alias: str
+    name: str
+    pipe_name: str
+    is_sub_pipe: bool
+
+
+class StringModule(AbbrevStringModule):
     id: str
-    type: ModuleName
-    conf: AnyModuleRawConf
+    expr: str
+    splits: int
+    is_collection: bool
+
+
+class TemplateData(TypedDict):
+    uniq_modules: list[AbbrevStringModule]
+    modules: list[StringModule]
+    pipe_name: str
+    inputs: PyInput
+    dependencies: list[str]
+    embedded_pipes: dict[str, PipeModule]
+    last_module: str
+    raw_confs: list[str]
+    use_collection: bool
+    subtype: str
 
 
 class TypeCount(TypedDict):
@@ -108,8 +155,13 @@ class ParsedPipeDef(TypedDict):
     name: str
     modules: dict[str, PipeModule]
     embed: dict[str, PipeModule]
-    graph: dict[str, str | list[str]]
+    graph: dict[str, str | Sequence[str]]
     wires: dict[str, Wire]
+
+
+class PipelineDescription(TypedDict):
+    inputs: list[str | tuple[str, ...]]
+    dependencies: list[str]
 
 
 class DagModule(TypedDict):

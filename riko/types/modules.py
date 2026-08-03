@@ -1,14 +1,23 @@
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from re import RegexFlag
-from typing import TYPE_CHECKING, Any, Literal, NotRequired, Required, TypedDict, Union
+from re import Pattern, RegexFlag
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+    NewType,
+    NotRequired,
+    Required,
+    TypedDict,
+    Union,
+)
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from riko.cast import CastType, LocationType, SortableCastType
     from riko.types.compile import PipeModule
+    from riko.types.general import Function
     from riko.types.values import BasicValue
 
 
@@ -50,7 +59,7 @@ class InferenceSource(StrEnum):
 class ReturnInference:
     kind: OperatorReturnKind
     source: InferenceSource | None
-    reason: str | None = None
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,24 +77,32 @@ class ModuleMetadata:
         return subtype in self.subtypes
 
 
-ModuleName = Literal[
-    "fetch",
-    "fetchdata",
-    "fetchpage",
-    "forever",
-    "input",
-    "itembuilder",
-    "loop",
-    "output",
-    "regex",
-    "rename",
-    "sort",
-    "strconcat",
-    "tail",
-    "tokenizer",
-    "truncate",
-    "urlbuilder",
-]
+PipeId = NewType("PipeId", str)
+
+
+ModuleName = (
+    Literal[
+        "fetch",
+        "fetchdata",
+        "fetchpage",
+        "forever",
+        "input",
+        "itembuilder",
+        "loop",
+        "output",
+        "regex",
+        "rename",
+        "sort",
+        "strconcat",
+        "tail",
+        "tokenizer",
+        "truncate",
+        "urlbuilder",
+    ]
+    | PipeId
+)
+
+CountValues = Literal["first", "all"]
 
 
 class ConfArg(TypedDict):
@@ -93,9 +110,15 @@ class ConfArg(TypedDict):
     value: int | str | bool
 
 
+class CountArg(TypedDict):
+    type: Literal["text"]
+    value: CountValues
+
+
 class Terminal(TypedDict):
     terminal: str
     type: str
+    path: NotRequired[str]
 
 
 class Subkey(TypedDict):
@@ -111,9 +134,11 @@ class Param(TypedDict):
     value: Value
 
 
-class Skip(TypedDict):
-    field: str
-    include: NotRequired[bool]
+class Skip(TypedDict, total=False):
+    field: Required[str]
+    text: str
+    op: Literal["intersection", "contains", "search"]
+    include: bool
 
 
 class ObjconfParam:
@@ -131,7 +156,7 @@ class RegexRule(TypedDict):
     default: str
     field: str
     flags: int | RegexFlag
-    match: str
+    match: Pattern[str]
     offset: int
     replace: str
     series: bool
@@ -189,25 +214,16 @@ class RssItemBuilderRawConf(TypedDict, total=False):
     title: Value
 
 
-class EmbeddedModule(TypedDict):
-    id: str
-    type: ModuleName
-    conf: "AnyModuleRawConf"
-    assign: NotRequired[ConfArg]
-    emit: NotRequired[ConfArg]
-    field: NotRequired[ConfArg]
-
-
 class Embed(TypedDict):
     type: Literal["module"]
-    value: EmbeddedModule
+    value: "EmbeddedModule"
 
 
-class LoopRawConf(TypedDict):
-    count: Value
-    embed: Embed
-    assign: NotRequired[ConfArg]
-    field: NotRequired[ConfArg]
+class LoopRawConf(TypedDict, total=False):
+    embed: Required[Embed]
+    count: CountArg
+    assign: ConfArg
+    field: ConfArg
 
 
 class CountRawConf(TypedDict, total=False):
@@ -357,6 +373,7 @@ class RenameRawConf(TypedDict):
 
 class SendRawConf(TypedDict):
     name: Value
+    max_wait: NotRequired[Value]
 
 
 class SimpleMathRawConf(TypedDict):
@@ -369,7 +386,7 @@ class SlugifyRawConf(TypedDict, total=False):
 
 
 class SplitRawConf(TypedDict, total=False):
-    splits: Value
+    splits: ConfArg
 
 
 class StrconcatRawConf(TypedDict):
@@ -402,6 +419,10 @@ class StrTransformRawConf(TypedDict):
 class SubelementRawConf(TypedDict):
     path: Value
     token_key: NotRequired[Value]
+
+
+class SubModuleRawConf(TypedDict):
+    gid: Value
 
 
 class SubstrRawConf(TypedDict, total=False):
@@ -496,6 +517,7 @@ type AnyModuleRawConf = (
     | StrReplaceRawConf
     | StrTransformRawConf
     | SubelementRawConf
+    | SubModuleRawConf
     | SubstrRawConf
     | SumRawConf
     | TailRawConf
@@ -509,6 +531,20 @@ type AnyModuleRawConf = (
     | UrlParseRawConf
     | XpathFetchPageRawConf
 )
+
+
+class EmbedRef(TypedDict):
+    id: str
+    type: ModuleName
+
+
+class EmbeddedModule(EmbedRef, total=False):
+    """The legacy nested submodule descriptor (``conf.embed.value``)."""
+
+    conf: Required[AnyModuleRawConf]
+    emit: ConfArg
+    assign: ConfArg
+    field: ConfArg
 
 
 # Parsed
@@ -601,8 +637,8 @@ class SortConf(TypedDict):
 
 
 class InputConf(TypedDict, total=False):
-    prompt: Required[str]
     type: Required["CastType"]
+    prompt: str
     default: str
     test: bool
     input_key: str
@@ -610,7 +646,7 @@ class InputConf(TypedDict, total=False):
 
 class FetchConf(TypedDict, total=False):
     url: str
-    delay: int
+    delay: float
 
 
 class TailConf(TypedDict):
@@ -637,15 +673,15 @@ class RssItemBuilderConf(TypedDict, total=False):
     title: str
 
 
-class LoopConf(TypedDict):
-    count: str
+class LoopConf(TypedDict, total=False):
+    embed: Required["PipeModule"]
+    count: CountValues
     assign: str
-    embed: EmbeddedModule
     field: str
 
 
 class AggregateConf(TypedDict):
-    func: Callable[..., Any]
+    func: "Function"
 
 
 class CountConf(TypedDict, total=False):
@@ -672,7 +708,7 @@ class DateFormatConf(TypedDict):
     format: str = "%m/%d/%Y %H:%M:%S"
 
 
-class ExchangeRateConf(TypedDict):
+class ExchangeRateConf(TypedDict, total=False):
     url: str
     param: dict[str, str]
     currency: str = "USD"
@@ -717,8 +753,8 @@ class FetchTextConf(TypedDict):
 class FilterConf(TypedDict):
     rule: FilterConfRule | list[FilterConfRule]
     combine: Literal["and", "or"] = "and"
-    permit: bool = True
-    stop: bool = False
+    permit: NotRequired[bool] = True
+    stop: NotRequired[bool] = False
 
 
 class GeolocateConf(TypedDict):
@@ -752,8 +788,9 @@ class RenameConf(TypedDict):
     rule: RenameConfRule | list[RenameConfRule]
 
 
-class SendConf(TypedDict):
+class SendConf(TypedDict, total=False):
     name: str
+    max_wait: int | float = 5
 
 
 class SimpleMathConf(TypedDict):
@@ -772,7 +809,7 @@ class SplitConf(TypedDict):
 
 
 class StrconcatConf(TypedDict):
-    part: str | Subkey | Terminal | list[str | Subkey | Terminal]
+    part: str | Subkey | Terminal | Sequence[str | Subkey | Terminal]
 
 
 class StrfindConf(TypedDict):
@@ -789,7 +826,7 @@ class StrTransformConf(TypedDict):
 
 class SubelementConf(TypedDict):
     path: str
-    token_key: str = "content"  # noqa: S105
+    token_key: str | None = "content"  # noqa: S105
 
 
 class SubstrConf(TypedDict):
@@ -812,14 +849,14 @@ class TimeoutConf(TypedDict, total=False):
     weeks: int
 
 
-class TokenizerConf(TypedDict):
+class TokenizerConf(TypedDict, total=False):
     delimiter: str = ","
     dedupe: bool = False
     sort: bool = False
     token_key: str = "content"  # noqa: S105
 
 
-class TruncateConf(TypedDict):
+class TruncateConf(TypedDict, total=False):
     count: int = 0
     start: int = 0
 
@@ -829,10 +866,10 @@ class TypecastConf(TypedDict):
 
 
 class UdfConf(TypedDict):
-    func: Callable[..., Any]
+    func: "Function"
 
 
-class UniqConf(TypedDict):
+class UniqConf(TypedDict, total=False):
     uniq_key: str = "content"
     limit: int = 1024
 
@@ -844,13 +881,13 @@ class UrlBuilderConf(TypedDict, total=False):
     param: ParsedParam | list[ParsedParam]
 
 
-class UrlParseConf(TypedDict):
+class UrlParseConf(TypedDict, total=False):
     parse_key: str = "content"
 
 
-class XpathFetchPageConf(TypedDict):
-    url: str
-    xpath: NotRequired[str]
+class XpathFetchPageConf(TypedDict, total=False):
+    url: Required[str]
+    xpath: str
     html5: bool = False
 
 

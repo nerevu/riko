@@ -23,20 +23,24 @@ Attributes:
 
 from collections.abc import Iterator
 from copy import deepcopy
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
 from riko.cast import BasicCastType
-from riko.types.general import Defaults, Opts, Stream
+from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import splitter
 
 OPTS: Opts = {"extract": "splits", "ptype": BasicCastType.INT, "objectify": False}
 DEFAULTS: Defaults = {"splits": 2}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
-def parser(stream: Stream, splits: int, tuples, **kwargs) -> Iterator[Stream]:
+def parser(
+    stream: Stream, splits: int, tuples: PipeTuples, **kwargs: object
+) -> Iterator[Stream]:
     """
     Parses the pipe content
 
@@ -75,7 +79,7 @@ def parser(stream: Stream, splits: int, tuples, **kwargs) -> Iterator[Stream]:
 
 
 @splitter(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Iterator[Stream]:
+def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
     """
     An operator that asynchronously and eagerly splits a stream into identical
     copies. Note that this pipe is not lazy.
@@ -90,21 +94,16 @@ def async_pipe(*args, **kwargs) -> Iterator[Stream]:
             splits (int): the number of copies to create (default: 2).
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterable of streams
+        Awaitable: iterable of streams
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     result = await async_pipe({'x': x} for x in range(5))
         ...     print(next(next(result)))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         {'x': 0}
 
     """
@@ -112,7 +111,7 @@ def async_pipe(*args, **kwargs) -> Iterator[Stream]:
 
 
 @splitter(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Iterator[Stream]:
+def pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
     """
     An operator that eagerly splits a stream into identical copies.
     Note that this pipe is not lazy.

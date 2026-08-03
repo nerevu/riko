@@ -5,12 +5,11 @@ from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from time import sleep, time
 from timeit import repeat
-from typing import cast
 
 from riko import get_path
-from riko.bado import react
+from riko.bado import async_sleep, isasync
+from riko.bado import run as async_run
 from riko.bado.itertools import async_map
-from riko.bado.util import async_sleep
 from riko.collections import (
     AsyncCollection,
     AsyncPipe,
@@ -21,14 +20,20 @@ from riko.collections import (
 )
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
-from riko.types.modules import AnyModuleConf
+from riko.types.general import (
+    AsyncPipeParser,
+    Items,
+    ParserMaterializedOutput,
+    ProcessorWrapperOutput,
+)
+from riko.types.modules import FetchConf
 from riko.types.values import RSSEntry
 
 NUMBER = 1
 LOOPS = 1
 DELAY = 0.1
 
-files = [
+files: list[str] = [
     "ouseful.xml",
     "feed.xml",
     "delicious.xml",
@@ -45,73 +50,71 @@ files = [
     "psychemedia_slideshare.xml",
 ]
 
-urls = [get_path(f) for f in files]
-confs: list[AnyModuleConf] = [{"url": url, "sleep": DELAY} for url in urls]
-sources = [{"url": url} for url in urls]
-length = len(files)
-iterable = [DELAY for _ in files]
+urls: list[str] = [get_path(f) for f in files]
+confs: list[FetchConf] = [FetchConf({"url": url, "delay": DELAY}) for url in urls]
+sources: list[dict[str, str]] = [{"url": url} for url in urls]
+length: int = len(files)
+iterable: list[float] = [DELAY for _ in files]
 
 type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
 
 
-def baseline_sync():
+def baseline_sync() -> list[None]:
     return list(map(sleep, iterable))
 
 
-def baseline_threads():
+def baseline_threads() -> list[None]:
     workers = get_worker_cnt(length)
     chunksize = get_chunksize(length, workers)
     pool = ThreadPool(workers)
     return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
 
 
-def baseline_procs():
+def baseline_procs() -> list[None]:
     workers = get_worker_cnt(length, False)
     chunksize = get_chunksize(length, workers)
     pool = Pool(workers)
     return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
 
 
-def sync_pipeline():
+def sync_pipeline() -> ParserMaterializedOutput:
     pipes = (fetch(conf=conf) for conf in confs)
-    return list(chain.from_iterable(cast(Iterator[RSSEntry], pipes)))
+    return list(chain.from_iterable(pipes))
 
 
-def sync_pipe():
+def sync_pipe() -> Items:
     streams = (SyncPipe("fetch", conf=conf) for conf in confs)
     return list(chain.from_iterable(streams))
 
 
-def sync_collection():
+def sync_collection() -> Items:
     return list(SyncCollection(sources, sleep=DELAY))
 
 
-def par_sync_collection():
+def par_sync_collection() -> Items:
     return list(SyncCollection(sources, parallel=True, sleep=DELAY))
 
 
-async def baseline_async():
+async def baseline_async() -> list[None]:
     return await async_map(async_sleep, iterable)
 
 
-async def async_pipeline():
-    func = lambda conf: async_fetch(conf=conf)
-    results = await async_map(cast(AsyncFunc, func), confs)
-    return list(results)
+async def async_pipeline() -> list[ProcessorWrapperOutput]:
+    func = partial(async_fetch, {})
+    return await async_map(func, confs)
 
 
-async def async_pipe2(conf=None):
-    func = lambda conf: AsyncPipe("fetch", conf=conf)
-    results = await async_map(func, confs)
-    return list(results)
+async def async_pipe2() -> list[ProcessorWrapperOutput]:
+    func = partial(AsyncPipe, "fetch", iter(()))
+    return await async_map(func, confs)
 
 
-async def async_collection():
+async def async_collection() -> Items:
     results = await AsyncCollection(sources, sleep=DELAY)
     return list(results)
 
 
-def parse_results(results):
+def parse_results(results: list[float]) -> tuple[float, str]:
     switch = {0: "secs", 3: "msecs", 6: "usecs"}
     best = min(results)
 
@@ -123,20 +126,20 @@ def parse_results(results):
     return round(best * factor, 2), switch[places]
 
 
-def print_time(test, max_chars, run_time, units):
+def print_time(test: str, max_chars: int, run_time: float, units: str) -> None:
     padded = test.zfill(max_chars).replace("0", " ")
     msg = "{0} - {1} repetitions/loop, best of {2} loops: {3} {4}"
     print(msg.format(padded, NUMBER, LOOPS, run_time, units))
 
 
-async def run_async(reactor, tests, max_chars):
+async def run_async(tests: list[AsyncPipeParser], max_chars: int) -> None:
     for test in tests:
         results = []
 
-        for _i in range(LOOPS):
+        for _ in range(LOOPS):
             loop = 0
 
-            for _j in range(NUMBER):
+            for _ in range(NUMBER):
                 start = time()
                 await test()
                 loop += time() - start
@@ -147,7 +150,7 @@ async def run_async(reactor, tests, max_chars):
         print_time(test.__name__, max_chars, run_time, units)
 
 
-def main():
+def main() -> None:
     run = partial(repeat, repeat=LOOPS, number=NUMBER)
     sync_tests = [
         "baseline_sync",
@@ -159,8 +162,13 @@ def main():
         "par_sync_collection",
     ]
 
-    async_tests = [baseline_async, async_pipeline, async_pipe2, async_collection]
-    combined_tests = sync_tests + [f.__name__ for f in async_tests]
+    if isasync:
+        async_tests = [baseline_async, async_pipeline, async_pipe2, async_collection]
+        combined_tests = sync_tests + [f.__name__ for f in async_tests]
+    else:
+        async_tests = []
+        combined_tests = sync_tests
+
     max_chars = max(list(map(len, combined_tests)))
 
     for test in sync_tests:
@@ -168,7 +176,8 @@ def main():
         run_time, units = parse_results(results)
         print_time(test, max_chars, run_time, units)
 
-    react(run_async, [async_tests, max_chars])
+    if isasync:
+        async_run(run_async, async_tests, max_chars)
 
 
 if __name__ == "__main__":

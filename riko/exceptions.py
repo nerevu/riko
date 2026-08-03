@@ -23,8 +23,22 @@ class PipelineStateError(Exception):
         self.action = action
 
 
+class ReceiverUnavailableError(Exception):
+    def __init__(self, name: str):
+        super().__init__(f"pub/sub receiver {name!r} was never subscribed")
+        self.name = name
+
+
+class DuplicateReceiverError(Exception):
+    def __init__(self, name: str):
+        super().__init__(f"pub/sub receiver {name!r} already has an active subscriber")
+        self.name = name
+
+
 __all__ = [
+    "DuplicateReceiverError",
     "PipelineStateError",
+    "ReceiverUnavailableError",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
 ]

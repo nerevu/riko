@@ -34,10 +34,10 @@ Examples:
 """
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from importlib.metadata import metadata, version
+from importlib.metadata import PackageMetadata, metadata, version
 from os import path as p
 from time import struct_time
-from typing import TYPE_CHECKING, TypeVar, overload
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 from warnings import warn
 
 from meza.fntools import Objectify as _Objectify
@@ -48,7 +48,7 @@ from riko.types.general import ItemOrValue, SyncArgFunc
 from riko.types.values import PrimitiveValueType
 
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
-meta = metadata("riko")
+meta: PackageMetadata = metadata("riko")
 
 PACKAGE_INFO = {
     "__version__": version("riko"),
@@ -76,7 +76,7 @@ ENCODING = "utf-8"
 VT = TypeVar("VT")
 
 
-def get_path(name: str):
+def get_path(name: str) -> str:
     if name.startswith(("http", "file:")):
         url = name
     else:
@@ -85,7 +85,7 @@ def get_path(name: str):
     return url
 
 
-def get_abspath(url: str, offline=False) -> str:
+def get_abspath(url: str, offline: bool = False) -> str:
     if url.startswith(("http", "file:///")):
         pass
     elif url.startswith("file://"):
@@ -101,7 +101,7 @@ def get_abspath(url: str, offline=False) -> str:
     return url
 
 
-def replacer(content: str, old: str, new="_") -> str:
+def replacer(content: str, old: str, new: str = "_") -> str:
     """
     Examples:
         >>> replacer('', '')
@@ -122,45 +122,56 @@ def replacer(content: str, old: str, new="_") -> str:
     return replaced
 
 
-class Objectify(_Objectify, Mapping[str, VT]):
-    """
-    Creates an object with dynamically set attributes. Useful
-    for accessing the kwargs of a function as attributes.
-    """
+if TYPE_CHECKING:
 
-    def __init__(self, data: Mapping[str, VT], *args, **kwargs):
+    class Objectify(Mapping[str, VT]):
         """
-        Objectify constructor
-
-        Args:
-            data (dict): The attributes to set
-            defaults (dict): The default attributes
-
-        Examples:
-            >>> kw = Objectify({'KEY': 'foo'})
-            >>> kw.key
-            'foo'
-            >>> kw['key']
-            'foo'
-            >>> kw.get('key')
-            'foo'
-
+        Creates an object with dynamically set attributes. Useful
+        for accessing the kwargs of a function as attributes.
         """
-        _data = {k.lower(): v for k, v in data.items()}
-        super().__init__(_data, *args, **kwargs)
 
-    def __len__(self) -> int:
-        return len(self.data)
-
-    if TYPE_CHECKING:
-
-        def __getattribute__(self, *_) -> VT: ...  # noqa: E704
-        def __getitem__(self, *_) -> VT: ...  # noqa: E704
+        def __init__(  # noqa: E704
+            self, data: Mapping[str, VT], *args: Any, **kwargs: object
+        ) -> None: ...  # noqa: E704
+        def __len__(self) -> int: ...  # noqa: E704
+        def __getattribute__(self, *_: object) -> VT: ...  # noqa: E704
+        def __getitem__(self, *_: object) -> VT: ...  # noqa: E704
         def __iter__(self) -> Iterator[str]: ...  # noqa: E704
         def iteritems(self) -> Iterator[tuple[str, VT]]: ...  # noqa: E704
+else:
+
+    class Objectify(_Objectify, Mapping[str, VT]):
+        """
+        Creates an object with dynamically set attributes. Useful
+        for accessing the kwargs of a function as attributes.
+        """
+
+        def __init__(self, data, *args, **kwargs):
+            """
+            Objectify constructor
+
+            Args:
+                data (dict): The attributes to set
+                defaults (dict): The default attributes
+
+            Examples:
+                >>> kw = Objectify({'KEY': 'foo'})
+                >>> kw.key
+                'foo'
+                >>> kw['key']
+                'foo'
+                >>> kw.get('key')
+                'foo'
+
+            """
+            _data = {k.lower(): v for k, v in data.items()}
+            super().__init__(_data, *args, **kwargs)
+
+        def __len__(self):
+            return len(self.data)
 
 
-class DynamicConf(Objectify):
+class DynamicConf(Objectify[Any]):
     """
     A parsed configuration bag with case-insensitive attribute and mapping
     access. The base type every parsed module config is, and the fallback
@@ -168,7 +179,9 @@ class DynamicConf(Objectify):
     """
 
 
-def Objconf[VT](values: Mapping[str, VT], *args, **kwargs) -> DynamicConf:  # noqa: N802
+def Objconf[VT](  # noqa: N802
+    values: Mapping[str, VT], *args: Any, **kwargs: object
+) -> DynamicConf:
     warn(
         "Objconf is deprecated; use riko.ext.config.DynamicConf",
         DeprecationWarning,
@@ -178,24 +191,24 @@ def Objconf[VT](values: Mapping[str, VT], *args, **kwargs) -> DynamicConf:  # no
 
 
 @overload
-def objectify(data: Mapping) -> Objectify: ...  # noqa: E704
+def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...  # noqa: E704
 @overload  # noqa: E302
 def objectify[T](data: T) -> T: ...  # noqa: E704
 @overload  # noqa: E302
-def objectify(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
-    data: Mapping, func: SyncArgFunc
-) -> Objectify: ...
+def objectify[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    data: Mapping[str, T], func: SyncArgFunc
+) -> Objectify[T]: ...
 @overload  # noqa: E302
 def objectify[T](  # noqa: E704
     data: Sequence[T], func: SyncArgFunc
-) -> list[ItemOrValue | Objectify]: ...
+) -> list[ItemOrValue | Objectify[object]]: ...
 @overload  # noqa: E302
-def objectify(  # noqa: E704
-    data: object, func: SyncArgFunc
-) -> ItemOrValue: ...
+def objectify[T](  # noqa: E704
+    data: T, func: SyncArgFunc
+) -> T | ItemOrValue: ...
 def objectify[T](  # noqa: E302
-    data: T, func: SyncArgFunc | None = None, **defaults
-) -> T | ItemOrValue | Objectify | list[T] | list[ItemOrValue | Objectify]:
+    data: T, func: SyncArgFunc | None = None, **defaults: object
+) -> T | ItemOrValue | Objectify[T] | list[T] | list[ItemOrValue | Objectify[object]]:
     if isinstance(data, (dict, CaseInsensitiveDict, Mapping)):
         objectified = Objectify(data, func=func, **defaults)
     elif func:
@@ -268,6 +281,8 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
 from riko.api import (  # noqa: E402
     AsyncCollection,
     AsyncPipe,
+    PipelineStateError,
+    PipeState,
     SyncCollection,
     SyncPipe,
     UnsupportedModuleError,
@@ -282,6 +297,8 @@ __all__ = [
     "AsyncPipe",
     "Context",
     "ExecutionMode",
+    "PipeState",
+    "PipelineStateError",
     "SyncCollection",
     "SyncPipe",
     "UnsupportedModuleError",

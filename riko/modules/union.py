@@ -21,7 +21,8 @@ Attributes:
 
 from collections.abc import Iterable
 from itertools import chain
-from typing import cast
+from logging import Logger
+from typing import Any, cast
 
 import pygogo as gogo
 
@@ -31,13 +32,13 @@ from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator
 
-OPTS = Opts()
+OPTS: Opts = Opts()
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs
+    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content
@@ -74,13 +75,13 @@ def parser(
         15
 
     """
-    kwargs = DotDict(kwargs)
-    others = cast(Iterable[Stream], kwargs["others"])
+    _others = DotDict(kwargs).get("others", [])
+    others = cast(Iterable[Stream], _others)
     return chain(stream, chain.from_iterable(others))
 
 
 @operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args, **kwargs) -> Stream:
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that asynchronously merges multiple source streams together.
 
@@ -92,24 +93,19 @@ def async_pipe(*args, **kwargs) -> Stream:
         others (List[Iter(dict)]): List of streams to join
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred iterator of the merged streams
+        Awaitable: iterator of the merged streams
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     items = ({'x': x} for x in range(5))
         ...     other1 = ({'x': x + 5} for x in range(5))
         ...     other2 = ({'x': x + 10} for x in range(5))
         ...     result = await async_pipe(items, others=[other1, other2])
         ...     print(len(list(result)))
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         15
 
     """
@@ -117,7 +113,7 @@ def async_pipe(*args, **kwargs) -> Stream:
 
 
 @operator(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> Stream:
+def pipe(*args: Any, **kwargs: object) -> Stream:
     """
     An operator that merges multiple streams together.
 

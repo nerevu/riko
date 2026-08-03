@@ -23,12 +23,14 @@ Attributes:
 
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import reduce
+from logging import Logger
+from typing import Any
 
 import pygogo as gogo
 
-from riko.bado import itertools as ait
+from riko.bado.itertools import coop_reduce
 from riko.cast import BasicCastType
 from riko.types.configs import StrReplaceObjconf
 from riko.types.general import Defaults, Opts
@@ -43,21 +45,24 @@ OPTS: Opts = {
     "extract": "rule",
 }
 DEFAULTS: Defaults = {}
-logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
-OPS = {
+OPS: dict[str, Callable[[str, StrReplaceConfRule], str]] = {
     "first": lambda word, rule: word.replace(rule.find, rule.replace, 1),
     "last": lambda word, rule: rule.replace.join(word.rsplit(rule.find, 1)),
     "every": lambda word, rule: word.replace(rule.find, rule.replace),
 }
 
 
-def reducer(word, rule):
+def reducer(word: str, rule: StrReplaceConfRule) -> str:
     return OPS.get(rule.param, OPS["every"])(word, rule)
 
 
 async def async_parser(
-    word: str, rules: Sequence[StrReplaceConfRule], objconf: StrReplaceObjconf, **kwargs
+    word: str,
+    rules: Sequence[StrReplaceConfRule],
+    objconf: StrReplaceObjconf,
+    **kwargs: object,
 ) -> str:
     """
     Asynchronously parses the pipe content
@@ -72,34 +77,31 @@ async def async_parser(
         stream (dict): The original item
 
     Returns:
-        Deferred: twisted.internet.defer.Deferred item
+        Awaitable: item
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     item = {'content': 'hello world'}
         ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         ...     rule = Objectify(conf['rule'])
         ...     result = await async_parser(item['content'], [rule], None, stream=item)
         ...     print(result)
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         bye world
 
     """
-    value = await ait.coop_reduce(reducer, rules, word)
-    return value
+    return await coop_reduce(reducer, rules, word)
 
 
 def parser(
-    word: str, rules: Sequence[StrReplaceConfRule], objconf: StrReplaceObjconf, **kwargs
+    word: str,
+    rules: Sequence[StrReplaceConfRule],
+    objconf: StrReplaceObjconf,
+    **kwargs: object,
 ) -> str:
     """
     Parses the pipe content
@@ -130,7 +132,7 @@ def parser(
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args, **kwargs) -> str:
+async def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor module that asynchronously replaces the text of a field of
     an item.
@@ -154,31 +156,25 @@ async def async_pipe(*args, **kwargs) -> str:
         field (str): Item attribute to operate on (default: 'content')
 
     Returns:
-       Deferred: twisted.internet.defer.Deferred item with replaced content
+       Awaitable: item with replaced content
 
     Examples:
-        >>> from riko.bado import react
-        >>> from riko.bado.mock import FakeReactor
+        >>> from riko.bado import run
         >>>
-        >>> async def run(reactor):
+        >>> async def main():
         ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
         ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
         ...     print(next(result)['strreplace'])
         >>>
-        >>> try:
-        ...     react(run, _reactor=FakeReactor())
-        ... except SystemExit:
-        ...     pass
-        ...
+        >>> run(main)
         bye world
 
     """
-    parsed = await async_parser(*args, **kwargs)
-    return parsed
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args, **kwargs) -> str:
+def pipe(*args: Any, **kwargs: object) -> str:
     """
     A processor that replaces the text of a field of an item.
 

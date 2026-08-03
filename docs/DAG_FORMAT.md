@@ -11,7 +11,7 @@ the essentials and expands to a full pipe definition via `convert_dag`.
 {
     "modules": [
         {"id": "sw-1", "type": "forever", "conf": {}},
-        {"id": "sw-2", "type": "truncate", "conf": {"count": {"type": "number", "value": "3"}}}
+        {"id": "sw-2", "type": "truncate", "conf": {"count": {"type": "float", "value": "3"}}}
     ],
     "wires": [
         ["sw-1", "sw-2"]
@@ -33,7 +33,7 @@ the essentials and expands to a full pipe definition via `convert_dag`.
 {
     "modules": [
         {"type": "forever", "conf": {}},
-        {"type": "truncate", "conf": {"count": {"type": "number", "value": "3"}}}
+        {"type": "truncate", "conf": {"count": {"type": "float", "value": "3"}}}
     ]
 }
 ```
@@ -45,7 +45,7 @@ e.g. the source is listed after the operator it feeds
 ```json
 {
     "modules": [
-        {"id": "trunc", "type": "truncate", "conf": {"count": {"type": "number", "value": "2"}}},
+        {"id": "trunc", "type": "truncate", "conf": {"count": {"type": "float", "value": "2"}}},
         {"id": "gen", "type": "forever", "conf": {}}
     ],
     "wires": [
