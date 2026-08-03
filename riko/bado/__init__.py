@@ -16,21 +16,21 @@ from typing import Any
 try:
     import anyio
 except ImportError:
+    CapacityLimiter: type | None = None
+    MemoryObjectReceiveStream: Any = None
+    MemoryObjectSendStream: Any = None
+    Path: type | None = None
     async_get: Callable[..., Any] = lambda *_: None
     async_json: Callable[..., Any] = lambda *_: None
     async_partial: Callable[..., Any] = lambda *_: None
     async_return: Callable[..., Any] = lambda *_: None
     async_sleep: Callable[..., Any] = lambda *_: None
-    CapacityLimiter: type | None = None
     create_memory_object_stream: Callable[..., Any] | None = None
     create_task_group: Callable[..., Any] | None = None
     fail_after: Callable[..., Any] | None = None
     gather_results: Callable[..., Any] = lambda *_: None
     lowlevel: Any = None
     maybe_deferred: Callable[..., Any] = lambda *_: None
-    MemoryObjectReceiveStream: Any = None
-    MemoryObjectSendStream: Any = None
-    Path: type | None = None
     run: Callable[..., Any] | None = None
 
     async def checkpoint() -> None:
