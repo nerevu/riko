@@ -60,6 +60,8 @@ type Streams = Iterator[Stream]
 
 type AsyncStream = AsyncIterator[Item]
 type AsyncItems = AsyncIterable[Item]
+type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
+
 type Feed = AsyncItems
 
 type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]

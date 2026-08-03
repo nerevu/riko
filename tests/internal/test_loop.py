@@ -11,6 +11,8 @@ Every stream uses at least two parent items — a single parent cannot expose th
 global-vs-per-parent ``count`` gap.
 """
 
+from typing import cast
+
 import pytest
 
 import riko.modules.loop as loop_module
@@ -23,7 +25,7 @@ from riko.modules.regex import pipe as regex
 from riko.modules.strconcat import pipe as strconcat
 from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
-from riko.types.general import Item, OperatorWrapperOutput, Stream
+from riko.types.general import AsyncStream, Item, OperatorWrapperOutput, Stream
 from riko.types.modules import (
     RegexRawConf,
     RegexRawRule,
@@ -279,13 +281,14 @@ class TestSubpipeLoop:
 @pytest.mark.skipif(issync, reason="async support not installed")
 class TestAsyncLoop:
     """
-    The eager-async loop (``async_pipe``) runs the embed once per parent and
-    applies the same per-parent fold as the sync loop (Phase 2 parity).
+    The lazy-async loop (``async_pipe``) runs the embed once per parent
+    *sequentially* and yields an ``AsyncIterator``, applying the same per-parent
+    fold as the sync loop (Phase 3 parity).
     """
 
     def test_async_loop_matches_sync_emit(self):
         async def main():
-            return await async_loop(
+            stream = await async_loop(
                 iter(PARENTS),
                 embed=async_tok,
                 conf=TOKENIZER_CONF,
@@ -293,13 +296,14 @@ class TestAsyncLoop:
                 count="all",
                 emit=True,
             )
+            return [item async for item in stream]
 
         sync_result = list(_tokenizer_loop(iter(PARENTS), count="all", emit=True))
-        assert list(run(main)) == sync_result
+        assert run(main) == sync_result
 
     def test_async_loop_assign_per_parent(self):
         async def main():
-            return await async_loop(
+            stream = await async_loop(
                 iter(PARENTS),
                 embed=async_tok,
                 conf=TOKENIZER_CONF,
@@ -308,30 +312,56 @@ class TestAsyncLoop:
                 assign="first",
                 emit=False,
             )
+            return [item async for item in stream]
 
-        assert list(run(main)) == [
+        assert run(main) == [
             {"title": "a b", "first": {"content": "a"}},
             {"title": "c d", "first": {"content": "c"}},
         ]
+
+    def test_async_loop_is_lazy_and_ordered(self):
+        consumed: list[str] = []
+
+        def tracking() -> Stream:
+            for parent in PARENTS:
+                consumed.append(str(parent["title"]))
+                yield parent
+
+        async def main():
+            stream = await async_loop(
+                tracking(),
+                embed=async_tok,
+                conf=TOKENIZER_CONF,
+                field="title",
+                count="all",
+                emit=True,
+            )
+            first = await anext(cast(AsyncStream, stream))
+            return first, list(consumed)
+
+        first, seen = run(main)
+        assert first == {"content": "a"}
+        assert seen == ["a b"]
 
 
 @pytest.mark.skipif(issync, reason="async support not installed")
 class TestAsyncSubpipeLoop:
     """
-    The eager-async loop may embed an *async* sub-pipeline (``AsyncSubPipe``): it
-    runs once per parent (awaited concurrently) and applies the per-parent fold.
+    The lazy-async loop may embed an *async* sub-pipeline (``AsyncSubPipe``): it
+    runs once per parent (sequentially) and applies the per-parent fold.
     """
 
     def test_emit_all_flattens_per_parent(self):
         async def main():
-            return await async_loop(
+            stream = await async_loop(
                 iter([{"title": "ab"}, {"title": "cd"}]),
                 embed=_ASYNC_SUBPIPE,
                 count="all",
                 emit=True,
             )
+            return [item async for item in stream]
 
-        assert list(run(main)) == [
+        assert run(main) == [
             {"content": "AB"},
             {"content": "ba"},
             {"content": "CD"},
@@ -340,15 +370,16 @@ class TestAsyncSubpipeLoop:
 
     def test_assign_folds_first_onto_parent(self):
         async def main():
-            return await async_loop(
+            stream = await async_loop(
                 iter([{"title": "ab"}, {"title": "cd"}]),
                 embed=_ASYNC_SUBPIPE,
                 count="first",
                 assign="up",
                 emit=False,
             )
+            return [item async for item in stream]
 
-        assert list(run(main)) == [
+        assert run(main) == [
             {"title": "ab", "up": {"content": "AB"}},
             {"title": "cd", "up": {"content": "CD"}},
         ]

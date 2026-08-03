@@ -6,29 +6,35 @@ Loop-specific execution, extracted from the generic operator decorator. Owns
 embedded-target validation, child-context creation (via ``_get_subpipe``), and
 the per-parent fold of an embedded processor over the source stream.
 
-Phase 2: the loop runs the embed once per parent and folds its results back
-against *that parent* — ``count`` reduces per parent, ``emit`` yields the child
-results, and ``assign`` stores each result on a preserved copy of the parent (one
-copy per result). This is the Yahoo per-parent contract, applied by both the sync
-loop and the eager-async loop (``loop.async_pipe``, which runs the embeds
-concurrently via ``async_map``). Lazy per-parent async streaming lands in Phase 3
-(see docs/gameplans/loop-restructure.md).
+The loop runs the embed once per parent and folds its results back against *that
+parent* — ``count`` reduces per parent, ``emit`` yields the child results, and
+``assign`` stores each result on a preserved copy of the parent (one copy per
+result). This is the Yahoo per-parent contract, shared by ``loop_embed_sync`` and
+``loop_embed_async`` (``loop.async_pipe``) via the common ``_fold_parent``/
+``_take`` fold. See docs/gameplans/loop-restructure.md.
+
+The lazy-async loop runs the embed once per parent *sequentially* and yields the
+per-parent fold incrementally as an ``AsyncIterator`` — preserving parent order,
+applying backpressure (the source only advances as the consumer pulls), and
+letting ``count="first"`` stop after the first result without materializing the
+rest.
 """
 
 from functools import partial
-from itertools import chain, islice
+from itertools import islice
 from logging import Logger
 from typing import Literal, cast, overload
 
 import pygogo as gogo
 
-from riko.bado.itertools import async_map
+from riko.bado.itertools import async_iter
 from riko.context import Context
 from riko.modules._assignment import get_subpipe
 from riko.modules._subpipe import is_subpipe
 from riko.types.compile import EmbedKwargs
 from riko.types.general import (
     AsyncProcessorWrapper,
+    AsyncStreamOrValueStream,
     AsyncSubPipe,
     Item,
     Items,
@@ -90,7 +96,7 @@ def _run_loop_sync(
         yield from _fold_parent(parent, items, assign or "", bool(emit))
 
 
-async def _run_loop_async_eager(
+async def _run_loop_async(
     embed: AsyncProcessorWrapper | AsyncSubPipe,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
@@ -100,15 +106,14 @@ async def _run_loop_async_eager(
     assign: str | None = None,
     emit: bool | None = None,
     count: CountValues | None,
-) -> StreamOrValueStream:
+) -> AsyncStreamOrValueStream:
     embedder = get_subpipe(embed, context, embedded_kwargs, field=field)
-    parents = list(source)
-    per_parent = await async_map(embedder, parents)
 
-    return chain.from_iterable(
-        _fold_parent(parent, _take(results, count), assign or "", bool(emit))
-        for parent, results in zip(parents, per_parent, strict=True)
-    )
+    async for parent in async_iter(source):
+        results = _take(await embedder(parent), count)
+
+        for value in _fold_parent(parent, results, assign or "", bool(emit)):
+            yield value
 
 
 def loop_embed_sync(
@@ -158,7 +163,7 @@ def loop_embed_sync(
     return handled, looped, stream
 
 
-async def loop_embed_async_eager(
+def loop_embed_async(
     embed: AsyncProcessorWrapper | AsyncSubPipe | None,
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
@@ -169,27 +174,27 @@ async def loop_embed_async_eager(
     assign: str | None = None,
     emit: bool | None = None,
     count: CountValues | None = None,
-) -> tuple[bool, bool, StreamOrValueStream]:
+) -> tuple[bool, bool, AsyncStreamOrValueStream | Stream]:
     """
-    Eager-async counterpart of ``loop_embed_sync``: runs the embed once per parent
-    (concurrently via ``async_map``) and applies the same per-parent fold. Parents
-    are materialized eagerly; the lazy per-parent async stream lands in Phase 3.
+    Lazy-async counterpart of ``loop_embed_sync``: constructs (without advancing)
+    a sequential per-parent async loop generator that yields results as the
+    consumer pulls. Unlike the eager path this neither materializes the source
+    nor runs the embeds concurrently — ordering, backpressure, and early exit on
+    ``count="first"`` fall out of sequential iteration.
     """
     embed_type = getattr(embed, "type", None)
     handled = True
     looped = False
     stream = source
-    loop = partial(
-        _run_loop_async_eager, field=field, assign=assign, emit=emit, count=count
-    )
+    loop = partial(_run_loop_async, field=field, assign=assign, emit=emit, count=count)
 
     if is_subpipe(embed):
         # A sub-pipeline embed is self-contained, so it runs per parent with no
         # embedded kwargs (its own modules carry their conf).
-        stream = await loop(cast(AsyncSubPipe, embed), None, context, source)
+        stream = loop(cast(AsyncSubPipe, embed), None, context, source)
         looped = True
     elif embed and embed_type and embed.loopable:
-        stream = await loop(embed, embedded_kwargs, context, source)
+        stream = loop(embed, embedded_kwargs, context, source)
         looped = True
     elif embed_type:
         logger.error(f"{embed.name} is not loopable and can't be embedded.")

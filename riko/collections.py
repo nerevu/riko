@@ -1073,8 +1073,12 @@ class AsyncPipe(PyPipe):
             else:
                 result = await async_pipeline(source)
 
-                for item in result:
-                    yield item
+                if isinstance(result, AsyncIterable):
+                    async for item in result:
+                        yield item
+                else:
+                    for item in result:
+                        yield item
         except BaseException:
             self._fail()
             raise

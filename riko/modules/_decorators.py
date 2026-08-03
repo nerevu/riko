@@ -23,7 +23,7 @@ from riko.cast import BasicCastType
 from riko.context import ExecutionMode, parse_context
 from riko.dotdict import DotDict, is_mapping
 from riko.modules._assignment import gen_assignments, get_assignment
-from riko.modules._loop import loop_embed_async_eager, loop_embed_sync
+from riko.modules._loop import loop_embed_async, loop_embed_sync
 from riko.modules._metadata import derive_loopable, derive_subtypes
 from riko.modules._prepare import (
     PreparedModule,
@@ -1010,7 +1010,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             tuples, orig_stream, casted = self.setup(
                 prepared, _input, inputs=inputs, field=field, count=count, **kwargs
             )
-            handled, looped, embed_stream = await loop_embed_async_eager(
+            handled, looped, embed_stream = loop_embed_async(
                 embed,
                 embedded_kwargs,
                 context,
@@ -1022,8 +1022,10 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 count=count,
             )
 
-            if handled:
-                stream = embed_stream
+            if looped:
+                processed = cast(StreamOrValueStream, embed_stream)
+            elif handled:
+                processed = cast(Stream, embed_stream)
             else:
                 async_pipe = cast(AsyncOperatorParser, pipe)
                 pkwargs: dict[str, object] = {
@@ -1034,9 +1036,6 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 result = async_pipe(orig_stream, casted.extraction, tuples, **pkwargs)
                 stream = (await result) if isawaitable(result) else result
 
-            if looped:
-                processed = cast(StreamOrValueStream, stream)
-            else:
                 if isinstance(stream, Iterator):
                     emit = bool(prepared.emit)
                 elif callable(prepared.emit):
@@ -1090,8 +1089,10 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 count=count,
             )
 
-            if handled:
-                stream = embed_stream
+            if looped:
+                processed = cast(StreamOrValueStream, embed_stream)
+            elif handled:
+                processed = embed_stream
             else:
                 sync_pipe = cast(SyncOperatorParser, pipe)
                 pkwargs: dict[str, object] = {
@@ -1101,9 +1102,6 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 }
                 stream = sync_pipe(orig_stream, casted.extraction, tuples, **pkwargs)
 
-            if looped:
-                processed = cast(StreamOrValueStream, stream)
-            else:
                 if isinstance(stream, Iterator):
                     emit = bool(prepared.emit)
                 elif callable(prepared.emit):
