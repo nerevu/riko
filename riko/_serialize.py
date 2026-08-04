@@ -126,6 +126,9 @@ def fromdict(
     return cls(**data)
 
 
+_UNSUPPORTED: Hashable = cast(Hashable, object())
+
+
 def _to_hashable(obj: object) -> HashableOrTuple:
     """
     Examples:
@@ -156,6 +159,7 @@ def _to_hashable(obj: object) -> HashableOrTuple:
         hashed = ("dataclass", (type(obj), inner))
     else:
         logger.error(f"Unsupported {type(obj)=}")
+        hashed = _UNSUPPORTED
 
     return hashed
 
@@ -194,6 +198,25 @@ def _from_hashable(
 
 
 def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
+    """
+    Memoize *fn* on repr-hashable args. Unsupported (unhashable) args bypass the
+    cache so distinct instances never collide on a shared key.
+
+    Examples:
+        >>> calls = []
+        >>> @repr_cache
+        ... def tally(x):
+        ...     calls.append(x)
+        ...     return len(calls)
+        >>> tally(5), tally(5)
+        (1, 1)
+        >>> class Opaque: pass
+        >>> _ = (tally(Opaque()), tally(Opaque()))
+        >>> len(calls)
+        3
+
+    """
+
     @cache
     def _cached(hashable_args: tuple, hashable_kwargs: tuple) -> R:
         args = tuple(_from_hashable(a) for a in hashable_args)
@@ -202,10 +225,18 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
 
     @wraps(fn)
     def wrapper(*args: VT, **kwargs: VT) -> R:
-        return _cached(
-            tuple(_to_hashable(a) for a in args),
-            tuple(sorted((k, _to_hashable(v)) for k, v in kwargs.items())),
+        hashable_args = tuple(_to_hashable(a) for a in args)
+        hashable_kwargs = tuple(sorted((k, _to_hashable(v)) for k, v in kwargs.items()))
+        unsupported = _UNSUPPORTED in hashable_args or any(
+            v is _UNSUPPORTED for _, v in hashable_kwargs
         )
+
+        if unsupported:
+            result = fn(*args, **kwargs)
+        else:
+            result = _cached(hashable_args, hashable_kwargs)
+
+        return result
 
     setattr(wrapper, "cache_clear", _cached.cache_clear)  # noqa: B010
     setattr(wrapper, "cache_info", _cached.cache_info)  # noqa: B010
