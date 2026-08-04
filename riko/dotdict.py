@@ -497,13 +497,17 @@ class DotDict(CaseInsensitiveDict[VT]):
         >>> r['author.url'] = 'example.com'
         >>> r
         {'author': {'name': 'bar', 'url': 'example.com'}}
+        >>> c = DotDict({'count': 0})
+        >>> c['count.total'] = 1
+        >>> c
+        {'count': {'total': 1}}
         """
 
         def reducer(item: Self, key: str) -> Self:
             if item and key in item:
                 existing = raw_get(item, key)
 
-                if existing and not is_mapping(existing):
+                if existing is not None and not is_mapping(existing):
                     del item[key]
                     existing = None
             else:
