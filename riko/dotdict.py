@@ -422,6 +422,17 @@ class DotDict(CaseInsensitiveDict[VT]):
         default: D | None = None,
         **kwargs: VT,
     ) -> VT | D | Any:
+        """
+        >>> dd = DotDict()
+        >>> dd._parse_value([10, 20], 1, 'missing')
+        20
+        >>> dd._parse_value([10, 20], 5, 'missing')
+        'missing'
+        >>> dd._parse_value([{'b': 1}, {'b': 2}], 'b', 'missing')
+        [1, 2]
+        >>> dd._parse_value([{'b': 1}, {'b': 2}], 'z', 'missing')
+        'missing'
+        """
         parsed = default
         msg = f"Ignoring unsupported key {key} to access {{0}} value {{1}}."
 
@@ -443,12 +454,18 @@ class DotDict(CaseInsensitiveDict[VT]):
         elif is_known_sequence(value):
             if is_mapping_seq(value):
                 if isinstance(key, str):
-                    parsed = cast(RikoList, [v[key] for v in value])
+                    try:
+                        parsed = cast(RikoList, [v[key] for v in value])
+                    except (KeyError, IndexError):
+                        parsed = default
                 else:
                     logger.warning(msg.format("submapping", value[0]))
             elif is_value_seq(value):
                 if isinstance(key, int):
-                    parsed = value[key]
+                    try:
+                        parsed = value[key]
+                    except IndexError:
+                        parsed = default
                 else:
                     logger.warning(msg.format("submapping", value[0]))
             else:
