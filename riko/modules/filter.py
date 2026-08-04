@@ -120,6 +120,21 @@ def parse_arg[VT](
 
 
 def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
+    """
+    Examples:
+        >>> from meza.fntools import Objectify
+        >>> from riko.dotdict import DotDict
+        >>>
+        >>> numeric = Objectify({'field': 'x', 'op': 'atleast', 'value': 3})
+        >>> parse_rule(numeric, DotDict({'x': 5}))
+        True
+        >>> parse_rule(numeric, DotDict({}))
+        False
+        >>> unknown = Objectify({'field': 'x', 'op': 'bogus', 'value': 3})
+        >>> parse_rule(unknown, DotDict({'x': 5}))
+        False
+
+    """
     truthiness = rule.op in TRUTHINESS_OPS
     _y = rule.value
 
@@ -134,23 +149,26 @@ def parse_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     result = False
 
     if has_value and not truthiness:
-        x = parse_arg(_x, rule.op)
-        y = parse_arg(_y, rule.op, memoize=True)
+        try:
+            x = parse_arg(_x, rule.op)
+            y = parse_arg(_y, rule.op, memoize=True)
+        except (AttributeError, TypeError, ValueError, InvalidOperation, ParserError):
+            x = y = None
     else:
         x, y = _x, _y
 
     has_value = y is not None
+    operation = SWITCH.get(rule.op)
 
-    if has_value or truthiness:
-        operation = SWITCH.get(rule.op)
-
-        if truthiness:
-            result = operation(x)
-        elif has_value:
-            try:
-                result = operation(x, y)
-            except AttributeError:
-                pass
+    if operation is None:
+        logger.error(f"Unsupported filter operation: {rule.op!r}.")
+    elif truthiness:
+        result = operation(x)
+    elif has_value and not (x is None or y is None):
+        try:
+            result = operation(x, y)
+        except (AttributeError, TypeError, ValueError, InvalidOperation, ParserError):
+            pass
 
     return result
 
