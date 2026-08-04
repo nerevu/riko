@@ -117,6 +117,12 @@ def fromdict(
 
 
 def _to_hashable(obj: object) -> HashableOrTuple:
+    """
+    Examples:
+        >>> _to_hashable([1, 2]) == _to_hashable((1, 2))
+        False
+
+    """
     hashed: HashableOrTuple = None
 
     if obj is None:
@@ -130,6 +136,8 @@ def _to_hashable(obj: object) -> HashableOrTuple:
         inner = sorted((k, _to_hashable(v)) for k, v in obj.items())
         typ = Objectify if isinstance(obj, Objectify) else dict
         hashed = (typ, tuple(inner))
+    elif isinstance(obj, tuple):
+        hashed = (tuple, tuple(_to_hashable(v) for v in obj))
     elif isinstance(obj, Sequence):
         hashed = (list, tuple(_to_hashable(v) for v in obj))
     elif is_dataclass(obj):
@@ -164,6 +172,9 @@ def _from_hashable(
         elif typ is list:
             _arg = [_from_hashable(v) for v in cast(tuple[HashableOrTuple, ...], inner)]
             arg = cast(RikoList, _arg)
+        elif typ is tuple:
+            _seq = [_from_hashable(v) for v in cast(tuple[HashableOrTuple, ...], inner)]
+            arg = cast(RikoValue, tuple(_seq))
         else:
             arg = obj
     else:
