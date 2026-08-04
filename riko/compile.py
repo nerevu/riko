@@ -401,9 +401,11 @@ def get_module_id(wire: Wire, stem: str = "src", base: str = "moduleid") -> str:
     return pythonise(wire, key=f"{stem}.{base}")
 
 
-def write_file(data: object, path: str | None, pretty: bool = False) -> int | None:
+def write_file(
+    data: object, path: Path | str | None, pretty: bool = False
+) -> int | None:
     if data and path:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(str(path), "w", encoding="utf-8") as f:
             if hasattr(data, "keys") and pretty:
                 kwargs = {
                     "cls": CustomEncoder,

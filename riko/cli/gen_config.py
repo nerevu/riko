@@ -79,14 +79,6 @@ def _normalize(annotation) -> str:
     return ast.unparse(_Deref().visit(ast.fix_missing_locations(module)))
 
 
-def _own_fields(node: ast.ClassDef) -> dict[str, str]:
-    return {
-        stmt.target.id: _normalize(stmt.annotation)
-        for stmt in node.body
-        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-    }
-
-
 def _base(node: ast.ClassDef) -> str:
     parents = [b.id for b in node.bases if isinstance(b, ast.Name)]
     conf_parents = [p for p in parents if p.endswith("Conf")]
@@ -104,9 +96,17 @@ def _nonraw_confs() -> list[ast.ClassDef]:
     ]
 
 
+def own_fields(node: ast.ClassDef) -> dict[str, str]:
+    return {
+        stmt.target.id: _normalize(stmt.annotation)
+        for stmt in node.body
+        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+    }
+
+
 def objconf_structure() -> dict[str, tuple[str, dict[str, str]]]:
     return {
-        f"{node.name[:-4]}Objconf": (_base(node), _own_fields(node))
+        f"{node.name[:-4]}Objconf": (_base(node), own_fields(node))
         for node in _nonraw_confs()
     }
 

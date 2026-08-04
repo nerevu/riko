@@ -6,6 +6,8 @@ A developer must be able to tell stable / extension / private from the import
 path alone. These are black-box tests: they import, they never reach inside.
 """
 
+import types
+
 import pytest
 
 import riko
@@ -47,7 +49,7 @@ EXTENSION = {
     "splitter",
 }
 
-DEMOTED = {"Objectify", "objectify", "listize", "get_path"}
+DEMOTED = {"Objectify", "objectify", "listize", "get_path", "get_abspath", "replacer"}
 
 
 def test_stable_all_matches_api():
@@ -84,6 +86,22 @@ def test_demoted_names_importable_but_not_public(name):
 
 def test_no_private_names_in_public_all():
     leaked = [n for n in (*riko.__all__, *riko.ext.__all__) if n.startswith("_")]
+    assert leaked == []
+
+
+def test_no_leaked_public_functions():
+    """
+    No non-``__all__`` function is publicly reachable on ``riko`` except
+    the P1 re-export shims (removed at Wnext) and the bare ``overload`` decorator.
+    """
+    allowed = set(riko.__all__) | DEMOTED | {"overload"}
+    leaked = sorted(
+        name
+        for name, val in vars(riko).items()
+        if not name.startswith("_")
+        and name not in allowed
+        and isinstance(val, (types.FunctionType, types.BuiltinFunctionType))
+    )
     assert leaked == []
 
 

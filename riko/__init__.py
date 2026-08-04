@@ -34,8 +34,10 @@ Examples:
 """
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from importlib.metadata import PackageMetadata, metadata, version
-from os import path as p
+from importlib import metadata
+from importlib.metadata import PackageMetadata
+from os import path
+from pathlib import Path
 from time import struct_time
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
@@ -47,16 +49,16 @@ from riko.types.general import ItemOrValue, SyncArgFunc
 from riko.types.values import PrimitiveValueType
 
 # https://github.com/astral-sh/uv/issues/7533#issuecomment-2472804995
-meta: PackageMetadata = metadata("riko")
+_meta: PackageMetadata = metadata.metadata("riko")
 
 PACKAGE_INFO = {
-    "__version__": version("riko"),
-    "__title__": meta["Name"],
-    "__package_name__": meta["Name"],
-    "__description__": meta.get("Summary") or meta.get("Description", ""),
-    "__license__": meta.get("License-Expression") or meta.get("License", ""),
-    "__author__": meta.get("Author", ""),
-    "__email__": meta.get("Author-email", ""),
+    "__version__": metadata.version("riko"),
+    "__title__": _meta["Name"],
+    "__package_name__": _meta["Name"],
+    "__description__": _meta.get("Summary") or _meta.get("Description", ""),
+    "__license__": _meta.get("License-Expression") or _meta.get("License", ""),
+    "__author__": _meta.get("Author", ""),
+    "__email__": _meta.get("Author-email", ""),
 }
 
 
@@ -70,16 +72,17 @@ def __getattr__(name: str) -> str:
 
 __copyright__ = "Copyright 2015 Reuben Cummings"
 
-PARENT_DIR = p.abspath(p.dirname(__file__))
+_PARENT_DIR = Path(__file__).parent.absolute()
+_GRANDPARENT_DIR = Path(__file__).parent.parent
+_VT = TypeVar("_VT")
 ENCODING = "utf-8"
-VT = TypeVar("VT")
 
 
 def get_path(name: str) -> str:
     if name.startswith(("http", "file:")):
         url = name
     else:
-        url = f"file://{p.join(PARENT_DIR, 'data', name)}"
+        url = f"file://{path.join(_PARENT_DIR, 'data', name)}"
 
     return url
 
@@ -88,9 +91,7 @@ def get_abspath(url: str, offline: bool = False) -> str:
     if url.startswith(("http", "file:///")):
         pass
     elif url.startswith("file://"):
-        parent = p.dirname(p.dirname(__file__))
-        rel_path = url[7:]
-        abspath = p.abspath(p.join(parent, rel_path))
+        abspath = (_GRANDPARENT_DIR / url[7:]).absolute()
         url = f"file://{abspath}"
     elif offline:
         url = get_path(url)
@@ -123,23 +124,23 @@ def replacer(content: str, old: str, new: str = "_") -> str:
 
 if TYPE_CHECKING:
 
-    class Objectify(Mapping[str, VT]):
+    class Objectify(Mapping[str, _VT]):
         """
         Creates an object with dynamically set attributes. Useful
         for accessing the kwargs of a function as attributes.
         """
 
         def __init__(  # noqa: E704
-            self, data: Mapping[str, VT], *args: Any, **kwargs: object
+            self, data: Mapping[str, _VT], *args: Any, **kwargs: object
         ) -> None: ...  # noqa: E704
         def __len__(self) -> int: ...  # noqa: E704
-        def __getattribute__(self, *_: object) -> VT: ...  # noqa: E704
-        def __getitem__(self, *_: object) -> VT: ...  # noqa: E704
+        def __getattribute__(self, *_: object) -> _VT: ...  # noqa: E704
+        def __getitem__(self, *_: object) -> _VT: ...  # noqa: E704
         def __iter__(self) -> Iterator[str]: ...  # noqa: E704
-        def iteritems(self) -> Iterator[tuple[str, VT]]: ...  # noqa: E704
+        def iteritems(self) -> Iterator[tuple[str, _VT]]: ...  # noqa: E704
 else:
 
-    class Objectify(_Objectify, Mapping[str, VT]):
+    class Objectify(_Objectify, Mapping[str, _VT]):
         """
         Creates an object with dynamically set attributes. Useful
         for accessing the kwargs of a function as attributes.

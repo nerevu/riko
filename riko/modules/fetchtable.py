@@ -21,7 +21,7 @@ Attributes:
 """
 
 from logging import Logger
-from os import path as p
+from os.path import splitext
 from typing import Any
 
 import pygogo as gogo
@@ -91,7 +91,7 @@ async def async_parser(
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     rkwargs = {**objconf, **renamed}
-    ext = p.splitext(objconf.url)[1]
+    ext = splitext(objconf.url)[1]
     stream = auto_close(read(r, ext, **rkwargs), r)
     return stream
 
@@ -128,7 +128,7 @@ def parser(
     renamed = {"first_row": first_row, "custom_header": custom_header}
     f = Fetch(objconf.url, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    ext = p.splitext(objconf.url)[1]
+    ext = splitext(objconf.url)[1]
     stream = auto_close(read(f, ext, **rkwargs), f)
     return stream
 

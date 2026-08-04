@@ -12,7 +12,7 @@ import pytest
 
 from riko import get_path
 from riko._iterutils import noop
-from riko._pubsub import _receive_queue, async_hub, close
+from riko._pubsub import async_hub, close, sync_hub
 from riko.bado import gather_results, issync, run
 from riko.collections import AsyncPipe, SyncCollection, SyncPipe
 from riko.exceptions import ReceiverUnavailableError
@@ -233,8 +233,8 @@ class TestSyncCollections(_CollectionTest):
         second = SyncPipe("receive", conf=r_conf)
         next(second)
         sender.close()
-        keep_q = list(_receive_queue.get("keep") or [])
-        r_q = list(_receive_queue.get("r") or [])
+        keep_q = list(sync_hub.queues.get("keep") or [])
+        r_q = list(sync_hub.queues.get("r") or [])
         assert any(state is StreamState.DONE for state, _ in keep_q)
         assert all(state is not StreamState.DONE for state, _ in r_q)
 

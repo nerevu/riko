@@ -12,7 +12,7 @@ and formatting differences from ``ruff format`` don't cause false failures. Run
 import ast
 import pathlib
 
-from riko.cli.gen_config import _own_fields, objconf_structure
+from riko.cli.gen_config import objconf_structure, own_fields
 
 _CONFIGS = pathlib.Path("riko/types/configs.py")
 
@@ -22,7 +22,7 @@ def _committed_structure() -> dict[str, tuple[str, dict[str, str]]]:
     structure = {
         node.name: (
             next((b.id for b in node.bases if isinstance(b, ast.Name)), ""),
-            _own_fields(node),
+            own_fields(node),
         )
         for node in tree.body
         if isinstance(node, ast.ClassDef) and node.name.endswith("Objconf")

@@ -40,7 +40,7 @@ from typing import Any, cast
 import pygogo as gogo
 from meza.fntools import dfilter
 
-from riko._pubsub import _receive_queue, _registry, async_hub, close, coroutine
+from riko._pubsub import async_hub, close, coroutine, sync_hub
 from riko.cast import BasicCastType
 from riko.types.configs import ReceiveObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
@@ -124,7 +124,7 @@ def _apply(func: Callable, item: Item | StatefulItem, **fkwargs: object) -> Item
 
 def _register_receiver(name, objconf, func, kwargs) -> None:
     # See https://github.com/ICRAR/ijson#push-interfaces
-    if name not in _registry:
+    if name not in sync_hub.receivers:
         fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
 
         @coroutine(registry_name=name, maxlen=objconf.max_len)
@@ -135,7 +135,7 @@ def _register_receiver(name, objconf, func, kwargs) -> None:
                 if item is not None:
                     state = item["state"] if is_stateful_item(item) else None
                     result = _apply(func, item, **fkwargs) if func else item
-                    queue = _receive_queue[name]
+                    queue = sync_hub.queues[name]
                     maxlen = queue.maxlen if queue else None
 
                     if maxlen is not None and len(queue) >= maxlen:
@@ -197,7 +197,7 @@ def parser(
     _register_receiver(name, objconf, func, kwargs)
 
     while True:
-        if _buf := _receive_queue[name]:
+        if _buf := sync_hub.queues[name]:
             total_waited = 0
             state, result = _buf.popleft()
 

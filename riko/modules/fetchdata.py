@@ -22,7 +22,7 @@ Attributes:
 """
 
 from logging import Logger
-from os import path as p
+from os.path import splitext
 from typing import Any, cast
 
 import pygogo as gogo
@@ -75,7 +75,7 @@ async def async_parser(
         Business System Analyst
 
     """
-    ext = p.splitext(objconf.url)[1].lstrip(".")
+    ext = splitext(objconf.url)[1].lstrip(".")
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
     # TODO: Figure out if html/xml files should be parsed as binary too.
     binary = ext == "json"
@@ -114,7 +114,7 @@ def parser(
         'Business System Analyst'
 
     """
-    ext = p.splitext(objconf.url)[1].lstrip(".")
+    ext = splitext(objconf.url)[1].lstrip(".")
     paths = cast(list[str], listize(objconf.path))
     path = ".".join(paths)
 

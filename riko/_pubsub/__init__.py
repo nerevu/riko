@@ -22,10 +22,6 @@ from ._sync import SyncPubSubHub
 sync_hub = SyncPubSubHub()
 async_hub = AsyncPubSubHub()
 
-_registry = sync_hub.receivers
-_receive_queue = sync_hub.queues
-_ids = sync_hub.ids
-
 
 __all__ = [
     "AsyncPubSubHub",

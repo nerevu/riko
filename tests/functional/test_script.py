@@ -9,7 +9,7 @@ import subprocess
 import sys
 from difflib import SequenceMatcher, unified_diff
 from io import StringIO
-from os import path as p
+from os.path import isfile
 from pathlib import Path
 
 import pytest
@@ -80,7 +80,7 @@ def assert_output_matches(
         if isinstance(expected, bool):
             outlines = b_outlines
             checklines = [str(expected)]
-        elif p.isfile(expected):
+        elif isfile(expected):
             outlines = r_outlines
 
             with builtins.open(expected, encoding="utf-8") as f:

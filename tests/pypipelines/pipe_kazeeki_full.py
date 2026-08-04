@@ -1,6 +1,5 @@
 # vim: sw=4:ts=4:expandtab
 
-from os import path as p
 from pprint import pprint
 
 from riko import Context, get_path
@@ -25,7 +24,6 @@ from riko.types.modules import (
     TokenizerConf,
 )
 
-PARENT = p.dirname(p.dirname(p.dirname(__file__)))
 DEF_CUR_CODE = "USD"
 
 

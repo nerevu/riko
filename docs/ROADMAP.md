@@ -2824,8 +2824,8 @@ mechanism, not by whether its source is finite or live.
 
 | Primitive | riko mapping | Environments | Best suited for |
 |---|---|---|---|
-| Generator coroutine (`.send()`) | `_registry` in `riko/utils.py` — named coroutines that receive items pushed by `send` module | S | Fan-out in sync pipelines; the only option without an async runtime |
-| `collections.deque` | `_receive_queue` in `riko/utils.py` — buffer between sender coroutine and polling consumer | S | Sync bridge between push (`.send()`) and pull (`next(receiver)`) sides |
+| Generator coroutine (`.send()`) | `sync_hub.receivers` in `riko/_pubsub` — named coroutines that receive items pushed by `send` module | S | Fan-out in sync pipelines; the only option without an async runtime |
+| `collections.deque` | `sync_hub.queues` in `riko/_pubsub` — buffer between sender coroutine and polling consumer | S | Sync bridge between push (`.send()`) and pull (`next(receiver)`) sides |
 | `time.sleep` polling (`wait` / `max_wait`) | Receiver loop in `riko/modules/receive.py` | S | Sync waiting for items from a named channel; unavoidable in sync context |
 | `StreamState.PENDING` sentinel | Yielded by `receive` while no items are available | S | Signals caller that the receiver is alive but waiting; enables cooperative interleaving |
 
@@ -2836,7 +2836,7 @@ coroutines + deque + polling unchanged.
 
 | Primitive | riko mapping | Environments | Best suited for |
 |---|---|---|---|
-| `asyncio.Queue` | Async alternative to `_receive_queue` + polling | A · Y | Fan-out between async tasks; bounded queue gives natural backpressure |
+| `asyncio.Queue` | Async alternative to `sync_hub.queues` + polling | A · Y | Fan-out between async tasks; bounded queue gives natural backpressure |
 | `anyio.create_memory_object_stream()` | Backend-agnostic named send/receive stream pair | Y | Fan-out on both asyncio and trio; naming mirrors `send`/`receive` semantics |
 | `anyio.TaskGroup` / `asyncio.TaskGroup` | Structured concurrency; each consumer runs as a concurrent task | A · Y | Multiple async consumers; lifetime tied to the group |
 
