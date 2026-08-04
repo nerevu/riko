@@ -384,8 +384,6 @@ class PyPipe(_Lifecycle):
     Kwargs:
 
     verbose = debug printing during compilation and running
-    describe_input = return pipe input requirements
-    describe_dependencies = return a list of sub-pipelines used
     test = takes input values from default (skips the console prompt)
     inputs = a dictionary of values that overrides the defaults
         e.g. {'name one': 'test value1'}
@@ -428,8 +426,6 @@ class PyPipe(_Lifecycle):
         self.inputs: Inputs = self.context.inputs
         self.verbose: bool = bool(verbose)
         self.test: bool = bool(test)
-        self.describe_input: bool = self.context.describe_input
-        self.describe_dependencies: bool = self.context.describe_dependencies
         self.kwargs = kwargs
         updates = {
             "assign": assign,

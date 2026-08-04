@@ -55,7 +55,7 @@ GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
 
 T = TypeVar("T")
 
-url_quote: Callable[[str | int], str] = lambda url: quote(url, safe=URL_SAFE)  # type: ignore[arg-type]
+
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
@@ -118,6 +118,10 @@ def literal_parse(content: BasicValue | bool) -> BasicArg:
             parsed = content
 
     return parsed
+
+
+def url_quote(url: str | int) -> str:
+    return quote(url, safe=URL_SAFE)  # type: ignore[arg-type]
 
 
 def cast_url(url: str | int) -> str:

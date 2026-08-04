@@ -81,9 +81,9 @@ class RssItemBuilderObjconf(DynamicConf):
 
 
 class LoopObjconf(DynamicConf):
+    embed: PipeModule
     count: CountValues
     assign: str
-    embed: PipeModule
     field: str
 
 
