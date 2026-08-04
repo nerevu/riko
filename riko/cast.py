@@ -220,6 +220,14 @@ def cast_datetime(  # noqa: E302
     as_datedict=False,
     try_local_tz=False,
 ) -> date | dt | DateDict | None:
+    """
+    Examples:
+        >>> type(cast_datetime('now')).__name__
+        'datetime'
+        >>> type(cast_datetime('today')).__name__
+        'date'
+
+    """
     tt = None
 
     if isinstance(value, dt) and as_date:
@@ -238,10 +246,11 @@ def cast_datetime(  # noqa: E302
         words = value.split(" ")
         mathish = set(words).intersection(MATH_WORDS)
         textish = set(words).intersection(TEXT_WORDS)
-        today = dt.now(UTC).date()
+        now = dt.now(UTC)
+        today = now.date()
         named = {
             "today": today,
-            "now": today,
+            "now": now,
             "tomorrow": today + timedelta(days=1),
             "yesterday": today - timedelta(days=1),
         }
