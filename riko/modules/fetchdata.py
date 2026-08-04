@@ -27,8 +27,9 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko import ENCODING, listize
+from riko import ENCODING
 from riko._io import Fetch, auto_close
+from riko._iterutils import listize
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import any2dict

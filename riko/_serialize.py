@@ -30,7 +30,7 @@ from typing import (
 import pygogo as gogo
 
 import riko.cast as cast_module
-from riko import Objectify
+from riko._objectify import Objectify
 from riko.dotdict import DotDict
 from riko.types.values import (
     Hashable,

@@ -30,9 +30,10 @@ import requests
 from meza.io import reencode
 from mezmorize.utils import get_cache_type
 
-from riko import ENCODING, __version__, get_abspath
-from riko._feed import truncate_content
+from riko import ENCODING, __version__
+from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
+from riko.paths import get_abspath
 from riko.types.general import FileTypes, Opener
 from riko.types.values import BasicArg
 

@@ -48,11 +48,13 @@ from typing import Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
-from riko import Context, listize, replacer
-from riko.context import ExecutionMode
+from riko._iterutils import listize
+from riko._strutils import replacer
+from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.modules._subpipe import is_subpipe, mark_subpipe
+from riko.paths import ROOT_DIR
 from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
 from riko.types.compile import (
@@ -773,8 +775,7 @@ def resolve_module(  # noqa: E302
                 msg += "Building from json..."
                 print(msg)
 
-                parent = Path(__file__).parent.parent
-                file_path = file_path or parent / "tests" / "pipelines"
+                file_path = file_path or ROOT_DIR / "tests" / "pipelines"
                 pipe_file_name = file_path / f"{pipe_name}.json"
 
                 try:

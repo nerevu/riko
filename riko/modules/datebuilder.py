@@ -25,7 +25,7 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import DynamicConf
+from riko._objectify import DynamicConf
 from riko.cast import BasicCastType
 from riko.dates import NOW, TODAY, parse_date_string
 from riko.types.general import Defaults, Extraction, Opts

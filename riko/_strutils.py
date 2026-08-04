@@ -1,21 +1,68 @@
 # vim: sw=4:ts=4:expandtab
 """
-riko._regex
-~~~~~~~~~~~
-Regex rule construction and multi-pass substitution.
+riko._strutils
+~~~~~~~~~~~~~~
+String helpers: identifier/key sanitization (``replacer``, ``slugify``) plus
+regex rule construction and multi-pass substitution.
 """
 
 import itertools as it
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import is_dataclass
 from operator import itemgetter
+from random import choice
 
-from riko import DynamicConf
+from riko._objectify import DynamicConf
 from riko.types.modules import RegexConfRule, RegexRule
 from riko.types.values import BasicValue
 
 INVALID_FILECHAR_PATTERN = re.compile(r'[<>:"/\\\|\*?%]')
+
+ONSETS = (
+    "b",
+    "br",
+    "cl",
+    "cr",
+    "d",
+    "dr",
+    "f",
+    "fl",
+    "g",
+    "gr",
+    "k",
+    "m",
+    "n",
+    "p",
+    "pl",
+    "r",
+    "s",
+    "sl",
+    "st",
+    "t",
+    "tr",
+    "v",
+)
+VOWELS = "aeiou"
+CODAS = ("", "l", "m", "n", "r", "s", "th", "nd", "nt", "ck")
+
+ADJECTIVES = [
+    "ancient",
+    "autumn",
+    "bold",
+    "brisk",
+    "calm",
+    "crimson",
+    "gentle",
+    "hidden",
+    "lucky",
+    "misty",
+    "rapid",
+    "silent",
+    "silver",
+    "steady",
+    "wild",
+]
 
 
 def _gen_words(match, splits: Iterable[BasicValue]):
@@ -30,6 +77,35 @@ def _gen_words(match, splits: Iterable[BasicValue]):
             word = next(it.islice(groups, num, num + 1))
 
         yield word
+
+
+def gen_name(count: int = 2) -> Iterator[str]:
+    yield choice(ADJECTIVES)  # noqa: S311
+    yield "-"
+
+    for _ in range(count):
+        yield "".join(map(choice, [ONSETS, VOWELS, CODAS]))  # noqa: S311
+
+
+def replacer(content: str, old: str, new: str = "_") -> str:
+    """
+    Examples:
+        >>> replacer('', '')
+        ''
+        >>> replacer('1abc', '')
+        '_1abc'
+        >>> replacer('a.b', '.')
+        'a_b'
+
+    """
+    if old:
+        replaced = content.replace(old, new)
+    elif content and (content[0].isdecimal() or not content[0].isascii()):
+        replaced = f"{new}{content}"
+    else:
+        replaced = content
+
+    return replaced
 
 
 def multi_substitute(word: str, rules: Sequence[RegexRule]) -> str:

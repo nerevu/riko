@@ -21,7 +21,7 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko import DynamicConf
+from riko._objectify import DynamicConf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator

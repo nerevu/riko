@@ -60,7 +60,7 @@ from urllib.parse import urlencode, urljoin
 
 import pygogo as gogo
 
-from riko._regex import INVALID_FILECHAR_PATTERN
+from riko._strutils import INVALID_FILECHAR_PATTERN
 from riko.types.configs import UrlBuilderObjconf
 from riko.types.general import Defaults, Item, Opts
 from riko.types.modules import ObjconfParam

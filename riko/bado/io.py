@@ -18,8 +18,9 @@ from typing import Literal, overload
 
 import pygogo as gogo
 
-from riko import ENCODING, get_abspath
+from riko import ENCODING
 from riko.bado import Path, async_get, async_sleep
+from riko.paths import get_abspath
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 

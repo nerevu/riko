@@ -2,9 +2,10 @@
 
 from pprint import pprint
 
-from riko import Context, get_path
-from riko._regex import make_regex_rule
+from riko._strutils import make_regex_rule
 from riko.collections import SyncPipe
+from riko.context import Context
+from riko.paths import get_path
 from riko.types.general import SkipIf
 from riko.types.modules import (
     CurrencyFormatConf,

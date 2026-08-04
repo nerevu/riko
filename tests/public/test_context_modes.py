@@ -10,7 +10,7 @@ properties derived from the mode.
 
 import pytest
 
-from riko import Context, ExecutionMode
+from riko.context import Context, ExecutionMode
 
 MODES = [
     (ExecutionMode.RUN, False, False),

@@ -25,6 +25,7 @@ from riko.exceptions import (
     UnsupportedPipelineError,
 )
 from riko.modules import list_modules
+from riko.paths import get_path
 
 __all__ = [
     "AsyncCollection",
@@ -38,6 +39,7 @@ __all__ = [
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
     "export",
+    "get_path",
     "list_modules",
     "list_targets",
 ]

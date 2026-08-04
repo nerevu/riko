@@ -29,10 +29,9 @@ from typing import Any, Literal, TypeVar, cast, overload
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko import listize
 from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.types.general import Function
-from riko.types.values import PrimitiveValue, SortableValue
+from riko.types.values import PrimitiveValue, PrimitiveValueType, SortableValue
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 NON_SORTABLE = (Mapping, Sequence)
@@ -351,5 +350,59 @@ def select_by_id[T](
         result = next(r for r in _result if _id == r[id_field])
     except StopIteration:
         result = {}
+
+    return result
+
+
+# TODO: move back to meza
+@overload
+def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
+@overload  # noqa: E302
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: dict[str, T],
+) -> list[dict[str, T]]: ...
+@overload  # noqa: E302
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: CaseInsensitiveDict[T],
+) -> list[CaseInsensitiveDict[T]]: ...
+@overload
+def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...  # noqa: E704
+@overload  # noqa: E302
+def listize[T](  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+    value: Sequence[T],
+) -> Sequence[T]: ...
+@overload
+def listize[T](value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
+@overload
+def listize[T](value: T) -> list[T]: ...  # noqa: E704
+def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
+    """
+    Create a listlike object from any value
+
+    Args:
+        value: The object to convert
+
+    Returns:
+        value as a listlike object (wrapped in a list or the value itself)
+
+    Examples:
+    >>> listize(x for x in range(3))  # doctest: +ELLIPSIS
+    <generator object <genexpr> at 0x...>
+    >>> listize([x for x in range(3)])
+    [0, 1, 2]
+    >>> listize(iter(x for x in range(3)))  # doctest: +ELLIPSIS
+    <generator object <genexpr> at 0x...>
+    >>> listize(range(3))
+    range(0, 3)
+
+    """
+    if not value:
+        result = []
+    elif isinstance(value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)):
+        result = [value]
+    elif isinstance(value, (Iterable, Sequence)):
+        result = value
+    else:
+        result = [value]
 
     return result

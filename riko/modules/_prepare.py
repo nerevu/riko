@@ -14,8 +14,8 @@ from typing import cast, overload
 
 import pygogo as gogo
 
-from riko import DynamicConf, listize, objectify
-from riko._iterutils import broadcast, dispatch
+from riko._iterutils import broadcast, dispatch, listize
+from riko._objectify import DynamicConf, objectify
 from riko.cast import (
     CAST_SWITCH,
     BasicCastType,

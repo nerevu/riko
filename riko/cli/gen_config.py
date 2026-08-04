@@ -15,11 +15,12 @@ file) and ``tests`` (to assert no drift) build on.
 from __future__ import annotations
 
 import ast
-import pathlib
 import shutil
 import subprocess
 
-_TYPES_DIR = pathlib.Path(__file__).parent.parent / "types"
+from riko.paths import PACKAGE_DIR
+
+_TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"
 _CONFIGS = _TYPES_DIR / "configs.py"
 _CAST_TYPES = {"CastType", "LocationType"}
@@ -139,7 +140,7 @@ def _import_block(structure) -> str:
     lines += [
         f"from typing import {', '.join(typing)}",
         "",
-        "from riko import DynamicConf",
+        "from riko._objectify import DynamicConf",
     ]
     guarded = ["", "if TYPE_CHECKING:"]
     guarded += [f"    from riko.cast import {', '.join(cast)}"] if cast else []

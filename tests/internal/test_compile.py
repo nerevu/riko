@@ -10,11 +10,9 @@ or a codegen regression — fails here.
 
 from difflib import unified_diff
 from json import loads
-from pathlib import Path
 
 import pytest
 
-from riko import Context
 from riko.bado import issync, run
 from riko.compile import (
     build_pipeline,
@@ -25,6 +23,7 @@ from riko.compile import (
     stringify_pipe,
 )
 from riko.compile import compile as compile_pipe
+from riko.context import Context
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule
 from riko.types.general import Item
@@ -33,11 +32,11 @@ from riko.types.modules import (
     Param,
     TruncateRawConf,
 )
+from tests import TESTS_DIR
 
-PARENT = Path(__file__).parent.parent
-PIPELINE_DIR = PARENT / "pipelines"
-PYPIPELINE_DIR = PARENT / "pypipelines"
-DAG_DIR = PARENT / "dags"
+PIPELINE_DIR = TESTS_DIR / "pipelines"
+PYPIPELINE_DIR = TESTS_DIR / "pypipelines"
+DAG_DIR = TESTS_DIR / "dags"
 
 FOREVER = PipeDef(
     {

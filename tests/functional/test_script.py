@@ -10,13 +10,13 @@ import sys
 from difflib import SequenceMatcher, unified_diff
 from io import StringIO
 from os.path import isfile
-from pathlib import Path
 
 import pytest
 
 from riko.bado import issync
+from tests import TESTS_DIR
 
-PARENT_DIR = Path(__file__).parent.parent.parent.absolute()
+_BASEDIR = TESTS_DIR.parent
 DEMO_SCRIPT = "run-pipe"
 BENCHMARK_SCRIPT = "benchmark"
 DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
@@ -47,7 +47,7 @@ def run_command(script: str, argument: str, *opts: str) -> str:
 
     result = subprocess.run(
         cmd,
-        cwd=PARENT_DIR,
+        cwd=_BASEDIR,
         capture_output=True,
         text=True,
         check=False,
@@ -137,12 +137,12 @@ def test_benchmark():
 
 
 def test_convert_dag_and_compile(tmp_path):
-    dag = PARENT_DIR / "tests" / "dags" / "pipe_forever.json"
+    dag = TESTS_DIR / "dags" / "pipe_forever.json"
     pipe_file = tmp_path / "pipe_forever.json"
 
     convert = subprocess.run(
         [sys.executable, "-m", "riko.cli.convert_dag", dag, "-o", str(pipe_file)],
-        cwd=PARENT_DIR,
+        cwd=_BASEDIR,
         capture_output=True,
         text=True,
         check=True,
@@ -150,7 +150,7 @@ def test_convert_dag_and_compile(tmp_path):
 
     compiled = subprocess.run(
         [sys.executable, "-m", "riko.cli.compile", str(pipe_file)],
-        cwd=PARENT_DIR,
+        cwd=_BASEDIR,
         capture_output=True,
         text=True,
         check=True,

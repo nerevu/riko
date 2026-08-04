@@ -8,7 +8,6 @@ Examples:
 
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
-        >>> from riko._iterutils import noop
         >>>
         >>> target = receiver(conf={'name': 'receiver1', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)
@@ -70,7 +69,6 @@ def parser(
     Examples:
         >>> from itertools import repeat
         >>> from riko.modules.receive import pipe as receiver
-        >>> from riko._iterutils import noop
         >>>
         >>> target = receiver(conf={'name': 'receiver2', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)
@@ -120,7 +118,6 @@ def pipe(*args: Any, **kwargs: str) -> Stream:
 
     Examples:
         >>> from riko.modules.receive import pipe as receiver
-        >>> from riko._iterutils import noop
         >>>
         >>> target = receiver(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)

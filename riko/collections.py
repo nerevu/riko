@@ -109,9 +109,6 @@ from typing import Any, Literal, Self, cast, overload
 
 import pygogo as gogo
 
-from riko import listize
-from riko.context import ExecutionMode
-
 try:
     from csv2ofx.ofx import OFX
 except ModuleNotFoundError:
@@ -124,7 +121,8 @@ else:
 from meza import convert as cv
 from meza import io
 
-from riko import Context
+from riko import DEF_CONNECTION_COUNT
+from riko._iterutils import listize
 from riko._pubsub import sync_hub
 from riko.bado import async_return
 from riko.bado.itertools import (
@@ -135,7 +133,7 @@ from riko.bado.itertools import (
     async_merge,
 )
 from riko.compile import resolve_module
-from riko.context import parse_context
+from riko.context import Context, ExecutionMode, parse_context
 from riko.exceptions import PipelineStateError
 from riko.types.general import (
     AsyncPipeParser,
@@ -169,8 +167,6 @@ __all__ = [
     "export",
     "list_targets",
 ]
-
-DEF_CONNECTION_COUNT = 16
 
 
 class PoolScope(StrEnum):

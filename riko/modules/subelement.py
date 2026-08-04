@@ -56,7 +56,7 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._feed import gen_items
+from riko._rssutils import gen_items
 from riko.types.configs import SubelementObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts, Stream
 from riko.types.values import RikoValue

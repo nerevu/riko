@@ -15,8 +15,8 @@ from typing import cast
 
 import pytest
 
-from riko import Context, ExecutionMode, listize
-from riko._feed import augment_entries, truncate_content
+from riko._iterutils import listize
+from riko._rssutils import augment_entries, truncate_content
 from riko.bado import issync, run
 from riko.compile import (
     abuild_pipeline,
@@ -24,6 +24,7 @@ from riko.compile import (
     extract_dependencies,
     resolve_module,
 )
+from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError
 from riko.parsers import IS_LXML
 from riko.types.general import (
@@ -35,15 +36,15 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import FeedParserRSSEntry, StatefulItem
+from tests import TESTS_DIR
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
-PARENT = Path(__file__).parent.parent
 
 type Items = ParserOutput | StatefulItem
 
 
 def _extract_dependencies(pipe_name) -> list[str]:
-    pipe_file_name = PARENT / "pipelines" / f"{pipe_name}.json"
+    pipe_file_name = TESTS_DIR / "pipelines" / f"{pipe_name}.json"
 
     with pipe_file_name.open() as f:
         pipe_def = loads(f.read())

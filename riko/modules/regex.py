@@ -33,7 +33,7 @@ from typing import Any, cast
 import pygogo as gogo
 
 from riko._iterutils import group_by
-from riko._regex import get_regex_rule, multi_substitute, substitute
+from riko._strutils import get_regex_rule, multi_substitute, substitute
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.dotdict import DotDict
 from riko.types.configs import RegexObjconf

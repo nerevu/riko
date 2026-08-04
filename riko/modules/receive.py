@@ -8,7 +8,6 @@ Examples:
 
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
-        >>> from riko._iterutils import noop
         >>>
         >>> conf = {'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}
         >>> target = receiver(conf=conf)
@@ -33,7 +32,6 @@ Attributes:
 from collections.abc import Callable, Generator, Iterator
 from inspect import signature
 from logging import Logger
-from random import choice
 from time import sleep
 from typing import Any, cast
 
@@ -41,6 +39,7 @@ import pygogo as gogo
 from meza.fntools import dfilter
 
 from riko._pubsub import async_hub, close, coroutine, sync_hub
+from riko._strutils import gen_name
 from riko.cast import BasicCastType
 from riko.types.configs import ReceiveObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
@@ -52,59 +51,6 @@ from . import operator
 OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
-
-ONSETS = (
-    "b",
-    "br",
-    "cl",
-    "cr",
-    "d",
-    "dr",
-    "f",
-    "fl",
-    "g",
-    "gr",
-    "k",
-    "m",
-    "n",
-    "p",
-    "pl",
-    "r",
-    "s",
-    "sl",
-    "st",
-    "t",
-    "tr",
-    "v",
-)
-VOWELS = "aeiou"
-CODAS = ("", "l", "m", "n", "r", "s", "th", "nd", "nt", "ck")
-
-ADJECTIVES = [
-    "ancient",
-    "autumn",
-    "bold",
-    "brisk",
-    "calm",
-    "crimson",
-    "gentle",
-    "hidden",
-    "lucky",
-    "misty",
-    "rapid",
-    "silent",
-    "silver",
-    "steady",
-    "wild",
-]
-
-
-def gen_name(count: int = 2) -> Iterator[str]:
-    yield choice(ADJECTIVES)  # noqa: S311
-    yield "-"
-
-    for _ in range(count):
-        yield "".join(map(choice, [ONSETS, VOWELS, CODAS]))  # noqa: S311
 
 
 def _apply(func: Callable, item: Item | StatefulItem, **fkwargs: object) -> Item | None:
@@ -175,7 +121,6 @@ def parser(
     Examples:
         >>> from itertools import repeat
         >>> from riko.modules.send import pipe as sender
-        >>> from riko._iterutils import noop
         >>> from meza.fntools import Objectify
         >>>
         >>> conf = {'wait': 0.01, 'max_wait': 2, 'name': 'receiver2'}
@@ -262,7 +207,6 @@ def pipe(*args: Any, **kwargs: object) -> Stream | Iterator[StatefulItem]:
 
     Examples:
         >>> from riko.modules.send import pipe as sender
-        >>> from riko._iterutils import noop
         >>>
         >>> target = pipe(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)

@@ -28,7 +28,7 @@ from typing import Any
 import pygogo as gogo
 
 from riko import ENCODING
-from riko._feed import augment_entries
+from riko._rssutils import augment_entries
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import parse_rss

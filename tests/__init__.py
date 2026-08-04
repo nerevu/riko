@@ -7,10 +7,13 @@ Provides application unit tests
 """
 
 from collections.abc import AsyncIterable
+from pathlib import Path
 from typing import Protocol, overload
 
 from riko.bado import run
 from riko.collections import AsyncPipe, SyncPipe
+
+TESTS_DIR = Path(__file__).parent.absolute()
 
 
 def aresolve[T](aiterable: AsyncIterable[T]) -> list[T]:

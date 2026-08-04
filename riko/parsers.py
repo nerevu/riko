@@ -22,9 +22,9 @@ import feedparser
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko import listize
-from riko._feed import truncate_content
 from riko._io import Fetch
+from riko._iterutils import listize
+from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
 from riko.dotdict import DotDict, is_sentinal, is_type_value
 from riko.types.general import (

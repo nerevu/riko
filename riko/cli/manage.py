@@ -8,7 +8,6 @@ from functools import partial
 from glob import glob
 from os import environ
 from os.path import getmtime
-from pathlib import Path
 from subprocess import CalledProcessError, call, check_call
 from sys import exit
 
@@ -16,8 +15,7 @@ import click
 
 from riko._logging import exception_hook
 from riko.cli.gen_config import main as gen_config_main
-
-BASEDIR = Path(__file__).parent.parent.parent.absolute()
+from riko.paths import ROOT_DIR
 
 sys.excepthook = partial(exception_hook, debug=False)
 
@@ -71,7 +69,7 @@ def help(ctx):
 
 def _clean():
     """Remove Python file and build artifacts"""
-    check_call(BASEDIR / "bin" / "clean")
+    check_call(ROOT_DIR / "bin" / "clean")
 
 
 def _build():
@@ -97,8 +95,8 @@ def _publish(dry_run=False):
 
 def _twine_check() -> int:
     """Validate built distributions render on PyPI"""
-    dists = sorted(glob(str(BASEDIR / "dist" / "*")))
-    inputs = [BASEDIR / "README.rst", BASEDIR / "pyproject.toml"]
+    dists = sorted(glob(str(ROOT_DIR / "dist" / "*")))
+    inputs = [ROOT_DIR / "README.rst", ROOT_DIR / "pyproject.toml"]
 
     if not dists:
         raise RuntimeError("No distributions found in dist/; run `manage build` first")
@@ -162,7 +160,7 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
 @manager.command()
 def check():
     """Check staged changes for lint errors"""
-    exit(call(BASEDIR / "bin" / "check-stage"))
+    exit(call(ROOT_DIR / "bin" / "check-stage"))
 
 
 @manager.command()

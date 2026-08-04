@@ -4,8 +4,8 @@ riko.modules
 ~~~~~~~~~~~~
 """
 
-from riko import Context, DynamicConf, listize, objectify
-from riko._iterutils import broadcast, dispatch
+from riko._iterutils import broadcast, dispatch, listize
+from riko._objectify import DynamicConf, objectify
 from riko.bado.itertools import async_map
 from riko.cast import (
     CAST_SWITCH,
@@ -15,7 +15,7 @@ from riko.cast import (
     cast_pass,
     cast_value,
 )
-from riko.context import parse_context
+from riko.context import Context, parse_context
 from riko.dotdict import DotDict, is_mapping
 from riko.modules._assignment import gen_assignments, get_assignment, get_subpipe
 from riko.modules._decorators import Module, operator, processor, splitter

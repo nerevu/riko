@@ -38,7 +38,7 @@ from typing import Any
 import pygogo as gogo
 from dateutil.parser import ParserError
 
-from riko import Objectify
+from riko._objectify import Objectify
 from riko._serialize import repr_cache
 from riko.cast import cast_date
 from riko.dotdict import DotDict

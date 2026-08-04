@@ -9,7 +9,8 @@ from typing import Any, TypeGuard
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
-from riko import Objectify, replacer
+from riko._objectify import Objectify
+from riko._strutils import replacer
 from riko.types.general import Item
 from riko.types.modules import ConfArg
 from riko.types.values import (

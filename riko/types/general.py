@@ -33,10 +33,11 @@ from riko.types.values import (
 )
 
 if TYPE_CHECKING:
-    from riko import Context, DynamicConf
     from riko._io import Fetch
+    from riko._objectify import DynamicConf
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
+    from riko.context import Context
     from riko.dotdict import DotDict
     from riko.types.modules import (
         AnyConfRule,

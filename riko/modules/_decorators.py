@@ -16,11 +16,11 @@ from typing import Literal, cast, overload
 
 import pygogo as gogo
 
-from riko import Context, DynamicConf
 from riko._iterutils import dispatch
+from riko._objectify import DynamicConf
 from riko.bado.itertools import async_map
 from riko.cast import BasicCastType
-from riko.context import ExecutionMode, parse_context
+from riko.context import Context, ExecutionMode, parse_context
 from riko.dotdict import DotDict, is_mapping
 from riko.modules._assignment import gen_assignments, get_assignment
 from riko.modules._loop import loop_embed_async, loop_embed_sync
