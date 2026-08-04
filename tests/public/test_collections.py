@@ -14,7 +14,7 @@ from riko import get_path
 from riko._iterutils import noop
 from riko._pubsub import async_hub, close, sync_hub
 from riko.bado import gather_results, issync, run
-from riko.collections import AsyncPipe, SyncCollection, SyncPipe
+from riko.collections import AsyncPipe, Executor, SyncCollection, SyncPipe
 from riko.exceptions import ReceiverUnavailableError
 from riko.types.general import Item, Items
 from riko.types.modules import (
@@ -48,6 +48,8 @@ _ENGINES = [
     pytest.param(SyncPipe, id="sync"),
     pytest.param(AsyncPipe, id="async", marks=marks),
 ]
+
+SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
 
 
 def _aresolve[T](awaitable: Awaitable[Any], extract: Callable[..., T]) -> T:
@@ -277,6 +279,31 @@ class TestSyncCollections(_CollectionTest):
         expected_content = sorted(cast(dict, item)["content"] for item in expected)
         assert actual_content == expected_content
         assert self.runs == 3
+
+
+class TestSyncPipeExecutor:
+    def test_process_executor_creates_pool(self):
+        with SyncPipe("hash", source=SRC, parallel=True, threads=False) as pipe:
+            assert pipe.executor is Executor.PROCESS
+            assert pipe.pool is not None
+            assert len(list(pipe)) == 3
+
+    def test_thread_executor_creates_pool(self):
+        with SyncPipe("hash", source=SRC, parallel=True) as pipe:
+            assert pipe.executor is Executor.THREAD
+            assert pipe.pool is not None
+            assert len(list(pipe)) == 3
+
+    def test_inline_skips_pool_and_runs_sequentially(self):
+        pipe = SyncPipe("hash", source=SRC)
+        assert pipe.executor is Executor.INLINE
+        assert not pipe.parallelize
+        assert pipe.pool is None
+        assert len(list(pipe)) == 3
+
+    def test_executor_propagates_through_chain(self):
+        head = SyncPipe("itembuilder", conf={"attrs": {"key": "content", "value": "a"}})
+        assert head.hash().executor is Executor.INLINE
 
 
 @pytest.mark.skipif(issync, reason="async support not available")

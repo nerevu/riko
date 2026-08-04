@@ -102,6 +102,8 @@ from logging import Logger
 from multiprocessing import Pool as CPUPool
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing.pool import Pool as CPUPoolType
+from multiprocessing.pool import ThreadPool as ThreadPoolType
 from operator import length_hint
 from typing import Any, Literal, Self, cast, overload
 
@@ -118,9 +120,6 @@ else:
     from csv2ofx.mappings.default import mapping
     from csv2ofx.qif import QIF
     from csv2ofx.utils import gen_data
-
-from multiprocessing.pool import Pool as CPUPoolType
-from multiprocessing.pool import ThreadPool as ThreadPoolType
 
 from meza import convert as cv
 from meza import io
@@ -150,12 +149,14 @@ from riko.types.general import (
 from riko.types.values import BasicValue, Inputs
 
 type AnyPool = ThreadPoolType | CPUPoolType
+type PoolFactory = Callable[..., AnyPool]
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 __all__ = [
     "AsyncCollection",
     "AsyncPipe",
+    "Executor",
     "SyncCollection",
     "SyncPipe",
     "export",
@@ -174,6 +175,18 @@ class PipeState(StrEnum):
     EXHAUSTED = "exhausted"
     CLOSED = "closed"
     FAILED = "failed"
+
+
+class Executor(StrEnum):
+    INLINE = "inline"
+    THREAD = "thread"
+    PROCESS = "process"
+
+
+_POOLS: dict[Executor, PoolFactory] = {
+    Executor.THREAD: ThreadPool,
+    Executor.PROCESS: CPUPool,
+}
 
 
 class _Lifecycle:
@@ -484,6 +497,12 @@ class SyncPipe(PyPipe):
             **kwargs,
         )
         self.threads: bool = bool(threads)
+
+        if parallel:
+            self.executor = Executor.THREAD if self.threads else Executor.PROCESS
+        else:
+            self.executor = Executor.INLINE
+
         self.pool_scope: PoolScope = pool_scope
         self.ordered = ordered
         self._iter: Generator[Item, None, None] | None = None
@@ -516,12 +535,12 @@ class SyncPipe(PyPipe):
 
         if self.parallelize:
             length = length_hint(self.source)
-            def_pool = ThreadPool if self.threads else CPUPool
+            def_pool = _POOLS.get(self.executor)
             self.workers: int | None = workers or get_worker_cnt(length, self.threads)
             self.chunksize: int = chunksize or get_chunksize(length, self.workers)
 
             if not self._pool_handle:
-                new_pool = cast(AnyPool, def_pool(self.workers))
+                new_pool = def_pool(self.workers)
                 self._pool_handle = _PoolHandle(new_pool, owned=True)
 
             if not (pool := self.pool):
@@ -775,6 +794,12 @@ class SyncCollection(PyCollection):
             sources, conf=conf, workers=workers, parallel=parallel, **kwargs
         )
         self.threads: bool = bool(threads)
+
+        if parallel:
+            self.executor = Executor.THREAD if self.threads else Executor.PROCESS
+        else:
+            self.executor = Executor.INLINE
+
         self.ordered: bool = bool(ordered)
         self._iter: Stream | None = None
         self.map: Callable[..., Iterable[Stream]]
@@ -785,10 +810,10 @@ class SyncCollection(PyCollection):
 
         if self.parallel:
             self.chunksize: int = get_chunksize(self.length, self.workers)
-            def_pool = ThreadPool if self.threads else CPUPool
+            def_pool = _POOLS.get(self.executor)
 
             if not self._pool_handle:
-                new_pool = cast(AnyPool, def_pool(self.workers))
+                new_pool = def_pool(self.workers)
                 self._pool_handle = _PoolHandle(new_pool, owned=True)
 
             if not (pool := self.pool):
