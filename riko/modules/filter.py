@@ -192,9 +192,19 @@ def parser(
         >>> tuples = zip(stream, repeat(objconf))
         >>> next(parser(stream, [objrule], tuples, **kwargs))
         {'ex': 4}
+        >>> bad = Objectify({'field': 'ex', 'op': 'bogus', 'value': 3})
+        >>> stream = (DotDict({'ex': x}) for x in range(5))
+        >>> tuples = zip(stream, repeat(objconf))
+        >>> next(parser(stream, [bad], tuples, **kwargs))
+        Traceback (most recent call last):
+            ...
+        ValueError: Unsupported filter operation: 'bogus'.
 
     """
     for rule in extract:
+        if rule.op not in SWITCH:
+            raise ValueError(f"Unsupported filter operation: {rule.op!r}.")
+
         truthiness = rule.op in TRUTHINESS_OPS
         has_value = rule.value is not None
 
