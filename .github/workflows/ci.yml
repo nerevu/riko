@@ -108,3 +108,33 @@ jobs:
 
       - name: Test
         run: uv run --no-sync manage test --no-cov
+
+      - name: Test with coverage
+        if: matrix.python-version == '3.12' && matrix.optional == true
+        run: uv run --no-sync pytest --cov=riko --cov-report=xml:coverage.xml --no-cov-on-fail -p no:cacheprovider --ignore=tests/internal
+
+      - name: Upload coverage artifact
+        if: matrix.python-version == '3.12' && matrix.optional == true && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-python
+          path: coverage.xml
+
+  upload-coverage-python:
+    needs: test
+    if: ${{ !cancelled() && needs.test.result == 'success' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      code-quality: write
+    steps:
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report-python
+
+      - uses: actions/upload-code-coverage@v1
+        with:
+          file: coverage.xml
+          language: Python
+          label: code-coverage-agent
