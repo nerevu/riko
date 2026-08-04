@@ -84,6 +84,14 @@ def fromdict(
         ...     inner: Inner | None = None
         >>> fromdict(Outer, inner={'n': 5}).inner
         Inner(n=5)
+        >>> @dataclass
+        ... class Other:
+        ...     m: int = 0
+        >>> @dataclass
+        ... class Either:
+        ...     val: Inner | Other | None = None
+        >>> fromdict(Either, val={'m': 9}).val
+        {'m': 9}
 
     """
     module = sys.modules[cls.__module__]
@@ -99,9 +107,11 @@ def fromdict(
         origin = get_origin(ftype)
 
         if origin is Union or origin is UnionType:
-            args = [a for a in get_args(ftype) if a is not type(None)]
-            ftype = args[0] if args else ftype
-            origin = get_origin(ftype)
+            non_none = [a for a in get_args(ftype) if a is not type(None)]
+
+            if len(non_none) == 1:
+                ftype = non_none[0]
+                origin = get_origin(ftype)
 
         if origin is Literal:
             valid = get_args(ftype)
