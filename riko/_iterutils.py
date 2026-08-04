@@ -138,7 +138,7 @@ def _resolve_default(
         logger.warning(f"Invalid cast type={_type}. Setting default to empty string.")
     elif _type and default is None:
         _default = CAST_SWITCH[_type].get("default")
-        resolved = cast(PrimitiveValue, _default) or ""
+        resolved = cast(SortableValue, _default) if _default is not None else ""
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     elif default is not None:
@@ -150,7 +150,17 @@ def _resolve_default(
 def def_itemgetter(
     attr: str, default: PrimitiveValue | None = None, _type: str | None = None
 ) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
-    # like operator.itemgetter but fills in missing keys with a default value
+    """
+    Like operator.itemgetter but fills in missing keys with a typed default.
+
+    Examples:
+        >>> keyfunc = def_itemgetter('n', _type='int')
+        >>> keyfunc({'n': 5})
+        5
+        >>> keyfunc({})
+        0
+
+    """
     _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
     invalid_type = bool(_invalid_type or (_type and _type not in CAST_SWITCH))
     default = _resolve_default(_type, invalid_type, default)
