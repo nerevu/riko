@@ -31,16 +31,16 @@ from requests.structures import CaseInsensitiveDict
 
 from riko import listize
 from riko.cast import CAST_SWITCH, CastType, cast_value
-from riko.types.general import Function, Item
+from riko.types.general import Function
 from riko.types.values import PrimitiveValue, SortableValue
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 NON_SORTABLE = (Mapping, Sequence)
 
-
-noop: Callable[[Item], Item] = lambda item: item
-
 B = TypeVar("B", Literal[True], Literal[False])
+T = TypeVar("T")
+
+noop: Callable[[T], T] = lambda item: item
 
 
 class Chainable:
