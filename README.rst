@@ -178,6 +178,9 @@ Usage Index
 - `Synchronous processing`_
 - `Parallel processing`_
 - `Asynchronous processing`_
+- `Discovering modules`_
+- `API surface`_
+- `Pipeline lifecycle`_
 - `Fan-out (pubsub)`_
 - `Cookbook`_
 
@@ -356,6 +359,52 @@ Semantics:
 - ``supported_subtypes`` includes behaviors reachable through options such as ``emit=True``.
 - Pass ``primary=True`` to match only the module's default subtype; ``primary=True`` requires ``subtype``.
 - Module authors do not declare metadata attributes; it is derived from the decorator type, options, return annotation, and module name.
+
+API surface
+^^^^^^^^^^^
+
+``riko`` organizes its public interface into three import tiers:
+
+- **Stable** — the top-level ``riko`` package (mirrored by ``riko.api``) holds the
+  SemVer-guaranteed API: the ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
+  ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``export``,
+  ``list_modules``, ``list_targets``, ``get_path``, and the pipeline exceptions.
+- **Extension** — ``riko.ext`` holds the symbols for authoring custom ``pipes``:
+  the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
+- **Private** — every underscore-prefixed name or module (and the individual
+  ``riko.modules.*`` implementations) is internal and may change without notice.
+
+.. code-block:: python
+
+    >>> import riko
+    >>> from riko import SyncPipe, get_path, export, list_modules
+    >>> from riko.ext import operator, processor, splitter
+    >>> sorted(riko.__all__)[:3]
+    ['AsyncCollection', 'AsyncPipe', 'Context']
+
+Pipeline lifecycle
+^^^^^^^^^^^^^^^^^^
+
+A ``SyncPipe``/``AsyncPipe`` represents a *single* execution: iterating it
+consumes the ``stream``, and iterating again yields an empty ``stream`` rather
+than silently re-running. Read the ``state``/``exhausted``/``closed``/``failed``
+properties to inspect a pipe, and use it as a context manager (or call
+``close()``/``terminate()``) to release a parallel pipe's worker pool
+deterministically.
+
+.. code-block:: python
+
+    >>> from riko.collections import SyncPipe, PipeState
+    >>>
+    >>> flow = SyncPipe('hash', source=[{'content': 'a'}, {'content': 'b'}])
+    >>> flow.state
+    <PipeState.NEW: 'new'>
+    >>> len(list(flow))
+    2
+    >>> flow.exhausted
+    True
+
+See the `cookbook`_ for pool cleanup and the full state model.
 
 Cookbook
 ^^^^^^^^
@@ -845,27 +894,27 @@ Project Structure
     │   └── *.md              (design/roadmap notes)
     ├── examples/*
     ├── riko
-    │   ├── __init__.py
-    │   ├── autorss.py
-    │   ├── cast.py
+    │   ├── __init__.py       (stable public API)
+    │   ├── api.py            (stable API re-export hub)
     │   ├── collections.py    (SyncPipe, AsyncPipe, SyncCollection, AsyncCollection)
     │   ├── compile.py        (JSON pipe → executable pipeline / Python module)
-    │   ├── currencies.py
-    │   ├── dates.py
-    │   ├── dotdict.py
+    │   ├── context.py        (Context, ExecutionMode)
     │   ├── exceptions.py
-    │   ├── helpers.py
-    │   ├── locations.py
-    │   ├── parsers.py
-    │   ├── pprint2.py
-    │   ├── topsort.py
-    │   ├── utils.py
-    │   ├── bado             (async backend: __init__, io, itertools, mock, util)
-    │   ├── cli              (manage, run-pipe, benchmark, compile, convert-dag)
+    │   ├── paths.py          (get_path / get_abspath)
+    │   ├── dotdict.py
+    │   ├── parsers.py        (sync XML/HTML parsing)
+    │   ├── cast.py, autorss.py, currencies.py, dates.py, locations.py,
+    │   │                      pprint2.py, topsort.py
+    │   ├── _*.py             (private helpers: _feed, _io, _iterutils, _objectify,
+    │   │                      _serialize, _strutils, _logging)
+    │   ├── ext/              (extension API: decorators, protocols)
+    │   ├── _pubsub/          (sync + async pub/sub hubs backing send/receive)
+    │   ├── bado/             (async backend: __init__, io, itertools, mock, _util)
+    │   ├── cli/              (manage, run-pipe, benchmark, compile, convert-dag, gen-config)
     │   ├── data/*
-    │   ├── modules/*        (the built-in pipes)
-    │   ├── templates/*      (codegen Jinja templates)
-    │   └── types            (compile, general, modules, values)
+    │   ├── modules/*         (the built-in pipes)
+    │   ├── templates/*       (codegen Jinja templates)
+    │   └── types/            (compile, general, modules, values, configs, guards)
     ├── tests
     │   ├── __init__.py
     │   ├── conftest.py

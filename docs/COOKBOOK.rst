@@ -4,7 +4,7 @@ riko Cookbook
 Index
 -----
 
-`User input`_ | `Fetching data and feeds`_ | `Alternate conf value entry`_ | `Alternate workflow creation`_ | `Compiling JSON workflows`_
+`User input`_ | `Fetching data and feeds`_ | `Alternate conf value entry`_ | `Alternate workflow creation`_ | `Managing pipeline lifecycle`_ | `Exporting results`_ | `Asynchronous workflows`_ | `Compiling JSON workflows`_ | `Inspecting a workflow`_
 
 User input
 ----------
@@ -182,6 +182,175 @@ style [#]_.
     >>> next(sorted_match)
     {'content': 'mailto:mail@writetoreply.org'}
 
+Managing pipeline lifecycle
+---------------------------
+
+A ``SyncPipe``/``AsyncPipe`` (and the ``SyncCollection``/``AsyncCollection``
+classes) represents a *single* execution. Iterating it consumes the underlying
+``stream``; iterating again yields an empty ``stream`` rather than silently
+re-running. You can inspect a pipe's state at any point via its read-only
+``state``/``closed``/``exhausted``/``failed`` properties.
+
+.. code-block:: python
+
+    >>> from riko.collections import SyncPipe, PipeState
+    >>>
+    >>> flow = SyncPipe('hash', source=[{'content': 'a'}, {'content': 'b'}])
+    >>> flow.state
+    <PipeState.NEW: 'new'>
+    >>> len(list(flow))                    # consume the stream
+    2
+    >>> flow.exhausted, flow.state
+    (True, <PipeState.EXHAUSTED: 'exhausted'>)
+    >>> list(flow)                         # re-iterating yields nothing
+    []
+
+Parallel pipes own a worker pool. Use the pipe as a context manager (or call
+``close()``/``terminate()``) to release it deterministically — ``terminate`` runs
+automatically if the ``with`` block exits via an exception.
+
+.. code-block:: python
+
+    >>> with SyncPipe('hash', source=[{'content': 'a'}], parallel=True) as flow:
+    ...     results = list(flow)
+    >>> flow.pool is None                  # pool released on exit
+    True
+
+Chaining onto a ``closed`` or ``failed`` pipe raises ``PipelineStateError`` (a
+``NEW``, ``RUNNING``, or ``EXHAUSTED`` pipe still chains — chaining wraps whatever
+of the source remains).
+
+.. code-block:: python
+
+    >>> from riko.exceptions import PipelineStateError
+    >>>
+    >>> flow = SyncPipe('hash', source=[{'content': 'a'}])
+    >>> flow.close()
+    >>> try:
+    ...     flow.count()
+    ... except PipelineStateError:
+    ...     print('cannot chain a closed pipe')
+    cannot chain a closed pipe
+
+Exporting results
+-----------------
+
+A ``flow`` is a lazy, single-use iterator. ``export()`` materializes it into a
+concrete list you can index, measure, and reuse.
+
+.. code-block:: python
+
+    >>> from riko.collections import SyncPipe
+    >>>
+    >>> flow = SyncPipe('hash', source=[{'title': 'a'}, {'title': 'b'}])
+    >>> items = flow.export()
+    >>> len(items)            # unlike the flow, the list can be measured...
+    2
+    >>> items[0]['title']     # ...and indexed / iterated repeatedly
+    'a'
+
+For serialized output, the top-level ``export`` converter writes ``items`` to a
+string buffer (or to a file if you pass a path as the third argument, returning
+the number of records written). ``list_targets()`` lists the available targets
+(``ofx``/``qif`` require the optional ``csv2ofx`` dependency).
+
+.. code-block:: python
+
+    >>> from riko import export
+    >>> from riko.collections import list_targets
+    >>>
+    >>> items = [{'title': 'a', 'score': 1}, {'title': 'b', 'score': 2}]
+    >>> base_targets = {'csv', 'geojson', 'json', 'list', 'tuple'}
+    >>>
+    >>> export(items, 'json').getvalue()
+    '[{"score": 1, "title": "a"}, {"score": 2, "title": "b"}]'
+    >>> base_targets.issubset(list_targets())
+    True
+
+Asynchronous workflows
+----------------------
+
+The ``async`` extra (``pip install riko[async]``) enables ``AsyncPipe`` and
+``AsyncCollection``, which mirror their synchronous counterparts. Build a ``flow``
+the same way, then either ``await`` it (materializing the whole ``stream``) or
+consume it lazily with ``async for``. ``riko.bado.run`` executes a coroutine on
+the installed backend, and ``issync`` is ``True`` when no async backend is present
+(so these examples degrade gracefully when the extra is absent).
+
+Lazy async iteration
+^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    >>> from riko import get_path
+    >>> from riko.bado import run, issync
+    >>> from riko.collections import AsyncPipe
+    >>>
+    >>> fetch_conf = {'url': get_path('feed.xml')}
+    >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
+    >>>
+    >>> ### Consume an AsyncPipe item-by-item with `async for` ###
+    >>> async def main():
+    ...     pipe = (
+    ...         AsyncPipe('fetch', conf=fetch_conf)
+    ...             .filter(conf={'rule': filter_rule}))
+    ...     titles = [item['title'] async for item in pipe]
+    ...     print(titles[0], '/', len(titles))
+    >>>
+    >>> if issync:
+    ...     print('Donations / 5')
+    ... else:
+    ...     run(main)
+    Donations / 5
+
+Fetching feeds concurrently
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``AsyncCollection`` is the async counterpart of ``SyncCollection``: it fetches
+every source concurrently and merges them into a single ``stream``.
+
+.. code-block:: python
+
+    >>> from riko.collections import AsyncCollection
+    >>>
+    >>> async def main():
+    ...     sources = [{'url': get_path('feed.xml')}, {'url': get_path('gawker.xml')}]
+    ...     coll = AsyncCollection(sources)
+    ...     print(len([item async for item in coll]))
+    >>>
+    >>> if issync:
+    ...     print(32)
+    ... else:
+    ...     run(main)
+    32
+
+Bounded parallelism
+^^^^^^^^^^^^^^^^^^^^
+
+Passing ``parallel=True`` maps a stage over its source with bounded concurrency
+and backpressure, so large or streaming sources are never materialized up front.
+Pass ``ordered=True`` to preserve source order (the default is unordered — results
+arrive as they complete) and ``connections`` to cap the number of in-flight items.
+
+.. code-block:: python
+
+    >>> async def main():
+    ...     pipe = (
+    ...         AsyncPipe(
+    ...             'itembuilder',
+    ...             conf={'attrs': {'key': 'content', 'value': 'a,bb,ccc'}},
+    ...             parallel=True,
+    ...             ordered=True)
+    ...             .tokenizer(emit=True)
+    ...             .hash())
+    ...     print([item['content'] async for item in pipe])
+    >>>
+    >>> if issync:
+    ...     print(['a', 'bb', 'ccc'])
+    ... else:
+    ...     run(main)
+    ['a', 'bb', 'ccc']
+
 Compiling JSON workflows
 ------------------------
 
@@ -226,6 +395,31 @@ Note that fan-in operators such as ``union``/``join`` cannot be expressed with t
 ``[source, target]`` pair format (their secondary inputs need ``_OTHER{n}``
 targets) and must be authored as a full JSON pipe definition instead. See the
 `DAG format doc`_ for the complete schema and expansion rules.
+
+Inspecting a workflow
+---------------------
+
+You can introspect a JSON pipe definition *without running it*.
+``extract_dependencies`` returns the sorted set of modules a workflow uses —
+handy for validating that every required ``pipe`` is installed before execution.
+
+.. code-block:: python
+
+    >>> from riko.compile import convert_dag, extract_dependencies
+    >>>
+    >>> dag = {
+    ...     'modules': [
+    ...         {'type': 'itembuilder', 'conf': {'attrs': {'key': 'greeting', 'value': 'hi'}}},
+    ...         {'type': 'rename', 'conf': {'rule': {'field': 'greeting', 'newval': 'salutation'}}},
+    ...     ]
+    ... }
+    >>> extract_dependencies(convert_dag(dag))
+    ['itembuilder', 'rename']
+
+A *compiled* pipeline (see `Compiling JSON workflows`_) can additionally report
+its input requirements or module dependencies at run time — pass a ``Context``
+whose ``mode`` is ``ExecutionMode.DESCRIBE_INPUTS``, ``DESCRIBE_DEPENDENCIES``, or
+``DESCRIBE`` and the pipeline yields that metadata instead of executing the flow.
 
 Notes
 ^^^^^
