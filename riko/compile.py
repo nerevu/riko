@@ -36,7 +36,7 @@ from collections import defaultdict
 from collections.abc import Awaitable, Iterable, Iterator, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
-from functools import reduce
+from functools import partial, reduce, update_wrapper
 from importlib import import_module
 from inspect import isawaitable
 from itertools import pairwise
@@ -167,6 +167,18 @@ class CustomEncoder(JSONEncoder):
             result = super().default(o)
 
         return result
+
+
+def _named_pipeline(module_name: str, pipe_name: str, module_id: str) -> Pipeline:
+    """Return a renamed wrapper without modifying the imported pipeline."""
+    pipeline = resolve_module(module_name, pipe_name)
+    name = str(f"pipe_{module_id}")
+    wrapper = cast(Pipeline, partial(pipeline))
+    update_wrapper(wrapper, pipeline)
+
+    wrapper.__name__ = name
+    wrapper.__qualname__ = name
+    return wrapper
 
 
 def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
@@ -836,8 +848,7 @@ def _gen_steps(
             # We need to wrap submodules (used by loops) so we can pass the
             # input at runtime (as we can to sub-pipelines)
             # Note: no embed (so no subloops) or wire pykwargs are passed
-            pipeline = resolve_module(module_name, pipe_name)
-            pipeline.__name__ = str(f"pipe_{module_id}")
+            pipeline = _named_pipeline(module_name, pipe_name, module_id)
             step = (module_id, pipeline)
         else:  # else this module is not embedded:
             pipeline = resolve_module(module_name, pipe_name)
