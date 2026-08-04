@@ -394,9 +394,17 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     <generator object <genexpr> at 0x...>
     >>> listize(range(3))
     range(0, 3)
+    >>> listize(0)
+    [0]
+    >>> listize(False)
+    [False]
+    >>> listize("")
+    ['']
+    >>> listize(None)
+    []
 
     """
-    if not value:
+    if value is None:
         result = []
     elif isinstance(value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)):
         result = [value]
