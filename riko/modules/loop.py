@@ -147,7 +147,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Async counterpart of ``pipe`` — creates submodules from existing pipes,
-    running the embed once per parent (eagerly, concurrently) and applying the
-    same per-parent ``count``/``emit``/``assign`` fold. See ``pipe`` for kwargs.
+    running the embed once per parent *lazily and sequentially* (parent order
+    preserved, source advanced only as the consumer pulls, ``count="first"``
+    stopping after the first result) and applying the same per-parent
+    ``count``/``emit``/``assign`` fold. See ``pipe`` for kwargs.
     """
     return parser(*args, **kwargs)

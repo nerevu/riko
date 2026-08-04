@@ -116,6 +116,30 @@ class TestSyncLifecycle:
         flow.close()
         assert list(flow) == []
 
+    def test_close_before_iteration_does_not_execute(self):
+        ran = []
+
+        def source():
+            ran.append(1)
+            yield {"content": "x"}
+
+        flow = SyncPipe("hash", source=source())
+        flow.close()
+        assert list(flow) == []
+        assert ran == []
+
+    def test_collection_close_before_iteration_does_not_execute(self):
+        ran = []
+
+        def sources():
+            ran.append(1)
+            yield {"url": get_path("feed.xml")}
+
+        stream = SyncCollection(sources())
+        stream.close()
+        assert list(stream) == []
+        assert ran == []
+
     def test_failed_state_reiterates_empty(self):
         flow = SyncPipe("hash", source=_boom())
 
@@ -275,6 +299,21 @@ class TestAsyncLifecycle:
         assert items
         assert after == []
 
+    def test_close_before_iteration_does_not_execute(self):
+        ran = []
+
+        async def source():
+            ran.append(1)
+            yield {"content": "x"}
+
+        async def main():
+            pipe = AsyncPipe("hash", source=source())
+            await pipe.aclose()
+            return [item async for item in pipe]
+
+        assert run(main) == []
+        assert ran == []
+
     def test_failed_state_reiterates_empty(self):
         async def boom():
             raise RuntimeError("boom")
@@ -332,6 +371,23 @@ class TestAsyncLifecycle:
         closed, state = run(main)
         assert closed
         assert state is PipeState.CLOSED
+
+    def test_collection_close_before_iteration_does_not_execute(self):
+        ran = []
+
+        def sources():
+            ran.append(1)
+            yield {"url": get_path("feed.xml")}
+
+        async def main():
+            stream = AsyncCollection(sources())
+            await stream.aclose()
+            return [item async for item in stream], stream.closed
+
+        items, closed = run(main)
+        assert items == []
+        assert closed
+        assert ran == []
 
     def test_await_after_partial_iteration_consumes_remainder(self):
         runs = []

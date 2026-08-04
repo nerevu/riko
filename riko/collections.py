@@ -69,7 +69,7 @@ Examples:
         >>> async def main():
         ...     fconf['type'] = 'fetchdata'
         ...     sources = [{'url': get_path('feed.xml')}, fconf]
-        ...     s = await AsyncCollection(sources)
+        ...     s = await AsyncCollection(sources, ordered=True)
         ...     d = list(s)
         ...     print(d[0]['title'])
         ...     print(len(d))
@@ -87,12 +87,12 @@ Examples:
 from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
-    Awaitable,
     Callable,
     Generator,
     Iterable,
     Mapping,
 )
+from contextlib import aclosing
 from enum import StrEnum
 from functools import partial
 from inspect import isawaitable
@@ -127,16 +127,23 @@ from meza import io
 from riko import Context
 from riko._pubsub import sync_hub
 from riko.bado import async_return
-from riko.bado.itertools import async_iter, async_map
+from riko.bado.itertools import (
+    async_iter,
+    async_map,
+    async_map_ordered_stream,
+    async_map_stream,
+    async_merge,
+)
 from riko.compile import resolve_module
 from riko.context import parse_context
 from riko.exceptions import PipelineStateError
 from riko.types.general import (
-    AsyncItems,
     AsyncPipeParser,
+    AsyncSource,
     AsyncStream,
     Conf,
     ConversionFunc,
+    Feed,
     Function,
     Item,
     Items,
@@ -162,6 +169,8 @@ __all__ = [
     "export",
     "list_targets",
 ]
+
+DEF_CONNECTION_COUNT = 16
 
 
 class PoolScope(StrEnum):
@@ -259,6 +268,32 @@ class _PoolHandle:
             pool.terminate()
             pool.join()
             self.pool = None
+
+
+def _settle_iter(current: Stream | None) -> Stream:
+    """
+    Close *current* if it is a live generator, else install a spent iterator.
+
+    Called on close/terminate so a pipe or collection that is shut down before it
+    ever iterates re-iterates as an empty stream (matching the spent-generator
+    semantics of one that ran first) instead of building and executing a fresh
+    ``_stream()`` on the next accessor call.
+    """
+    if current is not None:
+        if (close := getattr(current, "close", None)) is not None:
+            close()
+
+        result = current
+    else:
+        result = iter(())
+
+    return result
+
+
+async def _spent_aiter() -> AsyncGenerator[Item, None]:
+    """An exhausted async generator; the async counterpart to ``iter(())``."""
+    return
+    yield  # pragma: no cover
 
 
 def records2ofx(items: Items, **_: object) -> Iterable[str]:
@@ -363,7 +398,7 @@ class PyPipe(_Lifecycle):
     def __init__(
         self,
         name: str | None = None,
-        source: AsyncItems | Awaitable[Items] | Items | None = None,
+        source: AsyncSource | None = None,
         *,
         assign: str | None = None,
         conf: Conf | None = None,
@@ -505,7 +540,7 @@ class SyncPipe(PyPipe):
 
         self.pool_scope: PoolScope = pool_scope
         self.ordered = ordered
-        self._iter: Generator[Item, None, None] | None = None
+        self._iter: Stream | None = None
         self._mapped: Iterable[Stream] | None = None
         self._in_context: bool = False
         self._terminal: bool = True
@@ -615,16 +650,12 @@ class SyncPipe(PyPipe):
             self._pool_handle.terminate()
 
     def close(self) -> None:
-        if self._iter is not None:
-            self._iter.close()
-
+        self._iter = _settle_iter(self._iter)
         self._release_pool()
         self._close()
 
     def terminate(self) -> None:
-        if self._iter is not None:
-            self._iter.close()
-
+        self._iter = _settle_iter(self._iter)
         self._terminate_pool()
         self._close()
 
@@ -680,6 +711,7 @@ class SyncPipe(PyPipe):
 
         self._begin()
         pipeline = partial(self.pipe, **self.kwargs)
+        completed = False
 
         try:
             if self.parallelize and self.source is not None:
@@ -697,6 +729,12 @@ class SyncPipe(PyPipe):
                 yield from pipeline(self.source)
             else:
                 yield from chain.from_iterable(self._mapped)
+        except GeneratorExit:
+            # A graceful close is "no more items on this channel", so a bound
+            # sender still signals DONE to its receivers; a real failure below
+            # must not, else a failed sender looks successfully complete.
+            completed = True
+            raise
         except BaseException:
             self._fail()
 
@@ -704,12 +742,16 @@ class SyncPipe(PyPipe):
                 self._terminate_pool()
 
             raise
+        else:
+            completed = True
         finally:
             if self._release_pool_after_iteration():
                 self._release_pool()
 
             self._end()
-            self._notify_subscribers()
+
+            if completed:
+                self._notify_subscribers()
 
     def __iter__(self) -> Stream:
         if self._iter is None:
@@ -848,10 +890,12 @@ class SyncCollection(PyCollection):
             self._pool_handle.terminate()
 
     def close(self) -> None:
+        self._iter = _settle_iter(self._iter)
         self._release_pool()
         self._close()
 
     def terminate(self) -> None:
+        self._iter = _settle_iter(self._iter)
         self._terminate_pool()
         self._close()
 
@@ -919,7 +963,8 @@ class SyncCollection(PyCollection):
 
     def pipe(self, **kwargs: Any) -> "SyncPipe":
         """Return a SyncPipe primed with the source feed"""
-        return SyncPipe(source=self._stream(), **kwargs)
+        self._require_usable("chain")
+        return SyncPipe(source=self, **kwargs)
 
     @overload
     def export(self) -> list[Item]: ...  # noqa: E704
@@ -934,23 +979,43 @@ class SyncCollection(PyCollection):
 
 
 class AsyncPipe(PyPipe):
-    """An asynchronous PyPipe object"""
+    """
+    An asynchronous PyPipe object.
+
+    Note — eager-concurrent execution under *partial* consumption:
+        A mapping stage runs its items concurrently, so *partially* consuming an
+        ``AsyncPipe`` (``anext``, an early ``break``, or a downstream
+        ``count="first"``/``truncate``) may run that stage's function for items
+        you never yield — unlike ``SyncPipe``, which is lazy and sequential and
+        runs it only for consumed items. Fully draining the pipe yields the
+        *same* result on both engines; only a stage function's *side effects*
+        under partial consumption differ.
+
+        This matters only when a stage has side effects (e.g. ``send``, an
+        external write). If so, bound the work at the stage instead of the
+        consumer — pass ``count``/``truncate`` to the stage, or fully drain — so
+        it isn't run for un-yielded items. ``parallel=True`` *bounds* the
+        over-run to the in-flight window but does not eliminate it (a worker
+        prefetches the next item).
+    """
 
     def __init__(
         self,
         name: str | None = None,
-        source: AsyncItems | Awaitable[Items] | Items | None = None,
+        source: AsyncSource | None = None,
         conf: Conf | None = None,
         *,
         assign: str | None = None,
-        connections: int = 16,
+        connections: int = DEF_CONNECTION_COUNT,
         context: Context | None = None,
         field: str | None = None,
         func: Function | None = None,
         inputs: Inputs | None = None,
         mode: ExecutionMode | None = None,
+        ordered: bool = False,
         others: Iterable[str] | Iterable[Stream] | None = None,
         parallel: bool = False,
+        prefetch: int = 0,
         skip_if: SkipIf | None = None,
         submodule: bool | None = False,
         test: bool | None = False,
@@ -975,7 +1040,12 @@ class AsyncPipe(PyPipe):
             verbose=verbose,
             **kwargs,
         )
+        if connections < 1:
+            raise ValueError("limit must be at least 1")
+
         self.connections: int = connections
+        self.ordered: bool = ordered
+        self.prefetch: int = prefetch
         self._aiter: AsyncGenerator[Item, None] | None = None
 
         if self.name:
@@ -1017,7 +1087,9 @@ class AsyncPipe(PyPipe):
 
     async def aclose(self) -> None:
         """Close the pipe: stop the underlying async generator (idempotent)."""
-        if self._aiter is not None:
+        if self._aiter is None:
+            self._aiter = _spent_aiter()
+        else:
             await self._aiter.aclose()
 
         self._close()
@@ -1056,54 +1128,99 @@ class AsyncPipe(PyPipe):
             "context": self.context,
             "inputs": self.inputs,
             "connections": self.connections,
+            "ordered": self.ordered,
+            "prefetch": self.prefetch,
         }
         skwargs.update(kwargs)
         return AsyncPipe(name, source=self, **skwargs)
 
-    async def _resolve_source(self) -> Items | None:
+    async def _normalize_source(self) -> Feed | None:
         """
-        Materialize the source to a sync stream for the parser.
+        Normalize the configured source into a lazy async iterable.
 
-        A parent pipe (any ``AsyncIterable``) is drained through its memoized
-        ``__aiter__`` so chaining wraps the *remaining* stream (mirrors sync
-        ``source=self``); an ``Awaitable`` is awaited; a plain sync iterable is
-        adapted to a ``Feed`` via ``async_iter`` and drained.
+        ``None`` remains ``None`` to distinguish a source-less stage from an
+        upstream source that happens to be empty.
         """
-        src = self.source
+        source = self.source
 
-        if src is None:
+        if source is None:
             resolved = None
-        elif isinstance(src, AsyncIterable):
-            resolved = [item async for item in src]
-        elif isawaitable(src):
-            resolved = await src
         else:
-            resolved = [item async for item in async_iter(src)]
+            resolved = await source if isawaitable(source) else source
+
+            if isinstance(resolved, AsyncIterable):
+                resolved = aiter(resolved)
+            else:
+                resolved = async_iter(resolved)
 
         return resolved
 
+    async def _materialize_legacy_source(self, feed: Feed | None) -> Items | None:
+        """
+        Drain a Feed into a list for a non-Feed-native module parser.
+
+        This is the **explicit legacy-parser boundary**, not the default way
+        stages communicate. Today's module parsers still require synchronous
+        ``Items`` rather than a ``Feed``, so a non-parallel async stage buffers
+        its whole upstream here: everything *before* this point streams lazily,
+        everything *after* it has been materialized. The bounded/parallel path
+        (``_stream``) is the only fully-lazy end-to-end route; per-module opt-in
+        to Feed-native parsers (ROADMAP §4/§8) will shrink this boundary.
+        """
+        return None if feed is None else [item async for item in feed]
+
     async def _stream(self) -> AsyncGenerator[Item, None]:
         self._begin()
+        async_pipeline = partial(self.async_pipe, **self.kwargs)
+        bounded = self.mapify and self.parallel
 
         try:
-            source = await self._resolve_source()
-            async_pipeline = partial(self.async_pipe, **self.kwargs)
+            feed = await self._normalize_source()
 
-            if self.mapify and source is not None:
-                mapped = await async_map(async_pipeline, source, self.connections)
+            if bounded and feed is not None:
+                limit = self.connections
+                map_stream = (
+                    async_map_ordered_stream if self.ordered else async_map_stream
+                )
+                mapped = map_stream(
+                    async_pipeline, feed, limit=limit, buffer=self.prefetch
+                )
 
-                for stream in mapped:
-                    for item in stream:
-                        yield item
+                # ``aclosing`` tears the inner stream (and its task group) down in
+                # *this* task on any exit, so an early close doesn't leak it to a
+                # cross-task GC finalizer (which trips anyio's cancel-scope guard).
+                # Closing the as-complete stream mid-flight re-raises its task
+                # group's ``GeneratorExit`` as a one-member group; that is the
+                # expected close signal, so unwrap it back into a clean close and
+                # let anything genuinely unexpected propagate.
+                try:
+                    async with aclosing(mapped):
+                        async for stream in mapped:
+                            for item in stream:
+                                yield item
+                except BaseExceptionGroup as eg:
+                    if eg.split(GeneratorExit)[1] is not None:
+                        raise
+
+                    raise GeneratorExit from None
             else:
-                result = await async_pipeline(source)
+                source = await self._materialize_legacy_source(feed)
 
-                if isinstance(result, AsyncIterable):
-                    async for item in result:
-                        yield item
+                if self.mapify and source is not None:
+                    mapped = await async_map(async_pipeline, source, self.connections)
+
+                    for stream in mapped:
+                        for item in stream:
+                            yield item
                 else:
-                    for item in result:
-                        yield item
+                    result = await async_pipeline(source)
+
+                    if isinstance(result, AsyncIterable):
+                        async for item in result:
+                            yield item
+                    else:
+                        for item in result:
+                            yield item
         except BaseException:
             self._fail()
             raise
@@ -1125,13 +1242,20 @@ class AsyncCollection(PyCollection):
         conf: Conf | None = None,
         workers: int | None = None,
         parallel: bool = False,
-        connections: int = 16,
+        connections: int = DEF_CONNECTION_COUNT,
+        ordered: bool = False,
+        prefetch: int = 0,
         **kwargs: object,
     ):
         super().__init__(
             sources, conf=conf, workers=workers, parallel=parallel, **kwargs
         )
+        if connections < 1:
+            raise ValueError("limit must be at least 1")
+
         self.connections: int = connections
+        self.ordered: bool = ordered
+        self.prefetch: int = prefetch
         self._aiter: AsyncGenerator[Item, None] | None = None
 
     def __aiter__(self) -> AsyncStream:
@@ -1158,7 +1282,9 @@ class AsyncCollection(PyCollection):
 
     async def aclose(self) -> None:
         """Close the collection: stop the underlying async generator (idempotent)."""
-        if self._aiter is not None:
+        if self._aiter is None:
+            self._aiter = _spent_aiter()
+        else:
             await self._aiter.aclose()
 
         self._close()
@@ -1184,12 +1310,39 @@ class AsyncCollection(PyCollection):
         self._begin()
 
         try:
-            zargs = zip(self.sources, repeat(self.conf))
-            mapped = await async_map(afetch_source, zargs, self.connections)
+            if self.ordered:
+                # Explicit source-materialization compatibility mode: each source
+                # is fetched (concurrently, up to `connections`) and its records
+                # yielded in source order; records do not interleave across sources.
+                zargs = zip(self.sources, repeat(self.conf))
+                mapped = async_map_ordered_stream(
+                    afetch_source_eager,
+                    zargs,
+                    limit=self.connections,
+                    buffer=self.prefetch,
+                )
 
-            for stream in mapped:
-                for item in stream:
-                    yield item
+                async for stream in mapped:
+                    for item in stream:
+                        yield item
+            else:
+                # Incremental merge: each source is a lazy Feed and records
+                # interleave across sources as they arrive (bounded by
+                # `connections`), never materializing a whole source.
+                feeds = (afetch_source((src, self.conf)) for src in self.sources)
+                merged = async_merge(
+                    feeds, limit=self.connections, buffer=self.prefetch
+                )
+
+                try:
+                    async with aclosing(merged):
+                        async for item in merged:
+                            yield item
+                except BaseExceptionGroup as eg:
+                    if eg.split(GeneratorExit)[1] is not None:
+                        raise
+
+                    raise GeneratorExit from None
         except BaseException:
             self._fail()
             raise
@@ -1219,20 +1372,35 @@ def listpipe(
     return list(listize(result))
 
 
-def fetch_source(
-    args: tuple[Mapping[str, str], Conf], pipe: type[SyncPipe] = SyncPipe
-) -> Stream:
-    source, _conf = args
-    conf = {**_conf, **source}
-    pipe_name = source.get("type", "fetch")
-    primed_pipe = pipe(pipe_name, conf=cast(Conf, conf))
-    return iter(primed_pipe)
-
-
-async def afetch_source(
-    args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
-) -> Stream:
+def _fetch_source[T: SyncPipe | AsyncPipe](
+    args: tuple[Mapping[str, str], Conf], pipe: type[T]
+) -> T:
     source, _conf = args
     conf = {**_conf, **source}
     pipe_name = str(source.get("type", "fetch"))
-    return await pipe(pipe_name, conf=cast(Conf, conf))
+    return pipe(pipe_name, conf=cast(Conf, conf))
+
+
+def fetch_source(
+    args: tuple[Mapping[str, str], Conf], pipe: type[SyncPipe] = SyncPipe
+) -> Stream:
+    return iter(_fetch_source(args, pipe))
+
+
+def afetch_source(
+    args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
+) -> AsyncStream:
+    """
+    Return a lazy, unstarted async feed for one collection source.
+
+    Unlike ``afetch_source_eager`` (which materializing the whole source), this
+    hands back the source's async iterator so ``async_merge`` can stream its records
+    incrementally.
+    """
+    return aiter(_fetch_source(args, pipe))
+
+
+async def afetch_source_eager(
+    args: tuple[Mapping[str, str], Conf], pipe: type[AsyncPipe] = AsyncPipe
+) -> Stream:
+    return await _fetch_source(args, pipe)

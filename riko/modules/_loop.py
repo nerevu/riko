@@ -21,7 +21,6 @@ rest.
 """
 
 from functools import partial
-from itertools import islice
 from logging import Logger
 from typing import Literal, cast, overload
 
@@ -49,8 +48,29 @@ from riko.types.modules import CountValues
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
+def _take_first(results: ItemsOrValues) -> ItemsOrValues:
+    """
+    Yield only the first result, then promptly close the underlying iterator.
+
+    ``count="first"`` is already lazy (the loop stops pulling after one), but a
+    child generator holding resources would otherwise linger until GC; closing it
+    releases those resources as soon as the loop moves to the next parent.
+    """
+    iterator = iter(results)
+
+    try:
+        for item in iterator:
+            yield item
+            break
+    finally:
+        close = getattr(iterator, "close", None)
+
+        if callable(close):
+            close()
+
+
 def _take(results: ItemsOrValues, count: CountValues | None = "all") -> ItemsOrValues:
-    return islice(results, 1) if count == "first" else results
+    return _take_first(results) if count == "first" else results
 
 
 @overload
@@ -68,6 +88,18 @@ def _fold_parent(  # noqa: E704
 def _fold_parent(  # noqa: E302
     parent: Item, results: ItemsOrValues, assign: str, emit: bool
 ) -> StreamOrValueStream:
+    """
+    Fold a parent's per-child ``results`` back against that parent.
+
+    ``emit`` True yields each child result verbatim (replacing the parent);
+    ``emit`` False yields a preserved parent copy per result with the result
+    stored under ``assign``. Empty-child rule: when the child yields nothing, an
+    ``emit=False`` loop still yields the untouched parent (assign-mode preserves
+    the record) while an ``emit=True`` loop drops it (emit-mode has nothing to
+    emit). ``assign`` is guaranteed non-empty in ``emit=False`` mode: the module
+    decorator (``Module.prepare``) resolves an unset ``assign`` to the module
+    name (or ``"content"`` for sources) before the loop ever runs.
+    """
     yielded = False
 
     for value in results:

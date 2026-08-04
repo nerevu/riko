@@ -17,6 +17,7 @@ try:
     import anyio
 except ImportError:
     CapacityLimiter: type | None = None
+    Semaphore: type | None = None
     MemoryObjectReceiveStream: Any = None
     MemoryObjectSendStream: Any = None
     Path: type | None = None
@@ -39,6 +40,7 @@ else:
     from anyio import (
         CapacityLimiter,
         Path,
+        Semaphore,
         create_memory_object_stream,
         create_task_group,
         fail_after,
@@ -69,6 +71,7 @@ __all__ = [
     "MemoryObjectReceiveStream",
     "MemoryObjectSendStream",
     "Path",
+    "Semaphore",
     "async_get",
     "async_json",
     "async_partial",

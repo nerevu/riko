@@ -26,6 +26,7 @@ Python stream processing engine modeled after Yahoo! Pipes.
 | `docs/DAG_FORMAT.md` | bare-bones DAG format + `convert-dag`/`compile` commands |
 | `optional-requirements.txt` | Twisted, treq, lxml, speedparser3 |
 | `docs/ROADMAP.md` | authoritative roadmap and runtime contract (HigherGov-first critical path + RDP/Connect end state + async Feed) |
+| `docs/REFINEMENT_PLAN.md` | **P1–P14 refinement track + live progress tracker** (start here for phase status). Per-phase detail in `docs/P<N>_CHECKLIST.md`. As of last session: **P1–P7 + P10 done**; next is **P8** (module registry). Suite: 604 passed. |
 | `docs/Shelf.md` | tabled ideas (extra source pipes, protocol/orchestration/DB integrations) not on the critical path |
 | `docs/ANYIO_NO_SNIFFIO.md` | manual anyio support guide (without sniffio/Twisted integration) |
 

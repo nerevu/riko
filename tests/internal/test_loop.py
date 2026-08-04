@@ -277,6 +277,28 @@ class TestSubpipeLoop:
             {"title": "cd", "up": {"content": "CD"}},
         ]
 
+    def test_count_first_is_lazy_and_closes_child(self):
+        produced: list[int] = []
+        closed: list[str] = []
+
+        def child(tag: str):
+            try:
+                for index in range(50):
+                    produced.append(index)
+                    yield {"content": f"{tag}{index}"}
+            finally:
+                closed.append(tag)
+
+        def _sub(item, context=None, **_):
+            return child(str(item["title"]))
+
+        parents = [{"title": "a"}, {"title": "b"}]
+        result = loop(iter(parents), embed=mark_subpipe(_sub), count="first", emit=True)
+
+        assert list(result) == [{"content": "a0"}, {"content": "b0"}]
+        assert produced == [0, 0]
+        assert closed == ["a", "b"]
+
 
 @pytest.mark.skipif(issync, reason="async support not installed")
 class TestAsyncLoop:
@@ -383,3 +405,31 @@ class TestAsyncSubpipeLoop:
             {"title": "ab", "up": {"content": "AB"}},
             {"title": "cd", "up": {"content": "CD"}},
         ]
+
+    def test_count_first_is_lazy_and_closes_child(self):
+        produced: list[int] = []
+        closed: list[str] = []
+
+        def child(tag: str):
+            try:
+                for index in range(50):
+                    produced.append(index)
+                    yield {"content": f"{tag}{index}"}
+            finally:
+                closed.append(tag)
+
+        async def _sub(item, context=None, **_):
+            return child(str(item["title"]))
+
+        async def main():
+            stream = await async_loop(
+                iter([{"title": "a"}, {"title": "b"}]),
+                embed=mark_subpipe(_sub, is_async=True),
+                count="first",
+                emit=True,
+            )
+            return [item async for item in stream]
+
+        assert run(main) == [{"content": "a0"}, {"content": "b0"}]
+        assert produced == [0, 0]
+        assert closed == ["a", "b"]
