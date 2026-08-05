@@ -10,6 +10,9 @@ Examples:
         >>> stream = [{'x': x} for x in range(5)]
         >>> next(pipe(stream))['count']
         5
+        >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
+        >>> next(pipe(stream, conf={'count_key': 'title'}))
+        {'riko pt. 1': 1}
 
 Attributes:
     OPTS (dict): The default pipe options
@@ -23,6 +26,7 @@ from typing import Any
 
 import pygogo as gogo
 
+from riko.dotdict import DotDict
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from riko.utils import group_by
 
@@ -78,7 +82,13 @@ def parser(
     """
     if count_key:
         grouped = group_by(stream, count_key)
-        counted = ({key: len(group)} for key, group in grouped)
+
+        def _make_item(key: str, group: list[object]) -> DotDict[int]:
+            d: DotDict[int] = DotDict()
+            d.set_literal(key, len(group))
+            return d
+
+        counted = (_make_item(key, group) for key, group in grouped)
     else:
         counted = len(list(stream))
 

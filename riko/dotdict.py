@@ -482,18 +482,26 @@ class DotDict(CaseInsensitiveDict[VT]):
         'bar'
         >>> r['KEY']
         'bar'
+        >>> r = DotDict()
+        >>> r.set_literal('riko pt. 1', 42)
+        >>> r['riko pt. 1']
+        42
         """
         keys = parse_key(key)
-        value = raw_get(self, keys[0])
 
-        if len(keys) > 1:
-            key = ".".join(keys[1:])
-            msg = f"Ignoring unsupported key {key} to access non-mapping value {value}."
+        if len(keys) > 1 and isinstance(key, str) and key.lower() in self._store:
+            value = raw_get(self, key)
+        else:
+            value = raw_get(self, keys[0])
 
-            if is_mapping(value):
-                value = cast(VT, value[key])
-            else:
-                logger.warning(msg)
+            if len(keys) > 1:
+                key = ".".join(keys[1:])
+                msg = f"Ignoring unsupported key {key} to access non-mapping value {value}."
+
+                if is_mapping(value):
+                    value = cast(VT, value[key])
+                else:
+                    logger.warning(msg)
 
         result = value
 
@@ -546,6 +554,22 @@ class DotDict(CaseInsensitiveDict[VT]):
             reduced = reduce(reducer, rest, item)
             reduced[last] = value
             CaseInsensitiveDict.update(self, item)
+
+    def set_literal(self, key: str, value: VT) -> None:
+        """Store *key* verbatim, treating it as a plain string even if it
+        contains dots.  Use this when a key is data-derived (e.g. a field
+        value promoted to a dict key) so that dots in the value are not
+        misinterpreted as nested-path separators.
+
+        >>> r = DotDict()
+        >>> r.set_literal('riko pt. 1', 1)
+        >>> r
+        {'riko pt. 1': 1}
+        >>> r.set_literal('a.b.c', 'flat')
+        >>> r['a.b.c']
+        'flat'
+        """
+        CaseInsensitiveDict.__setitem__(self, key, value)
 
     def __or__[V](self, other: Mapping[str, V]) -> Self:
         """
