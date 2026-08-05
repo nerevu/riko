@@ -919,6 +919,8 @@ License
 .. _async web requests: https://github.com/cantino/huginn/blob/bf7c2feba4a7f27f39de96877c121d40282c0af9/app/models/agents/rss_agent.rb#L101
 .. _Spark doesn't: https://github.com/perwendel/spark/issues/208
 .. _remains: https://web.archive.org/web/20150930021241/http://pipes.yahoo.com/pipes/
+.. _AnyIO: https://anyio.readthedocs.io/
+.. _httpx: https://www.python-httpx.org/
 .. _lxml: http://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser
 .. _Twisted: http://twistedmatrix.com/
 .. _speedparser: https://github.com/jmoiron/speedparser

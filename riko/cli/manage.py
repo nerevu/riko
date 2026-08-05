@@ -5,6 +5,7 @@
 import shutil
 import sys
 from functools import partial
+from glob import glob
 from os import environ
 from os import path as p
 from subprocess import CalledProcessError, call, check_call
@@ -25,6 +26,7 @@ pytest: str | None = shutil.which("pytest")
 ruff: str | None = shutil.which("ruff")
 pylint: str | None = shutil.which("pylint")
 pyright: str | None = shutil.which("pyright")
+twine: str | None = shutil.which("twine")
 
 
 def parse_verbosity(verbose: int = 0, quiet: bool | None = None) -> str:
@@ -92,6 +94,70 @@ def _publish(dry_run=False):
         raise RuntimeError("uv not found")
 
 
+def _twine_check() -> int:
+    """Validate built distributions render on PyPI"""
+    dists = sorted(glob(p.join(BASEDIR, "dist", "*")))
+    inputs = [p.join(BASEDIR, "README.rst"), p.join(BASEDIR, "pyproject.toml")]
+
+    if not dists:
+        raise RuntimeError("No distributions found in dist/; run `manage build` first")
+    elif max(map(p.getmtime, inputs)) > min(map(p.getmtime, dists)):
+        raise RuntimeError("dist/ is stale; run `manage build` first")
+    elif twine:
+        cmd = [twine, "check", *dists]
+    elif uv:
+        cmd = [uv, "run", "--active", "--with", "twine", "twine", "check", *dists]
+    else:
+        raise RuntimeError("twine not found")
+
+    return call(cmd)
+
+
+def _check_types() -> int:
+    """Check type annotations with pyright"""
+    if not pyright:
+        raise RuntimeError("pyright not found")
+
+    return call([pyright])
+
+
+def _verify_types() -> int:
+    """Verify type completeness with pyright"""
+    if not pyright:
+        raise RuntimeError("pyright not found")
+
+    return call([pyright, "--verifytypes", "riko", "--ignoreexternal"])
+
+
+def _pylint_check(parallel: bool = False) -> int:
+    """Check style with pylint"""
+    if not pylint:
+        raise RuntimeError("pylint not found")
+
+    args = [pylint, "--rcfile=tests/standard.rc", "-rn", "-fparseable", "riko"]
+
+    if parallel:
+        args.extend(["-j", "0"])
+
+    return call(args)
+
+
+def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
+    """Check style and formatting with ruff"""
+    if not ruff:
+        raise RuntimeError("ruff not found")
+
+    args = [ruff, "check"]
+
+    if unsafe_fixes:
+        args.append("--unsafe-fixes")
+
+    if where:
+        args.extend(where.split(" "))
+
+    return call([*args]) or call([ruff, "format", "--check"])
+
+
 @manager.command()
 def check():
     """Check staged changes for lint errors"""
@@ -104,6 +170,7 @@ def check():
 @click.option("-t", "--check-types", help="Check with pyright", is_flag=True)
 @click.option("-T", "--verify-types", help="Verify with pyright", is_flag=True)
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
+@click.option("-d", "--dist", help="Check built distributions with twine", is_flag=True)
 @click.option(
     "-p",
     "--parallel",
@@ -116,50 +183,22 @@ def lint(
     strict=False,
     check_types=False,
     verify_types=False,
+    dist=False,
     parallel=False,
 ):
     """Check style with linters"""
-    where = where or ""
-    if check_types and pyright:
-        try:
-            check_call([pyright])
-        except CalledProcessError as e:
-            exit(e.returncode)
-    elif verify_types and pyright:
-        try:
-            check_call([pyright, "--verifytypes", "riko", "--ignoreexternal"])
-        except CalledProcessError as e:
-            exit(e.returncode)
-    elif check_types or verify_types:
-        raise RuntimeError("pyright not found")
-    elif strict and pylint:
-        args = [pylint, "--rcfile=tests/standard.rc", "-rn", "-fparseable", "riko"]
-
-        if parallel:
-            args.extend(["-j", "0"])
-
-        try:
-            check_call(args)
-        except CalledProcessError as e:
-            exit(e.returncode)
+    if dist:
+        return_code = _twine_check()
+    elif check_types:
+        return_code = _check_types()
+    elif verify_types:
+        return_code = _verify_types()
     elif strict:
-        raise RuntimeError("pylint not found")
-    elif ruff:
-        r_args = ["check"]
-
-        if unsafe_fixes:
-            r_args.append("--unsafe-fixes")
-
-        if where:
-            r_args.extend(where.split(" "))
-
-        try:
-            check_call([ruff] + r_args)
-            check_call([ruff, "format", "--check"])
-        except CalledProcessError as e:
-            exit(e.returncode)
+        return_code = _pylint_check(parallel)
     else:
-        raise RuntimeError("ruff not found")
+        return_code = _ruff_check(where, unsafe_fixes)
+
+    exit(return_code)
 
 
 @manager.command()
@@ -323,7 +362,12 @@ def publish(dry_run=False):
 def release(dry_run=False):
     """Build and publish new riko version"""
     try:
+        _clean()
         _build()
+
+        if return_code := _twine_check():
+            exit(return_code)
+
         _publish(dry_run)
     except CalledProcessError as e:
         exit(e.returncode)
