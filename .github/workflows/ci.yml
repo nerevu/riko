@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [ main, features ]
 
+permissions:
+  contents: write  # Required to push the fixes back to the repo
+
 env:
   PYTHONHASHSEED: "94967295"
 
