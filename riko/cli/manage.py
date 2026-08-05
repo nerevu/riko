@@ -309,12 +309,7 @@ def build():
 
 
 @manager.command()
-@click.option(
-    "-d",
-    "--dry-run",
-    help="Test that the package can be installed and imported",
-    is_flag=True,
-)
+@click.option("-d", "--dry-run", help="Publish riko to PyPI", is_flag=True)
 def publish(dry_run=False):
     """Publish riko to PyPI"""
     try:
@@ -324,12 +319,7 @@ def publish(dry_run=False):
 
 
 @manager.command()
-@click.option(
-    "-d",
-    "--dry-run",
-    help="Test that the package can be installed and imported",
-    is_flag=True,
-)
+@click.option("-d", "--dry-run", help="Build and publish riko to PyPI", is_flag=True)
 def release(dry_run=False):
     """Build and publish new riko version"""
     try:

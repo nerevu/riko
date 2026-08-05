@@ -220,6 +220,14 @@ def cast_datetime(  # noqa: E302
     as_datedict=False,
     try_local_tz=False,
 ) -> date | dt | DateDict | None:
+    """
+    Examples:
+        >>> type(cast_datetime('now')).__name__
+        'datetime'
+        >>> type(cast_datetime('today')).__name__
+        'date'
+
+    """
     tt = None
 
     if isinstance(value, dt) and as_date:
@@ -238,10 +246,11 @@ def cast_datetime(  # noqa: E302
         words = value.split(" ")
         mathish = set(words).intersection(MATH_WORDS)
         textish = set(words).intersection(TEXT_WORDS)
-        today = dt.now(UTC).date()
+        now = dt.now(UTC)
+        today = now.date()
         named = {
             "today": today,
-            "now": today,
+            "now": now,
             "tomorrow": today + timedelta(days=1),
             "yesterday": today - timedelta(days=1),
         }
@@ -284,7 +293,7 @@ CAST_SWITCH: dict[str, PreCaster] = {
     "text": {"default": "", "func": str},
     "datetime": {"default": EPOCH_DATETIME, "func": cast_datetime},
     "date": {"default": EPOCH_DATE, "func": cast_date},
-    "url": {"default": {}, "func": cast_url},
+    "url": {"default": "", "func": cast_url},
     "location": {"default": {}, "func": cast_location},
     "bool": {"default": False, "func": lambda i: bool(literal_parse(i))},
     "pass": {"default": None, "func": lambda i: i},
@@ -389,6 +398,8 @@ def cast_value[T](  # noqa: E302
         '12.25'
         >>> cast_value(12.25, 'int')
         12
+        >>> cast_value(None, 'url')
+        ''
 
     """
     if _type and _type in CAST_SWITCH:

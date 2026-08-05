@@ -544,6 +544,28 @@ def resolve_module(  # noqa: E302
     compile_missing=False,
     file_path: Path | None = None,
 ) -> Pipeline | None | tuple[Pipeline | None, ParsedPipeDef | None]:
+    """
+    Examples:
+        >>> resolve_module('filter', 'pipe')
+        <function pipe at ...>
+        >>> resolve_module('does_not_exist', 'pipe')
+        Traceback (most recent call last):
+            ...
+        riko.exceptions.UnsupportedModuleError: Unsupported riko module: does_not_exist
+
+        Re-raises ModuleNotFoundError errors *inside* a valid module instead of masking
+        it as an unsupported module:
+
+        >>> import riko.compile as _c
+        >>> _orig = _c.import_module
+        >>> _c.import_module = lambda name: _orig("missing.submodule")
+        >>> resolve_module('filter', 'pipe')
+        Traceback (most recent call last):
+            ...
+        ModuleNotFoundError: No module named 'missing'
+        >>> _c.import_module = _orig
+
+    """
     module = parsed_pipe_def = None
 
     if module_name == "output":
@@ -573,9 +595,14 @@ def resolve_module(  # noqa: E302
             else:
                 raise UnsupportedPipelineError(pipe_name) from e
     else:
+        target = f"riko.modules.{module_name}"
+
         try:
-            module = import_module(f"riko.modules.{module_name}")
+            module = import_module(target)
         except ModuleNotFoundError as e:
+            if e.name != target:
+                raise
+
             raise UnsupportedModuleError(module_name) from e
 
     pipeline = getattr(module, pipe_name, None) if module else None

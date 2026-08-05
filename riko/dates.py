@@ -292,6 +292,19 @@ def ensure_tzinfo(  # noqa: E302
     try_local_tz: bool = True,
     fallback_tzinfo: tzinfo = UTC,
 ) -> AwareDT | AwareST | date | None:
+    """
+    Examples:
+        >>> import time
+        >>> from datetime import datetime
+        >>>
+        >>> st = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
+        >>> ensure_tzinfo(st, try_local_tz=False).tm_gmtoff
+        0
+        >>> local = datetime(2020, 6, 15, 12).astimezone().utcoffset().total_seconds()
+        >>> ensure_tzinfo(st, try_local_tz=True).tm_gmtoff == local
+        True
+
+    """
     now = dt.now(UTC)
     _tzinfo = None
     new_date = None
@@ -312,7 +325,7 @@ def ensure_tzinfo(  # noqa: E302
             _tzinfo = fallback_tzinfo
 
         if isinstance(_date, struct_time):
-            new_date = tt_to_datetime(_date, def_tzinfo=fallback_tzinfo)
+            new_date = tt_to_datetime(_date, def_tzinfo=_tzinfo)
             new_date = date_to_tt(new_date)
         elif isinstance(_date, dt):
             new_date = dt.replace(_date, tzinfo=_tzinfo)
