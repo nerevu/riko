@@ -33,7 +33,7 @@ def {{ pipe_name }}(item=None, context: Context | None = None, **_):
     {%- if module.splits %}
         splits = {{ module.expr }}
     {%- for i in range(module.splits) %}
-        {{ module.id }}_{{ i }} = next(splits)
+        {{ module.id }}_{{ i }} = list(next(splits))
     {%- endfor %}
     {%- else %}
         {{ module.id }} = {{ module.expr }}

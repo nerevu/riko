@@ -14,7 +14,7 @@ from riko.types.modules import (
     FetchRawConf,
     SimpleMathRawConf,
     SplitRawConf,
-    TruncateRawConf,
+    TruncateRawConf
 )
 
 
@@ -22,51 +22,19 @@ def pipe_zKJifuNS3BGLRQK_GsevXg(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["count", "fetch", "simplemath", "split", "truncate"]
+        _OUTPUT = ['count', 'fetch', 'simplemath', 'split', 'truncate']
     else:
-        sw_224 = fetch(
-            item,
-            conf=FetchRawConf(
-                {"url": {"type": "url", "value": "file://riko/data/TheEdTechie.xml"}}
-            ),
-            context=context,
-        )
+        sw_224 = fetch(item, conf=FetchRawConf({'url': {'type': 'url', 'value': 'file://riko/data/TheEdTechie.xml'}}), context=context)
         splits = split(sw_224, conf=SplitRawConf(), context=context)
-        sw_250_0 = next(splits)
-        sw_250_1 = next(splits)
-        sw_242 = count(sw_250_0, conf=CountRawConf(), assign="content", context=context)
+        sw_250_0 = list(next(splits))
+        sw_250_1 = list(next(splits))
+        sw_242 = count(iter(sw_250_1), conf=CountRawConf(), assign='content', context=context)
         splits = split(sw_242, conf=SplitRawConf(), context=context)
-        sw_243_0 = next(splits)
-        sw_243_1 = next(splits)
-        sw_94 = simplemath(
-            sw_243_0,
-            conf=SimpleMathRawConf(
-                {
-                    "op": {"type": "text", "value": "modulo"},
-                    "other": {"type": "float", "value": "6"},
-                }
-            ),
-            emit=True,
-            context=context,
-        )
-        sw_169 = simplemath(
-            sw_243_1,
-            conf=SimpleMathRawConf(
-                {
-                    "op": {"type": "text", "value": "subtract"},
-                    "other": {"terminal": "OTHER", "type": "float"},
-                }
-            ),
-            emit=True,
-            context=context,
-            OTHER=sw_94,
-        )
-        sw_232 = truncate(
-            sw_250_1,
-            conf=TruncateRawConf({"count": {"terminal": "count", "type": "float"}}),
-            context=context,
-            count=sw_169,
-        )
+        sw_243_0 = list(next(splits))
+        sw_243_1 = list(next(splits))
+        sw_94 = simplemath(iter(sw_243_0), conf=SimpleMathRawConf({'op': {'type': 'text', 'value': 'modulo'}, 'other': {'type': 'float', 'value': '6'}}), emit=True, context=context)
+        sw_169 = simplemath(iter(sw_243_0), conf=SimpleMathRawConf({'op': {'type': 'text', 'value': 'subtract'}, 'other': {'terminal': 'OTHER', 'type': 'float'}}), emit=True, context=context, OTHER=sw_94)
+        sw_232 = truncate(iter(sw_250_0), conf=TruncateRawConf({'count': {'terminal': 'count', 'type': 'float'}}), context=context, count=sw_169)
         _OUTPUT = sw_232
 
     return _OUTPUT
