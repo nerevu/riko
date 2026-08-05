@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Execution-mode tests for the Phase 6 contract (docs/P6_CHECKLIST.md).
+Execution-mode tests.
 
 Context carries a single ExecutionMode instead of independent describe_* bools,
 so contradictory inspection states are unrepresentable. The legacy bool kwargs

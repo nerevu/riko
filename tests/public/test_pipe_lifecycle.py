@@ -1,12 +1,14 @@
 # vim: sw=4:ts=4:expandtab
 """
-One-shot lifecycle tests for the Phase 5 contract (docs/P5_CHECKLIST.md).
+One-shot lifecycle tests.
 
-A pipe instance represents a single execution. It may be chained only while
-NEW; once it has run it cannot be chained; an exhausted instance re-iterates as
-an empty stream and never silently re-executes; a closed or failed instance
-raises PipelineStateError on further iteration. Sync and async behave alike, so
-``TestSyncLifecycle`` and ``TestAsyncLifecycle`` mirror each other test-for-test.
+A pipe instance represents a single execution. It may be chained while NEW,
+RUNNING, or EXHAUSTED — chaining wraps whatever source is left (all / leftovers /
+nothing), like a native iterator; only a CLOSED or FAILED instance rejects
+chaining with PipelineStateError. Iteration never raises: an exhausted, closed,
+or failed instance re-iterates as an empty stream and never silently re-executes.
+Sync and async behave alike, so ``TestSyncLifecycle`` and ``TestAsyncLifecycle``
+mirror each other test-for-test.
 """
 
 import pytest

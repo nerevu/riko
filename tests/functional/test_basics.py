@@ -156,7 +156,7 @@ class TestBasics:
     def test_feeddiscovery(self):
         """
         Loads a pipeline containing a feed auto-discovery module plus
-        fetch-feed in a loop with emit all
+        fetch-feed in a loop with emit all.
         """
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
         items = self._get_pipeline(pipe_name)

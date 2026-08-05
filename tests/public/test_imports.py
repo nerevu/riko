@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Public-contract tests for the Phase 1 API boundary (docs/P1_CHECKLIST.md).
+Public-contract tests for the API boundary.
 
 A developer must be able to tell stable / extension / private from the import
 path alone. These are black-box tests: they import, they never reach inside.

@@ -11,7 +11,7 @@ parent* — ``count`` reduces per parent, ``emit`` yields the child results, and
 ``assign`` stores each result on a preserved copy of the parent (one copy per
 result). This is the Yahoo per-parent contract, shared by ``loop_embed_sync`` and
 ``loop_embed_async`` (``loop.async_pipe``) via the common ``_fold_parent``/
-``_take`` fold. See docs/gameplans/loop-restructure.md.
+``_take`` fold.
 
 The lazy-async loop runs the embed once per parent *sequentially* and yields the
 per-parent fold incrementally as an ``AsyncIterator`` — preserving parent order,

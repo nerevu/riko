@@ -873,6 +873,8 @@ More Info
 ---------
 
 - `FAQ`_
+- `Migration guide`_ (upgrading from the ``legacy`` branch)
+- `Changelog`_
 - `Cookbook`_
 - `iPython Notebook`_
 - `Step-by-Step Intro. Tutorial`_
@@ -950,6 +952,8 @@ License
 .. _file types: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-file-types-are-supported
 .. _protocols: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-protocols-are-supported
 .. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
+.. _Migration guide: https://github.com/nerevu/riko/blob/master/docs/MIGRATION.rst
+.. _Changelog: https://github.com/nerevu/riko/blob/master/docs/CHANGES.rst
 .. _Cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
 .. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py#L15-L18
 .. _alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#alternate-workflow-creation

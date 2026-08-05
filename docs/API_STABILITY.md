@@ -1,8 +1,7 @@
 # riko API Stability
 
 riko follows semantic versioning for its public surface. What an import path is
-tells you what stability guarantee it carries. The full per-symbol contract is
-in [API_SURFACE.md](API_SURFACE.md).
+tells you what stability guarantee it carries.
 
 ## Tiers
 
@@ -28,8 +27,6 @@ riko ships a `py.typed` marker, so type checkers treat it as a typed dependency.
 
 ## Compatibility during refactors
 
-Names that move keep a re-export at their old import path for at least one minor
-release; behavior-changing removals are listed in
-[MIGRATION_SHIMS.md](MIGRATION_SHIMS.md). Symbols such as `Objectify`, `objectify`,
-and `listize` remain importable from `riko` but are excluded from `riko.__all__`
-(they are not part of the guaranteed surface).
+After 1.0 release, names that move will keep a re-export at their old import path for at
+least one minor release; behavior-changing removals will be listed in
+[CHANGES.rst](CHANGES.rst).

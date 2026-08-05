@@ -6,7 +6,8 @@ The supported extension-author API: pipe decorators, parsed config types,
 module metadata, and parser protocols. SemVer-guaranteed for a smaller audience
 than the stable :mod:`riko.api` surface.
 
-``register`` joins this surface in a later phase (see docs/API_SURFACE.md).
+``register`` joins this surface in a later phase. See docs/API_STABILITY.md for
+additional details.
 """
 
 from riko.ext.config import DynamicConf, get_conf_type

@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Loop behavior tests (docs/gameplans/loop-restructure.md).
+Loop behavior tests.
 
 The explicit ``loop`` operator takes the **compact** form: ``embed`` is the
 sub-pipe callable, ``conf`` is the embed's own conf, and ``count``/``emit``/
@@ -190,7 +190,7 @@ class TestProcessorTopLevelCount:
 class TestImplicitLooping:
     """
     A processor stage fed a *stream* maps itself over each item, exactly like
-    ``loop(source, embed=<processor>)`` (docs/gameplans/implicit-looping.md).
+    ``loop(source, embed=<processor>)``.
     """
 
     def test_maps_over_every_item(self):

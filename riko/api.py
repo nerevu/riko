@@ -6,7 +6,7 @@ The stable, SemVer-guaranteed public surface of riko. Import application code
 from here (or the top-level ``riko`` package, which re-exports this module).
 
 Extension-author symbols live in :mod:`riko.ext`; everything else is private.
-See docs/API_SURFACE.md for the full three-tier contract.
+See docs/API_STABILITY.md for additional details.
 """
 
 from riko.collections import (
