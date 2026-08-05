@@ -150,14 +150,19 @@ def opener(  # noqa: E302
     url = get_abspath(url, offline=offline)
     r = None
 
-    if url.startswith("http") and params:
+    if url.startswith("http"):
         r = requests.get(url, params=params, stream=binary, timeout=timeout)
-        r.raw.decode_content = not binary
+        r.raise_for_status()
+        r.raw.decode_content = True
 
-        if binary:
-            response = BytesIO(r.content) if memoize else cast(RawIOBase, r.raw)
+        if binary and memoize:
+            response = BytesIO(r.content)
+            r.close()
+        elif binary:
+            response = cast(RawIOBase, r.raw)
         elif memoize:
             response = StringIO(r.text)
+            r.close()
         else:
             encoding = r.encoding or encoding
             reencoded = reencode(r.raw, encoding, decode=True)
@@ -267,6 +272,8 @@ class Fetch[B: (Literal[True], Literal[False])]:
                 raise
 
             logger.error(f"Error opening {truncate_content(url)}: {e.reason}")
+        except requests.RequestException as e:
+            logger.error(f"Error opening {truncate_content(url)}: {e}")
 
     def __getattr__(self, name: str) -> object:
         if self.file is not None:

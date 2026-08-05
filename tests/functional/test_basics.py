@@ -12,9 +12,11 @@ from itertools import islice
 from json import loads
 from pathlib import Path
 from typing import cast
+from unittest.mock import Mock, patch
 
 import pytest
 
+from riko._io import Fetch
 from riko._iterutils import listize
 from riko._rssutils import augment_entries, truncate_content
 from riko.bado import issync, run
@@ -131,6 +133,25 @@ class TestBasics:
     def setup_method(self):
         """Compile common subpipe"""
         self.context = Context(test=True)
+
+    def test_unified_http_backend(self):
+        """
+        Showcases the unified HTTP backend: a params-less http URL
+        routes through the requests backend instead og the opener.
+        """
+        url = "http://example.com/feed.xml"
+        response = Mock()
+        response.headers = {"Content-Type": "application/rss+xml"}
+
+        with (
+            patch("riko._io.requests.get", return_value=response) as mock_requests,
+            patch("riko._io.urlopen") as mock_urlopen,
+        ):
+            Fetch(url, binary=True)
+
+        mock_requests.assert_called_once()
+        mock_urlopen.assert_not_called()
+        assert mock_requests.call_args.args[0] == url
 
     def test_feeddiscovery(self):
         """
