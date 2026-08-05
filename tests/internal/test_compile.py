@@ -457,6 +457,235 @@ def test_unresolved_subpipeline_raises():
         resolve_module("pipe_missing", "pipe_missing", compile_missing=True)
 
 
+# ---------------------------------------------------------------------------
+# Split routing tests
+# ---------------------------------------------------------------------------
+
+from riko.types.modules import SplitRawConf  # noqa: E402
+
+
+def _make_split_pipe(wire_order_reversed=False) -> PipeDef:
+    """
+    Pipe:  itembuilder → split → (truncate_a from _OUTPUT, truncate_b from _OUTPUT2)
+    """
+    modules = [
+        PipeModule(
+            {
+                "id": "src",
+                "type": "itembuilder",
+                "conf": ItemBuilderRawConf(
+                    {
+                        "attrs": Param(
+                            {
+                                "key": {"type": "text", "value": "title"},
+                                "value": {"type": "text", "value": "hello"},
+                            }
+                        )
+                    }
+                ),
+            }
+        ),
+        PipeModule({"id": "sp", "type": "split", "conf": SplitRawConf()}),
+        PipeModule(
+            {
+                "id": "ta",
+                "type": "truncate",
+                "conf": TruncateRawConf({"count": {"type": "float", "value": "1"}}),
+            }
+        ),
+        PipeModule(
+            {
+                "id": "tb",
+                "type": "truncate",
+                "conf": TruncateRawConf({"count": {"type": "float", "value": "1"}}),
+            }
+        ),
+        PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
+    ]
+    w_src_sp = get_wire("src", "sp", "_w1")
+    w_sp_ta = get_wire("sp", "ta", "_w2", "_OUTPUT")
+    w_sp_tb = get_wire("sp", "tb", "_w3", "_OUTPUT2")
+    w_ta_out = get_wire("ta", "_OUTPUT", "_w4")
+    wires = (
+        [w_src_sp, w_sp_tb, w_sp_ta, w_ta_out]
+        if wire_order_reversed
+        else [w_src_sp, w_sp_ta, w_sp_tb, w_ta_out]
+    )
+    return PipeDef({"modules": modules, "wires": wires})
+
+
+@pytest.mark.parametrize(
+    "pipe_name",
+    [
+        "pipe_QMrlL_FS3BGlpwryODY80A",
+        "pipe_zKJifuNS3BGLRQK_GsevXg",
+    ],
+)
+def test_split_codegen_matches_executor(pipe_name):
+    pipe_def = loads((PIPELINE_DIR / f"{pipe_name}.json").read_text())
+    parsed = parse_pipe_def(pipe_def, pipe_name)
+    source = stringify_pipe(parsed)
+    assert _run_generated(source, pipe_name) == _run_executor(parsed)
+
+
+def test_split_port_routing_output_is_index_0():
+    pipe_def = _make_split_pipe()
+    parsed = parse_pipe_def(pipe_def, "pipe_split_routing")
+    source = stringify_pipe(parsed)
+    compact = source.replace(" ", "").replace("\n", "")
+    assert "sp_0=list(next(splits))" in compact
+    assert "sp_1=list(next(splits))" in compact
+    assert "truncate(iter(sp_0)," in compact
+    assert "truncate(iter(sp_1)," in compact
+
+
+def test_split_port_routing_wire_order_does_not_matter():
+    normal = _make_split_pipe(wire_order_reversed=False)
+    reversed_ = _make_split_pipe(wire_order_reversed=True)
+    parsed_n = parse_pipe_def(normal, "pipe_split_routing")
+    parsed_r = parse_pipe_def(reversed_, "pipe_split_routing")
+    assert _run_executor(parsed_n) == _run_executor(parsed_r)
+    assert stringify_pipe(parsed_n) == stringify_pipe(parsed_r)
+
+
+def _make_three_output_split_pipe() -> PipeDef:
+    """
+    Pipe:  itembuilder → split → truncate_a (_OUTPUT/0), truncate_b (_OUTPUT2/1),
+                             truncate_c (_OUTPUT3/2)
+    No explicit ``splits`` conf — effective count must be inferred as 3.
+    """
+    modules = [
+        PipeModule(
+            {
+                "id": "src",
+                "type": "itembuilder",
+                "conf": ItemBuilderRawConf(
+                    {
+                        "attrs": Param(
+                            {
+                                "key": {"type": "text", "value": "title"},
+                                "value": {"type": "text", "value": "hello"},
+                            }
+                        )
+                    }
+                ),
+            }
+        ),
+        PipeModule({"id": "sp", "type": "split", "conf": SplitRawConf()}),
+        PipeModule(
+            {
+                "id": "ta",
+                "type": "truncate",
+                "conf": TruncateRawConf({"count": {"type": "float", "value": "1"}}),
+            }
+        ),
+        PipeModule(
+            {
+                "id": "tb",
+                "type": "truncate",
+                "conf": TruncateRawConf({"count": {"type": "float", "value": "1"}}),
+            }
+        ),
+        PipeModule(
+            {
+                "id": "tc",
+                "type": "truncate",
+                "conf": TruncateRawConf({"count": {"type": "float", "value": "1"}}),
+            }
+        ),
+        PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
+    ]
+    wires = [
+        get_wire("src", "sp", "_w1"),
+        get_wire("sp", "ta", "_w2", "_OUTPUT"),
+        get_wire("sp", "tb", "_w3", "_OUTPUT2"),
+        get_wire("sp", "tc", "_w4", "_OUTPUT3"),
+        get_wire("ta", "_OUTPUT", "_w5"),
+    ]
+    return PipeDef({"modules": modules, "wires": wires})
+
+
+def test_three_output_split_effective_count():
+    pipe_def = _make_three_output_split_pipe()
+    parsed = parse_pipe_def(pipe_def, "pipe_split_three")
+    source = stringify_pipe(parsed)
+    assert "sp_0 = list(next(splits))" in source
+    assert "sp_1 = list(next(splits))" in source
+    assert "sp_2 = list(next(splits))" in source
+
+
+def test_three_output_split_executor_matches_codegen():
+    pipe_def = _make_three_output_split_pipe()
+    parsed = parse_pipe_def(pipe_def, "pipe_split_three")
+    source = stringify_pipe(parsed)
+    assert _run_generated(source, "pipe_split_three") == _run_executor(parsed)
+
+
+def test_split_invalid_explicit_count_raises():
+    modules = [
+        PipeModule(
+            {
+                "id": "src",
+                "type": "itembuilder",
+                "conf": ItemBuilderRawConf(
+                    {
+                        "attrs": Param(
+                            {
+                                "key": {"type": "text", "value": "title"},
+                                "value": {"type": "text", "value": "hello"},
+                            }
+                        )
+                    }
+                ),
+            }
+        ),
+        PipeModule(
+            {
+                "id": "sp",
+                "type": "split",
+                "conf": SplitRawConf({"splits": {"type": "int", "value": "2"}}),
+            }
+        ),
+        PipeModule(
+            {
+                "id": "ta",
+                "type": "truncate",
+                "conf": TruncateRawConf({"count": {"type": "float", "value": "1"}}),
+            }
+        ),
+        PipeModule(
+            {
+                "id": "tb",
+                "type": "truncate",
+                "conf": TruncateRawConf({"count": {"type": "float", "value": "1"}}),
+            }
+        ),
+        PipeModule(
+            {
+                "id": "tc",
+                "type": "truncate",
+                "conf": TruncateRawConf({"count": {"type": "float", "value": "1"}}),
+            }
+        ),
+        PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
+    ]
+    wires = [
+        get_wire("src", "sp", "_w1"),
+        get_wire("sp", "ta", "_w2", "_OUTPUT"),
+        get_wire("sp", "tb", "_w3", "_OUTPUT2"),
+        get_wire("sp", "tc", "_w4", "_OUTPUT3"),
+        get_wire("ta", "_OUTPUT", "_w5"),
+    ]
+    pipe_def = PipeDef({"modules": modules, "wires": wires})
+    parsed = parse_pipe_def(pipe_def, "pipe_split_invalid")
+
+    with pytest.raises(UnsupportedPipelineError):
+        stringify_pipe(parsed)
+
+    with pytest.raises(UnsupportedPipelineError):
+        _run_executor(parsed)
+
+
 def test_convert_dag_appends_output():
     dag = loads((DAG_DIR / "pipe_forever.json").read_text())
     pipe_def = convert_dag(dag)

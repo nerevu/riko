@@ -58,6 +58,7 @@ type ValueStream = Iterator[RikoValue]
 type Stream = Iterator[Item]
 type StreamOrValueStream = Iterator[ItemOrValue]
 type Streams = Iterator[Stream]
+type SplitOutputs = tuple[list[Item], ...]
 
 type AsyncStream = AsyncIterator[Item]
 type AsyncItems = AsyncIterable[Item]
@@ -346,7 +347,7 @@ type SplitterParser = SyncSplitterParser | AsyncSplitterParser
 type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
 type Pipeline = SyncPipeParser | AsyncPipeParser
 type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
-type StepValue = ParserOutput | Pipeline | AsyncPipeItems
+type StepValue = ParserOutput | Pipeline | AsyncPipeItems | SplitOutputs
 type Step = tuple[str, StepValue]
 type Steps = dict[str, StepValue]
 type PyInput = SyncPyInput | AsyncPyInput

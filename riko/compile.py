@@ -38,7 +38,7 @@ import keyword
 import subprocess
 from codecs import open
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from datetime import date
 from decimal import Decimal
 from importlib import import_module
@@ -78,6 +78,7 @@ from riko.types.general import (
     AsyncStream,
     ParserOutput,
     Pipeline,
+    SplitOutputs,
     Step,
     Steps,
     StepValue,
@@ -279,6 +280,87 @@ def _gen_embed_module_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
             yield embed_type
 
 
+def _split_port_index(port_id: str) -> int:
+    if port_id == "_OUTPUT":
+        return 0
+
+    if port_id.startswith("_OUTPUT"):
+        suffix = port_id.removeprefix("_OUTPUT")
+
+        if suffix.isdigit() and int(suffix) >= 2:
+            return int(suffix) - 1
+
+    raise UnsupportedPipelineError(f"Invalid split output port: {port_id}")
+
+
+def _resolve_wire_source(
+    parsed_pipe_def: ParsedPipeDef,
+    wire: Wire,
+    steps: Steps | None,
+) -> "Id | StepValue":
+    src_module_id = get_module_id(wire)
+    src_port = wire["src"]["id"]
+    module = parsed_pipe_def["modules"].get(src_module_id)
+    is_split = module is not None and module["type"] == "split"
+
+    if is_split:
+        index = _split_port_index(src_port)
+
+        if steps is None:
+            return Id(f"iter({src_module_id}_{index})")
+
+        split_outputs = steps[src_module_id]
+        return iter(cast("SplitOutputs", split_outputs)[index])
+
+    if steps is None:
+        return Id(src_module_id)
+
+    return steps[src_module_id]
+
+
+def _effective_split_count(
+    parsed_pipe_def: ParsedPipeDef,
+    module_id: str,
+    conf: AnyModuleRawConf | None,
+) -> int:
+    port_indexes = []
+
+    for wire in parsed_pipe_def["wires"].values():
+        if get_module_id(wire) == module_id:
+            src_port = wire["src"]["id"]
+
+            if src_port.startswith("_OUTPUT"):
+                port_indexes.append(_split_port_index(src_port))
+
+    required = max(port_indexes, default=0) + 1
+    conf_splits = DotDict(conf or {}).get("splits")
+    has_explicit = conf_splits is not None
+    configured = int(conf_splits) if has_explicit else 2
+
+    if has_explicit and configured < required:
+        raise UnsupportedPipelineError(
+            f"split {module_id!r} defines {configured} outputs "
+            f"but the graph references output {required}"
+        )
+
+    return max(configured, required)
+
+
+def _effective_split_conf(
+    parsed_pipe_def: ParsedPipeDef,
+    module_id: str,
+    conf: AnyModuleRawConf | None,
+) -> AnyModuleRawConf | None:
+    count = _effective_split_count(parsed_pipe_def, module_id, conf)
+    conf_splits = DotDict(conf or {}).get("splits")
+
+    if conf_splits is None and count > 2:
+        injected: AnyModuleRawConf = {**(conf or {}), "splits": {"type": "int", "value": count}}
+        return injected
+
+    return conf
+
+
 def _get_sources(
     conf: AnyModuleRawConf | None,
 ) -> list[dict[str, str]] | None:
@@ -346,7 +428,6 @@ def _gen_string_modules(
 ) -> Iterator[StringModule]:
     zipped = zip(module_ids, module_names, pipe_names, strict=False)
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
-    split_ids = defaultdict(int)
     checked = False
 
     for module_id, module_name, pipe_name in zipped:
@@ -355,7 +436,7 @@ def _gen_string_modules(
 
         args = (parsed_pipe_def, module_id)
         is_sub_pipe = module_name.startswith("pipe")
-        pyarg = _get_pyarg(*args, split_ids=split_ids, steps=None, **kwargs)
+        pyarg = _get_pyarg(*args, steps=None, **kwargs)
 
         if not checked:
             pyarg = Id("item") if pyarg == Id(None) else pyarg
@@ -372,21 +453,21 @@ def _gen_string_modules(
             pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
             expr = f"{pipe_name}({_render_args(module_name, None, pykwargs)})"
         else:
-            pyarg_expr = repr_arg(pyarg)
-
-            if split_ids and "_" in pyarg_expr:
-                split_id = "_".join(pyarg_expr.split("_")[:-1])
-
-                if split_id in split_ids:
-                    split_ids[split_id] += 1
-
             pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
             alias = _module_alias(module_name)
             expr = f"{alias}({_render_args(module_name, pyarg, pykwargs)})"
 
         if module_name == "split":
-            splits = DotDict(conf).get("splits", 2)
-            split_ids[module_id] = 0
+            splits = _effective_split_count(parsed_pipe_def, module_id, conf)
+            eff_conf = _effective_split_conf(parsed_pipe_def, module_id, conf)
+
+            if eff_conf is not conf:
+                pykwargs = [
+                    ("conf", eff_conf) if k == "conf" else (k, v)
+                    for k, v in pykwargs
+                ]
+                alias = _module_alias(module_name)
+                expr = f"{alias}({_render_args(module_name, pyarg, pykwargs)})"
         else:
             splits = 0
 
@@ -420,7 +501,6 @@ def _get_pyarg(  # noqa: E302
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
     *,
-    split_ids: Mapping[str, int] | None = None,
     steps: Steps | None = None,
     context: Context | None = None,
     mode: ExecutionMode | None = None,
@@ -428,12 +508,11 @@ def _get_pyarg(  # noqa: E302
     **kwargs: bool,
 ) -> StepValue | Id | None:
     context = context or Context(mode=mode, inputs=inputs, **kwargs)
-    split_ids = split_ids or {}
 
     if steps and context.mode is not ExecutionMode.RUN:
         print("You must not specify both describe and steps. Assuming steps.")
 
-    return _get_input_module(parsed_pipe_def, module_id, steps, **split_ids)
+    return _get_input_module(parsed_pipe_def, module_id, steps)
 
 
 def _is_default(wire: Wire, module_id: str, in_and_out: bool = False) -> bool:
@@ -480,8 +559,7 @@ def _gen_pykwargs(  # noqa: E302
         # if the wire is to this module and it's *NOT* the default input
         # but it *is* the default output
         if _is_default(wire, module_id):
-            src_module_id = get_module_id(wire)
-            source = Id(src_module_id) if steps is None else steps[src_module_id]
+            source = _resolve_wire_source(parsed_pipe_def, wire, steps)
             pipe_id = get_module_id(wire, stem="tgt", base="id")
 
             if pipe_id.startswith("_OTHER"):
@@ -651,7 +729,16 @@ def _gen_steps(
             _args = (parsed_pipe_def, module_id)
             _pykwargs = _gen_pykwargs(*_args, steps=steps, context=context, **kwargs)
             pykwargs = dict(_pykwargs)
-            step = (module_id, pipeline(pyarg, **pykwargs))
+
+            if module_name == "split":
+                orig_conf = parsed_pipe_def["modules"][module_id]["conf"]
+                eff_conf = _effective_split_conf(parsed_pipe_def, module_id, orig_conf)
+                pykwargs["conf"] = eff_conf
+                result = tuple(list(stream) for stream in pipeline(pyarg, **pykwargs))
+            else:
+                result = pipeline(pyarg, **pykwargs)
+
+            step = (module_id, result)
 
         steps.update([step])
         yield step
@@ -661,9 +748,8 @@ def _get_input_module(
     parsed_pipe_def: ParsedPipeDef,
     module_id: str,
     steps: Steps | None = None,
-    **split_ids: int,
 ) -> Id | StepValue | None:
-    source = None if steps is None else iter([{"forever": True}])
+    source = None
 
     if module_id in parsed_pipe_def["embed"]:
         source = "_INPUT"
@@ -672,16 +758,8 @@ def _get_input_module(
             # if the wire is to this module and it's the default input and it's
             # the default output:
             if _is_default(wire, module_id, True):
-                src_module_id = get_module_id(wire)
-
-                if steps is None and src_module_id in split_ids:
-                    pos = split_ids[src_module_id]
-                    source = f"{src_module_id}_{pos}"
-                elif steps is None:
-                    source = src_module_id
-                else:
-                    source = steps[src_module_id]
-
+                resolved = _resolve_wire_source(parsed_pipe_def, wire, steps)
+                source = resolved
                 break
 
     return Id(source) if steps is None else source

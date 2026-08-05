@@ -9,92 +9,28 @@ from riko.modules.filter import pipe as _filter
 from riko.modules.regex import pipe as regex
 from riko.modules.split import pipe as split
 from riko.modules.union import pipe as union
-from riko.types.modules import FetchRawConf, FilterRawConf, RegexRawConf, SplitRawConf
+from riko.types.modules import (
+    FetchRawConf,
+    FilterRawConf,
+    RegexRawConf,
+    SplitRawConf
+)
 
 
 def pipe_QMrlL_FS3BGlpwryODY80A(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
-        _OUTPUT = ["fetch", "filter", "regex", "split", "union"]
+        _OUTPUT = ['fetch', 'filter', 'regex', 'split', 'union']
     else:
-        sw_140 = fetch(
-            item,
-            conf=FetchRawConf(
-                {
-                    "url": {
-                        "type": "url",
-                        "value": "file://riko/data/news.yahoo.com_rss_health.xml",
-                    }
-                }
-            ),
-            context=context,
-        )
+        sw_140 = fetch(item, conf=FetchRawConf({'url': {'type': 'url', 'value': 'file://riko/data/news.yahoo.com_rss_health.xml'}}), context=context)
         splits = split(sw_140, conf=SplitRawConf(), context=context)
-        sw_108_0 = next(splits)
-        sw_108_1 = next(splits)
-        sw_159 = _filter(
-            sw_108_0,
-            conf=FilterRawConf(
-                {
-                    "combine": {"type": "text", "value": "and"},
-                    "permit": {"type": "bool", "value": True},
-                    "rule": {
-                        "field": {"type": "text", "value": "summary"},
-                        "op": {"type": "text", "value": "contains"},
-                        "value": {"type": "text", "value": "drug"},
-                    },
-                }
-            ),
-            context=context,
-        )
-        sw_148 = _filter(
-            sw_108_1,
-            conf=FilterRawConf(
-                {
-                    "combine": {"type": "text", "value": "and"},
-                    "permit": {"type": "bool", "value": True},
-                    "rule": {
-                        "field": {"type": "text", "value": "summary"},
-                        "op": {"type": "text", "value": "contains"},
-                        "value": {"type": "text", "value": "weight"},
-                    },
-                }
-            ),
-            context=context,
-        )
-        sw_204 = regex(
-            sw_159,
-            conf=RegexRawConf(
-                {
-                    "rule": {
-                        "field": {"type": "text", "value": "title"},
-                        "match": {"type": "text", "value": "(.+)"},
-                        "replace": {"type": "text", "value": "[Drugs] $1"},
-                    }
-                }
-            ),
-            emit=True,
-            assign="loop:regex",
-            count="all",
-            context=context,
-        )
-        sw_189 = regex(
-            sw_148,
-            conf=RegexRawConf(
-                {
-                    "rule": {
-                        "field": {"type": "text", "value": "title"},
-                        "match": {"type": "text", "value": "(.+)"},
-                        "replace": {"type": "text", "value": "[Weight] $1"},
-                    }
-                }
-            ),
-            emit=True,
-            assign="loop:regex",
-            count="all",
-            context=context,
-        )
+        sw_108_0 = list(next(splits))
+        sw_108_1 = list(next(splits))
+        sw_159 = _filter(iter(sw_108_1), conf=FilterRawConf({'combine': {'type': 'text', 'value': 'and'}, 'permit': {'type': 'bool', 'value': True}, 'rule': {'field': {'type': 'text', 'value': 'summary'}, 'op': {'type': 'text', 'value': 'contains'}, 'value': {'type': 'text', 'value': 'drug'}}}), context=context)
+        sw_148 = _filter(iter(sw_108_0), conf=FilterRawConf({'combine': {'type': 'text', 'value': 'and'}, 'permit': {'type': 'bool', 'value': True}, 'rule': {'field': {'type': 'text', 'value': 'summary'}, 'op': {'type': 'text', 'value': 'contains'}, 'value': {'type': 'text', 'value': 'weight'}}}), context=context)
+        sw_204 = regex(sw_159, conf=RegexRawConf({'rule': {'field': {'type': 'text', 'value': 'title'}, 'match': {'type': 'text', 'value': '(.+)'}, 'replace': {'type': 'text', 'value': '[Drugs] $1'}}}), emit=True, assign='loop:regex', count='all', context=context)
+        sw_189 = regex(sw_148, conf=RegexRawConf({'rule': {'field': {'type': 'text', 'value': 'title'}, 'match': {'type': 'text', 'value': '(.+)'}, 'replace': {'type': 'text', 'value': '[Weight] $1'}}}), emit=True, assign='loop:regex', count='all', context=context)
         sw_170 = union(None, context=context, others=[sw_189, sw_204])
         _OUTPUT = sw_170
 
