@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [ main, features ]
 
+permissions:
+  contents: read
+
 env:
   PYTHONHASHSEED: "94967295"
 
