@@ -1,8 +1,8 @@
 import pytest
 
+from riko._pubsub import reset_pubsub
 from riko.bado import issync
 from riko.parsers import IS_LXML
-from riko.utils import reset_pubsub
 
 
 @pytest.fixture(autouse=True)

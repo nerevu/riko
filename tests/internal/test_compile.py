@@ -10,45 +10,33 @@ or a codegen regression — fails here.
 
 from difflib import unified_diff
 from json import loads
-from pathlib import Path
 
 import pytest
 
-from riko import Context
-from riko.bado import issync
+from riko.bado import issync, run
 from riko.compile import (
     build_pipeline,
     convert_dag,
     get_wire,
-    legacy_loop_to_canonical,
-    normalize_raw_module,
     parse_pipe_def,
     resolve_module,
     stringify_pipe,
 )
 from riko.compile import compile as compile_pipe
+from riko.context import Context
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
-from riko.types.compile import DagModule, PipeDag, PipeDef, PipeModule
+from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule
+from riko.types.general import Item
 from riko.types.modules import (
-    Embed,
-    EmbeddedModule,
-    FetchDataRawConf,
     ItemBuilderRawConf,
-    LoopRawConf,
     Param,
-    PipeId,
-    RegexRawConf,
-    RegexRawRule,
-    SubModuleRawConf,
-    TokenizerRawConf,
     TruncateRawConf,
 )
-from riko.utils import listize
+from tests import TESTS_DIR
 
-PARENT = Path(__file__).parent.parent
-PIPELINE_DIR = PARENT / "pipelines"
-PYPIPELINE_DIR = PARENT / "pypipelines"
-DAG_DIR = PARENT / "dags"
+PIPELINE_DIR = TESTS_DIR / "pipelines"
+PYPIPELINE_DIR = TESTS_DIR / "pypipelines"
+DAG_DIR = TESTS_DIR / "dags"
 
 FOREVER = PipeDef(
     {
@@ -92,6 +80,23 @@ ITEMBUILDER = PipeDef(
     }
 )
 
+ITEMBUILDER_SRC = PipeModule(
+    {
+        "id": "sw-1",
+        "type": "itembuilder",
+        "conf": ItemBuilderRawConf(
+            {
+                "attrs": Param(
+                    {
+                        "key": {"type": "text", "value": "title"},
+                        "value": {"type": "text", "value": "a b c"},
+                    }
+                )
+            }
+        ),
+    }
+)
+
 # A canonical direct-processor node with a first-class top-level `count`.
 DIRECT_COUNT = PipeDef(
     {
@@ -128,7 +133,7 @@ MALFORMED = {
         {
             "modules": [
                 {"id": "sw-1", "type": "nonexistent", "conf": {}},
-                {"id": "_OUTPUT", "type": "output", "conf": {}},
+                PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
             ],
             "wires": [get_wire("sw-1", "_OUTPUT", "_w1")],
         },
@@ -149,255 +154,28 @@ PIPES = {
 }
 
 
-class TestNormalizeRawModule:
-    def test_ordinary_module_is_identity(self):
-        module = PipeModule(
-            {
-                "id": "sw-1",
-                "type": "tokenizer",
-                "conf": {"delimiter": {"type": "text", "value": " "}},
-            }
-        )
-        assert normalize_raw_module(module) == module
-
-    def test_legacy_processor_loop_emit_true_becomes_direct_processor(self):
-        legacy = PipeModule(
-            {
-                "id": "sw-598",
-                "type": "loop",
-                "field": "title",
-                "conf": LoopRawConf(
-                    {
-                        "embed": Embed(
-                            {
-                                "type": "module",
-                                "value": EmbeddedModule(
-                                    {
-                                        "id": "sw-601",
-                                        "type": "regex",
-                                        "conf": RegexRawConf(
-                                            {
-                                                "rule": RegexRawRule(
-                                                    {
-                                                        "field": {
-                                                            "type": "text",
-                                                            "value": "content",
-                                                        },
-                                                        "match": {
-                                                            "type": "text",
-                                                            "value": r"(\\w+)\\s(\\w+)",
-                                                        },
-                                                        "replace": {
-                                                            "type": "text",
-                                                            "value": "$2wide",
-                                                        },
-                                                    }
-                                                )
-                                            }
-                                        ),
-                                        "emit": {"type": "bool", "value": True},
-                                    }
-                                ),
-                            }
-                        ),
-                    }
-                ),
-            }
-        )
-        assert normalize_raw_module(legacy) == {
-            "id": "sw-598",
-            "type": "regex",
-            "conf": {
-                "rule": {
-                    "field": {
-                        "type": "text",
-                        "value": "content",
-                    },
-                    "match": {
-                        "type": "text",
-                        "value": r"(\\w+)\\s(\\w+)",
-                    },
-                    "replace": {
-                        "type": "text",
-                        "value": "$2wide",
-                    },
-                }
-            },
-            "field": "title",
-            "emit": True,
-        }
-
-    def test_legacy_processor_loop_count_first_becomes_direct_processor(self):
-        legacy = PipeModule(
-            {
-                "id": "sw-142",
-                "type": "loop",
-                "conf": LoopRawConf(
-                    {
-                        "count": {"type": "text", "value": "first"},
-                        "embed": Embed(
-                            {
-                                "type": "module",
-                                "value": EmbeddedModule(
-                                    {
-                                        "id": "sw-150",
-                                        "type": "fetchdata",
-                                        "conf": FetchDataRawConf(
-                                            {"url": {"subkey": "link", "type": "url"}}
-                                        ),
-                                        "emit": {"type": "bool", "value": False},
-                                        "assign": {"type": "text", "value": "info"},
-                                    }
-                                ),
-                            }
-                        ),
-                    }
-                ),
-            }
-        )
-        assert normalize_raw_module(legacy) == {
-            "id": "sw-142",
-            "type": "fetchdata",
-            "conf": {"url": {"subkey": "link", "type": "url"}},
-            "assign": "info",
-            "emit": False,
-            "count": "first",
-        }
-
-    def test_legacy_processor_loop_count_all_assign_stays_loop(self):
-        legacy = PipeModule(
-            {
-                "id": "sw-500",
-                "type": "loop",
-                "field": "title",
-                "conf": LoopRawConf(
-                    {
-                        "count": {"type": "text", "value": "all"},
-                        "embed": Embed(
-                            {
-                                "type": "module",
-                                "value": EmbeddedModule(
-                                    {
-                                        "id": "sw-508",
-                                        "type": "tokenizer",
-                                        "conf": TokenizerRawConf(),
-                                        "emit": {"type": "bool", "value": False},
-                                        "assign": {"type": "text", "value": "terms"},
-                                    }
-                                ),
-                            }
-                        ),
-                    }
-                ),
-            }
-        )
-        # emit=False + count=all + assign diverges from a direct processor
-        # (list-wrap vs one copy per result), so it stays a loop embedding it.
-        assert legacy_loop_to_canonical(legacy) == {
-            "id": "sw-500",
-            "type": "loop",
-            "embed": {"id": "sw-508", "type": "tokenizer"},
-            "conf": {},
-            "field": "title",
-            "assign": "terms",
-            "emit": False,
-            "count": "all",
-        }
-        # normalize_raw_module defers this compact-loop case (leaves it legacy).
-        assert normalize_raw_module(legacy) == legacy
-
-    def test_legacy_pipeline_loop_becomes_compact_loop(self):
-        subkey = "result.winning-mp.aristotle-id"
-        pipe_id = PipeId("pipe:bd0834cfe6cdacb0bea5569505d330b8")
-        legacy = PipeModule(
-            {
-                "id": "sw-595",
-                "type": "loop",
-                "conf": LoopRawConf(
-                    {
-                        "count": {"type": "text", "value": "first"},
-                        "embed": Embed(
-                            {
-                                "type": "module",
-                                "value": EmbeddedModule(
-                                    {
-                                        "id": "sw-603",
-                                        "type": pipe_id,
-                                        "emit": {"type": "bool", "value": False},
-                                        "assign": {
-                                            "type": "text",
-                                            "value": "mpdetails",
-                                        },
-                                        "conf": SubModuleRawConf(
-                                            {"gid": {"subkey": subkey, "type": "text"}}
-                                        ),
-                                    }
-                                ),
-                            }
-                        ),
-                    }
-                ),
-            }
-        )
-        # The full transform lifts it to a compact loop...
-        assert legacy_loop_to_canonical(legacy) == {
-            "id": "sw-595",
-            "type": "loop",
-            "embed": {
-                "id": "sw-603",
-                "type": "pipe:bd0834cfe6cdacb0bea5569505d330b8",
-            },
-            "conf": {"gid": {"subkey": subkey, "type": "text"}},
-            "assign": "mpdetails",
-            "emit": False,
-            "count": "first",
-        }
-
-        # ...but normalize_raw_module defers compact loops (leaves them legacy)
-        # until the compiler reads the top-level embed ref.
-        assert normalize_raw_module(legacy) == legacy
-
-    def test_loop_level_options_win_over_embed_level(self):
-        legacy = PipeModule(
-            {
-                "id": "sw-1",
-                "type": "loop",
-                "field": "outer",
-                "conf": LoopRawConf(
-                    {
-                        "embed": Embed(
-                            {
-                                "type": "module",
-                                "value": EmbeddedModule(
-                                    {
-                                        "id": "sw-2",
-                                        "type": "tokenizer",
-                                        "conf": TokenizerRawConf(),
-                                        "field": {"type": "text", "value": "inner"},
-                                    }
-                                ),
-                            }
-                        )
-                    }
-                ),
-            }
-        )
-        assert normalize_raw_module(legacy).get("field") == "outer"
-
-
-def _run_generated(source, pipe_name):
+def _run_generated(source, pipe_name) -> list[Item]:
     namespace: dict = {}
     exec(compile(source, f"<{pipe_name}>", "exec"), namespace)
-    return list(listize(namespace[pipe_name](context=Context())))
+    return list(namespace[pipe_name](context=Context()))
 
 
-def _run_executor(parsed):
-    return list(listize(build_pipeline(parsed, context=Context())))
+def _run_executor(parsed) -> list[Item]:
+    return list(build_pipeline(parsed, context=Context()))
 
 
-def _compile_and_run(pipe_def, pipe_name):
-    parsed = parse_pipe_def(pipe_def, pipe_name)
-    return list(listize(build_pipeline(parsed, context=Context())))
+def _compile_and_run(pipe_def, pipe_name) -> list[Item]:
+    return _run_executor(parse_pipe_def(pipe_def, pipe_name))
+
+
+def _compact_loop_def(loop_module: PipeModule) -> PipeDef:
+    modules = [
+        ITEMBUILDER_SRC,
+        loop_module,
+        PipeModule({"id": "_OUTPUT", "type": "output", "conf": {}}),
+    ]
+    wires = [get_wire("sw-1", "sw-2", "_w1"), get_wire("sw-2", "_OUTPUT", "_w2")]
+    return PipeDef({"modules": modules, "wires": wires})
 
 
 @pytest.mark.parametrize("pipe_name", list(PIPES))
@@ -532,14 +310,12 @@ def test_async_codegen_matches_sync():
     ``compile(is_async=True)`` emits a runnable anyio pipeline whose output
     matches the sync compilation.
     """
-    import anyio  # noqa: PLC0415
-
     pipe_def = loads((PIPELINE_DIR / "pipe_gigs.json").read_text())
 
     async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
     async_ns: dict = {}
     exec(async_src, async_ns)
-    async_result = list(anyio.run(async_ns["pipe_gigs"]))
+    async_result = list(run(async_ns["pipe_gigs"]))
 
     sync_src = compile_pipe(pipe_def, "pipe_gigs", is_async=False)
     sync_ns: dict = {}
@@ -548,3 +324,82 @@ def test_async_codegen_matches_sync():
 
     assert async_result
     assert async_result == sync_result
+
+
+class TestCompactLoopConsumption:
+    """
+    The compiler consumes a compact loop (top-level ``embed`` ref, ``conf`` =
+    the embed's conf, bare top-level ``count``/``emit``/``assign``/``field``)
+    directly — no legacy ``conf.embed.value`` nesting required.
+    """
+
+    def test_compact_processor_loop_emit(self):
+        loop = LoopModule(
+            {
+                "id": "sw-2",
+                "type": "loop",
+                "conf": {"delimiter": {"type": "text", "value": " "}},
+                "embed": {"id": "sw-3", "type": "tokenizer"},
+                "count": "all",
+                "emit": True,
+                "field": "title",
+            }
+        )
+        assert _compile_and_run(_compact_loop_def(loop), "pipe_compact") == [
+            {"content": "a"},
+            {"content": "b"},
+            {"content": "c"},
+        ]
+
+    def test_compact_processor_loop_assign_per_parent(self):
+        loop = LoopModule(
+            {
+                "id": "sw-2",
+                "type": "loop",
+                "conf": {"delimiter": {"type": "text", "value": " "}},
+                "embed": {"id": "sw-3", "type": "tokenizer"},
+                "count": "all",
+                "emit": False,
+                "assign": "toks",
+                "field": "title",
+            }
+        )
+        assert _compile_and_run(_compact_loop_def(loop), "pipe_compact") == [
+            {"title": "a b c", "toks": {"content": "a"}},
+            {"title": "a b c", "toks": {"content": "b"}},
+            {"title": "a b c", "toks": {"content": "c"}},
+        ]
+
+
+class TestNecessaryLoopFixtures:
+    """
+    Loops that cannot collapse to a direct node — the two cases that stay a
+    compact loop, each backed by a JSON fixture.
+    """
+
+    def test_subpipe_loop_via_top_level_embed(self):
+        # A `pipe:` sub-pipeline embed (the top-level EmbedRef confarg) can't be
+        # inlined, so it stays a loop and runs once per parent. This is the only
+        # fixture that *executes* a pipe:-embed inside a loop (b3d43 raises on an
+        # unsupported leaf; c1cfa's pipe: is a top-level node, not looped).
+        pipe_def = loads((PIPELINE_DIR / "pipe_loop_subpipe.json").read_text())
+        assert _compile_and_run(pipe_def, "pipe_loop_subpipe") == [
+            {"title": "hello", "strconcat": "hello!"}
+        ]
+
+    def test_subpipe_loop_codegen_imports_embed(self):
+        # codegen must import the sub-pipeline used as a loop embed
+        pipe_def = loads((PIPELINE_DIR / "pipe_loop_subpipe.json").read_text())
+        source = stringify_pipe(parse_pipe_def(pipe_def, "pipe_loop_subpipe"))
+        assert "import pipe_shout" in source
+        assert "embed=pipe_shout" in source
+
+    def test_count_all_assign_yields_per_parent_copies(self):
+        # count=all + assign keeps one preserved-parent copy per child result — a
+        # direct node would list-wrap into a single item, so this stays a loop.
+        pipe_def = loads((PIPELINE_DIR / "pipe_loop_assign.json").read_text())
+        assert _compile_and_run(pipe_def, "pipe_loop_assign") == [
+            {"title": "a b c", "tokens": {"content": "a"}},
+            {"title": "a b c", "tokens": {"content": "b"}},
+            {"title": "a b c", "tokens": {"content": "c"}},
+        ]

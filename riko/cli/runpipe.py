@@ -3,7 +3,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from collections.abc import Iterable, Mapping
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
-from os import path as p
+from os.path import basename, splitext
 from types import ModuleType
 
 from riko.bado import run as async_run
@@ -46,14 +46,14 @@ def load_file(name: str, src: str) -> ModuleType | None:
     return module
 
 
-def file2name(path: str) -> str:
+def file2name(_path: str) -> str:
     """
     Return the base module name for a file path.
 
     >>> file2name("examples/demo.py")
     'demo'
     """
-    return p.splitext(p.basename(path))[0]
+    return splitext(basename(_path))[0]
 
 
 async def runner(

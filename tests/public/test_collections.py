@@ -3,16 +3,18 @@
 Provides pipeline collection tests.
 """
 
+from collections.abc import Awaitable, Callable, Iterable, Iterator
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
 from riko import get_path
-from riko._pubsub import async_hub
+from riko._iterutils import noop
+from riko._pubsub import async_hub, close, sync_hub
 from riko.bado import gather_results, issync, run
-from riko.collections import AsyncPipe, SyncCollection, SyncPipe
+from riko.collections import AsyncPipe, Executor, SyncCollection, SyncPipe
 from riko.exceptions import ReceiverUnavailableError
 from riko.types.general import Item, Items
 from riko.types.modules import (
@@ -23,13 +25,14 @@ from riko.types.modules import (
     StrReplaceConfRule,
 )
 from riko.types.values import StreamState
-from riko.utils import _receive_queue, close, reset_pubsub
+from tests import PipeBuilder
 
 value = "once is 1x,twice is 2x,thrice is 3x"
 attrs = ParsedParam({"key": "content", "value": value})
 builder_conf = ItemBuilderConf({"attrs": attrs})
 recv_conf = ReceiveConf({"wait": 0.001, "max_wait": 2})
 strr_conf = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
+marks = pytest.mark.skipif(issync, reason="async support not available")
 
 
 async def _gather_pubsub(sender: AsyncPipe, *receivers: AsyncPipe) -> list[Items]:
@@ -41,10 +44,50 @@ async def _drain_ghost(sender: AsyncPipe) -> Items:
     return [item async for item in sender]
 
 
+_ENGINES = [
+    pytest.param(SyncPipe, id="sync"),
+    pytest.param(AsyncPipe, id="async", marks=marks),
+]
+
+SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
+
+
+def _aresolve[T](awaitable: Awaitable[Any], extract: Callable[..., T]) -> T:
+    """Await *awaitable* on the async engine and return ``extract`` of the result."""
+
+    async def _collect() -> T:
+        return extract(await awaitable)
+
+    return run(_collect)
+
+
+def _run_on[T](
+    pipe: type[SyncPipe] | type[AsyncPipe],
+    build: PipeBuilder,
+    extract: Callable[..., T],
+) -> T:
+    """
+    Build a pipeline on *pipe*, resolve it, and return ``extract`` applied to
+    the result. ``build(pipe)`` yields the terminal chain object; on the async
+    engine that object is awaited before ``extract`` runs, so a single spec drives
+    both engines.
+    """
+    if pipe is SyncPipe:
+        result = extract(build(pipe))
+    else:
+        result = _aresolve(build(cast(type[AsyncPipe], pipe)), extract)
+
+    return result
+
+
+def _first_two[T](splits: Iterable[Iterator[T]]) -> tuple[T, T]:
+    stream1, stream2 = splits
+    return next(stream1), next(stream2)
+
+
 class _CollectionTest:
     def setup_method(self):
         self.runs = 0
-        reset_pubsub()
 
     def udf(self, item: Item) -> Item:
         self.runs += 1
@@ -52,35 +95,15 @@ class _CollectionTest:
 
 
 class TestSyncCollections(_CollectionTest):
-    def test_udf(self):
-        stream = (
-            SyncPipe("itembuilder", conf=builder_conf)
-            .tokenizer(emit=True)
-            .udf(func=itemgetter("content"))
-        )
-        assert next(stream) == "once is 1x"
+    def test_pipes_use_loopability_for_mapping(self):
+        source = [{"content": "one"}, {"content": "two"}]
+        transformer = SyncPipe("strtransform", source=source)
+        input_pipe = SyncPipe("input", source=source)
 
-    def test_split(self):
-        stream = (
-            SyncPipe("itembuilder", conf=builder_conf)
-            .tokenizer(emit=True)
-            .udf(func=self.udf)
-            .split()
-        )
-
-        stream1, stream2 = stream
-        assert next(stream1) == {"content": "once is 1x"}
-        assert next(stream2) == {"content": "once is 1x"}
-        assert self.runs == 3
-
-    def test_export(self):
-        """Tests exporting a synchronous stream to a list."""
-        stream = SyncPipe("itembuilder", conf=builder_conf).tokenizer(emit=True)
-        assert stream.export() == [
-            {"content": "once is 1x"},
-            {"content": "twice is 2x"},
-            {"content": "thrice is 3x"},
-        ]
+        assert transformer.loopable
+        assert transformer.mapify
+        assert not input_pipe.loopable
+        assert not input_pipe.mapify
 
     def test_pubsub(self, caplog):
         names = ["receiver1", "receiver2"]
@@ -212,20 +235,10 @@ class TestSyncCollections(_CollectionTest):
         second = SyncPipe("receive", conf=r_conf)
         next(second)
         sender.close()
-        keep_q = list(_receive_queue.get("keep") or [])
-        r_q = list(_receive_queue.get("r") or [])
+        keep_q = list(sync_hub.queues.get("keep") or [])
+        r_q = list(sync_hub.queues.get("r") or [])
         assert any(state is StreamState.DONE for state, _ in keep_q)
         assert all(state is not StreamState.DONE for state, _ in r_q)
-
-    def test_pipes_use_loopability_for_mapping(self):
-        source = [{"content": "one"}, {"content": "two"}]
-        transformer = SyncPipe("strtransform", source=source)
-        input_pipe = SyncPipe("input", source=source)
-
-        assert transformer.loopable
-        assert transformer.mapify
-        assert not input_pipe.loopable
-        assert not input_pipe.mapify
 
     def test_stream(self):
         """Tests a basic stream pipeline."""
@@ -268,6 +281,31 @@ class TestSyncCollections(_CollectionTest):
         assert self.runs == 3
 
 
+class TestSyncPipeExecutor:
+    def test_process_executor_creates_pool(self):
+        with SyncPipe("hash", source=SRC, parallel=True, threads=False) as pipe:
+            assert pipe.executor is Executor.PROCESS
+            assert pipe.pool is not None
+            assert len(list(pipe)) == 3
+
+    def test_thread_executor_creates_pool(self):
+        with SyncPipe("hash", source=SRC, parallel=True) as pipe:
+            assert pipe.executor is Executor.THREAD
+            assert pipe.pool is not None
+            assert len(list(pipe)) == 3
+
+    def test_inline_skips_pool_and_runs_sequentially(self):
+        pipe = SyncPipe("hash", source=SRC)
+        assert pipe.executor is Executor.INLINE
+        assert not pipe.parallelize
+        assert pipe.pool is None
+        assert len(list(pipe)) == 3
+
+    def test_executor_propagates_through_chain(self):
+        head = SyncPipe("itembuilder", conf={"attrs": {"key": "content", "value": "a"}})
+        assert head.hash().executor is Executor.INLINE
+
+
 @pytest.mark.skipif(issync, reason="async support not available")
 class TestAsyncCollections(_CollectionTest):
     def test_pipes_use_loopability_for_mapping(self):
@@ -301,57 +339,6 @@ class TestAsyncCollections(_CollectionTest):
         captured = capsys.readouterr()
         assert self.runs == 9
         assert captured.out == "{'content': 396558121}\n"
-
-    def test_export(self):
-        """Tests exporting an asynchronous stream to a list."""
-        result = {}
-
-        async def main():
-            pipe = AsyncPipe("itembuilder", conf=builder_conf).tokenizer(emit=True)
-            result["items"] = await pipe.export()
-
-        run(main)
-
-        assert result["items"] == [
-            {"content": "once is 1x"},
-            {"content": "twice is 2x"},
-            {"content": "thrice is 3x"},
-        ]
-
-    def test_udf(self):
-        result = {}
-
-        async def main():
-            stream = await (
-                AsyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .udf(func=itemgetter("content"))
-            )
-            result["first"] = next(stream)
-
-        run(main)
-
-        assert result["first"] == "once is 1x"
-
-    def test_split(self):
-        result = {}
-
-        async def main():
-            splits = await (
-                AsyncPipe("itembuilder", conf=builder_conf)
-                .tokenizer(emit=True)
-                .udf(func=self.udf)
-                .split()
-            )
-            stream1, stream2 = splits
-            result["s1"] = next(stream1)
-            result["s2"] = next(stream2)
-
-        run(main)
-
-        assert result["s1"] == {"content": "once is 1x"}
-        assert result["s2"] == {"content": "once is 1x"}
-        assert self.runs == 3
 
     @pytest.mark.anyio
     @pytest.mark.timeout(10)
@@ -456,6 +443,43 @@ class TestAsyncCollections(_CollectionTest):
 
         run(main)
         assert result["first"] == {"content": 396558121}
+        assert self.runs == 3
+
+
+class TestCollectionParity(_CollectionTest):
+    """Behaviors whose observable output is identical across both engines."""
+
+    @pytest.mark.parametrize("pipe", _ENGINES)
+    def test_udf(self, pipe):
+        build = lambda pipe: (
+            pipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .udf(func=itemgetter("content"))
+        )
+        assert _run_on(pipe, build, next) == "once is 1x"
+
+    @pytest.mark.parametrize("pipe", _ENGINES)
+    def test_export(self, pipe):
+        build = lambda pipe: (
+            pipe("itembuilder", conf=builder_conf).tokenizer(emit=True).export()
+        )
+        assert _run_on(pipe, build, noop) == [
+            {"content": "once is 1x"},
+            {"content": "twice is 2x"},
+            {"content": "thrice is 3x"},
+        ]
+
+    @pytest.mark.parametrize("pipe", _ENGINES)
+    def test_split(self, pipe):
+        build = lambda pipe: (
+            pipe("itembuilder", conf=builder_conf)
+            .tokenizer(emit=True)
+            .udf(func=self.udf)
+            .split()
+        )
+        first1, first2 = _run_on(pipe, build, _first_two)
+        assert first1 == {"content": "once is 1x"}
+        assert first2 == {"content": "once is 1x"}
         assert self.runs == 3
 
 

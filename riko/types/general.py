@@ -8,7 +8,6 @@ from collections.abc import (
     Callable,
     Iterable,
     Iterator,
-    Sequence,
 )
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from typing import (
@@ -34,9 +33,11 @@ from riko.types.values import (
 )
 
 if TYPE_CHECKING:
-    from riko import Context, DynamicConf
+    from riko._io import Fetch
+    from riko._objectify import DynamicConf
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
+    from riko.context import Context
     from riko.dotdict import DotDict
     from riko.types.modules import (
         AnyConfRule,
@@ -45,7 +46,6 @@ if TYPE_CHECKING:
         CountValues,
         Skip,
     )
-    from riko.utils import Fetch
 
 T = TypeVar("T")
 
@@ -61,7 +61,10 @@ type Streams = Iterator[Stream]
 
 type AsyncStream = AsyncIterator[Item]
 type AsyncItems = AsyncIterable[Item]
+type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
+
 type Feed = AsyncItems
+type AsyncSource = Items | Feed | Awaitable[Items | Feed]
 
 type ProcessorParserOutput = Stream | ItemOrValue | AnyLocation | Iterator[str]
 type OperatorParserOutput = Stream | ItemOrValue | Iterator[StatefulItem]
@@ -85,7 +88,6 @@ type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapp
 
 type PipeTuple = tuple[Item, DynamicConf]
 type PipeTuples = Iterator[PipeTuple]
-type Objconfs = Sequence[DynamicConf]
 type Extraction = T
 type ConversionFunc = Callable[..., Items | StringIO]
 type Caster = Callable[[str | int], PrimitiveValue | AnyLocation]
@@ -197,9 +199,7 @@ type ItemOrValueDispatch = ItemDispatch | ValueDispatch
 type SyncItemParseFunc = Callable[..., ItemOrValue]
 type SyncArgFunc = Callable[..., ItemOrValue]
 type SyncConfCastFunc = Callable[..., DynamicConf]
-type SyncConfParseFunc = Callable[
-    ..., DynamicConf | dict[str, DynamicConf] | list[DynamicConf] | None
-]
+type SyncConfParseFunc = Callable[..., AnyModuleConf | None]
 
 type SyncProcessorParser = Callable[[T, Extraction, DynamicConf], ProcessorParserOutput]
 type SyncOperatorParser = Callable[
@@ -230,7 +230,7 @@ class SyncProcessorWrapper(ModuleWrapper):
     def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
-        conf: Conf | None = None,
+        conf: Conf | DynamicConf | None = None,
         context: Context | None = None,
         **__: object,
     ) -> ProcessorWrapperOutput:
@@ -238,7 +238,7 @@ class SyncProcessorWrapper(ModuleWrapper):
         return iter(())
 
 
-class SubPipe(ModuleWrapper):
+class SyncSubPipe(ModuleWrapper):
     def __call__(  # noqa: E704
         self, *_: object, **__: object
     ) -> ProcessorWrapperOutput:
@@ -250,7 +250,7 @@ class SyncOperatorWrapper(ModuleWrapper):
         self,
         items: OperatorWrapperInput | None = None,
         conf: Conf | None = None,
-        embed: SyncProcessorWrapper | SubPipe | None = None,
+        embed: SyncProcessorWrapper | SyncSubPipe | None = None,
         context: Context | None = None,
         **__: object,
     ) -> OperatorWrapperOutput:
@@ -305,11 +305,18 @@ class AsyncProcessorWrapper(ModuleWrapper):
     async def __call__(  # noqa: E704
         self,
         item: ProcessorWrapperInput | None = None,
-        conf: Conf | None = None,
+        conf: Conf | DynamicConf | None = None,
         context: Context | None = None,
         **__: object,
     ) -> ProcessorWrapperOutput:
         _ = (item, conf, context)
+        return iter(())
+
+
+class AsyncSubPipe(ModuleWrapper):
+    async def __call__(  # noqa: E704
+        self, *_: object, **__: object
+    ) -> ProcessorWrapperOutput:
         return iter(())
 
 
@@ -318,7 +325,7 @@ class AsyncOperatorWrapper(ModuleWrapper):
         self,
         items: OperatorWrapperInput | None = None,
         conf: Conf | None = None,
-        embed: AsyncProcessorWrapper | None = None,
+        embed: AsyncProcessorWrapper | AsyncSubPipe | None = None,
         context: Context | None = None,
         **__: object,
     ) -> OperatorWrapperOutput:
@@ -340,6 +347,7 @@ class AsyncSplitterWrapper(ModuleWrapper):
 # Both
 type ProcessorParser = SyncProcessorParser | AsyncProcessorParser
 type ProcessorWrapper = SyncProcessorWrapper | AsyncProcessorWrapper
+type SubPipe = SyncSubPipe | AsyncSubPipe
 type OperatorParser = SyncOperatorParser | AsyncOperatorParser
 type OperatorWrapper = SyncOperatorWrapper | AsyncOperatorWrapper
 type SplitterParser = SyncSplitterParser | AsyncSplitterParser

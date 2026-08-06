@@ -8,7 +8,6 @@ Examples:
 
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
-        >>> from riko.utils import noop
         >>>
         >>> target = receiver(conf={'name': 'receiver1', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)
@@ -29,10 +28,9 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko._pubsub import async_hub
+from riko._pubsub import async_hub, send
 from riko.types.configs import SendObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
-from riko.utils import send
 
 from . import operator
 
@@ -71,7 +69,6 @@ def parser(
     Examples:
         >>> from itertools import repeat
         >>> from riko.modules.receive import pipe as receiver
-        >>> from riko.utils import noop
         >>>
         >>> target = receiver(conf={'name': 'receiver2', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)
@@ -121,7 +118,6 @@ def pipe(*args: Any, **kwargs: str) -> Stream:
 
     Examples:
         >>> from riko.modules.receive import pipe as receiver
-        >>> from riko.utils import noop
         >>>
         >>> target = receiver(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)

@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 
-from riko import DynamicConf
+from riko._objectify import DynamicConf
 
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
@@ -81,9 +81,9 @@ class RssItemBuilderObjconf(DynamicConf):
 
 
 class LoopObjconf(DynamicConf):
+    embed: PipeModule
     count: CountValues
     assign: str
-    embed: PipeModule
     field: str
 
 

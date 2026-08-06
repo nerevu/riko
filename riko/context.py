@@ -5,6 +5,7 @@ riko.context
 The execution context for a pipeline.
 """
 
+from copy import copy
 from enum import StrEnum
 
 from riko.types.values import Inputs
@@ -15,22 +16,6 @@ class ExecutionMode(StrEnum):
     DESCRIBE_INPUTS = "describe_inputs"
     DESCRIBE_DEPENDENCIES = "describe_dependencies"
     DESCRIBE = "describe"
-
-
-def _mode_from_kwargs(**kwargs: bool | None) -> ExecutionMode:
-    inputs = kwargs.get("describe_input")
-    dependencies = kwargs.get("describe_dependencies")
-
-    if inputs and dependencies:
-        mode = ExecutionMode.DESCRIBE
-    elif inputs:
-        mode = ExecutionMode.DESCRIBE_INPUTS
-    elif dependencies:
-        mode = ExecutionMode.DESCRIBE_DEPENDENCIES
-    else:
-        mode = ExecutionMode.RUN
-
-    return mode
 
 
 class Context:
@@ -51,9 +36,9 @@ class Context:
         verbose: bool | None = False,
         test: bool | None = False,
         submodule: bool | None = False,
-        **kwargs: bool | None,
+        **kwargs: object,
     ) -> None:
-        self.mode: ExecutionMode = mode or _mode_from_kwargs(**kwargs)
+        self.mode: ExecutionMode = mode or ExecutionMode.RUN
         self.verbose: bool = bool(verbose)
         self.test: bool = bool(test)
         self.inputs: Inputs = inputs or {}
@@ -76,4 +61,17 @@ class Context:
         return f"Context({content})"
 
 
-__all__ = ["Context", "ExecutionMode"]
+def parse_context(
+    context: "Context | None" = None,
+    mode: "ExecutionMode | None" = None,
+    inputs: Inputs | None = None,
+    **kwargs: bool | None,
+) -> "Context":
+    # Prevents mutating caller-supplied Context
+    new_context = copy(context) if context else Context(mode, inputs=inputs, **kwargs)
+    new_inputs = new_context.inputs if inputs is None else dict(inputs)
+    new_context.inputs = new_inputs
+    return new_context
+
+
+__all__ = ["Context", "ExecutionMode", "parse_context"]

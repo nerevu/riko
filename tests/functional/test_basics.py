@@ -12,12 +12,21 @@ from itertools import islice
 from json import loads
 from pathlib import Path
 from typing import cast
+from unittest.mock import Mock, patch
 
 import pytest
 
-from riko import Context, ExecutionMode, listize
+from riko._io import Fetch
+from riko._iterutils import listize
+from riko._rssutils import augment_entries, truncate_content
 from riko.bado import issync, run
-from riko.compile import abuild_pipeline, build_pipeline, resolve_module
+from riko.compile import (
+    abuild_pipeline,
+    build_pipeline,
+    extract_dependencies,
+    resolve_module,
+)
+from riko.context import Context, ExecutionMode
 from riko.exceptions import UnsupportedModuleError
 from riko.parsers import IS_LXML
 from riko.types.general import (
@@ -29,16 +38,15 @@ from riko.types.general import (
     SyncPipeParser,
 )
 from riko.types.values import FeedParserRSSEntry, StatefulItem
-from riko.utils import augment_entries, extract_dependencies, truncate_content
+from tests import TESTS_DIR
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
-PARENT = Path(__file__).parent.parent
 
 type Items = ParserOutput | StatefulItem
 
 
 def _extract_dependencies(pipe_name) -> list[str]:
-    pipe_file_name = PARENT / "pipelines" / f"{pipe_name}.json"
+    pipe_file_name = TESTS_DIR / "pipelines" / f"{pipe_name}.json"
 
     with pipe_file_name.open() as f:
         pipe_def = loads(f.read())
@@ -126,10 +134,29 @@ class TestBasics:
         """Compile common subpipe"""
         self.context = Context(test=True)
 
+    def test_unified_http_backend(self):
+        """
+        Showcases the unified HTTP backend: a params-less http URL
+        routes through the requests backend instead og the opener.
+        """
+        url = "http://example.com/feed.xml"
+        response = Mock()
+        response.headers = {"Content-Type": "application/rss+xml"}
+
+        with (
+            patch("riko._io.requests.get", return_value=response) as mock_requests,
+            patch("riko._io.urlopen") as mock_urlopen,
+        ):
+            Fetch(url, binary=True)
+
+        mock_requests.assert_called_once()
+        mock_urlopen.assert_not_called()
+        assert mock_requests.call_args.args[0] == url
+
     def test_feeddiscovery(self):
         """
         Loads a pipeline containing a feed auto-discovery module plus
-        fetch-feed in a loop with emit all
+        fetch-feed in a loop with emit all.
         """
         pipe_name = "pipe_HrX5bjkv3BGEp9eSy6ky6g"
         items = self._get_pipeline(pipe_name)

@@ -21,7 +21,7 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko import listize
+from riko._iterutils import listize
 from riko.types.configs import AggregateObjconf
 from riko.types.general import Defaults, Item, PipeTuples, Stream
 

@@ -23,7 +23,8 @@ from typing import (
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko import Objectify, replacer
+from riko._objectify import Objectify
+from riko._strutils import replacer
 from riko.cast import CAST_SWITCH, CastType, cast_value
 from riko.types.general import Item, Stream
 from riko.types.guards import (

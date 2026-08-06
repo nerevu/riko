@@ -9,6 +9,13 @@ independent-pipe construction); it will migrate to execution-scoped
 depend on it.
 """
 
+from collections.abc import Callable, Generator
+from functools import wraps
+from typing import Any
+
+from riko.types.general import Item
+from riko.types.values import StatefulItem
+
 from ._async import AsyncPubSubHub, SubscriptionState
 from ._sync import SyncPubSubHub
 
@@ -21,7 +28,10 @@ __all__ = [
     "SubscriptionState",
     "SyncPubSubHub",
     "async_hub",
+    "close",
+    "coroutine",
     "reset_pubsub",
+    "send",
     "sync_hub",
 ]
 
@@ -29,3 +39,38 @@ __all__ = [
 def reset_pubsub() -> None:
     sync_hub.reset()
     async_hub.reset()
+
+
+def send(target: str, item: Item | StatefulItem) -> int | None:
+    return sync_hub.send(target, item)
+
+
+def close(name: str) -> None:
+    sync_hub.close(name)
+
+
+def coroutine(
+    registry_name: str | None = None, maxlen: int = 256
+) -> Callable[
+    [Callable[..., Generator[None, Item | StatefulItem, None]]],
+    Callable[..., Generator[None, Item | StatefulItem, None]],
+]:
+    """Decorator for generator-based coroutines."""
+
+    def decorator(
+        func: Callable[..., Generator[None, Item | StatefulItem, None]],
+    ) -> Callable[..., Generator[None, Item | StatefulItem, None]]:
+        name = registry_name or func.__name__
+
+        @wraps(func)
+        def wrapper(
+            *args: Any, **kwargs: object
+        ) -> Generator[None, Item | StatefulItem, None]:
+            gen = func(*args, **kwargs)
+            next(gen)
+            sync_hub.seed(name, gen, maxlen)
+            return gen
+
+        return wrapper
+
+    return decorator

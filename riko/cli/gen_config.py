@@ -15,11 +15,12 @@ file) and ``tests`` (to assert no drift) build on.
 from __future__ import annotations
 
 import ast
-import pathlib
 import shutil
 import subprocess
 
-_TYPES_DIR = pathlib.Path(__file__).parent.parent / "types"
+from riko.paths import PACKAGE_DIR
+
+_TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"
 _CONFIGS = _TYPES_DIR / "configs.py"
 _CAST_TYPES = {"CastType", "LocationType"}
@@ -79,14 +80,6 @@ def _normalize(annotation) -> str:
     return ast.unparse(_Deref().visit(ast.fix_missing_locations(module)))
 
 
-def _own_fields(node: ast.ClassDef) -> dict[str, str]:
-    return {
-        stmt.target.id: _normalize(stmt.annotation)
-        for stmt in node.body
-        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-    }
-
-
 def _base(node: ast.ClassDef) -> str:
     parents = [b.id for b in node.bases if isinstance(b, ast.Name)]
     conf_parents = [p for p in parents if p.endswith("Conf")]
@@ -104,9 +97,17 @@ def _nonraw_confs() -> list[ast.ClassDef]:
     ]
 
 
+def own_fields(node: ast.ClassDef) -> dict[str, str]:
+    return {
+        stmt.target.id: _normalize(stmt.annotation)
+        for stmt in node.body
+        if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+    }
+
+
 def objconf_structure() -> dict[str, tuple[str, dict[str, str]]]:
     return {
-        f"{node.name[:-4]}Objconf": (_base(node), _own_fields(node))
+        f"{node.name[:-4]}Objconf": (_base(node), own_fields(node))
         for node in _nonraw_confs()
     }
 
@@ -139,7 +140,7 @@ def _import_block(structure) -> str:
     lines += [
         f"from typing import {', '.join(typing)}",
         "",
-        "from riko import DynamicConf",
+        "from riko._objectify import DynamicConf",
     ]
     guarded = ["", "if TYPE_CHECKING:"]
     guarded += [f"    from riko.cast import {', '.join(cast)}"] if cast else []

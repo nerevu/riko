@@ -18,11 +18,6 @@ parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
 pipeline = build_pipeline(parsed_pipe_def)
 print(list(pipeline))
 
-Instead of passing a filename, a pipe id can be passed (-p) to fetch the
-JSON from Yahoo, e.g.
-
-python compile.py -p 2de0e4517ed76082dcddf66f7b218057
-
 Author: Greg Gaughan
 Idea: Tony Hirst (http://ouseful.wordpress.com/2010/02/25/
 starting-to-think-about-a-yahoo-pipes-code-generator)
@@ -38,10 +33,12 @@ import keyword
 import subprocess
 from codecs import open
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Awaitable, Iterable, Iterator, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
+from functools import partial, reduce, update_wrapper
 from importlib import import_module
+from inspect import isawaitable
 from itertools import pairwise
 from json import JSONEncoder, dumps, loads
 from pathlib import Path
@@ -51,17 +48,17 @@ from typing import Any, Literal, cast, overload
 
 from jinja2 import Environment, PackageLoader
 
-from riko import Context
-from riko.context import ExecutionMode
+from riko._iterutils import listize
+from riko._strutils import replacer
+from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.modules._subpipe import is_subpipe, mark_subpipe
+from riko.paths import ROOT_DIR
 from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
 from riko.types.compile import (
     AbbrevStringModule,
-    CanonicalOptions,
-    EmbedRef,
     LoopModule,
     ParsedPipeDef,
     PipeDag,
@@ -74,39 +71,33 @@ from riko.types.compile import (
 )
 from riko.types.general import (
     AsyncPipeItems,
+    AsyncPipelineDependencies,
     AsyncPipeParser,
+    AsyncPyInput,
     AsyncStream,
     ParserOutput,
     Pipeline,
+    PipelineDependencies,
+    PyInput,
     Step,
     Steps,
     StepValue,
     Stream,
+    SyncPipelineDependencies,
     SyncPipeParser,
+    SyncPyInput,
 )
 from riko.types.modules import (
     AnyModuleRawConf,
     ConfArg,
-    CountArg,
     CountValues,
-    Embed,
-    LoopRawConf,
-    ModuleName,
+    EmbeddedModule,
+    Graph,
+    InputRawConf,
+    Nodes,
     Value,
 )
 from riko.types.values import Inputs
-from riko.utils import (
-    extract_dependencies,
-    extract_input,
-    gen_embed_graph,
-    gen_graph,
-    gen_modules,
-    gen_names,
-    gen_parented_graph,
-    gen_wires,
-    listize,
-    pythonise,
-)
 
 _RAW_CONFS = {
     "count": "CountRawConf",
@@ -178,13 +169,257 @@ class CustomEncoder(JSONEncoder):
         return result
 
 
+def _named_pipeline(module_name: str, pipe_name: str, module_id: str) -> Pipeline:
+    """Return a renamed wrapper without modifying the imported pipeline."""
+    pipeline = resolve_module(module_name, pipe_name)
+    name = str(f"pipe_{module_id}")
+    wrapper = cast(Pipeline, partial(pipeline))
+    update_wrapper(wrapper, pipeline)
+
+    wrapper.__name__ = name
+    wrapper.__qualname__ = name
+    return wrapper
+
+
+def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
+    modules = pipe_def["modules"]
+
+    if isinstance(modules, dict):
+        embed = pipe_def.get("embed") or {}
+        modules = [module for key, module in modules.items() if key not in embed]
+
+    for module in modules:
+        dep = module if isinstance(module, str) else module["type"]
+
+        if dep != "output":
+            yield dep
+
+
+@overload
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+) -> list[str]: ...
+@overload  # noqa: E302
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: AsyncPipelineDependencies,
+) -> Awaitable[list[str]]: ...
+@overload  # noqa: E302
+def extract_dependencies(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: SyncPipelineDependencies,
+) -> list[str]: ...
+def extract_dependencies(  # noqa: E302
+    pipe_def: PipeDef | ParsedPipeDef | None = None,
+    pipeline: PipelineDependencies | None = None,
+) -> Awaitable[list[str]] | list[str]:
+    """Extract modules used by a pipe"""
+    if pipe_def:
+        pydeps = gen_dependencies(pipe_def)
+    elif pipeline:
+        pydeps = pipeline(context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES))
+    else:
+        raise TypeError("Must supply at least one kwarg!")
+
+    return pydeps if isawaitable(pydeps) else sorted(set(pydeps))
+
+
+def gen_input(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[tuple[str, ...]]:
+    fields = ["position", "name", "prompt"]
+    values = ["type", "value"]
+    modules = pipe_def["modules"]
+
+    if isinstance(modules, dict):
+        embed = pipe_def.get("embed") or {}
+        modules = [m for k, m in modules.items() if k not in embed]
+
+    for module in modules:
+        # Note: there seems to be no need to recursively collate inputs
+        # from subpipelines
+        conf = module["conf"]
+
+        try:
+            module_confs: list[str] = [conf[x]["value"] for x in fields]
+        except (KeyError, TypeError):
+            pass
+        else:
+            if default := conf.get("default"):
+                module_confs.extend(default[x] for x in values)
+
+            yield tuple(module_confs)
+
+
+def get_input(conf: InputRawConf, **kwargs: object) -> str | int | bool:
+    """
+    Gets a user parameter, either from the console or from an outer
+     submodule/system
+
+    Assumes conf has name, default, prompt and debug
+    """
+    name = str(conf["name"]["value"])
+    prompt = conf["prompt"]["value"]
+    __default = ConfArg({"type": "text", "value": ""})
+    _default = conf.get("default") or conf.get("debug") or __default
+    default = _default.get("value")
+
+    if inputs := kwargs.get("inputs"):
+        value = cast(Inputs, inputs).get(name, default)
+    elif not kwargs.get("test"):
+        # we skip user interaction during tests
+        raw = input(f"{prompt} (default={default}) ")
+        value = raw or default
+    else:
+        value = default
+
+    return value
+
+
+@overload
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+) -> SyncPyInput: ...
+@overload  # noqa: E302
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: AsyncPipelineDependencies,
+) -> AsyncPyInput: ...
+@overload  # noqa: E302
+def extract_input(  # noqa: E704
+    pipe_def: PipeDef | ParsedPipeDef | None = ...,
+    *,
+    pipeline: SyncPipelineDependencies,
+) -> SyncPyInput: ...
+def extract_input(  # noqa: E302
+    pipe_def: PipeDef | ParsedPipeDef | None = None,
+    pipeline: PipelineDependencies | None = None,
+) -> PyInput:
+    """Extract inputs required by a pipe"""
+    if pipe_def:
+        pyinput = gen_input(pipe_def)
+    elif pipeline:
+        pyinput = pipeline(Context(mode=ExecutionMode.DESCRIBE_INPUTS))
+    else:
+        raise TypeError("Must supply at least one kwarg!")
+
+    return pyinput if isawaitable(pyinput) else sorted(pyinput)
+
+
+def pythonise(
+    content: str | Mapping[str, object],
+    encoding: str = "ascii",
+    replace: Sequence[str] = ("-", ":", "/", ""),
+    key: str | None = None,
+) -> str:
+    """Return a Python-friendly id"""
+    if not isinstance(content, str):
+        if key:
+            resolved = DotDict(content).get(key)
+
+            if isinstance(resolved, str):
+                content = resolved
+            elif isinstance(resolved, (Mapping, Sequence)):
+                _type = type(resolved).__name__
+                raise TypeError(f"Key '{key}' resolved to unsupported type {_type}.")
+            else:
+                content = str(resolved)
+        else:
+            raise ValueError("Received a dict without a key.")
+    elif key:
+        raise ValueError("Received a key without a dict.")
+
+    reduced = reduce(replacer, replace, content)
+    return reduced.encode(encoding, "replace").decode(encoding)
+
+
+def gen_names(
+    module_ids: Sequence[str] | Sequence[tuple[str, ...]],
+    parsed_pipe_def: ParsedPipeDef,
+    ntype: Literal["module", "pipe", "async_pipe"] = "module",
+) -> Iterator[str]:
+    for module_id in module_ids:
+        if isinstance(module_id, str):
+            module_id = (module_id,)
+
+        for _module_id in module_id:
+            module_type = parsed_pipe_def["modules"][_module_id]["type"]
+
+            if module_type.startswith("pipe:"):
+                name = pythonise(module_type)
+            elif ntype == "module":
+                name = module_type
+            elif ntype in {"pipe", "async_pipe"}:
+                name = ntype
+            else:
+                msg = f"Invalid {ntype=}. (Expected 'module', 'pipe', or 'async_pipe')"
+                raise ValueError(msg)
+
+            yield name
+
+
+@overload
+def gen_modules(  # noqa: E704
+    pipe_def: PipeDef, embedded: Literal[False] = ...
+) -> Iterator[tuple[str, PipeModule]]: ...
+@overload  # noqa: E302
+def gen_modules(  # noqa: E704
+    pipe_def: PipeDef, embedded: Literal[True]
+) -> Iterator[tuple[str, EmbeddedModule]]: ...
+def gen_modules(  # noqa: E302
+    pipe_def: PipeDef, embedded=False
+) -> Iterator[tuple[str, PipeModule] | tuple[str, EmbeddedModule]]:
+    for module in listize(pipe_def["modules"]):
+        if embedded and module["type"] == "loop":
+            embed = cast(LoopModule, module)["embed"]
+            embedded_module = EmbeddedModule(
+                {"id": embed["id"], "type": embed["type"], "conf": module["conf"]}
+            )
+            yield (pythonise(embedded_module["id"]), embedded_module)
+        elif not embedded:
+            yield (pythonise(module["id"]), module)
+
+
+def gen_wires(pipe_def: PipeDef) -> Iterator[tuple[str, Wire]]:
+    for wire in pipe_def["wires"]:
+        yield (pythonise(wire["id"]), wire)
+
+
+def gen_graph(pipe_def: PipeDef) -> Iterator[tuple[str, str]]:
+    for wire in pipe_def["wires"]:
+        src_id = pythonise(wire["src"]["moduleid"])
+        tgt_id = pythonise(wire["tgt"]["moduleid"])
+        yield (src_id, tgt_id)
+
+
+def gen_embed_graph(pipe_def: PipeDef) -> Iterator[tuple[str, list[str]]]:
+    for module in listize(pipe_def["modules"]):
+        module_id = pythonise(module["id"])
+        yield (module_id, [])
+
+        # make the loop dependent on its embedded module
+        if module["type"] == "loop":
+            embed = cast(LoopModule, module)["embed"]
+            yield (pythonise(embed["id"]), [module_id])
+
+
+def gen_parented_graph[T: str | int](graph: Graph[T]) -> Iterator[tuple[T, Nodes[T]]]:
+    """Remove any orphan nodes"""
+    for node, value in graph.items():
+        if value or any(node in v for v in graph.values()):
+            yield (node, value)
+
+
 def get_module_id(wire: Wire, stem: str = "src", base: str = "moduleid") -> str:
     return pythonise(wire, key=f"{stem}.{base}")
 
 
-def write_file(data: object, path: str | None, pretty: bool = False) -> int | None:
+def write_file(
+    data: object, path: Path | str | None, pretty: bool = False
+) -> int | None:
     if data and path:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(str(path), "w", encoding="utf-8") as f:
             if hasattr(data, "keys") and pretty:
                 kwargs = {
                     "cls": CustomEncoder,
@@ -223,44 +458,9 @@ def _lower_keys[T](obj: T) -> T:
     return cast(T, result)
 
 
-def _render_embed(embed: Embed) -> str:
-    value = embed["value"]
-    embed_type = value["type"]
-    parts = []
-
-    for key, val in value.items():
-        if key == "conf":
-            rendered = _conf_source(embed_type, cast(AnyModuleRawConf, val))
-        else:
-            rendered = repr_arg(cast(str | ModuleName | ConfArg, val))
-
-        parts.append(f"{repr_arg(key)}: {rendered}")
-
-    return f"{{'type': 'module', 'value': {{{', '.join(parts)}}}}}"
-
-
-def _render_loop(conf: LoopRawConf) -> str:
-    parts = []
-
-    for key, val in conf.items():
-        if key == "embed":
-            rendered = _render_embed(cast(Embed, val))
-        else:
-            rendered = repr_arg(cast(Value, val))
-
-        parts.append(f"{repr_arg(key)}: {rendered}")
-
-    return f"{{{', '.join(parts)}}}"
-
-
 def _conf_source(module_name: str, conf: AnyModuleRawConf | Id | Context) -> str:
     raw = _RAW_CONFS.get(module_name)
-
-    if module_name == "loop" and isinstance(conf, dict) and "embed" in conf:
-        inner = _render_loop(conf)
-    else:
-        inner = repr_arg(conf)
-
+    inner = repr_arg(conf)
     return f"{raw}({inner})" if raw else inner
 
 
@@ -270,13 +470,20 @@ def _render_conf(module_name: str, conf: AnyModuleRawConf | Id | Context) -> str
 
 def _gen_embed_module_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
     for module in parsed_pipe_def["modules"].values():
-        if (
-            (conf := module["conf"])
-            and (embed := cast(LoopRawConf, conf).get("embed"))
-            and (embed_type := embed.get("value", {}).get("type"))
-            and not embed_type.startswith("pipe")
-        ):
-            yield embed_type
+        if module["type"] == "loop":
+            embed = cast(LoopModule, module)["embed"]
+
+            if not embed["type"].startswith("pipe"):
+                yield embed["type"]
+
+
+def _gen_embed_subpipe_names(parsed_pipe_def: ParsedPipeDef) -> Iterator[str]:
+    for module in parsed_pipe_def["modules"].values():
+        if module["type"] == "loop":
+            embed = cast(LoopModule, module)["embed"]
+
+            if embed["type"].startswith("pipe"):
+                yield pythonise(embed["type"])
 
 
 def _get_sources(
@@ -296,15 +503,13 @@ def _used_raw_confs(parsed_pipe_def: ParsedPipeDef) -> set[str]:
         if _get_sources(conf) is not None:
             continue
 
-        if raw := _RAW_CONFS.get(module["type"]):
-            used.add(raw)
+        if module["type"] == "loop":
+            embed = cast(LoopModule, module)["embed"]
 
-        if (
-            (embed := cast(LoopRawConf, conf or {}).get("embed"))
-            and (embed_type := embed.get("value", {}).get("type"))
-            and (embed_raw := _RAW_CONFS.get(embed_type))
-        ):
-            used.add(embed_raw)
+            if embed_raw := _RAW_CONFS.get(embed["type"]):
+                used.add(embed_raw)
+        elif raw := _RAW_CONFS.get(module["type"]):
+            used.add(raw)
 
     return used
 
@@ -353,6 +558,7 @@ def _gen_string_modules(
         if module_id in parsed_pipe_def["embed"]:
             continue
 
+        alias = _module_alias(module_name)
         args = (parsed_pipe_def, module_id)
         is_sub_pipe = module_name.startswith("pipe")
         pyarg = _get_pyarg(*args, split_ids=split_ids, steps=None, **kwargs)
@@ -380,9 +586,16 @@ def _gen_string_modules(
                 if split_id in split_ids:
                     split_ids[split_id] += 1
 
+            module = parsed_pipe_def["modules"][module_id]
+
+            if module["type"] == "loop" and "embed" in module:
+                embed = cast(LoopModule, module)["embed"]
+                embed_module_name = embed["type"]
+            else:
+                embed_module_name = module_name
+
             pykwargs = list(_gen_pykwargs(*args, steps=None, **kwargs))
-            alias = _module_alias(module_name)
-            expr = f"{alias}({_render_args(module_name, pyarg, pykwargs)})"
+            expr = f"{alias}({_render_args(embed_module_name, pyarg, pykwargs)})"
 
         if module_name == "split":
             splits = DotDict(conf).get("splits", 2)
@@ -394,7 +607,7 @@ def _gen_string_modules(
             {
                 "id": module_id,
                 "expr": expr,
-                "alias": _module_alias(module_name),
+                "alias": alias,
                 "is_sub_pipe": is_sub_pipe,
                 "is_collection": is_collection,
                 "name": module_name,
@@ -493,24 +706,21 @@ def _gen_pykwargs(  # noqa: E302
         yield ("others", others)
 
     if module["type"] == "loop":
-        embedded_module = cast(LoopRawConf, module["conf"])["embed"]["value"]
-        pipe_id = pythonise(embedded_module["id"])
-        updated = (
-            Id(_module_alias(embedded_module["type"]))
-            if steps is None
-            else steps[pipe_id]
-        )
+        embed = cast(LoopModule, module)["embed"]
+        embed_type = embed["type"]
+        pipe_id = pythonise(embed["id"])
+
+        if steps is None:
+            is_pipe = embed_type.startswith("pipe:")
+            name = pythonise(embed_type) if is_pipe else _module_alias(embed_type)
+            updated = Id(name)
+        else:
+            updated = steps[pipe_id]
+
         yield ("embed", updated)
 
 
 @overload
-def resolve_module(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
-    module_name: Literal["output"],
-    pipe_name: str,
-    compile_missing: Literal[False] = ...,
-    file_path: Path | None = ...,
-) -> None: ...
-@overload  # noqa: E302
 def resolve_module(  # noqa: E704
     module_name: str,
     pipe_name: Literal["pipe"],
@@ -568,11 +778,7 @@ def resolve_module(  # noqa: E302
     """
     module = parsed_pipe_def = None
 
-    if module_name == "output":
-        # output is a virtual pipe, legacy from Yahoo Pipes; there's no real
-        # module — the compiler just makes it return its input stream.
-        pass
-    elif module_name.startswith("pipe_"):
+    if module_name.startswith("pipe_"):
         try:
             module = import_module(f"tests.pypipelines.{module_name}")
         except ModuleNotFoundError as e:
@@ -581,8 +787,7 @@ def resolve_module(  # noqa: E302
                 msg += "Building from json..."
                 print(msg)
 
-                parent = Path(__file__).parent.parent
-                file_path = file_path or parent / "tests" / "pipelines"
+                file_path = file_path or ROOT_DIR / "tests" / "pipelines"
                 pipe_file_name = file_path / f"{pipe_name}.json"
 
                 try:
@@ -633,23 +838,22 @@ def _gen_steps(
     steps = steps or {}
 
     for module_id, module_name, pipe_name in zipped:
-        pipeline = resolve_module(module_name, pipe_name)
         args = (parsed_pipe_def, module_id)
 
         if module_name == "output":
-            # Legacy Yahoo Pipes. Its result is just its input stream.
+            # Terminal sink marker: its result is just its input stream.
             pyarg = _get_pyarg(*args, steps=steps, context=context, **kwargs)
             step = (module_id, pyarg)
         elif module_id in parsed_pipe_def["embed"]:
             # We need to wrap submodules (used by loops) so we can pass the
             # input at runtime (as we can to sub-pipelines)
             # Note: no embed (so no subloops) or wire pykwargs are passed
-            pipeline.__name__ = str(f"pipe_{module_id}")
+            pipeline = _named_pipeline(module_name, pipe_name, module_id)
             step = (module_id, pipeline)
         else:  # else this module is not embedded:
+            pipeline = resolve_module(module_name, pipe_name)
             pyarg = _get_pyarg(*args, steps=steps, context=context, **kwargs)
-            _args = (parsed_pipe_def, module_id)
-            _pykwargs = _gen_pykwargs(*_args, steps=steps, context=context, **kwargs)
+            _pykwargs = _gen_pykwargs(*args, steps=steps, context=context, **kwargs)
             pykwargs = dict(_pykwargs)
             step = (module_id, pipeline(pyarg, **pykwargs))
 
@@ -732,92 +936,6 @@ def convert_dag(dag: PipeDag) -> PipeDef:
     return PipeDef({"modules": modules, "wires": full_wires})
 
 
-@overload
-def _arg_value(arg: None) -> None: ...  # noqa: E704
-@overload
-def _arg_value(arg: CountArg) -> str: ...  # noqa: E704
-@overload
-def _arg_value(arg: ConfArg) -> int | str | bool: ...  # noqa: E704
-@overload
-def _arg_value[T](arg: T) -> T: ...  # noqa: E704
-def _arg_value[T](  # noqa: E302
-    arg: ConfArg | CountArg | T | None,
-) -> T | int | str | bool | None:
-    return arg.get("value") if isinstance(arg, dict) else arg
-
-
-def _canonical_options(module: PipeModule) -> CanonicalOptions:
-    conf = cast(LoopRawConf, module["conf"])
-    embedded_module = conf["embed"]["value"]
-    opts = cast(CanonicalOptions, {})
-
-    for key in ("field", "assign", "emit"):
-        if (value := cast(str | None, module.get(key))) is None:
-            value = cast(ConfArg | None, embedded_module.get(key))
-
-        opts[key] = None if value is None else _arg_value(value)
-
-    opts["count"] = _arg_value(conf.get("count"))
-    return opts
-
-
-def legacy_loop_to_canonical(module: PipeModule) -> PipeModule | LoopModule:
-    opts = _canonical_options(module)
-    conf = cast(LoopRawConf, module["conf"])
-    embedded_module = conf["embed"]["value"]
-    module_name = embedded_module["type"]
-    embed_conf = embedded_module["conf"]
-
-    # A pipe embed always stays a loop. A processor embed collapses to a direct
-    # node only when its own fold matches the loop's per-parent fold — i.e. it
-    # emits results or keeps just the first. With assign + count!="first" the
-    # processor list-wraps into one item while the loop yields one copy per
-    # result, so that case must stay a loop embedding the processor.
-    emit_false = opts["emit"] is False
-    keeps_many = opts["count"] != "first"
-    is_loop = module_name.startswith("pipe") or (emit_false and keeps_many)
-    _type = "loop" if is_loop else module_name
-    result = PipeModule({"id": module["id"], "type": _type, "conf": embed_conf})
-
-    if is_loop:
-        result["embed"] = EmbedRef({"id": embedded_module["id"], "type": module_name})
-
-    for k, v in opts.items():
-        if v is not None:
-            result[k] = v
-
-    return cast(LoopModule, result) if is_loop else result
-
-
-def normalize_raw_module(module: PipeModule) -> PipeModule | LoopModule:
-    """
-    Lift a legacy nested loop (``conf.embed.value``) to the canonical form the
-    compiler consumes. ``_legacy_loop_to_canonical`` collapses a processor loop
-    whose fold matches the loop (``emit`` mode or ``count="first"``) into a
-    **direct processor node** (``count``/``field``/``assign``/``emit`` hoisted,
-    embed conf flattened up, loop id kept). Ordinary modules pass through.
-
-    The compact-loop cases (any ``pipe:<id>`` embed, or ``count=all``+``assign``)
-    are **left legacy for now** — the compiler still reads the top-level ``embed``
-    ref from `conf.embed.value`, so lifting them to a compact node waits on that
-    consumption step. See docs/gameplans/loop-restructure.md.
-    """
-    result = module
-
-    if module["type"] == "loop" and "embed" in module["conf"]:
-        canonical = legacy_loop_to_canonical(module)
-
-        if canonical.get("type") != "loop":
-            result = canonical
-
-    return result
-
-
-def normalize_pipe_def(pipe_def: PipeDef) -> PipeDef:
-    modules = [normalize_raw_module(m) for m in listize(pipe_def["modules"])]
-    return cast(PipeDef, {**pipe_def, "modules": modules})
-
-
 def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPipeDef:
     """
     Parse pipe JSON into internal structures
@@ -832,7 +950,6 @@ def parse_pipe_def(pipe_def: PipeDef, pipe_name: str = "anonymous") -> ParsedPip
     pipe -- an internal representation of a pipe
 
     """
-    pipe_def = normalize_pipe_def(pipe_def)
     graph = defaultdict(list, gen_embed_graph(pipe_def))
     [graph[k].append(v) for k, v in gen_graph(pipe_def)]
     modules = {
@@ -917,8 +1034,8 @@ def _get_descriptions(
 
 def _resolve_leaf_modules(parsed_pipe_def: ParsedPipeDef) -> None:
     # Fail fast on unsupported leaf modules, including ones disconnected from the
-    # output graph that the lazy per-step build never reaches. `output` and
-    # `pipe`-prefixed sub-pipelines resolve via their own paths.
+    # graph that the lazy per-step build never reaches. The terminal ``output``
+    # marker and `pipe`-prefixed sub-pipelines resolve via their own paths.
     for module in parsed_pipe_def["modules"].values():
         module_name = module["type"]
 
@@ -1037,7 +1154,8 @@ def stringify_pipe(
         tuple(m[k] for k in keys) for m in string_modules if not m["is_collection"]
     }
     embeds = {(False, n, n, _module_alias(n)) for n in embed_names}
-    _uniq_modules = sorted(single_sources | embeds)
+    subpipes = {(True, n, n, n) for n in _gen_embed_subpipe_names(parsed_pipe_def)}
+    _uniq_modules = sorted(single_sources | embeds | subpipes)
     uniq_modules = [dict(zip(keys, m, strict=False)) for m in _uniq_modules]
 
     pyinput = extract_input(parsed_pipe_def)

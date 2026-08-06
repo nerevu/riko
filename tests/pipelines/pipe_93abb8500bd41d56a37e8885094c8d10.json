@@ -34,39 +34,22 @@
             "type": "output"
         },
         {
-            "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "listize": {
-                                "type": "bool",
-                                "value": true
-                            }
-                        },
-                        "id": "sw-508",
-                        "type": "termextractor",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "terms"
-                        }
-                    }
-                }
-            },
             "id": "sw-500",
             "type": "loop",
-            "field": {
-                "type": "text",
-                "value": "title"
-            }
+            "conf": {
+                "listize": {
+                    "type": "bool",
+                    "value": true
+                }
+            },
+            "embed": {
+                "id": "sw-508",
+                "type": "termextractor"
+            },
+            "field": "title",
+            "assign": "terms",
+            "emit": false,
+            "count": "all"
         }
     ],
     "terminaldata": [

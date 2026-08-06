@@ -11,7 +11,6 @@ from riko.modules.rename import pipe as rename
 from riko.modules.urlbuilder import pipe as urlbuilder
 from riko.types.modules import (
     FetchRawConf,
-    LoopRawConf,
     RegexRawConf,
     RenameRawConf,
     UrlBuilderRawConf,
@@ -40,46 +39,29 @@ def pipe_e65397e116d7754da0dd23425f1f0af1(
         )
         sw_626 = loop(
             sw_565,
-            conf=LoopRawConf(
+            conf=UrlBuilderRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "type": "urlbuilder",
-                            "id": "sw-634",
-                            "assign": {"type": "text", "value": "media:content.url"},
-                            "emit": {"type": "bool", "value": False},
-                            "conf": UrlBuilderRawConf(
-                                {
-                                    "path": {"type": "text", "value": ""},
-                                    "base": {
-                                        "type": "text",
-                                        "value": "https://example.invalid/chart",
-                                    },
-                                    "param": [
-                                        {
-                                            "value": {"type": "text", "value": "qr"},
-                                            "key": {"type": "text", "value": "cht"},
-                                        },
-                                        {
-                                            "value": {
-                                                "type": "text",
-                                                "value": "200x200",
-                                            },
-                                            "key": {"type": "text", "value": "chs"},
-                                        },
-                                        {
-                                            "value": {"type": "text", "subkey": "link"},
-                                            "key": {"type": "text", "value": "chl"},
-                                        },
-                                    ],
-                                }
-                            ),
+                    "path": {"type": "text", "value": ""},
+                    "base": {"type": "text", "value": "https://example.invalid/chart"},
+                    "param": [
+                        {
+                            "value": {"type": "text", "value": "qr"},
+                            "key": {"type": "text", "value": "cht"},
                         },
-                    },
+                        {
+                            "value": {"type": "text", "value": "200x200"},
+                            "key": {"type": "text", "value": "chs"},
+                        },
+                        {
+                            "value": {"type": "text", "subkey": "link"},
+                            "key": {"type": "text", "value": "chl"},
+                        },
+                    ],
                 }
             ),
+            emit=False,
+            assign="media:content.url",
+            count="all",
             context=context,
             embed=urlbuilder,
         )

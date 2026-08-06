@@ -106,35 +106,17 @@
             "type": "union"
         },
         {
+            "id": "sw-486",
+            "type": "fetch",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "fetch",
-                        "id": "sw-487",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "loop:fetch"
-                        },
-                        "conf": {
-                            "URL": {
-                                "subkey": "link",
-                                "type": "url"
-                            }
-                        }
-                    }
+                "URL": {
+                    "subkey": "link",
+                    "type": "url"
                 }
             },
-            "id": "sw-486",
-            "type": "loop"
+            "assign": "loop:fetch",
+            "emit": true,
+            "count": "all"
         },
         {
             "conf": {},

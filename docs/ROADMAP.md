@@ -66,7 +66,15 @@ orchestration and database integrations) live in [Shelf.md](Shelf.md).
 
 # Part I — Runtime contract
 
+> **Section status legend.** Each Part I section is tagged with how much of what it
+> describes exists **today**, verified against the code — not aspirational. **Implemented**
+> (ships and matches) · **Partial** (some ships; gaps noted) · **Planned** (described,
+> not yet in code). Parts II–IV are roadmap by nature and are not tagged.
+
+
 ## 0. Architectural direction
+
+> **Status: Partial.** async lazy iteration, bounded concurrency, and sync/async parity ship; callable `map`/`flat_map` and the RDP do not.
 
 Riko will retain its existing item-oriented pipeline model while adding:
 
@@ -89,6 +97,8 @@ The implementation should favor:
 * execution plans that record all resolved assumptions
 
 ## 1. Product layers
+
+> **Status: Partial.** Core (sync/async pipes + built-in modules) ships; the Connect layer is not started.
 
 ### Riko Core
 
@@ -124,6 +134,8 @@ Core and Connect may remain in one distribution initially. Connect is a conceptu
 ---
 
 ## 2. Core item and stream types
+
+> **Status: Implemented.** `Item`/`Stream`/`Feed`/`AsyncSource` exist as described in `riko/types/general.py`.
 
 ```python
 type Item = (
@@ -167,6 +179,8 @@ The new runtime must remove that materialization from normal stage chaining.
 ---
 
 ## 3. Pipe behavior
+
+> **Status: Partial.** sync pipes and Feed reuse ship; async chaining is lazy at the stage boundary but still materializes non-bounded legacy-parser paths (`riko/collections.py`).
 
 ### 3.1 Synchronous pipes
 
@@ -227,6 +241,14 @@ The underlying `StopAsyncIteration` behavior is authoritative.
 ---
 
 ## 4. Callable stages
+
+> **Status: Planned.** `Opts` carries none of the execution-characteristic fields; `map`/`flat_map` callable stages and strict mode do not exist. `@processor`/`@operator`/`@splitter` exist but are not extended with these fields.
+
+> **Deferred / not yet implemented.** Per-module Feed-native parsers (a
+> `parser_mode: feed | legacy_stream` classification, review #8) are not built:
+> today's module parsers consume synchronous `Items`, so a non-parallel async
+> stage buffers its upstream at the explicit `AsyncPipe._materialize_legacy_source`
+> boundary. Only the bounded/parallel path streams end-to-end (see §3.2, §8).
 
 ### Stage execution options
 
@@ -802,6 +824,8 @@ and no `call_kwargs` primitive.
 
 ## 5. Execution characteristics
 
+> **Status: Planned.** `Opts` does not contain `boundedness`/`ordering`/`side_effects`/`determinism`/`require_bounded`/`state_checkpoint`/`lineage_commit`; the bounded/ordered *behaviors* live in the §6 primitives, not as declared metadata.
+
 ### 5.1 Boundedness
 
 ```python
@@ -888,6 +912,8 @@ These opts influence retry safety, replay warnings, caching, and planner behavio
 
 ## 6. Async execution and backpressure
 
+> **Status: Partial.** bounded concurrency and order-preserving streaming ship (`async_map_stream`/`async_map_ordered_stream`); ordering uses a batched window, not a true indexed reorder buffer, and cancellation is not fully specified.
+
 ### 6.1 Bounded concurrency
 
 Async mapping uses bounded worker concurrency.
@@ -926,6 +952,10 @@ When the buffer fills:
 
 ### 6.4 Cancellation
 
+> **Deferred / not yet implemented.** `on_cancel` does not exist. Async
+> mid-iteration early close currently marks the pipe `FAILED`, and full `anext`
+> cancellation is unspecified — P7 carryover (REFINEMENT_PLAN P7 / P7.5).
+
 ```python
 on_cancel: Literal[
     "drain",
@@ -961,6 +991,8 @@ When both execution and cleanup fail:
 
 ## 7. Timeout
 
+> **Status: Partial.** sync and async `TimeoutIterator` ship for lifetime (`total`) timeout (`riko/modules/timeout.py`); the `idle`/`item` modes and `on_timeout` policy are not exposed.
+
 ```python
 timeout(
     seconds,
@@ -989,6 +1021,8 @@ Definitions:
 
 ## 8. Union and merge
 
+> **Status: Partial.** `union` ships (`riko/modules/union.py`); the concurrent async `merge` operator does not exist.
+
 ### 8.1 Union
 
 Historical `union` remains deterministic sequential concatenation:
@@ -1002,6 +1036,13 @@ primary
 The current implementation uses `itertools.chain`.
 
 ### 8.2 Merge
+
+> **Partial / deferred.** The internal `async_merge` primitive
+> (`riko/bado/itertools.py`) — bounded, arrival-order — exists and powers
+> incremental `AsyncCollection` merge on the unordered path (records interleave as
+> they arrive; ordered collections still materialize per source). The user-facing
+> `merge` *operator* below (`scheduling`/`on_source_error`/`buffer_budget`/
+> `per_source_limit`) does not exist yet.
 
 `merge` is a distinct async-native concurrent operator.
 
@@ -1063,6 +1104,8 @@ A source may discover partitions internally, but new top-level feeds are not dyn
 
 ## 9. Run status and exit codes
 
+> **Status: Partial.** the CLI returns exit codes (`riko/cli/manage.py`); the `RunStatus` enum / 4-code scheme is not implemented.
+
 ```python
 class RunStatus(Enum):
     COMPLETED = "completed"
@@ -1086,6 +1129,8 @@ The partial exit code remains configurable.
 
 ## 10. Delivery guarantee
 
+> **Status: Planned.** no positioned items, checkpoints, or at-least-once machinery.
+
 Riko Connect provides **at-least-once delivery**.
 
 A source position advances only after its required downstream outputs or terminal dispositions are durable.
@@ -1106,6 +1151,8 @@ These are sink capabilities, not universal Riko guarantees.
 ---
 
 ## 11. Retry policy
+
+> **Status: Planned.** no retry policy in code.
 
 ```python
 @dataclass(frozen=True)
@@ -1151,6 +1198,8 @@ Retry policies may be configured separately for:
 ---
 
 ## 12. Errors and dispositions
+
+> **Status: Planned.** only `on_error`/`error_key` + basic exception classes; no error/disposition sinks or drop policy.
 
 ### 12.1 Error policies
 
@@ -1265,6 +1314,8 @@ Per-item events are not required for the normal `complete` path.
 
 ## 13. Filter semantics
 
+> **Status: Partial.** `filter` implements `permit`/`combine`/`stop` (`riko/modules/filter.py`); drop-policy / disposition semantics are absent.
+
 A filtered-out item with `drop_policy="complete"` is immediately considered complete.
 
 With `filter(stop=True)` the first rejected item:
@@ -1278,6 +1329,8 @@ With `filter(stop=True)` the first rejected item:
 ---
 
 ## 14. Lineage and acknowledgements
+
+> **Status: Planned.** no lineage envelope, positions, or acknowledgements.
 
 ### 14.1 Position envelope
 
@@ -1408,6 +1461,8 @@ Defaults depend on join type.
 
 ## 15. Stateful operators
 
+> **Status: Planned.** `StatefulItem` type exists but no checkpoint/persist machinery.
+
 Stateful streaming stages declare:
 
 ```python
@@ -1424,6 +1479,8 @@ state_checkpoint: Literal[
 ---
 
 ## 16. Batch model
+
+> **Status: Planned.** no `Batch`/`BatchPipe`/`BatchPolicy`.
 
 ```python
 @dataclass(frozen=True)
@@ -1487,6 +1544,8 @@ error
 
 ## 17. Riko Data Protocol
 
+> **Status: Planned.** no RDP protocol/enums/plan types in code.
+
 ### 17.1 Compatibility position
 
 RDP is an input superset of Singer and defines a strict Singer-compatible profile.
@@ -1548,6 +1607,8 @@ The plan records:
 
 ## 18. State
 
+> **Status: Planned.** no state store / `Checkpoint`.
+
 ### 18.1 State types
 
 Support typed:
@@ -1593,6 +1654,8 @@ A crash after output acknowledgement but before CAS causes replay. Stable batch 
 ---
 
 ## 19. Schema
+
+> **Status: Planned.** no `RikoSchema` / registry.
 
 ### 19.1 Canonical representation
 
@@ -1657,6 +1720,8 @@ Fixed-schema batch pipelines freeze the initial schema and reject later widening
 
 ## 20. Batch transports
 
+> **Status: Planned.** no batch-transport selection.
+
 ```python
 batch_transport: Literal[
     "manifest",
@@ -1700,6 +1765,8 @@ The planner selects IPC only when every restriction is satisfied. Otherwise, it 
 
 ## 21. Manifest durability
 
+> **Status: Planned.** no `Manifest` / commit protocol.
+
 The manifest is the commit marker.
 
 Commit sequence:
@@ -1733,6 +1800,8 @@ Use run-scoped immutable object names initially. Objects without committed manif
 ---
 
 ## 22. Memory limits
+
+> **Status: Planned.** no enforced memory/record limits.
 
 Initial limits are item-count based:
 
@@ -1772,6 +1841,8 @@ Universal deep Python-object size estimation is not required initially.
 ---
 
 ## 23. AnyIO and Twisted
+
+> **Status: Partial.** AnyIO is the sole implemented async runtime (`riko/bado/__init__.py`); Twisted is not present in code and protocol adapters are pending.
 
 AnyIO becomes the canonical runtime for new concurrency features:
 
@@ -1839,6 +1910,8 @@ permitted within an adapter when it is the superior option (almost always a serv
 
 ## 24. Module registry and plugins
 
+> **Status: Partial.** module discovery is the current `pkgutil`-based `list_modules` (`riko/modules/_metadata.py`); the entry-point/runtime `ModuleRegistry` is P8-planned.
+
 Initial registry:
 
 * static built-in module registry
@@ -1851,6 +1924,8 @@ One distribution and internal plugin architecture are sufficient initially. Exte
 ---
 
 ## 25. Conversion and dataframe integration
+
+> **Status: Partial.** meza-backed export converters ship (csv/json/geojson/ofx/qif/list/tuple, `riko/collections.py`); the Batch/dataframe path is deferred.
 
 Meza owns conversion work.
 
@@ -1993,8 +2068,12 @@ Deliver before major runtime work:
 
 ### Milestone 10 — Compatibility cleanup
 
-* review Twisted usage
-* remove or constrain Twisted before 1.0
+* ~~review / remove Twisted~~ — **done** (no Twisted anywhere; the runtime is AnyIO-only)
+* **swap the ``mezmorize`` memoization dependency** — ``mezmorize.memoize`` + ``get_cache_type``
+  are used only in ``riko/_io.py::get_opener`` (memoized URL/file fetch). Replace with a
+  stdlib/dependency-free cache. Optional modernization (not legacy cleanup); the Flask concern is
+  moot (current ``mezmorize`` depends on ``cachelib``, not Flask). Also drops the ``manage``
+  console-script collision with ``mezmorize`` (see root ``CLAUDE.md``).
 * add entry-point plugin discovery if needed
 * upstream temporary Meza adapters
 * remove compatibility materialization stages where possible
@@ -2824,8 +2903,8 @@ mechanism, not by whether its source is finite or live.
 
 | Primitive | riko mapping | Environments | Best suited for |
 |---|---|---|---|
-| Generator coroutine (`.send()`) | `_registry` in `riko/utils.py` — named coroutines that receive items pushed by `send` module | S | Fan-out in sync pipelines; the only option without an async runtime |
-| `collections.deque` | `_receive_queue` in `riko/utils.py` — buffer between sender coroutine and polling consumer | S | Sync bridge between push (`.send()`) and pull (`next(receiver)`) sides |
+| Generator coroutine (`.send()`) | `sync_hub.receivers` in `riko/_pubsub` — named coroutines that receive items pushed by `send` module | S | Fan-out in sync pipelines; the only option without an async runtime |
+| `collections.deque` | `sync_hub.queues` in `riko/_pubsub` — buffer between sender coroutine and polling consumer | S | Sync bridge between push (`.send()`) and pull (`next(receiver)`) sides |
 | `time.sleep` polling (`wait` / `max_wait`) | Receiver loop in `riko/modules/receive.py` | S | Sync waiting for items from a named channel; unavoidable in sync context |
 | `StreamState.PENDING` sentinel | Yielded by `receive` while no items are available | S | Signals caller that the receiver is alive but waiting; enables cooperative interleaving |
 
@@ -2836,7 +2915,7 @@ coroutines + deque + polling unchanged.
 
 | Primitive | riko mapping | Environments | Best suited for |
 |---|---|---|---|
-| `asyncio.Queue` | Async alternative to `_receive_queue` + polling | A · Y | Fan-out between async tasks; bounded queue gives natural backpressure |
+| `asyncio.Queue` | Async alternative to `sync_hub.queues` + polling | A · Y | Fan-out between async tasks; bounded queue gives natural backpressure |
 | `anyio.create_memory_object_stream()` | Backend-agnostic named send/receive stream pair | Y | Fan-out on both asyncio and trio; naming mirrors `send`/`receive` semantics |
 | `anyio.TaskGroup` / `asyncio.TaskGroup` | Structured concurrency; each consumer runs as a concurrent task | A · Y | Multiple async consumers; lifetime tied to the group |
 

@@ -22,7 +22,10 @@ import feedparser
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko import listize
+from riko._io import Fetch
+from riko._iterutils import listize
+from riko._rssutils import truncate_content
+from riko._serialize import repr_cache
 from riko.dotdict import DotDict, is_sentinal, is_type_value
 from riko.types.general import (
     FileTypes,
@@ -40,7 +43,6 @@ from riko.types.values import (
     Stringy,
     StringyDict,
 )
-from riko.utils import Fetch, repr_cache, truncate_content
 
 try:
     from lxml import etree, html  # type: ignore[import-untyped]
@@ -652,7 +654,7 @@ def _parse_conf_uncached[VT](
     conf: VT | None = None,
     default: VT | None = None,
     **kwargs: VT,
-) -> VT | dict[str, VT] | list[VT] | None:
+) -> VT | None:
     parsed = default
 
     if is_dataclass(conf):
@@ -674,12 +676,12 @@ def _parse_conf_uncached[VT](
                 k: _parse_conf_uncached(item, v, **kwargs)
                 for k, v in dd_conf.asdict(key=None, **kwargs).items()
             }
-            parsed = cast(dict[str, VT], _parsed)
+            parsed = cast(VT, _parsed)
     elif isinstance(dd_conf, (str, struct_time)):
         parsed = dd_conf
     elif isinstance(dd_conf, (list, tuple)):
         _parsed = [_parse_conf_uncached(item, c, **kwargs) for c in dd_conf]
-        parsed = cast(list[VT], _parsed)
+        parsed = cast(VT, _parsed)
     elif dd_conf is not None:
         parsed = cast(VT, dd_conf)
 
@@ -692,7 +694,7 @@ def _parse_conf_cached[VT](
     conf: VT | None = None,
     default: VT | None = None,
     **kwargs: VT,
-) -> VT | dict[str, VT] | list[VT] | None:
+) -> VT | None:
     return _parse_conf_uncached(item, conf, default=default, **kwargs)
 
 
@@ -702,7 +704,7 @@ def parse_conf[VT](
     default: VT | None = None,
     memoize: bool | None = None,
     **kwargs: VT,
-) -> VT | dict[str, VT] | list[VT] | None:
+) -> VT | None:
     """
     Examples
     --------

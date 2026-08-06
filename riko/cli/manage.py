@@ -7,16 +7,15 @@ import sys
 from functools import partial
 from glob import glob
 from os import environ
-from os import path as p
+from os.path import getmtime
 from subprocess import CalledProcessError, call, check_call
 from sys import exit
 
 import click
 
+from riko._logging import exception_hook
 from riko.cli.gen_config import main as gen_config_main
-from riko.helpers import exception_hook
-
-BASEDIR = p.dirname(p.dirname(p.dirname(p.abspath(__file__))))
+from riko.paths import ROOT_DIR
 
 sys.excepthook = partial(exception_hook, debug=False)
 
@@ -70,7 +69,7 @@ def help(ctx):
 
 def _clean():
     """Remove Python file and build artifacts"""
-    check_call(p.join(BASEDIR, "bin", "clean"))
+    check_call(ROOT_DIR / "bin" / "clean")
 
 
 def _build():
@@ -96,12 +95,12 @@ def _publish(dry_run=False):
 
 def _twine_check() -> int:
     """Validate built distributions render on PyPI"""
-    dists = sorted(glob(p.join(BASEDIR, "dist", "*")))
-    inputs = [p.join(BASEDIR, "README.rst"), p.join(BASEDIR, "pyproject.toml")]
+    dists = sorted(glob(str(ROOT_DIR / "dist" / "*")))
+    inputs = [ROOT_DIR / "README.rst", ROOT_DIR / "pyproject.toml"]
 
     if not dists:
         raise RuntimeError("No distributions found in dist/; run `manage build` first")
-    elif max(map(p.getmtime, inputs)) > min(map(p.getmtime, dists)):
+    elif max(map(getmtime, inputs)) > min(map(getmtime, dists)):
         raise RuntimeError("dist/ is stale; run `manage build` first")
     elif twine:
         cmd = [twine, "check", *dists]
@@ -161,7 +160,7 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
 @manager.command()
 def check():
     """Check staged changes for lint errors"""
-    exit(call(p.join(BASEDIR, "bin", "check-stage")))
+    exit(call(ROOT_DIR / "bin" / "check-stage"))
 
 
 @manager.command()
@@ -302,8 +301,10 @@ def test(where=None, stop=None, **kwargs):  # noqa: PT028
 
     if kwargs.get("watch") and kwargs.get("capture"):
         opts += " --looponfail"
-    elif kwargs.get("debug"):
-        opts += " --pdb"
+
+    if kwargs.get("debug"):
+        # -s disables capture so the pdb prompt is interactive in the subprocess
+        opts += " --pdb -s"
 
     opts += f" {where}" if where else ""
 

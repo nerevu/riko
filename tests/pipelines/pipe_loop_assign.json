@@ -1,0 +1,69 @@
+{
+    "modules": [
+        {
+            "id": "sw-1",
+            "type": "itembuilder",
+            "conf": {
+                "attrs": [
+                    {
+                        "key": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "value": {
+                            "type": "text",
+                            "value": "a b c"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": "sw-2",
+            "type": "loop",
+            "conf": {
+                "delimiter": {
+                    "type": "text",
+                    "value": " "
+                }
+            },
+            "embed": {
+                "id": "sw-3",
+                "type": "tokenizer"
+            },
+            "count": "all",
+            "assign": "tokens",
+            "emit": false,
+            "field": "title"
+        },
+        {
+            "id": "_OUTPUT",
+            "type": "output",
+            "conf": {}
+        }
+    ],
+    "wires": [
+        {
+            "id": "_w1",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-1"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "sw-2"
+            }
+        },
+        {
+            "id": "_w2",
+            "src": {
+                "id": "_OUTPUT",
+                "moduleid": "sw-2"
+            },
+            "tgt": {
+                "id": "_INPUT",
+                "moduleid": "_OUTPUT"
+            }
+        }
+    ]
+}

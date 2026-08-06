@@ -51,12 +51,12 @@ from typing import Any, cast
 import pygogo as gogo
 
 from riko import ENCODING
+from riko._io import Fetch, auto_close
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import any2dict
 from riko.types.configs import XpathFetchPageObjconf
 from riko.types.general import Defaults, Extraction, FileTypes, Item, Stream
-from riko.utils import Fetch, auto_close
 
 from . import processor
 

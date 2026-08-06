@@ -8,7 +8,7 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.rssitembuilder import pipe as rssitembuilder
 from riko.modules.union import pipe as union
-from riko.types.modules import ItemBuilderRawConf, LoopRawConf, RssItemBuilderRawConf
+from riko.types.modules import ItemBuilderRawConf, RssItemBuilderRawConf
 
 
 def pipe_1166de33b0ea6936d96808717355beaa(
@@ -106,43 +106,23 @@ def pipe_1166de33b0ea6936d96808717355beaa(
         )
         sw_688 = loop(
             sw_656,
-            conf=LoopRawConf(
+            conf=ItemBuilderRawConf(
                 {
-                    "count": {"type": "text", "value": "all"},
-                    "embed": {
-                        "type": "module",
-                        "value": {
-                            "conf": ItemBuilderRawConf(
-                                {
-                                    "attrs": [
-                                        {
-                                            "key": {"type": "text", "value": "title"},
-                                            "value": {
-                                                "subkey": "newtitle",
-                                                "type": "text",
-                                            },
-                                        },
-                                        {
-                                            "key": {
-                                                "type": "text",
-                                                "value": "description.content",
-                                            },
-                                            "value": {
-                                                "type": "text",
-                                                "value": "DESCRIPTION",
-                                            },
-                                        },
-                                    ]
-                                }
-                            ),
-                            "id": "sw-710",
-                            "type": "itembuilder",
-                            "emit": {"type": "bool", "value": False},
-                            "assign": {"type": "text", "value": "loop:itembuilder"},
+                    "attrs": [
+                        {
+                            "key": {"type": "text", "value": "title"},
+                            "value": {"subkey": "newtitle", "type": "text"},
                         },
-                    },
+                        {
+                            "key": {"type": "text", "value": "description.content"},
+                            "value": {"type": "text", "value": "DESCRIPTION"},
+                        },
+                    ]
                 }
             ),
+            emit=False,
+            assign="loop:itembuilder",
+            count="all",
             context=context,
             embed=itembuilder,
         )

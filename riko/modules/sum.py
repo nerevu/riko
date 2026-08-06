@@ -24,9 +24,9 @@ from typing import Any
 
 import pygogo as gogo
 
+from riko._iterutils import group_by
 from riko.types.configs import SumObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
-from riko.utils import group_by
 
 from . import operator
 

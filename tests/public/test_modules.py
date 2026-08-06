@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from riko import Context
 from riko.cast import CastType
 from riko.collections import CONVERSION_FUNCS, list_targets
+from riko.context import Context
 from riko.modules import ModuleMetadata, list_modules, operator
 from riko.modules.count import pipe as count_pipe
 from riko.modules.input import pipe as input_pipe

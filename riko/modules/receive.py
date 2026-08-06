@@ -8,7 +8,6 @@ Examples:
 
         >>> from riko.modules.receive import pipe as receiver
         >>> from riko.modules.send import pipe as sender
-        >>> from riko.utils import noop
         >>>
         >>> conf = {'name': 'receiver1', 'wait': 0.01, 'max_wait': 2}
         >>> target = receiver(conf=conf)
@@ -33,79 +32,25 @@ Attributes:
 from collections.abc import Callable, Generator, Iterator
 from inspect import signature
 from logging import Logger
-from random import choice
 from time import sleep
 from typing import Any, cast
 
 import pygogo as gogo
 from meza.fntools import dfilter
 
-from riko._pubsub import async_hub
+from riko._pubsub import async_hub, close, coroutine, sync_hub
+from riko._strutils import gen_name
 from riko.cast import BasicCastType
 from riko.types.configs import ReceiveObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 from riko.types.guards import is_stateful_item
 from riko.types.values import StatefulItem, StreamState
-from riko.utils import _receive_queue, _registry, close, coroutine
 
 from . import operator
 
 OPTS: Opts = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
-
-ONSETS = (
-    "b",
-    "br",
-    "cl",
-    "cr",
-    "d",
-    "dr",
-    "f",
-    "fl",
-    "g",
-    "gr",
-    "k",
-    "m",
-    "n",
-    "p",
-    "pl",
-    "r",
-    "s",
-    "sl",
-    "st",
-    "t",
-    "tr",
-    "v",
-)
-VOWELS = "aeiou"
-CODAS = ("", "l", "m", "n", "r", "s", "th", "nd", "nt", "ck")
-
-ADJECTIVES = [
-    "ancient",
-    "autumn",
-    "bold",
-    "brisk",
-    "calm",
-    "crimson",
-    "gentle",
-    "hidden",
-    "lucky",
-    "misty",
-    "rapid",
-    "silent",
-    "silver",
-    "steady",
-    "wild",
-]
-
-
-def gen_name(count: int = 2) -> Iterator[str]:
-    yield choice(ADJECTIVES)  # noqa: S311
-    yield "-"
-
-    for _ in range(count):
-        yield "".join(map(choice, [ONSETS, VOWELS, CODAS]))  # noqa: S311
 
 
 def _apply(func: Callable, item: Item | StatefulItem, **fkwargs: object) -> Item | None:
@@ -125,7 +70,7 @@ def _apply(func: Callable, item: Item | StatefulItem, **fkwargs: object) -> Item
 
 def _register_receiver(name, objconf, func, kwargs) -> None:
     # See https://github.com/ICRAR/ijson#push-interfaces
-    if name not in _registry:
+    if name not in sync_hub.receivers:
         fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
 
         @coroutine(registry_name=name, maxlen=objconf.max_len)
@@ -136,7 +81,7 @@ def _register_receiver(name, objconf, func, kwargs) -> None:
                 if item is not None:
                     state = item["state"] if is_stateful_item(item) else None
                     result = _apply(func, item, **fkwargs) if func else item
-                    queue = _receive_queue[name]
+                    queue = sync_hub.queues[name]
                     maxlen = queue.maxlen if queue else None
 
                     if maxlen is not None and len(queue) >= maxlen:
@@ -176,7 +121,6 @@ def parser(
     Examples:
         >>> from itertools import repeat
         >>> from riko.modules.send import pipe as sender
-        >>> from riko.utils import noop
         >>> from meza.fntools import Objectify
         >>>
         >>> conf = {'wait': 0.01, 'max_wait': 2, 'name': 'receiver2'}
@@ -198,7 +142,7 @@ def parser(
     _register_receiver(name, objconf, func, kwargs)
 
     while True:
-        if _buf := _receive_queue[name]:
+        if _buf := sync_hub.queues[name]:
             total_waited = 0
             state, result = _buf.popleft()
 
@@ -263,7 +207,6 @@ def pipe(*args: Any, **kwargs: object) -> Stream | Iterator[StatefulItem]:
 
     Examples:
         >>> from riko.modules.send import pipe as sender
-        >>> from riko.utils import noop
         >>>
         >>> target = pipe(conf={'name': 'receiver3', 'wait': 0.01, 'max_wait': 2})
         >>> next(target)

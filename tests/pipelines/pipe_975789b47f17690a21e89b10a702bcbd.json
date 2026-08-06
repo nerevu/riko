@@ -138,104 +138,61 @@
             "type": "filter"
         },
         {
-            "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "regex",
-                        "id": "sw-448",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "loop:regex"
-                        },
-                        "conf": {
-                            "rule": [
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "title"
-                                    },
-                                    "singlematch": {
-                                        "type": "bool",
-                                        "value": false
-                                    },
-                                    "match": {
-                                        "type": "text",
-                                        "value": " [^#]*"
-                                    },
-                                    "replace": {
-                                        "type": "text",
-                                        "value": " "
-                                    }
-                                },
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "title"
-                                    },
-                                    "match": {
-                                        "type": "text",
-                                        "value": "^[^#]*"
-                                    },
-                                    "replace": {
-                                        "type": "text",
-                                        "value": ""
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
             "id": "sw-447",
-            "type": "loop"
-        },
-        {
+            "type": "regex",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "tokenizer",
-                        "id": "sw-478",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "loop:tokenizer"
-                        },
+                "rule": [
+                    {
                         "field": {
                             "type": "text",
                             "value": "title"
                         },
-                        "conf": {
-                            "delimiter": {
-                                "type": "text",
-                                "value": " "
-                            }
+                        "singlematch": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": " [^#]*"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": " "
+                        }
+                    },
+                    {
+                        "field": {
+                            "type": "text",
+                            "value": "title"
+                        },
+                        "match": {
+                            "type": "text",
+                            "value": "^[^#]*"
+                        },
+                        "replace": {
+                            "type": "text",
+                            "value": ""
                         }
                     }
+                ]
+            },
+            "assign": "loop:regex",
+            "emit": true,
+            "count": "all"
+        },
+        {
+            "id": "sw-470",
+            "type": "tokenizer",
+            "conf": {
+                "delimiter": {
+                    "type": "text",
+                    "value": " "
                 }
             },
-            "id": "sw-470",
-            "type": "loop",
-            "field": {
-                "type": "text",
-                "value": "title"
-            }
+            "field": "title",
+            "assign": "loop:tokenizer",
+            "emit": true,
+            "count": "all"
         },
         {
             "conf": {
@@ -268,47 +225,29 @@
             "type": "filter"
         },
         {
+            "id": "sw-501",
+            "type": "rename",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "rename",
-                        "id": "sw-502",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
+                "rule": [
+                    {
+                        "field": {
                             "type": "text",
-                            "value": "loop:rename"
+                            "value": "content"
                         },
-                        "conf": {
-                            "rule": [
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "content"
-                                    },
-                                    "copy": {
-                                        "type": "bool",
-                                        "value": false
-                                    },
-                                    "newval": {
-                                        "type": "text",
-                                        "value": "title"
-                                    }
-                                }
-                            ]
+                        "copy": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "title"
                         }
                     }
-                }
+                ]
             },
-            "id": "sw-501",
-            "type": "loop"
+            "assign": "loop:rename",
+            "emit": true,
+            "count": "all"
         }
     ],
     "terminaldata": [

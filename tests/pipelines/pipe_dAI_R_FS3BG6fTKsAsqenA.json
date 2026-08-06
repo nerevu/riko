@@ -31,49 +31,35 @@
     ],
     "modules": [
         {
-            "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "strconcat",
-                        "id": "sw-138e",
-                        "emit": {
-                            "type": "bool",
-                            "value": false
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "title"
-                        },
-                        "conf": {
-                            "part": [
-                                {
-                                    "type": "text",
-                                    "subkey": "headline"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": " ("
-                                },
-                                {
-                                    "type": "text",
-                                    "subkey": "severity"
-                                },
-                                {
-                                    "type": "text",
-                                    "value": ")"
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
             "id": "sw-138",
-            "type": "loop"
+            "type": "loop",
+            "conf": {
+                "part": [
+                    {
+                        "type": "text",
+                        "subkey": "headline"
+                    },
+                    {
+                        "type": "text",
+                        "value": " ("
+                    },
+                    {
+                        "type": "text",
+                        "subkey": "severity"
+                    },
+                    {
+                        "type": "text",
+                        "value": ")"
+                    }
+                ]
+            },
+            "embed": {
+                "id": "sw-138e",
+                "type": "strconcat"
+            },
+            "assign": "title",
+            "emit": false,
+            "count": "all"
         },
         {
             "conf": {},
@@ -81,47 +67,29 @@
             "type": "output"
         },
         {
+            "id": "sw-180",
+            "type": "rename",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "type": "rename",
-                        "id": "sw-180e",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
+                "RULE": [
+                    {
+                        "field": {
                             "type": "text",
-                            "value": "loop:rename"
+                            "value": "expires"
                         },
-                        "conf": {
-                            "RULE": [
-                                {
-                                    "field": {
-                                        "type": "text",
-                                        "value": "expires"
-                                    },
-                                    "copy": {
-                                        "type": "bool",
-                                        "value": false
-                                    },
-                                    "newval": {
-                                        "type": "text",
-                                        "value": "pubDate"
-                                    }
-                                }
-                            ]
+                        "copy": {
+                            "type": "bool",
+                            "value": false
+                        },
+                        "newval": {
+                            "type": "text",
+                            "value": "pubDate"
                         }
                     }
-                }
+                ]
             },
-            "id": "sw-180",
-            "type": "loop"
+            "assign": "loop:rename",
+            "emit": true,
+            "count": "all"
         },
         {
             "conf": {

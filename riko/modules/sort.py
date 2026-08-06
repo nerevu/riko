@@ -24,10 +24,10 @@ from typing import Any
 
 import pygogo as gogo
 
+from riko._iterutils import def_itemgetter
 from riko.bado.itertools import async_reduce
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 from riko.types.modules import SortConfRule
-from riko.utils import def_itemgetter
 
 from . import operator
 

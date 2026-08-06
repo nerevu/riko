@@ -53,35 +53,17 @@
             "type": "feedautodiscovery"
         },
         {
+            "id": "sw-157",
+            "type": "fetch",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
-                },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "URL": {
-                                "subkey": "link",
-                                "type": "url"
-                            }
-                        },
-                        "id": "sw-165",
-                        "type": "fetch",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "loop:fetch"
-                        }
-                    }
+                "URL": {
+                    "subkey": "link",
+                    "type": "url"
                 }
             },
-            "id": "sw-157",
-            "type": "loop"
+            "assign": "loop:fetch",
+            "emit": true,
+            "count": "all"
         },
         {
             "conf": {

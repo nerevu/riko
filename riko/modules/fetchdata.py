@@ -22,18 +22,19 @@ Attributes:
 """
 
 from logging import Logger
-from os import path as p
+from os.path import splitext
 from typing import Any, cast
 
 import pygogo as gogo
 
-from riko import ENCODING, listize
+from riko import ENCODING
+from riko._io import Fetch, auto_close
+from riko._iterutils import listize
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.parsers import any2dict
 from riko.types.configs import FetchDataObjconf
 from riko.types.general import Defaults, Extraction, FileTypes, Item, Opts, Stream
-from riko.utils import Fetch, auto_close
 
 from . import processor
 
@@ -75,7 +76,7 @@ async def async_parser(
         Business System Analyst
 
     """
-    ext = p.splitext(objconf.url)[1].lstrip(".")
+    ext = splitext(objconf.url)[1].lstrip(".")
     path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
     # TODO: Figure out if html/xml files should be parsed as binary too.
     binary = ext == "json"
@@ -114,7 +115,7 @@ def parser(
         'Business System Analyst'
 
     """
-    ext = p.splitext(objconf.url)[1].lstrip(".")
+    ext = splitext(objconf.url)[1].lstrip(".")
     paths = cast(list[str], listize(objconf.path))
     path = ".".join(paths)
 

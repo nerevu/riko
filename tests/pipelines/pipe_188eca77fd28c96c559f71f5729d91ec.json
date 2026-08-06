@@ -46,47 +46,29 @@
             "type": "truncate"
         },
         {
+            "id": "sw-111",
+            "type": "fetchpage",
             "conf": {
-                "count": {
-                    "type": "text",
-                    "value": "all"
+                "URL": {
+                    "subkey": "url",
+                    "type": "url"
                 },
-                "embed": {
-                    "type": "module",
-                    "value": {
-                        "conf": {
-                            "URL": {
-                                "subkey": "url",
-                                "type": "url"
-                            },
-                            "start": {
-                                "type": "text",
-                                "value": "One Way</span>"
-                            },
-                            "end": {
-                                "type": "text",
-                                "value": "</tr>"
-                            },
-                            "token": {
-                                "type": "text",
-                                "value": "<td style=\"text-align: center;\">"
-                            }
-                        },
-                        "id": "sw-119",
-                        "type": "fetchpage",
-                        "emit": {
-                            "type": "bool",
-                            "value": true
-                        },
-                        "assign": {
-                            "type": "text",
-                            "value": "loop:fetchpage"
-                        }
-                    }
+                "start": {
+                    "type": "text",
+                    "value": "One Way</span>"
+                },
+                "end": {
+                    "type": "text",
+                    "value": "</tr>"
+                },
+                "token": {
+                    "type": "text",
+                    "value": "<td style=\"text-align: center;\">"
                 }
             },
-            "id": "sw-111",
-            "type": "loop"
+            "assign": "loop:fetchpage",
+            "emit": true,
+            "count": "all"
         },
         {
             "conf": {
