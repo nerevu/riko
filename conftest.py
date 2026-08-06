@@ -12,12 +12,6 @@ def reset_pubsub_state():
     reset_pubsub()
 
 
-_TWISTED_ONLY_DOCTESTS = {
-    "riko.bado.itertools.ensure_deferred",
-    "riko.bado.mock.FakeReactor",
-}
-
-
 def pytest_collection_modifyitems(items):
     skip_async = pytest.mark.skip(reason="async support not available")
     skip_lxml = pytest.mark.skip(reason="lxml not installed")
@@ -28,7 +22,7 @@ def pytest_collection_modifyitems(items):
 
         name = item.name
 
-        if issync and ("async" in name or name in _TWISTED_ONLY_DOCTESTS):
+        if issync and ("async" in name):
             item.add_marker(skip_async)
         elif not IS_LXML and "xpathfetchpage" in name:
             item.add_marker(skip_lxml)

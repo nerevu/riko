@@ -68,13 +68,13 @@ def _derive_operator_subtypes(
     return subtype, subtypes
 
 
-def derive_loopable(name: str, module_type: ModuleType) -> bool:
+def derive_loopable(name: str, module_type: ModuleType | str) -> bool:
     return module_type == "processor" and name != "input"
 
 
 def derive_subtypes(
     pipe: Pipeline | ProcessorParser | OperatorParser | SplitterParser,
-    module_type: ModuleType,
+    module_type: ModuleType | str,
     ftype: BasicCastType | None = None,
     **kwargs: object,
 ) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
@@ -147,7 +147,7 @@ def gen_module_catalog() -> Iterator[ModuleMetadata]:
 
 
 def _matches_subtype(
-    module: ModuleMetadata, subtype: ModuleSubtype | None, *, primary: bool
+    module: ModuleMetadata, subtype: ModuleSubtype | str | None, *, primary: bool
 ) -> bool:
     if subtype is None:
         matched = True
@@ -162,8 +162,8 @@ def _matches_subtype(
 @overload
 def list_modules(  # noqa: E704
     *,
-    type: ModuleType | None = ...,  # noqa: A002
-    subtype: ModuleSubtype | None = ...,
+    type: ModuleType | str | None = ...,  # noqa: A002
+    subtype: ModuleSubtype | str | None = ...,
     primary: bool = ...,
     loopable: bool | None = ...,
     show_metadata: Literal[False] = ...,
@@ -171,16 +171,16 @@ def list_modules(  # noqa: E704
 @overload  # noqa: E302
 def list_modules(  # noqa: E704
     *,
-    type: ModuleType | None = None,  # noqa: A002
-    subtype: ModuleSubtype | None = None,
+    type: ModuleType | str | None = None,  # noqa: A002
+    subtype: ModuleSubtype | str | None = None,
     primary: bool = ...,
     loopable: bool | None = ...,
     show_metadata: Literal[True],
 ) -> tuple[ModuleMetadata, ...]: ...
 def list_modules(  # noqa: E302
     *,
-    type: ModuleType | None = None,  # noqa: A002
-    subtype: ModuleSubtype | None = None,
+    type: ModuleType | str | None = None,  # noqa: A002
+    subtype: ModuleSubtype | str | None = None,
     primary: bool = False,
     loopable: bool | None = None,
     show_metadata: bool = False,

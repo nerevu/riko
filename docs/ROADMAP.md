@@ -5,6 +5,11 @@ former `ROADMAP.md` and `ASYNC_FEED_SUPPORT.md` into a single document. Tabled i
 are additive but not on the critical path (extra source pipes, protocol adapters,
 orchestration and database integrations) live in [Shelf.md](Shelf.md).
 
+**What already ships** is documented separately in [IMPLEMENTED.md](IMPLEMENTED.md) — the
+as-built companion to this roadmap. Part I below retains the runtime-contract *design* but
+its shipped substance has been extracted there; each Part I section's status line points to
+the matching IMPLEMENTED.md section. This document covers planned and deferred work.
+
 ## Index
 
 **Part I — Runtime contract**
@@ -58,6 +63,18 @@ orchestration and database integrations) live in [Shelf.md](Shelf.md).
 - [37. Recommended HigherGov Feed slices](#37-recommended-highergov-feed-slices)
 - [38. Minimal Feed functionality HigherGov actually needs](#38-minimal-feed-functionality-highergov-actually-needs)
 
+**Part V — Extensibility and ecosystem roadmap (prior-art)**
+
+- [E0. Roadmap principles](#e0-roadmap-principles)
+- [E1. Module contract v1](#e1-module-contract-v1-self-describing)
+- [E2. Plugin ecosystem v1](#e2-plugin-ecosystem-v1)
+- [E3. Workflow specification v1](#e3-workflow-specification-v1)
+- [E4. Observability hooks](#e4-observability-hooks)
+- [E5. Adapter and connector packages](#e5-adapter-and-connector-packages)
+- [E6. Experimental execution drivers](#e6-experimental-execution-drivers)
+- [E7. Visual tooling and 1.0 readiness](#e7-visual-tooling-and-10-readiness)
+- [E8. Prior-art research conclusions](#e8-prior-art-research-conclusions)
+
 **Appendix**
 
 - [A. Async primitive reference](#a-async-primitive-reference)
@@ -70,11 +87,16 @@ orchestration and database integrations) live in [Shelf.md](Shelf.md).
 > describes exists **today**, verified against the code — not aspirational. **Implemented**
 > (ships and matches) · **Partial** (some ships; gaps noted) · **Planned** (described,
 > not yet in code). Parts II–IV are roadmap by nature and are not tagged.
+>
+> **As-built content lives elsewhere.** The shipped substance of every Implemented/Partial
+> section has been extracted into [IMPLEMENTED.md](IMPLEMENTED.md); the sections below retain
+> only planned/deferred work plus the gaps in partially-shipped sections. Where a section's
+> status line points to IMPLEMENTED.md, read that companion for what exists today.
 
 
 ## 0. Architectural direction
 
-> **Status: Partial.** async lazy iteration, bounded concurrency, and sync/async parity ship; callable `map`/`flat_map` and the RDP do not.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §0](IMPLEMENTED.md#0-architectural-direction-shipped)** (async lazy iteration, bounded concurrency, sync/async parity). **Remaining:** callable `map`/`flat_map` and the RDP.
 
 Riko will retain its existing item-oriented pipeline model while adding:
 
@@ -98,7 +120,7 @@ The implementation should favor:
 
 ## 1. Product layers
 
-> **Status: Partial.** Core (sync/async pipes + built-in modules) ships; the Connect layer is not started.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §1](IMPLEMENTED.md#1-product-layers--riko-core-shipped)** (Core: sync/async pipes, built-in modules, stream/Feed processing, export converters). **Remaining:** Core callable stages / batches / schema / sinks, and the entire Connect layer (not started).
 
 ### Riko Core
 
@@ -135,86 +157,31 @@ Core and Connect may remain in one distribution initially. Connect is a conceptu
 
 ## 2. Core item and stream types
 
-> **Status: Implemented.** `Item`/`Stream`/`Feed`/`AsyncSource` exist as described in `riko/types/general.py`.
+> **Status: Implemented.** The `Item`/`Items`/`Stream`/`Feed`/`AsyncSource` type
+> definitions (`riko/types/general.py`) are documented as-built in
+> **[IMPLEMENTED.md §2](IMPLEMENTED.md#2-core-item-and-stream-types)**. Only the
+> forward-looking gap remains here.
 
-```python
-type Item = (
-    RikoDict
-    | dict[str, RikoValue]
-    | RSSEntry
-    | DotDict[RikoValue]
-)
-
-type Items = Iterable[Item]
-type Stream = Iterator[Item]
-type Feed = AsyncIterable[Item]
-```
-
-`Stream` and `Feed` differ by iteration mechanism, not by whether the source is finite or live.
-
-* `Stream` is synchronous iteration.
-* `Feed` is asynchronous iteration.
-* Boundedness is represented separately through opts.
-
-The public asynchronous source type is:
-
-```python
-type AsyncSource = (
-    Items
-    | Feed
-    | Awaitable[Items | Feed]
-)
-```
-
-Each asynchronous execution resolves the source once and normalizes it to:
-
-```python
-AsyncIterator[Item]
-```
-
-The existing implementation currently accepts `Awaitable[Items]`, awaits it, and then passes synchronous iterables to module parsers. Chained async stages currently materialize the complete preceding stage through `_await_stream()`.
-
-The new runtime must remove that materialization from normal stage chaining.
+Chained async stages currently materialize the complete preceding stage through
+`_await_stream()`. **The new runtime must remove that materialization from normal stage
+chaining.**
 
 ---
 
 ## 3. Pipe behavior
 
-> **Status: Partial.** sync pipes and Feed reuse ship; async chaining is lazy at the stage boundary but still materializes non-bounded legacy-parser paths (`riko/collections.py`).
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §3](IMPLEMENTED.md#3-pipe-behavior-shipped)**
+> (sync iterable pipe + its parallel-materialization limitation, lazy `async for` + await
+> terminal, Feed reuse semantics). **Remaining:** the lazy-chaining targets below.
 
 ### 3.1 Synchronous pipes
 
-`SyncPipe` remains synchronous and iterable:
-
-```python
-for item in pipe:
-    ...
-```
-
-Its current parallel implementation materializes the complete source before pool submission:
-
-```python
-source_items = list(self.source)
-```
-
-This behavior may remain initially as an explicit limitation. Parallel synchronous execution is therefore not guaranteed to support infinite streams or bounded-memory source submission.
+The parallel `SyncPipe` materialization limitation ships today (see IMPLEMENTED §3).
+The roadmap target is to remove full-source materialization for pool submission so that
+parallel synchronous execution supports infinite streams and bounded-memory source
+submission (Milestone 1 / HG-6).
 
 ### 3.2 Asynchronous pipes
-
-`AsyncPipe` supports lazy iteration:
-
-```python
-async for item in pipe:
-    ...
-```
-
-Awaiting remains a compatibility terminal:
-
-```python
-result = await pipe
-```
-
-Awaiting collects the output and returns the historical synchronous stream-style result.
 
 Internal chaining must pass the upstream pipe directly:
 
@@ -224,19 +191,12 @@ return AsyncPipe(name, source=self)
 
 It must not call `_await_stream()` between stages.
 
-`AsyncCollection.async_pipe()` must similarly pass the collection itself rather than a materialized awaitable. The current implementation passes `_await_stream()`.
+`AsyncCollection.async_pipe()` must similarly pass the collection itself rather than a
+materialized awaitable. The current implementation passes `_await_stream()`.
 
 ### 3.3 Feed reuse
 
-Feeds behave like ordinary async iterators.
-
-Riko will not:
-
-* detect consumed feeds
-* recreate them automatically
-* raise a custom consumed-state exception
-
-The underlying `StopAsyncIteration` behavior is authoritative.
+Shipped as-built — see [IMPLEMENTED.md §3](IMPLEMENTED.md#3-pipe-behavior-shipped).
 
 ---
 
@@ -912,17 +872,14 @@ These opts influence retry safety, replay warnings, caching, and planner behavio
 
 ## 6. Async execution and backpressure
 
-> **Status: Partial.** bounded concurrency and order-preserving streaming ship (`async_map_stream`/`async_map_ordered_stream`); ordering uses a batched window, not a true indexed reorder buffer, and cancellation is not fully specified.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §6](IMPLEMENTED.md#6-async-execution-and-backpressure-shipped)**
+> (bounded concurrency, order-preserving streaming via `async_map_stream`/`async_map_ordered_stream`).
+> **Remaining:** true indexed reorder buffer, the `ordered=False` doc/behavior fix, and
+> cancellation/cleanup below.
 
 ### 6.1 Bounded concurrency
 
-Async mapping uses bounded worker concurrency.
-
-It must not:
-
-* create one task per source item
-* materialize the entire source
-* permit unbounded result buffering
+Shipped as-built — see [IMPLEMENTED.md §6](IMPLEMENTED.md#6-async-execution-and-backpressure-shipped).
 
 ### 6.2 Ordering
 
@@ -991,7 +948,9 @@ When both execution and cleanup fail:
 
 ## 7. Timeout
 
-> **Status: Partial.** sync and async `TimeoutIterator` ship for lifetime (`total`) timeout (`riko/modules/timeout.py`); the `idle`/`item` modes and `on_timeout` policy are not exposed.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §7](IMPLEMENTED.md#7-timeout-shipped)**
+> (lifetime `total` timeout, sync + async `TimeoutIterator`). **Remaining:** the `idle`/`item`
+> modes and the `on_timeout` policy described below.
 
 ```python
 timeout(
@@ -1021,28 +980,20 @@ Definitions:
 
 ## 8. Union and merge
 
-> **Status: Partial.** `union` ships (`riko/modules/union.py`); the concurrent async `merge` operator does not exist.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §8](IMPLEMENTED.md#8-union-shipped)**
+> (`union` sequential concatenation; the internal `async_merge` primitive). **Remaining:**
+> the user-facing concurrent async `merge` operator below.
 
 ### 8.1 Union
 
-Historical `union` remains deterministic sequential concatenation:
-
-```text
-primary
-→ other 1
-→ other 2
-```
-
-The current implementation uses `itertools.chain`.
+Shipped as-built — see [IMPLEMENTED.md §8](IMPLEMENTED.md#8-union-shipped).
 
 ### 8.2 Merge
 
-> **Partial / deferred.** The internal `async_merge` primitive
-> (`riko/bado/itertools.py`) — bounded, arrival-order — exists and powers
-> incremental `AsyncCollection` merge on the unordered path (records interleave as
-> they arrive; ordered collections still materialize per source). The user-facing
-> `merge` *operator* below (`scheduling`/`on_source_error`/`buffer_budget`/
-> `per_source_limit`) does not exist yet.
+> **Partial / deferred.** The internal `async_merge` primitive ships (see
+> [IMPLEMENTED.md §8](IMPLEMENTED.md#8-union-shipped)). The user-facing `merge` *operator*
+> below (`scheduling`/`on_source_error`/`buffer_budget`/`per_source_limit`) does not exist
+> yet.
 
 `merge` is a distinct async-native concurrent operator.
 
@@ -1104,7 +1055,9 @@ A source may discover partitions internally, but new top-level feeds are not dyn
 
 ## 9. Run status and exit codes
 
-> **Status: Partial.** the CLI returns exit codes (`riko/cli/manage.py`); the `RunStatus` enum / 4-code scheme is not implemented.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §9](IMPLEMENTED.md#9-exit-codes-shipped)**
+> (the CLI returns process exit codes). **Remaining:** the `RunStatus` enum and the formal
+> 4-code scheme below.
 
 ```python
 class RunStatus(Enum):
@@ -1314,7 +1267,8 @@ Per-item events are not required for the normal `complete` path.
 
 ## 13. Filter semantics
 
-> **Status: Partial.** `filter` implements `permit`/`combine`/`stop` (`riko/modules/filter.py`); drop-policy / disposition semantics are absent.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §13](IMPLEMENTED.md#13-filter-semantics-shipped)**
+> (`permit`/`combine`/`stop`). **Remaining:** the drop-policy / disposition semantics below.
 
 A filtered-out item with `drop_policy="complete"` is immediately considered complete.
 
@@ -1842,9 +1796,11 @@ Universal deep Python-object size estimation is not required initially.
 
 ## 23. AnyIO and Twisted
 
-> **Status: Partial.** AnyIO is the sole implemented async runtime (`riko/bado/__init__.py`); Twisted is not present in code and protocol adapters are pending.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §23](IMPLEMENTED.md#23-anyio-runtime-shipped)**
+> (AnyIO is the sole runtime; no Twisted; pull-based `Feed`). **Remaining:** the
+> protocol-adapter design and the `asyncioreactor` escape hatch below.
 
-AnyIO becomes the canonical runtime for new concurrency features:
+AnyIO is the canonical runtime for concurrency features:
 
 * Feed support
 * task groups
@@ -1854,12 +1810,13 @@ AnyIO becomes the canonical runtime for new concurrency features:
 * concurrent merge
 * worker coordination
 
-Twisted remains in compatibility and maintenance mode. Do not implement every new runtime semantic twice.
-
-Before 1.0:
-
-* remove Twisted if usage does not justify continued support, or
-* retain it as an explicitly narrower legacy adapter
+**Twisted has been removed.** There is no Twisted runtime code and no
+`RIKO_ASYNC_BACKEND` env var; backend selection is purely "does `anyio` import?"
+(`backend = "empty" if run is None else "anyio"` in `riko/bado/__init__.py`). The
+"remove or retain Twisted before 1.0" decision recorded in earlier drafts is closed — it
+was removed. New runtime semantics are implemented once, on AnyIO. This does **not** ban
+Twisted *protocol* implementations; see §23.1 for the runtime-vs-protocol distinction and
+the `asyncioreactor` escape hatch.
 
 `AsyncIterable` is the pipeline-level abstraction. Async iteration is pull-based (`__anext__`
 is awaited by the consumer), and a `Feed` is defined by its iteration mechanism, not by
@@ -1910,7 +1867,9 @@ permitted within an adapter when it is the superior option (almost always a serv
 
 ## 24. Module registry and plugins
 
-> **Status: Partial.** module discovery is the current `pkgutil`-based `list_modules` (`riko/modules/_metadata.py`); the entry-point/runtime `ModuleRegistry` is P8-planned.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §24](IMPLEMENTED.md#24-module-discovery-shipped)**
+> (`pkgutil`-based `list_modules`; built-in name/namespace reservation). **Remaining:** the
+> entry-point/runtime `ModuleRegistry` (P8-planned) below.
 
 Initial registry:
 
@@ -1925,7 +1884,9 @@ One distribution and internal plugin architecture are sufficient initially. Exte
 
 ## 25. Conversion and dataframe integration
 
-> **Status: Partial.** meza-backed export converters ship (csv/json/geojson/ofx/qif/list/tuple, `riko/collections.py`); the Batch/dataframe path is deferred.
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §25](IMPLEMENTED.md#25-conversion--export-converters-shipped)**
+> (meza-backed csv/json/geojson/ofx/qif/list/tuple export converters). **Remaining:** the
+> Batch/dataframe path below.
 
 Meza owns conversion work.
 
@@ -2873,6 +2834,230 @@ SQL/Airtable for durable boundaries
 ```
 
 Feed is a near-term HigherGov requirement rather than a post-HigherGov roadmap item.
+
+---
+
+# Part V — Extensibility and ecosystem roadmap
+
+This part folds in the most valuable conclusions from the issue
+[#10](https://github.com/nerevu/riko/issues/10) prior-art research (Pypes, Mario,
+RssPercolator, Plagger, Turtle, node-machine). It is the **contracts and extensibility
+plane** that complements the **data plane** of the RDP/Connect roadmap in Parts I–II. It is
+dependency-ordered, not a calendar commitment.
+
+Where an item overlaps an existing section it references that section instead of restating
+it. The organizing conviction is **contracts before interfaces**: CLI, GUI, plugins, and
+drivers must all consume one module/workflow contract rather than invent parallel models.
+
+## E0. Roadmap principles
+
+1. **Contracts before interfaces.** CLI, GUI, plugins, and drivers consume one contract.
+2. **Local semantics are authoritative.** Generated code and every execution driver must
+   match the in-process executor (the codegen-vs-executor parity tests already enforce this
+   for built-ins).
+3. **Explicit ports, errors, and side effects.** A module contract states what it accepts,
+   emits, mutates, and depends on (see §4 execution characteristics).
+4. **Optional integrations stay optional.** Plugin loading, OpenTelemetry, cloud SDKs, and
+   protocol clients must not inflate the minimal install.
+5. **Version data, not implementation details.** Workflow files and plugin contracts need
+   schema versions and migrations; private Python objects are not a durable storage format.
+6. **Secure by default.** Installing a package is a trust decision; riko must not silently
+   fetch or execute remote code.
+7. **Evidence before optimization.** Performance work is tied to reproducible workloads and
+   measured regressions (see Milestone 9 and the `benchmark` CLI).
+
+## E1. Module contract v1 (self-describing)
+
+Borrows named ports from Pypes and machine-readable definitions from node-machine. Extends
+the existing `ModuleMetadata` (§24) and the execution-characteristic `Opts` (§4) into a
+versioned, complete module definition — the highest-value idea in the research, because it
+unlocks plugin discovery, workflow validation, generated docs, CLI inspection, GUI forms,
+compatibility checks, and remote-execution boundaries. It must precede E2, E3, and E7.
+
+A `ModuleDefinition` should expose at least: stable name + contract version; type and
+supported subtypes; sync/async availability; input/output ports with cardinality;
+configuration schema, defaults, required values, and deprecations; item-field expectations
+and emitted-field behavior; named error outcomes / documented exception classes;
+side-effect flags — reuse the §4 `side_effects`/`determinism` opts; streaming
+characteristics — reuse the §5 `boundedness`/`ordering` opts; concurrency safety and
+cancellation support; short description, examples, docs URL; distribution name + version for
+external modules.
+
+Deliverables: extend `ModuleMetadata` or add a versioned `ModuleDefinition`; generate
+configuration JSON Schema from the typed configs (`riko/types/configs.py` via `gen-config`);
+add `riko module list|show NAME|schema NAME` and `riko pipeline validate FILE|explain FILE`;
+export the built-in catalog as deterministic JSON for docs/GUI; add a contract-conformance
+test helper for module authors.
+
+Acceptance: all built-in modules pass one conformance suite; the catalog generates without
+importing uninstalled optional deps; documentation tables are generated from the catalog,
+not hand-maintained; unknown config keys, missing required values, and invalid port
+connections produce actionable validation errors.
+
+## E2. Plugin ecosystem v1
+
+Completes the entry-point discovery deferred in §24. Borrows Plagger's plugin ecosystem and
+node-machine's reusable packs.
+
+Discovery uses Python package-metadata entry points, e.g.:
+
+```toml
+[project.entry-points."riko.modules"]
+example = "riko_example:modules"
+```
+
+The loaded object returns module definitions (E1) or invokes a public registration function.
+Import-path scanning and remote code downloads are not the default discovery mechanism.
+
+Deliverables: add `riko.ext.register` and a documented registry protocol; discover via
+`importlib.metadata.entry_points()`; deterministic name-conflict and override rules; record
+provider distribution/version, contract version, and load errors; add `riko plugin
+list|inspect|doctor`; publish a minimal plugin template (tests, typing, packaging, docs);
+support disabling plugins by name/distribution; add compatibility checks against riko and
+module-contract versions.
+
+**Security requirements (secure by default):** never install plugins while loading a
+workflow; never download or execute remote code from a workflow definition; display plugin
+provenance in validation, execution plans, and errors; permit an application-supplied
+allowlist/denylist; document that an installed Python plugin has the same process privileges
+as the host application.
+
+Acceptance: a separately distributed package can add a processor/operator/splitter without
+modifying `riko.modules`; plugin failures are isolated during discovery and reported without
+hiding healthy modules; a workflow validates against an installed plugin without executing
+it; built-in and third-party modules use the same definition and conformance APIs.
+
+## E3. Workflow specification v1
+
+Gives the existing JSON pipe-def and compact DAG formats a versioned, interoperable storage
+contract. Borrows the declarative-recipe approach from Plagger and RssPercolator.
+
+Design: canonical JSON-compatible data model; explicit `format_version`; stable node IDs and
+explicit source/target ports (closes the compact-DAG named-port gap noted in §24 baseline);
+full support for linear, fan-out, fan-in, split, named inputs, and terminal outputs;
+optional YAML authoring that normalizes to the canonical model; environment-independent core
+document (secrets/inputs are references, not embedded credentials); deterministic
+serialization for reviewable diffs; forward-migration tools and explicit rejection of
+unsupported future versions.
+
+Deliverables: publish a JSON Schema 2020-12 document for workflow v1; define the canonical
+normalized model and keep the compact DAG as convenience syntax; add optional metadata,
+parameters, resource references, and declared outputs; round-trip tests for JSON, YAML,
+normalized objects, and generated Python (extend the existing codegen round-trip tests in
+`tests/internal/test_compile.py`); add `riko pipeline format|migrate|diff|graph`; define a
+recipe-directory convention with example inputs and expected-output assertions; add
+digest/signature fields only as integrity metadata (no implied trust in referenced code).
+
+Acceptance: every representable in-process pipeline round-trips through workflow v1 without
+losing port information; workflow files remain usable across patch/minor releases via
+validation or documented migration; a GUI can render node forms and connections from the
+schema + catalog alone; secrets are supplied at runtime, never serialized into examples.
+
+## E4. Observability hooks
+
+Borrows Mario's explicit lifecycle and Turtle's operational granularity. **Extends — does
+not duplicate** — the retry policy (§11), error/disposition policies (§12), and aggregate
+stage counters (§12.5).
+
+New surface: lifecycle events for pipeline / module / item-batch / retry / cancellation /
+resource-closure; optional callbacks or an event sink on `Context`; structured execution
+records (workflow ID, run ID, module ID, provider, duration, counts, outcome); **optional**
+OpenTelemetry *API* integration for traces/metrics without requiring an SDK in the core
+install; bounded diagnostic sampling so item payloads are never logged by default;
+execution-plan estimates at known buffering/materialization boundaries.
+
+Acceptance: instrumentation-disabled overhead is negligible on benchmarked paths;
+instrumentation never records full item payloads unless explicitly opted in; the metrics set
+is the one already enumerated for Connect (§12.5 counters, plus wall/active time, in-flight
+task count, and peak memory).
+
+## E5. Adapter and connector packages
+
+Borrows Mario's file-like/subprocess adapters and RssPercolator's multi-source/multi-sink
+model. Complements the Feed source/sink work in [Part IV](#part-iv--async-feed-integration)
+and the tabled connectors in [Shelf.md](Shelf.md).
+
+Deliverables: define source and sink adapter protocols around the module contract (E1);
+first-class local adapters for file-like objects, iterables, async iterables, stdin/stdout,
+and subprocess streams; standardized multi-source merge and multi-sink broadcast with
+documented ordering and failure policy (see §8 merge); publish recipe packs (feed
+aggregation, file conversion, HTTP enrichment, notifications); connector contract tests
+against local fixtures and fake servers, not live services.
+
+**Prioritization rule:** a connector belongs in core only when it is broadly useful, small
+in dependency footprint, and deterministically testable; otherwise it is a plugin
+distribution (E2). This is the §23.1 "a protocol is a source/sink adapter, not a runtime
+concern" rule applied to packaging.
+
+## E6. Experimental execution drivers
+
+Borrows Turtle's driver boundary and scatter/gather model, but postpones cloud-specific work
+until local contracts are stable. Complements the RDP/Connect actor model (§17, Milestone 8).
+
+A driver accepts a validated execution plan and reports standardized outcomes; it must not
+reinterpret graph structure or module semantics. Deliverables: an experimental driver
+interface outside the stable API tier; a reference local driver that delegates to the
+existing executor; a process-pool driver for modules explicitly marked serializable /
+process-safe (reuse the §4.3 process-execution serialization boundaries); scatter/gather
+planning for eligible stateless modules with bounded concurrency; specified idempotency,
+retries, cancellation, artifact transfer, and result ordering.
+
+Non-goals for the first driver release: a scheduler service, a workflow database, automatic
+cloud deployment, transparent execution of arbitrary installed modules on untrusted workers,
+or exactly-once claims (consistent with §27).
+
+## E7. Visual tooling and 1.0 readiness
+
+Addresses the GUI question without coupling UI to the engine. Pypes shows the value of a
+graph editor; the Yahoo! Pipes experience warns that large visual pipelines can become
+harder to manage than text — so the GUI **complements** reviewable workflow files, it does
+not replace them.
+
+GUI (separate repository, versioned independently): generate the node palette, forms,
+validation, and help from module definitions (E1); import/export workflow v1 (E3) without
+private riko objects; graph validation before execution; a read-only execution plan and
+event stream (E4) before any editing-time execution; source/diff/search/grouping/subflow-
+collapse for large pipelines; secrets stay in the host app. Acceptance: the editor works
+against a static exported catalog without importing riko in the browser; all validation
+rules also exist in the Python library and CLI.
+
+**1.0 readiness** (borrowing node-machine's conformance-badge idea): publish stable API,
+extension API, module-contract, workflow-schema, and compatibility policies; author guides
+for plugins, workflows, and drivers; a conformance-badge process driven by automated tests;
+a curated recipe gallery with reproducible fixtures; benchmark history and regression
+thresholds; deprecation/migration windows. Ship 1.0 only after at least one external plugin
+and one external workflow consumer validate the contracts, and no open P0 correctness issue
+remains in execution, routing, lifecycle, or serialization (see §27 non-goals and §26
+Milestone 10).
+
+## E8. Prior-art research conclusions
+
+Issue #10 named six projects. Their implementations are dated, but several design ideas
+remain useful; each is mapped to where it lands above.
+
+| Project | Borrowed idea | Lands in | What riko does not copy |
+|---|---|---|---|
+| Pypes | Flow-based graphs of black-box components through named ports; one graph model shared by editor and runtime | E1, E3, E7 | Stackless / Python 2 assumptions; a monolithic drag-and-drop app coupled to the runtime |
+| Mario | File/socket/generator/subprocess adapters; explicit start/close; partial-chunk handling | E4, E5 | A byte-pump as the primary data model (riko keeps mapping-like items + iterable streams) |
+| RssPercolator | Async multi-source fetch, multiple destinations, filters in declared order | E5, §8 | Feed-specific concepts embedded in the core engine |
+| Plagger | Plugin architecture, declarative YAML recipes, end-to-end example gallery | E2, E3 | An implicit global hook system with weak contracts |
+| Turtle | Composition-vs-execution boundary, local/remote chaining, scatter/gather, package integrity | E6 | Cloud-first architecture; auto-executing downloaded code |
+| node-machine | Machine-readable definitions, typed inputs, named exits, generated docs/tests, reusable packs | E1, E7 | Multiple overlapping invocation styles and deferred-control APIs |
+
+### Dependency ordering
+
+```text
+E1 module contract
+   ├── E2 plugins
+   └── E3 workflow spec
+          └── E4 observability
+                 └── E5 adapters
+                        └── E6 drivers
+                               └── E7 GUI + 1.0
+```
+
+The GUI may be prototyped early against exported static schemas, but it must not fork the
+runtime contracts.
 
 ---
 
