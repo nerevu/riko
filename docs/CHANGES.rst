@@ -1,6 +1,15 @@
 Changelog
 =========
 
+v0.73.1 (2026-08-06)
+--------------------
+
+Documentation
+~~~~~~~~~~~~~
+
+- Correct and reorganize the README, Cookbook, FAQ, installation, migration,
+  contribution, and credits documentation.
+
 v0.73.0 (2026-08-05)
 --------------------
 
