@@ -4,7 +4,7 @@ Changelog
 v0.73.0 (2026-08-05)
 --------------------
 
-Legacy removal — the ``legacy`` branch is the ``v0.72.2`` release; these are the
+Legacy removal — the ``legacy`` branch is the ``v0.72.x`` release; these are the
 changes on top of it. See the "Upgrading from the ``legacy`` branch" section of
 ``docs/MIGRATION.rst`` for verified before/after behavior.
 
@@ -67,7 +67,7 @@ Bugfixes
 
 - Fail gracefully on filter parse errors; raise on unsupported filter operations.
 
-- Preserve falsy non-``None`` ``DotDict`` values; use an empty string for the url
+- Preserve falsy non-``None`` ``DotDict`` values; use an empty string for the URL
   cast default.
 
 - Cast ``"now"`` as a ``datetime``; pass ``_tzinfo`` for zone-less
@@ -346,7 +346,7 @@ Changes
 
   - fix py3 and open file errors
   - port missing twisted modules
-  - refactor rss parsing
+  - refactor RSS parsing
   - and streaming json support
   - rename request function
   - make benchmarks.py a script and add to tests

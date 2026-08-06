@@ -9,6 +9,7 @@ Extension-author symbols live in :mod:`riko.ext`; everything else is private.
 See docs/API_STABILITY.md for additional details.
 """
 
+from riko.bado import backend, isasync, issync, run
 from riko.collections import (
     AsyncCollection,
     AsyncPipe,
@@ -18,13 +19,20 @@ from riko.collections import (
     export,
     list_targets,
 )
+from riko.compile import (
+    build_pipeline,
+    compile_pipe,
+    convert_dag,
+    extract_dependencies,
+    parse_pipe_def,
+)
 from riko.context import Context, ExecutionMode
 from riko.exceptions import (
     PipelineStateError,
     UnsupportedModuleError,
     UnsupportedPipelineError,
 )
-from riko.modules import list_modules
+from riko.modules import get_module_metadata, list_modules
 from riko.paths import get_path
 
 __all__ = [
@@ -38,8 +46,18 @@ __all__ = [
     "SyncPipe",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "backend",
+    "build_pipeline",
+    "compile_pipe",
+    "convert_dag",
     "export",
+    "extract_dependencies",
+    "get_module_metadata",
     "get_path",
+    "isasync",
+    "issync",
     "list_modules",
     "list_targets",
+    "parse_pipe_def",
+    "run",
 ]

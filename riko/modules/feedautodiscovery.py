@@ -1,12 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for finding the all available RSS and Atom feeds in a web
-site.
+Discovers RSS/Atom feed links on a page.
 
-Lets you enter a url and then examines those pages for information (like link
+Lets you enter a url and then examines that page for information (like link
 rel tags) about available feeds. If information about more than one feed is
-found, then multiple items are returned. Because more than one feed can be
-returned, the output from this module is often piped into a Fetch Feed module.
+found, then multiple items are returned. This module discovers the feed links
+(href, rel, type, etc.); its output is typically piped into ``fetch`` to
+retrieve and parse the feeds themselves.
 
 Also note that not all sites provide auto-discovery links on their web site's
 home page. For a simpler alternative, try the Fetch Site Feed Module. It
@@ -136,7 +136,7 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that fetches and parses the first feed found on a site.
+    A source that discovers RSS/Atom feed links on a page.
 
     Args:
         item (dict): The entry to process (not used)
@@ -168,7 +168,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that fetches and parses the first feed found on a site.
+    A source that discovers RSS/Atom feed links on a page.
 
     Args:
         item (dict): The entry to process (not used)

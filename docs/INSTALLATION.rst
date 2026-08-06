@@ -4,9 +4,13 @@ Installing riko
 ``riko`` is a pure Python package. It has been tested and is known to work on
 Python 3.12, 3.13, and 3.14.
 
-The published PyPI release may lag the ``features`` branch. ``pip install riko``
-installs the published release; install from the branch when you need the APIs
-described by the current repository documentation.
+The published PyPI release may lag the ``features`` branch. ``python -m pip install riko``
+installs the published release; install from the ``features`` branch when you need
+access to unreleased APIs:
+
+.. code-block:: bash
+
+    python -m pip install "riko @ git+https://github.com/nerevu/riko.git@features"
 
 Create an isolated environment
 ------------------------------
@@ -35,7 +39,7 @@ At the command line, install the latest release available on PyPI:
 
 .. code-block:: bash
 
-    pip install riko
+    python -m pip install riko
 
 Confirm which release was installed:
 
@@ -52,19 +56,19 @@ Optional dependencies
 ``riko`` installs a slim core by default. Install only the optional ``extras``
 your application needs (quote the brackets so your shell doesn't interpret them).
 
-========================  ==================  =============================
+========================  ==================  =========================================
 Feature                   Dependency          Installation
-========================  ==================  =============================
-Async API                 `AnyIO`_, `httpx`_  ``pip install "riko[async]"``
-Accelerated xml parsing   `lxml`_             ``pip install "riko[perf]"``
-Accelerated feed parsing  `fastfeedparser`_   ``pip install "riko[perf]"``
-Streaming json parsing    ``ijson``           ``pip install "riko[perf]"``
-OFX/QIF export            csv2ofx             ``pip install "riko[finance]"``
-========================  ==================  =============================
+========================  ==================  =========================================
+Async API                 `AnyIO`_, `httpx`_  ``python -m pip install "riko[async]"``
+Accelerated XML parsing   `lxml`_             ``python -m pip install "riko[perf]"``
+Accelerated feed parsing  `fastfeedparser`_   ``python -m pip install "riko[perf]"``
+Streaming json parsing    ``ijson``           ``python -m pip install "riko[perf]"``
+OFX/QIF export            csv2ofx             ``python -m pip install "riko[finance]"``
+========================  ==================  =========================================
 
 - ``async`` enables the ``AsyncPipe`` and ``AsyncCollection`` APIs.
 - ``perf`` enables accelerated / streaming parser paths; without ``lxml``, ``riko``
-  falls back to the builtin Python xml parser; without ``fastfeedparser`` it falls back
+  falls back to the built-in Python XML parser; without ``fastfeedparser`` it falls back
   to `feedparser`_.
 - ``finance`` enables the ``ofx`` and ``qif`` export targets; without it
   ``list_targets()`` won't include them.
@@ -73,7 +77,7 @@ Install several groups together:
 
 .. code-block:: bash
 
-    pip install "riko[async,perf,finance]"
+    python -m pip install "riko[async,perf,finance]"
 
 Install for development with uv
 -------------------------------
@@ -86,10 +90,9 @@ mode, and pulls in the dev dependencies and every extra:
 
     uv sync --group dev --all-extras
 
-``riko``'s ``[tool.uv]`` ``cache-keys`` config rebuilds the local install
-whenever a ``riko/`` source file changes, so there's no separate editable
-reinstall step. Run project commands with ``uv run`` (it re-syncs first, picking
-up any source edits):
+``riko`` rebuilds the local install whenever a ``riko/`` source file changes, so there's
+no separate editable reinstall step. Run project commands with ``uv run`` (it re-syncs
+first, picking up any source edits):
 
 .. code-block:: bash
 
@@ -150,7 +153,7 @@ manually, e.g.:
 
 .. code-block:: bash
 
-    pip install "riko[async]"
+    python -m pip install "riko[async]"
 
 When reporting an installation problem, include the Python version, operating
 system, complete command, package version, and full error output in the
@@ -163,7 +166,7 @@ Remove ``riko`` from the active environment with:
 
 .. code-block:: bash
 
-    pip uninstall riko
+    python -m pip uninstall riko
 
 .. _virtualenv: https://virtualenv.pypa.io/en/latest/index.html
 .. _uv: https://docs.astral.sh/uv/

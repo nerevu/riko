@@ -6,10 +6,13 @@ tells you what stability guarantee it carries.
 ## Tiers
 
 - **Stable — `riko` / `riko.api`**
-  Application-facing API: `SyncPipe`, `AsyncPipe`, `SyncCollection`,
-  `AsyncCollection`, `Context`, `list_modules`, `list_targets`, `export`, and the
-  public exceptions. Breaking changes require a major version bump. `riko.__all__`
-  equals `riko.api.__all__`.
+  Application-facing API: `AsyncCollection`, `AsyncPipe`, `Context`, `SyncCollection`,
+  `SyncPipe`, `backend`, `build_pipeline`, `compile_pipe`, `convert_dag`, `ExecutionMode`,
+  `export`, `extract_dependencies`, `get_module_metadata`, `get_path`, `isasync`,
+  `issync`, `list_modules`, `list_targets`, `parse_pipe_def`, `PipeState`, `run`, and
+  the public exceptions.
+  Breaking changes require a major version bump. `riko.__all__` equals
+  `riko.api.__all__`.
 
 - **Extension — `riko.ext`**
   For module authors and integration packages: `processor`, `operator`,

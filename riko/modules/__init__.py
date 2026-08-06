@@ -24,6 +24,7 @@ from riko.modules._metadata import (
     derive_loopable,
     derive_subtypes,
     gen_module_catalog,
+    get_module_metadata,
     list_modules,
 )
 from riko.modules._prepare import (
@@ -177,6 +178,7 @@ __all__ = [
     "get_assignment",
     "get_casters",
     "get_field",
+    "get_module_metadata",
     "get_parsers",
     "get_pieces_or_conf",
     "get_skip",

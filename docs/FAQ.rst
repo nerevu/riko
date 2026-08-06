@@ -32,7 +32,7 @@ What is riko's data model?
 --------------------------
 
 An ``item`` is a dictionary-like record. A ``stream`` is an iterator of
-``items``. A ``pipe`` is a configured module that creates, transforms, combines,
+``item``. A ``pipe`` is a configured module that creates, transforms, combines,
 or consumes a ``stream``.
 
 .. code-block:: python
@@ -70,12 +70,16 @@ Which imports are public?
 
 - **Stable** — the top-level ``riko`` package (mirrored by ``riko.api``) holds the
   SemVer-guaranteed API: the ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
-  ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``export``,
-  ``list_modules``, ``list_targets``, ``get_path``, and the pipeline exceptions.
+  ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
+  ``backend``, ``build_pipeline``, ``compile_pipe``, ``convert_dag``, ``export``,
+  ``extract_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
+  ``issync``, ``list_modules``, ``list_targets``, ``parse_pipe_def``, ``run``, and the
+  pipeline exceptions.
 - **Extension** — ``riko.ext`` holds the symbols for authoring custom ``pipes``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
-- **Private** — every underscore-prefixed name or module (and the individual
-  ``riko.modules.*`` implementations) is internal and may change without notice.
+- **Private** — all import paths outside ``riko``, ``riko.api``, and ``riko.ext``,
+  including individual ``riko.modules.*`` implementations and other implementation
+  modules.
 
 Application code should import from ``riko`` or ``riko.api``.
 
@@ -114,167 +118,169 @@ Overview
 the authoritative source for a ``pipe``'s type, subtype, sync/async
 availability, and loopability.
 
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| Pipe name            | Pipe type | Pipe sub-type | Pipe description                                                                             |
-+======================+===========+===============+==============================================================================================+
-| `aggregate`_         | operator  | aggregator    | performs an arbitrary (user-defined) function on a stream                                    |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `count`_             | operator  | aggregator    | counts the number of items in a feed                                                         |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `csv`_               | processor | source        | parses a csv file to yield items                                                             |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `currencyformat`_    | processor | transformer   | formats a number to a given currency string                                                  |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `datebuilder`_       | processor | transformer   | converts a text string into a datetime                                                       |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `dateformat`_        | processor | transformer   | formats a date                                                                               |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `exchangerate`_      | processor | transformer   | retrieves the current exchange rate for a given currency pair                                |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `feedautodiscovery`_ | processor | source        | fetches and parses the first feed found on a site                                            |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `fetch`_             | processor | source        | fetches and parses a feed to return the entries                                              |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `fetchdata`_         | processor | source        | fetches and parses an XML or JSON file to return the feed entries                            |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `fetchpage`_         | processor | source        | fetches the content of a given web site as a string                                          |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `fetchsitefeed`_     | processor | source        | fetches and parses the first feed found on a site                                            |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `fetchtable`_        | processor | source        | fetches and parses tabular data (csv, xls, json, etc.) to yield items                        |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `fetchtext`_         | processor | source        | fetches and parses a text file                                                               |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `filter`_            | operator  | composer      | extracts items matching the given rules                                                      |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `forever`_           | processor | source        | yields an endless stream of empty items (mocks an input source)                              |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `geolocate`_         | processor | transformer   | obtains the geo location of an ip or street address                                          |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `hash`_              | processor | transformer   | hashes the field of a feed item                                                              |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `input`_             | processor | source        | prompts for text and parses it into a variety of different types, e.g., int, bool, date, etc |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `itembuilder`_       | processor | source        | builds an item                                                                               |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `join`_              | operator  | aggregator    | perform a SQL like join on two feeds                                                         |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `loop`_              | operator  | composer      | runs a submodule (pipe) once per stream item                                                 |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `receive`_           | operator  | composer      | receives stream items from a named channel (pub/sub)                                         |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `refind`_            | processor | transformer   | finds text located before, after, or between substrings using regular expressions            |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `regex`_             | processor | transformer   | replaces text in fields of a feed item using regexes                                         |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `rename`_            | processor | transformer   | renames or copies fields in a feed item                                                      |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `reverse`_           | operator  | composer      | reverses the order of source items in a feed                                                 |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `rssitembuilder`_    | processor | source        | builds an rss item                                                                           |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `send`_              | operator  | composer      | pushes a copy of each stream item to named channels (pub/sub)                                |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `simplemath`_        | processor | transformer   | performs basic arithmetic, such as addition and subtraction                                  |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `slugify`_           | processor | transformer   | slugifies text                                                                               |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `sort`_              | operator  | composer      | sorts a feed according to a specified key                                                    |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `split`_             | splitter  | splitter      | splits a feed into identical copies                                                          |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `strconcat`_         | processor | transformer   | concatenates strings                                                                         |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `strfind`_           | processor | transformer   | finds text located before, after, or between substrings                                      |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `strreplace`_        | processor | transformer   | replaces the text of a field of a feed item                                                  |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `strtransform`_      | processor | transformer   | performs string transformations on the field of a feed item                                  |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `subelement`_        | processor | transformer   | extracts sub-elements for the item of a feed                                                 |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `substr`_            | processor | transformer   | returns a substring of a field of a feed item                                                |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `sum`_               | operator  | aggregator    | sums a field of items in a feed                                                              |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `tail`_              | operator  | composer      | truncates a feed to the last N items                                                         |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `timeout`_           | operator  | composer      | returns items from a stream until a certain amount of time has passed                        |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `tokenizer`_         | processor | transformer   | splits a string by a delimiter                                                               |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `truncate`_          | operator  | composer      | returns a specified number of items from a feed                                              |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `typecast`_          | processor | transformer   | casts a field into a specific type                                                           |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `udf`_               | processor | transformer   | performs an arbitrary (user-defined) function on an item                                     |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `union`_             | operator  | composer      | merges multiple feeds together                                                               |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `uniq`_              | operator  | composer      | filters out non unique items according to a specified field                                  |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `urlbuilder`_        | processor | transformer   | builds a url                                                                                 |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `urlparse`_          | processor | transformer   | parses a URL into its six components                                                         |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
-| `xpathfetchpage`_    | processor | source        | fetches the content of a given website as DOM nodes or a string                              |
-+----------------------+-----------+---------------+----------------------------------------------------------------------------------------------+
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| Pipe name            | Pipe type | Primary sub-type | Pipe description                                                                             |
++======================+===========+==================+==============================================================================================+
+| `aggregate`_         | operator  | composer         | performs an arbitrary (user-defined) function on a stream                                    |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `count`_             | operator  | aggregator       | counts the number of items in a feed                                                         |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `csv`_               | processor | source           | parses a CSV file to yield items                                                             |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `currencyformat`_    | processor | transformer      | formats a number to a given currency string                                                  |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `datebuilder`_       | processor | transformer      | converts a text string into a datetime                                                       |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `dateformat`_        | processor | transformer      | formats a date                                                                               |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `exchangerate`_      | processor | transformer      | retrieves the current exchange rate for a given currency pair                                |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `feedautodiscovery`_ | processor | source           | discovers RSS/Atom feed links on a page                                                      |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `fetch`_             | processor | source           | fetches and parses a feed to return the entries                                              |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchdata`_         | processor | source           | fetches and parses an XML or JSON file to return the feed entries                            |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchpage`_         | processor | source           | fetches the content of a given web site as a string                                          |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchsitefeed`_     | processor | source           | fetches and parses the first feed found on a site                                            |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchtable`_        | processor | source           | fetches and parses tabular data (CSV, XLS, JSON, etc.) to yield items                        |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `fetchtext`_         | processor | source           | fetches and parses a text file                                                               |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `filter`_            | operator  | composer         | extracts items matching the given rules                                                      |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `forever`_           | processor | source           | yields an endless stream of empty items (mocks an input source)                              |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `geolocate`_         | processor | transformer      | obtains the geo location of an IP or street address                                          |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `hash`_              | processor | transformer      | hashes the field of a feed item                                                              |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `input`_             | processor | source           | prompts for text and parses it into a variety of different types, e.g., int, bool, date, etc |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `itembuilder`_       | processor | source           | builds an item                                                                               |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `join`_              | operator  | composer         | perform a SQL like join on two feeds                                                         |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `loop`_              | operator  | composer         | runs a submodule (pipe) once per stream item                                                 |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `receive`_           | operator  | composer         | receives stream items from a named channel (pub/sub)                                         |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `refind`_            | processor | transformer      | finds text located before, after, or between substrings using regular expressions            |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `regex`_             | processor | transformer      | replaces text in fields of a feed item using regexes                                         |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `rename`_            | processor | transformer      | renames or copies fields in a feed item                                                      |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `reverse`_           | operator  | composer         | reverses the order of source items in a feed                                                 |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `rssitembuilder`_    | processor | source           | builds an rss item                                                                           |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `send`_              | operator  | composer         | pushes a copy of each stream item to named channels (pub/sub)                                |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `simplemath`_        | processor | transformer      | performs basic arithmetic, such as addition and subtraction                                  |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `slugify`_           | processor | transformer      | slugifies text                                                                               |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `sort`_              | operator  | composer         | sorts a feed according to a specified key                                                    |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `split`_             | splitter  | splitter         | splits a feed into identical copies                                                          |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `strconcat`_         | processor | transformer      | concatenates strings                                                                         |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `strfind`_           | processor | transformer      | finds text located before, after, or between substrings                                      |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `strreplace`_        | processor | transformer      | replaces the text of a field of a feed item                                                  |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `strtransform`_      | processor | transformer      | performs string transformations on the field of a feed item                                  |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `subelement`_        | processor | transformer      | extracts sub-elements for the item of a feed                                                 |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `substr`_            | processor | transformer      | returns a substring of a field of a feed item                                                |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `sum`_               | operator  | aggregator       | sums a field of items in a feed                                                              |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `tail`_              | operator  | composer         | truncates a feed to the last N items                                                         |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `timeout`_           | operator  | composer         | returns items from a stream until a certain amount of time has passed                        |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `tokenizer`_         | processor | transformer      | splits a string by a delimiter                                                               |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `truncate`_          | operator  | composer         | returns a specified number of items from a feed                                              |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `typecast`_          | processor | transformer      | casts a field into a specific type                                                           |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `udf`_               | processor | transformer      | performs an arbitrary (user-defined) function on an item                                     |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `union`_             | operator  | composer         | merges multiple feeds together                                                               |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `uniq`_              | operator  | composer         | filters out non-unique items according to a specified field                                  |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `urlbuilder`_        | processor | transformer      | builds a URL                                                                                 |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `urlparse`_          | processor | transformer      | parses a URL into its six components                                                         |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `xpathfetchpage`_    | processor | source           | fetches the content of a given website as DOM nodes or a string                              |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 
 Args
 ^^^^
 
-``riko`` ``pipes`` come in two flavors; ``operator`` and ``processor`` [#]_.
-``operator``s operate on an entire ``stream`` at once. Example ``operator``s
-include ``count``, ``filter``, and ``reverse``.
+``riko`` ``pipes`` come in three types: ``processor``, ``operator``, and
+``splitter`` [#]_. An ``operator`` operates on a ``stream``. Examples include
+``count``, ``filter``, and ``reverse``.
 
 .. code-block:: python
 
-    >>> from riko.modules.reverse import pipe
+    >>> from riko import SyncPipe
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(pipe(stream))
+    >>> next(SyncPipe('reverse', stream))
     {'title': 'riko pt. 2'}
 
-``processor``s process individual ``items``. Example ``processor``s include
-``fetchsitefeed``, ``hash``, ``itembuilder``, and ``regex``.
+A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed``,
+``hash``, ``itembuilder``, and ``regex``.
 
 .. code-block:: python
 
-    >>> from riko.modules.hash import pipe
+    >>> from riko import SyncPipe
     >>>
-    >>> item = {'title': 'riko pt. 1'}
-    >>> result = next(pipe(item, field='title'))
+    >>> items = [{'title': 'riko pt. 1'}]
+    >>> result = next(SyncPipe('hash', items, field='title'))
     >>> sorted(result)
     ['hash', 'title']
-    >>> isinstance(result['hash'], int)
-    True
+    >>> result['hash']
+    1104819838
+
+A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in
+example is ``split``.
 
 Kwargs
 ^^^^^^
 
 The following table outlines the available kwargs.
 
-==========  ====  ================================================  =======
-kwarg       type  description                                       default
-==========  ====  ================================================  =======
-conf        dict  The pipe configuration                            varies
-extract     str   The key with which to get a value from `conf`     None
-listize     bool  Ensure that an `extract` value is list-like       False
-pdictize    bool  Convert `conf` / `extract` to a DotDict instance  varies
-objectify   bool  Convert `conf` to an Objectify instance           varies
-ptype       str   Used to convert `conf` items to a specific type.  pass
-dictize     bool  Convert the input `item` to a DotDict instance    True
-field       str   The key with which to get a value from the input  None
-ftype       str   Converts the input `item` to a specific type      pass
-count       str   The output count                                  all
-assign      str   Attribute used to assign output                   varies
-emit        bool  Return the output as is (don't assign)            varies
-skip_if     func  Determines if processing should be skipped        None
-inputs      dict  Values to be used in place of prompting the user  None
-==========  ====  ================================================  =======
+=========  ====  ==================================================  =======
+kwarg      type  description                                         default
+=========  ====  ==================================================  =======
+conf       dict  The pipe configuration                              varies
+extract    str   The key with which to get a value from ``conf``     None
+listize    bool  Ensure that an ``extract`` value is list-like       False
+pdictize   bool  Convert ``conf``/``extract`` to a DotDict instance  varies
+objectify  bool  Convert ``conf`` to an Objectify instance           varies
+ptype      str   Used to convert ``conf`` items to a specific type.  pass
+dictize    bool  Convert the input ``item`` to a DotDict instance    True
+field      str   The key with which to get a value from the input    None
+ftype      str   Converts the input ``item`` to a specific type      pass
+count      str   The output count                                    all
+assign     str   Attribute used to assign output                     varies
+emit       bool  Return the output as is (don't assign)              varies
+skip_if    func  Determines if processing should be skipped          None
+inputs     dict  Values to be used in place of prompting the user    None
+=========  ====  ==================================================  =======
 
 Notes
-^^^^^
 
 .. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
 .. [#] See `Alternate workflow creation`_ for pipe composition examples
@@ -298,18 +304,18 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     'aggregate'
     >>> len(list_modules(type='operator'))
     15
-    >>> # filter by `loopable`
+    >>> # filter by ``loopable``
     >>> list_modules(loopable=True)[0]
     'csv'
     >>> len(list_modules(loopable=True))
     34
-    >>> # filter by `supported_subtypes`
+    >>> # filter by ``supported_subtypes``
     >>> list_modules(subtype='aggregator')[0]
     'count'
     >>> len(list_modules(subtype='aggregator'))
     2
-    >>> # Only modules whose default behavior is aggregation (`primary=True` requires
-    >>> # `subtype`)
+    >>> # Only modules whose default behavior is aggregation
+    >>> # (``primary=True`` requires ``subtype``)
     >>> list_modules(subtype='aggregator', primary=True)[0]
     'count'
     >>> len(list_modules(subtype='aggregator', primary=True))
@@ -386,8 +392,8 @@ rate limits, TLS configuration, or server behavior.
 Protocol  example
 ========  =========================================
 http      http://google.com
-https     https://github.com/reubano/feed
-file      file:///Users/reubano/Downloads/feed.xml
+https     https://github.com
+file      file:///path/to/feed.xml
 ========  =========================================
 
 Use ``riko.get_path()`` only for package data and repository examples. It is not
@@ -396,16 +402,16 @@ a general application data directory.
 Which optional dependencies are available?
 ------------------------------------------
 
-=========  ================================  ======================================
-Extra      Packages                          Capability
-=========  ================================  ======================================
-``async``  AnyIO, httpx                      Asynchronous execution and HTTP paths
-``perf``   fastfeedparser, ijson, lxml       Accelerated / streaming parser paths
-finance    csv2ofx                           OFX and QIF export targets
-=========  ================================  ======================================
+===========  ============================  ======================================
+Extra        Packages                      Capability
+===========  ============================  ======================================
+``async``    AnyIO, httpx                  Asynchronous execution and HTTP paths
+``perf``     fastfeedparser, ijson, lxml   Accelerated / streaming parser paths
+``finance``  csv2ofx                       OFX and QIF export targets
+===========  ============================  ======================================
 
-From a checkout, install an ``extra`` with a quoted command such as
-``pip install "riko[async]"``. Use ``list_targets()`` to discover the export
+From a checkout, install an ``extra`` with a quoted, editable command such as
+``python -m pip install -e ".[async]"``. Use ``list_targets()`` to discover the export
 targets available in the active environment.
 
 How do synchronous and asynchronous pipelines differ?
@@ -499,8 +505,7 @@ created and primed before the sender is consumed. Consuming the main sender
 drives delivery to each named channel. This is an in-process coordination
 mechanism, not an external message broker.
 
-The `Cookbook`_ and the `README`_'s fan-out section include complete recipes for
-both approaches.
+The `Cookbook`_ fan-out section include complete recipes for both approaches.
 
 Can I define a workflow as JSON?
 --------------------------------
@@ -561,13 +566,13 @@ The chainable classes share one pipeline model across four execution styles.
 +------------------------------+----------------------------------------+------------------------------------------------+
 | API / mode                   | How it runs                            | Important behavior                             |
 +==============================+========================================+================================================+
-| ``SyncPipe``                 | inline iterator pipeline               | single-use; lazy except sort / aggregate       |
+| ``SyncPipe``                 | inline iterator pipeline               | single-use; lazy except sort/aggregate         |
 +------------------------------+----------------------------------------+------------------------------------------------+
 | ``SyncPipe(parallel=True)``  | local thread (or process) pool         | eligible stages; source materialized first     |
 +------------------------------+----------------------------------------+------------------------------------------------+
 | ``AsyncPipe``                | async iteration or ``await``           | await materializes; mapping may run eager      |
 +------------------------------+----------------------------------------+------------------------------------------------+
-| ``AsyncPipe(parallel=True)`` | bounded async concurrency              | tune ``connections`` / ``prefetch`` / ``order``|
+| ``AsyncPipe(parallel=True)`` | bounded async concurrency              | tune ``connections``/``prefetch``/``ordered``  |
 +------------------------------+----------------------------------------+------------------------------------------------+
 | ``SyncCollection``           | fetch sources sequentially or pooled   | sources may pick a pipe via ``type``           |
 +------------------------------+----------------------------------------+------------------------------------------------+
@@ -629,65 +634,65 @@ documentation workflow.
 .. _Can I create custom modules: #can-i-create-custom-modules
 .. _How should errors and resource cleanup be handled: #how-should-errors-and-resource-cleanup-be-handled
 .. _Where should I report problems or contribute: #where-should-i-report-problems-or-contribute
-.. _Inspecting a workflow: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#inspecting-a-workflow
+.. _Inspecting a workflow: COOKBOOK.rst#inspecting-a-workflow
 
 .. _README: ../README.rst
 .. _Cookbook: COOKBOOK.rst
 .. _installation guide: INSTALLATION.rst
 .. _contributing guide: ../CONTRIBUTING.rst
 .. _issue tracker: https://github.com/nerevu/riko/issues
-.. _DAG format: https://github.com/nerevu/riko/blob/master/docs/DAG_FORMAT.md
-.. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
-.. _Alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#alternate-workflow-creation
+.. _DAG format: DAG_FORMAT.md
+.. _Design Principles: ../README.rst#design-principles
+.. _Alternate workflow creation: COOKBOOK.rst#alternate-workflow-creation
 
-.. _aggregate: https://github.com/nerevu/riko/blob/master/riko/modules/aggregate.py
-.. _count: https://github.com/nerevu/riko/blob/master/riko/modules/count.py
-.. _csv: https://github.com/nerevu/riko/blob/master/riko/modules/csv.py
-.. _currencyformat: https://github.com/nerevu/riko/blob/master/riko/modules/currencyformat.py
-.. _datebuilder: https://github.com/nerevu/riko/blob/master/riko/modules/datebuilder.py
-.. _dateformat: https://github.com/nerevu/riko/blob/master/riko/modules/dateformat.py
-.. _exchangerate: https://github.com/nerevu/riko/blob/master/riko/modules/exchangerate.py
-.. _feedautodiscovery: https://github.com/nerevu/riko/blob/master/riko/modules/feedautodiscovery.py
-.. _fetch: https://github.com/nerevu/riko/blob/master/riko/modules/fetch.py
-.. _fetchdata: https://github.com/nerevu/riko/blob/master/riko/modules/fetchdata.py
-.. _fetchpage: https://github.com/nerevu/riko/blob/master/riko/modules/fetchpage.py
-.. _fetchsitefeed: https://github.com/nerevu/riko/blob/master/riko/modules/fetchsitefeed.py
-.. _fetchtable: https://github.com/nerevu/riko/blob/master/riko/modules/fetchtable.py
-.. _fetchtext: https://github.com/nerevu/riko/blob/master/riko/modules/fetchtext.py
-.. _filter: https://github.com/nerevu/riko/blob/master/riko/modules/filter.py
-.. _forever: https://github.com/nerevu/riko/blob/master/riko/modules/forever.py
-.. _geolocate: https://github.com/nerevu/riko/blob/master/riko/modules/geolocate.py
-.. _hash: https://github.com/nerevu/riko/blob/master/riko/modules/hash.py
-.. _input: https://github.com/nerevu/riko/blob/master/riko/modules/input.py
-.. _itembuilder: https://github.com/nerevu/riko/blob/master/riko/modules/itembuilder.py
-.. _join: https://github.com/nerevu/riko/blob/master/riko/modules/join.py
-.. _loop: https://github.com/nerevu/riko/blob/master/riko/modules/loop.py
-.. _receive: https://github.com/nerevu/riko/blob/master/riko/modules/receive.py
-.. _refind: https://github.com/nerevu/riko/blob/master/riko/modules/refind.py
-.. _regex: https://github.com/nerevu/riko/blob/master/riko/modules/regex.py
-.. _rename: https://github.com/nerevu/riko/blob/master/riko/modules/rename.py
-.. _reverse: https://github.com/nerevu/riko/blob/master/riko/modules/reverse.py
-.. _rssitembuilder: https://github.com/nerevu/riko/blob/master/riko/modules/rssitembuilder.py
-.. _send: https://github.com/nerevu/riko/blob/master/riko/modules/send.py
-.. _simplemath: https://github.com/nerevu/riko/blob/master/riko/modules/simplemath.py
-.. _slugify: https://github.com/nerevu/riko/blob/master/riko/modules/slugify.py
-.. _sort: https://github.com/nerevu/riko/blob/master/riko/modules/sort.py
-.. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py
-.. _strconcat: https://github.com/nerevu/riko/blob/master/riko/modules/strconcat.py
-.. _strfind: https://github.com/nerevu/riko/blob/master/riko/modules/strfind.py
-.. _strreplace: https://github.com/nerevu/riko/blob/master/riko/modules/strreplace.py
-.. _strtransform: https://github.com/nerevu/riko/blob/master/riko/modules/strtransform.py
-.. _subelement: https://github.com/nerevu/riko/blob/master/riko/modules/subelement.py
-.. _substr: https://github.com/nerevu/riko/blob/master/riko/modules/substr.py
-.. _sum: https://github.com/nerevu/riko/blob/master/riko/modules/sum.py
-.. _tail: https://github.com/nerevu/riko/blob/master/riko/modules/tail.py
-.. _timeout: https://github.com/nerevu/riko/blob/master/riko/modules/timeout.py
-.. _tokenizer: https://github.com/nerevu/riko/blob/master/riko/modules/tokenizer.py
-.. _truncate: https://github.com/nerevu/riko/blob/master/riko/modules/truncate.py
-.. _typecast: https://github.com/nerevu/riko/blob/master/riko/modules/typecast.py
-.. _udf: https://github.com/nerevu/riko/blob/master/riko/modules/udf.py
-.. _union: https://github.com/nerevu/riko/blob/master/riko/modules/union.py
-.. _uniq: https://github.com/nerevu/riko/blob/master/riko/modules/uniq.py
-.. _urlbuilder: https://github.com/nerevu/riko/blob/master/riko/modules/urlbuilder.py
-.. _urlparse: https://github.com/nerevu/riko/blob/master/riko/modules/urlparse.py
-.. _xpathfetchpage: https://github.com/nerevu/riko/blob/master/riko/modules/xpathfetchpage.py
+.. _aggregate: ../riko/modules/aggregate.py
+.. _count: ../riko/modules/count.py
+.. _csv: ../riko/modules/csv.py
+.. _currencyformat: ../riko/modules/currencyformat.py
+.. _datebuilder: ../riko/modules/datebuilder.py
+.. _dateformat: ../riko/modules/dateformat.py
+.. _exchangerate: ../riko/modules/exchangerate.py
+.. _feedautodiscovery: ../riko/modules/feedautodiscovery.py
+.. _fetch: ../riko/modules/fetch.py
+.. _fetchdata: ../riko/modules/fetchdata.py
+.. _fetchpage: ../riko/modules/fetchpage.py
+.. _fetchsitefeed: ../riko/modules/fetchsitefeed.py
+.. _fetchtable: ../riko/modules/fetchtable.py
+.. _fetchtext: ../riko/modules/fetchtext.py
+.. _filter: ../riko/modules/filter.py
+.. _forever: ../riko/modules/forever.py
+.. _geolocate: ../riko/modules/geolocate.py
+.. _hash: ../riko/modules/hash.py
+.. _input: ../riko/modules/input.py
+.. _itembuilder: ../riko/modules/itembuilder.py
+.. _join: ../riko/modules/join.py
+.. _loop: ../riko/modules/loop.py
+.. _receive: ../riko/modules/receive.py
+.. _refind: ../riko/modules/refind.py
+.. _regex: ../riko/modules/regex.py
+.. _rename: ../riko/modules/rename.py
+.. _reverse: ../riko/modules/reverse.py
+.. _rssitembuilder: ../riko/modules/rssitembuilder.py
+.. _send: ../riko/modules/send.py
+.. _simplemath: ../riko/modules/simplemath.py
+.. _slugify: ../riko/modules/slugify.py
+.. _sort: ../riko/modules/sort.py
+.. _split: ../riko/modules/split.py
+.. _strconcat: ../riko/modules/strconcat.py
+.. _strfind: ../riko/modules/strfind.py
+.. _strreplace: ../riko/modules/strreplace.py
+.. _strtransform: ../riko/modules/strtransform.py
+.. _subelement: ../riko/modules/subelement.py
+.. _substr: ../riko/modules/substr.py
+.. _sum: ../riko/modules/sum.py
+.. _tail: ../riko/modules/tail.py
+.. _timeout: ../riko/modules/timeout.py
+.. _tokenizer: ../riko/modules/tokenizer.py
+.. _truncate: ../riko/modules/truncate.py
+.. _typecast: ../riko/modules/typecast.py
+.. _udf: ../riko/modules/udf.py
+.. _union: ../riko/modules/union.py
+.. _uniq: ../riko/modules/uniq.py
+.. _urlbuilder: ../riko/modules/urlbuilder.py
+.. _urlparse: ../riko/modules/urlparse.py
+.. _xpathfetchpage: ../riko/modules/xpathfetchpage.py

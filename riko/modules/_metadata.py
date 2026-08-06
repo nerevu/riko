@@ -90,7 +90,7 @@ def derive_subtypes(
     return result
 
 
-def _get_module_metadata(name: str) -> ModuleMetadata | None:
+def get_module_metadata(name: str) -> ModuleMetadata | None:
     module = import_module(f"{_PACKAGE}.{name}")
     pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
     targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
@@ -136,13 +136,13 @@ def _get_module_metadata(name: str) -> ModuleMetadata | None:
     return metadata
 
 
-def gen_module_catalog() -> Iterator[ModuleMetadata]:
+def gen_module_catalog(name: str | None = None) -> Iterator[ModuleMetadata]:
     package = import_module(_PACKAGE)
 
     for info in iter_package_modules(package.__path__):
         skip = info.ispkg or info.name.startswith("_")
 
-        if not skip and (metadata := _get_module_metadata(info.name)):
+        if not skip and (metadata := get_module_metadata(info.name)):
             yield metadata
 
 
@@ -198,3 +198,7 @@ def list_modules(  # noqa: E302
     filtered = builtins.filter(match, gen_module_catalog())
     modules = tuple(sorted(filtered, key=lambda module: module.name))
     return modules if show_metadata else tuple(module.name for module in modules)
+
+
+def get_pipe_metadata(name: str) -> ModuleMetadata | None:
+    return get_module_metadata(f"{name}")

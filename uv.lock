@@ -1454,6 +1454,7 @@ perf = [
 [package.dev-dependencies]
 dev = [
     { name = "coverage" },
+    { name = "docutils" },
     { name = "ipython" },
     { name = "pre-commit" },
     { name = "pylint" },
@@ -1467,6 +1468,7 @@ dev = [
     { name = "twine" },
 ]
 lint = [
+    { name = "docutils" },
     { name = "pylint" },
     { name = "pyright" },
     { name = "ruff" },
@@ -1507,6 +1509,7 @@ provides-extras = ["perf", "async", "finance"]
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = ">=4.3.4,<8.0.0" },
+    { name = "docutils", specifier = ">=0.21" },
     { name = "ipython", specifier = ">=8.39.0" },
     { name = "pre-commit", specifier = ">=4.6.1" },
     { name = "pylint", specifier = ">=4.0.5,<5.0.0" },
@@ -1520,6 +1523,7 @@ dev = [
     { name = "twine", specifier = ">=6.0.0" },
 ]
 lint = [
+    { name = "docutils", specifier = ">=0.21" },
     { name = "pylint", specifier = ">=4.0.5,<5.0.0" },
     { name = "pyright", specifier = ">=1.1.411" },
     { name = "ruff", specifier = ">=0.13.1" },

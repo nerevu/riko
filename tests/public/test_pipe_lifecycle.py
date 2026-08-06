@@ -24,6 +24,7 @@ from riko.collections import (
     SyncPipe,
 )
 from riko.exceptions import PipelineStateError
+from riko.types.general import Items
 from riko.types.modules import ItemBuilderConf
 
 BUILDER_CONF = ItemBuilderConf({"attrs": [{"key": "content", "value": "a,b,c"}]})
@@ -462,11 +463,11 @@ class TestAsyncSourceAdapter:
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
     def test_source_iterates(self, make_source):
-        async def main():
+        async def main() -> Items:
             pipe = AsyncPipe("hash", source=make_source())
             return [item async for item in pipe]
 
-        assert len(run(main)) == len(SRC)
+        assert len(list(run(main))) == len(SRC)
 
     @pytest.mark.parametrize("make_source", RAISING_SOURCES)
     def test_source_failure_propagates(self, make_source):

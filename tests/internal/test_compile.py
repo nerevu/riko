@@ -16,13 +16,13 @@ import pytest
 from riko.bado import issync, run
 from riko.compile import (
     build_pipeline,
+    compile_pipe,
     convert_dag,
     get_wire,
     parse_pipe_def,
     resolve_module,
     stringify_pipe,
 )
-from riko.compile import compile as compile_pipe
 from riko.context import Context
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.types.compile import DagModule, LoopModule, PipeDag, PipeDef, PipeModule

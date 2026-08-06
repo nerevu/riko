@@ -10,8 +10,19 @@ the entry point for async doctests/examples (``run(main)`` where ``main`` is a
 no-argument coroutine function) — anyio needs no reactor.
 """
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol, Unpack
+
+
+class Run(Protocol):
+    def __call__[*PosArgsT, T](  # noqa: E704
+        self,
+        func: Callable[[Unpack[PosArgsT]], Awaitable[T]],
+        *args: *PosArgsT,
+    ) -> T: ...
+
+
+run: Run | None = None
 
 try:
     import anyio
@@ -32,7 +43,6 @@ except ImportError:
     gather_results: Callable[..., Any] = lambda *_: None
     lowlevel: Any = None
     maybe_deferred: Callable[..., Any] = lambda *_: None
-    run: Callable[..., Any] | None = None
 
     async def checkpoint() -> None:
         return None
@@ -60,7 +70,6 @@ else:
     )
 
     run = anyio.run
-
 
 backend: str = "empty" if run is None else "anyio"
 issync: bool = backend == "empty"
