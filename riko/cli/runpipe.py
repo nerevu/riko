@@ -34,9 +34,7 @@ def emit_result(result: object) -> None:
         print(result)
 
 
-def load_file(name: str, src: str) -> ModuleType | None:
-    location = f"examples/{src}.py"
-
+def load_file(name: str, location: str) -> ModuleType | None:
     if spec := spec_from_file_location(name, location):
         module = module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -70,7 +68,7 @@ def run() -> None:
     parser = ArgumentParser(
         description="description: Runs a riko pipe",
         prog="run-pipe",
-        usage="%(prog)s [pipeid]",
+        usage="%(prog)s [pipeid] [-p PATH]",
         formatter_class=RawTextHelpFormatter,
     )
 
@@ -78,7 +76,15 @@ def run() -> None:
         dest="pipeid",
         nargs="?",
         default=None,
-        help="The pipe to run (default: reads from stdin).",
+        help="The workflow to run from the examples directory.",
+    )
+
+    parser.add_argument(
+        "-p",
+        "--path",
+        dest="path",
+        default=None,
+        help="Path to a pipe file to run, e.g. flow.py.\n\n",
     )
 
     parser.add_argument(
@@ -100,14 +106,24 @@ def run() -> None:
 
     args = parser.parse_args()
 
-    try:
-        name = file2name(f"{args.pipeid}.py")
-        module = load_file(name, args.pipeid)
-    except io_error:
+    if args.path:
+        name = file2name(args.path)
+
         try:
-            module = import_module(f"examples.{args.pipeid}")
-        except ImportError:
-            sys.exit(f"Pipe examples.{args.pipeid} not found!")
+            module = load_file(name, args.path)
+        except io_error:
+            sys.exit(f"Pipe file {args.path} not found!")
+    elif args.pipeid:
+        try:
+            name = file2name(f"{args.pipeid}.py")
+            module = load_file(name, f"examples/{args.pipeid}.py")
+        except io_error:
+            try:
+                module = import_module(f"examples.{args.pipeid}")
+            except ImportError:
+                sys.exit(f"Pipe examples.{args.pipeid} not found!")
+    else:
+        sys.exit("Please provide a pipeid or path to a pipe file.")
 
     printer = getattr(module, "print_results", emit_result)
 

@@ -68,22 +68,22 @@ review when a change could be version-specific.
 Fork and clone
 ^^^^^^^^^^^^^^
 
-Fork the repository, clone your fork, and add the origin repository:
+Fork the repository, clone your fork, and add the upstream repository:
 
 .. code-block:: bash
 
     git clone https://github.com/<your-username>/riko.git
     cd riko
-    git remote add origin https://github.com/nerevu/riko.git
-    git fetch origin
+    git remote add upstream https://github.com/nerevu/riko.git
+    git fetch upstream
 
 The documentation and APIs described here target ``features``. Start a focused
-branch from the current origin branch unless an issue or maintainer specifies
+branch from the current upstream branch unless an issue or maintainer specifies
 a different target:
 
 .. code-block:: bash
 
-    git switch -c your-change origin/features
+    git switch -c your-change upstream/features
 
 Install the development environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -167,7 +167,7 @@ Code and API conventions
 ------------------------
 
 Please mimic the coding style/conventions used in this repo. If you add new
-classes or functions, please add the appropriate doc blocks with examples.
+classes or functions, please add the appropriate docstrings with examples.
 
 - Import application APIs from ``riko`` or ``riko.api``.
 - Import supported module-authoring decorators and protocols from ``riko.ext``.
@@ -228,8 +228,6 @@ Useful links
 - `Issue tracker`_
 - `Repository`_
 
-.. _uv: https://docs.astral.sh/uv/
-.. _uv: https://docs.astral.sh/uv/
 .. _uv: https://docs.astral.sh/uv/
 .. _issue: https://github.com/nerevu/riko/issues
 .. _README: README.rst

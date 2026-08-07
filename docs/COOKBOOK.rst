@@ -6,9 +6,6 @@ asynchronous execution, custom modules, testing, and JSON workflow compilation.
 Examples that read files use data bundled with ``riko`` (via ``get_path``) so
 they run offline.
 
-Index
------
-
 .. contents::
    :local:
    :depth: 2
@@ -106,7 +103,7 @@ examples deterministic.
 
 Use ``fetchdata`` for JSON or XML records, ``csv`` for CSV parsing, and
 ``fetchtable`` for supported tabular formats. See the `FAQ`_ for the full format
-matrix and each ``pipe``'s configuration.
+matrix and each ``pipe`` configuration.
 
 Read feeds
 ^^^^^^^^^^
@@ -162,14 +159,15 @@ User input
 Some ``workflows`` require user input (via the ``input`` pipe). By default,
 ``input`` prompts the user via the console, but in some situations this may not
 be appropriate, e.g., testing or integrating with a website. In such cases, the
-input values can instead be read from the ``workflow``'s ``inputs`` kwarg (a set
+input values can instead be read from a ``workflow`` ``inputs`` kwarg (a set
 of values passed into every ``pipe``).
 
 .. code-block:: python
 
-    >>> from riko.modules.input import pipe
+    >>> from riko import SyncPipe
+    >>>
     >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-    >>> next(pipe(conf=conf, inputs={'content': '30'}))
+    >>> next(SyncPipe('input', conf=conf, inputs={'content': '30'}))
     30
 
 Intermediate recipes
@@ -184,52 +182,46 @@ Fetching data and feeds
 
 .. code-block:: python
 
-    >>> from itertools import chain
-    >>> from riko import get_path
-    >>> from riko.modules.fetch import pipe as fetch
-    >>> from riko.modules.fetchpage import pipe as fetchpage
-    >>> from riko.modules.fetchdata import pipe as fetchdata
-    >>> from riko.modules.fetchsitefeed import pipe as fetchsitefeed
-    >>> from riko.modules.feedautodiscovery import pipe as feedautodiscovery
+    >>> from riko import get_path, SyncPipe
     >>>
-    >>> # Note: `get_path` looks up a cached copy of a url in the `data`
+    >>> # Note: `get_path` looks up a cached copy of a URL in the `data`
     >>> # directory, so these examples run offline
     >>>
     >>> ### Fetch a web page ###
-    >>> stream = fetchpage(conf={'url': get_path('users.jyu.fi.html')})
+    >>> stream = SyncPipe('fetchpage', conf={'url': get_path('users.jyu.fi.html')})
     >>>
     >>> ### Fetch a data file ###
-    >>> stream = fetchdata(conf={'url': get_path('quote.json')})
+    >>> stream = SyncPipe('fetchdata', conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
     >>> item = next(stream)
     >>> item['base']
     'USD'
-    >>> ### Fetch an rss feed ###
-    >>> stream = fetch(conf={'url': get_path('feed.xml')})
+    >>> ### Fetch an RSS feed ###
+    >>> stream = SyncPipe('fetch', conf={'url': get_path('feed.xml')})
     >>>
-    >>> ### Fetch the first rss feed found on a page ###
-    >>> stream = fetchsitefeed(conf={'url': get_path('cnn.html')})
+    >>> ### Fetch the first RSS feed found on a page ###
+    >>> stream = SyncPipe('fetchsitefeed', conf={'url': get_path('cnn.html')})
     >>>
-    >>> ### Find all rss links on a page and fetch the feeds ###
-    >>> entries = feedautodiscovery(conf={'url': get_path('bbc.html')})
+    >>> ### Find all RSS links on a page and fetch the feeds ###
+    >>> entries = SyncPipe('feedautodiscovery', conf={'url': get_path('bbc.html')})
     >>> urls = [entry['link'] for entry in entries]
     >>> urls
     ['file://riko/data/bbci.co.uk.xml']
-    >>> stream = chain.from_iterable(fetch(conf={'url': url}) for url in urls)
+    >>> stream = SyncPipe('fetch', conf={'url': urls[0]})
     >>>
     >>> ### Alternatively, create a SyncCollection ###
     >>> #
-    >>> # `SyncCollection` is a url fetching convenience class with support for
+    >>> # `SyncCollection` is a URL fetching convenience class with support for
     >>> # parallel processing
-    >>> from riko.collections import SyncCollection
+    >>> from riko import SyncCollection
     >>>
     >>> sources = [{'url': url} for url in urls]
     >>> stream = SyncCollection(sources)
     >>>
-    >>> ### View the fetched rss feed(s) ###
+    >>> ### View the fetched RSS feed(s) ###
     >>> #
-    >>> # Note: regardless of how you fetch an rss feed, it will have the same
+    >>> # Note: regardless of how you fetch an RSS feed, it will have the same
     >>> # structure
     >>> next(stream)['title']
     "EU sets out 'phased' Brexit strategy"
@@ -243,11 +235,11 @@ This is how compiled ``workflows`` wire values between modules.
 
 .. code-block:: python
 
-    >>> from riko import get_path
-    >>> from riko.modules.fetch import pipe
+    >>> from riko import get_path, SyncPipe
     >>>
     >>> conf = {'url': {'subkey': 'url'}}
-    >>> result = pipe({'url': get_path('feed.xml')}, conf=conf)
+    >>> items = [{'url': get_path('feed.xml')}]
+    >>> result = SyncPipe('fetch', items, conf=conf)
     >>> item = next(result)
     >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
     True
@@ -259,9 +251,14 @@ In addition to `class based workflows`_ ``riko`` supports a pure functional
 style [#]_. Every built-in ``pipe`` can also be called directly, which is useful
 when control flow is easier to express explicitly.
 
+.. warning::
+
+   Direct module imports are implementation-level APIs and are not covered by
+   the stable API guarantee. Application code that needs the stable public surface
+   should prefer ``SyncPipe`` or ``AsyncPipe``.
+
 .. code-block:: python
 
-    >>> import itertools as it
     >>> from riko import get_path
     >>> from riko.modules.fetchpage import pipe as fetchpage
     >>> from riko.modules.strreplace import pipe as strreplace
@@ -281,63 +278,21 @@ when control flow is easier to express explicitly.
     >>> ### Create a workflow ###
     >>> #
     >>> # The following workflow will:
-    >>> #   1. fetch the url and return the content between the body tags
+    >>> #   1. fetch the URL and return the content between the body tags
     >>> #   2. replace newlines with spaces
     >>> #   3. tokenize (split) the content by spaces, i.e., yield words
     >>> #   4. count the words
     >>> #
-    >>> # Note: because `fetchpage` and `strreplace` each return an iterator of
-    >>> # just one item, we can safely call `next` without fear of loosing data
-    >>> page = next(fetchpage(conf=fetch_conf))
-    >>> replaced = next(strreplace(page, conf=replace_conf, assign='content'))
+    >>> pages = fetchpage(conf=fetch_conf)
+    >>> replaced = strreplace(pages, conf=replace_conf, assign='content')
     >>> words = tokenizer(replaced, conf={'delimiter': ' '}, emit=True)
     >>> counts = count(words)
     >>> next(counts)
     {'count': 70}
 
-    >>> from itertools import chain
-    >>> from riko import get_path
-    >>> from riko.modules.fetch import pipe as fetch
-    >>> from riko.modules.filter import pipe as _filter
-    >>> from riko.modules.subelement import pipe as subelement
-    >>> from riko.modules.regex import pipe as regex
-    >>> from riko.modules.sort import pipe as _sort
-    >>>
-    >>> ### Set the pipe configurations ###
-    >>> #
-    >>> # Note: `get_path` just looks up files in the `data` directory to
-    >>> # simplify testing
-    >>> fetch_conf = {'url': get_path('feed.xml')}
-    >>> filter_rule = {
-    ...     'field': 'y:published', 'op': 'before', 'value': '2/5/09'}
-    >>> sub_conf = {'path': 'content.value'}
-    >>> match = r'(.*href=")([\w:/.@]+)(".*)'
-    >>> regex_rule = {'field': 'content', 'match': match, 'replace': '$2'}
-    >>> sort_conf = {'rule': {'field': 'content', 'dir': 'desc'}}
-    >>>
-    >>> ### Create a workflow ###
-    >>> #
-    >>> # The following workflow will:
-    >>> #   1. fetch the rss feed
-    >>> #   2. filter for items published before 2/5/2009
-    >>> #   3. extract the path `content.value` from each feed item
-    >>> #   4. replace the extracted text with the last href url contained
-    >>> #      within it
-    >>> #   5. reverse sort the items by the replaced url
-    >>> #
-    >>> # Note: sorting is not lazy so take caution when using this pipe
-    >>> stream = fetch(conf=fetch_conf)
-    >>> filtered = _filter(stream, conf={'rule': filter_rule})
-    >>> extracted = (subelement(i, conf=sub_conf, emit=True) for i in filtered)
-    >>> flat_extract = chain.from_iterable(extracted)
-    >>> matched = (regex(i, conf={'rule': regex_rule}) for i in flat_extract)
-    >>> flat_match = chain.from_iterable(matched)
-    >>> sorted_match = _sort(flat_match, conf=sort_conf)
-    >>> next(sorted_match)
-    {'content': 'mailto:mail@writetoreply.org'}
+Notes
 
-Direct module imports are implementation-level APIs. Application code that needs
-the stable public surface should prefer ``SyncPipe`` or ``AsyncPipe``.
+.. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
 
 Fetch several sources
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -350,11 +305,8 @@ module.
 
     >>> from riko import SyncCollection, get_path
     >>>
-    >>> sources = [
-    ...     {'url': get_path('feed.xml')},
-    ...     {'url': get_path('gawker.xml')}]
-    >>> items = list(SyncCollection(sources))
-    >>> len(items)
+    >>> sources = [{'url': get_path('feed.xml')}, {'url': get_path('gawker.xml')}]
+    >>> len(list(SyncCollection(sources)))
     32
 
 For concurrent local fetching, use ``parallel=True``. The default pool uses
@@ -363,8 +315,7 @@ threads; pass ``threads=False`` for processes.
 .. code-block:: python
 
     >>> with SyncCollection(sources, parallel=True, workers=4) as collection:
-    ...     items = list(collection)
-    >>> len(items)
+    ...     len(list(collection))
     32
 
 Managing pipeline lifecycle
@@ -378,7 +329,7 @@ re-running. You can inspect a pipe's state at any point via its read-only
 
 .. code-block:: python
 
-    >>> from riko.collections import SyncPipe, PipeState
+    >>> from riko import SyncPipe
     >>>
     >>> flow = SyncPipe('hash', source=[{'content': 'a'}, {'content': 'b'}])
     >>> flow.state
@@ -407,7 +358,8 @@ the pool is closed; on exceptional exit it is terminated.
 .. code-block:: python
 
     >>> with SyncPipe('hash', source=[{'content': 'a'}], parallel=True) as flow:
-    ...     results = list(flow)
+    ...     list(flow)
+    [{'content': 'a', 'hash': 1267964084}]
     >>> flow.closed and flow.pool is None  # pool released on exit
     True
 
@@ -447,10 +399,10 @@ the remaining ``stream``.
 Asynchronous workflows
 ----------------------
 
-The ``async`` extra (``pip install riko[async]``) enables ``AsyncPipe`` and
+The ``async`` extra (``python -m pip install "riko[async]"``) enables ``AsyncPipe`` and
 ``AsyncCollection``, which mirror their synchronous counterparts. Build a
 ``flow`` the same way, then either ``await`` it (materializing the whole
-``stream``) or consume it lazily with ``async for``. ``riko.bado.run`` executes
+``stream``) or consume it lazily with ``async for``. ``riko.run`` executes
 a coroutine on the installed backend, and ``issync`` is ``True`` when no async
 backend is present (so these examples degrade gracefully when the extra is
 absent).
@@ -460,9 +412,7 @@ Lazy async iteration
 
 .. code-block:: python
 
-    >>> from riko import get_path
-    >>> from riko.bado import run, issync
-    >>> from riko.collections import AsyncPipe
+    >>> from riko import AsyncPipe, get_path, issync, run
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
@@ -486,7 +436,7 @@ every source concurrently and merges them into a single ``stream``.
 
 .. code-block:: python
 
-    >>> from riko.collections import AsyncCollection
+    >>> from riko import AsyncCollection, get_path, issync, run
     >>>
     >>> async def main():
     ...     sources = [{'url': get_path('feed.xml')}, {'url': get_path('gawker.xml')}]
@@ -507,6 +457,8 @@ cap the number of in-flight items.
 
 .. code-block:: python
 
+    >>> from riko import AsyncPipe, issync, run
+    >>>
     >>> async def main():
     ...     conf = {'attrs': {'key': 'content', 'value': 'a,bb,ccc'}}
     ...     pipe = (
@@ -659,8 +611,7 @@ coroutine directly.
 
 .. code-block:: python
 
-    >>> from riko.modules.receive import pipe as receive
-    >>> from riko.modules.send import pipe as send
+    >>> from riko import SyncPipe
     >>>
     >>> items = [
     ...     {'title': 'Gravity paper', 'score': 42},
@@ -668,12 +619,12 @@ coroutine directly.
     ... ]
     >>>
     >>> ### Prime a named receiver ###
-    >>> receiver = receive(conf={'name': 'receiver'})
+    >>> receiver = SyncPipe('receive', conf={'name': 'receiver'})
     >>> next(receiver)
     {'state': <StreamState.PENDING: 1>}
     >>>
     >>> ### sender pushes items to 'receiver' ###
-    >>> sender = send(items, others=['receiver'])
+    >>> sender = SyncPipe('send', items, others=['receiver'])
     >>>
     >>> ### Consuming the sender drives the push ###
     >>> list(sender)
@@ -691,8 +642,7 @@ receiver:
 
 .. code-block:: python
 
-    >>> from riko.collections import SyncPipe
-    >>> from riko.modules.receive import pipe as receive
+    >>> from riko import SyncPipe
     >>>
     >>> ### `archive` and `notify` stand in for your real side effects ###
     >>> #
@@ -700,17 +650,18 @@ receiver:
     >>> archived, alerted = [], []
     >>>
     >>> ### Prime two named channels ###
-    >>> everything = receive(conf={'name': 'everything'}, func=archived.append)
+    >>> everything = SyncPipe('receive', conf={'name': 'everything'}, func=archived.append)
     >>> next(everything)
     {'state': <StreamState.PENDING: 1>}
-    >>> breaking = receive(conf={'name': 'breaking'}, func=alerted.append)
+    >>> breaking = SyncPipe('receive', conf={'name': 'breaking'}, func=alerted.append)
     >>> next(breaking)
     {'state': <StreamState.PENDING: 1>}
     >>>
     >>> items = [
     ...     {'title': 'quiet', 'score': 42},
     ...     {'title': 'breaking: riko 4.0', 'score': 980},
-    ...     {'title': 'also big', 'score': 750}]
+    ...     {'title': 'also big', 'score': 750}
+    ... ]
     >>>
     >>> ### Send ALL items to 'everything', filter, then send matches to 'breaking' ###
     >>> flow = (
@@ -718,7 +669,8 @@ receiver:
     ...         .send(others=['everything'])
     ...         .filter(conf={'rule': [{'field': 'score', 'value': 500, 'op': 'greater'}]})
     ...         .send(others=['breaking'])
-    ...         .sort(conf={'rule': [{'field': 'score'}]}))
+    ...         .sort(conf={'rule': [{'field': 'score'}]})
+    ... )
     >>>
     >>> ### Consume the main pipeline (this also drives the pushes) ###
     >>> [item['title'] for item in flow]  # sorted high score items
@@ -739,7 +691,7 @@ passing additional names to ``others``:
 
 .. code-block:: python
 
-    >>> sender = send(items, others=['breaking', 'archive', 'metrics'])
+    >>> sender = SyncPipe('send', items, others=['breaking', 'archive', 'metrics'])
 
 Each receiver is drained independently; draining one does not affect the others.
 
@@ -750,15 +702,15 @@ Each receiver is drained independently; draining one does not affect the others.
 
 .. code-block:: python
 
-    >>> from riko.modules.split import pipe as split
+    >>> from riko import SyncPipe
     >>>
     >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> stream1, stream2 = split(items)
+    >>> stream1, stream2 = SyncPipe('split', items)
     >>> next(stream1), next(stream2)
     ({'title': 'riko pt. 1'}, {'title': 'riko pt. 1'})
 
 The difference between them is that ``split`` calls ``list(stream)`` internally, so it
-**eagerly materializes** the entire stream into memory before handing out copies.
+**eagerly materializes** the ``stream`` into memory before handing out copies.
 ``send``/``receive`` are **lazy**: each item is pushed to receivers as it passes
 through, with no upfront buffering.
 
@@ -768,14 +720,21 @@ through, with no upfront buffering.
 | Evaluation                    | Eager — full stream in    | Lazy — one item at a time  |
 |                               | memory before any copy    |                            |
 +-------------------------------+---------------------------+----------------------------+
-| Memory                        | O(n × copies)             | O(queue size, default 256) |
+| Memory (best case)            | O(n) — source items       | O(queue size, default 256) |
+|                               | retained; branches        |                            |
+|                               | deep-copy lazily as       |                            |
+|                               | consumed                  |                            |
++-------------------------------+---------------------------+----------------------------+
+| Memory (worst case)           | O(n × branches) —         | O(queue size, default 256) |
+|                               | materializing every       |                            |
+|                               | branch downstream         |                            |
 +-------------------------------+---------------------------+----------------------------+
 | Infinite / very large streams | Hangs or OOM              | Works                      |
 +-------------------------------+---------------------------+----------------------------+
 | API                           | Returns N iterators       | Receivers primed upfront;  |
 |                               | in one call               | drained independently      |
 +-------------------------------+---------------------------+----------------------------+
-| Transform per branch          | No. Identical copies.     | Yes — ``func=`` in each    |
+| Transform per branch          | No. Identical copies.     | Yes. ``func=`` in each     |
 |                               |                           | ``receive``                |
 +-------------------------------+---------------------------+----------------------------+
 | SyncPipe chain                | Returns N streams;        | ``.send(others=[...])``    |
@@ -805,14 +764,15 @@ chained linearly, and a missing ``id`` defaults to ``sw-{n}``.
 
 .. code-block:: python
 
-    >>> from riko import Context
-    >>> from riko.compile import convert_dag, build_pipeline, parse_pipe_def
+    >>> from riko import Context, convert_dag, build_pipeline, parse_pipe_def
     >>>
     >>> ### Author a terse, linear DAG (no wires, no ids) ###
+    >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
+    >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
     >>> dag = {
     ...     'modules': [
-    ...         {'type': 'itembuilder', 'conf': {'attrs': {'key': 'greeting', 'value': 'hello'}}},
-    ...         {'type': 'rename', 'conf': {'rule': {'field': 'greeting', 'newval': 'salutation'}}},
+    ...         {'type': 'itembuilder', 'conf': itembuilder_conf},
+    ...         {'type': 'rename', 'conf': rename_conf},
     ...     ]
     ... }
     >>>
@@ -826,12 +786,12 @@ chained linearly, and a missing ``id`` defaults to ``sw-{n}``.
     >>> stream = build_pipeline(parse_pipe_def(pipe_def, 'pipe_demo'), context=Context())
 
 To instead emit a standalone, runnable Python module (equivalent to the
-``compile-pipe`` CLI), use ``compile``:
+``compile-pipe`` CLI), use ``compile_pipe``:
 
 .. code-block:: python
 
-    >>> from riko.compile import compile
-    >>> source = compile(pipe_def, 'pipe_demo')
+    >>> from riko import compile_pipe
+    >>> source = compile_pipe(pipe_def, 'pipe_demo')
     >>> 'def pipe' in source
     True
 
@@ -856,12 +816,14 @@ handy for validating that every required ``pipe`` is installed before execution.
 
 .. code-block:: python
 
-    >>> from riko.compile import convert_dag, extract_dependencies
+    >>> from riko import convert_dag, extract_dependencies
     >>>
+    >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
+    >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
     >>> dag = {
     ...     'modules': [
-    ...         {'type': 'itembuilder', 'conf': {'attrs': {'key': 'greeting', 'value': 'hi'}}},
-    ...         {'type': 'rename', 'conf': {'rule': {'field': 'greeting', 'newval': 'salutation'}}},
+    ...         {'type': 'itembuilder', 'conf': itembuilder_conf},
+    ...         {'type': 'rename', 'conf': rename_conf},
     ...     ]
     ... }
     >>> extract_dependencies(convert_dag(dag))
@@ -901,12 +863,7 @@ Polars may be a better fit. For distributed execution or durable orchestration,
 run ``riko`` inside the relevant worker or task rather than treating ``riko`` as
 the scheduler.
 
-Notes
-^^^^^
-
-.. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
-
-.. _FAQ: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst
-.. _Design Principles: https://github.com/nerevu/riko/blob/master/README.rst#design-principles
-.. _class based workflows: https://github.com/nerevu/riko/blob/master/README.rst#synchronous-processing
-.. _DAG format doc: https://github.com/nerevu/riko/blob/master/docs/DAG_FORMAT.md
+.. _FAQ: FAQ.rst
+.. _Design Principles: ../README.rst#design-principles
+.. _class based workflows: ../README.rst#synchronous-processing
+.. _DAG format doc: DAG_FORMAT.md

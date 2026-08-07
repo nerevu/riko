@@ -7,9 +7,7 @@ Provides functions for analyzing and processing streams of structured data
 Examples:
     basic usage::
 
-        >>> from riko.modules.itembuilder import pipe as itembuilder
-        >>> from riko.modules.strreplace import pipe as strreplace
-        >>> from riko.collections import SyncPipe
+        >>> from riko import SyncPipe
         >>>
         >>> ib_conf = {
         ...     'attrs': [
@@ -19,16 +17,13 @@ Examples:
         ...      ]
         ... }
         >>>
-        >>> items = itembuilder(conf=ib_conf)
-        >>> next(items)
-        {'link': 'www.google.com', 'title': 'google', 'author': 'Tommy'}
         >>> sr_conf = {
         ...     'rule': [{'find': 'Tom', 'param': 'first', 'replace': 'Tim'}]
         ... }
         >>>
-        >>> items = itembuilder(conf=ib_conf)
-        >>> replaced = strreplace(next(items), conf=sr_conf, field='author')
-        >>> next(replaced)['strreplace']
+        >>> flow = SyncPipe('itembuilder', conf=ib_conf).strreplace(
+        ...     conf=sr_conf, field='author')
+        >>> next(flow)['strreplace']
         'Timmy'
 
 """
@@ -74,10 +69,20 @@ from riko.api import (  # noqa: E402
     SyncPipe,
     UnsupportedModuleError,
     UnsupportedPipelineError,
+    backend,
+    build_pipeline,
+    compile_pipe,
+    convert_dag,
     export,
+    extract_dependencies,
+    get_module_metadata,
     get_path,
+    isasync,
+    issync,
     list_modules,
     list_targets,
+    parse_pipe_def,
+    run,
 )
 
 __all__ = [
@@ -91,8 +96,18 @@ __all__ = [
     "SyncPipe",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "backend",
+    "build_pipeline",
+    "compile_pipe",
+    "convert_dag",
     "export",
+    "extract_dependencies",
+    "get_module_metadata",
     "get_path",
+    "isasync",
+    "issync",
     "list_modules",
     "list_targets",
+    "parse_pipe_def",
+    "run",
 ]

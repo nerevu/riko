@@ -5,7 +5,7 @@ on:
     branches-ignore:
       - "v[0-9]+*"
   pull_request:
-    branches: [ main ]
+    branches: [ main, features ]
 
 env:
   PYTHONHASHSEED: "94967295"
@@ -61,6 +61,11 @@ jobs:
         # ruff is config-driven, not runner-Python-specific, so run it once.
         if: matrix.python-version == '3.12'
         run: uv run --no-sync manage lint
+
+      - name: Lint docs
+        # RST rendering/link validation is content-driven, not runner-Python-specific.
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync manage lint --rst
 
       - name: Check types
         run: uv run --no-sync manage lint --check-types

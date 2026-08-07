@@ -2,20 +2,30 @@
 
 """A script to manage development tasks"""
 
+import re
 import shutil
 import sys
 from functools import partial
 from glob import glob
+from io import StringIO
 from os import environ
-from os.path import getmtime
+from os.path import basename, dirname, exists, getmtime, join
 from subprocess import CalledProcessError, call, check_call
 from sys import exit
+from typing import Any
 
 import click
 
 from riko._logging import exception_hook
 from riko.cli.gen_config import main as gen_config_main
 from riko.paths import ROOT_DIR
+
+try:
+    from docutils import nodes
+    from docutils.core import publish_doctree
+except ImportError:
+    publish_doctree = None
+    nodes = None
 
 sys.excepthook = partial(exception_hook, debug=False)
 
@@ -157,6 +167,121 @@ def _ruff_check(where: str | None = "", unsafe_fixes: bool = False) -> int:
     return call([*args]) or call([ruff, "format", "--check"])
 
 
+TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
+LINE_ANCHOR_RE = re.compile(r"^L\d")
+
+
+def _github_slug(text: str) -> str:
+    """Convert a heading to its GitHub anchor slug"""
+    lowered = text.strip().lower()
+    kept = "".join(c for c in lowered if c.isalnum() or c in {" ", "-", "_"})
+    return kept.replace(" ", "-")
+
+
+def _doc_files(where: str | None) -> list[str]:
+    """Resolve the RST files to check"""
+    if where:
+        files = where.split(" ")
+    else:
+        roots = glob(str(ROOT_DIR / "*.rst"))
+        files = sorted(roots + glob(str(ROOT_DIR / "docs" / "*.rst")))
+
+    return files
+
+
+def _render_rst(path: str) -> tuple[str, Any]:
+    """Read and parse an RST file into (source, doctree)"""
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+
+    overrides = {
+        "report_level": 2,
+        "halt_level": 5,
+        "warning_stream": StringIO(),
+        "input_encoding": "utf-8",
+    }
+    return text, publish_doctree(text, source_path=path, settings_overrides=overrides)
+
+
+def _doc_anchors(doctree: Any) -> set[str]:
+    """Compute the GitHub heading anchors a rendered doc exposes"""
+    seen: dict[str, int] = {}
+    anchors: set[str] = set()
+
+    for node in doctree.findall(nodes.title):
+        if isinstance(node.parent, (nodes.section, nodes.document)):
+            base = _github_slug(node.astext())
+            count = seen.get(base, 0)
+            anchors.add(base if count == 0 else f"{base}-{count}")
+            seen[base] = count + 1
+
+    return anchors
+
+
+def _render_errors(path: str, doctree: Any) -> list[str]:
+    """Collect docutils warning/error/severe messages from a rendered doc"""
+    return [
+        f"{path}:{node.get('line', '?')}: [{node['type']}] {node.children[0].astext()}"
+        for node in doctree.findall(nodes.system_message)
+        if node["level"] >= 2
+    ]
+
+
+def _anchors_for(path: str, cache: dict[str, set[str]]) -> set[str]:
+    """Return the cached anchor set for a doc, rendering it on first use"""
+    if path not in cache:
+        try:
+            cache[path] = _doc_anchors(_render_rst(path)[1])
+        except OSError:
+            cache[path] = set()
+
+    return cache[path]
+
+
+def _link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
+    """Validate internal hyperlink targets resolve to files and anchors"""
+    base_dir = dirname(path)
+    errors: list[str] = []
+
+    for match in TARGET_RE.finditer(text):
+        uri = match["uri"].strip()
+        ref_path, _, anchor = uri.partition("#")
+        target = join(base_dir, ref_path) if ref_path else path
+        external = uri.startswith(("http://", "https://", "mailto:", "//"))
+
+        if external:
+            continue
+        elif ref_path and not exists(target):
+            errors.append(f"{path}: broken target '{uri}' (missing file)")
+        elif anchor and not LINE_ANCHOR_RE.match(anchor) and target.endswith(".rst"):
+            where = ref_path or basename(path)
+
+            if anchor not in _anchors_for(target, cache):
+                errors.append(f"{path}: unknown anchor '#{anchor}' in {where}")
+
+    return errors
+
+
+def _rst_check(where: str | None = None) -> int:
+    """Validate RST rendering and internal links"""
+    if publish_doctree is None:
+        raise RuntimeError("docutils not found")
+
+    cache: dict[str, set[str]] = {}
+    problems: list[str] = []
+
+    for path in _doc_files(where):
+        text, doctree = _render_rst(path)
+        cache[path] = _doc_anchors(doctree)
+        problems.extend(_render_errors(path, doctree))
+        problems.extend(_link_errors(path, text, cache))
+
+    for problem in problems:
+        print(problem)
+
+    return 1 if problems else 0
+
+
 @manager.command()
 def check():
     """Check staged changes for lint errors"""
@@ -164,12 +289,16 @@ def check():
 
 
 @manager.command()
-@click.option("-w", "--where", help="Modules to check")
+@click.argument("paths", nargs=-1)
+@click.option("-w", "--where", help="Modules to check (repeatable)", multiple=True)
 @click.option("-F", "--unsafe-fixes", help="View unsafe fixes", is_flag=True)
 @click.option("-t", "--check-types", help="Check with pyright", is_flag=True)
 @click.option("-T", "--verify-types", help="Verify with pyright", is_flag=True)
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
 @click.option("-d", "--dist", help="Check built distributions with twine", is_flag=True)
+@click.option(
+    "-r", "--rst", help="Validate RST rendering and internal links", is_flag=True
+)
 @click.option(
     "-p",
     "--parallel",
@@ -177,15 +306,19 @@ def check():
     is_flag=True,
 )
 def lint(
-    where=None,
+    paths=(),
+    where=(),
     unsafe_fixes=False,
     strict=False,
     check_types=False,
     verify_types=False,
     dist=False,
+    rst=False,
     parallel=False,
 ):
     """Check style with linters"""
+    where = " ".join([*where, *paths])
+
     if dist:
         return_code = _twine_check()
     elif check_types:
@@ -194,6 +327,8 @@ def lint(
         return_code = _verify_types()
     elif strict:
         return_code = _pylint_check(parallel)
+    elif rst:
+        return_code = _rst_check(where)
     else:
         return_code = _ruff_check(where, unsafe_fixes)
 
@@ -258,7 +393,8 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
 
 
 @manager.command()
-@click.option("-w", "--where", help="test path", default=None)
+@click.argument("paths", nargs=-1)
+@click.option("-w", "--where", help="test path (repeatable)", multiple=True)
 @click.option("-x", "--stop", help="Stop after first error", is_flag=True)
 @click.option(
     "-f", "--failed", help="Run failed tests (overrides --debug)", is_flag=True
@@ -289,8 +425,9 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
     help="Run tests in parallel in multiple processes",
     is_flag=True,
 )
-def test(where=None, stop=None, **kwargs):  # noqa: PT028
+def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
     """Run pytest, tox, and script tests"""
+    where = [*where, *paths]
     quiet = kwargs.get("quiet") and not kwargs.get("verbose")
     verbosity = "-q" if quiet else "-v"
     opts = f"-x{verbosity}" if stop else verbosity
@@ -306,7 +443,7 @@ def test(where=None, stop=None, **kwargs):  # noqa: PT028
         # -s disables capture so the pdb prompt is interactive in the subprocess
         opts += " --pdb -s"
 
-    opts += f" {where}" if where else ""
+    opts += f" {' '.join(where)}" if where else ""
 
     try:
         if tox and kwargs.get("tox"):

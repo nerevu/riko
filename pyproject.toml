@@ -1,5 +1,5 @@
 [project]
-version = "0.73.1"
+version = "0.74.0"
 name = "riko"
 authors = [
     {name = "Reuben Cummings", email = "reubano@gmail.com"}
@@ -74,6 +74,7 @@ lint = [
     "ruff>=0.13.1",
     "pylint>=4.0.5,<5.0.0",
     "pyright>=1.1.411",
+    "docutils>=0.21",
 ]
 
 dev = [
@@ -282,7 +283,10 @@ commands = [
 description = "run linter"
 runner = "uv-venv-lock-runner"
 dependency_groups = ["lint"]
-commands = [["python", "-m", "riko.cli.manage", "lint"]]
+commands = [
+    ["python", "-m", "riko.cli.manage", "lint"],
+    ["python", "-m", "riko.cli.manage", "lint", "--rst"],
+]
 
 
 [tool.setuptools]

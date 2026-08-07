@@ -5,17 +5,17 @@ This guide has two parts:
 
 * **Upgrading from the** ``legacy`` **branch** — the concrete, verified
   differences between the ``legacy`` branch (``git checkout legacy``) and the
-  current tree. ``legacy`` **is the** ``v0.72.0`` **release**; the current tree
-  is its unreleased successor (32 commits ahead), and those commits contain the
-  final legacy-removal work. Every example below was run on both — the
-  ``# LEGACY`` and ``# CURRENT`` comments show the actual observed behavior.
+  current tree. ``legacy`` **is the** ``v0.72.x`` **release**; the current tree
+  is the ``features`` branch, and those commits contain the final legacy-removal work.
+  Every example below was run on both — the ``# LEGACY`` and ``# CURRENT`` comments show
+  the actual observed behavior.
 * **Milestone changes** — larger behavior changes that landed across the 2026
   release series (expanded from `CHANGES.rst <CHANGES.rst>`_). These are already
   present on the ``legacy`` branch, so they are **not** part of the
   legacy → current diff, but they matter if you are upgrading from an older
   release.
 
-If a symbol you rely on isn't mentioned here, it is unchanged.
+The sections below cover the known user-facing migration changes.
 
 .. contents:: Contents
    :local:
@@ -122,12 +122,15 @@ Twisted replaced by AnyIO (v0.72.0)
 -----------------------------------
 
 The async runtime is now AnyIO. There is **no Twisted backend** — Twisted is not
-imported and not importable anywhere in ``riko``; ``riko.bado`` runs on AnyIO and
-is **not** deprecated. Backend selection is purely "does ``anyio`` import?":
+imported and not importable anywhere in ``riko``. The ``riko.bado`` backend still
+exists and runs on AnyIO, but it is an internal module (private per the stability
+policy): applications should use the stable re-exports ``riko.run``,
+``riko.backend``, ``riko.isasync``, and ``riko.issync`` rather than importing from
+``riko.bado`` directly. Backend selection is purely "does ``anyio`` import?":
 
 .. code-block:: python
 
-    from riko.bado import backend        # "anyio" when the `async` extra is
+    from riko import backend        # "anyio" when the `async` extra is
                                          # installed, else "empty" (sync-only)
 
 There is no ``RIKO_ASYNC_BACKEND`` env var. Install the ``async`` extra
@@ -147,26 +150,29 @@ Extension  ``riko.ext``                              SemVer, for module/pipe aut
 Private    any ``_name`` or ``riko._*`` module       none; may change any release
 ========== ========================================= =====================================
 
-The stable surface is exactly ``riko.__all__``::
+The stable surface is exactly ``riko.__all__`` (mirrored by ``riko.api.__all__``;
+see `API_STABILITY.md <API_STABILITY.md>`_ for the authoritative tier breakdown)::
 
     AsyncCollection, AsyncPipe, Context, ExecutionMode, PipeState,
     PipelineStateError, SyncCollection, SyncPipe, UnsupportedModuleError,
-    UnsupportedPipelineError, export, get_path, list_modules, list_targets
+    UnsupportedPipelineError, backend, build_pipeline, compile_pipe, convert_dag,
+    export, extract_dependencies, get_module_metadata, get_path, isasync, issync,
+    list_modules, list_targets, parse_pipe_def, run
 
 Utilities that previously leaked into ``riko`` now live in private modules and
 are **no longer importable from** ``riko`` (use the noted home, or pin your own
 copy):
 
-============================= ================================
-Removed import                Now lives in (private)
-============================= ================================
+================================  ======================
+Removed import                    Now lives in (private)
+================================  ======================
 ``from riko import Objconf``      *removed* (see Part 1)
 ``from riko import Objectify``    ``riko._objectify``
 ``from riko import objectify``    ``riko._objectify``
 ``from riko import listize``      ``riko._iterutils``
 ``from riko import get_abspath``  ``riko.paths``
 ``from riko import replacer``     ``riko._strutils``
-============================= ================================
+================================  ======================
 
 Single-execution pipe lifecycle (v0.70.0)
 ------------------------------------------

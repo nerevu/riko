@@ -3,9 +3,6 @@ riko: composable stream processing for Python
 
 |ci| |pypi| |versions| |license|
 
-Start here
-----------
-
 .. contents::
    :local:
    :depth: 2
@@ -13,10 +10,10 @@ Start here
 Introduction
 ------------
 
-**riko** is a pure Python `library`_ for building data-processing data ``streams``.
+**riko** is a pure Python `library`_ for building data-processing ``streams``.
 ``riko`` combines reusable, configuration-driven modular `pipes`_ with `synchronous`_,
 `asynchronous`_, and `parallel execution`_ APIs. It is particularly useful for
-processing `RSS feeds`_, web content, text, and structured files.
+processing RSS feeds, web content, text, and structured files.
 
 ``riko`` also supplies a `command-line interface`_ for executing ``flows``, i.e.,
 stream processors aka ``workflows``.
@@ -30,16 +27,16 @@ Install the latest published release from PyPI:
 
 .. code-block:: bash
 
-    pip install riko
+    python -m pip install riko
 
-``riko`` installs a slim core by default. See see the `installation doc`_ for advanced
+``riko`` installs a slim core by default. View the `installation doc`_ for advanced
 installation options.
 
 Quick start
 -----------
 
-The following example is self-contained and does not access the network. It fetches a
-webpage, splits its text into words, and counts the number of times each word appears.
+The following example fetches a webpage, splits its text into words, and counts the
+number of times each word appears.
 
 .. code-block:: python
 
@@ -52,7 +49,7 @@ webpage, splits its text into words, and counts the number of times each word ap
     >>> #   2. fetch the text contained inside the 'body' tag of a web page and strip
     >>> #      html tags
     >>> #   3. replace newlines with spaces and assign the result to 'content'
-    >>> #   4. tokenize the resulting text using whitespace as the delimeter
+    >>> #   4. tokenize the resulting text using whitespace as the delimiter
     >>> #   5. count the number of times each token appears
     >>>
     >>> url = get_path('users.jyu.fi.html')                   # 1
@@ -66,7 +63,7 @@ webpage, splits its text into words, and counts the number of times each word ap
     ...     .strreplace(conf=replace_conf, assign='content')  # 3
     ...     .tokenizer(conf={'delimiter': ' '}, emit=True)    # 4
     ...     .count(conf={'count_key': 'content'})             # 5
-    ... )                       # 5
+    ... )
     >>>
     >>> next(flow)
     {'Tidy': 1}
@@ -94,8 +91,8 @@ applications:
 - a small footprint (CPU and memory usage)
 - native RSS/Atom support
 - simple installation and usage
-- a pure python library supporting v3.12+
-- builtin modular ``pipes`` to filter, sort, and modify ``streams``
+- a pure Python library supporting v3.12+
+- built-in modular ``pipes`` to filter, sort, and modify ``streams``
 
 Why you shouldn't use riko
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -107,7 +104,7 @@ event-triggered actions, or query optimization.
 Choosing riko
 ^^^^^^^^^^^^^
 
-The below projects overlap with `riko` in different ways. Some are embedded
+The projects below overlap with `riko` in different ways. Some are embedded
 libraries, while others are distributed engines, workflow orchestrators, or
 data-integration platforms. RSS/Atom role distinguishes first-party feed support from
 functionality that requires a custom source, connector, tap, or task.
@@ -124,7 +121,7 @@ functionality that requires a custom source, connector, tap, or task.
 | Huginn            | Persistent agents    | Self-hosted app  | Built in             | UI-driven monitoring and  |
 |                   |                      |                  |                      | automation                |
 +-------------------+----------------------+------------------+----------------------+---------------------------+
-| Apache Beam       | Portable pipelines   | Runner-dependent | Custom transform     | Portable batch and stream |
+| Apache Beam       | Portable pipelines   | Runner-dependent | Custom I/O           | Portable batch and stream |
 |                   |                      |                  |                      | processing                |
 +-------------------+----------------------+------------------+----------------------+---------------------------+
 | Flink             | Stateful streams     | Distributed      | Custom connector     | Low-latency, stateful     |
@@ -139,8 +136,8 @@ functionality that requires a custom source, connector, tap, or task.
 | Luigi / Prefect   | Task workflows       | Scheduler and    | External task        | Scheduling, retries, and  |
 |                   |                      | workers          |                      | dependencies              |
 +-------------------+----------------------+------------------+----------------------+---------------------------+
-| Airbyte / Singer  | Data replication     | Connectors and   | Connector-dependent  | Data ingestion, ELT, and  |
-|                   |                      | jobs             |                      | change-data capture       |
+| Airbyte / Meltano | ELT platforms        | Connectors or    | Connector/tap        | Data integration and      |
+|                   |                      | plugins          | dependent            | repeatable ELT pipelines  |
 +-------------------+----------------------+------------------+----------------------+---------------------------+
 
 Choose `riko` when a pipeline should run directly inside a Python application
@@ -150,9 +147,11 @@ local execution.
 
 Choose `RxPY`_ for reactive event composition, `Huginn`_ for persistent
 UI-managed automation, and `Flink`_, `Storm`_, `Spark`_, or `Apache Beam`_ when
-distributed execution is required. Luigi and Prefect orchestrate tasks, while
-Airbyte and Singer move data between systems. These tools may complement
-`riko` rather than replace it.
+distributed execution is required. Luigi and Prefect orchestrate tasks, while Airbyte
+and Meltano focus on data-integration workflows. Meltano commonly runs Singer taps and
+targets and can add scheduling through an orchestration plugin. These tools may
+run ``riko`` as one step in a larger workflow rather than replace its in-process
+transformation API.
 
 Design Principles
 -----------------
@@ -182,32 +181,31 @@ Here's the ``riko`` vocabulary at a glance:
 | ``Context``         | runtime inputs + ``ExecutionMode``    | ``Context(inputs=...)``                          |
 +---------------------+---------------------------------------+--------------------------------------------------+
 
-Notes:
-
-- Since some ``pipes`` support more than one subtype depending on their options, view
-  the `FAQ`_ for steps on runtime discovery via `discovering modules`_
-
 Core concepts
 ^^^^^^^^^^^^^
 
 The primary data structures in ``riko`` are the ``item`` and ``stream``. An ``item``
-is just a python dictionary, and a ``stream`` is an iterator of ``items``. You can
+is just a Python dictionary, and a ``stream`` is an iterator of ``item``. You can
 create a ``stream`` manually with something as simple as
 ``iter([{'content': 'hello world'}])``. You manipulate ``streams`` in
 ``riko`` via ``pipes``. A ``pipe`` is simply a function that accepts either a
-``stream`` or ``item``, and returns a ``stream``. ``pipes`` are composable: the output
-of one ``pipe`` can be the input to another ``pipe``.
+``stream`` or ``item``, and returns a ``stream``.
 
-``riko`` ``pipes`` come in two flavors; ``operator`` and ``processor``.
-An ``operator`` operates on an entire ``stream`` at once and is unable to handle
-individual items. E.g., ``count``, ``filter``, and ``reverse``.
+
+Through ``SyncPipe`` and ``AsyncPipe`` classes, ``pipes`` are composable: the output of
+each ``pipe`` is the input to the next ``pipe``.
+
+
+``riko`` ``pipes`` come in three types: ``processor``, ``operator``, and ``splitter``.
+An ``operator`` operates on a ``stream`` and is unable to handle individual items.
+E.g., ``count``, ``filter``, and ``reverse``.
 
 .. code-block:: python
 
-    >>> from riko.modules.reverse import pipe
+    >>> from riko import SyncPipe
     >>>
     >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> stream = pipe(items)
+    >>> stream = SyncPipe('reverse', items)
     >>> next(stream)
     {'title': 'riko pt. 2'}
 
@@ -216,37 +214,36 @@ threads or processes. E.g., ``fetchsitefeed``, ``hash``, ``itembuilder``, and ``
 
 .. code-block:: python
 
-    >>> from riko.modules.hash import pipe
+    >>> from riko import SyncPipe
     >>>
-    >>> item = {'title': 'riko pt. 1'}
-    >>> stream = pipe(item, field='title')
+    >>> items = [{'title': 'riko pt. 1'}]
+    >>> stream = SyncPipe('hash', items, field='title')
     >>> next(stream)['hash']
     1104819838
 
-Some ``processor``'s, e.g., ``tokenizer``, return multiple results.
+Some ``processors``, e.g., ``tokenizer``, return multiple results.
 
 .. code-block:: python
 
-    >>> from riko.modules.tokenizer import pipe
+    >>> from riko import SyncPipe
     >>>
-    >>> item = {'title': 'riko pt. 1'}
-    >>> tokenizer_conf = {'delimiter': ' '}
-    >>> stream = pipe(item, conf=tokenizer_conf, field='title')
+    >>> items = [{'title': 'riko pt. 1'}]
+    >>> stream = SyncPipe('tokenizer', items, conf={'delimiter': ' '}, field='title')
     >>> list(stream)
     [{'content': 'riko'}, {'content': 'pt.'}, {'content': '1'}]
 
-``operator``'s are split into sub-types: ``aggregator``
-and ``composer``. ``aggregator``'s, e.g., ``count``, combine
+``operators`` are split into sub-types: ``aggregator``
+and ``composer``. ``aggregators``, e.g., ``count``, combine
 all ``items`` of an input ``stream`` into a new ``stream`` with a single ``item``;
-while ``composer``'s, e.g., ``filter``, create a new ``stream`` containing
+while ``composers``, e.g., ``filter``, create a new ``stream`` containing
 some or all ``items`` of an input ``stream``.
 
 .. code-block:: python
 
-    >>> from riko.modules.count import pipe
+    >>> from riko import SyncPipe
     >>>
     >>> items = [{'title': 'riko pt 1'}, {'title': 'riko pt 2'}]
-    >>> list(pipe(items))
+    >>> list(SyncPipe('count', items))
     [{'count': 2}]
 
 Astute observers may have noticed from the "Word Count" example up top, that ``count``
@@ -254,50 +251,58 @@ can return multiple items if you pass in the ``count_key`` config option.
 
 .. code-block:: python
 
-    >>> stream = pipe(items, conf={'count_key': 'title'})
+    >>> from riko import SyncPipe
+    >>>
+    >>> stream = SyncPipe('count', items, conf={'count_key': 'title'})
     >>> list(stream)
     [{'riko pt 1': 1}, {'riko pt 2': 1}]
 
-``processor``'s are parallelizable and split into sub-types of ``source`` and
+``processors`` are parallelizable and split into sub-types of ``source`` and
 ``transformer``. A ``source``, e.g., ``itembuilder``, can create a ``stream``, while
 a ``transformer``, e.g. ``hash`` can only transform a source ``item``.
 
 .. code-block:: python
 
-    >>> from riko.modules.itembuilder import pipe
+    >>> from riko import SyncPipe
     >>>
     >>> attrs = {'key': 'title', 'value': 'riko pt. 1'}
-    >>> next(pipe(conf={'attrs': attrs}))
+    >>> next(SyncPipe('itembuilder', conf={'attrs': attrs}))
     {'title': 'riko pt. 1'}
 
-The following table summaries these observations:
+The following table summarizes these observations:
 
 +-----------+-----------------+-----------------------------+-----------------------------------+
 | Type      | Sub-type        | Meaning                     | Example                           |
 +===========+=================+=============================+===================================+
-| operator  | ``source``      | creates a ``stream``        | ``itembuilder``, ``fetch``        |
+| processor | ``source``      | creates a ``stream``        | ``itembuilder``, ``fetch``        |
 |           +-----------------+-----------------------------+-----------------------------------+
 |           | ``transformer`` |  manipulates an ``item``    | ``hash``, ``rename``, ``regex``   |
-+-----------------------------+-----------------------------+-----------------------------------+
-| processor | ``composer``    | selects/orders a ``stream`` | ``filter``, ``sort``, ``union``   |
-|           +-----------------+-----------------------------+-----------------------------------+
-|           | ``aggregator``  | summarizes a ``stream``     | ``count``, ``sum``, ``aggregate`` |
 +-----------+-----------------+-----------------------------+-----------------------------------+
+| operator  | ``composer``    | selects/orders a ``stream`` | ``filter``, ``sort``, ``union``   |
+|           +-----------------+-----------------------------+-----------------------------------+
+|           | ``aggregator``  | summarizes a ``stream``     | ``count``, ``sum``                |
++-----------+-----------------+-----------------------------+-----------------------------------+
+| splitter  | ``splitter``    | copies a ``stream``         | ``split``                         |
++-----------+-----------------+-----------------------------+-----------------------------------+
+
+Note: Since some ``pipes`` support more than one subtype depending on their options,
+view the `FAQ`_ for steps on runtime discovery via `discovering modules`_
 
 If you are unsure of the type of ``pipe`` you have, check its metadata.
 
 .. code-block:: python
 
-    >>> from riko.modules import fetchpage, count
+    >>> from riko import get_module_metadata
     >>>
-    >>> fetchpage.pipe.name, fetchpage.pipe.type, fetchpage.pipe.subtype
+    >>> metadata = get_module_metadata('fetchpage')
+    >>> metadata.name, metadata.type, metadata.subtype
     ('fetchpage', 'processor', 'source')
-    >>> count.pipe.name, count.pipe.type, count.pipe.subtype
+    >>> metadata = get_module_metadata('count')
+    >>> metadata.name, metadata.type, metadata.subtype
     ('count', 'operator', 'aggregator')
 
-The ``SyncPipe`` and ``AsyncPipe`` classes (among other things) perform this
-check for you to allow for convenient method chaining and transparent
-parallelization.
+``SyncPipe``/``AsyncPipe`` perform this check for you to allow for convenient method
+chaining and transparent parallelization.
 
 .. code-block:: python
 
@@ -309,21 +314,18 @@ parallelization.
     ... ]
     >>> flow = SyncPipe('itembuilder', conf={'attrs': attrs}).hash()
     >>> item = next(flow)
-    >>> item['title'], item['content'], isinstance(item['hash'], int)
-    ('riko pt. 1', "Let's talk about riko!", True)
+    >>> item['title'], item['content'], item['hash']
+    ('riko pt. 1', "Let's talk about riko!", 197222720)
 
 View the `Cookbook`_ for advanced examples including how to wire in
-vales from other pipes or accept user input.
+values from other pipes or accept user input.
 
-Notes:
-
-- ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
+Note: ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
 
 Usage
 -----
 
-``riko`` is intended to be used either directly as a Python library or in the console
-the via `run-pipe` CLI.
+``riko`` can be used directly as a Python library.
 
 Usage Index
 ^^^^^^^^^^^
@@ -339,15 +341,13 @@ Fetching data
 ^^^^^^^^^^^^^
 
 ``riko`` can fetch data such as HTML, JSON, CSV, etc. from both local and remote
-filepaths via ``source`` ``pipe``'s:
+filepaths via ``source`` ``pipes``:
 
 .. code-block:: python
 
-    >>> from riko import get_path
-    >>> from riko.modules.fetch import pipe as fetch
-    >>> from riko.modules.fetchsitefeed import pipe as fetchsitefeed
+    >>> from riko import get_path, SyncPipe
     >>>
-    >>> stream = fetch(conf={'url': get_path('feed.xml')})
+    >>> stream = SyncPipe('fetch', conf={'url': get_path('feed.xml')})
     >>> item = next(stream)
     >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
     True
@@ -361,7 +361,7 @@ Synchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^
 
 ``riko`` can modify a ``stream`` via ``transformer``,  ``composer``, and ``aggregator``
-``pipe``'s:
+``pipes``:
 
 .. code-block:: python
 
@@ -386,8 +386,7 @@ Synchronous processing
     >>> next(flow)['title']
     'Donations'
 
-View `alternate workflow creation`_ for an alternative (function based) method for
-creating a ``stream``. View `pipes`_ for a complete list of available ``pipes``.
+View `pipes`_ for a complete list of available ``pipes``.
 
 Parallel processing
 ^^^^^^^^^^^^^^^^^^^
@@ -412,7 +411,7 @@ An example using ``riko``'s parallel API to spawn a ``ThreadPool`` [#]_
     ...     .filter(conf={'rule': filter_rule})                           # 2
     ... )
     >>>
-    >>> sorted(item['title'] for item in flow)[:3]                        # 3
+    >>> sorted(item['title'] for item in flow)[:3]
     ['Donations', 'FAQ', 'General Comments']
 
 Notes
@@ -426,12 +425,11 @@ To enable asynchronous processing, you must install the ``async`` extra.
 
 .. code-block:: bash
 
-    pip install riko[async]
+    python -m pip install "riko[async]"
 
 .. code-block:: python
 
-    >>> from riko import get_path, AsyncPipe
-    >>> from riko.bado import run, issync
+    >>> from riko import AsyncPipe, get_path, issync, run
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
@@ -453,8 +451,7 @@ To enable asynchronous processing, you must install the ``async`` extra.
 Built-in pipes
 ^^^^^^^^^^^^^^
 
-``riko`` ships `51 built-in`_ ``pipes``. The below tables summarizes them. The `FAQ`_
-has the complete per-module table.
+``riko`` ships `51 built-in`_ ``pipes``. The table below summarizes them.
 
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
 | Group                       | Representative pipes                                     | Purpose                                          |
@@ -477,12 +474,11 @@ has the complete per-module table.
 Pipeline lifecycle
 ^^^^^^^^^^^^^^^^^^
 
-``SyncPipe``/``AsyncPipe`` represent a *single* execution: iterating it
-consumes the ``stream``, and iterating again yields an empty ``stream`` rather
-than silently re-running. Read the ``state``/``exhausted``/``closed``/``failed``
-properties to inspect a pipe. Use it as a context manager (or call
-``close()``/``terminate()``) to release a parallel pipe's worker pool
-deterministically.
+``SyncPipe``/``AsyncPipe`` represent a *single* execution: iterating one
+consumes the ``stream``, and iterating it again yields an empty ``stream``. Read the
+``state``/``exhausted``/``closed``/``failed`` properties to inspect a pipe. Use it as a
+context manager (or call ``close()``/``terminate()``) to release a parallel pipe's
+worker pool deterministically.
 
 .. code-block:: python
 
@@ -493,6 +489,8 @@ deterministically.
     <PipeState.NEW: 'new'>
     >>> len(list(flow))
     2
+    >>> flow.state
+    <PipeState.EXHAUSTED: 'exhausted'>
     >>> flow.exhausted
     True
 
@@ -507,34 +505,33 @@ a ``flow`` and processes the resulting ``stream``. E.g., ``flow.py``
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
-    >>>
-    >>> conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
-    >>> conf2 = {'rule': [{'find': 'com', 'replace': 'co.uk'}]}
-    >>>
-    >>> def pipe(test=False):
-    ...     kwargs = {'conf': conf1, 'test': test}
-    ...     flow = SyncPipe('itembuilder', **kwargs).strreplace(conf=conf2)
-    ...     for i in flow:
-    ...         print(i)
+    from riko import SyncPipe
+
+    conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
+    conf2 = {'rule': [{'find': 'com', 'replace': 'co.uk'}]}
+
+    def pipe(test=False):
+        kwargs = {'conf': conf1, 'test': test}
+        flow = SyncPipe('itembuilder', **kwargs).strreplace(conf=conf2)
+        for i in flow:
+            print(i)
 
 CLI Usage
-^^^^^^^^^
 
-  usage: run-pipe [pipeid]
+  usage: run-pipe [pipeid] [-p PATH]
 
   description: Runs a riko pipe
 
   positional arguments:
-    pipeid       The pipe to run (default: reads from stdin).
+    pipeid            The workflow to run from the examples directory.
 
   optional arguments:
-    -h, --help   show this help message and exit
-    -a, --async  Load async pipe.
+    -h, --help        show this help message and exit
+    -p, --path PATH   Path to a pipe file to run, e.g. flow.py.
+    -a, --async       Load async pipe.
+    -t, --test        Run in test mode (uses default inputs).
 
-    -t, --test   Run in test mode (uses default inputs).
-
-Now to execute ``flow.py``, type the command ``run-pipe flow``. You should
+Now to execute ``flow.py``, type the command ``run-pipe --path flow.py``. You should
 then see the following output in your terminal:
 
 .. code-block:: bash
@@ -553,7 +550,7 @@ Contributing
 ------------
 
 Please mimic the coding style/conventions used in this repo. If you add new classes or
-functions, please add the appropriate doc blocks with examples. Also, make sure the
+functions, please add the appropriate docstrings with examples. Also, make sure the
 linter and tests pass.
 
 View `Contributing doc`_ for more details.
@@ -561,9 +558,9 @@ View `Contributing doc`_ for more details.
 Credits
 -------
 
-``riko`` started out as a fork of `pipe2py`_ which translated a Yahoo! Pipe into python
-code. ``riko`` has since diverged so much from ``pipe2py`` that little of the original
-code-base remains.
+``riko`` started out as a fork of `pipe2py`_ which translated a Yahoo! Pipe [#] into
+python code. ``riko`` has since diverged so much from ``pipe2py`` that little of the
+original code-base remains.
 
 Notes
 
@@ -585,9 +582,7 @@ Project Structure
 
 .. code-block:: bash
 
-    ┌── bin
-    │   └── bench
-    ├── docs
+    ┌── docs
     │   ├── API_STABILITY.md
     │   ├── AUTHORS.rst
     │   ├── CHANGES.rst
@@ -595,6 +590,7 @@ Project Structure
     │   ├── DAG_FORMAT.md
     │   ├── FAQ.rst
     │   ├── INSTALLATION.rst
+    │   ├── MIGRATION.rst
     │   └── ROADMAP.md
     ├── examples/*
     ├── riko
@@ -633,7 +629,6 @@ Project Structure
     ├── LICENSE
     ├── pyproject.toml
     ├── README.rst
-    ├── tox.ini
     └── uv.lock
 
 License
@@ -647,46 +642,30 @@ License
 .. _parallel processing: #parallel-processing
 .. _library: #usage
 
-.. _Contributing doc: https://github.com/nerevu/riko/blob/master/CONTRIBUTING.rst
-.. _docs/DAG_FORMAT.md: https://github.com/nerevu/riko/blob/master/docs/DAG_FORMAT.md
-.. _FAQ: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst
-.. _pipes: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-pipes-are-available
-.. _discovering modules: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#how-do-i-discover-installed-modules
-.. _51 built-in: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-pipes-are-available
-.. _file types: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-file-types-are-supported
-.. _protocols: https://github.com/nerevu/riko/blob/master/docs/FAQ.rst#what-protocols-are-supported
-.. _installation doc: https://github.com/nerevu/riko/blob/master/docs/INSTALLATION.rst
-.. _Migration guide: https://github.com/nerevu/riko/blob/master/docs/MIGRATION.rst
-.. _Changelog: https://github.com/nerevu/riko/blob/master/docs/CHANGES.rst
-.. _Cookbook: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst
-.. _DAG format: https://github.com/nerevu/riko/blob/master/docs/DAG_FORMAT.md
+.. _Contributing doc: CONTRIBUTING.rst
+.. _FAQ: docs/FAQ.rst
+.. _pipes: docs/FAQ.rst#what-pipes-are-available
+.. _discovering modules: docs/FAQ.rst#how-do-i-discover-installed-modules
+.. _51 built-in: docs/FAQ.rst#what-pipes-are-available
+.. _file types: docs/FAQ.rst#what-file-types-are-supported
+.. _protocols: docs/FAQ.rst#what-protocols-are-supported
+.. _installation doc: docs/INSTALLATION.rst
+.. _Migration guide: docs/MIGRATION.rst
+.. _Changelog: docs/CHANGES.rst
+.. _Cookbook: docs/COOKBOOK.rst
+.. _DAG format: docs/DAG_FORMAT.md
 .. _issue tracker: https://github.com/nerevu/riko/issues
-.. _split: https://github.com/nerevu/riko/blob/master/riko/modules/split.py#L15-L18
-.. _alternate workflow creation: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#alternate-workflow-creation
-.. _Fetching data and feeds: https://github.com/nerevu/riko/blob/master/docs/COOKBOOK.rst#fetching-data-and-feeds
+.. _Fetching data and feeds: docs/COOKBOOK.rst#fetching-data-and-feeds
 
-.. _RSS feeds: https://en.wikipedia.org/wiki/RSS
 .. _pipe2py: https://github.com/ggaughan/pipe2py/
 .. _Huginn: https://github.com/cantino/huginn/
 .. _Flink: http://flink.apache.org/
 .. _Spark: http://spark.apache.org/streaming/
 .. _Storm: http://storm.apache.org/
-.. _Complex Event Processing: https://en.wikipedia.org/wiki/Complex_event_processing
-.. _Async I/O: https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/asyncio/
-.. _FlinkCEP: https://nightlies.apache.org/flink/flink-docs-stable/docs/libs/cep/
 .. _remains: https://web.archive.org/web/20150930021241/http://pipes.yahoo.com/pipes/
-.. _AnyIO: https://anyio.readthedocs.io/
-.. _httpx: https://www.python-httpx.org/
-.. _lxml: http://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser
 .. _MIT License: http://opensource.org/licenses/MIT
-.. _Python iterators: https://docs.python.org/3/glossary.html#term-iterator
-.. _itertools: https://docs.python.org/3/library/itertools.html
-.. _Pandas: https://pandas.pydata.org/docs/user_guide/index.html
-.. _Polars: https://docs.pola.rs/user-guide/lazy/
 .. _Apache Beam: https://beam.apache.org/documentation/programming-guide/
 .. _RxPY: https://rxpy.readthedocs.io/en/latest/
-.. _Luigi: https://luigi.readthedocs.io/en/stable/
-.. _Prefect: https://docs.prefect.io/v3/get-started
 
 .. |ci| image:: https://github.com/nerevu/riko/actions/workflows/ci.yml/badge.svg
     :target: https://github.com/nerevu/riko/actions/workflows/ci.yml

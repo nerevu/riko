@@ -1177,7 +1177,7 @@ def stringify_pipe(
     return _ruff_format(template.render(**data))
 
 
-def compile(
+def compile_pipe(
     pipe_def: PipeDef,
     pipe_name: str = "anonymous",
     context: Context | None = None,

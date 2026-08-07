@@ -1,10 +1,45 @@
 Changelog
 =========
 
+v0.74.0 (2026-08-06)
+--------------------
+
+New
+~~~
+
+- Add ``run-pipe --path`` for executing a workflow from an arbitrary file.
+- Promote the async-backend and JSON workflow compilation helpers to the
+  stable top-level API, and expose ``get_module_metadata``.
+
+Changes
+~~~~~~~
+
+- Rename ``riko.compile`` to ``riko.compile_pipe`` so it no longer shadows the
+  builtin ``compile``.
+- Add ``manage lint --rst`` to render every RST document and validate its
+  internal links; run it under ``tox -e lint`` and in CI.
+- ``manage test`` and ``manage lint`` now accept multiple paths.
+
+Documentation
+~~~~~~~~~~~~~
+
+- Fix the Cookbook ``split`` memory note, the README ``tokenizer``/``hash``
+  examples, and malformed tables in the FAQ and migration guide.
+- Clean up feedautodiscovery module description
+
+v0.73.1 (2026-08-06)
+--------------------
+
+Documentation
+~~~~~~~~~~~~~
+
+- Correct and reorganize the README, Cookbook, FAQ, installation, migration,
+  contribution, and credits documentation.
+
 v0.73.0 (2026-08-05)
 --------------------
 
-Legacy removal — the ``legacy`` branch is the ``v0.72.2`` release; these are the
+Legacy removal — the ``legacy`` branch is the ``v0.72.x`` release; these are the
 changes on top of it. See the "Upgrading from the ``legacy`` branch" section of
 ``docs/MIGRATION.rst`` for verified before/after behavior.
 
@@ -67,7 +102,7 @@ Bugfixes
 
 - Fail gracefully on filter parse errors; raise on unsupported filter operations.
 
-- Preserve falsy non-``None`` ``DotDict`` values; use an empty string for the url
+- Preserve falsy non-``None`` ``DotDict`` values; use an empty string for the URL
   cast default.
 
 - Cast ``"now"`` as a ``datetime``; pass ``_tzinfo`` for zone-less
@@ -346,7 +381,7 @@ Changes
 
   - fix py3 and open file errors
   - port missing twisted modules
-  - refactor rss parsing
+  - refactor RSS parsing
   - and streaming json support
   - rename request function
   - make benchmarks.py a script and add to tests

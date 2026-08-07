@@ -5,9 +5,9 @@ Credits
 Development Lead
 ----------------
 
-* Reuben Cummings <reubano@gmail.com>
+* Reuben Cummings <rcummings@nerevu.com>
 
 Contributors
 ------------
 
-None yet. Why not be the first?
+https://github.com/nerevu/riko/graphs/contributors?all=1

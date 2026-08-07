@@ -26,10 +26,20 @@ STABLE = {
     "SyncPipe",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "backend",
+    "build_pipeline",
+    "compile_pipe",
+    "convert_dag",
     "export",
+    "extract_dependencies",
+    "get_module_metadata",
     "get_path",
+    "isasync",
+    "issync",
     "list_modules",
     "list_targets",
+    "parse_pipe_def",
+    "run",
 }
 
 EXTENSION = {

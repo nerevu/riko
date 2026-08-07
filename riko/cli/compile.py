@@ -4,7 +4,7 @@ Compile a riko JSON pipeline into a Python module.
 A full pipe definition (modules + verbose ``src``/``tgt`` wires) compiles to a
 runnable module whose function is named after the pipe:
 
->>> from riko.compile import compile
+>>> from riko.compile import compile_pipe
 >>> pipe_def = {
 ...     "modules": [
 ...         {"id": "sw-1", "type": "forever", "conf": {}},
@@ -18,7 +18,7 @@ runnable module whose function is named after the pipe:
 ...         }
 ...     ],
 ... }
->>> source = compile(pipe_def, "pipe_demo")
+>>> source = compile_pipe(pipe_def, "pipe_demo")
 >>> print(next(line for line in source.splitlines() if line.startswith("def ")))
 def pipe_demo(item=None, context: Context | None = None, **_):
 """
@@ -28,7 +28,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from json import loads
 from pathlib import Path
 
-from riko.compile import compile as compile_pipe
+from riko.compile import compile_pipe
 
 
 def run() -> None:
