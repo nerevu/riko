@@ -6,142 +6,114 @@ Add first-class primitives for repeatedly observing finite sources and emitting 
 changes, without turning Riko into a general-purpose scheduler, daemon, or workflow
 orchestrator.
 
-The target use cases are Huginn-style monitoring patterns such as:
+The target use cases are Huginn-style and earlier Nerevu monitoring patterns such as:
 
 ```text
 poll RSS/API/page
 → identify new or changed records
-→ apply rules or anomaly logic
+→ evaluate threshold/change/anomaly rules
 → fan out interesting events
+→ record delivery state
 → repeat
 ```
 
 Riko already has strong pieces for the middle of this flow: RSS/Atom and web ingestion,
 record transformations, filters, joins, fan-out, sync/async execution, and workflow
-definitions. The missing pieces are the polling lifecycle and explicit source-state / change-
-detection contracts.
+definitions. The missing pieces are polling lifecycle, explicit source-state/change
+contracts, and a small alert-state vocabulary.
 
-This gameplan extends, but does not replace, `_docs/gameplans/orchestration.md`. The
-orchestration plan remains authoritative for deployment-level scheduling, cron, webhook
-servers, Airflow, Prefect, Dagster, and durable run boundaries. This plan defines reusable
-**in-process monitoring primitives** that orchestrators or ordinary Python applications may
-invoke.
+This plan extends `_docs/gameplans/orchestration.md`. The orchestration plan remains
+authoritative for deployment-level scheduling, cron, webhook servers, Airflow, Prefect,
+Dagster, durable workers, and run boundaries. This plan defines reusable monitoring
+primitives that an orchestrator or ordinary Python application may invoke.
 
-## 2. Architectural rule
+## 2. Inspiration integrated by this plan
 
-Separate four concerns:
+The repository's inspiration corpus supplies several concrete precedents:
+
+* **Chakula**: RSS `tail -f`, configurable interval, finite/infinite iteration count,
+  persisted cache, `--unique`, `--newer`, explicit fail-on-error, and initial/backfill
+  control.
+* **email-sub-api**: a dedicated feed-monitor worker with file or Redis cache that emits
+  an email action only for new entries.
+* **AMS**: persisted named alert rules, min/max thresholds, rule enable/disable/restore,
+  scoped rules, and notification history.
+* **meetup**: explicit new-versus-changed entity detection and dry-run behavior.
+* **ckanny / ckanutils**: content hashes used to suppress writes when a remote resource has
+  not changed.
+* **Huginn / Streamz / Bytewax / dlt**: domain-level monitoring, periodic sources,
+  separation of source position from processing state, and incremental cursors.
+
+These are design inputs, not compatibility targets. In particular, Riko should not copy
+pickle state files, platform-specific Growl notifications, a permanent worker daemon, or a
+scheduler into core.
+
+## 3. Architectural rule
+
+Keep these concerns separate:
 
 ```text
 polling cadence
     when should the source be checked?
 
 source position
-    where should the next acquisition resume?
+    where should acquisition resume?
 
 observation history
-    which logical entities have already been seen, and did they change?
+    which entities/items have been seen and what was their prior value?
 
 analysis
-    does the new observation satisfy an alert/anomaly condition?
+    does the observation constitute a change/anomaly/threshold event?
+
+notification state
+    was an alert already emitted, acknowledged, disabled, or cooled down?
 ```
 
-Do not collapse these into one `poll()` implementation.
-
-## 3. Lessons from other systems
-
-### 3.1 Huginn
-
-Useful pattern:
-
-* monitoring is a domain concept;
-* sources can run on schedules;
-* source/event state persists between observations;
-* change and de-duplication are explicit user-facing concepts.
-
-Do not copy:
-
-* a Rails-style persistent server architecture;
-* database-backed agent graphs as a Riko core requirement;
-* a general scheduler inside the base CLI.
-
-### 3.2 Streamz
-
-Useful pattern:
-
-* a periodic callback injects fresh values into the ordinary stream graph;
-* once acquired, observations use the same stream operators as any other data source.
-
-This is the closest conceptual fit for Riko's in-process API.
-
-### 3.3 Bytewax
-
-Useful pattern:
-
-* polling sources cooperatively return control to the runtime;
-* source-position state is separate from processing/operator state;
-* state can be snapshotted and resumed when a deployment enables persistence.
-
-This separation should be adopted even if the first Riko implementation keeps state in
-memory.
-
-### 3.4 dlt
-
-Useful pattern:
-
-* incremental extraction cursors are first-class source configuration;
-* persisted pipeline state allows later runs to request only new/updated records;
-* REST acquisition state is distinct from downstream transformation logic.
-
-Riko should borrow the state model, not dlt's warehouse-loading focus.
+Do not collapse these into one `poll()` or `alert()` implementation.
 
 ## 4. Non-goals
 
 This plan does not add:
 
-* a durable scheduler daemon;
-* cron parsing in core;
+* a durable scheduler daemon or cron parser to core;
 * distributed leases or worker ownership;
 * exactly-once delivery claims;
-* durable alert delivery;
-* a monitoring UI;
-* database-backed state as a mandatory dependency;
-* a general CEP engine;
-* machine-learning anomaly models in core.
+* a mandatory database/Redis dependency;
+* a monitoring dashboard;
+* a general complex-event-processing engine;
+* machine-learning anomaly models in core;
+* provider-specific notification clients in core.
 
-Those may be provided by orchestrators, connectors, extension packages, or user code.
+## 5. M0 — finite poll contract
 
-## 5. Phase M0 — define finite poll semantics
-
-A polling source performs **one finite observation attempt** at a time.
-
-Conceptually:
+A source poll is one bounded observation attempt:
 
 ```python
 result = await poll_once(source, context)
 ```
 
-returns records and source metadata, then closes network/file resources before the next
-interval begins.
+It returns records plus source metadata and closes finite network/file resources before the
+next attempt.
 
-A recurring monitor composes those finite polls:
+A recurring monitor composes finite attempts:
 
 ```text
-poll once
-→ process result
-→ commit source state after successful handoff
-→ cancellation-aware sleep/backoff
-→ poll again
+load committed checkpoint
+→ poll once
+→ process records
+→ successful handoff
+→ commit checkpoint/state
+→ cancellation-aware delay/backoff
+→ repeat
 ```
 
-This preserves the orchestration plan's rule that durable deployments should checkpoint
-between finite polls rather than hiding an endless in-memory loop behind a restartable
-source claim.
+This is the same logical contract whether the recurrence is driven by an in-process loop,
+cron, an orchestrator sensor, or an agent worker.
 
-## 6. Phase M1 — in-process periodic source
+## 6. M1 — periodic source and bounded iterations
 
-Provide a lightweight async-native periodic source for ordinary Python applications.
-
-Possible API:
+Provide an async-native periodic source for applications that already own a process
+lifecycle:
 
 ```python
 flow = AsyncPipe.poll(
@@ -151,47 +123,56 @@ flow = AsyncPipe.poll(
 )
 ```
 
-or, if classmethod integration is too invasive initially:
-
-```python
-flow = AsyncPipe(
-    "poll",
-    conf={
-        "pipe": "fetch",
-        "interval": 60,
-        "pipe_conf": {"url": "https://example.com/feed.xml"},
-    },
-)
-```
-
 Requirements:
 
-* AnyIO-based cancellation-aware sleep;
+* AnyIO cancellation-aware sleep;
 * no private event loop;
-* each poll closes its own finite source resources;
-* interval begins from a documented point (`fixed_delay` initially);
-* exceptions follow an explicit retry/error policy rather than silently continuing;
-* unboundedness is declared through execution metadata;
-* polling can be stopped by consumer cancellation/close.
+* fixed-delay cadence initially;
+* explicit retry/error policy;
+* clean close on consumer cancellation;
+* declared unboundedness;
+* optional `iterations` limit for tests, one-off monitors, and deterministic CLI usage.
 
-Initial scheduling mode:
+The `iterations` idea comes directly from Chakula and is useful even though production
+monitoring is normally unbounded or orchestrated:
 
-```text
-fixed_delay
-    wait interval after one poll finishes before starting the next
+```python
+AsyncPipe.poll(..., interval=60, iterations=3)
 ```
 
-Do not add fixed-rate catch-up semantics until there is a demonstrated need.
+## 7. M2 — bootstrap and backfill policy
 
-## 7. Phase M2 — source position / cursor contract
+A monitor must define what happens on its first observation. Do not infer this from cache
+contents implicitly.
 
-Source position answers:
+Suggested policy:
 
-> Where should acquisition resume?
+```python
+bootstrap: Literal["all", "latest", "none", "count"] = "all"
+bootstrap_count: int | None = None
+```
 
-This is distinct from whether a record has changed.
+Examples:
 
-Define a serializable checkpoint payload:
+```text
+all      emit all current items, then checkpoint
+latest   emit only the newest current item
+none     establish checkpoint without emitting existing items
+count    emit the newest N current items
+```
+
+Also support an optional source-level lower bound when the source has reliable timestamps:
+
+```python
+after="2026-08-01T00:00:00Z"
+```
+
+This generalizes Chakula's `--initial` and `--newer` behavior while keeping source-specific
+timestamp interpretation inside the connector/source.
+
+## 8. M3 — source checkpoint contract
+
+Source position answers: **where should acquisition resume?**
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -202,188 +183,149 @@ class SourceCheckpoint:
     metadata: Mapping[str, JsonValue]
 ```
 
-Possible source cursor examples:
+Examples:
 
 ```text
-RSS/Atom       latest stable item id + publication metadata
-REST API       updated_at cursor / page token / last id
+RSS/Atom       stable item id/guid + publication metadata
+REST API       updated_at / last id / continuation token
 IMAP           UIDVALIDITY + UID
 Kafka          partition offsets
-file tail      inode/fingerprint + byte offset
+file tail      file identity + byte offset
 ```
 
-The connector/source owns cursor interpretation. Core only defines lifecycle and
-serialization contracts.
+Connector/source code owns cursor meaning. Core owns lifecycle, serialization, and commit
+ordering.
 
-## 8. Phase M3 — checkpoint store protocol
+## 9. M4 — checkpoint and state stores
 
-Reuse the orchestration plan's `FeedCheckpointStore` concept and generalize only if needed.
+Checkpoint state and observation state are separate protocols.
 
 ```python
 class CheckpointStore(Protocol):
     async def load(self, source_id: str) -> SourceCheckpoint | None: ...
     async def save(self, source_id: str, checkpoint: SourceCheckpoint) -> None: ...
-```
 
-Initial implementations:
 
-```text
-MemoryCheckpointStore
-JsonFileCheckpointStore (optional utility, atomic replace)
-```
-
-External packages may provide database/object-store implementations.
-
-Commit rule:
-
-```text
-acquire records
-→ process/handoff succeeds
-→ commit new checkpoint
-```
-
-Never advance durable source position before successful handoff unless a connector's
-delivery semantics explicitly require it.
-
-## 9. Phase M4 — de-duplication
-
-De-duplication answers:
-
-> Have I already observed this logical record?
-
-Add a streaming operator with explicit key derivation:
-
-```python
-flow.dedupe(
-    key="guid",
-    retention=1000,
-)
-```
-
-or composite keys:
-
-```python
-flow.dedupe(key=["source", "external_id"])
-```
-
-Semantics:
-
-* first occurrence emits;
-* repeat occurrence suppresses;
-* order of emitted items is preserved;
-* missing key behavior is explicit (`error`, `emit`, or `hash_record`);
-* retention policy is bounded by count and optionally duration;
-* hash-based whole-record fallback uses a stable canonical serializer.
-
-Do not use an unbounded Python `set` by default for unbounded monitoring.
-
-## 10. Phase M5 — change detection
-
-Change detection answers:
-
-> I have seen this entity before; did the selected value change?
-
-Target API:
-
-```python
-flow.changed(
-    key="product_id",
-    fields=["price", "availability"],
-)
-```
-
-Input:
-
-```text
-{id: 42, price: 100}
-{id: 42, price: 100}
-{id: 42, price: 95}
-```
-
-Output under `first="emit"`:
-
-```text
-{id: 42, price: 100}
-{id: 42, price: 95}
-```
-
-Configuration:
-
-```python
-first: Literal["emit", "suppress"] = "emit"
-comparison: Literal["selected", "record_hash"] = "selected"
-```
-
-Optional output metadata may include:
-
-```python
-{
-    "_change": {
-        "fields": ["price"],
-        "previous": {"price": 100},
-        "current": {"price": 95},
-    }
-}
-```
-
-Metadata injection must be opt-in or use a namespaced Riko metadata field so user records
-are not silently polluted.
-
-## 11. Phase M6 — state store separation
-
-Observation-history state is different from source checkpoints.
-
-Define a separate protocol:
-
-```python
 class StateStore(Protocol):
     async def get(self, namespace: str, key: str) -> JsonValue | None: ...
     async def set(self, namespace: str, key: str, value: JsonValue) -> None: ...
     async def delete(self, namespace: str, key: str) -> None: ...
 ```
 
-Use it for:
+Initial implementations:
 
-* `dedupe` keys;
-* `changed` baselines;
-* rolling anomaly statistics;
-* future keyed stateful operators.
-
-Do not overload `SourceCheckpoint` with arbitrary transformation state.
-
-## 12. Phase M7 — lightweight rolling/window state
-
-To make anomaly detection useful without becoming Bytewax, add bounded local windows.
-
-Initial primitives should be intentionally small:
-
-```python
-flow.window(count=100)
+```text
+MemoryCheckpointStore / MemoryStateStore
+JsonFileCheckpointStore / JsonFileStateStore
 ```
 
-and later:
+Optional packages may provide Redis, SQLite, database, or object-store implementations.
+This preserves the useful file/Redis cache pattern from Chakula and email-sub-api without
+making either backend mandatory.
+
+Commit rule:
+
+```text
+acquire
+→ downstream handoff succeeds
+→ commit checkpoint and observation state
+```
+
+## 10. M5 — exact de-duplication
+
+De-duplication answers: **have I already observed this logical record?**
 
 ```python
-flow.window(duration="5m", timestamp="observed_at")
+flow.dedupe(key="guid", retention=1000)
+flow.dedupe(key=["source", "external_id"], retention="30d")
 ```
 
 Requirements:
 
-* count windows are bounded in memory;
-* duration windows evict expired observations;
-* window output semantics are explicit (snapshot vs incremental aggregate);
-* unbounded streams never create unbounded retained state accidentally;
-* time-zone/timestamp parsing uses one normalized internal representation.
+* first occurrence emits;
+* repeat occurrence suppresses;
+* order is preserved;
+* missing-key behavior is explicit (`error`, `emit`, `hash_record`);
+* retention is bounded by count and/or duration;
+* record hashing uses stable canonical serialization;
+* state scope is explicit (`execution` or named external state namespace).
 
-Do not start with watermarks, distributed event-time coordination, or late-data correction.
-Those are Bytewax/Flink-class concerns.
+`uniq` remains the finite-stream deterministic operator; monitored de-duplication owns
+cross-poll history.
 
-## 13. Phase M8 — anomaly operator vocabulary
+## 11. M6 — approximate membership is optional and explicit
 
-Riko should not ship ML models in core, but it can provide a configuration-friendly way to
-express common monitoring thresholds.
+The Changanya inspiration includes Bloom filters and similarity hashes. These are useful
+only when their semantics are visible.
 
-Initial scope:
+An optional high-volume dedupe backend may use a Bloom filter:
+
+```python
+flow.dedupe(
+    key="guid",
+    backend="bloom",
+    capacity=1_000_000,
+    false_positive_rate=0.001,
+)
+```
+
+Rules:
+
+* approximate mode is never silently substituted for exact mode;
+* configured capacity and false-positive rate are reported in metadata;
+* a false positive may suppress a genuinely new item and must be documented;
+* use exact state when missed records are unacceptable.
+
+Simhash/Nilsimsa-style near-duplicate content detection remains under the enrichment
+module gameplan rather than being conflated with exact item identity.
+
+## 12. M7 — change detection
+
+Change detection answers: **I have seen this entity; did selected values change?**
+
+```python
+flow.changed(
+    key="product_id",
+    fields=["price", "availability"],
+    first="emit",
+)
+```
+
+Optional change metadata may expose previous/current selected values and changed fields.
+Metadata must be namespaced and opt-in.
+
+The operator supports historical snapshot patterns such as the Meetup `changed` command
+without requiring source timestamps to encode business identity.
+
+## 13. M8 — hash-aware sink suppression
+
+Some systems do not need to suppress records at acquisition time; they need to avoid a
+remote write when output bytes/data are unchanged. CKAN tooling in the inspiration corpus
+used a persisted resource hash for this purpose.
+
+Keep that as a sink/write policy, not as source checkpoint state:
+
+```text
+transform records
+→ canonicalize output artifact/table payload
+→ fingerprint
+→ compare remote/committed fingerprint
+→ write only if changed
+```
+
+The connector gameplan owns the eventual `if_changed` / idempotent write contract. This
+monitoring plan only requires change metadata to compose with it.
+
+## 14. M9 — bounded windows and anomaly vocabulary
+
+Add small local windows sufficient for lightweight anomaly detection:
+
+```python
+flow.window(count=100)
+flow.window(duration="5m", timestamp="observed_at")
+```
+
+Initial anomaly methods:
 
 ```text
 absolute threshold
@@ -393,7 +335,7 @@ z-score
 rate/count threshold
 ```
 
-Possible API:
+Example:
 
 ```python
 flow.anomaly(
@@ -406,25 +348,85 @@ flow.anomaly(
 )
 ```
 
-The operator emits only anomalous records by default and may attach diagnostic metadata:
+Do not add watermarks, distributed event-time coordination, late-data correction, or ML
+model hosting to core.
 
-```json
-{
-  "method": "zscore",
-  "score": 3.42,
-  "baseline": 121.5,
-  "threshold": 3.0
-}
+## 15. M10 — alert rule and firing semantics
+
+AMS demonstrates that a useful monitoring system needs more than a threshold function: it
+needs rule identity and firing history. Define a portable rule description, but keep
+persistence/UI outside core unless later justified.
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AlertRule:
+    id: str
+    condition: Mapping[str, JsonValue]
+    scope: Mapping[str, JsonValue]
+    enabled: bool = True
+    firing: Literal["every_match", "transition", "cooldown"] = "transition"
+    cooldown_seconds: float | None = None
 ```
 
-For advanced statistical or ML logic, users should use callable stages or extension
-packages.
+Semantics:
 
-## 14. Phase M9 — feed-aware defaults
+```text
+every_match   emit on every matching observation
+transition    emit only when state changes from non-matching to matching
+cooldown      re-emit only after the configured quiet period
+```
 
-RSS/Atom is a natural first monitored source because Riko already normalizes entries.
+Alert state may record:
 
-Define stable key-selection precedence for feed monitoring:
+```text
+last_evaluated_at
+last_match
+last_fired_at
+fire_count
+last_event_id
+```
+
+Disabling a rule should preserve its history so it can be re-enabled, mirroring the useful
+remove/restore idea from AMS without requiring a pickle-based registry.
+
+## 16. M11 — alert actions are ordinary sinks/fan-out
+
+Do not hard-code email, desktop notifications, SMS, or webhooks into anomaly operators.
+
+```text
+monitor
+→ changed/anomaly
+→ send("alerts")
+      ├── email connector
+      ├── webhook connector
+      └── audit/archive sink
+```
+
+This preserves the useful email-sub-api architecture: monitoring decides **what happened**;
+a delivery adapter decides **how to notify**.
+
+## 17. M12 — dry-run and explainability
+
+Monitoring and alert rule testing should support a no-side-effect mode:
+
+```python
+monitor(..., dry_run=True)
+```
+
+Dry-run may poll and evaluate but must not:
+
+* advance durable checkpoints unless explicitly requested;
+* mutate external observation state;
+* invoke side-effecting notification sinks.
+
+It should emit an explanation record showing the matched rule, observed value, baseline,
+and whether a notification would have fired. This generalizes the dry-run pattern seen in
+Meetup and Microsoft administration tooling.
+
+## 18. Feed-aware identity defaults
+
+RSS/Atom is the first monitored source because Riko already normalizes entries. Recommended
+key precedence:
 
 ```text
 entry id/guid
@@ -433,24 +435,23 @@ entry id/guid
 → stable record hash only when explicitly enabled
 ```
 
-Feed-specific monitor helper may be added after generic primitives stabilize:
+A convenience helper may later compose generic primitives:
 
 ```python
 flow = AsyncPipe.monitor_feed(
     url,
     interval=300,
+    bootstrap="none",
     checkpoint="feed:example",
 )
 ```
 
-This helper should compose generic poll + source checkpoint + dedupe behavior rather than
-implementing a second monitoring runtime.
+It must not create a second monitoring runtime.
 
-## 15. Retry and backoff
+## 19. Retry, failure, and delivery policy
 
-Polling failures require explicit policy.
-
-Suggested configuration:
+Polling failures require explicit bounded retry/backoff. Chakula's fail-fast switch becomes
+a general policy rather than a feed-only flag.
 
 ```python
 retry={
@@ -462,125 +463,111 @@ retry={
 }
 ```
 
-Rules:
+After retry exhaustion, an application chooses `raise`, `record_and_continue`, or another
+explicit policy. Cancellation interrupts backoff immediately. Checkpoints are never
+advanced for a failed acquisition or failed required handoff.
 
-* retry belongs to one finite poll attempt;
-* after attempts are exhausted, follow pipeline error policy;
-* checkpoint is not advanced on failed acquisition/handoff;
-* cancellation interrupts backoff immediately;
-* HTTP `Retry-After` may influence delay through connector metadata;
-* non-idempotent sink retries remain an orchestration/output concern.
+Notification delivery has separate retry/idempotency semantics and must not cause a source
+cursor to advance prematurely.
 
-## 16. Polling and orchestration boundary
-
-Two supported deployment styles:
+## 20. Deployment styles
 
 ### In-process monitor
 
 ```text
-Python application
+application/service
 → AsyncPipe.poll(...)
-→ changed/dedupe/anomaly
+→ dedupe/changed/window/anomaly
 → sink/send
 ```
-
-Useful for:
-
-* local agents;
-* services that already own a process lifecycle;
-* notebooks/development;
-* short-lived monitoring utilities.
 
 ### Orchestrated finite polling
 
 ```text
 cron / Prefect / Airflow / sensor
 → one finite Riko poll
-→ changed/dedupe/anomaly using durable state
-→ persist output
+→ stateful operators using durable stores
+→ durable handoff
 → commit checkpoint
-→ process exits
+→ exit
 ```
 
-Preferred for restartable production deployments.
+The latter remains preferred for restartable production deployments. Both must use the
+same checkpoint and state contracts.
 
-Both styles must share the same source-checkpoint and observation-state contracts.
-
-## 17. Interaction with fan-out
-
-The monitoring stack should compose naturally with named pub/sub:
-
-```text
-poll
-→ dedupe
-→ changed
-→ anomaly
-→ send("alerts")
-      ├── email/webhook connector
-      └── audit/archive branch
-```
-
-Fan-out buffer/error semantics are defined by the fan-out gameplan, not duplicated here.
-
-## 18. Observability
+## 21. Observability
 
 Emit normalized events/metrics for:
 
-* poll start/finish;
-* records acquired;
+* poll start/finish and duration;
+* records acquired/emitted/suppressed;
+* bootstrap policy and count;
 * cursor before/after;
-* records deduplicated;
+* state/checkpoint backend;
 * entities changed;
-* anomalies emitted;
-* retry count/backoff;
-* checkpoint commit;
-* checkpoint/state load failure;
-* monitor cancellation.
+* anomalies/rules evaluated and fired;
+* retry/backoff;
+* checkpoint commits;
+* sink delivery outcome;
+* dry-run decisions;
+* cancellation.
 
-Do not log secrets, raw credential material, or full sensitive payloads by default.
+Never log credentials or sensitive payloads by default.
 
-## 19. Testing strategy
+## 22. Testing strategy
 
-Required contract tests:
+Required contract tests include:
 
 1. periodic source emits multiple finite poll results;
-2. cancellation stops sleep and closes source resources;
-3. source checkpoint resumes after restart simulation;
-4. checkpoint is not committed when downstream handoff fails;
-5. dedupe suppresses repeated IDs with bounded retention;
-6. change detection emits only selected field changes;
-7. first-observation policy is honored;
-8. state survives recreation when persistent test store is supplied;
-9. count window stays bounded;
-10. z-score/threshold anomaly fixtures are deterministic;
-11. feed monitor does not re-emit previously committed items;
-12. retry backoff is cancellation-aware;
-13. in-process and finite orchestrated polling produce equivalent logical deltas.
+2. finite `iterations` stops deterministically;
+3. bootstrap `all/latest/none/count` behavior;
+4. timestamp lower-bound behavior when supported;
+5. cancellation closes resources and interrupts sleeps;
+6. checkpoint resumes after restart simulation;
+7. failed handoff does not advance checkpoint;
+8. exact dedupe stays bounded;
+9. Bloom dedupe reports approximate semantics and configured error rate;
+10. `changed` reports selected-field changes only;
+11. count/duration windows remain bounded;
+12. deterministic threshold/z-score anomaly fixtures;
+13. transition and cooldown alert firing semantics;
+14. disabled rule preserves history and can be re-enabled;
+15. dry-run performs no external mutation;
+16. feed identity precedence is stable;
+17. in-process and orchestrated finite polling produce equivalent logical deltas.
 
-## 20. Phases
+## 23. Phases
 
 ```text
-M0  Finite poll contract
-M1  Async periodic source
-M2  SourceCheckpoint cursor contract
-M3  CheckpointStore
-M4  dedupe
-M5  changed
-M6  StateStore separation
-M7  bounded windows
-M8  lightweight anomaly operators
-M9  RSS/Atom monitoring helper
+M0   finite poll contract
+M1   periodic source + bounded iterations
+M2   bootstrap/backfill policy
+M3   SourceCheckpoint
+M4   checkpoint/state stores
+M5   exact dedupe
+M6   optional approximate membership backend
+M7   changed
+M8   hash-aware sink integration contract
+M9   bounded windows + anomaly vocabulary
+M10  alert rule/firing state
+M11  action/sink composition
+M12  dry-run/explainability
+M13  RSS/Atom monitoring helper
 ```
 
-## 21. Definition of done
+## 24. Definition of done
 
-1. Riko can poll a finite source repeatedly without a private event loop.
-2. Source position is separate from transformation state.
-3. A durable deployment can resume from an explicit checkpoint.
-4. `dedupe` and `changed` are separate operators with bounded-state behavior.
-5. Simple anomaly detection can be expressed without custom monitoring loops.
-6. RSS/Atom monitoring has stable new-item semantics.
-7. Polling cancellation and retry behavior are explicit.
-8. In-process monitoring does not turn the base CLI into a scheduler daemon.
-9. Orchestrated finite polling remains the recommended restartable production pattern.
-10. All monitoring primitives compose with existing Riko filters, fan-out, union, join, and callable stages.
+1. Riko can repeatedly poll finite sources without a private event loop.
+2. First-observation/backfill semantics are explicit and deterministic.
+3. Source position is separate from observation and alert state.
+4. State can persist through file or extension-provided backends without a mandatory
+   service dependency.
+5. Exact dedupe and changed-record detection have distinct contracts.
+6. Approximate dedupe cannot masquerade as exact dedupe.
+7. Lightweight threshold/window anomaly detection is configuration-friendly.
+8. Alert transition/cooldown semantics prevent accidental notification spam.
+9. Actions remain ordinary sinks/fan-out, not embedded notification code.
+10. Dry-run can explain behavior without external mutations.
+11. Production restartability continues to belong to orchestration/deployment policy.
+12. All monitoring primitives compose with existing Riko filters, fan-out, `union`,
+    `join`, REST sources, and callable stages.
