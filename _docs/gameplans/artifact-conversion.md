@@ -2,13 +2,16 @@
 
 ## 1. Mission
 
-Define explicit boundaries for tabular format conversion, contact/card serialization,
+Define explicit boundaries for serialized format conversion, contact/card serialization,
 template-driven reports, and rendered artifacts without turning Riko's record-stream core
 into a document-rendering framework.
 
 This plan extends the connector and orchestration gameplans: connectors acquire and deliver
 bytes/records, Riko transforms records, and artifact/rendering extras turn finite data into
 versioned files or reports.
+
+In-memory Pandas/Arrow/Polars conversion is owned by `tabular-interop.md`; this plan owns
+serialized codecs and artifact/rendering boundaries.
 
 ## 2. Inspiration integrated by this plan
 
@@ -75,10 +78,10 @@ csv
 json
 ndjson
 geojson
+parquet (optional)
 xlsx/xls (optional)
 dbf/mdb (optional)
 vcard (optional)
-arrow/parquet (optional)
 ```
 
 Each codec declares:
@@ -91,6 +94,10 @@ streaming/chunk support
 schema/metadata behavior
 optional dependencies
 ```
+
+Arrow is an in-memory interchange type rather than an artifact format contract here;
+Arrow frame/table conversion is specified in `tabular-interop.md`. Arrow IPC/Feather, if
+added as serialized codecs, belong in this registry like Parquet.
 
 Extension inference is convenience; explicit media type/codec wins.
 
@@ -118,11 +125,15 @@ Examples:
 CSV/NDJSON       naturally streaming
 JSON array       may require structured streaming parser or materialization
 XLSX             finite workbook boundary
+Parquet          finite/row-group artifact boundary
 PDF/PNG          terminal rendered artifact
 ```
 
 Chunk size is explicit for large finite inputs. A codec cannot silently consume a known
 unbounded stream.
+
+Generic frame batching/chunk semantics are owned by `tabular-interop.md`; codecs only
+declare how their serialized representation can be read/written incrementally.
 
 ## 8. Header and field normalization
 
@@ -190,18 +201,22 @@ stdin → decode → Riko → encode → stdout
 Binary formats require binary-safe handling and should not be accidentally emitted to a
 TTY without an explicit output path/flag.
 
-## 12. Tabular frame boundaries
+## 12. Tabular frame boundary
 
-Pandas/Arrow interoperability remains owned by `rest-incremental.md` and future batch
-contracts. This plan treats them as codec/materialization boundaries:
+This plan intentionally does not define `from_pandas`, `to_pandas`, `from_arrow`,
+`to_arrow`, Arrow batch semantics, Polars helpers, null coercion, or DataFrame index rules.
+Those contracts live in `tabular-interop.md`.
+
+Artifact codecs compose with those boundaries when useful:
 
 ```text
-Arrow/Pandas/table
-↔ record stream
-↔ artifact codec
+Pandas/Arrow/Polars     record stream       serialized artifact
+        ↕                    ↕                     ↕
+  tabular-interop  ←→   Riko transforms  ←→  artifact codecs
 ```
 
-Avoid adding Pandas as a mandatory dependency for CSV/JSON conversion.
+A Parquet/XLSX/CSV implementation may internally use Arrow or another frame library, but
+that is an adapter implementation detail rather than a second public frame API.
 
 ## 13. Template rendering
 
@@ -289,6 +304,7 @@ report context ──┼→ HTML
 ```
 
 This is fan-out over artifacts, not four repeated source/data-processing pipelines.
+Fan-out mechanics remain owned by `fanout-topology.md`.
 
 ## 18. Rendered tables
 
@@ -305,6 +321,9 @@ A general table renderer should not contain application-specific column names su
 legacy eBay LEGO mapping. Column selection/formatting belongs in configuration or upstream
 transforms.
 
+If the intermediate table is a Pandas/Arrow value, its conversion semantics come from
+`tabular-interop.md`.
+
 ## 19. Artifact publishing and versioning
 
 Borrow the useful part of Euler's vision without turning Riko into Dropbox/Git:
@@ -315,6 +334,7 @@ Borrow the useful part of Euler's vision without turning Riko into Dropbox/Git:
 * external catalog/index systems may consume artifact metadata;
 * notifications about a new version are ordinary monitoring/fan-out actions.
 
+Provider-specific idempotent write mechanics remain owned by `provider-integrations.md`.
 Offline synchronization/conflict resolution is outside Riko core.
 
 ## 20. Artifact metadata and provenance
@@ -362,6 +382,9 @@ riko artifact describe <ref>
 CLI convenience resolves to the same codec/render services used by Python and serialized
 workflow definitions.
 
+Frame-specific CLI behavior, if ever added, should call `tabular-interop.md` contracts
+rather than add independent coercion rules here.
+
 ## 23. Testing strategy
 
 Contract tests include:
@@ -376,28 +399,34 @@ Contract tests include:
 8. report context is reusable across multiple renderers;
 9. template-only change rerenders without upstream acquisition;
 10. artifact fingerprint changes on context/template/renderer changes;
-11. `if_changed` publishing suppresses identical artifact writes;
+11. `if_changed` publishing suppresses identical artifact writes through the shared sink
+    policy;
 12. remote-resource access during rendering follows policy;
 13. PII metadata is retained and sensitive fields are not logged;
 14. renderer optional-dependency failure is explicit.
+
+Pandas/Arrow/Polars conversion tests live in `tabular-interop.md`.
 
 ## 24. Phases
 
 ```text
 AC0  ArtifactRef + codec capability metadata
 AC1  streaming CSV/JSON/NDJSON codecs
-AC2  optional XLS/XLSX/DBF/MDB/vCard codecs
+AC2  optional XLS/XLSX/DBF/MDB/vCard/Parquet codecs
 AC3  declarative destination mappings
 AC4  ReportContext + RenderPlan
 AC5  Jinja/Markdown/HTML renderer
 AC6  optional PDF/DOCX/PNG render adapters
-AC7  fingerprints, lineage, and if-changed publishing
+AC7  fingerprints, lineage, and if-changed publishing integration
 AC8  CLI convert/render/describe
 ```
 
+Frame interoperability has its own phases in `tabular-interop.md`.
+
 ## 25. Definition of done
 
-1. Format conversion is an explicit source/sink boundary, not scattered utility code.
+1. Serialized format conversion is an explicit source/sink boundary, not scattered utility
+   code.
 2. Streaming formats remain lazy/chunked where practical.
 3. Terminal renderers cannot accidentally consume unbounded streams.
 4. Optional legacy/business formats do not become core dependencies.
@@ -406,4 +435,5 @@ AC8  CLI convert/render/describe
 7. Multi-format output reuses one report context.
 8. Artifacts are fingerprinted and lineage-aware.
 9. PII and renderer security boundaries are explicit.
-10. CLI, Python, and workflow definitions use the same conversion/render services.
+10. Pandas/Arrow/Polars contracts are referenced from `tabular-interop.md`, not duplicated
+    here.
