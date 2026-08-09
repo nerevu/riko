@@ -70,7 +70,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Item:
     function on an item.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -80,7 +80,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Item:
         Awaitable: truncated stream
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     func = lambda item: {'y': item['x'] + 3}
@@ -101,7 +101,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     on an item.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

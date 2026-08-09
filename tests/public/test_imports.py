@@ -26,6 +26,8 @@ STABLE = {
     "SyncPipe",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "async_return",
+    "async_sleep",
     "backend",
     "build_pipeline",
     "compile_pipe",

@@ -99,7 +99,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         Awaitable: truncated stream
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     items = ({'x': x} for x in range(5))

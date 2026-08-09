@@ -282,7 +282,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         Awaitable: iterator of the filtered items
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     items = [{'title': 'Good job!'}, {'title': 'Website Developer'}]

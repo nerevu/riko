@@ -110,7 +110,7 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     A processor that asynchronously extracts sub-elements from an item.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -127,7 +127,7 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
        Awaitable: sub-element item
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     sonnet = {'stanzas': [{'verses': ['verse1', 'verse2']}]}
@@ -148,7 +148,7 @@ def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     A processor that extracts sub-elements from an item.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

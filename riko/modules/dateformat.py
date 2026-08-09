@@ -82,7 +82,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     A processor module that asynchronously formats a date.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -103,7 +103,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
     Examples:
         >>> from datetime import date
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe({'date': date(2015, 5, 4)})
@@ -122,7 +122,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     A processor module that formats a date.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

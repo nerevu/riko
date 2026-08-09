@@ -111,7 +111,7 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
             counted items
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     items = ({'x': x} for x in range(5))

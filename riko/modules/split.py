@@ -97,7 +97,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
         Awaitable: iterable of streams
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe({'x': x} for x in range(5))

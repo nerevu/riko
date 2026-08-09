@@ -80,7 +80,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     A processor module that asynchronously splits a string by a delimiter.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -107,7 +107,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
         Awaitable: item with tokenized content
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     item = {'content': 'Once,twice,thrice,no more'}
@@ -127,7 +127,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     A processor that splits a string by a delimiter.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

@@ -122,7 +122,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Dec
         Awaitable: iterator of the summed items
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     items = ({'content': x} for x in range(5))

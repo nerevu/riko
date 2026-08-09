@@ -71,7 +71,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     A processor module that asynchronously slugifies the field of an item.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -82,7 +82,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
        Awaitable: item with slugified content
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe({'content': 'hello world'})
@@ -101,7 +101,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     A processor that slugifies the field of an item.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

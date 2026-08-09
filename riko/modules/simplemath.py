@@ -90,7 +90,7 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
     as addition and subtraction.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -110,7 +110,7 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
         Awaitable: item with formatted currency
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     conf = {'op': 'divide', 'other': '5'}
@@ -131,7 +131,7 @@ def pipe(*args: Any, **kwargs: object) -> NumLike:
     subtraction.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

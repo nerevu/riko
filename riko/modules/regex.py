@@ -69,7 +69,7 @@ async def async_parser(
         Awaitable: dict
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({'content': 'hello world', 'title': 'greeting'})
@@ -184,7 +184,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     using regexes.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -214,7 +214,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         Awaitable: item with replaced content
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> item = {'content': 'hello world', 'title': 'greeting'}
         >>> match = r'(\\w+)\\s(\\w+)'
@@ -239,7 +239,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     A processor that replaces text in fields of an item using regexes.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

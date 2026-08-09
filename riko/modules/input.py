@@ -120,7 +120,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     into a variety of different types, e.g., int, bool, date, etc.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -144,7 +144,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
        Awaitable: iterator of items of user input
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     conf = {'prompt': 'How old are you?', 'type': 'int'}
@@ -165,7 +165,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     different types, e.g., int, bool, date, etc.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
