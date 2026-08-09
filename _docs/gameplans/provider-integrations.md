@@ -2,53 +2,87 @@
 
 ## 1. Mission
 
-Define a reusable provider-integration layer for authenticated SaaS APIs, resource CRUD,
-webhooks, cached acquisition, idempotent writes, and asynchronous provider jobs without
-recreating the monolithic API gateways found in several earlier Nerevu projects.
+Define reusable provider semantics for authenticated SaaS APIs, resource CRUD/search,
+webhooks, caching, idempotent writes, identity mapping, browser fallback, and asynchronous
+provider operations without recreating the monolithic API gateways found in earlier Nerevu
+projects.
 
-This plan extends:
+This plan owns **provider semantics**, not generic transport, secrets, REST pagination,
+retry, monitoring checkpoints, or the common capability catalog.
 
-* `_docs/gameplans/connectors.md` for transport/session/credential contracts;
-* `_docs/gameplans/rest-incremental.md` for declarative REST collection semantics;
-* `_docs/gameplans/mcp.md` for capability projection and policy;
-* `_docs/gameplans/orchestration.md` for webhook-triggered and queued executions.
+Related authoritative plans:
+
+* `connectors.md` — transport/session lifecycle and credential references/resolution;
+* `rest-incremental.md` — REST collection, pagination, dependent endpoints, cursor encoding;
+* `feed-monitoring.md` — source checkpoints, dedupe/change/anomaly monitoring state;
+* `execution-semantics.md` — retry, timeout, cancellation, and error policy;
+* `mcp.md` — common `CapabilityInfo`, effects, catalog, policy, and OpenAPI projection;
+* `orchestration.md` — durable run boundaries and external scheduling.
 
 ## 2. Inspiration integrated by this plan
 
-The inspiration corpus contains repeated versions of the same useful architecture:
+Reusable lessons from the inspiration corpus include:
 
-* **HTTPSanction / authorizer / nerevu-api**: normalized OAuth/API-key/service-account
-  authentication, provider-scoped resources, auth status/refresh/revoke, CRUD, webhooks,
-  cache management, and provider adapters.
-* **data-hub-etl**: API acquisition plus configuration-driven mappings and batched Google
-  Sheets writes.
-* **ckanutils / ckanny**: CKAN resource/package operations and hash-aware smart updates.
-* **amzn-search-api / ebay-search-api**: provider search wrappers, cache policies,
-  pagination, explicit sandbox/live behavior, and discoverable resource APIs.
-* **extractor**: async multi-provider enrichment with allow/deny selection, response cache,
-  browser fallback, cleaning, and Airtable upsert.
-* **COVID19 IL Data API / HDX ageing service**: interchangeable source/destination
-  backends, queued long-running work, job IDs, status/result endpoints, timeout/TTL.
-* **webhooks**: provider-specific signature verification followed by normalized dispatch.
-* **Google contacts / contacts**: OAuth-backed resource discovery, natural-name/ID/URL
-  addressing, batch updates, and PII-aware records.
-* **HDX scrapers / file proxy**: many source-specific collectors normalized behind common
-  output contracts rather than promoted to core modules.
+* **HTTPSanction / authorizer / nerevu-api** — auth lifecycle, provider-scoped resources,
+  normalized CRUD/search, webhooks, cache control, and provider adapters;
+* **data-hub-etl** — mapped extraction plus batched provider writes;
+* **ckanutils / ckanny** — CKAN operations and hash-aware smart updates;
+* **Amazon/eBay search APIs** — provider search vocabularies, pagination, environments,
+  caching, and discoverability;
+* **extractor** — bounded multi-provider enrichment, response cache, browser fallback,
+  provenance, cleaning, and upsert;
+* **COVID19/HDX services** — queued long-running operations, IDs, status/result endpoints,
+  timeouts, and TTLs;
+* **webhooks** — provider signature verification before normalized dispatch;
+* **contacts integrations** — OAuth-backed resource discovery, stable identity mapping,
+  batch updates, and PII-aware records.
 
-The common lesson is a provider capability model, not a new Flask monolith.
+The common lesson is a provider capability layer, not a required Flask proxy monolith.
 
-## 3. Architectural rule
+## 3. Ownership boundary
+
+This plan owns:
+
+```text
+ProviderSpec / ResourceSpec / ActionSpec
+provider-facing auth lifecycle projection
+provider environment selection
+resource CRUD/search semantics
+multi-provider enrichment policy
+provider response caching policy
+explicit browser fallback
+provider batch/write/idempotency policy
+IdentityMap
+provider webhook EventEnvelope
+OperationHandle + wait_operation semantics
+provider diagnostics
+provider-specific sensitivity/provenance metadata
+```
+
+It does not redefine:
+
+```text
+CredentialProvider / secret material    connectors.md
+REST pagination / source cursor         rest-incremental.md
+SourceCheckpoint / observation state    feed-monitoring.md
+RetryPolicy / timeout / cancellation    execution-semantics.md
+CapabilityInfo / CapabilityCatalog      mcp.md
+```
+
+## 4. Architectural rule
 
 ```text
 provider definition
     ↓
 credential reference + policy
     ↓
-resource/action capability
+resource/action semantics
     ↓
 shared connector/session service
     ↓
-normalized records / action result / job handle
+normalized records / action result / OperationHandle
+    ↓
+shared capability catalog projection
 ```
 
 Provider packages describe semantics. Core Riko continues to process records.
@@ -61,35 +95,33 @@ riko → one giant provider proxy service → every external API
 
 as a required architecture.
 
-## 4. Package boundaries
+## 5. Package boundaries
 
 Suggested ownership:
 
 ```text
 riko core
     ExecutionContext
-    capability metadata contracts
     ordinary record processing
-    generic retry/poll hooks when broadly useful
+    generic execution/retry primitives
 
 riko-connect
-    HTTP/file/storage/mail/CKAN/Google-Sheets-style connectors
+    HTTP/file/storage/mail connectors
     credential-provider integration points
-    provider resource/action registry
-    caching and idempotent write helpers
+    generic provider adapter helpers
 
 riko-mcp
-    OpenAPI/MCP-derived capabilities
-    capability policy and agent-facing projection
+    CapabilityInfo / CapabilityCatalog
+    OpenAPI/MCP projection and execution policy
 
 provider extras
-    behavior that cannot be represented faithfully through generic REST/OpenAPI
+    behavior not faithfully represented by generic REST/OpenAPI
 ```
 
-A provider-specific module is justified when protocol, pagination, streaming, mutation, or
-state semantics require it—not merely because the provider has a brand name.
+A provider-specific adapter is justified by distinctive pagination, streaming, mutation,
+state, auth, or operation semantics—not merely a brand name.
 
-## 5. Provider definition
+## 6. Provider definition
 
 Use a serializable provider descriptor:
 
@@ -104,54 +136,36 @@ class ProviderSpec:
     environment: str = "production"
 ```
 
-Provider definitions may be generated from OpenAPI where possible, then augmented with
-small explicit policy/semantic overrides.
+Provider definitions may be generated from OpenAPI and then augmented with explicit
+provider policy/semantic overrides.
 
-They must not contain raw secrets.
+`credential` is a reference only; raw secret material is resolved by `connectors.md`.
 
-## 6. Authentication lifecycle
+## 7. Authentication lifecycle projection
 
-Older gateway projects exposed auth, callback, status, refresh, and revoke as provider
-routes. Preserve the lifecycle, not the server shape.
+Earlier gateway projects exposed auth/callback/status/refresh/revoke routes. Preserve the
+lifecycle without preserving the server shape.
 
-Credential providers should support capabilities such as:
+A provider integration may project lifecycle capabilities such as:
 
 ```text
-resolve
+authorize/setup
 status
 refresh
 revoke
 ```
 
-where supported by the underlying authentication scheme.
+when supported by the credential implementation.
 
-Serialized pipelines use references:
+Secret storage, token retrieval, redaction, and serialized credential references are owned
+by `connectors.md`. This plan only defines how a provider exposes setup/control operations.
 
-```json
-{"credential": "providers/xero/accounting"}
-```
+Interactive authorization belongs to setup/control-plane tooling, not an implicit side
+effect during record iteration.
 
-not client secrets, access tokens, refresh tokens, private keys, or service-account JSON.
+## 8. Provider environments
 
-Supported auth metadata may include:
-
-```text
-API key
-basic auth
-OAuth 1 where unavoidable
-OAuth 2 authorization code
-OAuth 2 client credentials
-service account/workload identity
-bearer token
-```
-
-Interactive authorization belongs to setup/control-plane tooling, not an implicit action
-inside ordinary record iteration.
-
-## 7. Provider environments
-
-Several inspiration APIs distinguish live, sandbox, development, and offline/test modes.
-Make environment explicit:
+Environment is explicit:
 
 ```python
 ProviderSpec(
@@ -161,15 +175,17 @@ ProviderSpec(
 )
 ```
 
-Environment selects endpoint/credential policy but must not silently alter record schemas or
-side-effect classification.
+Typical values may include `production`, `sandbox`, or provider-specific cloud/region
+variants.
 
-Tests should prefer deterministic fixtures or recorded/fake transports rather than a hidden
-`offline` branch with different execution semantics.
+Environment may select endpoints and credential policy, but must not silently change record
+shape, side-effect classification, or test semantics.
 
-## 8. Resource capability model
+Tests prefer deterministic fake/recorded transports rather than hidden execution branches.
 
-Normalize common operations without pretending all providers are identical:
+## 9. Resource and action semantics
+
+Normalize common operations without pretending every provider implements all of them:
 
 ```text
 list
@@ -179,26 +195,19 @@ update
 upsert
 delete
 search
+custom action
 ```
 
-A resource capability declares which operations exist, its identity fields, pagination,
-and side-effect/risk properties.
+A `ResourceSpec`/`ActionSpec` describes provider identity, supported operations, and
+provider-specific parameters. Generic input/output schemas, effects, policy, and catalog
+identity are projected into `CapabilityInfo` from `mcp.md` rather than duplicated here.
 
-```python
-ResourceSpec(
-    id="xero.projects",
-    identity=("project_id",),
-    operations=frozenset({"list", "get", "create", "update"}),
-)
-```
+Natural-name/URL lookups may be convenience resolvers, but mutation should resolve to a
+stable provider identity first.
 
-Natural-name, ID, or URL lookups may be convenience resolvers, but resolution must end in a
-stable provider identity before mutation.
+## 10. Search and collection operations
 
-## 9. Search and collection operations
-
-Amazon/eBay-style wrappers show a useful distinction between generic REST requests and a
-provider's search vocabulary. Search capabilities may expose typed/queryable parameters:
+Provider search vocabularies may be richer than a generic HTTP request:
 
 ```python
 pipe.capability(
@@ -211,24 +220,24 @@ pipe.capability(
 )
 ```
 
-The underlying implementation may be generic REST/OpenAPI. Public output remains ordinary
-Riko records plus namespaced response metadata.
+The implementation may still use generic REST/OpenAPI machinery.
 
-Pagination, rate limiting, and incremental state defer to `rest-incremental.md`.
+Pagination, rate limiting, dependent endpoints, and incremental cursor encoding defer to
+`rest-incremental.md`; durable source-position state defers to `feed-monitoring.md`.
 
-## 10. Provider selection for enrichment
+## 11. Multi-provider enrichment
 
-Extractor demonstrates a useful multi-provider pattern:
+A reusable pattern is:
 
 ```text
 base records
 → selected enrichment providers
-→ merge normalized fields/provenance
+→ merge normalized fields + provenance
 → clean
-→ upsert
+→ optional upsert
 ```
 
-Support an explicit provider-selection policy:
+Selection is explicit:
 
 ```python
 providers={
@@ -241,47 +250,49 @@ Requirements:
 
 * allow/deny selection is deterministic;
 * each provider result carries provenance;
-* failure policy can distinguish required and optional enrichers;
-* concurrent provider requests are bounded;
+* required and optional provider failures are distinguishable;
+* concurrent calls are bounded;
 * cache hits/misses are observable;
-* one provider cannot silently overwrite higher-priority data without a merge policy.
+* merge precedence is explicit;
+* providers cannot silently overwrite higher-priority data.
 
-This belongs in an enrichment/provider extension, not in the core loop decorator.
+## 12. HTTP caching and conditional requests
 
-## 11. HTTP caching and conditional requests
+Provider response caching is an optimization, not correctness state.
 
-Earlier APIs relied heavily on local/memcached HTTP response caches. Modernize the pattern:
+Prefer standard validators when available:
 
-* use standard validators (`ETag`, `Last-Modified`) when provided;
-* support bounded response caching through connector policy;
-* make cache namespace/key derivation stable and inspectable;
-* distinguish response cache from source checkpoint state;
-* expose cache bypass/refresh for troubleshooting;
-* never cache auth material in ordinary result records.
+```text
+ETag
+Last-Modified
+provider version IDs
+```
 
-Caching is an optimization. Incremental/checkpoint semantics remain correctness contracts.
+Requirements:
 
-## 12. Browser fallback
+* cache key/namespace derivation is stable and inspectable;
+* cache bypass/refresh is available for troubleshooting;
+* response cache is distinct from source checkpoints and identity maps;
+* credentials are never cached in ordinary result records;
+* connector response/session rules still come from `connectors.md`.
 
-Some legacy providers required Selenium/Playwright login or scraping. Browser automation may
-exist as an optional connector capability when no stable API exists.
+## 13. Browser fallback
+
+Browser automation is optional and explicit when no stable API is available.
 
 Rules:
 
-* browser use is explicit in the plan;
-* a REST connector never silently launches a browser;
+* REST execution never silently launches a browser;
 * credentials remain references;
-* rendered-page extraction remains a downstream parser where practical;
-* browser contexts are execution resources and close on cancellation/error;
+* browser contexts are execution-scoped resources;
+* contexts close on success, error, timeout, or cancellation;
 * concurrency is tightly bounded;
-* plans/events identify that browser fallback was used.
+* plan/events disclose browser fallback;
+* rendered-page parsing remains a downstream parser where practical.
 
-## 13. Batched mutations
+## 14. Batched mutations
 
-Google Sheets/contact examples and data-hub-etl show that remote writes often have native
-batch semantics.
-
-A sink/action may declare:
+Remote writes may expose provider-native batch endpoints:
 
 ```python
 batch={
@@ -291,19 +302,24 @@ batch={
 }
 ```
 
-Batching must preserve provider ordering/idempotency requirements and report partial
-failures at item granularity where the provider supports it.
+Batching must preserve provider ordering/idempotency rules and expose item-level partial
+failures where the provider permits it.
 
-Do not materialize an unbounded stream solely to use a provider's batch endpoint.
+Do not materialize an unbounded stream solely to use a provider batch endpoint.
 
-## 14. Idempotent and change-aware writes
+Generic batch execution semantics belong to the runtime/RDP plans; this section only owns
+provider batch limits and response interpretation.
 
-CKAN tooling used a persisted content hash so scheduled jobs did not rewrite unchanged
-resources. Generalize this as a sink policy:
+## 15. Idempotent and change-aware writes
+
+Generalize the CKAN-style persisted-hash pattern as provider sink policy:
 
 ```python
 write_policy="if_changed"
-fingerprint={"algorithm": "sha256", "canonicalization": "records-v1"}
+fingerprint={
+    "algorithm": "sha256",
+    "canonicalization": "records-v1",
+}
 ```
 
 Possible policies:
@@ -316,16 +332,16 @@ create_only
 update_only
 ```
 
-`if_changed` requires a comparable committed/remote fingerprint. The fingerprint algorithm
-and canonicalization version are metadata, not implicit implementation detail.
+`if_changed` requires a comparable committed or provider-native version/fingerprint.
+Prefer ETags/version IDs over redownloading content solely to hash it when equivalent safety
+is available.
 
-Provider-native ETags/version IDs should be preferred over downloading content solely to
-compute a comparison hash when they provide equivalent safety.
+Artifact content fingerprinting/lineage is owned by `artifact-conversion.md`; this section
+owns the **remote write decision**.
 
-## 15. Upsert and identity mapping
+## 16. Identity mapping
 
-Provider sync projects repeatedly maintain mappings between local and remote identities.
-Define an optional mapping-store contract rather than hiding mapping files in provider code:
+Provider synchronization often needs durable local-to-remote identity mapping:
 
 ```python
 class IdentityMap(Protocol):
@@ -333,15 +349,23 @@ class IdentityMap(Protocol):
     async def set_remote(self, provider: str, local_id: str, remote_id: str) -> None: ...
 ```
 
-Use provider-native external IDs/upsert keys when available. Mapping state is durable
-application state, separate from source cursor/checkpoint state.
+Prefer provider-native external IDs/upsert keys when available.
 
-## 16. Webhook ingress
-
-Normalize webhook processing as:
+Identity mapping is application/provider state. It is distinct from:
 
 ```text
-request bytes + headers
+source checkpoint      where acquisition resumes
+response cache         acquisition optimization
+observation state      whether an entity changed
+artifact version       durable output identity
+```
+
+## 17. Webhook ingress
+
+Normalize provider webhook processing as:
+
+```text
+raw request bytes + headers
 → provider signature verification
 → replay/idempotency validation
 → EventEnvelope
@@ -358,24 +382,14 @@ class EventEnvelope:
     payload: JsonValue
 ```
 
-Do not route arbitrary URL `func_name` values directly to arbitrary Python functions.
-Dispatch only to registered capabilities or pipeline IDs authorized by policy.
+Provider signature algorithms belong to adapters and use exact raw bytes when required.
 
-Provider-specific signature algorithms belong to adapters and require exact raw request
-bytes where the signature scheme specifies them.
+Never route an arbitrary URL-supplied function/import name directly to Python execution.
+Dispatch only to registered, policy-authorized capability or pipeline IDs.
 
-## 17. Asynchronous provider jobs
+## 18. Asynchronous provider operations
 
-COVID/HDX services expose a useful generic pattern for long operations:
-
-```text
-submit action
-→ job id / result URL
-→ queued/running state
-→ bounded wait or later retrieval
-```
-
-Define a provider-neutral handle:
+Long-running actions use one provider-neutral contract:
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -384,108 +398,173 @@ class OperationHandle:
     operation_id: str
     status_capability: str
     result_capability: str | None = None
+    correlation_id: str | None = None
 ```
 
-Riko may either emit the handle immediately or pass it to the generic polling/wait contract.
-Timeout, status TTL, result TTL, and cancellation are explicit. Redis/RQ is one possible
-external implementation, not part of the core contract.
+A provider adapter owns:
 
-## 18. Provider status and diagnostics
+* deriving the operation ID/status/result endpoint;
+* normalizing provider status;
+* defining provider terminal states;
+* extracting result references/request IDs.
 
-Useful control-plane operations include:
+The shared waiter owns lifecycle:
+
+```python
+result = await wait_operation(
+    handle,
+    mode="interval",  # interval | event | hybrid
+    interval=30,
+    timeout=900,
+    context=context,
+)
+```
+
+### Interval mode
+
+Periodically read the authoritative status capability until terminal state or timeout.
+
+### Event mode
+
+Wait for a correlated provider event, then re-read authoritative status. Event payloads are
+wake-up hints unless the provider contract explicitly guarantees they are authoritative.
+
+### Hybrid mode
+
+Wait for either a correlated event or the interval deadline, then re-read authoritative
+status. This is preferred when notifications may be delayed/dropped but can reduce polling
+latency/cost.
+
+Rules:
+
+* subscribe before starting an operation when required to avoid a notification race;
+* use caller/provider correlation IDs when the final operation ID does not yet exist;
+* unrelated events do not satisfy the waiter;
+* timeout/cancellation follow `execution-semantics.md`;
+* transient status-read retries use `RetryPolicy` from `execution-semantics.md`;
+* only the provider adapter defines terminal status mapping;
+* the waiter never owns scheduling of future independent pipeline runs.
+
+This contract is deliberately named **operation waiting**, not source polling. Periodically
+checking a data source for new records remains `feed-monitoring.md`.
+
+## 19. Retry ownership
+
+Provider adapters classify failures and supply provider hints; `execution-semantics.md` owns
+`RetryPolicy` and retry ordering.
+
+Examples of provider hints/classification:
 
 ```text
-credential/auth status
+Retry-After
+HTTP transient/permanent classification
+provider throttle codes
+provider-specific conflict/eventual-consistency signals
+```
+
+Do not wrap a capability in an independent retry loop when Riko is already applying its
+configured retry policy.
+
+## 20. Provider diagnostics
+
+Control-plane operations may include:
+
+```text
+auth/credential status
 connectivity check
-resource capability list
+provider resource/action list
 cache status/invalidate
-rate-limit status when exposed
+rate-limit status
 queued-operation status
 ```
 
-Expose these through CLI/control-plane capability discovery. They should not be mixed into
-user data records.
+They are diagnostics/control-plane capabilities, not user data records.
 
-## 19. Discoverability
+## 21. Capability catalog projection
 
-Many inspiration APIs returned a link index at their root. Preserve the underlying idea as
-a capability catalog:
+`mcp.md` owns the common capability model and catalog.
+
+Provider resources/actions project into that model:
 
 ```text
-provider
-resource/action id
-input schema
-output shape
-side-effect classification
-credential reference kind
-boundedness
-pagination/state support
+ProviderSpec / ResourceSpec / ActionSpec
+→ CapabilityInfo / provider-specific CapabilitySpec
+→ CapabilityCatalog
+→ CLI / MCP / docs / agents
 ```
 
-The same catalog should drive CLI help, MCP projection, docs, and agent tool selection.
-Do not maintain separate hand-authored registries for each surface.
+Do not maintain a second provider-only catalog containing duplicate fields such as input
+schema, output shape, effects, boundedness, credential kind, or description.
 
-## 20. PII and sensitive-resource metadata
+Provider-specific semantics that are not generic catalog fields remain on the provider
+spec and are referenced by capability identity.
 
-Contacts and administrative provider records can contain personal or financial data.
-Capabilities may declare data classification hints:
+## 22. PII and sensitive-resource metadata
+
+Provider records may contain personal, financial, or administrative data.
+Provider-specific metadata may augment shared capability policy with hints such as:
 
 ```python
 sensitivity="personal"
 fields={"email": "pii", "phone": "pii"}
 ```
 
-These hints can inform logging/redaction/artifact policies without changing ordinary record
-semantics. Raw PII must not be copied into diagnostic events by default.
+These hints inform logging/redaction/artifact policy without changing ordinary record
+semantics. Raw PII should not be copied into diagnostics by default.
 
-## 21. Testing strategy
+## 23. Testing strategy
 
 Contract tests should cover:
 
-1. provider spec serialization without secrets;
-2. auth resolve/status/refresh/revoke adapters;
-3. sandbox vs production endpoint selection;
-4. resource list/get/create/update/upsert/delete capability metadata;
-5. search pagination through shared REST machinery;
-6. bounded multi-provider enrichment and deterministic merge precedence;
-7. HTTP validator/cache behavior;
-8. explicit browser fallback lifecycle;
-9. partial batch-write failure reporting;
+1. provider spec serialization without secret material;
+2. auth setup/status/refresh/revoke projection uses connector credentials;
+3. sandbox/production endpoint selection;
+4. resource CRUD/search semantics project to the common catalog;
+5. search pagination uses shared REST machinery;
+6. bounded multi-provider enrichment with deterministic merge precedence;
+7. HTTP validator/cache behavior distinct from checkpoint state;
+8. explicit browser-fallback lifecycle;
+9. partial provider batch-write failures;
 10. `if_changed` suppresses identical writes;
-11. changed fingerprints trigger one write;
-12. identity-map-backed upsert survives recreation;
-13. webhook signature/replay validation precedes dispatch;
-14. unregistered webhook function/capability cannot execute;
-15. long-running job handle can be polled/cancelled with timeout;
-16. capability catalog projects the same underlying service to CLI/MCP/docs;
-17. logs redact auth and sensitive payload fields.
+11. identity-map-backed upsert survives recreation;
+12. webhook signature/replay validation precedes dispatch;
+13. unregistered webhook targets cannot execute;
+14. `OperationHandle` status/result normalization;
+15. interval/event/hybrid wait modes re-read authoritative status;
+16. operation waiter respects timeout/cancellation and shared RetryPolicy;
+17. provider adapters do not create nested retry loops;
+18. provider projections use the common capability catalog;
+19. logs redact credentials and sensitive payload fields.
 
-## 22. Phases
+## 24. Phases
 
 ```text
 P0  ProviderSpec / ResourceSpec / ActionSpec
-P1  credential lifecycle projection
-P2  resource CRUD/search capability projection
+P1  auth lifecycle projection
+P2  resource CRUD/search semantics
 P3  cache + HTTP validator policy
 P4  batch and idempotent write policy
 P5  identity mapping and upsert
 P6  multi-provider enrichment service
-P7  explicit browser fallback capability
-P8  webhook EventEnvelope and verification adapters
-P9  OperationHandle and status/result contract
-P10 capability catalog / diagnostics / sensitivity metadata
+P7  explicit browser fallback
+P8  verified webhook EventEnvelope
+P9  OperationHandle + wait_operation
+P10 provider diagnostics + capability projection
+P11 sensitivity/provenance metadata
 ```
 
-## 23. Definition of done
+## 25. Definition of done
 
-1. A provider integration is a capability/adapter, not a mandatory proxy web service.
-2. Raw credentials never enter serialized pipeline definitions.
-3. Common resource operations share contracts without erasing provider-specific semantics.
-4. REST pagination/incremental behavior reuses the existing REST gameplan.
+1. A provider integration is an adapter/capability, not a mandatory proxy service.
+2. Raw credentials never enter provider specs or serialized workflows.
+3. Common resource operations share semantics without erasing provider differences.
+4. REST pagination/cursors, checkpoint state, retry, and capability metadata reuse their
+   authoritative gameplans.
 5. Multi-provider enrichment has explicit selection, provenance, and merge policy.
-6. Browser automation is visible and optional.
+6. Browser automation is explicit and optional.
 7. Remote writes can be batched, upserted, and skipped when unchanged.
 8. Webhooks verify/authenticate before registered dispatch.
-9. Long-running provider actions return inspectable job handles.
-10. CLI, MCP, documentation, and agents discover the same capability catalog.
+9. Long-running actions use one `OperationHandle`/`wait_operation` contract.
+10. CLI, MCP, docs, and agents discover provider operations through the shared capability
+    catalog rather than a second provider registry.
 11. Provider-specific dependencies remain outside core unless broadly justified.
