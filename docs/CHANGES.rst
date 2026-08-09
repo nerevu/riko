@@ -310,6 +310,671 @@ Bugfixes
 
 - Properly add setup requirements; clean up docblocks.
 
+v0.66.0 (2020-08-14)
+--------------------
+
+Changes
+~~~~~~~
+
+- Make ``skip_if`` searching case insensitive.
+
+Bugfixes
+~~~~~~~~
+
+- Remove an unused import.
+
+v0.65.0 (2020-08-14)
+--------------------
+
+New
+~~~
+
+- Add a user-defined operator.
+
+Bugfixes
+~~~~~~~~
+
+- Fix typos.
+
+v0.64.3 (2020-08-13)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Actually pass request params through to the fetcher.
+
+v0.64.2 (2020-08-13)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Properly resolve keyword arguments.
+
+v0.64.1 (2020-08-13)
+--------------------
+
+Changes
+~~~~~~~
+
+- Loosen the ``pytz`` requirement.
+
+Bugfixes
+~~~~~~~~
+
+- Properly pass request params.
+
+v0.64.0 (2020-08-11)
+--------------------
+
+Changes
+~~~~~~~
+
+- Use a ``LocalProxy`` to return the URL opener, return the content type with
+  the response, remove the ``r`` attribute, and make ``ext`` a property.
+
+Bugfixes
+~~~~~~~~
+
+- Get ``fetch`` memoization working.
+
+v0.63.0 (2020-08-11)
+--------------------
+
+Changes
+~~~~~~~
+
+- Allow skips to contain a callable.
+
+Bugfixes
+~~~~~~~~
+
+- Properly compare integers; use the correct pipe names.
+
+v0.62.2 (2020-07-30)
+--------------------
+
+Changes
+~~~~~~~
+
+- Fix lint errors.
+
+v0.62.1 (2020-07-30)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Update the language identifier.
+
+Documentation
+~~~~~~~~~~~~~
+
+- Correct the ``kazeeki`` pipe example.
+
+v0.62.0 (2020-07-29)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Add tests and generalize the cast fix so casting no longer crashes.
+
+- Correct the ``skip_if`` logic for the text key.
+
+- Account for ``Deferred`` having no ``close`` method, and for ``MemoryReactor``
+  (thus ``MemoryReactorClock``) now implementing ``IReactorCore``.
+
+v0.61.4 (2020-07-29)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Correctly set the license.
+
+v0.61.3 (2020-07-29)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Update requirements; correct lint errors.
+
+v0.61.2 (2020-07-06)
+--------------------
+
+Changes
+~~~~~~~
+
+- Set the flake8 max line length equal to black; upgrade ``meza`` and twine.
+
+Bugfixes
+~~~~~~~~
+
+- Add a default user agent for ``urlopen`` HTTP requests.
+
+Documentation
+~~~~~~~~~~~~~
+
+- Add an XML namespace warning.
+
+v0.61.1 (2020-02-02)
+--------------------
+
+Changes
+~~~~~~~
+
+- Upgrade ``mezmorize``.
+
+Bugfixes
+~~~~~~~~
+
+- Get the twine upload working.
+
+v0.61.0 (2020-02-01)
+--------------------
+
+Changes
+~~~~~~~
+
+- Remove Python 2 support; upgrade dependencies.
+
+Bugfixes
+~~~~~~~~
+
+- Catch ``StopIteration`` exceptions.
+
+Documentation
+~~~~~~~~~~~~~
+
+- Fix a broken link to ``reverse``.
+
+v0.60.4 (2018-09-13)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Correct a syntax error.
+
+v0.60.3 (2018-09-12)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Use the correct URL params.
+
+v0.60.2 (2018-08-18)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Use a new exchange rate data source.
+
+v0.60.1 (2018-08-18)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Don't crash on JSON parse errors; fix Python 2 import errors.
+
+v0.60.0 (2018-05-23)
+--------------------
+
+New
+~~~
+
+- Add the URL to ``urllib`` exceptions.
+
+v0.59.1 (2018-05-19)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Fix boolean type casting.
+
+v0.59.0 (2018-05-18)
+--------------------
+
+New
+~~~
+
+- Add a ``name`` attribute to ``async_url_open``.
+
+Bugfixes
+~~~~~~~~
+
+- Upgrade conflicting requirements.
+
+v0.58.0 (2018-05-18)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Ignore currency pairs with no price; convert requirements to lists.
+
+v0.57.0 (2017-08-31)
+--------------------
+
+Changes
+~~~~~~~
+
+- Upgrade ``mezmorize`` to move the memoize logic into it.
+
+Bugfixes
+~~~~~~~~
+
+- Upgrade ``mezmorize`` to fix Heroku detection; fix the manager's test command.
+
+v0.56.3 (2017-08-18)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Initialize the ``ext`` property.
+
+v0.56.2 (2017-08-18)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Upgrade ``mezmorize``.
+
+v0.56.1 (2017-08-18)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Parse URLs without file extensions.
+
+v0.56.0 (2017-08-17)
+--------------------
+
+Changes
+~~~~~~~
+
+- Update ``mezmorize`` and rename a keyword argument; add a source option to the
+  lint command.
+
+v0.55.0 (2017-08-17)
+--------------------
+
+New
+~~~
+
+- Add cache metadata to ``memoize`` and ``fetch``.
+
+Changes
+~~~~~~~
+
+- Simplify ``cache_type`` parsing.
+
+v0.54.1 (2017-08-17)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Upgrade ``mezmorize`` and correctly set keyword arguments.
+
+v0.54.0 (2017-08-16)
+--------------------
+
+New
+~~~
+
+- Pass ``cache_options`` and ``preferred_memcache``.
+
+v0.53.0 (2017-08-16)
+--------------------
+
+Changes
+~~~~~~~
+
+- Remove Python 3.4 support and upgrade PyPy versions; upgrade ``mezmorize``.
+
+v0.52.3 (2017-08-12)
+--------------------
+
+Changes
+~~~~~~~
+
+- Upgrade ``chardet``.
+
+v0.52.2 (2017-08-11)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Fix ``pgrep`` to work on Heroku instances.
+
+v0.52.1 (2017-08-09)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Fix a lint error.
+
+v0.52.0 (2017-08-09)
+--------------------
+
+New
+~~~
+
+- Add more cache types.
+
+Bugfixes
+~~~~~~~~
+
+- Fix a bug when the new month isn't in 1..12; use ``Clock`` to manage
+  ``FakeReactor`` timing (closes #37).
+
+Documentation
+~~~~~~~~~~~~~
+
+- Update the contribution documentation.
+
+v0.51.0 (2017-05-01)
+--------------------
+
+New
+~~~
+
+- Add ``takewhile`` functionality to the ``filter`` pipe.
+
+Changes
+~~~~~~~
+
+- Set a default memcache server.
+
+v0.50.0 (2017-04-12)
+--------------------
+
+New
+~~~
+
+- Add the ``timeout`` pipe.
+
+- Add options to specify the cache, namespace, and cache backend.
+
+Changes
+~~~~~~~
+
+- Default to spread memcache; remove ``DotDict``'s ``feedparser`` dependency.
+
+v0.49.2 (2017-04-12)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Don't consume the stream in ``PipeCollections``; prevent a
+  ``UnicodeEncodeError``; fix the URL fetcher.
+
+- Persist memoized responses; fix exchange rate memoization and encoding.
+
+v0.49.1 (2017-04-09)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Fix spacing.
+
+v0.49.0 (2017-04-09)
+--------------------
+
+New
+~~~
+
+- Add RSS caching.
+
+Bugfixes
+~~~~~~~~
+
+- Fix caching.
+
+v0.48.0 (2017-04-06)
+--------------------
+
+Changes
+~~~~~~~
+
+- Populate pipe collections with ``conf``; add caching and rename the ``sleep``
+  config; add a URL fetcher and move the cast functions.
+
+Bugfixes
+~~~~~~~~
+
+- Account for empty dates.
+
+v0.47.0 (2017-04-04)
+--------------------
+
+New
+~~~
+
+- Add currency symbol unicode values.
+
+Bugfixes
+~~~~~~~~
+
+- Catch ``TypeError`` exceptions.
+
+v0.46.1 (2017-04-04)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Correctly parse dates.
+
+v0.46.0 (2017-04-04)
+--------------------
+
+Changes
+~~~~~~~
+
+- Use case-insensitive comparison.
+
+v0.45.1 (2017-04-04)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Fix a syntax error; cast parts to strings before joining; use the correct
+  import; don't convert input to text.
+
+Documentation
+~~~~~~~~~~~~~
+
+- Update documentation.
+
+v0.45.0 (2017-04-01)
+--------------------
+
+New
+~~~
+
+- Add the ``typecast`` pipe.
+
+v0.44.0 (2017-04-01)
+--------------------
+
+Changes
+~~~~~~~
+
+- Remove the ``lib`` directory and parse timezones.
+
+v0.43.1 (2017-03-24)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Fix Python 2 tests; remove a duplicate key.
+
+v0.43.0 (2017-03-24)
+--------------------
+
+New
+~~~
+
+- Add the ``geolocate`` pipe.
+
+Changes
+~~~~~~~
+
+- Return ``inf`` when dividing by zero; refactor so parsers don't need to return
+  ``skip``.
+
+v0.42.0 (2017-03-23)
+--------------------
+
+New
+~~~
+
+- Allow items to be type-cast when sorting; add a ``get_skip`` dict ``re.search``
+  option; add an option to always return multiple items.
+
+Bugfixes
+~~~~~~~~
+
+- Handle the changed Yahoo API format; catch ``IndexError`` when casting to a
+  date; decode the raw stream response.
+
+v0.41.0 (2017-03-18)
+--------------------
+
+New
+~~~
+
+- Allow ``get_skip`` to take a dict; only check the conversion rate when
+  necessary; find text "at" a location.
+
+Changes
+~~~~~~~
+
+- Move the ``kazeeki`` data and refactor the pipe; cast null numbers to ``NaN``;
+  compress the collection module to a single file; use the microdom parser to
+  find RSS links.
+
+Bugfixes
+~~~~~~~~
+
+- Don't block stderr during nosetests; convert decoded values to strings; strip
+  whitespace from tokens; don't try to convert args when skipping.
+
+v0.40.1 (2017-03-16)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Reduce function complexities; downgrade ``pygogo`` to match ``meza``'s; close
+  ``meza`` files when done with CSV; fix xpath in the PyPy environment (no lxml).
+
+v0.40.0 (2017-03-16)
+--------------------
+
+Changes
+~~~~~~~
+
+- Upgrade ``html5lib``; add a pyup.io config file.
+
+v0.39.0 (2017-03-10)
+--------------------
+
+New
+~~~
+
+- Add new pipes; add a debugging option.
+
+Changes
+~~~~~~~
+
+- Rename ``stringtokenizer`` to ``tokenizer``; rename functions; move
+  ``invert_dict`` and move/rename ``entity2text``.
+
+v0.38.0 (2017-03-10)
+--------------------
+
+New
+~~~
+
+- Add the ``eq`` operator to the ``filter`` pipe; add the ``fetchtext`` pipe.
+
+Changes
+~~~~~~~
+
+- Add more logging.
+
+Bugfixes
+~~~~~~~~
+
+- Use ``cElementTree`` when available; initialize ``self.entry`` as an iterator.
+
+v0.37.0 (2016-09-29)
+--------------------
+
+New
+~~~
+
+- Add a lowercase transformation to the ``join`` pipe.
+
+v0.36.0 (2016-09-29)
+--------------------
+
+New
+~~~
+
+- Add the ``join`` pipe; add the ``sum`` pipe.
+
+Bugfixes
+~~~~~~~~
+
+- Correctly parse the XML path.
+
+Documentation
+~~~~~~~~~~~~~
+
+- Add more links to the documentation.
+
+v0.35.3 (2016-07-26)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Install Python 2 requirements under Python 2 (fixes #3).
+
+v0.35.2 (2016-07-25)
+--------------------
+
+Bugfixes
+~~~~~~~~
+
+- Update ``meza`` to fix a ``pygogo`` version conflict; store downloaded packages
+  in the wheel dir; fix prefix generation.
+
+Documentation
+~~~~~~~~~~~~~
+
+- Update the contribution docs.
+
 v0.35.1 (2016-07-22)
 --------------------
 
