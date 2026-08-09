@@ -1,33 +1,67 @@
-Migrating to riko
-=================
-
-This guide has two parts:
-
-* **Upgrading from the** ``legacy`` **branch** — the concrete, verified
-  differences between the ``legacy`` branch (``git checkout legacy``) and the
-  current tree. ``legacy`` **is the** ``v0.72.x`` **release**; the current tree
-  is the ``features`` branch, and those commits contain the final legacy-removal work.
-  Every example below was run on both — the ``# LEGACY`` and ``# CURRENT`` comments show
-  the actual observed behavior.
-* **Milestone changes** — larger behavior changes that landed across the 2026
-  release series (expanded from `CHANGES.rst <CHANGES.rst>`_). These are already
-  present on the ``legacy`` branch, so they are **not** part of the
-  legacy → current diff, but they matter if you are upgrading from an older
-  release.
-
-The sections below cover the known user-facing migration changes.
+Migrating riko
+==============
 
 .. contents:: Contents
    :local:
    :depth: 2
 
-----
+API Stability
+-------------
 
-Part 1 — Upgrading from the ``legacy`` branch
-=============================================
+riko follows semantic versioning for its public surface. What an import path is
+tells you what stability guarantee it carries.
+
+Tiers
+^^^^^
+
+Stable: ``riko`` / ``riko.api``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Application-facing API: ``AsyncCollection``, ``AsyncPipe``, ``async_return``, ``async_sleep``,
+``Context``, ``SyncCollection``, ``SyncPipe``, ``backend``, ``build_pipeline``, ``compile_pipe``,
+``convert_dag``, ``ExecutionMode``, ``export``, ``extract_dependencies``, ``get_module_metadata``,
+``get_path``, ``isasync``, ``issync``, ``list_modules``, ``list_targets``, ``parse_pipe_def``,
+``PipeState``, ``run``, and the public exceptions.
+Breaking changes require a major version bump. ``riko.__all__`` equals
+``riko.api.__all__``.
+
+Extension: ``riko.ext``
+~~~~~~~~~~~~~~~~~~~~~~~
+
+For module authors and integration packages: ``processor``, ``operator``,
+``splitter``, ``ModuleMetadata``/``ModuleType``/``ModuleSubtype``, and the parser
+protocols. SemVer-guaranteed, but for a smaller audience than the stable API.
+
+Private: everything else
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Underscore-prefixed names and internal modules (AST inference, prepared-module
+internals, pool handles, pub/sub registries, compiler helpers). No stability
+guarantee; may change in any release. Do not import these from application code.
+
+Marker
+^^^^^^
+
+riko ships a ``py.typed`` marker, so type checkers treat it as a typed dependency.
+
+Compatibility during refactors
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+After 1.0 release, names that move will keep a re-export at their old import path for at
+least one minor release; behavior-changing removals will be listed in
+`CHANGES`_.
+
+Upgrading from the ``legacy`` branch
+------------------------------------
+
+concrete, verified differences between the ``legacy`` branch (``git checkout legacy``)
+and the current tree. ``legacy`` **is the** ``v0.72.x`` **release**; the current tree
+is the ``features`` branch, and those commits contain the final legacy-removal work.
+Every example below was run on both. The ``# LEGACY`` and ``# CURRENT`` comments show
+the actual observed behavior.
 
 Legacy ``Context`` describe kwargs are ignored
-----------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Both branches expose ``mode: ExecutionMode`` and derive ``describe_input`` /
 ``describe_dependencies`` as **read-only properties**. The difference is the
@@ -58,7 +92,7 @@ no setter) — that is not a new change:
 ``describe_dependencies=``.
 
 ``Objconf`` is removed
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^
 
 On the ``legacy`` branch ``Objconf`` survived as a deprecated factory that warned
 and returned a ``DynamicConf``. The current release removes it outright.
@@ -78,7 +112,7 @@ re-export at ``riko.ext.config``:
     from riko import DynamicConf              # LEGACY: OK   CURRENT: ImportError
 
 Legacy JSON pipeline forms are removed
---------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The current tree deletes the Yahoo!-Pipes-era **nested-loop shape** — a ``loop``
 module carrying its embedded submodule under ``conf["embed"]["value"]`` with two
@@ -99,7 +133,7 @@ Pipelines built with the ``SyncPipe`` / ``AsyncPipe`` API are unaffected by all
 of the above.
 
 ``get_path`` is now part of the stable surface
-----------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``get_path`` is importable from ``riko`` on both branches, but only the current
 release lists it in ``riko.__all__`` (so ``from riko import *`` now includes it):
@@ -109,17 +143,15 @@ release lists it in ``riko.__all__`` (so ``from riko import *`` now includes it)
     from riko import get_path            # LEGACY & CURRENT: OK
     "get_path" in riko.__all__           # LEGACY: False   CURRENT: True
 
-----
-
-Part 2 — Milestone changes (release history)
-============================================
+Milestone changes (release history)
+-----------------------------------
 
 These landed across the 2026 releases and are already on the ``legacy`` branch.
 They are relevant when upgrading from a release **older** than the one noted. See
 `CHANGES.rst <CHANGES.rst>`_ for the full per-release history.
 
 Twisted replaced by AnyIO (v0.72.0)
------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The async runtime is now AnyIO. There is **no Twisted backend** — Twisted is not
 imported and not importable anywhere in ``riko``. The ``riko.bado`` backend still
@@ -131,14 +163,14 @@ policy): applications should use the stable re-exports ``riko.run``,
 .. code-block:: python
 
     from riko import backend        # "anyio" when the `async` extra is
-                                         # installed, else "empty" (sync-only)
+                                    # installed, else "empty" (sync-only)
 
 There is no ``RIKO_ASYNC_BACKEND`` env var. Install the ``async`` extra
 (``anyio`` + ``httpx``) to enable async processing. Code written against the old
 Twisted/``deferred`` API must move to ``async`` / ``await``.
 
 Three-tier import surface (v0.70.0)
------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Imports now fall into three tiers knowable from the path alone:
 
@@ -151,7 +183,7 @@ Private    any ``_name`` or ``riko._*`` module       none; may change any releas
 ========== ========================================= =====================================
 
 The stable surface is exactly ``riko.__all__`` (mirrored by ``riko.api.__all__``;
-see `API_STABILITY.md <API_STABILITY.md>`_ for the authoritative tier breakdown)::
+see `API Stability`_ for the authoritative tier breakdown)::
 
     AsyncCollection, AsyncPipe, Context, ExecutionMode, PipeState,
     PipelineStateError, SyncCollection, SyncPipe, UnsupportedModuleError,
@@ -175,7 +207,7 @@ Removed import                    Now lives in (private)
 ================================  ======================
 
 Single-execution pipe lifecycle (v0.70.0)
-------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A ``SyncPipe`` / ``AsyncPipe`` / ``SyncCollection`` / ``AsyncCollection``
 instance now represents **one execution**.
@@ -205,7 +237,7 @@ instance now represents **one execution**.
     flow.count()           # raises PipelineStateError
 
 ``ExecutionMode`` replaces the describe booleans (v0.70.0)
-----------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``Context`` gained a ``mode: ExecutionMode`` field
 (``RUN`` / ``DESCRIBE_INPUTS`` / ``DESCRIBE_DEPENDENCIES`` / ``DESCRIBE``), part
@@ -215,15 +247,18 @@ derived from it. (The constructor's final acceptance of the old kwargs is the
 Part 1 legacy → current diff.)
 
 ``Objconf`` → ``DynamicConf`` (v0.71.0)
----------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``Objconf`` class was replaced by ``DynamicConf`` (from
 ``riko.ext.config``). v0.71.0 kept ``Objconf`` as a deprecated factory; the
 current release removes it entirely (Part 1).
 
 ``return_value`` removed
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``return_value`` symbol was removed entirely — there is no shim. Remove any
 imports or references. (Note: the ``coroutine`` decorator is **not** an async
 marker — it marks pub/sub generator pipelines using ``send`` / ``receive``.)
+
+.. _CHANGES: CHANGES.rst
+
