@@ -5,7 +5,18 @@
 Integrate one-shot Riko pipeline executions with cron, webhook servers, Airflow, Prefect,
 and Dagster without turning Riko or `riko-cli` into an orchestrator.
 
-This plan promotes Shelf milestones 13.2, 13.3, and 15.
+This plan owns **deployment-level run boundaries, scheduling integration, and durable
+handoffs**. It does not redefine source checkpoints, operation waiting, record-level retry,
+or artifact/frame semantics.
+
+Related authoritative plans:
+
+* `feed-monitoring.md` — source checkpoints and finite/repeated monitoring semantics;
+* `provider-integrations.md` — provider `OperationHandle` and `wait_operation`;
+* `execution-semantics.md` — retry, timeout, cancellation, and error policy inside a Riko
+  execution;
+* `artifact-conversion.md` — durable artifact references/rendering;
+* `tabular-interop.md` — in-memory frame boundaries.
 
 ## 2. Architectural rule
 
@@ -19,11 +30,11 @@ orchestrator task or asset
 → report normalized run result
 ```
 
-Do not map every streaming module to an orchestrator task. A stream cannot cross process
-or scheduler boundaries without explicit materialization. Split a pipeline only at a
-named artifact, database table, object, RDP state boundary, or other durable handoff.
+Do not map every streaming module to an orchestrator task. A stream crosses a process or
+scheduler boundary only through explicit durable materialization such as an artifact,
+database table, object, or RDP state boundary.
 
-## 3. Common adapter service
+## 3. Common run adapter
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -37,19 +48,25 @@ class PipelineRunRequest:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PipelineRunResult:
-    status: Literal["succeeded", "failed", "cancelled"]
+    status: Literal["succeeded", "failed", "cancelled", "partial"]
     artifacts: tuple[ArtifactRef, ...]
     state: JsonValue | None
     metrics: Mapping[str, JsonValue]
 ```
 
-Airflow, Prefect, Dagster, webhooks, and CLI commands call the same service.
+Airflow, Prefect, Dagster, webhook workers, and CLI commands should call the same execution
+service rather than each building a separate Riko runner.
 
 ## 4. Cron and standalone execution
 
-A standalone script or `riko run` command is the baseline deployment. The process exits
-with stable status codes, writes machine-readable run metadata when requested, and leaves
-retry and schedule policy to cron or the host platform.
+A standalone script or `riko run` command is the baseline deployment.
+
+The process:
+
+* executes one bounded run/request;
+* exits with stable machine-readable status;
+* emits run metadata when requested;
+* leaves recurrence to cron or the host platform.
 
 Do not add an in-process forever scheduler to the base CLI.
 
@@ -58,49 +75,85 @@ Do not add an in-process forever scheduler to the base CLI.
 A webhook adapter:
 
 1. authenticates and validates the request;
-2. normalizes an event ID and idempotency key;
+2. normalizes event ID/idempotency key;
 3. persists or queues the event according to deployment policy;
 4. starts a bounded pipeline run or returns an accepted response;
 5. records the resulting run ID.
 
-The HTTP request handler must not execute an unbounded feed monitor or agent network.
-Replay protection and duplicate-event behavior are explicit.
+Provider signature verification and `EventEnvelope` normalization belong to
+`provider-integrations.md`. The orchestrator owns **when/how a normalized event becomes a
+run**.
 
-## 6. Feed monitoring
+The request handler must not execute an unbounded feed monitor or agent network inline.
 
-Continuous RSS/Atom monitoring is an orchestration source, not a restartable Riko source
-implemented with an in-memory `while True` loop.
+## 6. Feed monitoring integration
 
-```python
-class FeedCheckpointStore(Protocol):
-    async def load(self, feed_id: str) -> FeedCheckpoint | None: ...
-    async def save(self, feed_id: str, value: FeedCheckpoint) -> None: ...
+Do not define another checkpoint protocol here.
+
+`feed-monitoring.md` owns:
+
+```text
+SourceCheckpoint
+CheckpointStore
+observation state
+dedupe / changed
+bootstrap behavior
+checkpoint commit ordering
+periodic in-process monitor semantics
 ```
 
-A monitor performs a finite poll, emits new events, commits checkpoint state after
-successful handoff, and waits with cancellation-aware backoff. Deployment may use an
-agent worker, scheduled run, or orchestrator sensor.
+Orchestration only decides **when to invoke the finite monitoring operation** and which
+persistent store/configuration the deployment supplies.
 
-## 7. Airflow adapter
+Typical deployment:
+
+```text
+cron / Prefect / Airflow / Dagster sensor
+→ finite source observation using feed-monitoring contract
+→ downstream durable handoff
+→ checkpoint commit
+→ run exits
+→ orchestrator schedules the next run
+```
+
+An application-owned long-lived monitor may also use `feed-monitoring.md` directly without
+changing checkpoint semantics.
+
+## 7. Long-running provider operations
+
+Do not use orchestration retries or sensors as a second definition of provider operation
+waiting.
+
+When a Riko action returns `OperationHandle`, `provider-integrations.md` owns the
+`wait_operation` interval/event/hybrid semantics.
+
+An orchestrator may instead choose to persist the handle and resume/check it in a later run,
+but it must preserve the same provider terminal-state and correlation semantics rather than
+inventing an incompatible waiter.
+
+## 8. Airflow adapter
 
 Default integration: one `PythonOperator` or TaskFlow task per Riko run.
 
 Split extract, transform, and delivery into separate Airflow tasks only when each boundary
-writes a durable artifact. Never pass a stream or large record collection through XCom.
-Use artifact references and record lineage IDs instead.
+writes a durable artifact/table/object. Never pass a stream or large record collection
+through XCom.
 
-Map Airflow cancellation and deadlines into `ExecutionContext`. Airflow connections may
-resolve named Riko credential references but must not be copied into task output.
+Use artifact references and lineage IDs instead. Airflow connections may resolve named Riko
+credential references but must not be copied into task output.
 
-## 8. Prefect adapter
+## 9. Prefect adapter
 
-Expose a task wrapper and result block. Retries occur at the task/run boundary unless the
-pipeline itself has operation-specific retry policy. Prefect artifacts contain summaries
-and artifact references, not full streams.
+Expose a task wrapper and result block.
 
-## 9. Dagster adapter
+Prefect may retry the **whole task/run** according to deployment policy. Record/source-level
+retry inside the Riko execution remains governed by `execution-semantics.md`.
 
-Support two modes:
+Prefect artifacts contain summaries and artifact references, not full streams.
+
+## 10. Dagster adapter
+
+Support:
 
 ```text
 Riko run as @op
@@ -108,13 +161,16 @@ Riko durable output as @asset
 ```
 
 An asset represents a durable data product, not every Riko module. IOManagers exchange
-artifact references, tables, Arrow batches, or files. Asset partitions map to explicit
-pipeline parameters and checkpoint keys.
+artifact references, tables, Arrow batches, or files through the authoritative artifact and
+tabular contracts.
 
-## 10. dbt coordination
+Asset partitions map to explicit pipeline parameters/checkpoint namespaces rather than
+implicitly changing source state.
 
-dbt execution is a reusable service supplied by `riko-dbt`. Orchestrators decide when to
-invoke it. A typical durable flow is:
+## 11. dbt coordination
+
+`riko-dbt` supplies a reusable dbt execution service. Orchestrators decide when to invoke it.
+A typical durable flow is:
 
 ```text
 Riko load artifact/table
@@ -124,58 +180,85 @@ Riko load artifact/table
 
 Do not call dbt in the middle of a lazy record stream.
 
-## 11. Retries, idempotency, and state
+## 12. Run-level retries, idempotency, and state
 
-Orchestrator retries may rerun the entire pipeline. Therefore:
+Distinguish orchestration retry from Riko operation retry:
 
-* sources restore committed state;
-* sinks support idempotency keys or document duplicate behavior;
-* state is committed only after the durable output boundary succeeds;
-* non-idempotent operations may require manual approval before retry;
-* partial artifacts are marked incomplete and are not silently reused.
+```text
+execution-semantics RetryPolicy
+    retries one configured source/stage/write operation inside a run
 
-## 12. Events and observability
+orchestrator retry
+    reruns the entire PipelineRunRequest
+```
 
-Normalize run-start, stage-start, stage-finish, artifact, checkpoint, warning, and failure
-events. Adapters translate them to Airflow logs, Prefect events, Dagster metadata, or
-ordinary JSON logs without changing event meaning.
+Whole-run retries require:
 
-## 13. Package and plugin layout
+* sources to restore committed checkpoint state through their authoritative state contract;
+* sinks/actions to expose idempotency behavior;
+* durable outputs to commit before their associated state advances;
+* non-idempotent actions to follow approval/manual policy where applicable;
+* partial artifacts to be marked incomplete rather than silently reused.
+
+Only one layer should retry a given failure domain.
+
+## 13. Events and observability
+
+Normalize run-level events such as:
+
+```text
+run start/finish
+stage summary
+artifact publication
+checkpoint commit reference
+warning/failure
+cancellation/deadline
+```
+
+Adapters translate these to Airflow logs, Prefect events, Dagster metadata, or JSON logging
+without changing semantic meaning.
+
+Detailed stage/retry/checkpoint event schemas remain owned by their underlying contracts.
+
+## 14. Package layout
 
 ```text
 riko_orchestration/
     service.py
     types.py
     webhooks.py
-    feeds.py
     adapters/
+        cron.py
         airflow.py
         prefect.py
         dagster.py
     cli.py
 ```
 
-Orchestrator dependencies are extras and lazily imported.
+Orchestrator dependencies are optional extras and lazily imported.
 
-## 14. Phases
+## 15. Phases
 
 ```text
-O0  Common run service and fake adapter
-O1  Cron/CLI and webhook examples
-O2  Feed checkpoint and finite-poll service
-O3  Airflow adapter
-O4  Prefect adapter
-O5  Dagster op, asset, partition, and IOManager adapters
-O6  Cross-adapter contract tests and deployment templates
+O0  common run service + fake adapter
+O1  cron/CLI examples
+O2  webhook-to-run adapter
+O3  feed-monitoring deployment examples using shared checkpoints
+O4  provider-operation deployment examples using OperationHandle
+O5  Airflow adapter
+O6  Prefect adapter
+O7  Dagster op/asset/partition/IOManager adapters
+O8  cross-adapter contract tests and deployment templates
 ```
 
-## 15. Definition of done
+## 16. Definition of done
 
-1. No stream crosses an orchestrator boundary implicitly.
-2. Every split occurs at a durable handoff.
-3. Cancellation and deadlines reach Riko.
-4. Retries have documented idempotency behavior.
-5. Webhooks use event IDs and replay protection.
-6. Feed monitoring persists checkpoint state.
-7. Orchestrator metadata uses artifact references, not large payloads.
-8. The base CLI remains a run adapter, not a scheduler daemon.
+1. No lazy stream crosses an orchestrator boundary implicitly.
+2. Every multi-task split occurs at a durable handoff.
+3. Cancellation/deadlines reach the Riko execution.
+4. Run-level retries are distinguished from stage/provider retries.
+5. Webhook ingress consumes normalized verified events.
+6. Feed monitoring reuses, rather than redefines, checkpoint/state contracts.
+7. Provider jobs reuse, rather than redefine, `OperationHandle`/wait semantics.
+8. Orchestrator metadata uses artifact/frame references rather than large hidden payloads.
+9. The base CLI remains a run adapter, not a scheduler daemon.
