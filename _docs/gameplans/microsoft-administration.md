@@ -2,122 +2,141 @@
 
 ## 1. Mission
 
-Turn the useful patterns from the Microsoft 365 and Entra automation inspiration into a
-safe, testable administrative automation layer built on the existing
-`_docs/gameplans/azure-automation.md` architecture.
+Define the administrative workflow semantics for Microsoft 365, Entra, and Azure changes:
+desired state, preflight, dry-run, approval, verification, audit evidence, certificate
+lifecycle, and manual handoffs.
 
-This plan does not replace the Azure automation gameplan. It sharpens the administrative
-workflow contract around desired state, privilege, dry-run, verification, audit evidence,
-certificate/credential lifecycle, and manual handoffs.
+This plan consumes the Microsoft adapters in `azure-automation.md`; it does not redefine
+tenant context, credential resolution, PowerShell execution, Graph/ARM clients, retry, the
+generic capability catalog, or long-running-operation waiting.
+
+Related authoritative plans:
+
+* `azure-automation.md` — `MicrosoftContext`, Graph/ARM/PowerShell adapters, Microsoft
+  credential implementations, provider status normalization;
+* `connectors.md` — credential references and secret resolution;
+* `mcp.md` — generic capability metadata, effects, catalog, and execution policy;
+* `execution-semantics.md` — retry, timeout, cancellation, and error policy;
+* `provider-integrations.md` — `OperationHandle` and shared operation waiting;
+* `orchestration.md` — deployment schedules and durable run boundaries.
 
 ## 2. Inspiration integrated by this plan
 
-### Microsoft 365 admin scripts
+### Microsoft 365 administration
 
 Useful patterns:
 
-* explicit service connections and required scopes;
-* strongly typed command parameters and validation;
-* reusable utility/logging layer;
-* read/list operations separated from mutations;
-* backup-owner logic expressed as a desired state;
-* `DryRun` before membership changes;
-* audit-log search with explicit time windows and filters;
-* verification after commands whose return/error behavior is unreliable;
-* stable process exit codes.
+* explicit required scopes and service preflight;
+* typed command inputs;
+* reads separated from mutations;
+* backup-owner and membership logic expressed as desired state;
+* `DryRun`/WhatIf before changes;
+* audit queries with explicit windows and filters;
+* verification after provider behavior that can be ambiguous;
+* stable machine-readable outcomes.
 
-### Entra ID SAML automation
+### Entra SAML automation
 
 Useful patterns:
 
 * idempotent create-or-update behavior;
-* dry-run/force/quiet modes suitable for scheduled execution;
-* certificate-expiration threshold checks;
-* Government cloud/environment context;
-* user/group assignment as desired state;
-* generated metadata artifacts and logs;
-* explicit partial/manual steps after automation;
-* verification/testing after a certificate or SSO change;
-* operation-specific exit/status codes.
+* certificate-expiration thresholds;
+* Government cloud awareness through shared Microsoft context;
+* assignments as desired state;
+* generated metadata artifacts;
+* explicit manual handoffs;
+* post-change verification.
 
-Do not copy the scripts wholesale or place Microsoft-specific dependencies in Riko core.
+Do not copy the scripts wholesale or add Microsoft dependencies to core Riko.
 
-## 3. Safety invariant
+## 3. Ownership boundary
+
+This plan owns:
+
+```text
+administrative preflight semantics
+Microsoft admin-specific scope/risk metadata
+desired-state reconciliation
+ChangePlan
+dry-run / WhatIf semantics
+plan-bound approval
+apply-then-verify
+administrative audit evidence
+SAML/certificate lifecycle workflows
+manual handoffs / rollback metadata
+admin result states
+```
+
+It does not own:
+
+```text
+MicrosoftContext                     azure-automation.md
+PowerShellResult / PowerShellRunner  azure-automation.md
+CredentialProvider                   connectors.md
+CapabilityInfo / CapabilityCatalog   mcp.md
+RetryPolicy                          execution-semantics.md
+OperationHandle / wait_operation     provider-integrations.md
+```
+
+## 4. Safety invariant
 
 Administrative automation follows:
 
 ```text
-resolve tenant + credential
-→ discover current state
+resolve MicrosoftContext + credential
+→ preflight scopes/dependencies
+→ discover authoritative current state
 → calculate desired state
 → produce ChangePlan
 → authorize / approve
 → apply smallest required mutation
 → verify authoritative state
-→ emit audit evidence
+→ emit audit evidence / handoff
 ```
 
-An AI agent may select from approved capabilities or interpret a request, but it may not
-bypass this sequence for privileged/destructive operations.
+An AI agent may select from approved capabilities or interpret an unstructured request, but
+it may not bypass this sequence for privileged/destructive changes.
 
-## 4. Microsoft execution context
+## 5. Administrative capability metadata
 
-Every operation carries explicit tenant/environment context:
+Generic capability identity, schemas, effects, and catalog behavior come from `mcp.md`.
+Microsoft administration attaches domain-specific metadata to that capability identity:
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class MicrosoftContext:
-    tenant_id: str
-    credential: str
-    cloud: Literal["public", "government", "china"] = "public"
-    subscription_id: str | None = None
-    operator_id: str | None = None
-    correlation_id: str | None = None
-```
-
-No mutable global tenant/session state. Concurrent MSP workflows must not leak credentials,
-scopes, subscriptions, or PowerShell sessions across clients.
-
-## 5. Capability metadata for administration
-
-Administrative capabilities declare more than an input schema:
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AdminCapability:
-    id: str
+class MicrosoftAdminMetadata:
+    capability_id: str
     risk: Literal["read", "write", "privileged", "destructive"]
-    required_scopes: tuple[str, ...]
-    supports_what_if: bool
-    idempotent: bool
-    verifies: bool
+    required_scopes: tuple[str, ...] = ()
+    required_roles: tuple[str, ...] = ()
+    supports_what_if: bool = False
+    verifies: bool = False
 ```
 
-Scope metadata is both documentation and preflight input. The adapter should fail before a
-mutation when known required scopes/roles are absent rather than discovering permission
-problems halfway through a batch.
+This is not a second capability catalog. It augments a shared capability with Microsoft
+preflight and administrative-safety facts.
 
-## 6. Service/session preflight
+## 6. Service and privilege preflight
 
-A reusable preflight layer should be able to report:
+Before a mutation, the administrative layer should be able to establish:
 
 ```text
-credential available?
-token/certificate valid?
-required PowerShell module/command available?
-required Graph scopes granted?
+named credential resolves?
+token/certificate currently usable?
+MicrosoftContext tenant/cloud matches target?
+required Graph scopes or directory/service roles available?
+required PowerShell command/module available?
 service reachable?
-tenant/cloud matches configuration?
 ```
 
-PowerShell module installation must not occur silently inside a production pipeline. A
-control-plane/bootstrap command may install or validate dependencies explicitly.
+Known preflight failures happen before mutation whenever possible.
+
+PowerShell modules must not install themselves silently during a production pipeline. A
+setup/control-plane command may install or validate dependencies explicitly.
 
 ## 7. Desired-state operations
 
-Prefer desired-state capabilities over raw administrative verbs.
-
-Examples:
+Prefer reconciliation capabilities over exposing raw administrative verbs directly:
 
 ```python
 ensure_group_membership(user="user@contoso.org", group="Finance", present=True)
@@ -126,18 +145,18 @@ ensure_license(user="user@contoso.org", sku="Microsoft 365 Business Premium", pr
 ensure_saml_application(spec=...)
 ```
 
-Each implementation:
+Each reconciler:
 
-1. reads current state;
-2. resolves stable resource IDs;
+1. reads authoritative current state;
+2. resolves stable provider IDs;
 3. computes whether a change is required;
-4. emits a plan;
+4. produces a plan;
 5. applies only missing/different state;
 6. verifies final state.
 
-A second execution against the resulting desired state should produce `changed=False`.
+A second execution against converged state should produce `changed=False`.
 
-## 8. Change plans
+## 8. ChangePlan
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -151,41 +170,51 @@ class ChangePlan:
     destructive: bool
 ```
 
-Plans must be serializable and safe to display without secret material.
+Plans are serializable, fingerprinted, inspectable, and safe to display without secret
+material.
 
-For a backup-owner workflow, for example:
+Example:
 
 ```text
-channel A: current owner = user1
-           desired owners = user1, backup-admin
-           operation = add backup-admin
+channel A
+    current owners: user1
+    desired owners: user1, backup-admin
+    planned operation: add backup-admin
 
-channel B: already has backup-admin
-           operation = none
+channel B
+    already converged
+    planned operation: none
 ```
-
-This captures the useful intent of `Add-BackupChannelOwner.ps1` without making its script
-shape the public API.
 
 ## 9. Dry-run / WhatIf
 
-`dry_run` is a cross-adapter safety contract:
+`dry_run` follows the same planning path as execution but performs no external mutation:
 
 ```python
 result = capability.invoke(..., dry_run=True)
 ```
 
-Dry-run may read authoritative state and construct plans, but cannot perform external
-mutations.
+Dry-run may:
 
-When using PowerShell, map to `SupportsShouldProcess` / `-WhatIf` where reliable. Still
-produce a Riko `ChangePlan`; do not depend only on human-formatted PowerShell WhatIf text.
+* resolve context/credentials;
+* read authoritative current state;
+* run preflight;
+* build and validate a `ChangePlan`;
+* explain which operations would execute.
 
-For REST operations, implement dry-run in the adapter/planning layer.
+It may not perform writes or advance external mutation state.
+
+For PowerShell-backed actions, use `SupportsShouldProcess` / `-WhatIf` where reliable, but
+still emit the Riko `ChangePlan`; human-formatted PowerShell output is not the planning
+contract.
 
 ## 10. Approval policy
 
-Risk determines whether approval is required by default:
+`mcp.md` owns the generic execution-policy and approval mechanism. This plan supplies
+Microsoft administrative defaults and an additional invariant: approval is bound to the
+fingerprint of the exact `ChangePlan`.
+
+Recommended defaults:
 
 ```text
 read          no approval
@@ -194,23 +223,22 @@ privileged    approval normally required
 destructive   approval required unless explicitly pre-authorized
 ```
 
-Typical privileged/destructive examples:
+Examples commonly requiring approval:
 
 * user/license removal;
-* role assignment;
+* directory/service role assignment;
 * Conditional Access changes;
 * mailbox purge;
 * tenant-wide policy changes;
-* SAML signing certificate rotation;
-* deleting cloud resources.
+* SAML signing-certificate rotation;
+* resource deletion.
 
-Approval records should include the plan fingerprint so approval cannot be silently reused
-for a materially different mutation.
+A changed plan requires a new authorization decision; approval for one fingerprint cannot
+silently authorize another.
 
 ## 11. Apply then verify
 
-Several Microsoft cmdlets/APIs can return success, partial success, delayed consistency, or
-misleading errors. Therefore mutation result and verified state are distinct:
+Provider mutation response and verified state are separate concepts:
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -222,62 +250,38 @@ class AdminResult:
     warnings: tuple[str, ...] = ()
 ```
 
-Verification reads the authoritative endpoint after mutation. For eventually consistent
-operations it may use bounded polling with backoff.
+Verification reads the authoritative endpoint after mutation.
 
-A provider error followed by verified desired state may be classified as a warning rather
-than automatically replaying a non-idempotent action.
+When the provider is eventually consistent or returns an asynchronous job, the reconciler
+uses the shared `OperationHandle`/`wait_operation` contract from `provider-integrations.md`.
+It does not define another generic polling loop.
 
-## 12. Long-running operations
+A provider error followed by verified desired state may be reported as a warning rather
+than blindly replaying a non-idempotent mutation.
 
-ARM jobs, Intune actions, exports, provisioning, certificate propagation, and similar
-operations may return asynchronous handles.
+## 12. Long-running administrative operations
 
-Reuse the generic operation/poll contract:
+ARM jobs, Intune actions, exports, provisioning, and certificate propagation may be
+asynchronous.
 
-```text
-start
-→ obtain operation ID
-→ optionally subscribe for wake-up events
-→ periodically re-read authoritative status
-→ terminal state or timeout
-```
-
-Event notifications mean "recheck now"; they are not assumed to contain authoritative
-final state.
-
-Supported wait modes:
+The Microsoft adapter normalizes provider state into `OperationHandle`; the administrative
+layer only decides what completion means for the change plan and whether verification is
+required afterward.
 
 ```text
-interval
-event
-hybrid  # preferred when both are available
+apply planned operation
+→ OperationHandle when asynchronous
+→ wait_operation(...)
+→ authoritative verification
+→ AdminResult
 ```
 
-## 13. PowerShell structured I/O
+Generic interval/event/hybrid waiting, timeouts, and wake-up semantics are specified only in
+`provider-integrations.md`.
 
-PowerShell remains an optional adapter. Never parse formatted console tables.
+## 13. Audit search as a finite source
 
-The runner uses structured JSON envelopes containing:
-
-```text
-success
-result
-warnings
-errors
-exit_code
-```
-
-and captures raw stdout/stderr separately for diagnostics with secret redaction.
-
-Advanced functions are particularly suitable for tool generation because command metadata
-already exposes parameter names/types/validation. Generated tool schemas must still pass
-Riko policy and risk classification.
-
-## 14. Audit search as a data source
-
-Unified audit-log search should be modeled as an ordinary finite source capability with
-explicit filters:
+Unified audit-log search is an ordinary finite source capability with explicit filters:
 
 ```python
 pipe.microsoft_audit(
@@ -291,14 +295,15 @@ pipe.microsoft_audit(
 )
 ```
 
-Relative windows such as `7d` may be CLI conveniences, but the resolved timestamps should
-appear in the execution plan/events for reproducibility.
+Relative CLI windows such as `7d` resolve to concrete timestamps recorded in execution
+metadata for reproducibility.
 
-Large audit ranges use pagination/checkpoint behavior from the REST/connector plans.
+Graph/REST pagination follows `rest-incremental.md`; durable source-position/checkpoint
+lifecycle follows `feed-monitoring.md` when repeated audit collection requires it.
 
-## 15. SAML application desired state
+## 14. SAML application desired state
 
-Represent a SAML enterprise application as data rather than command-line switches:
+Represent a SAML enterprise application as data:
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -312,44 +317,40 @@ class SamlAppSpec:
     claims: tuple[ClaimSpec, ...]
 ```
 
-The reconciler creates or finds the application, compares settings, adjusts only drift,
-then emits federation metadata as an artifact.
+The reconciler finds or creates the application, compares the current configuration,
+adjusts only drift, verifies the result, and emits federation metadata as an artifact.
 
-## 16. Certificate lifecycle monitoring
+## 15. Certificate lifecycle monitoring
 
-Certificate renewal is a monitoring + administration composition:
+Certificate renewal composes existing contracts:
 
 ```text
-finite discovery of SAML apps
-→ select certificates expiring within threshold
+orchestrated finite discovery
+→ select certificates inside renewal threshold
 → ChangePlan
 → approval / dry-run
-→ rotate
-→ export new metadata artifact
-→ verify provider state
-→ emit manual-handoff requirement if necessary
+→ rotate through Microsoft adapter
+→ wait_operation if asynchronous
+→ verify
+→ publish new metadata artifact
+→ manual handoff when external service-provider action is required
 ```
 
-Configuration includes:
+Configuration may include:
 
 ```text
 renew_before_days
 application selector
 force
 dry_run
-cloud
 ```
 
-Do not build a separate scheduler. Cron/orchestration decides when the finite certificate
-check runs.
+Tenant/cloud come from `MicrosoftContext`; scheduling comes from `orchestration.md`; no
+separate scheduler or credential model is defined here.
 
-## 17. Human/manual handoffs
+## 16. Human/manual handoffs
 
-Some automation cannot safely complete both sides of a federated change. Entra SAML
-inspiration explicitly requires uploading new metadata to the service provider and testing
-login afterward.
-
-Represent this honestly:
+Some federated changes cannot safely complete both sides automatically.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -360,34 +361,30 @@ class Handoff:
     required_before_completion: bool
 ```
 
-A run can be `awaiting_handoff` rather than falsely reporting full completion.
+A run may end as `awaiting_handoff` rather than falsely reporting success. Ticketing,
+approval UI, and human-workflow systems may consume handoffs but are not part of Riko core.
 
-Future ticketing/approval integrations may consume these records; core does not invent a
-human-workflow UI.
+## 17. Rollback and break-glass metadata
 
-## 18. Rollback and break-glass metadata
-
-For privileged configuration changes, plans may optionally describe rollback information:
+Privileged plans may record rollback-relevant prior state:
 
 ```text
-prior assignment set
+prior assignments
 prior claims configuration
 prior certificate identifier
 prior policy value
 ```
 
-Rollback is not automatically safe for every operation. Each capability declares whether a
-mechanical rollback exists and whether it needs separate authorization.
+Rollback is capability-specific and may require separate approval. Emergency/break-glass
+credentials are never ordinary serialized parameters.
 
-Never make emergency/break-glass credentials ordinary serialized parameters.
+## 18. Logging and audit evidence
 
-## 19. Logging and evidence
-
-Administrative events should contain:
+Administrative evidence should include safe identifiers such as:
 
 ```text
 run/correlation ID
-tenant ID (or safe alias)
+tenant safe ID/alias
 operator/initiator when available
 capability ID
 plan fingerprint
@@ -400,15 +397,14 @@ provider request IDs
 artifact references
 ```
 
-They must exclude tokens, passwords, private keys, certificate private material, and full
-sensitive payloads.
+It excludes tokens, passwords, private keys, certificate private material, and unnecessary
+full sensitive payloads.
 
-A stable event schema is more useful than reproducing script-specific colored logs.
+PowerShell stdout/stderr normalization and redaction are owned by `azure-automation.md`.
 
-## 20. Exit/result status
+## 19. Result states
 
-CLI/control-plane execution needs stable machine-readable outcomes. Suggested semantic
-states:
+CLI/control-plane execution should expose stable semantic outcomes:
 
 ```text
 succeeded_no_change
@@ -423,51 +419,53 @@ timed_out
 cancelled
 ```
 
-Adapters may map these to stable process exit codes. Do not make provider-specific numeric
-codes the internal data model.
+Adapters may map these to process exit codes, but provider-specific numeric codes are not the
+internal model.
 
-## 21. Testing strategy
+## 20. Testing strategy
 
-Contract tests include:
+Administrative contract tests include:
 
-1. tenant contexts remain isolated under concurrency;
-2. missing scope/role fails preflight before mutation;
-3. desired-state operation makes no second mutation after convergence;
-4. dry-run produces a plan and zero side effects;
-5. approval fingerprint changes when planned mutation changes;
-6. structured PowerShell wrapper handles result/warning/error envelopes;
+1. missing scope/role fails preflight before mutation;
+2. desired-state operation makes no second mutation after convergence;
+3. dry-run produces the same plan and zero side effects;
+4. approval fingerprint changes when the planned mutation changes;
+5. generic capability policy remains authoritative while Microsoft risk defaults apply;
+6. async mutations use the shared `OperationHandle`/wait contract;
 7. provider error plus verified desired state is not blindly replayed;
-8. audit queries resolve relative ranges to explicit timestamps;
+8. audit queries resolve relative windows to explicit timestamps;
 9. SAML reconciliation is idempotent;
 10. certificate threshold selects only expiring targets;
-11. Government/public cloud endpoint selection is explicit;
-12. metadata export produces an artifact reference;
-13. manual handoff prevents false full-success status;
-14. logs contain audit evidence but no secrets.
+11. metadata export produces an artifact reference;
+12. manual handoff prevents false full-success status;
+13. logs contain audit evidence without secrets.
 
-## 22. Phases
+Adapter mechanics are tested in `azure-automation.md` rather than duplicated here.
+
+## 21. Phases
 
 ```text
-MA0  AdminCapability + MicrosoftContext metadata
-MA1  preflight/scope/module validation
-MA2  ChangePlan + dry-run
-MA3  desired-state reconcilers + verification
+MA0  MicrosoftAdminMetadata + preflight
+MA1  ChangePlan + dry-run
+MA2  desired-state reconcilers + verification
+MA3  plan-bound approval integration
 MA4  audit source capability
 MA5  SAML application reconciler
-MA6  certificate lifecycle monitor/action
-MA7  approval/handoff/result-state integration
+MA6  certificate lifecycle workflow
+MA7  handoff/result-state integration
 MA8  audit evidence + rollback metadata
 ```
 
-## 23. Definition of done
+## 22. Definition of done
 
-1. Microsoft administration remains outside Riko core dependencies.
-2. Every mutation runs in explicit tenant/cloud context.
-3. Required scopes and risk are inspectable before execution.
-4. Desired-state operations are idempotent where the provider permits.
-5. Dry-run produces the same plan path without mutation.
-6. Privileged/destructive actions can require approval tied to plan fingerprint.
-7. Mutation success is verified against authoritative state.
-8. Long-running operations use bounded status polling/event wakeups.
-9. SAML/certificate workflows can return explicit manual handoffs.
-10. Audit evidence is machine-readable and secret-safe.
+1. Microsoft administration consumes rather than duplicates Microsoft adapter contracts.
+2. Required scopes/roles and administrative risk are inspectable before execution.
+3. Desired-state operations are idempotent where the provider permits.
+4. Dry-run follows the real planning path without mutation.
+5. Privileged/destructive actions can require approval tied to a plan fingerprint.
+6. Mutation success is verified against authoritative state.
+7. Long-running work uses the shared provider operation-wait contract.
+8. SAML/certificate workflows can return explicit manual handoffs.
+9. Audit evidence is machine-readable and secret-safe.
+10. Generic context, credential, retry, capability, and wait semantics are referenced from
+    their authoritative gameplans rather than redefined here.
