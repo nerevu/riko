@@ -29,7 +29,7 @@ Schema
   ``{"src": {...}, "tgt": {...}}`` endpoints and wire ids are generated for you.
   When ``wires`` is omitted or empty, the modules are chained **linearly in listing
   order**, so the concise form drops both ``wires`` and ``id``
-  (see `pipe_forever.json`_):
+  (see `pipe_forever`_):
 
 .. code-block:: json
 
@@ -42,7 +42,7 @@ Schema
 
 Provide ``wires`` when the module listing order is **not** the execution order —
 e.g. the source is listed after the operator it feeds
-(see `pipe_reordered.json`_):
+(see `pipe_reordered`_):
 
 .. code-block:: json
 
@@ -100,7 +100,7 @@ Chaining them turns a DAG straight into runnable Python:
     compile pipe_forever.json
 
 
-See `pipe_forever.json`_ for a runnable example and `test_compile.py`_
+See `pipe_forever`_ for a runnable example and `test_compile`_
 (``test_convert_dag_*``) for the round-trip guarantees.
 
 .. _pipe_forever: ../tests/dags/pipe_forever.json

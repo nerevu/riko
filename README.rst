@@ -583,7 +583,6 @@ Project Structure
 .. code-block:: bash
 
     ┌── docs
-    │   ├── API_STABILITY.md
     │   ├── AUTHORS.rst
     │   ├── CHANGES.rst
     │   ├── COOKBOOK.rst
