@@ -2,175 +2,174 @@
 
 ## 1. Mission
 
-Add first-class primitives for repeatedly observing finite sources and emitting only useful
-changes, without turning Riko into a general-purpose scheduler, daemon, or workflow
-orchestrator.
+Add first-class primitives for repeatedly observing finite sources and emitting useful new,
+changed, threshold, or anomaly events without turning Riko into a scheduler, daemon, or
+workflow orchestrator.
 
-The target use cases are Huginn-style and earlier Nerevu monitoring patterns such as:
+Target shape:
 
 ```text
-poll RSS/API/page
+observe RSS/API/page
 → identify new or changed records
 → evaluate threshold/change/anomaly rules
 → fan out interesting events
-→ record delivery state
+→ commit source/observation state
 → repeat
 ```
 
-Riko already has strong pieces for the middle of this flow: RSS/Atom and web ingestion,
-record transformations, filters, joins, fan-out, sync/async execution, and workflow
-definitions. The missing pieces are polling lifecycle, explicit source-state/change
-contracts, and a small alert-state vocabulary.
+This plan owns **recurring source observation and monitoring state**.
 
-This plan extends `_docs/gameplans/orchestration.md`. The orchestration plan remains
-authoritative for deployment-level scheduling, cron, webhook servers, Airflow, Prefect,
-Dagster, durable workers, and run boundaries. This plan defines reusable monitoring
-primitives that an orchestrator or ordinary Python application may invoke.
+Related authoritative plans:
+
+* `orchestration.md` — deployment schedules, durable run boundaries, external workers;
+* `execution-semantics.md` — `RetryPolicy`, timeout, cancellation, error/disposition policy;
+* `rest-incremental.md` — REST cursor extraction/encoding;
+* `provider-integrations.md` — `OperationHandle` and waiting for an already-started provider
+  operation;
+* `fanout-topology.md` — delivery/fan-out topology;
+* `connectors.md` — source/sink transport and credential lifecycle.
 
 ## 2. Inspiration integrated by this plan
 
-The repository's inspiration corpus supplies several concrete precedents:
+Relevant precedents:
 
-* **Chakula**: RSS `tail -f`, configurable interval, finite/infinite iteration count,
-  persisted cache, `--unique`, `--newer`, explicit fail-on-error, and initial/backfill
-  control.
-* **email-sub-api**: a dedicated feed-monitor worker with file or Redis cache that emits
-  an email action only for new entries.
-* **AMS**: persisted named alert rules, min/max thresholds, rule enable/disable/restore,
-  scoped rules, and notification history.
-* **meetup**: explicit new-versus-changed entity detection and dry-run behavior.
-* **ckanny / ckanutils**: content hashes used to suppress writes when a remote resource has
-  not changed.
-* **Huginn / Streamz / Bytewax / dlt**: domain-level monitoring, periodic sources,
-  separation of source position from processing state, and incremental cursors.
+* **Chakula** — RSS `tail -f`, interval, bounded iteration count, initial/backfill control,
+  persisted cache, uniqueness, time lower bounds, explicit failure behavior;
+* **email-sub-api** — feed-monitor process with file/Redis state and notification action;
+* **AMS** — named threshold rules, enable/disable/restore, firing history;
+* **Meetup** — new-versus-changed detection and dry-run;
+* **CKAN tooling** — change fingerprints used to avoid unnecessary remote writes;
+* **Huginn / Streamz / Bytewax / dlt** — periodic sources, source-position state, windows,
+  and explicit incremental cursors.
 
-These are design inputs, not compatibility targets. In particular, Riko should not copy
-pickle state files, platform-specific Growl notifications, a permanent worker daemon, or a
-scheduler into core.
+These are design inputs, not compatibility targets. Do not copy pickle state files,
+platform-specific notification systems, or a permanent scheduler into core.
 
-## 3. Architectural rule
+## 3. Ownership boundary
 
-Keep these concerns separate:
+Keep these concepts distinct:
 
 ```text
-polling cadence
-    when should the source be checked?
+source observation cadence
+    when should another finite source observation occur?
 
 source position
     where should acquisition resume?
 
 observation history
-    which entities/items have been seen and what was their prior value?
+    which logical entities were seen and what values were previously observed?
 
 analysis
-    does the observation constitute a change/anomaly/threshold event?
+    is this a change/anomaly/threshold event?
 
-notification state
-    was an alert already emitted, acknowledged, disabled, or cooled down?
+alert state
+    did a rule already fire, transition, or enter cooldown?
 ```
 
-Do not collapse these into one `poll()` or `alert()` implementation.
+This plan does **not** own generic provider-operation waiting:
+
+```text
+feed monitoring
+    repeat independent source observations and emit records
+
+provider operation wait
+    track one OperationHandle until terminal status
+```
+
+The latter belongs to `provider-integrations.md`.
 
 ## 4. Non-goals
 
-This plan does not add:
+Do not add to core:
 
-* a durable scheduler daemon or cron parser to core;
-* distributed leases or worker ownership;
+* a cron parser or durable scheduler daemon;
+* distributed worker ownership/leases;
 * exactly-once delivery claims;
-* a mandatory database/Redis dependency;
+* mandatory Redis/database dependencies;
 * a monitoring dashboard;
 * a general complex-event-processing engine;
-* machine-learning anomaly models in core;
-* provider-specific notification clients in core.
+* ML anomaly models;
+* provider-specific notification clients;
+* another generic retry or operation-wait implementation.
 
-## 5. M0 — finite poll contract
+## 5. M0 — finite observation contract
 
-A source poll is one bounded observation attempt:
+One observation is bounded:
 
 ```python
 result = await poll_once(source, context)
 ```
 
-It returns records plus source metadata and closes finite network/file resources before the
-next attempt.
+It returns records plus source metadata and closes finite source resources before returning.
 
-A recurring monitor composes finite attempts:
+A recurring monitor composes those observations:
 
 ```text
-load committed checkpoint
+load committed checkpoint/state
 → poll once
 → process records
-→ successful handoff
+→ successful required handoff
 → commit checkpoint/state
-→ cancellation-aware delay/backoff
+→ cancellation-aware recurrence delay
 → repeat
 ```
 
-This is the same logical contract whether the recurrence is driven by an in-process loop,
-cron, an orchestrator sensor, or an agent worker.
+The same finite observation can be invoked by an in-process service, cron, an orchestrator
+sensor, or an agent worker.
 
 ## 6. M1 — periodic source and bounded iterations
 
-Provide an async-native periodic source for applications that already own a process
-lifecycle:
+Applications that own a long-lived process may use an async-native periodic source:
 
 ```python
 flow = AsyncPipe.poll(
     "fetch",
     interval=60,
+    iterations=None,
     conf={"url": "https://example.com/feed.xml"},
 )
 ```
 
 Requirements:
 
-* AnyIO cancellation-aware sleep;
+* AnyIO cancellation-aware delay;
 * no private event loop;
 * fixed-delay cadence initially;
-* explicit retry/error policy;
-* clean close on consumer cancellation;
-* declared unboundedness;
-* optional `iterations` limit for tests, one-off monitors, and deterministic CLI usage.
+* known unboundedness when `iterations=None`;
+* deterministic finite `iterations` for tests/CLI;
+* clean close on cancellation;
+* retries **within one observation attempt** use `RetryPolicy` from
+  `execution-semantics.md`.
 
-The `iterations` idea comes directly from Chakula and is useful even though production
-monitoring is normally unbounded or orchestrated:
-
-```python
-AsyncPipe.poll(..., interval=60, iterations=3)
-```
+`interval` controls recurrence between completed observations; it is not a retry policy.
 
 ## 7. M2 — bootstrap and backfill policy
 
-A monitor must define what happens on its first observation. Do not infer this from cache
-contents implicitly.
-
-Suggested policy:
+First observation behavior is explicit:
 
 ```python
 bootstrap: Literal["all", "latest", "none", "count"] = "all"
 bootstrap_count: int | None = None
 ```
 
-Examples:
+Semantics:
 
 ```text
 all      emit all current items, then checkpoint
-latest   emit only the newest current item
-none     establish checkpoint without emitting existing items
-count    emit the newest N current items
+latest   emit only newest current item
+none     establish checkpoint without emitting current items
+count    emit newest N current items
 ```
 
-Also support an optional source-level lower bound when the source has reliable timestamps:
+Sources with meaningful timestamps may also accept a lower bound such as:
 
 ```python
 after="2026-08-01T00:00:00Z"
 ```
 
-This generalizes Chakula's `--initial` and `--newer` behavior while keeping source-specific
-timestamp interpretation inside the connector/source.
+Source-specific timestamp/cursor interpretation remains inside the source/connector.
 
-## 8. M3 — source checkpoint contract
+## 8. M3 — SourceCheckpoint
 
 Source position answers: **where should acquisition resume?**
 
@@ -186,19 +185,19 @@ class SourceCheckpoint:
 Examples:
 
 ```text
-RSS/Atom       stable item id/guid + publication metadata
-REST API       updated_at / last id / continuation token
-IMAP           UIDVALIDITY + UID
-Kafka          partition offsets
-file tail      file identity + byte offset
+RSS/Atom    item id/guid + publication metadata
+REST API    timestamp/id/continuation cursor
+IMAP        UIDVALIDITY + UID
+Kafka       partition offsets
+file tail   file identity + byte offset
 ```
 
-Connector/source code owns cursor meaning. Core owns lifecycle, serialization, and commit
-ordering.
+The connector/source owns cursor meaning. This plan owns checkpoint lifecycle,
+serialization, and commit ordering.
 
-## 9. M4 — checkpoint and state stores
+## 9. M4 — checkpoint and observation stores
 
-Checkpoint state and observation state are separate protocols.
+Source position and observation history are separate:
 
 ```python
 class CheckpointStore(Protocol):
@@ -212,28 +211,20 @@ class StateStore(Protocol):
     async def delete(self, namespace: str, key: str) -> None: ...
 ```
 
-Initial implementations:
-
-```text
-MemoryCheckpointStore / MemoryStateStore
-JsonFileCheckpointStore / JsonFileStateStore
-```
-
-Optional packages may provide Redis, SQLite, database, or object-store implementations.
-This preserves the useful file/Redis cache pattern from Chakula and email-sub-api without
-making either backend mandatory.
+Initial implementations may be memory and JSON-file stores. Optional packages may provide
+Redis, SQLite, databases, or object storage.
 
 Commit rule:
 
 ```text
 acquire
-→ downstream handoff succeeds
+→ required downstream handoff succeeds
 → commit checkpoint and observation state
 ```
 
-## 10. M5 — exact de-duplication
+## 10. M5 — exact deduplication
 
-De-duplication answers: **have I already observed this logical record?**
+Deduplication answers: **has this logical record already been observed?**
 
 ```python
 flow.dedupe(key="guid", retention=1000)
@@ -242,23 +233,20 @@ flow.dedupe(key=["source", "external_id"], retention="30d")
 
 Requirements:
 
-* first occurrence emits;
-* repeat occurrence suppresses;
+* first observation emits;
+* repeats suppress;
 * order is preserved;
-* missing-key behavior is explicit (`error`, `emit`, `hash_record`);
+* missing-key policy is explicit;
 * retention is bounded by count and/or duration;
-* record hashing uses stable canonical serialization;
-* state scope is explicit (`execution` or named external state namespace).
+* hashing uses stable canonical serialization;
+* state scope is explicit.
 
-`uniq` remains the finite-stream deterministic operator; monitored de-duplication owns
-cross-poll history.
+`uniq` remains the finite-stream deterministic operator. Monitored dedupe owns cross-poll
+history.
 
-## 11. M6 — approximate membership is optional and explicit
+## 11. M6 — approximate membership
 
-The Changanya inspiration includes Bloom filters and similarity hashes. These are useful
-only when their semantics are visible.
-
-An optional high-volume dedupe backend may use a Bloom filter:
+Approximate duplicate suppression is optional and explicit:
 
 ```python
 flow.dedupe(
@@ -271,17 +259,17 @@ flow.dedupe(
 
 Rules:
 
-* approximate mode is never silently substituted for exact mode;
-* configured capacity and false-positive rate are reported in metadata;
-* a false positive may suppress a genuinely new item and must be documented;
+* never silently substitute approximate for exact state;
+* report configured capacity/error rate;
+* document that false positives may suppress genuinely new records;
 * use exact state when missed records are unacceptable.
 
-Simhash/Nilsimsa-style near-duplicate content detection remains under the enrichment
-module gameplan rather than being conflated with exact item identity.
+Near-duplicate content similarity such as Simhash/Nilsimsa belongs to
+`enrichment-modules.md`, not exact logical identity.
 
 ## 12. M7 — change detection
 
-Change detection answers: **I have seen this entity; did selected values change?**
+Change detection answers: **has a known entity changed in selected business fields?**
 
 ```python
 flow.changed(
@@ -291,41 +279,39 @@ flow.changed(
 )
 ```
 
-Optional change metadata may expose previous/current selected values and changed fields.
-Metadata must be namespaced and opt-in.
+Optional metadata may report previous/current selected values and changed fields. Metadata
+is namespaced and opt-in.
 
-The operator supports historical snapshot patterns such as the Meetup `changed` command
-without requiring source timestamps to encode business identity.
+This is independent of source cursor advancement: an API may advance its cursor while the
+selected business fields remain unchanged.
 
-## 13. M8 — hash-aware sink suppression
+## 13. M8 — write-if-changed composition
 
-Some systems do not need to suppress records at acquisition time; they need to avoid a
-remote write when output bytes/data are unchanged. CKAN tooling in the inspiration corpus
-used a persisted resource hash for this purpose.
+Source/observation state is not remote sink state.
 
-Keep that as a sink/write policy, not as source checkpoint state:
+For a provider write:
 
 ```text
-transform records
-→ canonicalize output artifact/table payload
-→ fingerprint
-→ compare remote/committed fingerprint
-→ write only if changed
+records
+→ transform/canonicalize
+→ provider/artifact fingerprint
+→ provider sink write_policy="if_changed"
 ```
 
-The connector gameplan owns the eventual `if_changed` / idempotent write contract. This
-monitoring plan only requires change metadata to compose with it.
+Provider write semantics belong to `provider-integrations.md`; artifact fingerprint/lineage
+belongs to `artifact-conversion.md`. Monitoring may produce the changed event but does not
+own the remote-write contract.
 
 ## 14. M9 — bounded windows and anomaly vocabulary
 
-Add small local windows sufficient for lightweight anomaly detection:
+Small local windows support lightweight anomaly detection:
 
 ```python
 flow.window(count=100)
 flow.window(duration="5m", timestamp="observed_at")
 ```
 
-Initial anomaly methods:
+Initial methods:
 
 ```text
 absolute threshold
@@ -348,14 +334,11 @@ flow.anomaly(
 )
 ```
 
-Do not add watermarks, distributed event-time coordination, late-data correction, or ML
-model hosting to core.
+Do not add distributed watermarks, late-data correction, or ML model hosting to core.
 
-## 15. M10 — alert rule and firing semantics
+## 15. M10 — alert rule and firing state
 
-AMS demonstrates that a useful monitoring system needs more than a threshold function: it
-needs rule identity and firing history. Define a portable rule description, but keep
-persistence/UI outside core unless later justified.
+Monitoring needs rule identity/history, not only a threshold function:
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -371,12 +354,12 @@ class AlertRule:
 Semantics:
 
 ```text
-every_match   emit on every matching observation
-transition    emit only when state changes from non-matching to matching
-cooldown      re-emit only after the configured quiet period
+every_match   emit every matching observation
+transition    emit only non-match → match
+cooldown      re-emit only after configured quiet period
 ```
 
-Alert state may record:
+State may record:
 
 ```text
 last_evaluated_at
@@ -386,47 +369,43 @@ fire_count
 last_event_id
 ```
 
-Disabling a rule should preserve its history so it can be re-enabled, mirroring the useful
-remove/restore idea from AMS without requiring a pickle-based registry.
+Disable/re-enable preserves rule history.
 
-## 16. M11 — alert actions are ordinary sinks/fan-out
+## 16. M11 — actions are ordinary sinks/fan-out
 
-Do not hard-code email, desktop notifications, SMS, or webhooks into anomaly operators.
+Do not hard-code notification clients into anomaly operators:
 
 ```text
 monitor
 → changed/anomaly
 → send("alerts")
-      ├── email connector
-      ├── webhook connector
+      ├── email provider
+      ├── webhook provider
       └── audit/archive sink
 ```
 
-This preserves the useful email-sub-api architecture: monitoring decides **what happened**;
-a delivery adapter decides **how to notify**.
+Monitoring decides **what happened**; delivery adapters decide **how to notify**.
 
 ## 17. M12 — dry-run and explainability
 
-Monitoring and alert rule testing should support a no-side-effect mode:
+Monitoring/rule testing supports no-side-effect execution:
 
 ```python
 monitor(..., dry_run=True)
 ```
 
-Dry-run may poll and evaluate but must not:
+Dry-run may acquire/evaluate, but must not:
 
 * advance durable checkpoints unless explicitly requested;
 * mutate external observation state;
 * invoke side-effecting notification sinks.
 
-It should emit an explanation record showing the matched rule, observed value, baseline,
-and whether a notification would have fired. This generalizes the dry-run pattern seen in
-Meetup and Microsoft administration tooling.
+It should emit an explanation containing rule identity, observed value, baseline, and whether
+an alert would have fired.
 
 ## 18. Feed-aware identity defaults
 
-RSS/Atom is the first monitored source because Riko already normalizes entries. Recommended
-key precedence:
+Recommended RSS/Atom identity precedence:
 
 ```text
 entry id/guid
@@ -435,7 +414,7 @@ entry id/guid
 → stable record hash only when explicitly enabled
 ```
 
-A convenience helper may later compose generic primitives:
+A convenience helper may compose the generic primitives:
 
 ```python
 flow = AsyncPipe.monitor_feed(
@@ -448,65 +427,80 @@ flow = AsyncPipe.monitor_feed(
 
 It must not create a second monitoring runtime.
 
-## 19. Retry, failure, and delivery policy
+## 19. Retry, failed observations, and recurrence
 
-Polling failures require explicit bounded retry/backoff. Chakula's fail-fast switch becomes
-a general policy rather than a feed-only flag.
+Separate three things:
+
+```text
+RetryPolicy
+    retry an operation inside one finite observation
+    owner: execution-semantics.md
+
+failed-observation policy
+    after RetryPolicy is exhausted, decide whether the monitor stops or records/continues
+    owner: this plan
+
+recurrence delay
+    delay before the next independent source observation
+    owner: this plan
+```
+
+Example monitoring policy:
 
 ```python
-retry={
-    "max_attempts": 5,
-    "initial_delay": 1,
-    "max_delay": 60,
-    "multiplier": 2,
-    "jitter": True,
+monitor={
+    "on_poll_failure": "raise",  # raise | record_and_continue
+    "failure_delay": 60,
 }
 ```
 
-After retry exhaustion, an application chooses `raise`, `record_and_continue`, or another
-explicit policy. Cancellation interrupts backoff immediately. Checkpoints are never
-advanced for a failed acquisition or failed required handoff.
+The underlying source/stage uses the normal `RetryPolicy`; this plan does not introduce a
+second `retry={...}` schema.
 
-Notification delivery has separate retry/idempotency semantics and must not cause a source
-cursor to advance prematurely.
+Cancellation interrupts both retries (through execution semantics) and recurrence delays.
+A failed observation or failed required handoff never advances the source checkpoint.
+
+Notification/provider delivery has its own provider idempotency and may use the same generic
+`RetryPolicy`; it must not cause source state to commit prematurely.
 
 ## 20. Deployment styles
 
-### In-process monitor
+### In-process
 
 ```text
 application/service
 → AsyncPipe.poll(...)
 → dedupe/changed/window/anomaly
-→ sink/send
+→ sink/fan-out
 ```
 
-### Orchestrated finite polling
+### Orchestrated finite observations
 
 ```text
 cron / Prefect / Airflow / sensor
-→ one finite Riko poll
-→ stateful operators using durable stores
+→ finite poll_once
+→ stateful monitoring operators
 → durable handoff
-→ commit checkpoint
+→ checkpoint commit
 → exit
 ```
 
-The latter remains preferred for restartable production deployments. Both must use the
-same checkpoint and state contracts.
+`orchestration.md` owns scheduling and run retries; both deployment styles reuse the same
+checkpoint/state contracts defined here.
 
 ## 21. Observability
 
 Emit normalized events/metrics for:
 
-* poll start/finish and duration;
+* observation start/finish/duration;
 * records acquired/emitted/suppressed;
-* bootstrap policy and count;
+* bootstrap policy/count;
 * cursor before/after;
-* state/checkpoint backend;
-* entities changed;
-* anomalies/rules evaluated and fired;
-* retry/backoff;
+* checkpoint/state backend;
+* changed entities;
+* anomaly/rule evaluations/firings;
+* RetryPolicy activity through runtime events;
+* failed-observation policy/recurrence delay;
 * checkpoint commits;
 * sink delivery outcome;
 * dry-run decisions;
@@ -516,38 +510,38 @@ Never log credentials or sensitive payloads by default.
 
 ## 22. Testing strategy
 
-Required contract tests include:
+Required tests include:
 
-1. periodic source emits multiple finite poll results;
+1. periodic source emits multiple finite observations;
 2. finite `iterations` stops deterministically;
 3. bootstrap `all/latest/none/count` behavior;
-4. timestamp lower-bound behavior when supported;
-5. cancellation closes resources and interrupts sleeps;
+4. timestamp lower-bound behavior where supported;
+5. cancellation closes resources and interrupts recurrence delay;
 6. checkpoint resumes after restart simulation;
 7. failed handoff does not advance checkpoint;
-8. exact dedupe stays bounded;
-9. Bloom dedupe reports approximate semantics and configured error rate;
-10. `changed` reports selected-field changes only;
-11. count/duration windows remain bounded;
-12. deterministic threshold/z-score anomaly fixtures;
-13. transition and cooldown alert firing semantics;
-14. disabled rule preserves history and can be re-enabled;
-15. dry-run performs no external mutation;
-16. feed identity precedence is stable;
-17. in-process and orchestrated finite polling produce equivalent logical deltas.
+8. source retries use the shared `RetryPolicy` rather than a monitoring-specific retry type;
+9. failed-observation `raise`/`record_and_continue` behavior;
+10. exact dedupe remains bounded;
+11. approximate dedupe reports its error semantics;
+12. `changed` reports selected-field changes only;
+13. count/duration windows remain bounded;
+14. deterministic threshold/z-score fixtures;
+15. transition/cooldown firing semantics;
+16. dry-run performs no external mutation;
+17. in-process and orchestrated finite observation produce equivalent logical deltas.
 
 ## 23. Phases
 
 ```text
-M0   finite poll contract
+M0   finite observation contract
 M1   periodic source + bounded iterations
 M2   bootstrap/backfill policy
 M3   SourceCheckpoint
 M4   checkpoint/state stores
 M5   exact dedupe
-M6   optional approximate membership backend
+M6   optional approximate membership
 M7   changed
-M8   hash-aware sink integration contract
+M8   write-if-changed composition boundary
 M9   bounded windows + anomaly vocabulary
 M10  alert rule/firing state
 M11  action/sink composition
@@ -557,17 +551,15 @@ M13  RSS/Atom monitoring helper
 
 ## 24. Definition of done
 
-1. Riko can repeatedly poll finite sources without a private event loop.
-2. First-observation/backfill semantics are explicit and deterministic.
-3. Source position is separate from observation and alert state.
-4. State can persist through file or extension-provided backends without a mandatory
-   service dependency.
-5. Exact dedupe and changed-record detection have distinct contracts.
-6. Approximate dedupe cannot masquerade as exact dedupe.
-7. Lightweight threshold/window anomaly detection is configuration-friendly.
-8. Alert transition/cooldown semantics prevent accidental notification spam.
-9. Actions remain ordinary sinks/fan-out, not embedded notification code.
-10. Dry-run can explain behavior without external mutations.
-11. Production restartability continues to belong to orchestration/deployment policy.
-12. All monitoring primitives compose with existing Riko filters, fan-out, `union`,
-    `join`, REST sources, and callable stages.
+1. Riko can repeatedly observe finite sources without a private event loop.
+2. Source observation polling is clearly distinct from provider operation waiting.
+3. First-observation/backfill semantics are explicit.
+4. Source position is separate from observation/alert state.
+5. State can persist without a mandatory service dependency.
+6. Exact and approximate dedupe have explicit, distinct semantics.
+7. Change detection and lightweight anomaly rules are configuration-friendly.
+8. Monitoring reuses generic `RetryPolicy` instead of defining another retry contract.
+9. Alert transition/cooldown behavior prevents accidental notification spam.
+10. Actions remain ordinary provider/sink/fan-out operations.
+11. Dry-run explains behavior without external mutation.
+12. Scheduling/restart policy remains outside the monitoring core.
