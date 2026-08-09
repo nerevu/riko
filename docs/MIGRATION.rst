@@ -88,7 +88,7 @@ shape is gone, so hand-authored JSON using it no longer compiles.
 The canonical forms are the **compact loop** (``type="loop"`` with a top-level
 ``embed`` reference and the embed's ``conf``) and, for processor loops, a
 **direct processor node**. If you author pipeline JSON by hand, see
-`DAG_FORMAT.md <DAG_FORMAT.md>`_ for the current format.
+`DAG_FORMAT.rst <DAG_FORMAT.rst>`_ for the current format.
 
 The terminal ``output`` node is **unaffected** — it is still recognized as the
 pipeline's sink marker (``type: "output"``). What was removed is only its
