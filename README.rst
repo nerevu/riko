@@ -587,7 +587,7 @@ Project Structure
     │   ├── AUTHORS.rst
     │   ├── CHANGES.rst
     │   ├── COOKBOOK.rst
-    │   ├── DAG_FORMAT.md
+    │   ├── DAG_FORMAT.rst
     │   ├── FAQ.rst
     │   ├── INSTALLATION.rst
     │   ├── MIGRATION.rst
@@ -653,7 +653,7 @@ License
 .. _Migration guide: docs/MIGRATION.rst
 .. _Changelog: docs/CHANGES.rst
 .. _Cookbook: docs/COOKBOOK.rst
-.. _DAG format: docs/DAG_FORMAT.md
+.. _DAG format: docs/DAG_FORMAT.rst
 .. _issue tracker: https://github.com/nerevu/riko/issues
 .. _Fetching data and feeds: docs/COOKBOOK.rst#fetching-data-and-feeds
 

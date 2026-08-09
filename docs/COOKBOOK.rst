@@ -866,4 +866,4 @@ the scheduler.
 .. _FAQ: FAQ.rst
 .. _Design Principles: ../README.rst#design-principles
 .. _class based workflows: ../README.rst#synchronous-processing
-.. _DAG format doc: DAG_FORMAT.md
+.. _DAG format doc: DAG_FORMAT.rst
