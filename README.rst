@@ -582,7 +582,8 @@ Project Structure
 
 .. code-block:: bash
 
-    ┌── docs
+    ┌── _docs/*               (internal documentation)
+    ├── docs
     │   ├── AUTHORS.rst
     │   ├── CHANGES.rst
     │   ├── COOKBOOK.rst
