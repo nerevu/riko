@@ -49,3 +49,5 @@ jobs:
       uses: astral-sh/attest-action@v0.0.6
     - name: Publish distribution to PyPI
       uses: pypa/gh-action-pypi-publish@v1.14.2
+      with:
+        skip-existing: true
