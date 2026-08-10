@@ -10,6 +10,7 @@ from collections.abc import (
     Iterator,
 )
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
+from tempfile import SpooledTemporaryFile
 from typing import (
     TYPE_CHECKING,
     Literal,
@@ -98,11 +99,19 @@ type Function = Callable[..., object]
 
 # Opener = Callable[[str], tuple[Optional[str | Reencoder], Optional[str]]]
 # TODO: add type hint overloads to Reencoder with decode=True -> str
-type BinaryFileTypes = BytesIO | RawIOBase
-type StringFileTypes = StringIO | StreamReader | TextIOBase | NamedTextIOWrapper
-type FileTypes = (
-    BinaryFileTypes | StringFileTypes | Fetch[Literal[True]] | Fetch[Literal[False]]
+type BinaryFileTypes = (
+    BytesIO | RawIOBase | Fetch[Literal[True]] | SpooledTemporaryFile[bytes]
 )
+type StringFileTypes = (
+    Fetch[Literal[False]]
+    | NamedTextIOWrapper
+    | SpooledTemporaryFile[str]
+    | StreamReader
+    | StringIO
+    | TextIOBase
+)
+type FileTypes = BinaryFileTypes | StringFileTypes
+
 type Opener = Callable[[str], tuple[FileTypes, str | None]]
 type Conf = AnyModuleConf | AnyModuleRawConf
 

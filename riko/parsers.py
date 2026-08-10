@@ -14,7 +14,7 @@ from json import JSONDecodeError, load, loads
 from logging import Logger
 from time import struct_time
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Union, cast, overload
 from urllib.error import URLError
 from xml.sax import SAXParseException  # noqa: S406
 
@@ -22,7 +22,7 @@ import feedparser
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
-from riko._io import Fetch
+from riko._io import STREAMING_THRESHOLD, Fetch
 from riko._iterutils import listize
 from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
@@ -45,7 +45,7 @@ from riko.types.values import (
 )
 
 try:
-    from lxml import etree, html  # type: ignore[import-untyped]
+    from lxml import etree, html
 except ImportError:
     html5parser: ModuleType | None = None
 
@@ -57,9 +57,10 @@ except ImportError:
     IS_LXML: bool = False
     XML_PARSER: Any = None
 else:
+    from xml.etree.ElementTree import ElementTree  # noqa: S405
+
     from lxml.html import html5parser
 
-    ElementTree = None
     IS_LXML: bool = True
     XML_PARSER = etree.XMLParser(  # noqa: S314
         resolve_entities=False,
@@ -91,17 +92,19 @@ if TYPE_CHECKING:
     from xml.etree.ElementTree import ElementTree as nativeElementTree
 
     from _typeshed import DataclassInstance
-    from lxml.etree import Element as lxmlElement
-    from lxml.etree import ElementTree as lxmlElementTree
+    from lxml import html as lxmlhtml
+    from lxml.etree import _Element as lxmlElement
+    from lxml.etree import _ElementTree as lxmlElementTree
 
-type AnyElementTree = "nativeElementTree" | "lxmlElementTree"
+type AnyElementTree = (
+    "nativeElementTree" | "lxmlElementTree" | "nativeElementTree[nativeElement[str]]"
+)
 type AnyElement = "nativeElement" | "lxmlElement"
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
 
-STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 
 SKIP_SWITCH: dict[str, Callable[[str, str], bool]] = {
@@ -246,7 +249,7 @@ def parse_rss(  # noqa: E302
     return cast(list[ParserRSSEntry], parsed.entries)
 
 
-def extract_namespace(tree: AnyElementTree) -> str | None:
+def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
     """
     Extracts the XML namespace URI from an element's tag.
 
@@ -265,10 +268,7 @@ def extract_namespace(tree: AnyElementTree) -> str | None:
         >>> extract_namespace(fromstring('<root/>'))
 
     """
-    tag = getattr(tree, "tag", None) or ""
-
-    if not isinstance(tag, str):  # lxml uses QName objects sometimes
-        tag = str(tag)
+    tag = str(getattr(tree, "tag", None) or "")
 
     if "{" in tag and "}" in tag:
         namespace = tag[tag.find("{") + 1 : tag.find("}")]
@@ -278,7 +278,7 @@ def extract_namespace(tree: AnyElementTree) -> str | None:
     return namespace
 
 
-def verify_pos(tree: AnyElementTree, pos: int, *tags: str) -> int:
+def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
     """
     Adjusts *pos* when *tree* IS the element at ``tags[pos]``.
 
@@ -326,7 +326,7 @@ def verify_pos(tree: AnyElementTree, pos: int, *tags: str) -> int:
 
 
 def xpath(
-    tree: AnyElementTree,
+    tree: AnyElementTree | AnyElement,
     path: str = "/",
     pos: int | None = None,
     namespace: str | None = None,
@@ -401,57 +401,25 @@ def xpath(
     if auto_pos:
         pos = verify_pos(tree, pos, *tags)
 
-    ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
     namespaces = {ns_prefix: namespace}
+    ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
 
-    try:
-        if namespace:
-            elements = tree.xpath(  # type: ignore[attr-defined]
-                ns_path, namespaces=namespaces
-            )
-        else:
-            elements = tree.xpath(path)  # type: ignore[attr-defined]
-    except AttributeError:
-        if namespace:
-            elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
-        else:
-            elements = tree.findall(".//" + "/".join(tags[pos:]))
-
-        yield from elements
+    if hasattr(tree, "xpath"):
+        _xpath = cast(Union["lxmlElementTree", "lxmlElement"], tree).xpath
+        elements = _xpath(ns_path, namespaces=namespaces) if namespace else _xpath(path)
+    elif namespace:
+        elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
     else:
-        yield from elements
+        elements = tree.findall(".//" + "/".join(tags[pos:]))
+
+    yield from elements
 
 
-@overload
-def xml2etree(  # noqa: E704
-    f: str | FileTypes,
-    xml: Literal[True] = ...,
-    html5: Literal[False] = ...,
-) -> AnyElementTree: ...
-@overload  # noqa: E302
-def xml2etree(  # noqa: E704
-    f: str | FileTypes,
-    *,
-    xml: Literal[True] = ...,
-    html5: Literal[True],
-) -> AnyElementTree: ...
-@overload  # noqa: E302
-def xml2etree(  # noqa: E704
-    f: str | FileTypes,
-    xml: Literal[False],
-    html5: Literal[True],
-) -> AnyElementTree: ...
-@overload  # noqa: E302
-def xml2etree(  # noqa: E704
-    f: str | FileTypes,
-    xml: Literal[False],
-    html5: Literal[False] = ...,
-) -> "nativeElementTree": ...
 def xml2etree(  # noqa: E302
     f: str | FileTypes,
     xml: bool = True,
     html5: bool = False,
-) -> AnyElementTree | None:
+) -> AnyElementTree:
     """
     Parse XML/HTML into an ElementTree. External XML is parsed with a hardened
     policy: entity resolution, DTD loading, and network access are disabled to
@@ -474,16 +442,15 @@ def xml2etree(  # noqa: E302
     if xml:
         element_tree = etree.parse(f, XML_PARSER)  # noqa: S314
     elif html5 and html5parser:
-        element_tree = html5parser.parse(f)
+        element_tree = cast("lxmlElementTree", html5parser.parse(f))
     elif IS_LXML:
-        element_tree = html.parse(f)
+        element_tree = cast("lxmlhtml", html).parse(f)
     else:
         if html5 and not html5parser:
             logger.warning("lxml parser not found. Using html5lib instead.")
 
-        # html5lib's parser returns an Element, so we must convert it into an
-        # ElementTree
-        element_tree = ElementTree(html.parse(f))
+        element = cast("nativeElement", html.parse(f))
+        element_tree = cast("nativeElementTree", ElementTree(element))
 
     return element_tree
 
@@ -515,19 +482,20 @@ def _make_content(
     return {tag: content} if content else {}
 
 
-def etree2dict(element: AnyElement) -> StringyDict:
+def element2dict(element: AnyElement) -> StringyDict:
     """Convert an element tree into a dict imitating how Yahoo Pipes does it."""
     i: StringyDict = dict(element.items())
-    content = _make_content(i, element.text, strip=True)
+    text = element.text
+    content = _make_content(i, text, strip=True)
     i.update(content)
 
     for child in element:
-        tag = child.tag.split("}", 1)[-1]
-        value = etree2dict(child)
+        tag = str(child.tag).split("}", 1)[-1]
+        value = element2dict(child)
         content = _make_content(i, value, tag)
         i.update(content)
 
-    if element.text and not set(i).difference(["content"]):
+    if text and not set(i).difference(["content"]):
         # element is leaf node and doesn't have attributes
         result = cast(StringyDict, i["content"])
     else:
@@ -561,14 +529,14 @@ def any2dict(
         else:
             root = xml2etree(content, xml=False, html5=html5).getroot()
 
-        if path:
+        if path and root is not None:
             replaced = "/".join(path.split("."))
 
-            for tree in xpath(root, replaced):
-                value = etree2dict(tree)
+            for element in xpath(root, replaced):
+                value = element2dict(element)
                 yield from any2dict(value, ext=None)
-        else:
-            yield etree2dict(root)
+        elif root is not None:
+            yield element2dict(root)
     elif ext == "json":
         if not IJSON_IS_NATIVE:
             use_ijson = False
