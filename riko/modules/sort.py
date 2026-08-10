@@ -69,7 +69,7 @@ async def async_parser(
 
     Examples:
         >>> from itertools import repeat
-        >>> from riko.bado import run, issync
+        >>> from riko import run, issync
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -161,7 +161,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         Awaitable: stream
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     items = [{'rank': 'b'}, {'rank': 'a'}, {'rank': 'c'}]

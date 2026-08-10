@@ -150,7 +150,7 @@ async def async_parser(
 
     Examples:
         >>> from itertools import count
-        >>> from riko.bado import async_sleep, run
+        >>> from riko import async_sleep, run
         >>> from meza.fntools import Objectify
         >>>
         >>> objconf = Objectify({'milliseconds': 250})
@@ -254,7 +254,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Examples:
         >>> from itertools import count
         >>> from time import sleep
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> def gen_stream():
         ...     for x in count():

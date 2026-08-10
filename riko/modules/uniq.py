@@ -108,7 +108,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         Awaitable: stream
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     items = ({'x': x, 'mod': x % 2} for x in range(5))

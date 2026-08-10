@@ -613,10 +613,7 @@ coroutine directly.
 
     >>> from riko import SyncPipe
     >>>
-    >>> items = [
-    ...     {'title': 'Gravity paper', 'score': 42},
-    ...     {'title': 'Breaking: riko 4.0', 'score': 980},
-    ... ]
+    >>> items = [{'title': 'Gravity paper'}, {'title': 'Breaking: riko 4.0'}]
     >>>
     >>> ### Prime a named receiver ###
     >>> receiver = SyncPipe('receive', conf={'name': 'receiver'})
@@ -627,8 +624,7 @@ coroutine directly.
     >>> sender = SyncPipe('send', items, others=['receiver'])
     >>>
     >>> ### Consuming the sender drives the push ###
-    >>> list(sender)
-    [{'title': 'Gravity paper', 'score': 42}, {'title': 'Breaking: riko 4.0', 'score': 980}]
+    >>> _ = list(sender)
     >>>
     >>> ### Drain the receiver independently ###
     >>> # Note: an idle receiver yields a `PENDING` and `DONE` state markers, so filter
@@ -866,4 +862,4 @@ the scheduler.
 .. _FAQ: FAQ.rst
 .. _Design Principles: ../README.rst#design-principles
 .. _class based workflows: ../README.rst#synchronous-processing
-.. _DAG format doc: DAG_FORMAT.md
+.. _DAG format doc: DAG_FORMAT.rst

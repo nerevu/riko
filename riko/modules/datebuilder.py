@@ -98,7 +98,7 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
     A processor module that asynchronously converts a text string into a datetime.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -109,7 +109,7 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
        Awaitable: item with date timetuples
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe({'content': '12/2/2014'})
@@ -128,7 +128,7 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
     A processor that converts a text string into a datetime.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

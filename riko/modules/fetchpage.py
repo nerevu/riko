@@ -76,7 +76,7 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import run
+        >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -142,7 +142,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     a string.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -164,7 +164,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     url, path = get_path('bbc.html'), 'value.items'
@@ -185,7 +185,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     A source that fetches the content of a given web site as a string.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

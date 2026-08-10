@@ -73,7 +73,7 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
     address, currency code, or lat/lon coordinates.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -91,7 +91,7 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
         Awaitable: item with formatted location
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     conf = {'type': 'currency'}
@@ -112,7 +112,7 @@ def pipe(*args: Any, **kwargs: object) -> AnyLocation:
     address, currency code, or lat/lon coordinates.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

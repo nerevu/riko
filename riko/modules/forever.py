@@ -71,7 +71,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     entries.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -87,7 +87,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
         Awaitable: iterator of items
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe()
@@ -106,7 +106,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     A source that fetches and parses a feed to return the entries.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

@@ -77,7 +77,7 @@ async def async_parser(
         Awaitable: item
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>> from riko.dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
@@ -135,7 +135,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     item.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -155,7 +155,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
        Awaitable: item with renamed content
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     conf = {'rule': {'field': 'content', 'newval': 'greeting'}}
@@ -175,7 +175,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     A processor that renames or copies fields in an item.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

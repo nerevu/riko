@@ -641,7 +641,7 @@ documentation workflow.
 .. _installation guide: INSTALLATION.rst
 .. _contributing guide: ../CONTRIBUTING.rst
 .. _issue tracker: https://github.com/nerevu/riko/issues
-.. _DAG format: DAG_FORMAT.md
+.. _DAG format: DAG_FORMAT.rst
 .. _Design Principles: ../README.rst#design-principles
 .. _Alternate workflow creation: COOKBOOK.rst#alternate-workflow-creation
 

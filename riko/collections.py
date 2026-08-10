@@ -44,7 +44,7 @@ Examples:
     async usage::
 
         >>> from riko import get_path
-        >>> from riko.bado import run, issync
+        >>> from riko import run, issync
         >>> from riko.collections import AsyncPipe, AsyncCollection
         >>>
         >>> fconf = {'url': get_path('gigs.json'), 'path': 'value.items'}

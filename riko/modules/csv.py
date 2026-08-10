@@ -68,7 +68,7 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import run
+        >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -138,7 +138,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     a string.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -165,7 +165,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe(conf={'url': get_path('spreadsheet.csv')})
@@ -184,7 +184,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     A source that fetches and parses a csv file to yield items.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

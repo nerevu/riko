@@ -127,7 +127,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     A source that asynchronously builds a url.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -146,7 +146,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         Awaitable: an iterator of items
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     param = {'key': 's', 'value': 'gm'}
@@ -169,7 +169,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     A source that builds a url.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

@@ -230,3 +230,24 @@ D3  optional dbt-ibis evaluation
 8. Public results contain no Ibis or dbt SDK objects.
 9. Early termination closes readers and connections.
 10. Backend contract tests cover at least DuckDB and one client/server database.
+
+
+---
+
+> **Runtime-contract section extracted from ROADMAP §25.** the SQL/dbt/dataframe gameplan owns the Batch/Arrow/Polars/pandas execution path. `§N` refs point to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md).
+
+## 25. Conversion and dataframe integration
+
+> **Status: Partial.** **Shipped → [IMPLEMENTED.md §25](../IMPLEMENTED.md#25-conversion--export-converters-shipped)**
+> (meza-backed csv/json/geojson/ofx/qif/list/tuple export converters). **Remaining:** the
+> Batch/dataframe path below.
+
+Meza owns conversion work.
+
+Riko may temporarily provide adapters or protocols needed for the new architecture, but conversion implementation should eventually be upstreamed or finalized in Meza.
+
+The batch/dataframe path should avoid pandas as a mandatory intermediary.
+
+Logical Batch remains the Riko abstraction. Arrow, Narwhals, Polars, pandas, or SQL are execution representations selected by capability.
+
+"Zero-copy" should be claimed only when the actual path avoids conversion or copying.

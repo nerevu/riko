@@ -93,7 +93,7 @@ async def async_iter[T](
         Any: Each element from *elements* in order.
 
     Examples:
-        >>> from riko.bado import issync, run
+        >>> from riko import issync, run
         >>>
         >>> async def main():
         ...     print([x async for x in async_iter(range(3))])
@@ -136,7 +136,7 @@ async def coop_reduce[T, S](  # noqa: E302 # pyright: ignore[reportInconsistentO
         Any: The final accumulated value.
 
     Examples:
-        >>> from riko.bado import issync, run
+        >>> from riko import issync, run
         >>>
         >>> async def main():
         ...     print(await coop_reduce(lambda x, y: x + y, range(5)))
@@ -180,7 +180,7 @@ def async_reduce[T, S](
         Awaitable[Any]: The final accumulated value.
 
     Examples:
-        >>> from riko.bado import issync, run
+        >>> from riko import issync, run
         >>>
         >>> async def main():
         ...     print(await async_reduce(lambda x, y: x + y, range(5)))
@@ -227,7 +227,7 @@ async def async_map[T, S](
         list: Results in iteration order.
 
     Examples:
-        >>> from riko.bado import issync, run
+        >>> from riko import issync, run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -355,7 +355,7 @@ async def async_map_stream[T, S](
         Any: Each ``func(item)`` result, in completion order.
 
     Examples:
-        >>> from riko.bado import issync, run
+        >>> from riko import issync, run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -448,7 +448,7 @@ async def async_merge[S](
         Any: Each record from every feed, in arrival order.
 
     Examples:
-        >>> from riko.bado import issync, run
+        >>> from riko import issync, run
         >>>
         >>> async def feed(*items):
         ...     for item in items:

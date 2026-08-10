@@ -6,10 +6,10 @@ The stable, SemVer-guaranteed public surface of riko. Import application code
 from here (or the top-level ``riko`` package, which re-exports this module).
 
 Extension-author symbols live in :mod:`riko.ext`; everything else is private.
-See docs/API_STABILITY.md for additional details.
+See docs/MIGRATION.rst for additional details.
 """
 
-from riko.bado import backend, isasync, issync, run
+from riko.bado import async_return, async_sleep, backend, isasync, issync, run
 from riko.collections import (
     AsyncCollection,
     AsyncPipe,
@@ -46,6 +46,8 @@ __all__ = [
     "SyncPipe",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "async_return",
+    "async_sleep",
     "backend",
     "build_pipeline",
     "compile_pipe",

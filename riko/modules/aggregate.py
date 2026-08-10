@@ -98,7 +98,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         func (callable): User defined function to apply to the stream.
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     func = lambda stream: ({'y': item['x'] + 3} for item in stream)

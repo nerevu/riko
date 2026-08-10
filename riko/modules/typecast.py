@@ -73,7 +73,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     different types, e.g., int, bool, date, etc. Useful as terminal data. Loopable.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -88,7 +88,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
        Awaitable: item with type casted content
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe({'content': '1.0'}, conf={'type': 'int'})
@@ -108,7 +108,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     int, bool, date, etc. Useful as terminal data. Loopable.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

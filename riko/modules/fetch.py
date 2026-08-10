@@ -73,7 +73,7 @@ async def async_parser(
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import run
+        >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -139,7 +139,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     entries.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -156,7 +156,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
     Examples:
         >>> from riko import get_path
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe(conf={'url': get_path('feed.xml')})
@@ -176,7 +176,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     A source that fetches and parses a feed to return the entries.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

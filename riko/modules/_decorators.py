@@ -321,7 +321,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 input `item`.
 
         Examples:
-            >>> from riko.bado import run, async_return, issync
+            >>> from riko import async_return, issync, run
             >>>
             >>> @processor()
             ... def pipe(item, extraction, objconf, **kwargs):
@@ -499,7 +499,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import run, issync
+            >>> from riko import run, issync
             >>>
             >>> kwargs = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,
@@ -753,7 +753,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             func: A function of 1 arg (items) and a `**kwargs`.
 
         Examples:
-            >>> from riko.bado import run, async_return, issync
+            >>> from riko import async_return, issync, run
             >>>
             >>> # emit is True by default
             >>> # and operators can't skip items, so the pipe is passed an
@@ -919,7 +919,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
         Examples:
             >>> from riko import bado
-            >>> from riko.bado import run, issync
+            >>> from riko import run, issync
             >>>
             >>> opts = {
             ...     'ftype': 'text', 'extract': 'times', 'listize': True,

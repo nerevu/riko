@@ -79,7 +79,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str | Decimal:
     currency string.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:
@@ -98,7 +98,7 @@ def async_pipe(*args: Any, **kwargs: object) -> str | Decimal:
 
     Examples:
         >>> from datetime import date
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     result = await async_pipe({'content': '10.33'})
@@ -117,7 +117,7 @@ def pipe(*args: Any, **kwargs: object) -> str | Decimal:
     A processor module that formats a number to a given currency string.
 
     Args:
-        item (dict): The entry to process
+        item (dict or Iter[dict]): The entry, or stream of entries, to process
         kwargs (dict): The keyword arguments passed to the wrapper
 
     Kwargs:

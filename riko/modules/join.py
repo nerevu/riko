@@ -150,7 +150,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         Awaitable: iterator of the merged streams
 
     Examples:
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     items = ({'x': 'foo', 'sum': x} for x in range(5))

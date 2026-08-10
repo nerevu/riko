@@ -431,7 +431,7 @@ def test(paths=(), where=(), stop=None, **kwargs):  # noqa: PT028
     quiet = kwargs.get("quiet") and not kwargs.get("verbose")
     verbosity = "-q" if quiet else "-v"
     opts = f"-x{verbosity}" if stop else verbosity
-    opts += " --cov=riko" if kwargs.get("cover") else " --no-cov"
+    opts += " --cov=riko" if kwargs.get("cov") else " --no-cov"
     opts += "" if kwargs.get("capture") else " -s"
     opts += " --last-failed" if kwargs.get("failed") else ""
     opts += " -vv --tb=long -ra" if kwargs.get("verbose") else " --tb=short -ra"
