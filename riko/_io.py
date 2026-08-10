@@ -12,6 +12,7 @@ from functools import partial, wraps
 from http.client import HTTPResponse
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from logging import Logger
+from tempfile import SpooledTemporaryFile
 from typing import Literal, cast, overload
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -34,10 +35,12 @@ from riko import ENCODING, __version__
 from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
 from riko.paths import get_abspath
-from riko.types.general import FileTypes, Opener
+from riko.types.general import FileTypes, Opener, StreamableFileTypes
 from riko.types.values import BasicArg
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+
+STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 
 def make_blocking(f: RawIOBase | TextIOBase) -> None:
@@ -83,6 +86,63 @@ def auto_close[T](stream: Iterable[T], f: FileTypes) -> Iterator[T]:
         yield from stream
     finally:
         f.close()
+
+
+@overload
+def seekable(  # noqa: E704
+    f: str, binary: bool | None = None, encoding: str | None = None
+) -> str: ...
+@overload  # noqa: E302
+def seekable[T: StreamableFileTypes](  # pyright: ignore[reportOverlappingOverload]  # noqa: E704
+    f: T, binary: bool | None = None, encoding: str | None = None
+) -> T: ...
+@overload  # noqa: E302
+def seekable[T: FileTypes](  # noqa: E704
+    f: T, binary: bool | None = None, encoding: str | None = None
+) -> T | SpooledTemporaryFile: ...
+def seekable(  # noqa: E302
+    f: FileTypes | str, binary: bool | None = None, encoding: str | None = None
+) -> FileTypes | SpooledTemporaryFile | str:
+    if isinstance(f, str):
+        _seekable = f
+        seek = None
+    else:
+        seek = getattr(f, "seek", None)
+        _seekable = None
+
+    if callable(seek):
+        try:
+            seek(0)
+        except (OSError, ValueError, AttributeError):
+            pass
+        else:
+            _seekable = cast("StreamableFileTypes", f)
+
+    if _seekable is None:
+        chunks = iter(f)
+        first = None
+
+        if binary is None:
+            first = next(chunks, None)
+            binary = isinstance(first, bytes)
+
+        decode = binary and encoding
+        encoding = encoding or ""
+        mode = "w+b" if binary and not decode else "w+"
+        spool = SpooledTemporaryFile(  # noqa: SIM115
+            max_size=STREAMING_THRESHOLD, mode=mode
+        )
+
+        if first is not None:
+            spool.write(cast(bytes, first).decode(encoding) if decode else first)
+
+        for chunk in chunks:
+            spool.write(cast(bytes, chunk).decode(encoding) if decode else chunk)
+
+        spool.seek(0)
+        _seekable = spool
+
+    return _seekable
 
 
 @overload
@@ -176,7 +236,7 @@ def opener(  # noqa: E302
             logger.debug("Request delaying not currently implemented.")
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
-            response = BytesIO(r.read()) if memoize else cast(RawIOBase, r)
+            response = seekable(r, binary=True) if memoize else cast(RawIOBase, r)
         elif r:
             encoding = get_response_encoding(r, encoding)
 
@@ -184,9 +244,9 @@ def opener(  # noqa: E302
                 encoding = ENCODING
 
             if memoize and encoding:
-                response = StringIO(r.read().decode(encoding))
+                response = seekable(r, encoding=encoding)
             elif memoize:
-                response = StringIO(r.read())
+                response = seekable(r, binary=False)
             elif encoding:
                 reencoded = reencode(r.fp, encoding, decode=True)
                 # TODO: Add self._f = f to Reencoder

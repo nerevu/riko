@@ -9,7 +9,7 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
-from io import BytesIO, RawIOBase, StringIO, TextIOBase
+from io import BytesIO, FileIO, RawIOBase, StringIO, TextIOBase
 from typing import (
     TYPE_CHECKING,
     Literal,
@@ -100,6 +100,7 @@ type Function = Callable[..., object]
 # TODO: add type hint overloads to Reencoder with decode=True -> str
 type BinaryFileTypes = BytesIO | RawIOBase
 type StringFileTypes = StringIO | StreamReader | TextIOBase | NamedTextIOWrapper
+type StreamableFileTypes = BytesIO | StringIO | FileIO | NamedTextIOWrapper
 type FileTypes = (
     BinaryFileTypes | StringFileTypes | Fetch[Literal[True]] | Fetch[Literal[False]]
 )
