@@ -1467,6 +1467,7 @@ dev = [
     { name = "docutils" },
     { name = "ipython" },
     { name = "pre-commit" },
+    { name = "pygments" },
     { name = "pylint" },
     { name = "pyright" },
     { name = "pytest" },
@@ -1479,6 +1480,7 @@ dev = [
 ]
 lint = [
     { name = "docutils" },
+    { name = "pygments" },
     { name = "pylint" },
     { name = "pyright" },
     { name = "ruff" },
@@ -1523,6 +1525,7 @@ dev = [
     { name = "docutils", specifier = ">=0.21" },
     { name = "ipython", specifier = ">=8.39.0" },
     { name = "pre-commit", specifier = ">=4.6.1" },
+    { name = "pygments", specifier = ">=2.20.0" },
     { name = "pylint", specifier = ">=4.0.5,<5.0.0" },
     { name = "pyright", specifier = ">=1.1.411" },
     { name = "pytest", specifier = ">=8.0.0" },
@@ -1535,6 +1538,7 @@ dev = [
 ]
 lint = [
     { name = "docutils", specifier = ">=0.21" },
+    { name = "pygments", specifier = ">=2.20.0" },
     { name = "pylint", specifier = ">=4.0.5,<5.0.0" },
     { name = "pyright", specifier = ">=1.1.411" },
     { name = "ruff", specifier = ">=0.13.1" },
