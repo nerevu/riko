@@ -294,6 +294,40 @@ Notes
 
 .. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
 
+Chaining with the ``|`` operator or ``pipe`` method
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Alongside attribute chaining (``pipe.tokenizer(...)``), a ``pipe`` can be added to
+the ``pipeline`` with the ``|`` operator or the ``pipe`` method. These take the
+module name as a *value*, so they also work when the name is dynamic or dotted
+(``"microsoft.autopilot.ensure"``). Every form resolves to the same string
+identifier.
+
+.. code-block:: python
+
+    >>> from riko import SyncPipe
+    >>>
+    >>> src = [{'content': 'a,b,c,a'}]
+    >>>
+    >>> # seed a source stream with ``items | pipe``
+    >>> next(src | SyncPipe('tokenizer'))
+    {'content': 'a'}
+    >>>
+    >>> # chain a pipe by name
+    >>> tokens = SyncPipe('tokenizer', source=src)
+    >>> next(tokens | 'hash')
+    {'content': 'a', 'hash': 1267964084}
+    >>> # chain a pipe by ``(name, conf)`` pair
+    >>> tokens = SyncPipe('tokenizer', source=src)
+    >>> list(tokens | ('truncate', {'count': 2}))
+    [{'content': 'a'}, {'content': 'b'}]
+    >>>
+    >>> # chosen pipe name at runtime
+    >>> module = 'count'
+    >>> tokens = SyncPipe('tokenizer', source=src).pipe(module)
+    >>> next(tokens)
+    {'count': 4}
+
 Fetch several sources
 ^^^^^^^^^^^^^^^^^^^^^^
 

@@ -1,6 +1,22 @@
 Changelog
 =========
 
+v0.75.0 (unreleased)
+--------------------
+
+New
+~~~
+
+- Add value-taking ``pipe`` chaining to ``SyncPipe``/``AsyncPipe`` — for adding a
+  ``pipe`` to a ``pipeline`` by a module name that can't be written as an attribute
+  (a runtime variable, a dotted identifier such as
+  ``"microsoft.autopilot.ensure"``, or a ``ModuleName`` member). The attribute form
+  (``pipe.tokenizer(...)``) is unchanged.
+
+  - ``pipe | "tokenizer"``, ``pipe | ("tokenizer", conf)``,
+    ``pipe | SyncPipe("sort", conf=...)``, and ``items | SyncPipe(...)``
+  - ``pipe.pipe(name, conf=...)`` / ``pipe.async_pipe(name, ...)``
+
 v0.74.2 (2026-08-11)
 --------------------
 

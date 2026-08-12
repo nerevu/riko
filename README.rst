@@ -317,6 +317,21 @@ chaining and transparent parallelization.
     >>> item['title'], item['content'], item['hash']
     ('riko pt. 1', "Let's talk about riko!", 197222720)
 
+The ``|`` operator chains the same way, taking a module name or a
+``(name, conf)`` tuple — handy when the next ``pipe``'s name is computed:
+
+.. code-block:: python
+
+    >>> from riko import SyncPipe
+    >>>
+    >>> attrs = [
+    ...     {'key': 'title', 'value': 'riko pt. 1'},
+    ...     {'key': 'content', 'value': "Let's talk about riko!"}
+    ... ]
+    >>> item = next(SyncPipe('itembuilder', conf={'attrs': attrs}) | 'hash')
+    >>> item['title'], item['hash']
+    ('riko pt. 1', 197222720)
+
 View the `Cookbook`_ for advanced examples including how to wire in
 values from other pipes or accept user input.
 

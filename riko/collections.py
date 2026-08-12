@@ -105,7 +105,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing.pool import Pool as CPUPoolType
 from multiprocessing.pool import ThreadPool as ThreadPoolType
 from operator import length_hint
-from typing import Any, Literal, Self, cast, overload
+from typing import Any, Literal, Protocol, Self, TypeGuard, cast, overload
 
 import pygogo as gogo
 
@@ -167,6 +167,39 @@ __all__ = [
     "export",
     "list_targets",
 ]
+
+
+class TemplatePipe(Protocol):
+    name: str
+
+    def _prime(self, source: Items) -> Self: ...  # noqa: E704
+
+
+def _is_pipe_spec(obj: object) -> TypeGuard[tuple[str, Conf]]:
+    return (
+        isinstance(obj, tuple)
+        and len(obj) == 2
+        and isinstance(obj[0], str)
+        and isinstance(obj[1], Mapping)
+    )
+
+
+def _is_source(obj: object) -> TypeGuard[Items]:
+    """
+    A stream of items on the left of ``|`` — any iterable that isn't a bare
+    string/bytes or a single ``Mapping`` item.
+    """
+    return isinstance(obj, Iterable) and not isinstance(obj, str | bytes | Mapping)
+
+
+def _is_template(obj: object) -> TypeGuard[TemplatePipe]:
+    """A named, source-less, not-yet-run pipe — safe to rebind onto a source."""
+    return (
+        isinstance(obj, PyPipe)
+        and bool(obj.name)
+        and obj.source is None
+        and obj._state is PipeState.NEW
+    )
 
 
 class PoolScope(StrEnum):
@@ -474,6 +507,16 @@ class PyPipe(_Lifecycle):
             ids = cast(dict[str, int], self.kwargs.get("ids", {}))
             sync_hub.notify_complete(ids)
 
+    def _definitional_kwargs(self) -> dict[str, object]:
+        """
+        Module-behavior kwargs (``field``/``assign``/``emit``/…), excluding runtime
+        settings carried separately (``conf``/``context``/ ``inputs``/``mode``). Used
+        to rebind a source-less template onto a new source while preserving what the
+        pipe *does*.
+        """
+        skip = {"conf", "context", "inputs", "mode"}
+        return {k: v for k, v in self.kwargs.items() if k not in skip and v is not None}
+
 
 class SyncPipe(PyPipe):
     """A synchronous Pipe object"""
@@ -551,13 +594,13 @@ class SyncPipe(PyPipe):
             self._pool_handle = _pool_handle
 
         if self.name:
-            self.pipe: SyncPipeParser = resolve_module(self.name, "pipe")
-            self.pollable: bool = getattr(self.pipe, "pollable")  # noqa: B009
-            self.loopable: bool = getattr(self.pipe, "loopable")  # noqa: B009
+            self._pipe: SyncPipeParser = resolve_module(self.name, "pipe")
+            self.pollable: bool = getattr(self._pipe, "pollable")  # noqa: B009
+            self.loopable: bool = getattr(self._pipe, "loopable")  # noqa: B009
             self.mapify: bool = self.loopable and self.source is not None
             self.parallelize: bool = self.parallel and self.mapify
         else:
-            self.pipe = lambda source, **_: source
+            self._pipe = lambda source, **_: source
             self.pollable = self.loopable = self.mapify = self.parallelize = False
 
         if self.parallelize:
@@ -602,13 +645,13 @@ class SyncPipe(PyPipe):
         next_scope = cast(PoolScope, kwargs.get("pool_scope", self.pool_scope))
 
         skwargs = {
-            "parallel": self.parallel,
-            "threads": self.threads,
-            "pool_scope": next_scope,
-            "workers": self.workers,
             "chunksize": self.chunksize,
             "context": self.context,
             "inputs": self.inputs,
+            "parallel": self.parallel,
+            "pool_scope": next_scope,
+            "threads": self.threads,
+            "workers": self.workers,
         }
 
         if self.pool_scope == next_scope == PoolScope.PIPELINE and "pool" not in kwargs:
@@ -632,6 +675,94 @@ class SyncPipe(PyPipe):
             raise AttributeError(name)
 
         return self._chain(name)
+
+    def __or__(self, other: object) -> "SyncPipe":
+        """
+        Chain the next pipe via ``|``.
+
+        The right side may be a module name, a ``(name, conf)`` pair, or a
+        source-less ``SyncPipe`` template (``pipe | SyncPipe("sort", ...)``).
+
+        Examples:
+            >>> flow = SyncPipe('itembuilder')
+            >>> piped = flow | 'hash'
+            >>> piped.name, piped.source is flow
+            ('hash', True)
+            >>> piped = SyncPipe('itembuilder') | ('sort', {'combine': 'a'})
+            >>> piped.name, piped.conf
+            ('sort', {'combine': 'a'})
+            >>> template = SyncPipe('sort', conf={'combine': 'a'})
+            >>> piped = SyncPipe('itembuilder') | template
+            >>> piped.name, piped.conf, piped.source is flow
+            ('sort', {'combine': 'a'}, False)
+
+        """
+        if isinstance(other, str):
+            chained = self._chain(other)
+        elif _is_pipe_spec(other):
+            name, conf = other
+            chained = self._chain(name, conf=conf)
+        elif _is_template(other) and isinstance(other, SyncPipe):
+            name = other.name
+            chained = self._chain(name, conf=other.conf, **other._definitional_kwargs())
+        else:
+            chained = NotImplemented
+
+        return chained
+
+    def __ror__(self, other: object) -> "SyncPipe":
+        """
+        Seed a stream on the left of ``|``: ``items | SyncPipe("filter")``.
+
+        Examples:
+            >>> items = [{'x': 1}, {'x': 2}]
+            >>> piped = items | SyncPipe('sort')
+            >>> piped.name, list(piped.source) == items
+            ('sort', True)
+
+        """
+        if _is_template(self) and _is_source(other):
+            primed = self._prime(other)
+        else:
+            primed = NotImplemented
+
+        return primed
+
+    def _prime(self, source: Items) -> "SyncPipe":
+        """
+        Rebind a source-less pipe template onto a new source, returning a fresh
+        pipe instance. The original template is left intact.
+        """
+        self._require_usable("chain")
+        skwargs = {
+            "chunksize": self.chunksize,
+            "conf": self.conf,
+            "context": self.context,
+            "inputs": self.inputs,
+            "ordered": self.ordered,
+            "parallel": self.parallel,
+            "pool_scope": self.pool_scope,
+            "threads": self.threads,
+            "workers": self.workers,
+        }
+        skwargs.update(self._definitional_kwargs())
+        return SyncPipe(self.name, source=source, **skwargs)
+
+    def pipe(self, name: str, **kwargs: Any) -> "SyncPipe":
+        """
+        Chain the next pipe by name (the method form of ``pipe | name``).
+
+        Accepts arbitrary pipe kwargs (``conf``/``field``/``assign``/…) that the
+        terse ``|`` form can't. Runtime settings propagate via ``_chain``.
+
+        Examples:
+            >>> flow = SyncPipe('itembuilder')
+            >>> chained = flow.pipe('hash')
+            >>> chained.name, chained.source is flow
+            ('hash', True)
+
+        """
+        return self._chain(name, **kwargs)
 
     def _release_pool(self) -> None:
         if self._pool_handle:
@@ -702,7 +833,7 @@ class SyncPipe(PyPipe):
             self.kwargs.setdefault("ids", {})
 
         self._begin()
-        pipeline = partial(self.pipe, **self.kwargs)
+        pipeline = partial(self._pipe, **self.kwargs)
         completed = False
 
         try:
@@ -953,10 +1084,19 @@ class SyncCollection(PyCollection):
             if not self._in_context:
                 self._release_pool()
 
-    def pipe(self, **kwargs: Any) -> "SyncPipe":
-        """Return a SyncPipe primed with the source feed"""
+    def pipe(self, name: str | None = None, **kwargs: Any) -> "SyncPipe":
+        """
+        Chain the next pipe by name: ``pipe.pipe("filter", conf=...)``.
+
+        Examples:
+            >>> flow = SyncPipe('itembuilder')
+            >>> chained = flow.pipe('hash')
+            >>> chained.name, chained.source is flow
+            ('hash', True)
+
+        """
         self._require_usable("chain")
-        return SyncPipe(source=self, **kwargs)
+        return SyncPipe(name, source=self, **kwargs)
 
     @overload
     def export(self) -> list[Item]: ...  # noqa: E704
@@ -1041,12 +1181,12 @@ class AsyncPipe(PyPipe):
         self._aiter: AsyncGenerator[Item, None] | None = None
 
         if self.name:
-            self.async_pipe: AsyncPipeParser = resolve_module(self.name, "async_pipe")
-            self.pollable: bool = getattr(self.async_pipe, "pollable")  # noqa: B009
-            self.loopable: bool = getattr(self.async_pipe, "loopable")  # noqa: B009
+            self._async_pipe: AsyncPipeParser = resolve_module(self.name, "async_pipe")
+            self.pollable: bool = getattr(self._async_pipe, "pollable")  # noqa: B009
+            self.loopable: bool = getattr(self._async_pipe, "loopable")  # noqa: B009
             self.mapify: bool = self.loopable
         else:
-            self.async_pipe = lambda source, **_: async_return(source)
+            self._async_pipe = lambda source, **_: async_return(source)
             self.pollable = self.loopable = self.mapify = False
 
     def __getattr__(self, name: str) -> "AsyncPipe":
@@ -1054,6 +1194,80 @@ class AsyncPipe(PyPipe):
             raise AttributeError(name)
 
         return self._chain(name)
+
+    def __or__(self, other: object) -> "AsyncPipe":
+        """
+        Chain the next pipe via ``|``.
+
+        The right side may be a module name, a ``(name, conf)`` pair, or a
+        source-less ``AsyncPipe`` template (``pipe | AsyncPipe("sort", ...)``).
+
+        Examples:
+            >>> flow = AsyncPipe('itembuilder')
+            >>> piped = flow | 'hash'
+            >>> piped.name, piped.source is flow
+            ('hash', True)
+            >>> piped = AsyncPipe('itembuilder') | ('sort', {'combine': 'a'})
+            >>> piped.name, piped.conf
+            ('sort', {'combine': 'a'})
+            >>> template = AsyncPipe('sort', conf={'combine': 'a'})
+            >>> piped = AsyncPipe('itembuilder') | template
+            >>> piped.name, piped.conf, piped.source is flow
+            ('sort', {'combine': 'a'}, False)
+
+        """
+        if isinstance(other, str):
+            chained = self._chain(other)
+        elif _is_pipe_spec(other):
+            name, conf = other
+            chained = self._chain(name, conf=conf)
+        elif _is_template(other) and isinstance(other, AsyncPipe):
+            name = other.name
+            chained = self._chain(name, conf=other.conf, **other._definitional_kwargs())
+        else:
+            chained = NotImplemented
+
+        return chained
+
+    def __ror__(self, other: object) -> "AsyncPipe":
+        """
+        Seed a stream on the left of ``|``: ``items | AsyncPipe("filter")``.
+
+        Examples:
+            >>> items = [{'x': 1}, {'x': 2}]
+            >>> piped = items | AsyncPipe('sort')
+            >>> piped.name, list(piped.source) == items
+            ('sort', True)
+
+        """
+        if _is_template(self) and _is_source(other):
+            primed = self._prime(other)
+        else:
+            primed = NotImplemented
+
+        return primed
+
+    def _prime(self, source: Items) -> "AsyncPipe":
+        """
+        Rebind a source-less pipe template onto a new source, returning a fresh
+        pipe instance. The original template is left intact.
+        """
+        self._require_usable("chain")
+        skwargs = {
+            "conf": self.conf,
+            "connections": self.connections,
+            "context": self.context,
+            "inputs": self.inputs,
+            "ordered": self.ordered,
+            "parallel": self.parallel,
+            "prefetch": self.prefetch,
+        }
+        skwargs.update(self._definitional_kwargs())
+        return AsyncPipe(self.name, source=source, **skwargs)
+
+    def async_pipe(self, name: str, **kwargs: Any) -> "AsyncPipe":
+        """Chain the next pipe by name (the method form of ``pipe | name``)."""
+        return self._chain(name, **kwargs)
 
     def __aiter__(self) -> AsyncStream:
         if self._aiter is None:
@@ -1116,11 +1330,11 @@ class AsyncPipe(PyPipe):
         """
         self._require_usable("chain")
         skwargs = {
-            "parallel": self.parallel,
+            "connections": self.connections,
             "context": self.context,
             "inputs": self.inputs,
-            "connections": self.connections,
             "ordered": self.ordered,
+            "parallel": self.parallel,
             "prefetch": self.prefetch,
         }
         skwargs.update(kwargs)
@@ -1163,7 +1377,7 @@ class AsyncPipe(PyPipe):
 
     async def _stream(self) -> AsyncGenerator[Item, None]:
         self._begin()
-        async_pipeline = partial(self.async_pipe, **self.kwargs)
+        async_pipeline = partial(self._async_pipe, **self.kwargs)
         bounded = self.mapify and self.parallel
 
         try:
@@ -1281,9 +1495,9 @@ class AsyncCollection(PyCollection):
 
         self._close()
 
-    def async_pipe(self, **kwargs: Any) -> "AsyncPipe":
-        """Return an AsyncPipe primed with the source feed"""
-        return AsyncPipe(source=self, **kwargs)
+    def async_pipe(self, name: str | None = None, **kwargs: Any) -> "AsyncPipe":
+        """Chain the next pipe by name: ``pipe.async_pipe("filter", conf=...)``."""
+        return AsyncPipe(name, source=self, **kwargs)
 
     @overload
     async def export(self) -> list[Item]: ...  # noqa: E704
