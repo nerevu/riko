@@ -6,7 +6,7 @@ from riko.types.modules import (
     AnyModuleRawConf,
     CountValues,
     EmbedRef,
-    ModuleName,
+    ModuleId,
 )
 
 
@@ -167,7 +167,7 @@ class PipelineDescription(TypedDict):
 
 class DagModule(TypedDict):
     id: NotRequired[str]
-    type: ModuleName
+    type: ModuleId
     conf: AnyModuleRawConf
 
 

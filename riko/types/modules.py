@@ -80,7 +80,7 @@ class ModuleMetadata:
 PipeId = NewType("PipeId", str)
 
 
-ModuleName = (
+ModuleId = (
     Literal[
         "fetch",
         "fetchdata",
@@ -535,7 +535,7 @@ type AnyModuleRawConf = (
 
 class EmbedRef(TypedDict):
     id: str
-    type: ModuleName
+    type: ModuleId
 
 
 class EmbeddedModule(EmbedRef, total=False):

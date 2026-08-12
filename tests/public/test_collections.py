@@ -16,6 +16,7 @@ from riko._pubsub import async_hub, close, sync_hub
 from riko.bado import gather_results, issync, run
 from riko.collections import AsyncPipe, Executor, SyncCollection, SyncPipe
 from riko.exceptions import ReceiverUnavailableError
+from riko.ext.names import ModuleName, normalize_module_name
 from riko.types.general import Item, Items
 from riko.types.modules import (
     ItemBuilderConf,
@@ -92,6 +93,11 @@ class _CollectionTest:
     def udf(self, item: Item) -> Item:
         self.runs += 1
         return item
+
+
+class _Mod(ModuleName):
+    HASH = "hash"
+    TRUNCATE = "truncate"
 
 
 class TestSyncCollections(_CollectionTest):
@@ -660,3 +666,32 @@ class TestAsyncPipeChaining:
     def test_or_unsupported_rhs_raises_type_error(self):
         with pytest.raises(TypeError):
             _ = AsyncPipe("hash", source=SRC) | 5
+
+
+class TestModuleNameEnum:
+    """A ``ModuleName`` enum is accepted anywhere a name string is."""
+
+    def test_normalize_module_name(self):
+        assert normalize_module_name(_Mod.HASH) == "hash"
+        assert normalize_module_name("hash") == "hash"
+        assert normalize_module_name(None) is None
+
+    def test_constructor_stores_plain_string(self):
+        pipe = SyncPipe(_Mod.HASH, source=SRC)
+        assert pipe.name == "hash"
+        assert type(pipe.name) is str
+        assert len(list(pipe)) == 3
+
+    def test_enum_and_string_resolve_identically(self):
+        via_enum = list(SyncPipe(_Mod.HASH, source=SRC))
+        via_str = list(SyncPipe("hash", source=SRC))
+        assert via_enum == via_str
+
+    def test_enum_through_operator_and_method(self):
+        via_or = SyncPipe(_Mod.HASH, source=SRC) | _Mod.TRUNCATE
+        via_method = SyncPipe(_Mod.HASH, source=SRC).pipe(
+            _Mod.TRUNCATE, conf={"count": 1}
+        )
+        assert via_or.name == "truncate"
+        assert via_method.name == "truncate"
+        assert len(list(via_method)) == 1

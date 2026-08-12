@@ -60,6 +60,13 @@ Bugfixes
 - ``manage test`` correctly reads the ``cov`` flag (not ``cover``), so
   ``--cov=riko`` coverage works.
 
+- Add ``riko.ext.ModuleName``, a deliberately empty ``StrEnum`` base for typed
+  module-name discovery, plus ``normalize_module_name`` and the
+  ``ModuleNameLike = str | ModuleName`` alias. Any ``ModuleName`` subclass member
+  is now accepted anywhere a module name is (``SyncPipe(MyModules.FETCH)``,
+  ``pipe | MyModules.SORT``); it is normalized to its canonical string at the
+  boundary, so serialized pipelines are unchanged.
+
 v0.74.0 (2026-08-06)
 --------------------
 

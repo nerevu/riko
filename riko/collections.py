@@ -135,6 +135,7 @@ from riko.bado.itertools import (
 from riko.compile import resolve_module
 from riko.context import Context, ExecutionMode, parse_context
 from riko.exceptions import PipelineStateError
+from riko.ext.names import ModuleNameLike, normalize_module_name
 from riko.types.general import (
     AsyncPipeParser,
     AsyncSource,
@@ -424,7 +425,7 @@ class PyPipe(_Lifecycle):
 
     def __init__(
         self,
-        name: str | None = None,
+        name: ModuleNameLike | None = None,
         source: AsyncSource | None = None,
         *,
         assign: str | None = None,
@@ -444,7 +445,7 @@ class PyPipe(_Lifecycle):
     ):
 
         self._state = PipeState.NEW
-        self.name = name
+        self.name: str | None = normalize_module_name(name)
         self.source = source
         self.parallel = parallel
         self.conf: Conf = conf or {}
@@ -523,7 +524,7 @@ class SyncPipe(PyPipe):
 
     def __init__(
         self,
-        name: str | None = None,
+        name: ModuleNameLike | None = None,
         source: Items | None = None,
         conf: Conf | None = None,
         *,
@@ -626,7 +627,7 @@ class SyncPipe(PyPipe):
     def pool(self) -> AnyPool | None:
         return self._pool_handle.pool if self._pool_handle else None
 
-    def _chain(self, name: str, **kwargs: object) -> "SyncPipe":
+    def _chain(self, name: ModuleNameLike, **kwargs: object) -> "SyncPipe":
         """
         Create the next pipe stage, propagating all runtime and execution
         settings. Context (and its inputs) stays authoritative across the chain.
@@ -748,7 +749,7 @@ class SyncPipe(PyPipe):
         skwargs.update(self._definitional_kwargs())
         return SyncPipe(self.name, source=source, **skwargs)
 
-    def pipe(self, name: str, **kwargs: Any) -> "SyncPipe":
+    def pipe(self, name: ModuleNameLike, **kwargs: Any) -> "SyncPipe":
         """
         Chain the next pipe by name (the method form of ``pipe | name``).
 
@@ -1084,7 +1085,7 @@ class SyncCollection(PyCollection):
             if not self._in_context:
                 self._release_pool()
 
-    def pipe(self, name: str | None = None, **kwargs: Any) -> "SyncPipe":
+    def pipe(self, name: ModuleNameLike | None = None, **kwargs: Any) -> "SyncPipe":
         """
         Chain the next pipe by name: ``pipe.pipe("filter", conf=...)``.
 
@@ -1133,7 +1134,7 @@ class AsyncPipe(PyPipe):
 
     def __init__(
         self,
-        name: str | None = None,
+        name: ModuleNameLike | None = None,
         source: AsyncSource | None = None,
         conf: Conf | None = None,
         *,
@@ -1265,7 +1266,7 @@ class AsyncPipe(PyPipe):
         skwargs.update(self._definitional_kwargs())
         return AsyncPipe(self.name, source=source, **skwargs)
 
-    def async_pipe(self, name: str, **kwargs: Any) -> "AsyncPipe":
+    def async_pipe(self, name: ModuleNameLike, **kwargs: Any) -> "AsyncPipe":
         """Chain the next pipe by name (the method form of ``pipe | name``)."""
         return self._chain(name, **kwargs)
 
@@ -1323,7 +1324,7 @@ class AsyncPipe(PyPipe):
 
         return result
 
-    def _chain(self, name: str, **kwargs: object) -> "AsyncPipe":
+    def _chain(self, name: ModuleNameLike, **kwargs: object) -> "AsyncPipe":
         """
         Create the next async pipe stage, propagating runtime and execution
         settings and consuming this pipe's single execution (not restarting it).
@@ -1495,7 +1496,9 @@ class AsyncCollection(PyCollection):
 
         self._close()
 
-    def async_pipe(self, name: str | None = None, **kwargs: Any) -> "AsyncPipe":
+    def async_pipe(
+        self, name: ModuleNameLike | None = None, **kwargs: Any
+    ) -> "AsyncPipe":
         """Chain the next pipe by name: ``pipe.async_pipe("filter", conf=...)``."""
         return AsyncPipe(name, source=self, **kwargs)
 
