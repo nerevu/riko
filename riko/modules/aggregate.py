@@ -31,6 +31,20 @@ DEFAULTS: Defaults = Defaults()
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
+async def async_parser(
+    stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs: object
+) -> Stream:
+    func = cast(Callable[[Stream], Item], kwargs["func"])
+
+    if iscoroutinefunction(func):
+        result = await func(stream)
+    else:
+        result = func(stream)
+
+    listed = listize(result)
+    return iter(cast(list[Item], listed))
+
+
 def parser(
     stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
@@ -66,20 +80,6 @@ def parser(
     """
     func = cast(Callable[[Stream], Item], kwargs["func"])
     result = func(stream)
-    listed = listize(result)
-    return iter(cast(list[Item], listed))
-
-
-async def async_parser(
-    stream: Stream, objconf: AggregateObjconf, tuples: PipeTuples, **kwargs: object
-) -> Stream:
-    func = cast(Callable[[Stream], Item], kwargs["func"])
-
-    if iscoroutinefunction(func):
-        result = await func(stream)
-    else:
-        result = func(stream)
-
     listed = listize(result)
     return iter(cast(list[Item], listed))
 

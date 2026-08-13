@@ -94,6 +94,33 @@ def _register_receiver(name, objconf, func, kwargs) -> None:
         receiver()
 
 
+async def async_parser(
+    _: Stream,
+    objconf: ReceiveObjconf,
+    tuples: PipeTuples,
+    func: Callable[[Item | StatefulItem], Item] | None = None,
+    **kwargs: object,
+) -> Stream:
+    """
+    Asynchronously receives pushed items (materialized).
+
+    Subscribes to the named AnyIO channel and collects items until the sender
+    completes (channel closure). Registration *is* readiness, so no polling,
+    sleep, or DONE sentinel is involved. Note: this is *materialized* — results
+    are returned only once the channel closes; incremental (yield-as-received)
+    delivery awaits P7.3.
+    """
+    name = objconf.name or "".join(gen_name())
+    fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
+    results: list[Item] = []
+
+    async with async_hub.subscribe(name) as receive_stream:
+        async for item in receive_stream:
+            results.append(cast(Item, _apply(func, item, **fkwargs) if func else item))
+
+    return iter(results)
+
+
 def parser(
     _: Stream,
     objconf: ReceiveObjconf,
@@ -160,31 +187,10 @@ def parser(
             yield StatefulItem(state=StreamState.PENDING)
 
 
-async def async_parser(
-    _: Stream,
-    objconf: ReceiveObjconf,
-    tuples: PipeTuples,
-    func: Callable[[Item | StatefulItem], Item] | None = None,
-    **kwargs: object,
-) -> Stream:
-    """
-    Asynchronously receives pushed items (materialized).
-
-    Subscribes to the named AnyIO channel and collects items until the sender
-    completes (channel closure). Registration *is* readiness, so no polling,
-    sleep, or DONE sentinel is involved. Note: this is *materialized* — results
-    are returned only once the channel closes; incremental (yield-as-received)
-    delivery awaits P7.3.
-    """
-    name = objconf.name or "".join(gen_name())
-    fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
-    results: list[Item] = []
-
-    async with async_hub.subscribe(name) as receive_stream:
-        async for item in receive_stream:
-            results.append(cast(Item, _apply(func, item, **fkwargs) if func else item))
-
-    return iter(results)
+@operator(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args: Any, **kwargs: object) -> Stream:
+    """An async operator that receives pushed stream items (materialized)."""
+    return await async_parser(*args, **kwargs)
 
 
 @operator(DEFAULTS, **OPTS)
@@ -221,9 +227,3 @@ def pipe(*args: Any, **kwargs: object) -> Stream | Iterator[StatefulItem]:
 
     """
     return parser(*args, **kwargs)
-
-
-@operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: object) -> Stream:
-    """An async operator that receives pushed stream items (materialized)."""
-    return await async_parser(*args, **kwargs)
