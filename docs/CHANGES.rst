@@ -80,8 +80,8 @@ New
 Changes
 ~~~~~~~
 
-- Rename ``riko.compile`` to ``riko.compile_pipe`` so it no longer shadows the
-  builtin ``compile``.
+- Rename ``riko.compile.compile`` to ``riko.compile.compile_pipe`` so it no longer
+  shadows the builtin ``compile``.
 - Add ``manage lint --rst`` to render every RST document and validate its
   internal links; run it under ``tox -e lint`` and in CI.
 - ``manage test`` and ``manage lint`` now accept multiple paths.
