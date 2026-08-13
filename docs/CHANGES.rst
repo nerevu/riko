@@ -73,8 +73,8 @@ v0.74.0 (2026-08-06)
 New
 ~~~
 
-- Add ``run-pipe --path`` for executing a workflow from an arbitrary file.
-- Promote the async-backend and JSON workflow compilation helpers to the
+- Add ``run-pipe --path`` for executing a ``pipeline`` from an arbitrary file.
+- Promote the async-backend and JSON ``pipeline`` compilation helpers to the
   stable top-level API, and expose ``get_module_metadata``.
 
 Changes

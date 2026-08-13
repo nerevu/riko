@@ -22,8 +22,8 @@ Index
 - `Why does a pipeline return no items the second time`_
 - `Which operations materialize or retain input`_
 - `How do I send one stream to multiple consumers`_
-- `Can I define a workflow as JSON`_
-- `What execution modes are available for compiled workflows`_
+- `Can I define a pipeline as JSON`_
+- `What execution modes are available for compiled pipelines`_
 - `Can I create custom modules`_
 - `How should errors and resource cleanup be handled`_
 - `Where should I report problems or contribute`_
@@ -283,7 +283,7 @@ inputs     dict  Values to be used in place of prompting the user    None
 Notes
 
 .. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
-.. [#] See `Alternate workflow creation`_ for pipe composition examples
+.. [#] See `Alternate pipeline creation`_ for pipe composition examples
 
 How do I discover installed modules?
 ------------------------------------
@@ -473,7 +473,7 @@ returns an empty ``stream`` rather than silently rerunning work.
     >>> list(flow)
     []
 
-Build a new pipeline instance to rerun the workflow. Chaining after partial
+Build a new pipeline instance to rerun the pipeline. Chaining after partial
 consumption wraps the remaining ``source``. Chaining after ``close()`` or
 failure raises ``PipelineStateError``.
 
@@ -507,7 +507,7 @@ mechanism, not an external message broker.
 
 The `Cookbook`_ fan-out section include complete recipes for both approaches.
 
-Can I define a workflow as JSON?
+Can I define a pipeline as JSON?
 --------------------------------
 
 ``riko`` ships two commands for working with JSON pipe definitions (the
@@ -544,7 +544,7 @@ write to stdout, or to a file via ``-o``):
 See the `DAG format`_ doc and the `Cookbook`_ for the full format/expansion rules and
 examples.
 
-What execution modes are available for compiled workflows?
+What execution modes are available for compiled pipelines?
 ----------------------------------------------------------
 
 ``Context`` accepts these ``ExecutionMode`` values:
@@ -559,7 +559,7 @@ DESCRIBE                 Return both input and dependency information
 =======================  =========================================================
 
 ``extract_dependencies()`` can also inspect a pipe definition without executing
-it. See `Inspecting a workflow`_ in the cookbook for additional details.
+it. See `Inspecting a pipeline`_ in the cookbook for additional details.
 
 The chainable classes share one pipeline model across four execution styles.
 
@@ -629,12 +629,12 @@ documentation workflow.
 .. _Why does a pipeline return no items the second time: #why-does-a-pipeline-return-no-items-the-second-time
 .. _Which operations materialize or retain input: #which-operations-materialize-or-retain-input
 .. _How do I send one stream to multiple consumers: #how-do-i-send-one-stream-to-multiple-consumers
-.. _Can I define a workflow as JSON: #can-i-define-a-workflow-as-json
-.. _What execution modes are available for compiled workflows: #what-execution-modes-are-available-for-compiled-workflows
+.. _Can I define a pipeline as JSON: #can-i-define-a-pipeline-as-json
+.. _What execution modes are available for compiled pipelines: #what-execution-modes-are-available-for-compiled-pipelines
 .. _Can I create custom modules: #can-i-create-custom-modules
 .. _How should errors and resource cleanup be handled: #how-should-errors-and-resource-cleanup-be-handled
 .. _Where should I report problems or contribute: #where-should-i-report-problems-or-contribute
-.. _Inspecting a workflow: COOKBOOK.rst#inspecting-a-workflow
+.. _Inspecting a pipeline: COOKBOOK.rst#inspecting-a-pipeline
 
 .. _README: ../README.rst
 .. _Cookbook: COOKBOOK.rst
@@ -643,7 +643,7 @@ documentation workflow.
 .. _issue tracker: https://github.com/nerevu/riko/issues
 .. _DAG format: DAG_FORMAT.rst
 .. _Design Principles: ../README.rst#design-principles
-.. _Alternate workflow creation: COOKBOOK.rst#alternate-workflow-creation
+.. _Alternate pipeline creation: COOKBOOK.rst#alternate-pipeline-creation
 
 .. _aggregate: ../riko/modules/aggregate.py
 .. _count: ../riko/modules/count.py

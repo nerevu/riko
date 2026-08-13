@@ -16,7 +16,7 @@ Introduction
 processing RSS feeds, web content, text, and structured files.
 
 ``riko`` also supplies a `command-line interface`_ for executing ``flows``, i.e.,
-stream processors aka ``workflows``.
+stream processors aka ``pipelines``.
 
 Requirements & Installation
 ---------------------------
@@ -45,12 +45,11 @@ number of times each word appears.
     >>> ### Set the pipe configurations ###
     >>> #
     >>> # Notes:
-    >>> #   1. look up cached file in the `data` directory
-    >>> #   2. fetch the text contained inside the 'body' tag of a web page and strip
-    >>> #      html tags
+    >>> #   1. look up cached html file in the `data` directory
+    >>> #   2. fetch text in the 'body' tag and strip html tags
     >>> #   3. replace newlines with spaces and assign the result to 'content'
-    >>> #   4. tokenize the resulting text using whitespace as the delimiter
-    >>> #   5. count the number of times each token appears
+    >>> #   4. split text in words using whitespace as the delimiter
+    >>> #   5. count the number of times each word appears
     >>>
     >>> url = get_path('users.jyu.fi.html')                   # 1
     >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
@@ -76,82 +75,103 @@ Motivation
 Why I built riko
 ^^^^^^^^^^^^^^^^
 
-I wanted a small-footprint, pure-Python library for processing data streams. I wanted
-to fetch RSS feeds and perform custom transformations without the complexities of
-distributed compute engines, workflow schedulers, clusters, or message queues.
+I wanted a small-footprint, pure-Python library for processing data streams. In
+particular, I wanted to fetch RSS feeds and web pages and process records without
+needing to deploy a scheduler, cluster, or message queue.
 
-``riko``, a primarily pull-based in-process library, is the result.
+The basic idea is deliberately simple: dictionary-like records flow through configurable
+pipes. Pipelines can run synchronously, asynchronous via async/await, or
+parallelized across threads or processes.
 
 Why you should use riko
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-``riko`` provides a number of benefits / differences from other stream processing
-applications:
+``riko`` is a good fit when you want a batteries included, reusable, data-processing
+abstraction.
 
-- a small footprint (CPU and memory usage)
-- native RSS/Atom support
-- simple installation and usage
-- a pure Python library supporting v3.12+
-- built-in modular ``pipes`` to filter, sort, and modify ``streams``
+In particular, riko provides:
+
+- a pure-Python, embedded execution model with no required external services
+- a library of configuration-driven pipes for filtering, sorting, parsing, transforming, aggregating, and composing streams
+- first-class RSS/Atom and web-content processing
+- synchronous and asynchronous APIs
+- local thread and process-pool execution
+- lazy iterator-oriented processing
+- simple Python or JSON pipeline configuration and definition
+- tools to inspect, execute, and compile pipelines
 
 Why you shouldn't use riko
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``riko`` is usually not the right tool when you need: distributed execution,
-durable scheduling, automatic retries, continual data monitoring, a workflow UI,
-event-triggered actions, or query optimization.
+``riko`` does not try to be a distributed stream-processing engine, durable workflow
+scheduler, or dataframe query engine.
+
+It is usually not the right tool when you need:
+
+- execution across a cluster
+- durable keyed state and recovery after worker failure
+- persistent scheduling, retries, or task dependency management
+- a workflow service/UI
+- event-triggered infrastructure automation
+- dataframe-scale columnar analytics or query optimization
+
+``riko`` can instead run inside a worker or task managed by such systems.
 
 Choosing riko
 ^^^^^^^^^^^^^
 
-The projects below overlap with `riko` in different ways. Some are embedded
-libraries, while others are distributed engines, workflow orchestrators, or
-data-integration platforms. RSS/Atom role distinguishes first-party feed support from
-functionality that requires a custom source, connector, tap, or task.
+Several Python projects overlap with `riko`, but they optimize for different parts
+of the data-processing problem.
 
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| Project           | Primary model        | Deployment       | RSS/Atom             | Best fit                  |
-+===================+======================+==================+======================+===========================+
-| riko              | Python pipelines     | Embedded, local  | Built in             | Lightweight data and feed |
-|                   |                      | process          |                      | processing                |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| RxPY              | Reactive observables | Embedded library | Custom adapter       | Push-based application    |
-|                   |                      |                  |                      | events                    |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| Huginn            | Persistent agents    | Self-hosted app  | Built in             | UI-driven monitoring and  |
-|                   |                      |                  |                      | automation                |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| Apache Beam       | Portable pipelines   | Runner-dependent | Custom I/O           | Portable batch and stream |
-|                   |                      |                  |                      | processing                |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| Flink             | Stateful streams     | Distributed      | Custom connector     | Low-latency, stateful     |
-|                   |                      | engine           |                      | processing                |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| Storm             | Event topologies     | Distributed      | Custom spout         | Low-latency event         |
-|                   |                      | engine           |                      | processing                |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| Spark             | DataFrame streams    | Distributed      | Custom connector     | Large-scale streaming     |
-|                   |                      | engine           |                      | analytics                 |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| Luigi / Prefect   | Task workflows       | Scheduler and    | External task        | Scheduling, retries, and  |
-|                   |                      | workers          |                      | dependencies              |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
-| Airbyte / Meltano | ELT platforms        | Connectors or    | Connector/tap        | Data integration and      |
-|                   |                      | plugins          | dependent            | repeatable ELT pipelines  |
-+-------------------+----------------------+------------------+----------------------+---------------------------+
++------------------------------------------+------------------------------------------------------------------+
+| Project  | Distinctive strength          | Prefer it for...                                                 |
++==========+===============================+==================================================================+
+| dlt_     | Declarative, schema-aware     | moving data from REST APIs into warehouses/lakes/databases       |
+|          | ingestion                     |                                                                  |
++------------------------------------------+------------------------------------------------------------------+
+| Singer_  | Standardized taps and targets | replicating data from various sources into many destinations     |
++------------------------------------------+------------------------------------------------------------------+
+| Bytewax_ | Stateful streaming runtime    | keyed state, recovery, workers, or distributed stream processing |
++------------------------------------------+------------------------------------------------------------------+
+| Bonobo_  | Injectable services and I/O   | traditional ETL graphs and runtime-injected infrastructure       |
++------------------------------------------+------------------------------------------------------------------+
+| Streamz_ | Continuous stream graphs      | push-oriented streams, branching, backpressure, or live windows  |
++------------------------------------------+------------------------------------------------------------------+
+| petl_    | Rich lazy table algebra       | joins, reshaping, and data-quality operations                    |
++------------------------------------------+------------------------------------------------------------------+
+| ``riko`` | Config-driven pipelines       | broad library of reusable, JSON serializable pipes               |
++------------------------------------------+------------------------------------------------------------------+
 
-Choose `riko` when a pipeline should run directly inside a Python application
-without a separate scheduler, service, or cluster. It provides first-party
-RSS/Atom processing and supports synchronous, asynchronous, and thread-pooled
-local execution.
+The closest comparison depends on what part of `riko` you care about.
 
-Choose `RxPY`_ for reactive event composition, `Huginn`_ for persistent
-UI-managed automation, and `Flink`_, `Storm`_, `Spark`_, or `Apache Beam`_ when
-distributed execution is required. Luigi and Prefect orchestrate tasks, while Airbyte
-and Meltano focus on data-integration workflows. Meltano commonly runs Singer taps and
-targets and can add scheduling through an orchestration plugin. These tools may
-run ``riko`` as one step in a larger workflow rather than replace its in-process
-transformation API.
+dlt_ is a Python ingestion framework/library with similarities to ``riko`` in REST
+ingestion, incremental extraction, schema-aware loading, and Python-native data
+handling. dlt primarily allows you to "get data out a source reliably and into a
+well-structured destination." It provides primitives for pagination, auth, and schema
+normalization. This contrasts with riko's main use-case of processing and composing
+streams of records.
+
+`Singer`_ is a connector protocol that standardizes how sources (``taps``) and
+destinations (``targets``) exchange records, schemas, and replication state. It
+overlaps with ``riko`` at the extraction and data-movement boundaries. Singer is a
+better fit when the primary goal is source-to-destination replication. ``riko`` instead
+places more emphasis on transforming and composing records.
+
+`Bytewax`_ is the natural direction when a workload grows beyond ``riko``'s intended
+scope and requires durable keyed state, recovery, or distributed stream processing.
+
+`petl`_ and `Bonobo`_, like ``riko``, are both lightweight ETL libraries. Compared to
+``riko``, petl is more table-oriented and provides a deeper relational/data-wrangling
+vocabulary. Bonobo centers execution around an ETL graph of transformation nodes.
+
+`Streamz`_ overlaps most with ``riko``'s stream-composition and fan-out model, but
+places more emphasis on continuous push-based streams, windowing, and reactive dataflow.
+
+``riko`` provides more "batteries included" data-processing vocabulary. It exposes common
+operations (filtering, truncating, searching, etc.) as configurable, reusable ``pipes``
+rather than requiring a Python callable. ``riko`` also provides first-class support for
+web-content (RSS/Atom feeds, HTML/XML, and JSON) and a simple JSON-based pipeline
+definition format.
 
 Design Principles
 -----------------
@@ -514,8 +534,8 @@ See the `Cookbook`_ for pool cleanup and the full state model.
 Command-line Interface
 ----------------------
 
-``riko`` provides a command, ``run-pipe``, to execute ``workflows``. A
-``workflow`` is simply a file containing a function named ``pipe`` that creates
+``riko`` provides a command, ``run-pipe``, to execute ``pipelines``. A
+``pipeline`` is simply a file containing a function named ``pipe`` that creates
 a ``flow`` and processes the resulting ``stream``. E.g., ``flow.py``
 
 .. code-block:: python
@@ -538,7 +558,7 @@ CLI Usage
   description: Runs a riko pipe
 
   positional arguments:
-    pipeid            The workflow to run from the examples directory.
+    pipeid            The pipeline to run from the examples directory.
 
   optional arguments:
     -h, --help        show this help message and exit
@@ -553,7 +573,7 @@ then see the following output in your terminal:
 
     {'content': 'https://google.com', 'strreplace': 'https://google.co.uk'}
 
-``run-pipe`` will also search the ``examples`` directory for ``workflows``. Type
+``run-pipe`` will also search the ``examples`` directory for ``pipelines``. Type
 ``run-pipe demo`` and you should see the following output:
 
 .. code-block:: bash
@@ -586,7 +606,7 @@ More Info
 
 - `FAQ`_ — the complete built-in ``pipe`` and file-format catalog
 - `Cookbook`_ — progressively organized, runnable recipes
-- `DAG format`_ — compact and full JSON ``workflow`` formats
+- `DAG format`_ — compact and full JSON ``pipeline`` formats
 - `Migration guide`_ — upgrading from the older versions or the ``legacy`` branch
 - `Changelog`_ — release notes
 - `Contributing doc`_ — contribution and issue-reporting guidance
@@ -673,10 +693,12 @@ License
 .. _Fetching data and feeds: docs/COOKBOOK.rst#fetching-data-and-feeds
 
 .. _pipe2py: https://github.com/ggaughan/pipe2py/
-.. _Huginn: https://github.com/cantino/huginn/
-.. _Flink: http://flink.apache.org/
-.. _Spark: http://spark.apache.org/streaming/
-.. _Storm: http://storm.apache.org/
+.. _Bonobo: https://www.bonobo-project.org
+.. _petl: https://petl.readthedocs.io
+.. _Singer: https://www.singer.io
+.. _Streamz: https://streamz.readthedocs.io
+.. _Bytewax: https://docs.bytewax.io
+.. _dlt: https://dlthub.com/docs/intro
 .. _remains: https://web.archive.org/web/20150930021241/http://pipes.yahoo.com/pipes/
 .. _MIT License: http://opensource.org/licenses/MIT
 .. _Apache Beam: https://beam.apache.org/documentation/programming-guide/

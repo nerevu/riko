@@ -76,7 +76,7 @@ def run() -> None:
         dest="pipeid",
         nargs="?",
         default=None,
-        help="The workflow to run from the examples directory.",
+        help="The pipeline to run from the examples directory.",
     )
 
     parser.add_argument(
