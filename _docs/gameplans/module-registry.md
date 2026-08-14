@@ -149,10 +149,15 @@ callable for that interface (today `resolve_module`'s 2nd arg). `ModuleDefinitio
    resolves and runs it, **no core edit** (verified end-to-end). Tests: `TestEntryPointModules` (4:
    resolve, via-façade, runtime-shadows-entry-point, lazy-discovered-once). Suite **674**; pyright/ruff
    clean. **DoD #1 met.**
-   **Deferred:** `_metadata.py` catalog (`list_modules`/`gen_module_catalog`) still pkgutil-only, so
-   entry-point modules resolve but don't yet appear in `list_modules()` — a focused follow-up
-   (needs a lazy registry read to avoid the `riko.modules`↔`riko.ext` import cycle). A live
-   `pip install -e` of the example in CI is the M2 gate, not a per-slice requirement.
+   **Catalog integration — ✅ LANDED.** `_metadata.py` gained `gen_registry_catalog()` (lazy
+   `riko.ext.registry` import, so no `riko.modules`↔`riko.ext` load cycle); `list_modules()` overlays
+   registry (runtime + entry-point) modules onto the pkgutil built-ins, so extension modules are now
+   discoverable — metadata derived from their decorated wrappers with `enforce_name=False` (extension
+   names are namespaced, unlike the built-in short-name contract). Bare-callable registrations (no
+   metadata attrs) resolve but are skipped in the catalog (guarded `AttributeError`/`TypeError`).
+   Listing forces entry-point extensions to import — an explicit "show everything" op. Registry
+   accessors `catalog_names()`/`definition()`. Tests: `TestCatalog` (2). Suite **681**.
+   **Remaining:** a live `pip install -e` of the example in CI (M2 gate, not per-slice).
 
 ## Exit tests (M2)
 

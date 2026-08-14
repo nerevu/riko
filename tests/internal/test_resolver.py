@@ -12,6 +12,18 @@ from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext.pipelines import PipelineResolver
 from riko.ext.registry import ModuleDefinition, registry
 from riko.ext.resolver import StageResolver, stage_resolver
+from riko.modules import list_modules
+
+_META = {
+    "type": "operator",
+    "subtype": "composer",
+    "subtypes": {"composer"},
+    "pollable": False,
+    "loopable": False,
+    "isasync": False,
+}
+
+_NAME = "acme.mod"
 
 
 @pytest.fixture
@@ -27,6 +39,14 @@ marker = lambda source, **_: source
 def _patch_entry_points(monkeypatch, *eps):
     ep_func = lambda group: list(eps) if group == "riko.modules" else []
     monkeypatch.setattr("riko.ext.registry.entry_points", ep_func)
+
+
+def _pipe_wrapper(**attrs):
+    wrapper = lambda source, **_: source
+    for key, value in attrs.items():
+        setattr(wrapper, key, value)
+
+    return wrapper
 
 
 class _FakeEntryPoint:
@@ -90,20 +110,19 @@ class TestModuleRegistry:
 
     def test_module_convention_derives_both_interfaces(self, clean_registry):
         mod = SimpleNamespace(pipe=marker, async_pipe=marker)
-        clean_registry.register(ModuleDefinition(name="acme.mod", module=mod))
+        clean_registry.register(ModuleDefinition(name=_NAME, module=mod))
 
-        assert clean_registry.resolve("acme.mod", "pipe") is marker
-        assert clean_registry.resolve("acme.mod", "async_pipe") is marker
+        assert clean_registry.resolve(_NAME, "pipe") is marker
+        assert clean_registry.resolve(_NAME, "async_pipe") is marker
 
     def test_explicit_callable_overrides_module(self, clean_registry):
         other = lambda source, **_: source
         mod = SimpleNamespace(pipe=other, async_pipe=other)
-        clean_registry.register(
-            ModuleDefinition(name="acme.mod", sync_pipe=marker, module=mod)
-        )
+        definition = ModuleDefinition(name=_NAME, sync_pipe=marker, module=mod)
+        clean_registry.register(definition)
 
-        assert clean_registry.resolve("acme.mod", "pipe") is marker  # explicit wins
-        assert clean_registry.resolve("acme.mod", "async_pipe") is other  # from module
+        assert clean_registry.resolve(_NAME, "pipe") is marker  # explicit wins
+        assert clean_registry.resolve(_NAME, "async_pipe") is other  # from module
 
 
 class TestStageResolver:
@@ -202,3 +221,18 @@ class TestPipelineResolver:
 
         with pytest.raises(UnsupportedPipelineError):
             resolver.load("pipe_missing", "pipe_missing")
+
+
+class TestCatalog:
+    def test_registered_module_appears_in_catalog(self, clean_registry):
+        pipe = _pipe_wrapper(name=_NAME, **_META)
+        clean_registry.register(ModuleDefinition(name=_NAME, sync_pipe=pipe))
+
+        assert _NAME in list_modules()
+        assert "tokenizer" in list_modules()  # built-ins still present
+
+    def test_bare_callable_skipped_in_catalog(self, clean_registry):
+        # resolvable but carries no metadata → listed nowhere, and no error
+        clean_registry.register(ModuleDefinition(name="acme.bare", sync_pipe=marker))
+
+        assert "acme.bare" not in list_modules()

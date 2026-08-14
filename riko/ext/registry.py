@@ -54,13 +54,13 @@ class ModuleDefinition:
     module: object | None = None
     description: str | None = None
 
-    def pipe_for(self, interface: Interface) -> Pipeline | None:
-        explicit = self.sync_pipe if interface == "pipe" else self.async_pipe
+    def get_pipe(self, interface: Interface) -> Pipeline | None:
+        pipe = self.sync_pipe if interface == "pipe" else self.async_pipe
 
-        if explicit is None and self.module is not None:
-            explicit = getattr(self.module, interface, None)
+        if pipe is None and self.module is not None:
+            pipe = getattr(self.module, interface, None)
 
-        return explicit
+        return pipe
 
 
 class ModuleRegistry:
@@ -131,14 +131,24 @@ class ModuleRegistry:
         definition = self._runtime.get(name) or self._entry_point_definition(name)
 
         if definition is None:
-            resolved = self._resolve_builtin(name, interface)
-        elif (resolved := definition.pipe_for(interface)) is None:
+            pipe = self._resolve_builtin(name, interface)
+        elif (pipe := definition.get_pipe(interface)) is None:
             raise UnsupportedModuleError(f"{name!r} has no {interface!r}")
 
-        return resolved
+        return pipe
 
     def registered_names(self) -> tuple[str, ...]:
         return tuple(sorted(self._runtime))
+
+    def catalog_names(self) -> tuple[str, ...]:
+        """
+        Every registered + entry-point name (built-ins are enumerated
+        separately by the pkgutil catalog).
+        """
+        return tuple(sorted({*self._runtime, *self._discover_entry_points()}))
+
+    def definition(self, name: str) -> ModuleDefinition | None:
+        return self._runtime.get(name) or self._entry_point_definition(name)
 
     def reset(self) -> None:
         self._runtime.clear()
