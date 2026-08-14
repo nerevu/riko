@@ -1,6 +1,49 @@
 Changelog
 =========
 
+v0.74.2 (2026-08-11)
+--------------------
+
+Changes
+~~~~~~~
+
+- Harden the release/publish GitHub workflows: set explicit workflow
+  permissions and skip re-uploading existing PyPI artifacts.
+- Add ``pygments`` to the dev dependencies (RST linting).
+
+Bugfixes
+~~~~~~~~
+
+- Verify ``xpath`` strips XML namespaces (#20); move content
+  re-encoding into ``riko/_reencode.py`` and simplify the parsers.
+
+v0.74.1 (2026-08-10)
+--------------------
+
+New
+~~~
+
+- Promote ``async_return`` and ``async_sleep`` to the stable top-level
+  ``riko`` API, so async pipes and doctests import their helpers (and
+  ``run``) from ``riko`` rather than ``riko.bado``.
+
+Documentation
+~~~~~~~~~~~~~
+
+- Correct processor module docstrings: import ``run`` from ``riko`` and
+  document the accepted ``item`` type as ``dict or Iter[dict]``.
+- Convert ``docs/DAG_FORMAT`` to reStructuredText and fold
+  ``API_STABILITY`` into the migration guide.
+- Relocate internal planning docs (``ROADMAP`` and the gameplans) out of
+  the user-facing ``docs/`` tree; streamline a Cookbook example and
+  backfill the changelog.
+
+Bugfixes
+~~~~~~~~
+
+- ``manage test`` correctly reads the ``cov`` flag (not ``cover``), so
+  ``--cov=riko`` coverage works.
+
 v0.74.0 (2026-08-06)
 --------------------
 
