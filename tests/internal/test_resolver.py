@@ -4,6 +4,7 @@ Tests for the P8 module registry + stage-resolution façade (slice 1).
 """
 
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,6 +22,20 @@ def clean_registry():
 
 
 marker = lambda source, **_: source
+
+
+def _patch_entry_points(monkeypatch, *eps):
+    ep_func = lambda group: list(eps) if group == "riko.modules" else []
+    monkeypatch.setattr("riko.ext.registry.entry_points", ep_func)
+
+
+class _FakeEntryPoint:
+    def __init__(self, name, definition):
+        self.name = name
+        self._definition = definition
+
+    def load(self):
+        return self._definition
 
 
 class TestModuleRegistry:
@@ -69,6 +84,27 @@ class TestModuleRegistry:
         with pytest.raises(UnsupportedModuleError):
             clean_registry.resolve("synconly", "async_pipe")
 
+    def test_runtime_register_requires_name(self, clean_registry):
+        with pytest.raises(ValueError, match="needs a name"):
+            clean_registry.register(ModuleDefinition(sync_pipe=marker))
+
+    def test_module_convention_derives_both_interfaces(self, clean_registry):
+        mod = SimpleNamespace(pipe=marker, async_pipe=marker)
+        clean_registry.register(ModuleDefinition(name="acme.mod", module=mod))
+
+        assert clean_registry.resolve("acme.mod", "pipe") is marker
+        assert clean_registry.resolve("acme.mod", "async_pipe") is marker
+
+    def test_explicit_callable_overrides_module(self, clean_registry):
+        other = lambda source, **_: source
+        mod = SimpleNamespace(pipe=other, async_pipe=other)
+        clean_registry.register(
+            ModuleDefinition(name="acme.mod", sync_pipe=marker, module=mod)
+        )
+
+        assert clean_registry.resolve("acme.mod", "pipe") is marker  # explicit wins
+        assert clean_registry.resolve("acme.mod", "async_pipe") is other  # from module
+
 
 class TestStageResolver:
     def test_module_resolves_via_registry(self, clean_registry):
@@ -84,6 +120,66 @@ class TestStageResolver:
         sys.modules.pop("riko.compile", None)
         StageResolver(clean_registry).resolve("tokenizer", "pipe")
         assert "riko.compile" not in sys.modules
+
+
+class TestEntryPointModules:
+    """DoD #1: an external package supplies modules via entry points, no core edit."""
+
+    def test_entry_point_module_resolves(self, monkeypatch, clean_registry):
+        defn = ModuleDefinition(name="acme.hello", sync_pipe=marker)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint("acme.hello", defn))
+        clean_registry.reset()
+        assert clean_registry.resolve("acme.hello", "pipe") is marker
+
+    def test_name_stamped_from_entry_point_key(self, monkeypatch, clean_registry):
+        # definition omits name — the registry adopts the entry-point key
+        defn = ModuleDefinition(sync_pipe=marker)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint("acme.hello", defn))
+        clean_registry.reset()
+
+        assert clean_registry.resolve("acme.hello", "pipe") is marker
+        assert clean_registry._entry_point_definition("acme.hello").name == "acme.hello"
+
+    def test_name_key_mismatch_raises(self, monkeypatch, clean_registry):
+        defn = ModuleDefinition(name="acme.other", sync_pipe=marker)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint("acme.hello", defn))
+        clean_registry.reset()
+
+        with pytest.raises(ValueError, match="must match"):
+            clean_registry.resolve("acme.hello", "pipe")
+
+    def test_entry_point_via_facade(self, monkeypatch, clean_registry):
+        defn = ModuleDefinition(name="acme.hello", sync_pipe=marker)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint("acme.hello", defn))
+        clean_registry.reset()
+        assert stage_resolver.resolve("acme.hello", "pipe") is marker
+
+    def test_runtime_registration_shadows_entry_point(
+        self, monkeypatch, clean_registry
+    ):
+        definition = ModuleDefinition("acme.hello", marker)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint("acme.hello", definition))
+        clean_registry.reset()
+        clean_registry.register(ModuleDefinition("acme.hello", marker))
+        assert clean_registry.resolve("acme.hello", "pipe") is marker
+
+    def test_entry_points_discovered_lazily_once(self, monkeypatch, clean_registry):
+        calls = {"n": 0}
+
+        def counting(group):
+            calls["n"] += 1
+            return []
+
+        monkeypatch.setattr("riko.ext.registry.entry_points", counting)
+        clean_registry.reset()
+
+        with pytest.raises(UnsupportedModuleError):
+            clean_registry.resolve("nope", "pipe")
+
+        with pytest.raises(UnsupportedModuleError):
+            clean_registry.resolve("nope", "pipe")
+
+        assert calls["n"] == 1
 
 
 class TestPipelineResolver:

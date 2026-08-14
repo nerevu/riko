@@ -141,8 +141,18 @@ callable for that interface (today `resolve_module`'s 2nd arg). `ModuleDefinitio
    Composite, M2's `test_pipeline_store.py`); compiler adopting the `StageResolver` façade (P8.6);
    dropping the `compile_missing` polymorphism (P8.8); wrapping resolved sub-pipelines instead of
    mutating them (P8.9) — all carry codegen/test-infra risk and are cleaner as a focused follow-up.
-3. **Extensibility** — entry points + `_metadata` reads registry + **one external example extension**
-   proving P8/P14 (**DoD #1 done**). This is also what unblocks P9A codegen.
+3. **Extensibility — ✅ LANDED (entry points + example); catalog deferred.** `ModuleRegistry` gained
+   the **entry-point tier** (`importlib.metadata.entry_points(group="riko.modules")`, discovered by
+   name lazily, loaded+cached on first resolve; precedence runtime → entry-point → built-in;
+   `reset()` clears the entry-point cache). Installable **example extension**
+   (`examples/riko-example-ext/`) authored with only public `riko.ext` API — `SyncPipe("example.shout")`
+   resolves and runs it, **no core edit** (verified end-to-end). Tests: `TestEntryPointModules` (4:
+   resolve, via-façade, runtime-shadows-entry-point, lazy-discovered-once). Suite **674**; pyright/ruff
+   clean. **DoD #1 met.**
+   **Deferred:** `_metadata.py` catalog (`list_modules`/`gen_module_catalog`) still pkgutil-only, so
+   entry-point modules resolve but don't yet appear in `list_modules()` — a focused follow-up
+   (needs a lazy registry read to avoid the `riko.modules`↔`riko.ext` import cycle). A live
+   `pip install -e` of the example in CI is the M2 gate, not a per-slice requirement.
 
 ## Exit tests (M2)
 
