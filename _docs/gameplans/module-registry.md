@@ -128,8 +128,19 @@ callable for that interface (today `resolve_module`'s 2nd arg). `ModuleDefinitio
    **Deferred to slice 2 (not P8.2 as sliced):** `compile.resolve_module`'s own module branch still
    duplicates the registry's lazy import — left intact so its transitive-error doctest (which patches
    `riko.compile.import_module`) stays valid; reconciled when the compiler adopts the façade (P8.6).
-2. **Pipeline store** — P8.3/P8.6/P8.8/P8.9. Extract `tests.*` into injected stores; compiler uses the
-   resolver; drop `compile_missing`; stop mutating callables. Removes hardcoded `tests.*` from `riko/`.
+2. **Pipeline store — ✅ LANDED (2a); 2b deferred.** `riko/ext/pipelines.py` — `PipelineResolver`
+   (injectable `package`/`directory`), global `pipeline_resolver` **empty in core**;
+   `resolve_module`'s `pipe_*` branch delegates to it; the hardcoded `tests.pypipelines` /
+   `tests/pipelines` **code paths are gone from `riko/`** (only docstrings mention them now), moved to
+   `conftest.py` via `pipeline_resolver.configure(...)`. Unused `loads`/`ROOT_DIR`/
+   `UnsupportedPipelineError` imports removed from `compile.py`. Behavior preserved (the
+   `compile_missing` tuple + `_get_pipeline` test infra untouched). Tests: `TestPipelineResolver` (3,
+   incl. "core default has no named pipelines"). Suite **670**; pyright/ruff clean. `ModuleDefinition`
+   fields are `sync_pipe`/`async_pipe`.
+   **Deferred → slice 2b:** full `PipelineStore` protocol decomposition (Directory/Package/Mapping/
+   Composite, M2's `test_pipeline_store.py`); compiler adopting the `StageResolver` façade (P8.6);
+   dropping the `compile_missing` polymorphism (P8.8); wrapping resolved sub-pipelines instead of
+   mutating them (P8.9) — all carry codegen/test-infra risk and are cleaner as a focused follow-up.
 3. **Extensibility** — entry points + `_metadata` reads registry + **one external example extension**
    proving P8/P14 (**DoD #1 done**). This is also what unblocks P9A codegen.
 

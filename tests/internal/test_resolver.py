@@ -7,7 +7,8 @@ import sys
 
 import pytest
 
-from riko.exceptions import UnsupportedModuleError
+from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.ext.pipelines import PipelineResolver
 from riko.ext.registry import ModuleDefinition, registry
 from riko.ext.resolver import StageResolver, stage_resolver
 
@@ -83,3 +84,25 @@ class TestStageResolver:
         sys.modules.pop("riko.compile", None)
         StageResolver(clean_registry).resolve("tokenizer", "pipe")
         assert "riko.compile" not in sys.modules
+
+
+class TestPipelineResolver:
+    def test_core_default_has_no_named_pipelines(self):
+        """
+        A bare (unconfigured) resolver resolves no ``pipe_*`` — core ships
+        no named-pipeline locations.
+        """
+        with pytest.raises(UnsupportedPipelineError):
+            PipelineResolver().load("pipe_x", "pipe_x")
+
+    def test_configured_resolver_imports_generated_module(self):
+        resolver = PipelineResolver(package="tests.pypipelines")
+        module, parsed = resolver.load("pipe_kazeeki1", "pipe_kazeeki1")
+        assert module is not None
+        assert parsed is None
+
+    def test_missing_pipeline_raises_unsupported(self):
+        resolver = PipelineResolver(package="tests.pypipelines")
+
+        with pytest.raises(UnsupportedPipelineError):
+            resolver.load("pipe_missing", "pipe_missing")

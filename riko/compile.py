@@ -40,7 +40,7 @@ from functools import partial, reduce, update_wrapper
 from importlib import import_module
 from inspect import isawaitable
 from itertools import pairwise
-from json import JSONEncoder, dumps, loads
+from json import JSONEncoder, dumps
 from pathlib import Path
 from pprint import PrettyPrinter
 from time import struct_time
@@ -52,9 +52,9 @@ from riko._iterutils import listize
 from riko._strutils import replacer
 from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict
-from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.exceptions import UnsupportedModuleError
+from riko.ext.pipelines import pipeline_resolver
 from riko.modules._subpipe import is_subpipe, mark_subpipe
-from riko.paths import ROOT_DIR
 from riko.pprint2 import Id, repr_arg, repr_args
 from riko.topsort import topological_sort
 from riko.types.compile import (
@@ -779,26 +779,12 @@ def resolve_module(  # noqa: E302
     module = parsed_pipe_def = None
 
     if module_name.startswith("pipe_"):
-        try:
-            module = import_module(f"tests.pypipelines.{module_name}")
-        except ModuleNotFoundError as e:
-            if compile_missing:
-                msg = f"Couldn't import module for {pipe_name}: {e}. "
-                msg += "Building from json..."
-                print(msg)
-
-                file_path = file_path or ROOT_DIR / "tests" / "pipelines"
-                pipe_file_name = file_path / f"{pipe_name}.json"
-
-                try:
-                    with pipe_file_name.open() as f:
-                        pipe_def = loads(f.read())
-                except OSError as file_error:
-                    raise UnsupportedPipelineError(pipe_name) from file_error
-
-                parsed_pipe_def = parse_pipe_def(pipe_def, pipe_name)
-            else:
-                raise UnsupportedPipelineError(pipe_name) from e
+        module, parsed_pipe_def = pipeline_resolver.load(
+            module_name,
+            pipe_name,
+            compile_missing=compile_missing,
+            file_path=file_path,
+        )
     else:
         target = f"riko.modules.{module_name}"
 
