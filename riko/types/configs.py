@@ -16,9 +16,9 @@ Edit those objects (not this file), then regenerate with ``gen-config``.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from riko._objectify import DynamicConf
+from riko._objectify import Objectify
 
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
@@ -37,6 +37,14 @@ if TYPE_CHECKING:
         Subkey,
         Terminal,
     )
+
+
+class DynamicConf(Objectify[Any]):
+    """
+    A parsed configuration bag with case-insensitive attribute and mapping
+    access. The base type every parsed module config is, and the fallback
+    config type for modules without a precise config.
+    """
 
 
 class SortObjconf(DynamicConf):

@@ -31,8 +31,8 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._objectify import DynamicConf
 from riko.cast import BasicCastType
+from riko.types.configs import DynamicConf
 from riko.types.general import Defaults, Extraction, Opts
 
 from . import processor

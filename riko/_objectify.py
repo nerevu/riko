@@ -68,14 +68,6 @@ else:
             return len(self.data)
 
 
-class DynamicConf(Objectify[Any]):
-    """
-    A parsed configuration bag with case-insensitive attribute and mapping
-    access. The base type every parsed module config is, and the fallback
-    config type for modules without a precise config.
-    """
-
-
 @overload
 def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...  # noqa: E704
 @overload  # noqa: E302

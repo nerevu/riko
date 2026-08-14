@@ -15,7 +15,7 @@ from typing import cast, overload
 import pygogo as gogo
 
 from riko._iterutils import broadcast, dispatch, listize
-from riko._objectify import DynamicConf, objectify
+from riko._objectify import objectify
 from riko.cast import (
     CAST_SWITCH,
     BasicCastType,
@@ -26,6 +26,7 @@ from riko.cast import (
 )
 from riko.dotdict import DotDict, is_mapping
 from riko.parsers import conf_is_dynamic, get_field, parse_conf
+from riko.types.configs import DynamicConf
 from riko.types.general import (
     Casted,
     CastFuncs,

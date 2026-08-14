@@ -17,7 +17,6 @@ from typing import Literal, cast, overload
 import pygogo as gogo
 
 from riko._iterutils import dispatch
-from riko._objectify import DynamicConf
 from riko.bado.itertools import async_map
 from riko.cast import BasicCastType
 from riko.context import Context, ExecutionMode, parse_context
@@ -34,6 +33,7 @@ from riko.modules._prepare import (
 )
 from riko.parsers import get_field, get_skip
 from riko.types.compile import EmbedKwargs
+from riko.types.configs import DynamicConf
 from riko.types.general import (
     AsyncOperatorParser,
     AsyncOperatorWrapper,

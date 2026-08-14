@@ -13,7 +13,7 @@ from dataclasses import is_dataclass
 from operator import itemgetter
 from random import choice
 
-from riko._objectify import DynamicConf
+from riko.types.configs import DynamicConf
 from riko.types.modules import RegexConfRule, RegexRule
 from riko.types.values import BasicValue
 

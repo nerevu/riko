@@ -25,8 +25,8 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko._objectify import DynamicConf
 from riko.cast import SourceOpts
+from riko.types.configs import DynamicConf
 from riko.types.general import Defaults, Extraction, Item, Opts
 
 from . import processor
