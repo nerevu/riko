@@ -347,7 +347,7 @@ What do processor, operator, and splitter mean?
 
 A ``processor`` works on individual ``items``. A ``processor`` whose input type
 is ``none`` is a ``source``; other ``processors`` are ``transformers``. Loopable
-``processors`` can be mapped over a ``source`` and are the stages eligible for
+``processors`` can be mapped over a ``source`` and are the ``pipes`` eligible for
 local sync pools or bounded async concurrency.
 
 An ``operator`` works on a whole ``stream``. A ``composer`` returns a
@@ -422,9 +422,10 @@ iteration and can also be awaited. Awaiting materializes all remaining
 ``items``; ``async for`` preserves item-by-item consumption.
 
 Fully consumed sync and async pipelines are tested for equivalent data output.
-Execution mechanics can differ under partial consumption: an async mapping stage
-may begin work for ``items`` that a downstream consumer never yields. Keep side
-effects out of partially consumed mapping stages or bound work at the stage.
+Execution mechanics can differ under partial consumption: a loopable ``pipe``
+mapped over its ``source`` may begin work for ``items`` that a downstream consumer
+never yields. Keep side effects out of such ``pipes`` when consuming partially, or
+bound the work per ``item``.
 
 ``SyncCollection`` fetches multiple configured sources sequentially or with a
 local pool. ``AsyncCollection`` fetches sources concurrently with bounded
@@ -433,9 +434,9 @@ in-flight work.
 What does ``parallel=True`` do?
 -------------------------------
 
-For ``SyncPipe``, eligible item-processing stages use a local thread pool by
+For ``SyncPipe``, eligible item-processing ``pipes`` use a local thread pool by
 default. Pass ``threads=False`` to use a process pool. The current sync mapping
-path materializes the stage ``source`` before dispatch, so it is suitable only
+path materializes the ``pipe`` ``source`` before dispatch, so it is suitable only
 for finite inputs. Results are unordered unless ``ordered=True`` is requested.
 
 For ``AsyncPipe``, ``parallel=True`` enables bounded async concurrency with
@@ -568,9 +569,9 @@ The chainable classes share one pipeline model across four execution styles.
 +==============================+========================================+================================================+
 | ``SyncPipe``                 | inline iterator pipeline               | single-use; lazy except sort/aggregate         |
 +------------------------------+----------------------------------------+------------------------------------------------+
-| ``SyncPipe(parallel=True)``  | local thread (or process) pool         | eligible stages; source materialized first     |
+| ``SyncPipe(parallel=True)``  | local thread (or process) pool         | eligible pipes; source materialized first      |
 +------------------------------+----------------------------------------+------------------------------------------------+
-| ``AsyncPipe``                | async iteration or ``await``           | await materializes; mapping may run eager      |
+| ``AsyncPipe``                | async iteration or ``await``           | await materializes; mapped source runs eager   |
 +------------------------------+----------------------------------------+------------------------------------------------+
 | ``AsyncPipe(parallel=True)`` | bounded async concurrency              | tune ``connections``/``prefetch``/``ordered``  |
 +------------------------------+----------------------------------------+------------------------------------------------+

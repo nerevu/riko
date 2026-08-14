@@ -30,7 +30,7 @@ Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP
 
 ## 0. Architectural direction (shipped)
 
-> **Partial.** Direction beyond what ships (callable stages, batches, schema/state, RDP, Connect) is [roadmap](ROADMAP.md).
+> **Partial.** Direction beyond what ships (callable pipes, batches, schema/state, RDP, Connect) is [roadmap](ROADMAP.md).
 
 Riko retains its item-oriented pipeline model. Already shipping from the architectural
 direction:
@@ -39,7 +39,7 @@ direction:
 * bounded concurrency and backpressure
 * synchronous/asynchronous parity for the built-in modules
 
-Not yet shipped (see ROADMAP §0): callable `map`/`flat_map` stages, logical record
+Not yet shipped (see ROADMAP §0): callable `map`/`flat_map` pipes, logical record
 batches, explicit schema/state handling, the Riko Data Protocol, and the Connect
 orchestration layer.
 
@@ -54,7 +54,7 @@ orchestration layer.
 * stream and Feed processing
 * meza-backed export converters (see [§25](#25-conversion--export-converters-shipped))
 
-Not yet shipped in Core: callable stages, logical batches, schema projection, and
+Not yet shipped in Core: callable pipes, logical batches, schema projection, and
 error/disposition callbacks and sinks. **Riko Connect** is not started.
 
 ## 2. Core item and stream types
@@ -126,7 +126,7 @@ async for item in pipe:
 result = await pipe          # collects output, returns the historical sync-style result
 ```
 
-Async chaining is lazy at the stage boundary. The non-bounded legacy-parser path still
+Async chaining is lazy at the pipe boundary. The non-bounded legacy-parser path still
 buffers its upstream at the named `AsyncPipe._materialize_legacy_source` seam; only the
 bounded/parallel path streams end-to-end. Incremental `AsyncCollection` merge on the
 unordered path streams as records arrive (via `async_merge`); ordered collections still

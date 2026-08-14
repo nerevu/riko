@@ -81,7 +81,7 @@ an explicit conversion for small or compatibility workloads.
 ## 5. Push-down
 
 Push-down occurs only for a documented expression subset. Unsupported transforms remain
-normal Riko stages after the source.
+normal Riko pipes after the source.
 
 Initial subset:
 

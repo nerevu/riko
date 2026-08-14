@@ -20,7 +20,7 @@ appears here only as the fake in-repo example extension that proves the seam.
   (`operator`/`processor`/`splitter`) — the two are **different axes** and both are kept: runtime
   `type` unchanged; `user_type` added for codegen only.
 - **No `.then()` — decision: Option C + `__or__`.** `.then()` is **rejected** (avoids a second
-  chaining idiom and the `then`-means-callable semantic collision with §4 callable stages). Instead:
+  chaining idiom and the `then`-means-callable semantic collision with §4 callable pipes). Instead:
   (a) **extend the existing `.pipe()`** to accept a positional `ModuleNameLike`
   (`pipe.pipe("filter", conf=...)`), and (b) add a native **`__or__`/`__ror__`** so
   `pipe | "filter"` / `pipe | Module.Transforms.FILTER` / `data | pipe` compose. Both are thin sugar
@@ -31,7 +31,7 @@ appears here only as the fake in-repo example extension that proves the seam.
 
 Grounding (verified 2026-08 against the tree):
 - P8 does **not** exist — it is the `⏳ next` phase. Design already lives in
-  [MILESTONES.md](../MILESTONES.md) M2 (`ModuleRegistry`/`PipelineResolver`/`StageResolver`, order
+  [MILESTONES.md](../MILESTONES.md) M2 (`ModuleRegistry`/`PipelineResolver`/`PipeResolver`, order
   P8.1–P8.11, file map, exit tests). **This gameplan does not restate that; it extends it.**
 - Runtime catalog **exists and works**: `list_modules`/`get_module_metadata`/`gen_module_catalog`
   + `ModuleMetadata` (`riko/modules/_metadata.py`, `riko/types/modules.py`). P8 rebases these onto
@@ -45,7 +45,7 @@ Grounding (verified 2026-08 against the tree):
 ## Phase P8 — registry + resolution seam (prerequisite)
 
 Execute per **MILESTONES M2 order P8.1–P8.11** and its file map (`riko/ext/registry.py`,
-`resolver.py`, `pipelines.py`; rebase `compile.resolve_module` + `collections` onto `StageResolver`;
+`resolver.py`, `pipelines.py`; rebase `compile.resolve_module` + `collections` onto `PipeResolver`;
 `[project.entry-points."riko.modules"]`). **Only the P9A-enabling deltas are listed here** — fold
 them into P8 so the definition contract isn't reopened later.
 
@@ -161,7 +161,7 @@ is explicitly not added (second idiom + `then`-vs-callable semantic clash).
   boundary. (Do **not** overload `__call__` — taken by post-construction reconfig.)
 - [x] **`__or__`/`__ror__` — the `RunnableSequence (a | b)` operator (LANDED, str/tuple/template +
   `__ror__`).** Native on `SyncPipe`/`AsyncPipe` (NOT a `RikoRunnable` wrapper — see
-  [ai-Inference.md](ai-Inference.md) key design rule). Left-associative, single stage per `|`
+  [ai-Inference.md](ai-Inference.md) key design rule). Left-associative, single pipe per `|`
   (matches LCEL `a | b | c`). RHS dispatch:
   | `pipe | rhs` where rhs is… | behavior |
   |---|---|
@@ -173,10 +173,10 @@ is explicitly not added (second idiom + `then`-vs-callable semantic clash).
   `__ror__` handles `data | pipe` (LHS is a plain iterable with no `__or__`): seed `data` as the
   source of `pipe`'s head. Guard both with `_require_usable("chain")`; a `CLOSED`/`FAILED` or
   already-consumed operand raises `PipelineStateError` (lifecycle-consistent).
-  > **Deferred increment (fork):** concatenating two *multi-stage* chains (`pipe1 | pipe2` where
+  > **Deferred increment (fork):** concatenating two *multi-pipe* chains (`pipe1 | pipe2` where
   > `pipe2` is itself a chain) needs a recursive head-rebind — walk `pipe2.source` to its head and
   > reattach. Feasible (nodes retain `name`/`conf`/`kwargs`) but out of the MVP; LCEL applies one
-  > runnable per `|`, so single-stage RHS covers the motivating case.
+  > runnable per `|`, so single-pipe RHS covers the motivating case.
 - [ ] `describe_module`/`available_modules` (P9A.5) accept `ModuleNameLike`.
 
 ### P9A.5 — registry-backed introspection (complements, not replaces, the enum)

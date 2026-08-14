@@ -40,7 +40,7 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | Microsoft Graph/ARM/PowerShell adapters and `MicrosoftContext` | `azure-automation.md` | administrative policy specialization |
 | desired-state Microsoft administration, ChangePlan, approval, verify/handoff | `microsoft-administration.md` | adapter mechanics from Azure plan |
 | orchestration, external scheduling, durable run boundaries | `orchestration.md` | in-process finite primitive semantics |
-| callable stage contract | `callable-stages.md` | domain examples only |
+| callable pipe contract | `callable-pipes.md` | domain examples only |
 | extension/plugin registration | `extensibility.md` | package-specific registrations |
 
 ## 4. Important boundaries

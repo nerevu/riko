@@ -25,11 +25,11 @@ class Position:
     expansion_path: tuple[int, ...] = ()
 ```
 
-Simple one-to-one stages use the compact position. Expanding stages append lineage paths.
+Simple one-to-one pipes use the compact position. Expanding pipes append lineage paths.
 
 ### 14.2 Unordered processing
 
-For unordered stages, the checkpoint tracker advances only the largest contiguous completed prefix.
+For unordered pipes, the checkpoint tracker advances only the largest contiguous completed prefix.
 
 ```text
 completed: 1, 2, 3, 5, 6
@@ -117,7 +117,7 @@ Sparse exceptions may be stored separately.
 
 Built-in joins track exact left/right lineage.
 
-Custom joins use conservative whole-stage lineage unless they explicitly return finer-grained lineage.
+Custom joins use conservative pipeline lineage unless they explicitly return finer-grained lineage.
 
 Unmatched behavior is explicit:
 
@@ -228,7 +228,7 @@ class Checkpoint:
     plan_version: int
     source_states: Mapping[str, object]
     acknowledged_positions: Mapping[str, int]
-    stage_states: Mapping[str, object]
+    pipe_states: Mapping[str, object]
     schema_versions: Mapping[str, str]
 ```
 
@@ -420,10 +420,10 @@ Deliver before major runtime work:
 * add bounded reorder buffering
 * add cancellation and cleanup
 * add explicit error policies
-* add aggregate stage counters
+* add aggregate pipe counters
 * preserve current sync behavior
 
-### Milestone 2 — Callable stages and Opts
+### Milestone 2 — Callable pipes and Opts
 
 * add `map`
 * add `flat_map`
@@ -444,7 +444,7 @@ Deliver before major runtime work:
 * adapt `AsyncCollection.async_pipe()`
 * convert composer operators to lazy Feed processing
 * add compatibility materialization adapters for legacy modules
-* mark materializing stages in execution plans
+* mark materializing pipes in execution plans
 
 ### Milestone 4 — Async concurrency
 
@@ -525,7 +525,7 @@ Deliver before major runtime work:
   console-script collision with ``mezmorize`` (see root ``CLAUDE.md``).
 * add entry-point plugin discovery if needed
 * upstream temporary Meza adapters
-* remove compatibility materialization stages where possible
+* remove compatibility materialization pipes where possible
 
 ---
 
@@ -744,4 +744,4 @@ The first implementation does not require:
 * generic `Pipe[T, U]`
 * automatic Feed restartability
 * process serialization of arbitrary runtime objects
-* persistent stage state without an explicit codec
+* persistent pipe state without an explicit codec

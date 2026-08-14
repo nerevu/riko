@@ -629,7 +629,7 @@ class SyncPipe(PyPipe):
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "SyncPipe":
         """
-        Create the next pipe stage, propagating all runtime and execution
+        Create the next pipe, propagating all runtime and execution
         settings. Context (and its inputs) stays authoritative across the chain.
 
         Examples:
@@ -1115,21 +1115,19 @@ class AsyncPipe(PyPipe):
     """
     An asynchronous PyPipe object.
 
-    Note — eager-concurrent execution under *partial* consumption:
-        A mapping stage runs its items concurrently, so *partially* consuming an
-        ``AsyncPipe`` (``anext``, an early ``break``, or a downstream
-        ``count="first"``/``truncate``) may run that stage's function for items
-        you never yield — unlike ``SyncPipe``, which is lazy and sequential and
-        runs it only for consumed items. Fully draining the pipe yields the
-        *same* result on both engines; only a stage function's *side effects*
-        under partial consumption differ.
+    Note: eager-concurrent execution under *partial* consumption:
+        A loopable ``pipe`` mapped over its ``source`` runs its items
+        concurrently. So *partially* consuming an ``AsyncPipe`` (``anext``, an
+        early ``break``, or a downstream ``count="first"``/``truncate``) may run
+        that pipe's function for items you never yield. This is in contrast to
+        ``SyncPipe``, which is lazy and sequential and runs it only for consumed items.
+        Fully draining the pipe yields the *same* result on both engines.
 
-        This matters only when a stage has side effects (e.g. ``send``, an
-        external write). If so, bound the work at the stage instead of the
-        consumer — pass ``count``/``truncate`` to the stage, or fully drain — so
-        it isn't run for un-yielded items. ``parallel=True`` *bounds* the
-        over-run to the in-flight window but does not eliminate it (a worker
-        prefetches the next item).
+        This matters only when a pipe has side effects (e.g. ``send``, an
+        external write). Then bound the work at the pipe, not the consumer: pass
+        it ``count``/``truncate`` or fully drain it, so it never runs for
+        un-yielded items. ``parallel=True`` *bounds* the over-run to the
+        in-flight window but doesn't eliminate it (a worker prefetches ahead).
     """
 
     def __init__(
@@ -1328,7 +1326,7 @@ class AsyncPipe(PyPipe):
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "AsyncPipe":
         """
-        Create the next async pipe stage, propagating runtime and execution
+        Create the next async pipe, propagating runtime and execution
         settings and consuming this pipe's single execution (not restarting it).
         """
         self._require_usable("chain")
@@ -1347,7 +1345,7 @@ class AsyncPipe(PyPipe):
         """
         Normalize the configured source into a lazy async iterable.
 
-        ``None`` remains ``None`` to distinguish a source-less stage from an
+        ``None`` remains ``None`` to distinguish a source-less pipe from an
         upstream source that happens to be empty.
         """
         source = self.source
@@ -1369,8 +1367,8 @@ class AsyncPipe(PyPipe):
         Drain a Feed into a list for a non-Feed-native module parser.
 
         This is the **explicit legacy-parser boundary**, not the default way
-        stages communicate. Today's module parsers still require synchronous
-        ``Items`` rather than a ``Feed``, so a non-parallel async stage buffers
+        pipes communicate. Today's module parsers still require synchronous
+        ``Items`` rather than a ``Feed``, so a non-parallel async pipe buffers
         its whole upstream here: everything *before* this point streams lazily,
         everything *after* it has been materialized. The bounded/parallel path
         (``_stream``) is the only fully-lazy end-to-end route; per-module opt-in

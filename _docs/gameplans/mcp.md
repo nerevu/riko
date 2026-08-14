@@ -331,7 +331,7 @@ Default session scope:
 pipeline execution
 ```
 
-Sessions must be reusable across stages through `ExecutionContext.resources`.
+Sessions must be reusable across pipes through `ExecutionContext.resources`.
 
 ## 5.10 MCP is not Riko’s internal transport
 
@@ -347,7 +347,7 @@ sitespec
 export
 ```
 
-Internal Riko stages remain direct Python streams and protocols.
+Internal Riko pipes remain direct Python streams and protocols.
 
 ---
 
@@ -1050,7 +1050,7 @@ Possible scopes:
 ```python
 class McpSessionScope(StrEnum):
     CALL = "call"
-    STAGE = "stage"
+    PIPE = "pipe"
     PIPELINE = "pipeline"
 ```
 
@@ -1867,7 +1867,7 @@ own protocol-specific sessions and data streaming.
 
 Do not implement initially:
 
-* MCP as an internal Riko stage transport;
+* MCP as an internal Riko pipe transport;
 * autonomous multi-agent execution;
 * arbitrary model-selected server URLs;
 * arbitrary model-selected schema URLs;

@@ -186,7 +186,7 @@ Distinguish orchestration retry from Riko operation retry:
 
 ```text
 execution-semantics RetryPolicy
-    retries one configured source/stage/write operation inside a run
+    retries one configured source/pipe/write operation inside a run
 
 orchestrator retry
     reruns the entire PipelineRunRequest
@@ -208,7 +208,7 @@ Normalize run-level events such as:
 
 ```text
 run start/finish
-stage summary
+pipe summary
 artifact publication
 checkpoint commit reference
 warning/failure
@@ -218,7 +218,7 @@ cancellation/deadline
 Adapters translate these to Airflow logs, Prefect events, Dagster metadata, or JSON logging
 without changing semantic meaning.
 
-Detailed stage/retry/checkpoint event schemas remain owned by their underlying contracts.
+Detailed pipe/retry/checkpoint event schemas remain owned by their underlying contracts.
 
 ## 14. Package layout
 
@@ -256,7 +256,7 @@ O8  cross-adapter contract tests and deployment templates
 1. No lazy stream crosses an orchestrator boundary implicitly.
 2. Every multi-task split occurs at a durable handoff.
 3. Cancellation/deadlines reach the Riko execution.
-4. Run-level retries are distinguished from stage/provider retries.
+4. Run-level retries are distinguished from pipe/provider retries.
 5. Webhook ingress consumes normalized verified events.
 6. Feed monitoring reuses, rather than redefines, checkpoint/state contracts.
 7. Provider jobs reuse, rather than redefine, `OperationHandle`/wait semantics.

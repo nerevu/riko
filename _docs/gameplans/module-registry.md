@@ -2,7 +2,7 @@
 
 Scoping for **P8** (the `⏳ next` phase). Translates the M2 design
 ([MILESTONES.md](../MILESTONES.md) § P8) into concrete, code-grounded tasks. **DoD:** (1) an external
-package adds modules without editing core; (2) runtime stage resolution no longer imports the
+package adds modules without editing core; (2) runtime pipe resolution no longer imports the
 compiler.
 
 ## Current state (verified against the tree)
@@ -49,7 +49,7 @@ Tests that must stay green:
   `Directory`/`Package`/`Mapping`/`Composite` stores. **Replaces the hardcoded `tests.*` paths** — the
   test suite injects a `Directory("tests/pipelines")` + `Package("tests.pypipelines")` store; core
   ships no `tests.*` reference.
-- **`StageResolver`** (`riko/ext/resolver.py`) — the single façade returning a `ResolvedStage`.
+- **`PipeResolver`** (`riko/ext/resolver.py`) — the single façade.
   Precedence **runtime registration → entry-point → built-in → named pipeline** (`register` needs
   `replace=True` to shadow).
 
@@ -62,7 +62,7 @@ declared target lazily).
 
 ## Interface subtlety
 
-`StageResolver.resolve(name, interface)` where `interface ∈ {"pipe", "async_pipe"}` returns the
+`PipeResolver.resolve(name, interface)` where `interface ∈ {"pipe", "async_pipe"}` returns the
 callable for that interface (today `resolve_module`'s 2nd arg). `ModuleDefinition` holds both
 `sync`/`async_` wrappers; the façade selects by `interface`. `SyncPipe.__init__` calls
 `resolve(self.name, "pipe")`, `AsyncPipe` calls `"async_pipe"`.
@@ -81,9 +81,9 @@ callable for that interface (today `resolve_module`'s 2nd arg). `ModuleDefinitio
 - [ ] **P8.3 `PipelineStore` + stores + `PipelineResolver`** (`riko/ext/pipelines.py`). Extract the
   `tests.pypipelines` import (`:783`) → `Package` store, the `tests/pipelines/*.json` compile
   (`:790`) → `Directory` store (compile-from-JSON lives **behind the store**, compiler-side).
-- [ ] **P8.4 `StageResolver` façade** (`riko/ext/resolver.py`) — precedence + `ResolvedStage`; the
+- [ ] **P8.4 `PipeResolver` façade** (`riko/ext/resolver.py`) — precedence; the
   single entry point.
-- [ ] **P8.5 Pipes use the façade.** `collections.py:135,588,1168` → `StageResolver.resolve(name,
+- [ ] **P8.5 Pipes use the façade.** `collections.py:135,588,1168` → `PipeResolver.resolve(name,
   interface)`; drop `from riko.compile import resolve_module`. **This alone satisfies DoD #2.**
 - [ ] **P8.6 Compiler uses the façade.** `build_pipeline`/`_gen_steps` (`compile.py:172,854`) take the
   injected resolver for sub-pipelines.
@@ -117,8 +117,8 @@ callable for that interface (today `resolve_module`'s 2nd arg). `ModuleDefinitio
 
 1. **Modules-only seam — ✅ LANDED.** `riko/ext/registry.py` (`ModuleDefinition`, `ModuleRegistry`
    lazy built-in resolution + runtime `register`/`reset` + transitive-`ModuleNotFoundError` guard),
-   `riko/ext/resolver.py` (`StageResolver` + global `stage_resolver`; `pipe_*` delegated to the
-   compiler via a **lazy** import), `collections.py` resolves through `stage_resolver` (dropped
+   `riko/ext/resolver.py` (`PipeResolver` + global `pipe_resolver`; `pipe_*` delegated to the
+   compiler via a **lazy** import), `collections.py` resolves through `pipe_resolver` (dropped
    `from riko.compile import resolve_module`). Exported `ModuleDefinition`/`ModuleRegistry`/`register`
    from `riko.ext`. Tests: `tests/internal/test_resolver.py` (9). Suite **667**; pyright/ruff clean.
    **DoD #2 (precise):** the *resolution path* is compiler-free (the seam's only `riko.compile`
@@ -217,7 +217,7 @@ callable for that interface (today `resolve_module`'s 2nd arg). `ModuleDefinitio
    and standalone; each slice has a suite-green checkpoint; cost is the one-cycle `resolve_module`
    forwarding shim (P8.11).
 3. **Entry-point group name — DECIDED: `"riko.modules"`.** One narrow group; every entry is
-   unconditionally a `ModuleDefinition` (no discriminator branch in `StageResolver`). Other extension
+   unconditionally a `ModuleDefinition` (no discriminator branch in `PipeResolver`). Other extension
    kinds get sibling groups later (`riko.stores`, `riko.events`, `riko.converters`) rather than
    overloading this one — matching the layered design (registry ≠ pipeline store ≠ event sink). This
    string is a **public contract** the moment an external package declares it; fixed before

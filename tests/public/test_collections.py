@@ -636,7 +636,7 @@ class TestSyncPipeChaining:
 
 @pytest.mark.skipif(issync, reason="async support not available")
 class TestAsyncPipeChaining:
-    """The ``|`` operators wire AsyncPipe stages (construction is loop-free)."""
+    """The ``|`` operators wire AsyncPipe pipes (construction is loop-free)."""
 
     def test_async_pipe_accepts_positional_name(self):
         flow = AsyncPipe("hash", source=SRC)

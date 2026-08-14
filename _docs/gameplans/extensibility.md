@@ -70,7 +70,7 @@ external modules.
 capabilities must be *declared*, not inferred from decorator type, so the CLI, compiler,
 validator, GUI, and future drivers can reason about a workflow without hard-coding module
 names: supported execution modes (sync / async / thread-safe / process-safe — the
-prerequisite for the per-stage policy in [E6](#e6-experimental-execution-drivers), motivated
+prerequisite for the per-pipe policy in [E6](#e6-experimental-execution-drivers), motivated
 by FastPipe); source / transform / aggregate / sink role; lazy vs buffering vs materializing
 behavior; bounded vs unbounded input suitability; ordering guarantees; stateful vs stateless
 (per the §15 definition of module state); fan-in/fan-out cardinality; schema/field
@@ -155,7 +155,7 @@ schema + catalog alone; secrets are supplied at runtime, never serialized into e
 
 Borrows Mario's explicit lifecycle and Turtle's operational granularity. **Extends — does
 not duplicate** — the retry policy (§11), error/disposition policies (§12), and aggregate
-stage counters (§12.5).
+pipe counters (§12.5).
 
 New surface: lifecycle events for pipeline / module / item-batch / retry / cancellation /
 resource-closure; optional callbacks or an event sink on `Context`; structured execution
@@ -224,12 +224,12 @@ process-safe (reuse the §4.3 process-execution serialization boundaries); scatt
 planning for eligible stateless modules with bounded concurrency; specified idempotency,
 retries, cancellation, artifact transfer, and result ordering.
 
-**Per-stage execution policy (FastPipe), deferred behind E1.** FastPipe moves one pipeline
-through async, process, and thread stages with adapters between them. Riko should not copy
-this until the module contract (E1) can answer whether a stage is safe and useful under a
+**Per-pipe execution policy (FastPipe), deferred behind E1.** FastPipe moves one pipeline
+through async, process, and thread pipes with adapters between them. Riko should not copy
+this until the module contract (E1) can answer whether a pipe is safe and useful under a
 given mode. Only then investigate a workflow-level policy — e.g. `fetch → async / high
 concurrency`, `parse → process pool`, `store → thread pool` — separate from the
-pipeline-wide execution mode. Existing simple defaults must be preserved: per-stage execution
+pipeline-wide execution mode. Existing simple defaults must be preserved: per-pipe execution
 is an explicit optimization, never required boilerplate.
 
 Non-goals for the first driver release: a scheduler service, a workflow database, automatic
@@ -284,7 +284,7 @@ set of borrowed ideas:
 | Singer | Standardized tap/target contracts, schema messages, incremental replication state | E2, E5 | A source-to-destination replication protocol as its main job |
 | Streamz | Continuous push graphs, live windows, branching, backpressure | E4 | A reactive/event framework where push semantics replace the iterator core |
 | Bytewax | Durable keyed state, recovery, partitioned sources, distributed workers | E4 (metadata), E6 (optional driver) | A distributed stateful engine with checkpoint/recovery machinery in core |
-| FastPipe | Explicit per-stage thread/process/async modes with inter-stage adapters | E1, E6 | A low-level concurrency framework with a tiny transformation vocabulary |
+| FastPipe | Explicit per-pipe thread/process/async modes with inter-pipe adapters | E1, E6 | A low-level concurrency framework with a tiny transformation vocabulary |
 
 ### Non-goals clarified by the 2026-08-07 comparison
 

@@ -45,7 +45,7 @@ def _tokenize[P: (SyncPipe, AsyncPipe)](pipe: type[P]) -> P:
 
 @pytest.mark.skipif(issync, reason="async support not available")
 class TestOutputParity:
-    def test_multistage_chaining(self):
+    def test_pipe_chaining(self):
         sync_result, async_result = _both(lambda pipe: _tokenize(pipe).count())
         assert sync_result == async_result == [{"count": 3}]
 

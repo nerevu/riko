@@ -29,7 +29,7 @@ riko-<proto>  (external package; entry-point registered per §24)
     builds the Twisted server Factory/Protocol
     each inbound message  ->  send() into an AnyIO memory object stream (backpressure)
     exposes:
-        a poll/interval or event Subscription (P11)  for pull-style stages, or
+        a poll/interval or event Subscription (P11)  for pull-style pipes, or
         a Feed (AsyncIterable[Item])                 for `async for` consumption
     resources (listening port, factory) live in Context.resources (P11), closed on teardown
 ```

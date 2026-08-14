@@ -19,7 +19,7 @@ boundedness: Literal[
 
 Examples:
 
-| Stage                       | Opt         |
+| pipe                        | Opt         |
 | --------------------------- | ----------- |
 | `map`                       | `preserve`  |
 | `filter`                    | `preserve`  |
@@ -55,7 +55,7 @@ ordering: Literal[
 
 Examples:
 
-| Stage                    | Ordering  |
+| pipe                     | Ordering  |
 | ------------------------ | --------- |
 | sequential map           | preserve  |
 | ordered concurrent map   | preserve  |
@@ -155,7 +155,7 @@ This applies to:
 
 * truncation
 * timeout
-* stage failure
+* pipe failure
 * downstream cancellation
 * consumer abandonment
 
@@ -188,7 +188,7 @@ on_timeout="stop"
 
 Definitions:
 
-* `total`: maximum lifetime of the timeout stage
+* `total`: maximum lifetime of the timeout pipe
 * `idle`: maximum interval between emitted items
 * `item`: maximum time waiting for the next upstream item
 
@@ -269,7 +269,7 @@ Independent groups may continue.
 
 The top-level collection of merge inputs is fixed at plan time.
 
-A source may discover partitions internally, but new top-level feeds are not dynamically added to a running merge stage.
+A source may discover partitions internally, but new top-level feeds are not dynamically added to a running merge pipe.
 
 ---
 
@@ -306,7 +306,7 @@ Rules:
 * ordered execution holds the affected position
 * stable batch IDs are reused across retries
 * only one layer should own retrying a given operation
-* non-idempotent stages may not be retried unless explicitly authorized
+* non-idempotent pipes may not be retried unless explicitly authorized
 * state-store CAS conflicts may be retried internally
 
 Retry policies may be configured separately for:
@@ -372,7 +372,7 @@ drop_policy: Literal[
 ] = "complete"
 ```
 
-The value is inherited from the pipe and may be overridden per stage.
+The value is inherited from the pipe and may be overridden per pipe.
 
 **Complete**
 
@@ -389,7 +389,7 @@ This preserves current filter behavior, where rejected records are silently omit
 
 **Error**
 
-* attempted dropping becomes a stage failure
+* attempted dropping becomes a pipe failure
 
 ### 12.4 Disposition sink
 
@@ -421,7 +421,7 @@ Semantics:
 
 ### 12.5 Internal counters
 
-Every stage tracks aggregate counts:
+Every pipe tracks aggregate counts:
 
 ```text
 emitted
@@ -587,7 +587,7 @@ replacement; natural backpressure comes from bounded queues rather than a pollin
 
 > **Status: Planned.** `StatefulItem` type exists but no checkpoint/persist machinery.
 
-Stateful streaming stages declare:
+Stateful streaming pipes declare:
 
 ```python
 state_checkpoint: Literal[
@@ -598,7 +598,7 @@ state_checkpoint: Literal[
 
 **Replay** — persist source checkpoints only. Rebuild operator state by replay after restart.
 
-**Persist** — store versioned stage state with the checkpoint. A stage may use `persist` only when it provides a durable state codec.
+**Persist** — store versioned pipe state with the checkpoint. A pipe may use `persist` only when it provides a durable state codec.
 
 ---
 

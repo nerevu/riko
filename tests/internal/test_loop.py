@@ -189,7 +189,7 @@ class TestProcessorTopLevelCount:
 
 class TestImplicitLooping:
     """
-    A processor stage fed a *stream* maps itself over each item, exactly like
+    A processor fed a *stream* maps itself over each item, exactly like
     ``loop(source, embed=<processor>)``.
     """
 

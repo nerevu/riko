@@ -1,26 +1,26 @@
-# Riko Callable Stages Contract Gameplan
+# Riko Callable pipes Contract Gameplan
 
-> **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the callable-stage execution contract — the `Opts` execution-characteristic fields, the `@processor`/`@operator`/`@splitter` decorator model, `map`/`flat_map`, strict mode, and callable context / thread / process execution (ROADMAP §4). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
+> **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the callable-pipe execution contract — the `Opts` execution-characteristic fields, the `@processor`/`@operator`/`@splitter` decorator model, `map`/`flat_map`, strict mode, and callable context / thread / process execution (ROADMAP §4). Section references like §N point back to [RUNTIME_CONTRACT.md](../RUNTIME_CONTRACT.md) (the runtime contract); the numbered `## N.` headings are preserved so those references resolve.
 
-## 4. Callable stages
+## 4. Callable pipes
 
-> **Status: Planned.** `Opts` carries none of the execution-characteristic fields; `map`/`flat_map` callable stages and strict mode do not exist. `@processor`/`@operator`/`@splitter` exist but are not extended with these fields.
+> **Status: Planned.** `Opts` carries none of the execution-characteristic fields; `map`/`flat_map` callable pipes and strict mode do not exist. `@processor`/`@operator`/`@splitter` exist but are not extended with these fields.
 
 > **Deferred / not yet implemented.** Per-module Feed-native parsers (a
 > `parser_mode: feed | legacy_stream` classification, review #8) are not built:
 > today's module parsers consume synchronous `Items`, so a non-parallel async
-> stage buffers its upstream at the explicit `AsyncPipe._materialize_legacy_source`
+> pipe buffers its upstream at the explicit `AsyncPipe._materialize_legacy_source`
 > boundary. Only the bounded/parallel path streams end-to-end (see §3.2, §8).
 
-### Stage execution options
+### Pipe execution options
 
-Stage execution behavior is represented using the existing `Opts` typed dictionary.
+Pipe execution behavior is represented using the existing `Opts` typed dictionary.
 
 Do not introduce:
 
-* `StageTraits`
+* `PipeTraits`
 * `TraitOverrides`
-* `@riko.stage`
+* `@riko.pipe`
 * a separate traits mapping
 * a separate trait-resolution object
 
@@ -321,7 +321,7 @@ module.opts["determinism"] == "nondeterministic"
 
 ### Strict mode
 
-Strictness is inherited from the pipe and may be overridden per stage.
+Strictness is inherited from the pipe and may be overridden per pipe.
 
 ```python
 pipe = AsyncPipe(..., strict=True)
@@ -333,7 +333,7 @@ With `strict=False`:
 
 * the result is iterated without special type checking
 * a mistakenly returned mapping may be flattened into its keys
-* later stages may surface the error
+* later pipes may surface the error
 
 With `strict=True`:
 
@@ -343,11 +343,11 @@ With `strict=True`:
 
 ### 4.3 Callable context
 
-Callable stages use Riko's existing `Context` primitive and existing keyword propagation model.
+Callable pipes use Riko's existing `Context` primitive and existing keyword propagation model.
 
 #### Callable invocation
 
-A callable stage invokes its function using the item followed by the normal pipe keyword arguments:
+A callable pipe invokes its function using the item followed by the normal pipe keyword arguments:
 
 ```python
 result = fn(item, **kwargs)
@@ -413,10 +413,10 @@ AsyncPipe.map(
 Invocation is conceptually:
 
 ```python
-fn(item, **stage_kwargs)
+fn(item, **pipe_kwargs)
 ```
 
-where `stage_kwargs` is the ordinary resolved pipe kwargs and includes:
+where `pipe_kwargs` is the ordinary resolved pipe kwargs and includes:
 
 ```python
 {
@@ -451,7 +451,7 @@ AsyncPipe.flat_map(
 Invocation uses the same rule:
 
 ```python
-fn(item, **stage_kwargs)
+fn(item, **pipe_kwargs)
 ```
 
 There is no special context-aware flat-map path.
@@ -472,25 +472,25 @@ self.kwargs.update(
 )
 ```
 
-Callable stages should reuse that behavior rather than introducing a new context delivery mechanism.
+Callable pipes should reuse that behavior rather than introducing a new context delivery mechanism.
 
-The same `Context` instance is propagated through chained stages unless a narrower context is intentionally created for:
+The same `Context` instance is propagated through chained pipes unless a narrower context is intentionally created for:
 
 * an embedded module
 * a Connect run
-* a stage
+* a pipe
 * a source
 * a positioned item
 
 #### Scoped contexts
 
-Per-stage or per-item execution metadata must not be written onto a single shared mutable context during concurrent execution.
+Per-pipe or per-item execution metadata must not be written onto a single shared mutable context during concurrent execution.
 
 When narrower execution metadata is needed, Riko derives a child `Context`:
 
 ```python
 item_context = context.bind(
-    stage_id=stage_id,
+    pipe_id=pipe_id,
     source_id=position.source_id,
     position=position,
     schema_id=schema_id,
@@ -501,7 +501,7 @@ That child is then placed into the same ordinary kwargs mapping:
 
 ```python
 item_kwargs = {
-    **stage_kwargs,
+    **pipe_kwargs,
     "context": item_context,
 }
 
@@ -524,7 +524,7 @@ fn(
 )
 ```
 
-Riko does not inspect whether the callable declares `context`, `**kwargs`, or neither. A callable used as a Riko stage is responsible for accepting the keyword arguments Riko supplies.
+Riko does not inspect whether the callable declares `context`, `**kwargs`, or neither. A callable used as a Riko pipe is responsible for accepting the keyword arguments Riko supplies.
 
 #### Process execution
 
@@ -534,7 +534,7 @@ Process execution preserves the same callable interface:
 fn(item, context=context, **kwargs)
 ```
 
-Before submission, Riko validates and serializes the process-safe portions of the ordinary stage kwargs.
+Before submission, Riko validates and serializes the process-safe portions of the ordinary pipe kwargs.
 
 The `context` value remains a `Context`, reconstructed in the worker from a serializable snapshot.
 

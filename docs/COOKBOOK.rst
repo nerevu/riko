@@ -483,7 +483,7 @@ every source concurrently and merges them into a single ``stream``.
 Bounded parallelism
 ^^^^^^^^^^^^^^^^^^^
 
-Passing ``parallel=True`` maps a stage over its ``source`` with bounded
+Passing ``parallel=True`` maps a ``pipe`` over its ``source`` with bounded
 concurrency and backpressure, so large or streaming sources are never
 materialized up front. Pass ``ordered=True`` to preserve source order (the
 default is unordered — results arrive as they complete) and ``connections`` to
@@ -873,10 +873,10 @@ Keep the following execution boundaries explicit:
 - A pipeline instance is single-use. Rebuild it for another run.
 - Most item ``transformers`` are iterator-oriented, but ``sort``, ``reverse``,
   ``tail``, ``split``, aggregators, and exports consume or retain input.
-- ``SyncPipe(parallel=True)`` currently materializes the stage ``source`` before
+- ``SyncPipe(parallel=True)`` currently materializes the ``pipe`` ``source`` before
   local thread or process mapping. Don't use it for an unbounded ``stream``.
 - ``AsyncPipe(parallel=True)`` uses bounded concurrency and backpressure for
-  loopable stages. Tune ``connections`` first; increase ``prefetch`` only when
+  loopable ``pipes``. Tune ``connections`` first; increase ``prefetch`` only when
   buffering improves throughput without violating memory limits.
 - Parallel execution is unordered by default. Ordering can reduce throughput
   when an early item is slow.
