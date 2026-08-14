@@ -204,7 +204,7 @@ def _is_template(obj: object) -> TypeGuard[TemplatePipe]:
 
 
 class PoolScope(StrEnum):
-    STAGE = "stage"
+    PIPE = "pipe"
     PIPELINE = "pipeline"
 
 
@@ -584,8 +584,8 @@ class SyncPipe(PyPipe):
 
         self.map: Callable[..., Iterable[Stream]]
 
-        if pool_scope not in {"stage", "pipeline"}:
-            raise ValueError("pool_scope must be either 'stage' or 'pipeline'")
+        if pool_scope not in {"pipe", "pipeline"}:
+            raise ValueError("pool_scope must be either 'pipe' or 'pipeline'")
 
         if pool and _pool_handle:
             raise TypeError("pool and _pool_handle cannot both be provided")
@@ -822,7 +822,7 @@ class SyncPipe(PyPipe):
     def _release_pool_after_iteration(self) -> bool:
         if self._in_context:
             result = False
-        elif self.pool_scope == PoolScope.STAGE:
+        elif self.pool_scope == PoolScope.PIPE:
             result = True
         else:
             result = self._terminal
