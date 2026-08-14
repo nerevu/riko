@@ -12,6 +12,7 @@ from functools import partial, wraps
 from http.client import HTTPResponse
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from logging import Logger
+from tempfile import SpooledTemporaryFile
 from typing import Literal, cast, overload
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -27,17 +28,19 @@ except ImportError:
 import mezmorize
 import pygogo as gogo
 import requests
-from meza.io import reencode
 from mezmorize.utils import get_cache_type
 
 from riko import ENCODING, __version__
+from riko._reencode import reencode
 from riko._rssutils import truncate_content
 from riko._serialize import repr_cache
 from riko.paths import get_abspath
-from riko.types.general import FileTypes, Opener
+from riko.types.general import BinaryFileTypes, FileTypes, Opener, StringFileTypes
 from riko.types.values import BasicArg
 
 logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+
+STREAMING_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
 
 def make_blocking(f: RawIOBase | TextIOBase) -> None:
@@ -83,6 +86,49 @@ def auto_close[T](stream: Iterable[T], f: FileTypes) -> Iterator[T]:
         yield from stream
     finally:
         f.close()
+
+
+@overload
+def buffer(  # noqa: E704
+    f: StringFileTypes, binary: bool = ..., encoding: str = ...
+) -> SpooledTemporaryFile[str]: ...
+@overload  # noqa: E302
+def buffer(  # noqa: E704
+    f: BinaryFileTypes, binary: bool = ..., encoding: str = ...
+) -> SpooledTemporaryFile[bytes]: ...
+@overload  # noqa: E302
+def buffer(  # noqa: E704
+    f: BinaryFileTypes, binary: bool = ..., *, encoding: str
+) -> SpooledTemporaryFile[str]: ...
+def buffer(  # noqa: E302
+    f: FileTypes, binary: bool | None = None, encoding: str | None = None
+) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
+    """
+    Materialize *f* into a bounded, re-readable spool (in-memory then disk).
+
+    Decodes to text when *encoding* is given for a byte source. *binary* is
+    auto-detected from the first chunk when not supplied.
+    """
+    chunks = iter(f)
+    first = None
+
+    if binary is None:
+        first = next(chunks, None)
+        binary = isinstance(first, bytes)
+
+    decode = binary and encoding
+    encoding = encoding or ""
+    mode = "w+b" if binary and not decode else "w+"
+    spool = SpooledTemporaryFile(max_size=STREAMING_THRESHOLD, mode=mode)  # noqa: SIM115
+
+    if first is not None:
+        spool.write(cast(bytes, first).decode(encoding) if decode else first)
+
+    for chunk in chunks:
+        spool.write(cast(bytes, chunk).decode(encoding) if decode else chunk)
+
+    spool.seek(0)
+    return spool
 
 
 @overload
@@ -165,9 +211,7 @@ def opener(  # noqa: E302
             r.close()
         else:
             encoding = r.encoding or encoding
-            reencoded = reencode(r.raw, encoding, decode=True)
-            # TODO: Add self._f = f to Reencoder
-            reencoded._r = r  # pyright: ignore[reportAttributeAccessIssue]
+            reencoded = reencode(r.raw, encoding, decode=True, owner=r)
             response = cast(StreamReader, reencoded)
     else:
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
@@ -176,7 +220,7 @@ def opener(  # noqa: E302
             logger.debug("Request delaying not currently implemented.")
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
-            response = BytesIO(r.read()) if memoize else cast(RawIOBase, r)
+            response = buffer(r, binary=True) if memoize else cast(RawIOBase, r)
         elif r:
             encoding = get_response_encoding(r, encoding)
 
@@ -184,13 +228,11 @@ def opener(  # noqa: E302
                 encoding = ENCODING
 
             if memoize and encoding:
-                response = StringIO(r.read().decode(encoding))
+                response = buffer(r, encoding=encoding)
             elif memoize:
-                response = StringIO(r.read())
+                response = buffer(r, binary=False)
             elif encoding:
-                reencoded = reencode(r.fp, encoding, decode=True)
-                # TODO: Add self._f = f to Reencoder
-                reencoded._r = r  # pyright: ignore[reportAttributeAccessIssue]
+                reencoded = reencode(r.fp, encoding, decode=True, owner=r)
                 response = cast(StreamReader, reencoded)
             else:
                 response = cast(TextIOBase, r)
@@ -283,14 +325,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
     def close(self) -> None:
         if self.file:
-            response = getattr(self.file, "_r", None)
-
-            try:
-                self.file.close()
-            finally:
-                if response is not None:
-                    response.close()
-
+            self.file.close()
             self.file = None
 
     def __enter__(self) -> "Fetch[B]":
@@ -328,9 +363,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
     @overload
     def read(self: "Fetch[Literal[False]]", size: int = ...) -> str: ...  # noqa: E704
     def read(self, size: int = -1) -> bytes | str:  # noqa: E301
-        if self.file and size < 0:
-            result = self.file.read()
-        elif self.file:
+        if self.file:
             result = self.file.read(size)
         else:
             result = b"" if self.binary else ""

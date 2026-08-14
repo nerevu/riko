@@ -1,5 +1,5 @@
 [project]
-version = "0.74.1"
+version = "0.74.2"
 name = "riko"
 authors = [
     {name = "Reuben Cummings", email = "reubano@gmail.com"}
@@ -49,6 +49,7 @@ perf = [
     "fastfeedparser>=0.6.0",
     "ijson>=3.4.0,<4.0.0",
     "lxml>=4.5.0,<7.0.0",
+    "types-lxml>=2026.2.16",
 ]
 
 async = [
@@ -71,10 +72,11 @@ test = [
 ]
 
 lint = [
-    "ruff>=0.13.1",
+    "docutils>=0.21",
+    "pygments>=2.20.0",
     "pylint>=4.0.5,<5.0.0",
     "pyright>=1.1.411",
-    "docutils>=0.21",
+    "ruff>=0.13.1",
 ]
 
 dev = [
