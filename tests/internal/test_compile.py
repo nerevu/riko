@@ -231,9 +231,6 @@ def test_unresolved_subpipeline_raises():
     with pytest.raises(UnsupportedPipelineError):
         resolve_module("pipe_missing", "pipe_missing")
 
-    with pytest.raises(UnsupportedPipelineError):
-        resolve_module("pipe_missing", "pipe_missing", compile_missing=True)
-
 
 def test_convert_dag_appends_output():
     dag = loads((DAG_DIR / "pipe_forever.json").read_text())

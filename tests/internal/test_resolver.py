@@ -9,10 +9,17 @@ from types import SimpleNamespace
 import pytest
 
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
-from riko.ext.pipelines import PipelineResolver
+from riko.ext.pipelines import (
+    CompositeStore,
+    DirectoryStore,
+    MappingStore,
+    PackageStore,
+    PipelineResolver,
+)
 from riko.ext.registry import ModuleDefinition, registry
 from riko.ext.resolver import StageResolver, stage_resolver
-from riko.modules import list_modules
+from riko.modules import list_modules, tokenizer
+from riko.paths import ROOT_DIR
 
 _META = {
     "type": "operator",
@@ -203,24 +210,41 @@ class TestEntryPointModules:
 
 class TestPipelineResolver:
     def test_core_default_has_no_named_pipelines(self):
-        """
-        A bare (unconfigured) resolver resolves no ``pipe_*`` — core ships
-        no named-pipeline locations.
-        """
+        # a bare (unconfigured) resolver finds no pipe_* module and no definition
+        resolver = PipelineResolver()
+        assert resolver.load("pipe_x") is None
+
         with pytest.raises(UnsupportedPipelineError):
-            PipelineResolver().load("pipe_x", "pipe_x")
+            resolver.load_definition("pipe_x")
 
     def test_configured_resolver_imports_generated_module(self):
-        resolver = PipelineResolver(package="tests.pypipelines")
-        module, parsed = resolver.load("pipe_kazeeki1", "pipe_kazeeki1")
-        assert module is not None
-        assert parsed is None
+        resolver = PipelineResolver(store=PackageStore("tests.pypipelines"))
+        assert resolver.load("pipe_kazeeki1") is not None
 
-    def test_missing_pipeline_raises_unsupported(self):
-        resolver = PipelineResolver(package="tests.pypipelines")
+    def test_missing_module_returns_none(self):
+        resolver = PipelineResolver(store=PackageStore("tests.pypipelines"))
+        assert resolver.load("pipe_missing") is None
+
+    def test_directory_store_compiles_definition(self):
+        directory = ROOT_DIR / "tests" / "pipelines"
+        resolver = PipelineResolver(definitions=DirectoryStore(directory))
+        assert "modules" in resolver.load_definition("pipe_gigs")
 
         with pytest.raises(UnsupportedPipelineError):
-            resolver.load("pipe_missing", "pipe_missing")
+            resolver.load_definition("pipe_missing")
+
+    def test_composite_store_first_hit_wins(self):
+        store = CompositeStore(
+            MappingStore({}),
+            MappingStore({"pipe_x": tokenizer}),
+            PackageStore("tests.pypipelines"),
+        )
+        assert store.load("pipe_x") is tokenizer
+        assert store.load("absent") is None
+
+    def test_mapping_store_serves_in_memory_module(self):
+        resolver = PipelineResolver(store=MappingStore({"pipe_mem": tokenizer}))
+        assert resolver.load("pipe_mem") is tokenizer
 
 
 class TestCatalog:

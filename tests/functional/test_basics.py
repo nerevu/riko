@@ -27,7 +27,8 @@ from riko.compile import (
     resolve_module,
 )
 from riko.context import Context, ExecutionMode
-from riko.exceptions import UnsupportedModuleError
+from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.ext.pipelines import pipeline_resolver
 from riko.parsers import IS_LXML
 from riko.types.general import (
     AsyncPipelineDependencies,
@@ -79,32 +80,29 @@ class TestBasics:
     def _get_pipeline(
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
-        args = (pipe_name, pipe_name, True)
-        pipeline, parsed_pipe_def = resolve_module(*args, file_path=file_path)
-
-        if pipeline:
-            stream = cast(SyncPipeParser, pipeline)(context=self.context)
-        elif parsed_pipe_def:
-            stream = build_pipeline(parsed_pipe_def, context=self.context)
+        # prefer the generated module; fall back to compiling the JSON definition
+        try:
+            pipeline = resolve_module(pipe_name, pipe_name)
+        except UnsupportedPipelineError:
+            parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
+            stream = build_pipeline(parsed, context=self.context)
         else:
-            stream = iter(())
+            stream = cast(SyncPipeParser, pipeline)(context=self.context)
 
         return cast(ParserMaterializedOutput, list(listize(stream)))
 
     async def _aget_pipeline(
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
-        args = (pipe_name, pipe_name, True)
-        pipeline, parsed_pipe_def = resolve_module(*args, file_path=file_path)
-
-        if pipeline:
-            _stream = await cast(AsyncPipeParser, pipeline)(context=self.context)
-            stream = list(listize(_stream))
-        elif parsed_pipe_def:
-            items = abuild_pipeline(parsed_pipe_def, context=self.context)
+        try:
+            pipeline = resolve_module(pipe_name, pipe_name)
+        except UnsupportedPipelineError:
+            parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
+            items = abuild_pipeline(parsed, context=self.context)
             stream = [item async for item in items]
         else:
-            stream = []
+            _stream = await cast(AsyncPipeParser, pipeline)(context=self.context)
+            stream = list(listize(_stream))
 
         return cast(ParserMaterializedOutput, stream)
 

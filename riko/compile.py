@@ -52,7 +52,7 @@ from riko._iterutils import listize
 from riko._strutils import replacer
 from riko.context import Context, ExecutionMode
 from riko.dotdict import DotDict
-from riko.exceptions import UnsupportedModuleError
+from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
 from riko.ext.pipelines import pipeline_resolver
 from riko.modules._subpipe import is_subpipe, mark_subpipe
 from riko.pprint2 import Id, repr_arg, repr_args
@@ -169,7 +169,7 @@ class CustomEncoder(JSONEncoder):
         return result
 
 
-def _named_pipeline(module_name: str, pipe_name: str, module_id: str) -> Pipeline:
+def _as_named_pipe(module_name: str, pipe_name: str, module_id: str) -> Pipeline:
     """Return a renamed wrapper without modifying the imported pipeline."""
     pipeline = resolve_module(module_name, pipe_name)
     name = str(f"pipe_{module_id}")
@@ -179,6 +179,21 @@ def _named_pipeline(module_name: str, pipe_name: str, module_id: str) -> Pipelin
     wrapper.__name__ = name
     wrapper.__qualname__ = name
     return wrapper
+
+
+def _as_subpipe(pipeline: Pipeline) -> Pipeline:
+    """
+    Mark a resolved ``pipe_*`` callable as a sub-pipeline via a fresh wrapper
+    without modifying the original pipeline.
+    """
+    if is_subpipe(pipeline):
+        subpipe = pipeline
+    else:
+        subpipe = cast(Pipeline, partial(pipeline))
+        update_wrapper(subpipe, pipeline)
+        mark_subpipe(subpipe, subtype="source")
+
+    return subpipe
 
 
 def gen_dependencies(pipe_def: PipeDef | ParsedPipeDef) -> Iterator[str]:
@@ -722,39 +737,20 @@ def _gen_pykwargs(  # noqa: E302
 
 @overload
 def resolve_module(  # noqa: E704
-    module_name: str,
-    pipe_name: Literal["pipe"],
-    compile_missing: Literal[False] = ...,
-    file_path: Path | None = ...,
+    module_name: str, pipe_name: Literal["pipe"]
 ) -> SyncPipeParser: ...
 @overload  # noqa: E302
 def resolve_module(  # noqa: E704
-    module_name: str,
-    pipe_name: Literal["async_pipe"],
-    compile_missing: Literal[False] = ...,
-    file_path: Path | None = ...,
+    module_name: str, pipe_name: Literal["async_pipe"]
 ) -> AsyncPipeParser: ...
 @overload  # noqa: E302
-def resolve_module(  # noqa: E704
-    module_name: str,
-    pipe_name: str,
-    compile_missing: Literal[False] = ...,
-    file_path: Path | None = ...,
-) -> Pipeline: ...
-@overload  # noqa: E302
-def resolve_module(  # noqa: E704
-    module_name: str,
-    pipe_name: str,
-    compile_missing: Literal[True],
-    file_path: Path | None = ...,
-) -> tuple[Pipeline | None, ParsedPipeDef | None]: ...
-def resolve_module(  # noqa: E302
-    module_name: str,
-    pipe_name: str,
-    compile_missing=False,
-    file_path: Path | None = None,
-) -> Pipeline | None | tuple[Pipeline | None, ParsedPipeDef | None]:
+def resolve_module(module_name: str, pipe_name: str) -> Pipeline: ...  # noqa: E704
+def resolve_module(module_name: str, pipe_name: str) -> Pipeline:  # noqa: E302
     """
+    Resolve a leaf module or a generated ``pipe_*`` sub-pipeline to its callable.
+    JSON pipeline *definitions* are a separate concern — see
+    ``pipeline_resolver.load_definition``.
+
     Examples:
         >>> resolve_module('filter', 'pipe')
         <function pipe at ...>
@@ -776,15 +772,11 @@ def resolve_module(  # noqa: E302
         >>> _c.import_module = _orig
 
     """
-    module = parsed_pipe_def = None
-
     if module_name.startswith("pipe_"):
-        module, parsed_pipe_def = pipeline_resolver.load(
-            module_name,
-            pipe_name,
-            compile_missing=compile_missing,
-            file_path=file_path,
-        )
+        module = pipeline_resolver.load(module_name)
+
+        if module is None:
+            raise UnsupportedPipelineError(pipe_name)
     else:
         target = f"riko.modules.{module_name}"
 
@@ -796,18 +788,15 @@ def resolve_module(  # noqa: E302
 
             raise UnsupportedModuleError(module_name) from e
 
-    pipeline = getattr(module, pipe_name, None) if module else None
+    pipeline = cast("Pipeline | None", getattr(module, pipe_name, None))
 
-    if module and pipeline is None:
+    if pipeline is None:
         raise UnsupportedModuleError(f"{module_name!r} has no {pipe_name!r}")
 
-    is_pipe = module_name.startswith("pipe_")
+    if module_name.startswith("pipe_"):
+        pipeline = _as_subpipe(pipeline)
 
-    if pipeline is not None and is_pipe and not is_subpipe(pipeline):
-        no_input = parsed_pipe_def is None or not extract_input(parsed_pipe_def)
-        mark_subpipe(pipeline, subtype="source" if no_input else "transformer")
-
-    return (pipeline, parsed_pipe_def) if compile_missing else pipeline
+    return pipeline
 
 
 def _gen_steps(
@@ -834,7 +823,7 @@ def _gen_steps(
             # We need to wrap submodules (used by loops) so we can pass the
             # input at runtime (as we can to sub-pipelines)
             # Note: no embed (so no subloops) or wire pykwargs are passed
-            pipeline = _named_pipeline(module_name, pipe_name, module_id)
+            pipeline = _as_named_pipe(module_name, pipe_name, module_id)
             step = (module_id, pipeline)
         else:  # else this module is not embedded:
             pipeline = resolve_module(module_name, pipe_name)

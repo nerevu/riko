@@ -137,10 +137,31 @@ callable for that interface (today `resolve_module`'s 2nd arg). `ModuleDefinitio
    `compile_missing` tuple + `_get_pipeline` test infra untouched). Tests: `TestPipelineResolver` (3,
    incl. "core default has no named pipelines"). Suite **670**; pyright/ruff clean. `ModuleDefinition`
    fields are `sync_pipe`/`async_pipe`.
-   **Deferred → slice 2b:** full `PipelineStore` protocol decomposition (Directory/Package/Mapping/
-   Composite, M2's `test_pipeline_store.py`); compiler adopting the `StageResolver` façade (P8.6);
-   dropping the `compile_missing` polymorphism (P8.8); wrapping resolved sub-pipelines instead of
-   mutating them (P8.9) — all carry codegen/test-infra risk and are cleaner as a focused follow-up.
+   **Slice 2b — partially landed.**
+   - ✅ **`ModuleStore` decomposition** — `riko/ext/pipelines.py` now has a `ModuleStore` Protocol +
+     `PackageStore`/`MappingStore`/`CompositeStore`; `PipelineResolver` takes a `store=` (was a bare
+     `package=`), conftest builds `PackageStore("tests.pypipelines")`. Behavior-preserving (the
+     `compile_missing` JSON fallback stays in the resolver, gated by the flag). Tests: composite
+     first-hit, mapping-store. Suite **683**.
+   - ✅ **P8.8 (drop `compile_missing`) + `DirectoryStore`** — `resolve_module` now **always returns
+     a callable** (dropped the `compile_missing` flag, the `(pipeline, parsed_pipe_def)` tuple, and
+     `file_path`); its overloads collapse to the two-arg form. The JSON→`ParsedPipeDef` compile moved
+     to a first-class **`DirectoryStore`** + `PipelineResolver.load_definition(name, directory=…)`;
+     `test_basics` now orchestrates the try-`.py`-else-compile-JSON explicitly. Key finding that made
+     this safe: the `"transformer"` subpipe mark was **dead code** (only reachable on the `.py` path
+     where `parsed_pipe_def` is always `None`), so marking simplifies to a constant `"source"` with
+     no behavior change; the codegen byte-match test never calls `resolve_module`. `compile_missing`
+     is **gone from the codebase**. Tests: `DirectoryStore` compile + `load`/`load_definition` split.
+     Suite **684**.
+   - ✅ **P8.9 (wrap, don't mutate)** — `resolve_module` now marks a **fresh wrapper**
+     (`_as_subpipe`: `partial` + `update_wrapper` + `mark_subpipe`) instead of stamping attrs on the
+     generated module's own function. The original module callable is left unmutated (verified:
+     `is_subpipe(original)` is `False`, `is_subpipe(resolved)` is `True`); the mark still propagates
+     to `_named_pipeline`'s wrapper via `update_wrapper`, so loop/embed detection (`_loop.py`
+     `is_subpipe(embed)`) is unaffected. Suite **684**.
+   - ⏳ **Still deferred:** **P8.6** (compiler adopts the façade — messy because `pipe_*` resolution
+     overloads the 2nd arg as the pipeline's own name, not `"pipe"`/`"async_pipe"`). Low value; the
+     compiler already routes modules through the registry via `resolve_module`.
 3. **Extensibility — ✅ LANDED (entry points + example); catalog deferred.** `ModuleRegistry` gained
    the **entry-point tier** (`importlib.metadata.entry_points(group="riko.modules")`, discovered by
    name lazily, loaded+cached on first resolve; precedence runtime → entry-point → built-in;

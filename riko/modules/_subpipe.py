@@ -10,45 +10,33 @@ loopable — so the metadata is **declared** here rather than inferred.
 """
 
 from collections.abc import Awaitable, Callable
-from typing import Literal, cast, overload
+from typing import cast, overload
 
-from riko.types.general import (
-    AsyncSubPipe,
-    ProcessorWrapperOutput,
-    SubPipe,
-    SyncSubPipe,
-)
+from riko.types.general import AsyncSubPipe, SubPipe, SyncSubPipe
 from riko.types.modules import ModuleSubtype
 
 SUBPIPE_TYPE = "pipe"
 
-type _SubPipeOutput = ProcessorWrapperOutput | list[str] | list[tuple[str, ...]]
-type _SyncSubPipeFunc = Callable[..., _SubPipeOutput]
-type _AsyncSubPipeFunc = Callable[..., Awaitable[_SubPipeOutput]]
-
 
 @overload
-def mark_subpipe(  # noqa: E704
-    pipe: _SyncSubPipeFunc,
+def mark_subpipe(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+    pipe: Callable[..., Awaitable[object]],
     *,
     subtype: ModuleSubtype = ...,
     loopable: bool = ...,
-    is_async: Literal[False] = ...,
-) -> SyncSubPipe: ...
+) -> AsyncSubPipe: ...
 @overload  # noqa: E302
 def mark_subpipe(  # noqa: E704
-    pipe: _AsyncSubPipeFunc,
+    pipe: Callable[..., object],
     *,
     subtype: ModuleSubtype = ...,
     loopable: bool = ...,
-    is_async: Literal[True],
-) -> AsyncSubPipe: ...
+) -> SyncSubPipe: ...
 def mark_subpipe(  # noqa: E302
-    pipe: _SyncSubPipeFunc | _AsyncSubPipeFunc,
+    pipe: Callable[..., object],
     *,
     subtype: ModuleSubtype = "transformer",
     loopable: bool = True,
-    is_async: bool = False,
 ) -> SubPipe:
     setattr(pipe, "name", getattr(pipe, "__name__", SUBPIPE_TYPE))  # noqa: B010
     setattr(pipe, "type", SUBPIPE_TYPE)  # noqa: B010
@@ -56,7 +44,7 @@ def mark_subpipe(  # noqa: E302
     setattr(pipe, "subtypes", {subtype})  # noqa: B010
     setattr(pipe, "loopable", loopable)  # noqa: B010
     setattr(pipe, "pollable", False)  # noqa: B010
-    return cast(AsyncSubPipe, pipe) if is_async else cast(SyncSubPipe, pipe)
+    return cast(SubPipe, pipe)
 
 
 def is_subpipe(pipe: object) -> bool:

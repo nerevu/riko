@@ -2,16 +2,17 @@ import pytest
 
 from riko._pubsub import reset_pubsub
 from riko.bado import issync
-from riko.ext.pipelines import pipeline_resolver
+from riko.ext.pipelines import DirectoryStore, PackageStore, pipeline_resolver
 from riko.parsers import IS_LXML
 from riko.paths import ROOT_DIR
 
 PIPELINE_DIR = ROOT_DIR / "tests" / "pipelines"
 
 # The core compiler ships no named-pipeline locations; the suite supplies its
-# own generated-package + JSON-definition directory (formerly hardcoded as
+# own generated-package store + JSON-definition directory (formerly hardcoded as
 # ``tests.pypipelines`` / ``tests/pipelines`` inside ``riko.compile``).
-pipeline_resolver.configure(package="tests.pypipelines", directory=PIPELINE_DIR)
+store = PackageStore("tests.pypipelines")
+pipeline_resolver.configure(store=store, definitions=DirectoryStore(PIPELINE_DIR))
 
 
 @pytest.fixture(autouse=True)

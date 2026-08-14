@@ -2,86 +2,142 @@
 """
 riko.ext.pipelines
 ~~~~~~~~~~~~~~~~~~~
-Resolution of *named pipelines* (``pipe_*``) — the counterpart to the
-module registry. Where the registry resolves leaf module implementations, this
-resolves whole sub-pipelines: a generated Python module (imported from a
-configured package) or, failing that, a JSON definition compiled from a
-configured directory.
+Resolution of *named pipelines* (``pipe_*``) — the counterpart to the module
+registry. Where the registry resolves leaf module implementations, this resolves
+whole sub-pipelines: a generated Python module found via a pluggable
+``ModuleStore``, or (as a fallback) a JSON definition compiled from a configured
+directory.
 
 The locations are **injected**, not hardcoded: core ships an empty
 ``pipeline_resolver`` (a bare install has no named pipelines), and the test suite
-configures it with its ``tests.pypipelines`` package / ``tests/pipelines``
-directory via ``conftest``. This is what removes the ``tests.*`` paths from the
+configures it with a ``PackageStore("tests.pypipelines")`` + ``tests/pipelines``
+directory via ``conftest``. This is what keeps the ``tests.*`` paths out of the
 core compiler.
 """
 
+from collections.abc import Mapping
 from importlib import import_module
 from json import loads
 from pathlib import Path
 from types import ModuleType
+from typing import Protocol
 
 from riko.exceptions import UnsupportedPipelineError
 from riko.types.compile import ParsedPipeDef
 
 
-class PipelineResolver:
-    def __init__(
-        self, *, package: str | None = None, directory: Path | None = None
-    ) -> None:
+class ModuleStore(Protocol):
+    """Locates a generated pipeline module by name (``None`` if absent)."""
+
+    def load(self, name: str) -> ModuleType | None: ...  # noqa: E704
+
+
+class PackageStore:
+    """Import ``<package>.<name>`` — the shape generated pipelines ship in."""
+
+    def __init__(self, package: str) -> None:
         self._package = package
+
+    def load(self, name: str) -> ModuleType | None:
+        target = f"{self._package}.{name}"
+
+        try:
+            module = import_module(target)
+        except ModuleNotFoundError as e:
+            if missing_name := e.name:
+                is_target = target == missing_name
+
+                if not (is_target or target.startswith(f"{missing_name}.")):
+                    raise
+
+            module = None
+
+        return module
+
+
+class MappingStore:
+    """Serve pipeline modules from an in-memory ``{name: module}`` mapping."""
+
+    def __init__(self, modules: Mapping[str, ModuleType]) -> None:
+        self._modules = dict(modules)
+
+    def load(self, name: str) -> ModuleType | None:
+        return self._modules.get(name)
+
+
+class CompositeStore:
+    """Try each store in order; first hit wins."""
+
+    def __init__(self, *stores: ModuleStore) -> None:
+        self._stores = stores
+
+    def load(self, name: str) -> ModuleType | None:
+        found = None
+
+        for store in self._stores:
+            if (found := store.load(name)) is not None:
+                break
+
+        return found
+
+
+class DirectoryStore:
+    """
+    Compile ``<directory>/<name>.json`` into a ``ParsedPipeDef`` (``None`` if
+    the file is absent). The definition is interface-agnostic — the caller
+    builds it sync (``build_pipeline``) or async (``abuild_pipeline``).
+    """
+
+    def __init__(self, directory: Path) -> None:
         self._directory = directory
 
-    def _import(self, module_name: str) -> ModuleType:
-        if self._package is None:
-            raise ModuleNotFoundError(
-                f"no pipeline package configured for {module_name!r}", name=module_name
-            )
-
-        return import_module(f"{self._package}.{module_name}")
-
-    def _compile_from_json(
-        self, pipe_name: str, file_path: Path | None
-    ) -> ParsedPipeDef:
+    def load(self, name: str) -> ParsedPipeDef | None:
         from riko.compile import parse_pipe_def  # noqa: PLC0415
 
-        if (directory := file_path or self._directory) is None:
-            raise UnsupportedPipelineError(pipe_name)
-
-        pipe_file = directory / f"{pipe_name}.json"
-
         try:
-            pipe_def = loads(pipe_file.read_text())
-        except OSError as e:
-            raise UnsupportedPipelineError(pipe_name) from e
+            pipe_def = loads((self._directory / f"{name}.json").read_text())
+        except OSError:
+            parsed = None
+        else:
+            parsed = parse_pipe_def(pipe_def, name)
 
-        return parse_pipe_def(pipe_def, pipe_name)
+        return parsed
+
+
+class PipelineResolver:
+    def __init__(
+        self,
+        *,
+        store: ModuleStore | None = None,
+        definitions: DirectoryStore | None = None,
+    ) -> None:
+        self._store = store
+        self._definitions = definitions
 
     def configure(
-        self, *, package: str | None = None, directory: Path | None = None
-    ) -> None:
-        self._package = package
-        self._directory = directory
-
-    def load(
         self,
-        module_name: str,
-        pipe_name: str,
         *,
-        compile_missing: bool = False,
-        file_path: Path | None = None,
-    ) -> tuple[ModuleType | None, ParsedPipeDef | None]:
-        module: ModuleType | None = None
-        parsed: ParsedPipeDef | None = None
+        store: ModuleStore | None = None,
+        definitions: DirectoryStore | None = None,
+    ) -> None:
+        self._store = store
+        self._definitions = definitions
 
-        try:
-            module = self._import(module_name)
-        except ModuleNotFoundError as e:
-            if compile_missing:
-                parsed = self._compile_from_json(pipe_name, file_path)
-            else:
-                raise UnsupportedPipelineError(pipe_name) from e
+    def load(self, name: str) -> ModuleType | None:
+        """The generated pipeline module for ``name``, or ``None``."""
+        return self._store.load(name) if self._store is not None else None
 
-        return module, parsed
+    def load_definition(
+        self, name: str, *, directory: Path | None = None
+    ) -> ParsedPipeDef:
+        """Compile ``name``'s JSON definition, raising if it can't be found."""
+        store = self._definitions if directory is None else DirectoryStore(directory)
+        parsed = store.load(name) if store is not None else None
+
+        if parsed is None:
+            raise UnsupportedPipelineError(name)
+
+        return parsed
 
 
 pipeline_resolver: PipelineResolver = PipelineResolver()
