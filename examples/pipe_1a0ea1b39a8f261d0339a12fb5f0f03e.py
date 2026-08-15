@@ -7,9 +7,7 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.types.modules import DateFormatRawConf, ItemBuilderRawConf
 
 
-def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(
-    item=None, context: Context | None = None, **kwargs
-):
+def pipe(item=None, context: Context | None = None, **kwargs):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:
@@ -53,5 +51,5 @@ def pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(
 
 
 if __name__ == "__main__":
-    for i in pipe_1a0ea1b39a8f261d0339a12fb5f0f03e(context=Context()):
+    for i in pipe(context=Context()):
         print(i)

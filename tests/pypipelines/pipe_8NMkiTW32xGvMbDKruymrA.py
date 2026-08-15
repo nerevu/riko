@@ -10,7 +10,7 @@ from riko.modules.sort import pipe as sort
 from riko.types.modules import FilterRawConf, SortRawConf
 
 
-def pipe_8NMkiTW32xGvMbDKruymrA(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -115,9 +115,9 @@ def pipe_8NMkiTW32xGvMbDKruymrA(item=None, context: Context | None = None, **_):
     return _OUTPUT
 
 
-mark_subpipe(pipe_8NMkiTW32xGvMbDKruymrA, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_8NMkiTW32xGvMbDKruymrA():
+    for i in pipe():
         print(i)

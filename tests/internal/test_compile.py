@@ -157,7 +157,7 @@ PIPES = {
 def _run_generated(source, pipe_name) -> list[Item]:
     namespace: dict = {}
     exec(compile(source, f"<{pipe_name}>", "exec"), namespace)
-    return list(namespace[pipe_name](context=Context()))
+    return list(namespace["pipe"](context=Context()))
 
 
 def _run_executor(parsed) -> list[Item]:
@@ -229,7 +229,7 @@ def test_compile_wraps_parse_and_stringify():
 
 def test_unresolved_subpipeline_raises():
     with pytest.raises(UnsupportedPipelineError):
-        resolve_module("pipe_missing", "pipe_missing")
+        resolve_module("pipe_missing", "pipe")
 
 
 def test_convert_dag_appends_output():
@@ -312,12 +312,12 @@ def test_async_codegen_matches_sync():
     async_src = compile_pipe(pipe_def, "pipe_gigs", is_async=True)
     async_ns: dict = {}
     exec(async_src, async_ns)
-    async_result = list(run(async_ns["pipe_gigs"]))
+    async_result = list(run(async_ns["async_pipe"]))
 
     sync_src = compile_pipe(pipe_def, "pipe_gigs", is_async=False)
     sync_ns: dict = {}
     exec(sync_src, sync_ns)
-    sync_result = list(sync_ns["pipe_gigs"]())
+    sync_result = list(sync_ns["pipe"]())
 
     assert async_result
     assert async_result == sync_result
@@ -388,7 +388,7 @@ class TestNecessaryLoopFixtures:
         # codegen must import the sub-pipeline used as a loop embed
         pipe_def = loads((PIPELINE_DIR / "pipe_loop_subpipe.json").read_text())
         source = stringify_pipe(parse_pipe_def(pipe_def, "pipe_loop_subpipe"))
-        assert "import pipe_shout" in source
+        assert "import pipe as pipe_shout" in source
         assert "embed=pipe_shout" in source
 
     def test_count_all_assign_yields_per_parent_copies(self):

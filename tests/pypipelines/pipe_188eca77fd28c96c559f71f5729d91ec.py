@@ -10,9 +10,7 @@ from riko.modules.truncate import pipe as truncate
 from riko.types.modules import FetchPageRawConf, ItemBuilderRawConf, TruncateRawConf
 
 
-def pipe_188eca77fd28c96c559f71f5729d91ec(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -61,9 +59,9 @@ def pipe_188eca77fd28c96c559f71f5729d91ec(
     return _OUTPUT
 
 
-mark_subpipe(pipe_188eca77fd28c96c559f71f5729d91ec, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_188eca77fd28c96c559f71f5729d91ec():
+    for i in pipe():
         print(i)

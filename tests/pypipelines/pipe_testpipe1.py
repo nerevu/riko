@@ -9,7 +9,7 @@ from riko.modules.filter import pipe as _filter
 from riko.types.modules import FetchRawConf, FilterRawConf
 
 
-def pipe_testpipe1(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -44,9 +44,9 @@ def pipe_testpipe1(item=None, context: Context | None = None, **_):
     return _OUTPUT
 
 
-mark_subpipe(pipe_testpipe1, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_testpipe1():
+    for i in pipe():
         print(i)

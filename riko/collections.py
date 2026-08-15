@@ -135,7 +135,7 @@ from riko.bado.itertools import (
 from riko.context import Context, ExecutionMode, parse_context
 from riko.exceptions import PipelineStateError
 from riko.ext.names import ModuleNameLike, normalize_module_name
-from riko.ext.resolver import stage_resolver
+from riko.ext.resolver import pipe_resolver
 from riko.types.general import (
     AsyncPipeParser,
     AsyncSource,
@@ -595,7 +595,7 @@ class SyncPipe(PyPipe):
             self._pool_handle = _pool_handle
 
         if self.name:
-            self._pipe: SyncPipeParser = stage_resolver.resolve(self.name, "pipe")
+            self._pipe: SyncPipeParser = pipe_resolver.resolve(self.name, "pipe")
             self.pollable: bool = getattr(self._pipe, "pollable")  # noqa: B009
             self.loopable: bool = getattr(self._pipe, "loopable")  # noqa: B009
             self.mapify: bool = self.loopable and self.source is not None
@@ -1182,7 +1182,7 @@ class AsyncPipe(PyPipe):
         self._aiter: AsyncGenerator[Item, None] | None = None
 
         if self.name:
-            self._async_pipe: AsyncPipeParser = stage_resolver.resolve(
+            self._async_pipe: AsyncPipeParser = pipe_resolver.resolve(
                 self.name, "async_pipe"
             )
             self.pollable: bool = getattr(self._async_pipe, "pollable")  # noqa: B009

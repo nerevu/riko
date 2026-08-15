@@ -9,7 +9,7 @@ from riko.collections import SyncCollection
 from riko.modules._subpipe import mark_subpipe
 {%- for module in uniq_modules %}
 {%- if module.is_sub_pipe %}
-from riko.pypipelines.{{ module.name }} import {{ module.pipe_name }}
+from riko.pypipelines.{{ module.name }} import pipe as {{ module.alias }}
 {%- elif module.name != "output" %}
 from riko.modules.{{ module.name }} import pipe as {{ module.alias }}
 {%- endif %}
@@ -23,7 +23,7 @@ from riko.types.modules import (
 {%- endif %}
 
 
-def {{ pipe_name }}(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         {{ last_module }} = {{ inputs }}
     elif context and context.describe_dependencies:
@@ -43,9 +43,9 @@ def {{ pipe_name }}(item=None, context: Context | None = None, **_):
     return {{ last_module }}
 
 
-mark_subpipe({{ pipe_name }}, subtype="{{ subtype }}")
+mark_subpipe(pipe, subtype="{{ subtype }}")
 
 
 if __name__ == "__main__":
-    for i in {{ pipe_name }}():
+    for i in pipe():
         print(i)

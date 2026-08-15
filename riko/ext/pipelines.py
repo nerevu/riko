@@ -16,14 +16,35 @@ core compiler.
 """
 
 from collections.abc import Mapping
+from functools import partial, update_wrapper
 from importlib import import_module
 from json import loads
 from pathlib import Path
 from types import ModuleType
-from typing import Protocol
+from typing import Literal, Protocol, cast, overload
 
 from riko.exceptions import UnsupportedPipelineError
+from riko.modules._subpipe import is_subpipe, mark_subpipe
 from riko.types.compile import ParsedPipeDef
+from riko.types.general import AsyncPipeParser, Interface, Pipeline, SyncPipeParser
+from riko.types.modules import ModuleSubtype
+
+
+def _as_subpipe(pipeline: Pipeline) -> Pipeline:
+    """
+    Mark a resolved ``pipe_*`` callable as a sub-pipeline via a fresh wrapper,
+    leaving the original module callable unmutated.
+    """
+    if is_subpipe(pipeline):
+        subpipe = pipeline
+    else:
+        subpipe = cast(Pipeline, partial(pipeline))
+        update_wrapper(subpipe, pipeline)
+        subtype = cast(ModuleSubtype, getattr(pipeline, "subtype", "source"))
+        loopable = cast(bool, getattr(pipeline, "loopable", True))
+        mark_subpipe(subpipe, subtype=subtype, loopable=loopable)
+
+    return subpipe
 
 
 class ModuleStore(Protocol):
@@ -126,6 +147,29 @@ class PipelineResolver:
     def load(self, name: str) -> ModuleType | None:
         """The generated pipeline module for ``name``, or ``None``."""
         return self._store.load(name) if self._store is not None else None
+
+    @overload
+    def resolve(  # noqa: E704
+        self, name: str, interface: Literal["pipe"]
+    ) -> SyncPipeParser: ...
+    @overload  # noqa: E301
+    def resolve(  # noqa: E704
+        self, name: str, interface: Literal["async_pipe"]
+    ) -> AsyncPipeParser: ...
+    def resolve(self, name: str, interface: Interface) -> Pipeline:  # noqa: E301
+        """
+        Resolve a ``pipe_<id>`` / ``pipe:<id>`` sub-pipeline to its marked
+        callable — the counterpart to ``ModuleRegistry.resolve``.
+        """
+        from riko.compile import pythonise  # noqa: PLC0415
+
+        module = self.load(pythonise(name))
+        pipeline = getattr(module, interface, None) if module else None
+
+        if pipeline is None:
+            raise UnsupportedPipelineError(name)
+
+        return _as_subpipe(pipeline)
 
     def load_definition(
         self, name: str, *, directory: Path | None = None

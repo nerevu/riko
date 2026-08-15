@@ -10,9 +10,7 @@ from riko.modules.urlbuilder import pipe as urlbuilder
 from riko.types.modules import FetchRawConf, InputRawConf, UrlBuilderRawConf
 
 
-def pipe_e519dd393f943315f7e4128d19db2eac(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = [("", "q", "Search term:", "text", "enterprise mashup")]
     elif context and context.describe_dependencies:
@@ -77,9 +75,9 @@ def pipe_e519dd393f943315f7e4128d19db2eac(
     return _OUTPUT
 
 
-mark_subpipe(pipe_e519dd393f943315f7e4128d19db2eac, subtype="transformer")
+mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":
-    for i in pipe_e519dd393f943315f7e4128d19db2eac():
+    for i in pipe():
         print(i)

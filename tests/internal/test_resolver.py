@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Tests for the P8 module registry + stage-resolution façade (slice 1).
+Tests for the P8 module registry + pipe-resolution façade (slice 1).
 """
 
 import sys
@@ -15,9 +15,10 @@ from riko.ext.pipelines import (
     MappingStore,
     PackageStore,
     PipelineResolver,
+    pipeline_resolver,
 )
 from riko.ext.registry import ModuleDefinition, registry
-from riko.ext.resolver import StageResolver, stage_resolver
+from riko.ext.resolver import PipeResolver, pipe_resolver
 from riko.modules import list_modules, tokenizer
 from riko.paths import ROOT_DIR
 
@@ -132,19 +133,19 @@ class TestModuleRegistry:
         assert clean_registry.resolve(_NAME, "async_pipe") is other  # from module
 
 
-class TestStageResolver:
+class TestPipeResolver:
     def test_module_resolves_via_registry(self, clean_registry):
-        assert stage_resolver.resolve("tokenizer", "pipe").__name__ == "pipe"
+        assert pipe_resolver.resolve("tokenizer", "pipe").__name__ == "pipe"
 
     def test_pipeline_delegates_to_compiler(self, clean_registry):
         with pytest.raises(UnsupportedModuleError):
             # non-pipe_ missing name goes through the registry
-            stage_resolver.resolve("nope", "pipe")
+            pipe_resolver.resolve("nope", "pipe")
 
-    def test_runtime_stage_resolution_imports_no_compiler(self, clean_registry):
+    def test_runtime_pipe_resolution_imports_no_compiler(self, clean_registry):
         """Resolving an ordinary module must not pull in riko.compile."""
         sys.modules.pop("riko.compile", None)
-        StageResolver(clean_registry).resolve("tokenizer", "pipe")
+        PipeResolver(clean_registry, pipeline_resolver).resolve("tokenizer", "pipe")
         assert "riko.compile" not in sys.modules
 
 
@@ -178,7 +179,7 @@ class TestEntryPointModules:
         defn = ModuleDefinition(name="acme.hello", sync_pipe=marker)
         _patch_entry_points(monkeypatch, _FakeEntryPoint("acme.hello", defn))
         clean_registry.reset()
-        assert stage_resolver.resolve("acme.hello", "pipe") is marker
+        assert pipe_resolver.resolve("acme.hello", "pipe") is marker
 
     def test_runtime_registration_shadows_entry_point(
         self, monkeypatch, clean_registry

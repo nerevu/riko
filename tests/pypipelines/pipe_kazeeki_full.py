@@ -347,7 +347,7 @@ def print_content(output):
     print("count", len(pipe))
 
 
-def pipe_kazeeki_full(context: Context | None = None, **_):
+def pipe(context: Context | None = None, **_):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:
@@ -362,5 +362,5 @@ def pipe_kazeeki_full(context: Context | None = None, **_):
 
 
 if __name__ == "__main__":
-    output = pipe_kazeeki_full(context=Context())
+    output = pipe(context=Context())
     print_content(output)

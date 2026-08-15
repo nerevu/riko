@@ -18,6 +18,7 @@ from typing import (
     Protocol,
     TypedDict,
     TypeVar,
+    overload,
 )
 
 from riko.types.modules import ModuleSubtype, ModuleSubtypes, ModuleType
@@ -354,6 +355,7 @@ class AsyncSplitterWrapper(ModuleWrapper):
 
 
 # Both
+type Interface = Literal["pipe", "async_pipe"]
 type ProcessorParser = SyncProcessorParser | AsyncProcessorParser
 type ProcessorWrapper = SyncProcessorWrapper | AsyncProcessorWrapper
 type SubPipe = SyncSubPipe | AsyncSubPipe
@@ -367,3 +369,22 @@ type StepValue = ParserOutput | Pipeline | AsyncPipeItems
 type Step = tuple[str, StepValue]
 type Steps = dict[str, StepValue]
 type PyInput = SyncPyInput | AsyncPyInput
+
+
+class Resolver(Protocol):
+    """
+    Resolves a pipe name + interface to its callable — a ``ModuleRegistry``
+    (leaf modules) or a ``PipelineResolver`` (``pipe`` sub-pipelines).
+    """
+
+    @overload
+    def resolve(  # noqa: E704
+        self, name: str, interface: Literal["pipe"]
+    ) -> SyncPipeParser: ...
+    @overload  # noqa: E301
+    def resolve(  # noqa: E704
+        self, name: str, interface: Literal["async_pipe"]
+    ) -> AsyncPipeParser: ...
+    def resolve(  # noqa: E301, E704
+        self, name: str, interface: Interface
+    ) -> Pipeline: ...

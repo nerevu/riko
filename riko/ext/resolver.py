@@ -2,32 +2,30 @@
 """
 riko.ext.resolver
 ~~~~~~~~~~~~~~~~~~
-The single stage-resolution façade. Runtime stages resolve through here instead
-of importing the compiler.
-
-Precedence: runtime registration → (entry points, later) → built-in module →
-named pipeline. Ordinary module names resolve via the :class:`ModuleRegistry`
-with no compiler import; composed pipelines (``pipe_*``) are delegated to the
-compiler **lazily** (imported only inside the ``pipe_*`` branch), so importing
-this module (and therefore ``riko.collections``) never pulls in ``riko.compile``.
+The single pipe-resolution façade — one symmetric dispatch over two resolvers
+that share a ``resolve(name, interface)`` shape: the :class:`ModuleRegistry` for
+leaf modules, the :class:`PipelineResolver` for composed ``pipe`` sub-pipelines.
+Neither imports the compiler, so importing this module (and therefore
+``riko.collections``) never pulls in ``riko.compile``.
 """
 
 from typing import Literal, overload
 
-from riko.ext.registry import ModuleRegistry, registry
-from riko.types.general import AsyncPipeParser, Pipeline, SyncPipeParser
+from riko.ext.pipelines import pipeline_resolver
+from riko.ext.registry import registry
+from riko.types.general import (
+    AsyncPipeParser,
+    Interface,
+    Pipeline,
+    Resolver,
+    SyncPipeParser,
+)
 
-type Interface = Literal["pipe", "async_pipe"]
 
-
-class StageResolver:
-    def __init__(self, module_registry: ModuleRegistry) -> None:
-        self._registry = module_registry
-
-    def _resolve_pipeline(self, name: str, interface: Interface) -> Pipeline:
-        from riko.compile import resolve_module  # noqa: PLC0415
-
-        return resolve_module(name, interface)
+class PipeResolver:
+    def __init__(self, registry: Resolver, pipelines: Resolver) -> None:
+        self._registry = registry
+        self._pipelines = pipelines
 
     @overload
     def resolve(  # noqa: E704
@@ -38,12 +36,9 @@ class StageResolver:
         self, name: str, interface: Literal["async_pipe"]
     ) -> AsyncPipeParser: ...
     def resolve(self, name: str, interface: Interface) -> Pipeline:  # noqa: E301
-        if name.startswith("pipe_"):
-            resolved = self._resolve_pipeline(name, interface)
-        else:
-            resolved = self._registry.resolve(name, interface)
-
-        return resolved
+        is_pipeline = name.startswith(("pipe_", "pipe:"))
+        resolver: Resolver = self._pipelines if is_pipeline else self._registry
+        return resolver.resolve(name, interface)
 
 
-stage_resolver: StageResolver = StageResolver(registry)
+pipe_resolver: PipeResolver = PipeResolver(registry, pipeline_resolver)

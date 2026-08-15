@@ -11,7 +11,7 @@ from riko.modules.uniq import pipe as uniq
 from riko.types.modules import FetchDataRawConf, FilterRawConf, SortRawConf, UniqRawConf
 
 
-def pipe_gigs(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -68,9 +68,9 @@ def pipe_gigs(item=None, context: Context | None = None, **_):
     return _OUTPUT
 
 
-mark_subpipe(pipe_gigs, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_gigs():
+    for i in pipe():
         print(i)

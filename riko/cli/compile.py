@@ -2,7 +2,7 @@
 Compile a riko JSON pipeline into a Python module.
 
 A full pipe definition (modules + verbose ``src``/``tgt`` wires) compiles to a
-runnable module whose function is named after the pipe:
+runnable module exposing a ``pipe`` (or ``async_pipe``) entry point:
 
 >>> from riko.compile import compile_pipe
 >>> pipe_def = {
@@ -20,7 +20,7 @@ runnable module whose function is named after the pipe:
 ... }
 >>> source = compile_pipe(pipe_def, "pipe_demo")
 >>> print(next(line for line in source.splitlines() if line.startswith("def ")))
-def pipe_demo(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
 """
 
 import sys

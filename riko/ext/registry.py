@@ -24,9 +24,7 @@ from importlib.metadata import EntryPoint, entry_points
 from typing import Literal, cast, overload
 
 from riko.exceptions import UnsupportedModuleError
-from riko.types.general import AsyncPipeParser, Pipeline, SyncPipeParser
-
-type Interface = Literal["pipe", "async_pipe"]
+from riko.types.general import AsyncPipeParser, Interface, Pipeline, SyncPipeParser
 
 ENTRY_POINT_GROUP = "riko.modules"
 

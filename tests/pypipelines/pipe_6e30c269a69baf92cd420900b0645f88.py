@@ -21,9 +21,7 @@ from riko.types.modules import (
 )
 
 
-def pipe_6e30c269a69baf92cd420900b0645f88(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -144,9 +142,9 @@ def pipe_6e30c269a69baf92cd420900b0645f88(
     return _OUTPUT
 
 
-mark_subpipe(pipe_6e30c269a69baf92cd420900b0645f88, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_6e30c269a69baf92cd420900b0645f88():
+    for i in pipe():
         print(i)

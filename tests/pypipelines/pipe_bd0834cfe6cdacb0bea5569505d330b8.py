@@ -10,9 +10,7 @@ from riko.modules.urlbuilder import pipe as urlbuilder
 from riko.types.modules import FetchDataRawConf, InputRawConf, UrlBuilderRawConf
 
 
-def pipe_bd0834cfe6cdacb0bea5569505d330b8(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = [("", "gid", "MP Guardian ID", "text", "1276")]
     elif context and context.describe_dependencies:
@@ -67,9 +65,9 @@ def pipe_bd0834cfe6cdacb0bea5569505d330b8(
     return _OUTPUT
 
 
-mark_subpipe(pipe_bd0834cfe6cdacb0bea5569505d330b8, subtype="transformer")
+mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":
-    for i in pipe_bd0834cfe6cdacb0bea5569505d330b8():
+    for i in pipe():
         print(i)

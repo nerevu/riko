@@ -6,9 +6,7 @@ from riko.modules.regex import pipe as regex
 from riko.types.modules import ItemBuilderRawConf, RegexRawConf, RegexRawRule
 
 
-def pipe_a3d1afa31f0a24cc51dcbe79f1590343(
-    item=None, context: Context | None = None, **kwargs
-):
+def pipe(item=None, context: Context | None = None, **kwargs):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:
@@ -52,5 +50,5 @@ def pipe_a3d1afa31f0a24cc51dcbe79f1590343(
 
 
 if __name__ == "__main__":
-    for i in pipe_a3d1afa31f0a24cc51dcbe79f1590343():
+    for i in pipe():
         print(i)

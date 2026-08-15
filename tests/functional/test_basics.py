@@ -82,7 +82,7 @@ class TestBasics:
     ) -> ParserMaterializedOutput:
         # prefer the generated module; fall back to compiling the JSON definition
         try:
-            pipeline = resolve_module(pipe_name, pipe_name)
+            pipeline = resolve_module(pipe_name, "pipe")
         except UnsupportedPipelineError:
             parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
             stream = build_pipeline(parsed, context=self.context)
@@ -95,7 +95,7 @@ class TestBasics:
         self, pipe_name: str, file_path: Path | None = None
     ) -> ParserMaterializedOutput:
         try:
-            pipeline = resolve_module(pipe_name, pipe_name)
+            pipeline = resolve_module(pipe_name, "async_pipe")
         except UnsupportedPipelineError:
             parsed = pipeline_resolver.load_definition(pipe_name, directory=file_path)
             items = abuild_pipeline(parsed, context=self.context)
@@ -112,7 +112,7 @@ class TestBasics:
         except ImportError:
             pydeps = _extract_dependencies(pipe_name)
         else:
-            pipeline: SyncPipelineDependencies = getattr(module, pipe_name)
+            pipeline: SyncPipelineDependencies = module.pipe
             pydeps = extract_dependencies(pipeline=pipeline)
 
         _check_results(pydeps, items, pipe_name, value=0, check=1)
@@ -123,7 +123,7 @@ class TestBasics:
         except ImportError:
             pydeps = _extract_dependencies(pipe_name)
         else:
-            pipeline: AsyncPipelineDependencies = getattr(module, pipe_name)
+            pipeline: AsyncPipelineDependencies = module.async_pipe
             pydeps = await extract_dependencies(pipeline=pipeline)
 
         _check_results(pydeps, items, pipe_name, value=0, check=1)
