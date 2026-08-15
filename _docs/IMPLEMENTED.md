@@ -113,7 +113,9 @@ for item in pipe:
 Its parallel implementation materializes the complete source before pool submission
 (`source_items = list(self.source)`). This ships as an explicit limitation: parallel
 synchronous execution is not guaranteed to support infinite streams or bounded-memory
-source submission.
+source submission. `pool_scope` selects pool lifetime: `"pipe"` (a per-pipe pool,
+released after each pipe's iteration) or the default `"pipeline"` (one pool shared
+across the run). The `"pipe"` value was renamed from `"stage"`.
 
 ### Asynchronous pipes
 
@@ -210,14 +212,42 @@ the Twisted `asyncioreactor` escape hatch for server roles) is roadmap, in ROADM
 
 ## 24. Module discovery (shipped)
 
-> **Partial.** Entry-point / runtime `ModuleRegistry` (P8) → [extensibility.md §24](gameplans/extensibility.md#24-module-registry-and-plugins).
-
-Module discovery is the `pkgutil`-based catalog. `list_modules()` /
+Module discovery is the derived catalog. `list_modules()` /
 `list_modules(show_metadata=True)` (defined in `riko/modules/_metadata.py`, re-exported from
-`riko/modules/__init__.py`) discover pipes via `pkgutil` and read `ModuleMetadata` off the decorator-set wrapper attributes (`type`,
-`subtype`, `supported_subtypes`, `pollable`); subtype is derived (see `_derive_subtypes`).
-The catalog is derived, not declared. Unqualified names are reserved for built-ins;
-namespaces are reserved. The entry-point/runtime `ModuleRegistry` is P8-planned.
+`riko/modules/__init__.py`) discover built-in pipes via `pkgutil` and read `ModuleMetadata` off the
+decorator-set wrapper attributes (`type`, `subtype`, `subtypes`, `pollable`); subtype is derived
+(see `_derive_subtypes`). The catalog is derived, not declared. Since P8 it **overlays** registry
+(runtime-registered + entry-point) modules via `gen_registry_catalog`, so extension modules are
+discoverable too. Unqualified names are reserved for built-ins; dotted namespaces for extensions.
+
+## Module registry & pipe resolution (P8, shipped)
+
+The runtime→compiler resolution coupling is inverted behind three **compiler-free** layers sharing
+one overloaded `resolve(name, interface)` contract (`riko/types/general.py::Resolver`):
+`ModuleRegistry` (`riko/ext/registry.py`; built-ins lazy per name, runtime `register`/`reset`, entry
+points under `[project.entry-points."riko.modules"]`; precedence runtime → entry-point → built-in),
+`PipelineResolver` + injectable `ModuleStore`/`DirectoryStore` (`riko/ext/pipelines.py`; core ships
+no locations), and the `PipeResolver` façade (`riko/ext/resolver.py`) doing one symmetric dispatch.
+`riko/collections.py` resolves through the façade; `compile.resolve_module` delegates to it.
+Generated pipelines expose a stable `pipe`/`async_pipe` entry, so a sub-pipeline resolves exactly
+like a built-in. External packages add modules with **no core edit** (`examples/riko-example-ext/`).
+Remaining P9A discoverability (generated `Module` tree, `available_modules`/`describe_module`,
+`.pyi` stubs) → [module-enums.md](gameplans/module-enums.md).
+
+**Pipe authoring:** the `processor`/`operator`/`splitter` decorators infer `isasync`
+(`riko/modules/_decorators.py::_resolve_isasync`) — from an `async def` or the conventional
+`async_pipe` name — so authors rarely pass it. Explicit `isasync=True` is needed only where the
+name signal can't reach the type checker: a sync async-interface callable not named `async_pipe`
+(e.g. a lambda), or a sync `def async_pipe` handed to a typed API such as
+`ModuleDefinition(async_pipe=…)`. A function named `pipe` that resolves async raises `TypeError`.
+The typed `__call__` overloads track the `async def` case (`@operator()` on a coroutine is statically
+async). Tests: `tests/internal/test_decorators.py`.
+
+**Fluent surface (P9, partial — shipped):** value-taking chaining — `pipe | "name"`,
+`pipe | ("name", conf)`, `pipe | SyncPipe(...)`, `items | SyncPipe(...)`, and `.pipe()`/`.async_pipe()`
+— plus the `ModuleName` `StrEnum` base and `normalize_module_name` (`riko/ext/names.py`); a name may
+be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
+generated `Module` tree is P9A.
 
 ## 25. Conversion — export converters (shipped)
 

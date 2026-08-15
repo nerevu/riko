@@ -17,6 +17,52 @@ New
     ``pipe | SyncPipe("sort", conf=...)``, and ``items | SyncPipe(...)``
   - ``pipe.pipe(name, conf=...)`` / ``pipe.async_pipe(name, ...)``
 
+- Add ``riko.ext.ModuleName``, a deliberately empty ``StrEnum`` base for typed
+  module-name discovery, plus ``normalize_module_name`` and the
+  ``ModuleNameLike = str | ModuleName`` alias. A ``ModuleName`` subclass member is
+  accepted anywhere a module name is (``SyncPipe(MyModules.FETCH)``,
+  ``pipe | MyModules.SORT``) and normalizes to its canonical string, so serialized
+  pipelines are unchanged.
+
+- Add a **module registry and entry-point plugin seam**. An external package can
+  add riko modules with **no edit to core**: expose a ``riko.ext.ModuleDefinition``
+  (point it at a module exposing ``pipe``/``async_pipe``, or pass ``sync_pipe`` /
+  ``async_pipe`` callables explicitly) and declare it under
+  ``[project.entry-points."riko.modules"]``. ``riko.ext.register`` /
+  ``ModuleRegistry`` cover in-process registration (precedence: runtime →
+  entry point → built-in). Registered and entry-point modules resolve like
+  built-ins and appear in ``list_modules()``. See ``examples/riko-example-ext``
+  (entry point) and ``examples/register_module.py`` / ``examples/register_alias.py``
+  (runtime ``register``).
+
+- Infer ``isasync`` for ``processor``/``operator``/``splitter`` when it isn't
+  passed — from an ``async def`` or the conventional ``async_pipe`` name — so an
+  async pipe no longer silently builds a sync wrapper when the author forgets
+  ``isasync=True``. An explicit ``isasync=True`` is now needed only where the
+  name signal can't reach the type checker: a sync callable that is the async
+  interface but isn't named ``async_pipe`` (e.g. a lambda), or a sync
+  ``def async_pipe`` whose decorated result is passed to a typed API such as
+  ``ModuleDefinition(async_pipe=...)``. A function named ``pipe`` that resolves
+  async (an ``async def`` or ``isasync=True``) is a contradiction and raises a
+  helpful ``TypeError``. The typed decorator overloads track the ``async def``
+  case, so ``@operator()`` on a coroutine function is statically async.
+
+Changes
+~~~~~~~
+
+- Renamed the ``SyncPipe``/``AsyncPipe`` ``pool_scope`` value from ``"stage"`` to
+  ``"pipe"`` (contrasting with ``"pipeline"``): a per-``pipe`` pool is released
+  after each pipe's iteration, a ``"pipeline"`` pool is shared across the run.
+  The default (``"pipeline"``) is unchanged.
+
+- Pipe resolution now runs through a single compiler-free façade
+  (``riko.ext`` registry/resolver); runtime module resolution no longer imports
+  the compiler.
+
+- Generated pipeline modules now expose a stable ``pipe`` / ``async_pipe`` entry
+  point (instead of a function named after the pipe), so a compiled sub-pipeline
+  resolves exactly like a built-in module.
+
 v0.74.2 (2026-08-11)
 --------------------
 

@@ -584,10 +584,9 @@ configuration, assignment, metadata, and sync/async wrappers.
 Creating a custom processor
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``processor`` wraps a function that handles one ``item`` at a time. The public
-extension surface does not currently provide a runtime registry for adding an
-arbitrary decorated function to ``SyncPipe`` by name, so invoke the decorated
-callable functionally or ship it as an importable ``riko`` module.
+``processor`` wraps a function that handles one ``item`` at a time. A decorated
+callable can be invoked functionally, or registered so ``SyncPipe`` resolves it
+by name (see `Registering a custom module`_ below).
 
 .. code-block:: python
 
@@ -601,8 +600,13 @@ callable functionally or ship it as an importable ``riko`` module.
     {'content': 'HELLO'}
 
 A ``processor`` can return one value, an ``item``, or an iterator. Use ``field``
-and ``assign`` at the call site to control extraction and assignment. For an
-async ``processor``, pass ``isasync=True`` and decorate an async function.
+and ``assign`` at the call site to control extraction and assignment.
+
+The async interface accepts a sync *or* async callable, so ``async_pipe`` may be a plain
+``def`` that returns the sync parser (as built-in ``count``/``reverse``/``sort`` do)
+*or* an ``async def`` that awaits real I/O (as ``strreplace``/``timeout`` and
+`register_module.py`_ do). Pass ``isasync=True`` explicitly if you wrap a sync function
+(that isn't named ``async_pipe``) for the async interface.
 
 Creating a custom operator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -625,6 +629,18 @@ or composition that cannot be expressed as an item-level ``processor``.
 ``operator`` functions should preserve iterator behavior unless the operation
 requires materialization. Add both sync and async wrappers when users need both
 execution APIs.
+
+Registering a custom module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To make a custom module resolvable by name, i.e., ``SyncPipe('your.module', ...)``
+and the ``|`` operator find it, register it with ``riko.ext.register`` or declare
+a ``[project.entry-points."riko.modules"]`` entry point. Point a ``ModuleDefinition``
+at a module exposing ``pipe``/``async_pipe``, or pass those callables explicitly. See
+`riko-example-ext`_ (installable entry-point plugin), `register_module.py`_ (runtime
+``register`` with explicit callables), and `register_alias.py`_ (runtime ``register``
+aliasing a built-in), plus the `FAQ`_ entry `Can I create custom modules`_ for the
+mechanics.
 
 Fanning out a stream
 ^^^^^^^^^^^^^^^^^^^^
@@ -894,6 +910,10 @@ run ``riko`` inside the relevant worker or task rather than treating ``riko`` as
 the scheduler.
 
 .. _FAQ: FAQ.rst
+.. _Can I create custom modules: FAQ.rst#can-i-create-custom-modules
+.. _riko-example-ext: ../examples/riko-example-ext
+.. _register_module.py: ../examples/register_module.py
+.. _register_alias.py: ../examples/register_alias.py
 .. _Design Principles: ../README.rst#design-principles
 .. _class based flows: ../README.rst#synchronous-processing
 .. _DAG format doc: DAG_FORMAT.rst

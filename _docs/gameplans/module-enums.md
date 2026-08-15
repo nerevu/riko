@@ -1,5 +1,7 @@
 # Gameplan: Module Registry (P8) + Enum Discoverability (P9A)
 
+> **Status (2026-08):** prerequisites **shipped** — P8 registry/resolver, P9A.4 value-taking chaining (`|`/`.pipe()`), P9A.1 `ModuleName` base, and decorator `isasync` inference; see [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) § P8 and [IMPLEMENTED.md](../IMPLEMENTED.md). Remaining P9A = the generated `Module` tree + introspection/stubs. (Grounding notes below predate this.)
+
 Actionable plan derived from `_docs/current_implementation.md` (the "generated module enums"
 design), scoped to **core riko only**. The `riko-microsoft` / Autopilot half of that doc is a
 downstream *consumer* of this work and is planned separately (P14 — gated behind P8/P11/P12); it

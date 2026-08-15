@@ -7,7 +7,7 @@ sequencing). Consolidates the former `P1/P2/P5/P6/P7/P10_CHECKLIST.md` and the f
 
 ## Progress tracker (authoritative)
 
-Suite: **684 passed** (pyright/ruff clean). Branch: `fixes` (the user commits).
+Suite: **709 passed** (pyright/ruff clean). Branch: `features` (the user commits).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -269,6 +269,14 @@ argument (P8.6). `list_modules` overlays registry (runtime + entry-point) module
 widened (it only stamps metadata). Speculative `ModuleDefinition` discovery fields
 (`provider`/`enum_name`/`user_type`/`docs_url`) dropped until P9A needs them. Entry-point group name:
 `riko.modules`.
+
+**Pipe-authoring ergonomics (landed alongside).** The decorators now **infer `isasync`**
+(`_resolve_isasync`) from an `async def` or the conventional `async_pipe` name, so it's rarely passed;
+explicit `isasync=True` remains only for the cases the name signal can't type — a sync async-interface
+callable not named `async_pipe` (a lambda), or a sync `def async_pipe` handed to
+`ModuleDefinition(async_pipe=…)`. A `pipe`-named async function raises `TypeError`; typed `__call__`
+overloads make `@operator()` on a coroutine statically async. Also on this branch: `pool_scope`'s
+`"stage"` value renamed to `"pipe"` (vs `"pipeline"`). Tests: `tests/internal/test_decorators.py`.
 
 **Carryover:** none. Unblocks **P9A** (the generated `Module.<Type>.<Subtype>.<NAME>` tree reads the
 registry/catalog). Tests: `tests/internal/test_resolver.py`.

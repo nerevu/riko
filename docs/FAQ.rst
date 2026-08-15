@@ -341,6 +341,14 @@ Notes:
   ``emit=True``.
 - Module authors do not declare these metadata attributes; they are derived from the
   decorator type, options, and return annotations.
+- The catalog overlays registry entries: modules added via ``riko.ext.register`` or a
+  ``[project.entry-points."riko.modules"]`` entry point appear alongside the packaged
+  built-ins (see `Can I create custom modules`_).
+- A module name may be given as a plain ``str`` or a ``riko.ext.ModuleName`` member;
+  ``normalize_module_name`` coerces either to the canonical string accepted
+  everywhere a module name is. Generated, ready-to-use enums grouped by taxonomy
+  (``Sources``/``Transforms``/``Sinks``) are planned; today ``ModuleName`` is the
+  base they will build on.
 
 What do processor, operator, and splitter mean?
 -----------------------------------------------
@@ -587,14 +595,43 @@ Yes. ``riko.ext`` exposes ``processor``, ``operator``, and ``splitter``
 decorators plus supported protocols and metadata types. Decorated functions can
 be called directly and composed with ordinary Python.
 
-The current public extension API doesn't include a runtime registration
-function. ``list_modules()`` discovers packaged built-ins under
-``riko.modules``; don't assume that an arbitrary decorated function becomes a
-chainable named module automatically.
+To make a module resolvable by name (so ``SyncPipe('your.module', ...)`` and the
+``|`` operator can find it), register it with the module registry. Package your
+module so it exposes ``pipe`` and/or ``async_pipe`` functions, then either register
+it at runtime or declare an entry point.
 
-The `Cookbook`_ contains custom ``processor`` and ``operator`` examples, and the
-`contributing guide`_ explains the additional work required for a built-in
-module.
+Entry point (discovered lazily; no edit to riko core, nothing imported until the
+name is resolved):
+
+.. code-block:: python
+
+    # your_ext/modules.py
+    from riko.ext import ModuleDefinition
+    from your_ext import shout  # a module exposing pipe/async_pipe
+
+    shout_definition = ModuleDefinition(module=shout, description="Uppercase 'content'.")
+
+.. code-block:: toml
+
+    # pyproject.toml
+    [project.entry-points."riko.modules"]
+    "example.shout" = "your_ext.modules:shout_definition"
+
+Runtime registration (process-global; precedence is runtime → entry point →
+built-in):
+
+.. code-block:: python
+
+    from riko.ext import ModuleDefinition, register
+
+    register(ModuleDefinition(name="example.shout", module=shout))
+
+Point ``module`` at an object exposing ``pipe``/``async_pipe``, or pass
+``sync_pipe``/``async_pipe`` explicitly for a bare callable. Registered and
+entry-point names surface in ``list_modules()`` alongside the packaged built-ins.
+See ``examples/riko-example-ext`` for a complete, installable example, the
+`Cookbook`_ for custom ``processor`` and ``operator`` examples, and the
+`contributing guide`_ for the additional work required for a built-in module.
 
 How should errors and resource cleanup be handled?
 --------------------------------------------------
