@@ -24,7 +24,14 @@ from importlib.metadata import EntryPoint, entry_points
 from typing import Literal, cast, overload
 
 from riko.exceptions import UnsupportedModuleError
-from riko.types.general import AsyncPipeParser, Interface, Pipeline, SyncPipeParser
+from riko.types.general import (
+    AsyncPipeCallable,
+    AsyncPipeParser,
+    Interface,
+    Pipeline,
+    SyncPipeCallable,
+    SyncPipeParser,
+)
 
 ENTRY_POINT_GROUP = "riko.modules"
 
@@ -47,8 +54,8 @@ class ModuleDefinition:
     """
 
     name: str = ""
-    sync_pipe: SyncPipeParser | None = None
-    async_pipe: AsyncPipeParser | None = None
+    sync_pipe: SyncPipeCallable | None = None
+    async_pipe: AsyncPipeCallable | None = None
     module: object | None = None
     description: str | None = None
 
@@ -58,7 +65,7 @@ class ModuleDefinition:
         if pipe is None and self.module is not None:
             pipe = getattr(self.module, interface, None)
 
-        return pipe
+        return cast(Pipeline | None, pipe)
 
 
 class ModuleRegistry:
@@ -98,8 +105,11 @@ class ModuleRegistry:
         try:
             module = import_module(target)
         except ModuleNotFoundError as e:
-            if e.name != target:
-                raise
+            if missing_name := e.name:
+                is_target = target == missing_name
+
+                if not (is_target or target.startswith(f"{missing_name}.")):
+                    raise
 
             raise UnsupportedModuleError(name) from e
 

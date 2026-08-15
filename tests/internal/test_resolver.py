@@ -8,7 +8,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from riko.collections import SyncPipe
 from riko.exceptions import UnsupportedModuleError, UnsupportedPipelineError
+from riko.ext import register
 from riko.ext.pipelines import (
     CompositeStore,
     DirectoryStore,
@@ -17,7 +19,7 @@ from riko.ext.pipelines import (
     PipelineResolver,
     pipeline_resolver,
 )
-from riko.ext.registry import ModuleDefinition, registry
+from riko.ext.registry import ModuleDefinition, registry, reset_registry
 from riko.ext.resolver import PipeResolver, pipe_resolver
 from riko.modules import list_modules, tokenizer
 from riko.paths import ROOT_DIR
@@ -73,6 +75,12 @@ class TestModuleRegistry:
     def test_missing_module_raises_unsupported(self, clean_registry):
         with pytest.raises(UnsupportedModuleError):
             clean_registry.resolve("does_not_exist", "pipe")
+
+    def test_missing_dotted_module_raises_unsupported(self, clean_registry):
+        # a dotted name fails to import at its missing parent package, not the
+        # full target; the guard must still map that to UnsupportedModuleError
+        with pytest.raises(UnsupportedModuleError):
+            clean_registry.resolve("acme.does_not_exist", "pipe")
 
     def test_transitive_import_error_preserved(self, clean_registry, monkeypatch):
         """
@@ -131,6 +139,34 @@ class TestModuleRegistry:
 
         assert clean_registry.resolve(_NAME, "pipe") is marker  # explicit wins
         assert clean_registry.resolve(_NAME, "async_pipe") is other  # from module
+
+
+class TestPublicRegister:
+    """The public ``riko.ext.register`` surface, targeting the global registry."""
+
+    def test_register_resolves_via_facade(self, clean_registry):
+        register(ModuleDefinition(name="acme.echo", sync_pipe=marker))
+        assert pipe_resolver.resolve("acme.echo", "pipe") is marker
+        assert registry.resolve("acme.echo", "pipe") is marker
+
+    def test_register_runs_end_to_end(self, clean_registry):
+        # a registered alias of a built-in resolves and runs through SyncPipe
+        register(ModuleDefinition(name="acme.tok", module=tokenizer))
+        flow = SyncPipe(
+            "acme.tok", source=[{"content": "a b c"}], conf={"delimiter": " "}
+        )
+        assert [item.get("content") for item in flow] == ["a", "b", "c"]
+
+    def test_register_requires_name(self, clean_registry):
+        with pytest.raises(ValueError, match="needs a name"):
+            register(ModuleDefinition(sync_pipe=marker))
+
+    def test_reset_registry_clears_registration(self, clean_registry):
+        register(ModuleDefinition(name="acme.echo", sync_pipe=marker))
+        reset_registry()
+
+        with pytest.raises(UnsupportedModuleError):
+            pipe_resolver.resolve("acme.echo", "pipe")
 
 
 class TestPipeResolver:

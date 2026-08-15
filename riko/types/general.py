@@ -363,6 +363,14 @@ type OperatorParser = SyncOperatorParser | AsyncOperatorParser
 type OperatorWrapper = SyncOperatorWrapper | AsyncOperatorWrapper
 type SplitterParser = SyncSplitterParser | AsyncSplitterParser
 type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
+type SyncModuleWrapper = (
+    SyncProcessorWrapper | SyncOperatorWrapper | SyncSplitterWrapper
+)
+type AsyncModuleWrapper = (
+    AsyncProcessorWrapper | AsyncOperatorWrapper | AsyncSplitterWrapper
+)
+type SyncPipeCallable = SyncPipeParser | SyncModuleWrapper
+type AsyncPipeCallable = AsyncPipeParser | AsyncModuleWrapper
 type Pipeline = SyncPipeParser | AsyncPipeParser
 type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
 type StepValue = ParserOutput | Pipeline | AsyncPipeItems
