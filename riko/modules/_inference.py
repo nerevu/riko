@@ -234,9 +234,9 @@ def infer_from_source(pipe: Callable) -> ReturnInference:
 
         if function := next(builtins.filter(is_func, module.body), None):
             statement = cast(FunctionDef, function).body[-1]
-    except (OSError, TypeError, SyntaxError, IndexError) as exc:
-        exc_type = type(exc).__name__
-        reason = f"source could not be inspected or parsed: {exc_type}: {exc}"
+    except (OSError, TypeError, SyntaxError, IndexError) as e:
+        exc_type = type(e).__name__
+        reason = f"source could not be inspected or parsed: {exc_type}: {e}"
     else:
         if function := next(builtins.filter(is_func, module.body), None):
             function = cast(FunctionDef | AsyncFunctionDef, function)
