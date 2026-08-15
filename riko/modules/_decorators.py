@@ -7,9 +7,9 @@ Pipe-authoring decorators: the ``Module`` base and the ``processor`` /
 sync/async module callables the framework executes.
 """
 
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from functools import partial, wraps
-from inspect import isawaitable
+from inspect import isawaitable, iscoroutinefunction
 from itertools import chain, islice
 from logging import Logger
 from typing import Literal, cast, overload
@@ -62,6 +62,7 @@ from riko.types.general import (
     ProcessorWrapperInput,
     ProcessorWrapperOutput,
     SplitterParser,
+    SplitterParserOutput,
     SplitterWrapper,
     SplitterWrapperInput,
     Stream,
@@ -129,6 +130,26 @@ class Module[B: (Literal[True], Literal[False])]:
         self.pollable: bool = pollable
         self.types: set[str] = set()
 
+    def _resolve_isasync(self, pipe: ModuleParser) -> bool:
+        # ``isasync`` marks which interface this is (``pipe`` vs ``async_pipe``),
+        # not whether the function is a coroutine — a sync ``def async_pipe`` is
+        # valid. Infer it from the two conventions (awaitable func, or the
+        # ``async_pipe`` name the registry resolves) so authors rarely pass it;
+        # an explicit ``isasync=True`` still forces the async interface.
+        awaitable = iscoroutinefunction(pipe)
+        name = getattr(pipe, "__name__", "")
+        isasync = self.isasync or awaitable or name == "async_pipe"
+
+        if name == "pipe" and isasync:
+            reason = "an async def" if awaitable else "marked isasync=True"
+            qualified = f"{pipe.__module__}.{name}"
+            raise TypeError(
+                f"{qualified}: 'pipe' is the synchronous interface but is "
+                f"{reason}; name the async interface 'async_pipe' instead."
+            )
+
+        return isasync
+
     def _set_wrapper_metadata(
         self,
         wrapper: wraps,
@@ -148,7 +169,7 @@ class Module[B: (Literal[True], Literal[False])]:
         setattr(wrapper, "subtype", subtype)  # noqa: B010
         setattr(wrapper, "subtypes", subtypes)  # noqa: B010
         setattr(wrapper, "pollable", self.pollable)  # noqa: B010
-        setattr(wrapper, "isasync", self.isasync)  # noqa: B010
+        setattr(wrapper, "isasync", isasync)  # noqa: B010
         setattr(wrapper, "loopable", loopable)  # noqa: B010
 
     def prepare(
@@ -485,6 +506,11 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> AsyncProcessorWrapper: ...
     @overload  # noqa: E301
     def __call__(  # noqa: E704
+        self: "processor[Literal[False]]",
+        pipe: Callable[..., Awaitable[ProcessorParserOutput]],
+    ) -> AsyncProcessorWrapper: ...
+    @overload  # noqa: E301
+    def __call__(  # noqa: E704
         self: "processor[Literal[False]]", pipe: SyncProcessorParser
     ) -> SyncProcessorWrapper: ...
     def __call__(self, pipe: ProcessorParser) -> ProcessorWrapper:  # noqa: E301
@@ -671,8 +697,9 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
             yield from processed
 
-        wrapper = wraps(pipe)(async_wrapper if self.isasync else sync_wrapper)
-        self._set_wrapper_metadata(wrapper, pipe)
+        isasync = self._resolve_isasync(pipe)
+        wrapper = wraps(pipe)(async_wrapper if isasync else sync_wrapper)
+        self._set_wrapper_metadata(wrapper, pipe, isasync)
         return cast(ProcessorWrapper, wrapper)
 
 
@@ -903,6 +930,11 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> AsyncOperatorWrapper: ...
     @overload  # noqa: E301
     def __call__(  # noqa: E704
+        self: "operator[Literal[False]]",
+        pipe: Callable[..., Awaitable[OperatorParserOutput]],
+    ) -> AsyncOperatorWrapper: ...
+    @overload  # noqa: E301
+    def __call__(  # noqa: E704
         self: "operator[Literal[False]]", pipe: SyncOperatorParser
     ) -> SyncOperatorWrapper: ...
     def __call__(self, pipe: OperatorParser) -> OperatorWrapper:  # noqa: E301
@@ -1113,12 +1145,12 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
             yield from processed
 
-        if self.isasync:
+        if isasync := self._resolve_isasync(pipe):
             wrapper = wraps(pipe)(async_wrapper)
         else:
             wrapper = wraps(pipe)(sync_wrapper)
 
-        self._set_wrapper_metadata(wrapper, pipe)
+        self._set_wrapper_metadata(wrapper, pipe, isasync)
         return cast(OperatorWrapper, wrapper)
 
 
@@ -1182,6 +1214,11 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     ) -> AsyncSplitterWrapper: ...
     @overload  # noqa: E301
     def __call__(  # noqa: E704
+        self: "splitter[Literal[False]]",
+        pipe: Callable[..., Awaitable[SplitterParserOutput]],
+    ) -> AsyncSplitterWrapper: ...
+    @overload  # noqa: E301
+    def __call__(  # noqa: E704
         self: "splitter[Literal[False]]", pipe: SyncSplitterParser
     ) -> SyncSplitterWrapper: ...
     def __call__(self, pipe: SplitterParser) -> SplitterWrapper:  # noqa: E301
@@ -1223,6 +1260,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             streams = sync_pipe(orig_stream, casted.extraction, tuples, **kwargs)
             yield from streams
 
-        wrapper = wraps(pipe)(async_wrapper if self.isasync else sync_wrapper)
-        self._set_wrapper_metadata(wrapper, pipe)
+        isasync = self._resolve_isasync(pipe)
+        wrapper = wraps(pipe)(async_wrapper if isasync else sync_wrapper)
+        self._set_wrapper_metadata(wrapper, pipe, isasync)
         return cast(SplitterWrapper, wrapper)
