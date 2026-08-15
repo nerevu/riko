@@ -8,7 +8,7 @@ from riko.modules.strconcat import pipe as strconcat
 from riko.types.modules import StrconcatRawConf
 
 
-def pipe_shout(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     sw_1 = strconcat(
         item,
         conf=StrconcatRawConf(
@@ -26,9 +26,9 @@ def pipe_shout(item=None, context: Context | None = None, **_):
     return _OUTPUT
 
 
-mark_subpipe(pipe_shout, subtype="transformer")
+mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":
-    for i in pipe_shout():
+    for i in pipe():
         print(i)

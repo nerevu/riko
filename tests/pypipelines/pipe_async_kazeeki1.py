@@ -6,7 +6,7 @@ from riko.collections import AsyncPipe
 from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 
-async def pipe_async_kazeeki1(context: Context | None = None, **_):
+async def async_pipe(context: Context | None = None, **_):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:
@@ -19,7 +19,7 @@ async def pipe_async_kazeeki1(context: Context | None = None, **_):
 
 
 async def _main():
-    pipeline = await pipe_async_kazeeki1(context=Context())
+    pipeline = await async_pipe(context=Context())
 
     for i in pipeline:
         print(i)

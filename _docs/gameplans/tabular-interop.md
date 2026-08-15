@@ -235,7 +235,7 @@ Rules:
 * batch/chunk size is explicit;
 * conversion preserves logical row order unless downstream execution selects otherwise;
 * chunk boundaries are not semantically meaningful to ordinary record processors;
-* a downstream stage that requires whole-frame semantics must declare/materialize that
+* a downstream pipe that requires whole-frame semantics must declare/materialize that
   boundary itself.
 
 ## 13. File/artifact relationship

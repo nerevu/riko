@@ -48,7 +48,7 @@ def _sync_subpipe(item: Item, context: Context | None = None, **_) -> Stream:
 
 
 _SYNC_SUBPIPE = mark_subpipe(_sync_subpipe)
-_ASYNC_SUBPIPE = mark_subpipe(_async_subpipe, is_async=True)
+_ASYNC_SUBPIPE = mark_subpipe(_async_subpipe)
 
 
 def _tokenizer_loop(source: Stream, **kwargs) -> OperatorWrapperOutput:
@@ -189,7 +189,7 @@ class TestProcessorTopLevelCount:
 
 class TestImplicitLooping:
     """
-    A processor stage fed a *stream* maps itself over each item, exactly like
+    A processor fed a *stream* maps itself over each item, exactly like
     ``loop(source, embed=<processor>)``.
     """
 
@@ -424,7 +424,7 @@ class TestAsyncSubpipeLoop:
         async def main():
             stream = await async_loop(
                 iter([{"title": "a"}, {"title": "b"}]),
-                embed=mark_subpipe(_sub, is_async=True),
+                embed=mark_subpipe(_sub),
                 count="first",
                 emit=True,
             )

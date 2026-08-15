@@ -26,8 +26,8 @@ from typing import Any, cast
 
 import pygogo as gogo
 
-from riko._objectify import DynamicConf
 from riko.dotdict import DotDict
+from riko.types.configs import DynamicConf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator

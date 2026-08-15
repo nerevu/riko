@@ -33,7 +33,7 @@ mapping every section number to its home. What actually ships (as-built detail) 
 Riko is an item-oriented pipeline engine. Its design favors: explicit behavior over
 inference; at-least-once delivery over exactly-once claims; bounded resource use; simple
 defaults; conservative failure behavior; and compatibility with existing synchronous
-pipelines. Where the runtime is *headed* (callable stages, logical batches, schema/state, the
+pipelines. Where the runtime is *headed* (callable pipes, logical batches, schema/state, the
 Riko Data Protocol, the Connect layer) is roadmap, not contract — see [ROADMAP.md](ROADMAP.md).
 
 ## 1. Product layers
@@ -64,7 +64,7 @@ source once and normalizes it to `AsyncIterator[Item]`.
 A pipe instance is **one-shot** — a single execution. Iteration never restarts and never
 raises; an exhausted or closed pipe simply yields nothing. `SyncPipe` is synchronous and
 iterable (`for item in pipe`); `AsyncPipe` iterates lazily (`async for item in pipe`) with an
-`await pipe` collect terminal. Async chaining is lazy at the stage boundary. `Feed`s behave
+`await pipe` collect terminal. Async chaining is lazy at the pipe boundary. `Feed`s behave
 like ordinary async iterators — riko does not detect or recreate a consumed feed.
 
 ## 6. Async execution and backpressure

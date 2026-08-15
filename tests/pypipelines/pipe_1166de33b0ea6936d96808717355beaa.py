@@ -11,9 +11,7 @@ from riko.modules.union import pipe as union
 from riko.types.modules import ItemBuilderRawConf, RssItemBuilderRawConf
 
 
-def pipe_1166de33b0ea6936d96808717355beaa(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -132,9 +130,9 @@ def pipe_1166de33b0ea6936d96808717355beaa(
     return _OUTPUT
 
 
-mark_subpipe(pipe_1166de33b0ea6936d96808717355beaa, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_1166de33b0ea6936d96808717355beaa():
+    for i in pipe():
         print(i)

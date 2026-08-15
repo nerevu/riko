@@ -5,7 +5,7 @@ riko.modules
 """
 
 from riko._iterutils import broadcast, dispatch, listize
-from riko._objectify import DynamicConf, objectify
+from riko._objectify import objectify
 from riko.bado.itertools import async_map
 from riko.cast import (
     CAST_SWITCH,
@@ -35,6 +35,7 @@ from riko.modules._prepare import (
     parse_and_cast,
 )
 from riko.parsers import conf_is_dynamic, get_field, get_skip, parse_conf
+from riko.types.configs import DynamicConf
 from riko.types.general import (
     AsyncOperatorParser,
     AsyncOperatorWrapper,

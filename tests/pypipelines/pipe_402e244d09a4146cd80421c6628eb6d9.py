@@ -10,9 +10,7 @@ from riko.modules.rename import pipe as rename
 from riko.types.modules import FetchDataRawConf, RegexRawConf, RenameRawConf
 
 
-def pipe_402e244d09a4146cd80421c6628eb6d9(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -88,9 +86,9 @@ def pipe_402e244d09a4146cd80421c6628eb6d9(
     return _OUTPUT
 
 
-mark_subpipe(pipe_402e244d09a4146cd80421c6628eb6d9, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_402e244d09a4146cd80421c6628eb6d9():
+    for i in pipe():
         print(i)

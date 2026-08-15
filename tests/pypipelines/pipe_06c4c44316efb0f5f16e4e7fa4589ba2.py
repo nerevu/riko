@@ -11,9 +11,7 @@ from riko.modules.tail import pipe as tail
 from riko.types.modules import FetchRawConf, InputRawConf, SortRawConf, TailRawConf
 
 
-def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = [
             ("", "numberinput1", "How many items do you want in the feed?", "int", "5")
@@ -74,9 +72,9 @@ def pipe_06c4c44316efb0f5f16e4e7fa4589ba2(
     return _OUTPUT
 
 
-mark_subpipe(pipe_06c4c44316efb0f5f16e4e7fa4589ba2, subtype="transformer")
+mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":
-    for i in pipe_06c4c44316efb0f5f16e4e7fa4589ba2():
+    for i in pipe():
         print(i)

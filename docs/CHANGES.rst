@@ -1,6 +1,68 @@
 Changelog
 =========
 
+v0.75.0 (2026-08-15)
+--------------------
+
+New
+~~~
+
+- Add value-taking ``pipe`` chaining to ``SyncPipe``/``AsyncPipe`` — for adding a
+  ``pipe`` to a ``pipeline`` by a module name that can't be written as an attribute
+  (a runtime variable, a dotted identifier such as
+  ``"microsoft.autopilot.ensure"``, or a ``ModuleName`` member). The attribute form
+  (``pipe.tokenizer(...)``) is unchanged.
+
+  - ``pipe | "tokenizer"``, ``pipe | ("tokenizer", conf)``,
+    ``pipe | SyncPipe("sort", conf=...)``, and ``items | SyncPipe(...)``
+  - ``pipe.pipe(name, conf=...)`` / ``pipe.async_pipe(name, ...)``
+
+- Add ``riko.ext.ModuleName``, a deliberately empty ``StrEnum`` base for typed
+  module-name discovery, plus ``normalize_module_name`` and the
+  ``ModuleNameLike = str | ModuleName`` alias. A ``ModuleName`` subclass member is
+  accepted anywhere a module name is (``SyncPipe(MyModules.FETCH)``,
+  ``pipe | MyModules.SORT``) and normalizes to its canonical string, so serialized
+  pipelines are unchanged.
+
+- Add a **module registry and entry-point plugin seam**. An external package can
+  add riko modules with **no edit to core**: expose a ``riko.ext.ModuleDefinition``
+  (point it at a module exposing ``pipe``/``async_pipe``, or pass ``sync_pipe`` /
+  ``async_pipe`` callables explicitly) and declare it under
+  ``[project.entry-points."riko.modules"]``. ``riko.ext.register`` /
+  ``ModuleRegistry`` cover in-process registration (precedence: runtime →
+  entry point → built-in). Registered and entry-point modules resolve like
+  built-ins and appear in ``list_modules()``. See ``examples/riko-example-ext``
+  (entry point) and ``examples/register_module.py`` / ``examples/register_alias.py``
+  (runtime ``register``).
+
+- Infer ``isasync`` for ``processor``/``operator``/``splitter`` when it isn't
+  passed — from an ``async def`` or the conventional ``async_pipe`` name — so an
+  async pipe no longer silently builds a sync wrapper when the author forgets
+  ``isasync=True``. An explicit ``isasync=True`` is now needed only where the
+  name signal can't reach the type checker: a sync callable that is the async
+  interface but isn't named ``async_pipe`` (e.g. a lambda), or a sync
+  ``def async_pipe`` whose decorated result is passed to a typed API such as
+  ``ModuleDefinition(async_pipe=...)``. A function named ``pipe`` that resolves
+  async (an ``async def`` or ``isasync=True``) is a contradiction and raises a
+  helpful ``TypeError``. The typed decorator overloads track the ``async def``
+  case, so ``@operator()`` on a coroutine function is statically async.
+
+Changes
+~~~~~~~
+
+- Renamed the ``SyncPipe``/``AsyncPipe`` ``pool_scope`` value from ``"stage"`` to
+  ``"pipe"`` (contrasting with ``"pipeline"``): a per-``pipe`` pool is released
+  after each pipe's iteration, a ``"pipeline"`` pool is shared across the run.
+  The default (``"pipeline"``) is unchanged.
+
+- Pipe resolution now runs through a single compiler-free façade
+  (``riko.ext`` registry/resolver); runtime module resolution no longer imports
+  the compiler.
+
+- Generated pipeline modules now expose a stable ``pipe`` / ``async_pipe`` entry
+  point (instead of a function named after the pipe), so a compiled sub-pipeline
+  resolves exactly like a built-in module.
+
 v0.74.2 (2026-08-11)
 --------------------
 
@@ -44,21 +106,28 @@ Bugfixes
 - ``manage test`` correctly reads the ``cov`` flag (not ``cover``), so
   ``--cov=riko`` coverage works.
 
+- Add ``riko.ext.ModuleName``, a deliberately empty ``StrEnum`` base for typed
+  module-name discovery, plus ``normalize_module_name`` and the
+  ``ModuleNameLike = str | ModuleName`` alias. Any ``ModuleName`` subclass member
+  is now accepted anywhere a module name is (``SyncPipe(MyModules.FETCH)``,
+  ``pipe | MyModules.SORT``); it is normalized to its canonical string at the
+  boundary, so serialized pipelines are unchanged.
+
 v0.74.0 (2026-08-06)
 --------------------
 
 New
 ~~~
 
-- Add ``run-pipe --path`` for executing a workflow from an arbitrary file.
-- Promote the async-backend and JSON workflow compilation helpers to the
+- Add ``run-pipe --path`` for executing a ``pipeline`` from an arbitrary file.
+- Promote the async-backend and JSON ``pipeline`` compilation helpers to the
   stable top-level API, and expose ``get_module_metadata``.
 
 Changes
 ~~~~~~~
 
-- Rename ``riko.compile`` to ``riko.compile_pipe`` so it no longer shadows the
-  builtin ``compile``.
+- Rename ``riko.compile.compile`` to ``riko.compile.compile_pipe`` so it no longer
+  shadows the builtin ``compile``.
 - Add ``manage lint --rst`` to render every RST document and validate its
   internal links; run it under ``tox -e lint`` and in CI.
 - ``manage test`` and ``manage lint`` now accept multiple paths.

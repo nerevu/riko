@@ -18,11 +18,8 @@ from riko._iterutils import broadcast
 from riko.cast import BasicCastType
 from riko.modules._inference import gen_operator_return_kinds
 from riko.types.general import (
+    ModuleParser,
     ModuleWrapper,
-    OperatorParser,
-    Pipeline,
-    ProcessorParser,
-    SplitterParser,
 )
 from riko.types.modules import (
     ModuleMetadata,
@@ -44,7 +41,7 @@ SUBTYPES: dict[ModuleSubtype, ModuleType] = {
 
 
 def _derive_operator_subtypes(
-    pipe: Pipeline | ProcessorParser | OperatorParser | SplitterParser,
+    pipe: ModuleParser,
 ) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
     subtype: ModuleSubtype | None = None
     subtypes: ModuleSubtypes = set()
@@ -73,7 +70,7 @@ def derive_loopable(name: str, module_type: ModuleType | str) -> bool:
 
 
 def derive_subtypes(
-    pipe: Pipeline | ProcessorParser | OperatorParser | SplitterParser,
+    pipe: ModuleParser,
     module_type: ModuleType | str,
     ftype: BasicCastType | None = None,
     **kwargs: object,
@@ -90,10 +87,9 @@ def derive_subtypes(
     return result
 
 
-def get_module_metadata(name: str) -> ModuleMetadata | None:
-    module = import_module(f"{_PACKAGE}.{name}")
-    pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
-    targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
+def _metadata_from_targets(
+    name: str, targets: tuple[ModuleWrapper, ...], *, label: str, strict_naming: bool
+) -> ModuleMetadata | None:
     attrs = ("name", "type", "subtype", "subtypes", "pollable", "loopable")
 
     if len(targets) == 2:
@@ -102,21 +98,21 @@ def get_module_metadata(name: str) -> ModuleMetadata | None:
             expected = getattr(targets[1], attr)
 
             if actual != expected:
-                msg = f"{module.__name__} has inconsistent sync/async metadata: "
+                msg = f"{label} has inconsistent sync/async metadata: "
                 msg += f"{expected!r} != {actual!r}"
                 raise TypeError(msg)
 
     if targets:
         first = targets[0]
 
-        if first.name != name:
-            raise TypeError(f"{module.__name__} reports module name {first.name!r}")
+        if strict_naming and first.name != name:
+            raise TypeError(f"{label} reports module name {first.name!r}")
 
         for subtype in first.subtypes:
             expected_type = SUBTYPES[subtype]
 
             if first.type != expected_type:
-                msg = f"{module.__name__} supports subtype {subtype!r}, "
+                msg = f"{label} supports subtype {subtype!r}, "
                 msg += f"which requires type {expected_type!r}, not {first.type!r}"
                 raise TypeError(msg)
 
@@ -136,6 +132,14 @@ def get_module_metadata(name: str) -> ModuleMetadata | None:
     return metadata
 
 
+def get_module_metadata(name: str) -> ModuleMetadata | None:
+    module = import_module(f"{_PACKAGE}.{name}")
+    pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
+    targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
+    label = module.__name__
+    return _metadata_from_targets(name, targets, label=label, strict_naming=True)
+
+
 def gen_module_catalog(name: str | None = None) -> Iterator[ModuleMetadata]:
     package = import_module(_PACKAGE)
 
@@ -143,6 +147,34 @@ def gen_module_catalog(name: str | None = None) -> Iterator[ModuleMetadata]:
         skip = info.ispkg or info.name.startswith("_")
 
         if not skip and (metadata := get_module_metadata(info.name)):
+            yield metadata
+
+
+def gen_registry_catalog() -> Iterator[ModuleMetadata]:
+    """
+    Metadata for runtime-registered + entry-point modules (the extension
+    surface). Deriving it forces each entry-point extension to import — listing
+    the catalog is an explicit "show everything" operation. A definition whose
+    callables carry no module metadata (e.g. a bare lambda) is skipped.
+    """
+    from riko.ext.registry import registry  # noqa: PLC0415
+
+    interfaces = ("pipe", "async_pipe")
+
+    for name in registry.catalog_names():
+        definition = registry.definition(name)
+        pipes = map(definition.get_pipe, interfaces) if definition else ()
+        targets = tuple(cast(ModuleWrapper, pipe) for pipe in pipes if callable(pipe))
+        args = (name, targets)
+
+        try:
+            metadata = _metadata_from_targets(*args, label=name, strict_naming=False)
+        except (AttributeError, TypeError):
+            # a callable that isn't a metadata-carrying pipe wrapper (e.g. a
+            # bare lambda) — resolvable, but not catalogable
+            metadata = None
+
+        if metadata:
             yield metadata
 
 
@@ -194,8 +226,13 @@ def list_modules(  # noqa: E302
     type_match = lambda module: type is None or module.type == type
     loop_match = lambda module: loopable is None or module.loopable is loopable
     match = lambda module: all(broadcast(module, subtype_match, type_match, loop_match))
+
+    # built-ins first, then registry (runtime + entry-point) modules shadow them
+    catalog = {metadata.name: metadata for metadata in gen_module_catalog()}
+    catalog.update((metadata.name, metadata) for metadata in gen_registry_catalog())
+
     # dynamic filter pipe import shadows the builtin filter
-    filtered = builtins.filter(match, gen_module_catalog())
+    filtered = builtins.filter(match, catalog.values())
     modules = tuple(sorted(filtered, key=lambda module: module.name))
     return modules if show_metadata else tuple(module.name for module in modules)
 

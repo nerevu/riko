@@ -22,8 +22,8 @@ Index
 - `Why does a pipeline return no items the second time`_
 - `Which operations materialize or retain input`_
 - `How do I send one stream to multiple consumers`_
-- `Can I define a workflow as JSON`_
-- `What execution modes are available for compiled workflows`_
+- `Can I define a pipeline as JSON`_
+- `What execution modes are available for compiled pipelines`_
 - `Can I create custom modules`_
 - `How should errors and resource cleanup be handled`_
 - `Where should I report problems or contribute`_
@@ -283,7 +283,7 @@ inputs     dict  Values to be used in place of prompting the user    None
 Notes
 
 .. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
-.. [#] See `Alternate workflow creation`_ for pipe composition examples
+.. [#] See `Alternate pipeline creation`_ for pipe composition examples
 
 How do I discover installed modules?
 ------------------------------------
@@ -341,13 +341,21 @@ Notes:
   ``emit=True``.
 - Module authors do not declare these metadata attributes; they are derived from the
   decorator type, options, and return annotations.
+- The catalog overlays registry entries: modules added via ``riko.ext.register`` or a
+  ``[project.entry-points."riko.modules"]`` entry point appear alongside the packaged
+  built-ins (see `Can I create custom modules`_).
+- A module name may be given as a plain ``str`` or a ``riko.ext.ModuleName`` member;
+  ``normalize_module_name`` coerces either to the canonical string accepted
+  everywhere a module name is. Generated, ready-to-use enums grouped by taxonomy
+  (``Sources``/``Transforms``/``Sinks``) are planned; today ``ModuleName`` is the
+  base they will build on.
 
 What do processor, operator, and splitter mean?
 -----------------------------------------------
 
 A ``processor`` works on individual ``items``. A ``processor`` whose input type
 is ``none`` is a ``source``; other ``processors`` are ``transformers``. Loopable
-``processors`` can be mapped over a ``source`` and are the stages eligible for
+``processors`` can be mapped over a ``source`` and are the ``pipes`` eligible for
 local sync pools or bounded async concurrency.
 
 An ``operator`` works on a whole ``stream``. A ``composer`` returns a
@@ -422,9 +430,10 @@ iteration and can also be awaited. Awaiting materializes all remaining
 ``items``; ``async for`` preserves item-by-item consumption.
 
 Fully consumed sync and async pipelines are tested for equivalent data output.
-Execution mechanics can differ under partial consumption: an async mapping stage
-may begin work for ``items`` that a downstream consumer never yields. Keep side
-effects out of partially consumed mapping stages or bound work at the stage.
+Execution mechanics can differ under partial consumption: a loopable ``pipe``
+mapped over its ``source`` may begin work for ``items`` that a downstream consumer
+never yields. Keep side effects out of such ``pipes`` when consuming partially, or
+bound the work per ``item``.
 
 ``SyncCollection`` fetches multiple configured sources sequentially or with a
 local pool. ``AsyncCollection`` fetches sources concurrently with bounded
@@ -433,9 +442,9 @@ in-flight work.
 What does ``parallel=True`` do?
 -------------------------------
 
-For ``SyncPipe``, eligible item-processing stages use a local thread pool by
+For ``SyncPipe``, eligible item-processing ``pipes`` use a local thread pool by
 default. Pass ``threads=False`` to use a process pool. The current sync mapping
-path materializes the stage ``source`` before dispatch, so it is suitable only
+path materializes the ``pipe`` ``source`` before dispatch, so it is suitable only
 for finite inputs. Results are unordered unless ``ordered=True`` is requested.
 
 For ``AsyncPipe``, ``parallel=True`` enables bounded async concurrency with
@@ -473,7 +482,7 @@ returns an empty ``stream`` rather than silently rerunning work.
     >>> list(flow)
     []
 
-Build a new pipeline instance to rerun the workflow. Chaining after partial
+Build a new pipeline instance to rerun the pipeline. Chaining after partial
 consumption wraps the remaining ``source``. Chaining after ``close()`` or
 failure raises ``PipelineStateError``.
 
@@ -507,7 +516,7 @@ mechanism, not an external message broker.
 
 The `Cookbook`_ fan-out section include complete recipes for both approaches.
 
-Can I define a workflow as JSON?
+Can I define a pipeline as JSON?
 --------------------------------
 
 ``riko`` ships two commands for working with JSON pipe definitions (the
@@ -544,7 +553,7 @@ write to stdout, or to a file via ``-o``):
 See the `DAG format`_ doc and the `Cookbook`_ for the full format/expansion rules and
 examples.
 
-What execution modes are available for compiled workflows?
+What execution modes are available for compiled pipelines?
 ----------------------------------------------------------
 
 ``Context`` accepts these ``ExecutionMode`` values:
@@ -559,7 +568,7 @@ DESCRIBE                 Return both input and dependency information
 =======================  =========================================================
 
 ``extract_dependencies()`` can also inspect a pipe definition without executing
-it. See `Inspecting a workflow`_ in the cookbook for additional details.
+it. See `Inspecting a pipeline`_ in the cookbook for additional details.
 
 The chainable classes share one pipeline model across four execution styles.
 
@@ -568,9 +577,9 @@ The chainable classes share one pipeline model across four execution styles.
 +==============================+========================================+================================================+
 | ``SyncPipe``                 | inline iterator pipeline               | single-use; lazy except sort/aggregate         |
 +------------------------------+----------------------------------------+------------------------------------------------+
-| ``SyncPipe(parallel=True)``  | local thread (or process) pool         | eligible stages; source materialized first     |
+| ``SyncPipe(parallel=True)``  | local thread (or process) pool         | eligible pipes; source materialized first      |
 +------------------------------+----------------------------------------+------------------------------------------------+
-| ``AsyncPipe``                | async iteration or ``await``           | await materializes; mapping may run eager      |
+| ``AsyncPipe``                | async iteration or ``await``           | await materializes; mapped source runs eager   |
 +------------------------------+----------------------------------------+------------------------------------------------+
 | ``AsyncPipe(parallel=True)`` | bounded async concurrency              | tune ``connections``/``prefetch``/``ordered``  |
 +------------------------------+----------------------------------------+------------------------------------------------+
@@ -586,14 +595,43 @@ Yes. ``riko.ext`` exposes ``processor``, ``operator``, and ``splitter``
 decorators plus supported protocols and metadata types. Decorated functions can
 be called directly and composed with ordinary Python.
 
-The current public extension API doesn't include a runtime registration
-function. ``list_modules()`` discovers packaged built-ins under
-``riko.modules``; don't assume that an arbitrary decorated function becomes a
-chainable named module automatically.
+To make a module resolvable by name (so ``SyncPipe('your.module', ...)`` and the
+``|`` operator can find it), register it with the module registry. Package your
+module so it exposes ``pipe`` and/or ``async_pipe`` functions, then either register
+it at runtime or declare an entry point.
 
-The `Cookbook`_ contains custom ``processor`` and ``operator`` examples, and the
-`contributing guide`_ explains the additional work required for a built-in
-module.
+Entry point (discovered lazily; no edit to riko core, nothing imported until the
+name is resolved):
+
+.. code-block:: python
+
+    # your_ext/modules.py
+    from riko.ext import ModuleDefinition
+    from your_ext import shout  # a module exposing pipe/async_pipe
+
+    shout_definition = ModuleDefinition(module=shout, description="Uppercase 'content'.")
+
+.. code-block:: toml
+
+    # pyproject.toml
+    [project.entry-points."riko.modules"]
+    "example.shout" = "your_ext.modules:shout_definition"
+
+Runtime registration (process-global; precedence is runtime → entry point →
+built-in):
+
+.. code-block:: python
+
+    from riko.ext import ModuleDefinition, register
+
+    register(ModuleDefinition(name="example.shout", module=shout))
+
+Point ``module`` at an object exposing ``pipe``/``async_pipe``, or pass
+``sync_pipe``/``async_pipe`` explicitly for a bare callable. Registered and
+entry-point names surface in ``list_modules()`` alongside the packaged built-ins.
+See ``examples/riko-example-ext`` for a complete, installable example, the
+`Cookbook`_ for custom ``processor`` and ``operator`` examples, and the
+`contributing guide`_ for the additional work required for a built-in module.
 
 How should errors and resource cleanup be handled?
 --------------------------------------------------
@@ -629,12 +667,12 @@ documentation workflow.
 .. _Why does a pipeline return no items the second time: #why-does-a-pipeline-return-no-items-the-second-time
 .. _Which operations materialize or retain input: #which-operations-materialize-or-retain-input
 .. _How do I send one stream to multiple consumers: #how-do-i-send-one-stream-to-multiple-consumers
-.. _Can I define a workflow as JSON: #can-i-define-a-workflow-as-json
-.. _What execution modes are available for compiled workflows: #what-execution-modes-are-available-for-compiled-workflows
+.. _Can I define a pipeline as JSON: #can-i-define-a-pipeline-as-json
+.. _What execution modes are available for compiled pipelines: #what-execution-modes-are-available-for-compiled-pipelines
 .. _Can I create custom modules: #can-i-create-custom-modules
 .. _How should errors and resource cleanup be handled: #how-should-errors-and-resource-cleanup-be-handled
 .. _Where should I report problems or contribute: #where-should-i-report-problems-or-contribute
-.. _Inspecting a workflow: COOKBOOK.rst#inspecting-a-workflow
+.. _Inspecting a pipeline: COOKBOOK.rst#inspecting-a-pipeline
 
 .. _README: ../README.rst
 .. _Cookbook: COOKBOOK.rst
@@ -643,7 +681,7 @@ documentation workflow.
 .. _issue tracker: https://github.com/nerevu/riko/issues
 .. _DAG format: DAG_FORMAT.rst
 .. _Design Principles: ../README.rst#design-principles
-.. _Alternate workflow creation: COOKBOOK.rst#alternate-workflow-creation
+.. _Alternate pipeline creation: COOKBOOK.rst#alternate-pipeline-creation
 
 .. _aggregate: ../riko/modules/aggregate.py
 .. _count: ../riko/modules/count.py

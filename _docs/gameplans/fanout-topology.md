@@ -168,7 +168,7 @@ Semantics:
 * abandoning one branch must have explicit backpressure behavior rather than causing an
   undocumented deadlock.
 
-A callable predicate may be supported through callable-stage integration, but serialized
+A callable predicate may be supported through callable-pipe integration, but serialized
 workflow definitions must be able to express the rule-based form without arbitrary code.
 
 Do not call this operation `split`; `split` already means eager duplication.

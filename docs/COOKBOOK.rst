@@ -2,7 +2,7 @@ riko Cookbook
 =============
 
 This cookbook presents ``riko`` recipes from basic iterator pipelines through
-asynchronous execution, custom modules, testing, and JSON workflow compilation.
+asynchronous execution, custom modules, testing, and JSON ``pipeline`` compilation.
 Examples that read files use data bundled with ``riko`` (via ``get_path``) so
 they run offline.
 
@@ -14,7 +14,7 @@ Beginner recipes
 ----------------
 
 Build your first pipeline
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Create one ``item``, tokenize its ``content`` field into three ``items``, and
 count them.
@@ -37,7 +37,7 @@ count them.
 or an export.
 
 Transform, filter, and order items
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The next ``flow`` keeps scores greater than 10, creates a slug from each title,
 and orders the results by score.
@@ -65,7 +65,7 @@ the field receiving the result. Passing ``emit=True`` instead yields the
 processed value as a new ``item`` rather than assigning it to the original.
 
 Combine multiple rules
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
 
 ``filter`` accepts one rule or a list of rules. ``combine`` is ``and`` by
 default and can be set to ``or``.
@@ -88,7 +88,7 @@ default and can be set to ``or``.
 Set ``permit=False`` to exclude matches instead of keeping them.
 
 Read structured data
-^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
 
 ``get_path`` resolves files bundled in ``riko/data`` and makes documentation
 examples deterministic.
@@ -125,7 +125,7 @@ Use ``fetchsitefeed`` to fetch the first feed discovered on a page or
 ``feedautodiscovery`` to return feed links for separate processing.
 
 Read unstructured web content
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``fetchpage`` returns page content and can select text between delimiters and
 strip markup. This example uses an offline HTML fixture.
@@ -156,10 +156,10 @@ selection is required and the relevant parser dependency is installed.
 User input
 ^^^^^^^^^^
 
-Some ``workflows`` require user input (via the ``input`` pipe). By default,
+Some ``pipelines`` require user input (via the ``input`` pipe). By default,
 ``input`` prompts the user via the console, but in some situations this may not
 be appropriate, e.g., testing or integrating with a website. In such cases, the
-input values can instead be read from a ``workflow`` ``inputs`` kwarg (a set
+input values can instead be read from a ``pipeline`` ``inputs`` kwarg (a set
 of values passed into every ``pipe``).
 
 .. code-block:: python
@@ -174,7 +174,7 @@ Intermediate recipes
 --------------------
 
 Fetching data and feeds
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
 
 ``riko`` can read both local and remote filepaths via ``source`` pipes. All
 ``source`` pipes return an equivalent ``stream`` iterator of dictionaries, aka
@@ -227,11 +227,11 @@ Fetching data and feeds
     "EU sets out 'phased' Brexit strategy"
 
 Alternate ``conf`` value entry
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Some ``workflows`` have ``conf`` values that are wired from other ``pipes``. A
+Some ``pipelines`` have ``conf`` values that are wired from other ``pipes``. A
 ``conf`` value can reference a field on the current ``item`` with ``subkey``.
-This is how compiled ``workflows`` wire values between modules.
+This is how compiled ``pipelines`` wire values between modules.
 
 .. code-block:: python
 
@@ -244,10 +244,10 @@ This is how compiled ``workflows`` wire values between modules.
     >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
     True
 
-Alternate workflow creation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Alternate pipeline creation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In addition to `class based workflows`_ ``riko`` supports a pure functional
+In addition to `class based flows`_ ``riko`` supports a pure functional
 style [#]_. Every built-in ``pipe`` can also be called directly, which is useful
 when control flow is easier to express explicitly.
 
@@ -275,9 +275,9 @@ when control flow is easier to express explicitly.
     >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
     >>>
-    >>> ### Create a workflow ###
+    >>> ### Create a pipeline ###
     >>> #
-    >>> # The following workflow will:
+    >>> # The following pipeline will:
     >>> #   1. fetch the URL and return the content between the body tags
     >>> #   2. replace newlines with spaces
     >>> #   3. tokenize (split) the content by spaces, i.e., yield words
@@ -294,8 +294,42 @@ Notes
 
 .. [#] See `Design Principles`_ for explanation on `pipe` types and sub-types
 
+Chaining with the ``|`` operator or ``pipe`` method
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Alongside attribute chaining (``pipe.tokenizer(...)``), a ``pipe`` can be added to
+the ``pipeline`` with the ``|`` operator or the ``pipe`` method. These take the
+module name as a *value*, so they also work when the name is dynamic or dotted
+(``"microsoft.autopilot.ensure"``). Every form resolves to the same string
+identifier.
+
+.. code-block:: python
+
+    >>> from riko import SyncPipe
+    >>>
+    >>> src = [{'content': 'a,b,c,a'}]
+    >>>
+    >>> # seed a source stream with ``items | pipe``
+    >>> next(src | SyncPipe('tokenizer'))
+    {'content': 'a'}
+    >>>
+    >>> # chain a pipe by name
+    >>> tokens = SyncPipe('tokenizer', source=src)
+    >>> next(tokens | 'hash')
+    {'content': 'a', 'hash': 1267964084}
+    >>> # chain a pipe by ``(name, conf)`` pair
+    >>> tokens = SyncPipe('tokenizer', source=src)
+    >>> list(tokens | ('truncate', {'count': 2}))
+    [{'content': 'a'}, {'content': 'b'}]
+    >>>
+    >>> # chosen pipe name at runtime
+    >>> module = 'count'
+    >>> tokens = SyncPipe('tokenizer', source=src).pipe(module)
+    >>> next(tokens)
+    {'count': 4}
+
 Fetch several sources
-^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 ``SyncCollection`` merges ``items`` from multiple configured sources. A source
 uses ``fetch`` by default; set its ``type`` key to select another ``source``
@@ -319,7 +353,7 @@ threads; pass ``threads=False`` for processes.
     32
 
 Managing pipeline lifecycle
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A ``SyncPipe``/``AsyncPipe`` (and the ``SyncCollection``/``AsyncCollection``
 classes) represents a *single* execution. Iterating it consumes the underlying
@@ -364,7 +398,7 @@ the pool is closed; on exceptional exit it is terminated.
     True
 
 Exporting results
-^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 A ``flow`` is a lazy, single-use iterator. ``export()`` materializes it into a
 concrete list you can index, measure, and reuse.
@@ -396,7 +430,7 @@ the number of records written). ``list_targets()`` lists the available targets
 Exporting, awaiting a pipe, or converting to ``list`` consumes and materializes
 the remaining ``stream``.
 
-Asynchronous workflows
+Asynchronous pipelines
 ----------------------
 
 The ``async`` extra (``python -m pip install "riko[async]"``) enables ``AsyncPipe`` and
@@ -408,7 +442,7 @@ backend is present (so these examples degrade gracefully when the extra is
 absent).
 
 Lazy async iteration
-^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -429,7 +463,7 @@ Lazy async iteration
     Donations / 5
 
 Fetching feeds concurrently
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``AsyncCollection`` is the async counterpart of ``SyncCollection``: it fetches
 every source concurrently and merges them into a single ``stream``.
@@ -447,9 +481,9 @@ every source concurrently and merges them into a single ``stream``.
     32
 
 Bounded parallelism
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
-Passing ``parallel=True`` maps a stage over its ``source`` with bounded
+Passing ``parallel=True`` maps a ``pipe`` over its ``source`` with bounded
 concurrency and backpressure, so large or streaming sources are never
 materialized up front. Pass ``ordered=True`` to preserve source order (the
 default is unordered — results arrive as they complete) and ``connections`` to
@@ -527,7 +561,7 @@ retryable I/O behind a function or module with an explicit policy, or run
 required.
 
 Using a one-off function
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 The built-in ``udf`` ``processor`` applies a Python callable to each ``item``.
 It is the simplest option when a transformation is local to one application.
@@ -548,12 +582,11 @@ Use the extension decorators when the transformation should have normal ``riko``
 configuration, assignment, metadata, and sync/async wrappers.
 
 Creating a custom processor
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``processor`` wraps a function that handles one ``item`` at a time. The public
-extension surface does not currently provide a runtime registry for adding an
-arbitrary decorated function to ``SyncPipe`` by name, so invoke the decorated
-callable functionally or ship it as an importable ``riko`` module.
+``processor`` wraps a function that handles one ``item`` at a time. A decorated
+callable can be invoked functionally, or registered so ``SyncPipe`` resolves it
+by name (see `Registering a custom module`_ below).
 
 .. code-block:: python
 
@@ -567,11 +600,16 @@ callable functionally or ship it as an importable ``riko`` module.
     {'content': 'HELLO'}
 
 A ``processor`` can return one value, an ``item``, or an iterator. Use ``field``
-and ``assign`` at the call site to control extraction and assignment. For an
-async ``processor``, pass ``isasync=True`` and decorate an async function.
+and ``assign`` at the call site to control extraction and assignment.
+
+The async interface accepts a sync *or* async callable, so ``async_pipe`` may be a plain
+``def`` that returns the sync parser (as built-in ``count``/``reverse``/``sort`` do)
+*or* an ``async def`` that awaits real I/O (as ``strreplace``/``timeout`` and
+`register_module.py`_ do). Pass ``isasync=True`` explicitly if you wrap a sync function
+(that isn't named ``async_pipe``) for the async interface.
 
 Creating a custom operator
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``operator`` receives the whole ``stream``. Use it for selection, aggregation,
 or composition that cannot be expressed as an item-level ``processor``.
@@ -591,6 +629,18 @@ or composition that cannot be expressed as an item-level ``processor``.
 ``operator`` functions should preserve iterator behavior unless the operation
 requires materialization. Add both sync and async wrappers when users need both
 execution APIs.
+
+Registering a custom module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To make a custom module resolvable by name, i.e., ``SyncPipe('your.module', ...)``
+and the ``|`` operator find it, register it with ``riko.ext.register`` or declare
+a ``[project.entry-points."riko.modules"]`` entry point. Point a ``ModuleDefinition``
+at a module exposing ``pipe``/``async_pipe``, or pass those callables explicitly. See
+`riko-example-ext`_ (installable entry-point plugin), `register_module.py`_ (runtime
+``register`` with explicit callables), and `register_alias.py`_ (runtime ``register``
+aliasing a built-in), plus the `FAQ`_ entry `Can I create custom modules`_ for the
+mechanics.
 
 Fanning out a stream
 ^^^^^^^^^^^^^^^^^^^^
@@ -748,11 +798,11 @@ to the branched items without touching the main flow.
 .. _ijson: https://github.com/ICRAR/ijson/blob/master/notes/design_notes.rst
 
 
-Compiling JSON workflows
-^^^^^^^^^^^^^^^^^^^^^^^^^
+Compiling JSON pipelines
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-In addition to writing ``workflows`` in Python, ``riko`` can load and compile
-``workflows`` stored as JSON pipe definitions (the Yahoo! Pipes-style
+In addition to writing ``pipelines`` in Python, ``riko`` can load and compile
+``pipelines`` stored as JSON pipe definitions (the Yahoo! Pipes-style
 ``{"modules": [...], "wires": [...]}`` format). The simplest way to author one
 is as a *bare-bones DAG* — a list of ``modules`` plus optional
 ``[source, target]`` wire pairs. When ``wires`` are omitted the modules are
@@ -803,11 +853,11 @@ the ``[source, target]`` pair format (their secondary inputs need ``_OTHER{n}``
 targets) and must be authored as a full JSON pipe definition instead. See the
 `DAG format doc`_ for the complete schema and expansion rules.
 
-Inspecting a workflow
-^^^^^^^^^^^^^^^^^^^^^^
+Inspecting a pipeline
+^^^^^^^^^^^^^^^^^^^^^
 
 You can introspect a JSON pipe definition *without running it*.
-``extract_dependencies`` returns the sorted set of modules a ``workflow`` uses —
+``extract_dependencies`` returns the sorted set of modules a ``pipeline`` uses —
 handy for validating that every required ``pipe`` is installed before execution.
 
 .. code-block:: python
@@ -825,7 +875,7 @@ handy for validating that every required ``pipe`` is installed before execution.
     >>> extract_dependencies(convert_dag(dag))
     ['itembuilder', 'rename']
 
-A *compiled* pipeline (see `Compiling JSON workflows`_) can additionally report
+A *compiled* pipeline (see `Compiling JSON pipelines`_) can additionally report
 its input requirements or module dependencies at run time — pass a ``Context``
 whose ``mode`` is ``ExecutionMode.DESCRIBE_INPUTS``, ``DESCRIBE_DEPENDENCIES``,
 or ``DESCRIBE`` and the pipeline yields that metadata instead of executing the
@@ -839,10 +889,10 @@ Keep the following execution boundaries explicit:
 - A pipeline instance is single-use. Rebuild it for another run.
 - Most item ``transformers`` are iterator-oriented, but ``sort``, ``reverse``,
   ``tail``, ``split``, aggregators, and exports consume or retain input.
-- ``SyncPipe(parallel=True)`` currently materializes the stage ``source`` before
+- ``SyncPipe(parallel=True)`` currently materializes the ``pipe`` ``source`` before
   local thread or process mapping. Don't use it for an unbounded ``stream``.
 - ``AsyncPipe(parallel=True)`` uses bounded concurrency and backpressure for
-  loopable stages. Tune ``connections`` first; increase ``prefetch`` only when
+  loopable ``pipes``. Tune ``connections`` first; increase ``prefetch`` only when
   buffering improves throughput without violating memory limits.
 - Parallel execution is unordered by default. Ordering can reduce throughput
   when an early item is slow.
@@ -860,6 +910,10 @@ run ``riko`` inside the relevant worker or task rather than treating ``riko`` as
 the scheduler.
 
 .. _FAQ: FAQ.rst
+.. _Can I create custom modules: FAQ.rst#can-i-create-custom-modules
+.. _riko-example-ext: ../examples/riko-example-ext
+.. _register_module.py: ../examples/register_module.py
+.. _register_alias.py: ../examples/register_alias.py
 .. _Design Principles: ../README.rst#design-principles
-.. _class based workflows: ../README.rst#synchronous-processing
+.. _class based flows: ../README.rst#synchronous-processing
 .. _DAG format doc: DAG_FORMAT.rst

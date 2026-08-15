@@ -225,7 +225,7 @@ side-effect classification
 
 Default agent scenarios have no arbitrary code-execution tool.
 
-A deterministic Riko callable stage remains preferable when the operation is known in
+A deterministic Riko callable pipe remains preferable when the operation is known in
 advance.
 
 ## 11. Agent team topology

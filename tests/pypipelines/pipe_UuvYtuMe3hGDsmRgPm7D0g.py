@@ -19,7 +19,7 @@ from riko.types.modules import (
 )
 
 
-def pipe_UuvYtuMe3hGDsmRgPm7D0g(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = [("", "name", "Name", "text", "Lancaster")]
     elif context and context.describe_dependencies:
@@ -183,9 +183,9 @@ def pipe_UuvYtuMe3hGDsmRgPm7D0g(item=None, context: Context | None = None, **_):
     return _OUTPUT
 
 
-mark_subpipe(pipe_UuvYtuMe3hGDsmRgPm7D0g, subtype="transformer")
+mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":
-    for i in pipe_UuvYtuMe3hGDsmRgPm7D0g():
+    for i in pipe():
         print(i)

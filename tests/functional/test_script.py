@@ -158,5 +158,5 @@ def test_convert_dag_and_compile(tmp_path):
 
     assert not convert.stdout
     assert '"moduleid": "_OUTPUT"' in pipe_file.read_text(encoding="utf-8")
-    assert "def pipe_forever(" in compiled.stdout
+    assert "def pipe(" in compiled.stdout
     assert "truncate" in compiled.stdout

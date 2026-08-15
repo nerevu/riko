@@ -10,9 +10,7 @@ from riko.modules.truncate import pipe as truncate
 from riko.types.modules import CountRawConf, FetchRawConf, TruncateRawConf
 
 
-def pipe_404411a8d22104920f3fc1f428f33642(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -54,9 +52,9 @@ def pipe_404411a8d22104920f3fc1f428f33642(
     return _OUTPUT
 
 
-mark_subpipe(pipe_404411a8d22104920f3fc1f428f33642, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_404411a8d22104920f3fc1f428f33642():
+    for i in pipe():
         print(i)

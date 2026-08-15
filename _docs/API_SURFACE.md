@@ -85,7 +85,7 @@ Never in any `__all__`. Import path signals instability. Enforced by
 | metadata derivation | `_derive_subtypes`, `_derive_operator_subtypes`, `_derive_loopable`, `gen_module_catalog`, `SUBTYPES` | `riko/modules/_metadata.py` | P3 |
 | wrappers | sync/async exec wrappers, lifecycle hooks | `riko/modules/_wrappers.py` | P3/P5 |
 | decorator impl | `Module`, `processor`/`operator`/`splitter` classes | `riko/modules/_decorators.py` | P3 |
-| resolution | `StageResolver`, `ResolvedStage`, `PipelineResolver`, `PipelineStore`, stores | `riko/ext/resolver.py`, `riko/ext/pipelines.py` | P8 |
+| resolution | `PipeResolver`, `PipelineResolver`, `PipelineStore`, stores | `riko/ext/resolver.py`, `riko/ext/pipelines.py` | P8 |
 | concurrency | executor abstraction, `prefetch`/budget helpers, `async_map_stream` | `riko/concurrency.py`, `riko/bado/streams.py` | P10 |
 | pub/sub state | `_registry`, `_receive_queue`, `send`/`receive` impl, `coroutine` | `riko/utils.py`, `riko/resources.py` | P11 |
 | pool handles | `_PoolHandle`, `_owns_pool` | `riko/collections.py` | — |

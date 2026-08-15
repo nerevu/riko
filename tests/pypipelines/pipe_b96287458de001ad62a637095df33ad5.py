@@ -10,9 +10,7 @@ from riko.modules.union import pipe as union
 from riko.types.modules import ItemBuilderRawConf, StrconcatRawConf
 
 
-def pipe_b96287458de001ad62a637095df33ad5(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -75,9 +73,9 @@ def pipe_b96287458de001ad62a637095df33ad5(
     return _OUTPUT
 
 
-mark_subpipe(pipe_b96287458de001ad62a637095df33ad5, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_b96287458de001ad62a637095df33ad5():
+    for i in pipe():
         print(i)

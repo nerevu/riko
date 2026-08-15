@@ -7,7 +7,7 @@ sequencing). Consolidates the former `P1/P2/P5/P6/P7/P10_CHECKLIST.md` and the f
 
 ## Progress tracker (authoritative)
 
-Suite: **604 passed** (pyright/ruff clean). Branch: `features`/`next` (uncommitted; the user commits).
+Suite: **709 passed** (pyright/ruff clean). Branch: `features` (the user commits).
 
 | Phase | Status | Notes |
 |---|---|---|
@@ -18,17 +18,17 @@ Suite: **604 passed** (pyright/ruff clean). Branch: `features`/`next` (uncommitt
 | **P5** one-shot lifecycle | ✅ done | § P5; `PipeState` |
 | **P6** `ExecutionMode` | ✅ done | § P6 |
 | **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export*. |
-| **P8** module registry + entry points | ⏳ next | design → MILESTONES M2 (the registry/resolver seam) |
-| **P9** fluent discoverability | ⬜ pending | `.then`, `available_modules`, `__dir__`, generated stubs (reads P8) |
+| **P8** module registry + entry points | ✅ done | § P8; `ext/{registry,pipelines,resolver}.py`, `Resolver` protocol, symmetric dispatch |
+| **P9** fluent discoverability | ⏳ next | value-taking chaining (`.pipe`/`\|`) + `ModuleName` base shipped; **P9A** = generated `Module` tree + `available_modules`/`__dir__`/stubs (reads P8) → [gameplans/module-enums.md](gameplans/module-enums.md) |
 | **P10** bounded parallelism + backpressure | ✅ done | § P10. **Carryover:** pipe-level budget via `Context` → P14. |
 | **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll` |
 | **P12** stable errors + events | ⬜ pending | `RikoError` tree, `EventSink` |
 | **P13** public/typing/internal test split | ⬜ pending | `tests/typing/` |
 | **P14** extensions outside core | ⬜ pending | `riko-microsoft`, `riko-ai` |
 
-**Milestone 1 (P1–P7): complete** (P10 landed early, out of sequence, at the user's request). The
-current/next phase is the tracker's ⏳ row above; pending-phase design + file maps + exit tests are
-in [MILESTONES.md](MILESTONES.md).
+**Milestone 1 (P1–P7): complete** (P10 landed early, out of sequence, at the user's request). **P8
+landed** (the M2 seam), so the current/next phase is **P9** (the tracker's ⏳ row above); pending-phase
+design + file maps + exit tests are in [MILESTONES.md](MILESTONES.md).
 
 **Accepted/deferred (documented, not bugs):** sync/async **udf-count divergence under partial
 consumption** (eager-concurrent async vs lazy-sequential sync — see the `AsyncPipe` docstring +
@@ -158,7 +158,7 @@ runtime migration (`async_map_stream`); the parity matrix (`tests/public/test_sy
   close via `async with`/`aclose`.
 
 **Landed since the original deferral list.**
-- Cancel-scope teardown of streaming stages (`aclosing` + benign `GeneratorExit`-group unwrap) — a
+- Cancel-scope teardown of streaming pipes (`aclosing` + benign `GeneratorExit`-group unwrap) — a
   supported early close (`async with`/`aclose`) is clean while as-complete delivery is kept.
 - Child-level `count="first"` early-exit + close via `_take_first` (`riko/modules/_loop.py`) — yields
   the first result per parent then closes the child iterator in a `finally`; shared by sync + async loops.
@@ -176,7 +176,7 @@ looping" change. All landed; the loop's public vocabulary is unchanged
 **Implicit looping (thread 0 — prerequisite).** A processor wrapper processes one item; fed a stream
 it used to take the first and warn — the explicit `loop` was the only thing that mapped a processor
 per item, so collapsing a processor-loop to a direct `rename(source)` node corrupted multi-item
-streams. Fixed by making a bare processor stage **auto-map** over an iterator source, exactly
+streams. Fixed by making a bare processor **auto-map** over an iterator source, exactly
 equivalent to looping it:
 
 - Seam is at the **top of the processor wrapper**, before `parse`: `sync_wrapper`/`async_wrapper`
@@ -196,7 +196,7 @@ equivalent to looping it:
   `LoopModule`, `CountArg`, a shared `RawModule` base) added as accepted input only. Characterization
   tests pinned the then-wrong global-flatten output first.
 - **Phase 2 — full Yahoo per-parent semantics (eager async).** Correct per-parent folding shared by
-  the processor stage and the explicit `loop`, via `_fold_parent`/`_take` in `_loop.py`
+  the processor and the explicit `loop`, via `_fold_parent`/`_take` in `_loop.py`
   (`_run_loop_sync`, `loop_embed_sync`). No cross-parent flatten before `count`/`assign`; `assign`
   folds onto the **parent**; loop-level `field`/`assign`/`emit` win over embed-level. `count` became a
   first-class top-level kwarg (distinct from a module's own `conf.count`, resolved by location). The
@@ -240,6 +240,47 @@ equivalent to looping it:
 | Direct `pipe:<id>` + top-level `count` | **rejected** (per-parent must be an explicit `loop`) | no |
 | `lazy`/`async`/`stream` flags in JSON | **rejected** (execution strategy is engine-chosen) | no |
 
+## P8 — Module registry + resolution seam
+
+**Delivered.** The backwards runtime→compiler resolution coupling is inverted behind three
+**compiler-free** layers that share one `resolve(name, interface)` contract
+(`riko/types/general.py::Resolver`, an overloaded `Protocol`):
+
+- **`riko/ext/registry.py`** — `ModuleRegistry` (built-ins imported lazily per name; runtime
+  `register` + `reset()`; entry points via `[project.entry-points."riko.modules"]`, discovered by
+  name lazily; precedence **runtime → entry-point → built-in**) + `ModuleDefinition`
+  (`module=` by-convention *or* explicit `sync_pipe`/`async_pipe`; `name` optional, stamped from the
+  entry-point key with a mismatch guard).
+- **`riko/ext/pipelines.py`** — `PipelineResolver` + an injectable `ModuleStore`
+  (`Package`/`Mapping`/`Composite`) and `DirectoryStore`; core ships no locations (conftest injects
+  the suite's `tests.pypipelines` / `tests/pipelines`, so no `tests.*` in `riko/`).
+- **`riko/ext/resolver.py`** — the `PipeResolver` façade: one symmetric dispatch
+  (`pipe*` → pipelines, else registry). `collections` resolves through it; `compile.resolve_module`
+  is now a one-line delegate to it (P8.11).
+
+**Decisions/landings.** Registry lifetime = **hybrid** (immutable global built-ins/entry points;
+runtime `register` global-with-`reset()`, Context-scopable later). **DoD #2** (runtime resolution
+imports no compiler) and **DoD #1** (external module via entry point, no core edit —
+`examples/riko-example-ext/`) both met. `compile_missing` polymorphism **dropped** (`resolve_module`
+always returns a callable; JSON compile → `load_definition`). Sub-pipelines are marked via a **fresh
+wrapper** (the generated module fn is never mutated). Codegen emits a **stable `pipe`/`async_pipe`
+entry**, so a sub-pipeline resolves exactly like a built-in — this removed the overloaded `pipe_name`
+argument (P8.6). `list_modules` overlays registry (runtime + entry-point) modules. `mark_subpipe`
+widened (it only stamps metadata). Speculative `ModuleDefinition` discovery fields
+(`provider`/`enum_name`/`user_type`/`docs_url`) dropped until P9A needs them. Entry-point group name:
+`riko.modules`.
+
+**Pipe-authoring ergonomics (landed alongside).** The decorators now **infer `isasync`**
+(`_resolve_isasync`) from an `async def` or the conventional `async_pipe` name, so it's rarely passed;
+explicit `isasync=True` remains only for the cases the name signal can't type — a sync async-interface
+callable not named `async_pipe` (a lambda), or a sync `def async_pipe` handed to
+`ModuleDefinition(async_pipe=…)`. A `pipe`-named async function raises `TypeError`; typed `__call__`
+overloads make `@operator()` on a coroutine statically async. Also on this branch: `pool_scope`'s
+`"stage"` value renamed to `"pipe"` (vs `"pipeline"`). Tests: `tests/internal/test_decorators.py`.
+
+**Carryover:** none. Unblocks **P9A** (the generated `Module.<Type>.<Subtype>.<NAME>` tree reads the
+registry/catalog). Tests: `tests/internal/test_resolver.py`.
+
 ## P10 — Bounded parallelism + backpressure
 
 **Delivered (P10.1–P10.5).** `AsyncPipe` honors `parallel` with bounded in-flight memory —
@@ -254,7 +295,7 @@ without multiplication or hold-and-wait deadlock).
 **Carryovers.**
 - **Pipe-level budget wiring via `Context`** — the `Semaphore` foundation is opt-in; threading one
   budget through `Context` down into the pipe/collection `async_map*` calls is deferred to a concrete
-  fetch-heavy nesting site (P14). Core has no deep multiplicative nesting today (stages/loop/subpipe
+  fetch-heavy nesting site (P14). Core has no deep multiplicative nesting today (pipes/loop/subpipe
   are sequential), so the blow-up is latent.
 - **Sync `prefetch` window** — sync uses `chunksize` (pool imap), not a `prefetch` buffer; deferred
   (lower value than the async seam).
@@ -301,7 +342,7 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
    then implement streaming on AnyIO; Twisted is not the runtime (P7). Runtime and protocols are
    orthogonal (RUNTIME_CONTRACT §23.1).
 7. **Layer internally, unify externally** — `ModuleRegistry` (modules) + `PipelineResolver`
-   (composed pipelines) behind one `StageResolver` façade; invert the runtime→compiler dependency
+   (composed pipelines) behind one `PipeResolver` façade; invert the runtime→compiler dependency
    (P8 — see MILESTONES M2).
 
 **Backward-compatibility contract (evergreen).** Every phase ships compat shims (moved-name

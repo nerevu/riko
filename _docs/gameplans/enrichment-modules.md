@@ -46,7 +46,7 @@ Rules:
 * target may be included as the first source;
 * missing-value policy is explicit;
 * false, zero, and empty containers are not missing unless configured;
-* source fields remain unless a later `dropfields` stage removes them;
+* source fields remain unless a later `dropfields` pipe removes them;
 * output cardinality is one record per input record.
 
 Do not rely solely on `value != value`; use a tested scalar-missing helper with optional
@@ -97,7 +97,7 @@ flow.dropfields(
 ```
 
 This replaces the Shelf proposal to overload `rename` for deletion. Field removal occurs
-after any coalesce stage that consumes staging columns.
+after any coalesce pipe that consumes staging columns.
 
 ## 6. Existing modules
 

@@ -47,11 +47,11 @@ named *module implementations* (`fetch`, `graph`); a `PipelineResolver` resolves
 pipelines* (`pipe_abc123`, JSON defs, generated py). Today `_resolve_module()` conflates four
 concerns (`output` handling, importing `tests.pypipelines.*`, loading `tests/pipelines/*.json`,
 importing `riko.modules.*`) and `collections.py` imports that **private compiler** function to
-resolve ordinary runtime stages — a backwards runtime→compiler dependency. Invert it behind three
+resolve ordinary runtime pipes — a backwards runtime→compiler dependency. Invert it behind three
 layers: **`ModuleRegistry`** (module definitions only; built-ins + entry points + runtime
 registrations; never loads JSON/invokes the compiler), **`PipelineResolver`** (composed-pipeline
 lookup via an injected `PipelineStore(Protocol).load` — `Directory`/`Package`/`Mapping`/`Composite`
-— replacing the hardcoded `tests.*` paths), and **`StageResolver`** (the single façade). Precedence:
+— replacing the hardcoded `tests.*` paths), and **`PipeResolver`** (the single façade). Precedence:
 **runtime registration → entry-point → built-in → named pipeline** (`register` needs `replace=True`
 to shadow). Corrections folded in: keep `output` compiler-local (check `== "output"` before
 resolving); don't mutate resolved callables (wrap via `bind_embedded`/`functools.wraps`); drop
@@ -59,7 +59,7 @@ resolving); don't mutate resolved callables (wrap via `bind_embedded`/`functools
 *requested* module is missing). Order P8.1–P8.11: registry → move discovery out of `compile.py` →
 store/resolver → façade → pipes use it → compiler uses it → `output` stays local → drop polymorphism
 → stop mutating callables → preserve transitive import error → keep deprecated `_resolve_module`
-forwarding one cycle. **DoD:** an external package adds modules without editing core; runtime stage
+forwarding one cycle. **DoD:** an external package adds modules without editing core; runtime pipe
 resolution no longer imports the compiler.
 
 **P9 — fluent discoverability.** Keep dynamic `pipe.tokenizer(...)`; add explicit
@@ -76,7 +76,7 @@ Grid, Redis, webhook.
 **P12 — stable errors + observability.** `RikoError` tree (`ConfigurationError`,
 `ModuleDefinitionError`, `ModuleExecutionError`, `UnsupportedModuleError(ModuleDefinitionError,
 ImportError)`, `PipelineStateError`, `PollTimeoutError`, `PublishError`, `SubscriptionError`);
-`ModuleExecutionError` preserves module/stage/correlation-id/original; `EventSink` protocol +
+`ModuleExecutionError` preserves module/pipe/correlation-id/original; `EventSink` protocol +
 `RuntimeEvent`s. **DoD:** integrations get diagnostics without printing or a vendor telemetry dep.
 
 **P13 — public/typing/internal test split.** `tests/public/`, `tests/typing/{valid,invalid}/`,
@@ -92,7 +92,7 @@ per integration**.
 | File | Phase | Symbols / purpose |
 |---|---|---|
 | `riko/ext/registry.py` | P8 | `ModuleDefinition`, `ModuleRegistry` (`register(def,*,replace=False)`, `resolve(name, interface)`, `names()`); built-in + entry-point + runtime population |
-| `riko/ext/resolver.py` | P8 | `ResolvedStage`, `StageResolver` façade — the single resolution entry point |
+| `riko/ext/resolver.py` | P8 | `PipeResolver` façade — the single resolution entry point |
 | `riko/ext/pipelines.py` | P8 | `PipelineResolver`, `PipelineStore(Protocol)` + `Directory/Package/Mapping/Composite` stores (replaces hardcoded `tests.pypipelines` / `tests/pipelines`) |
 | `riko/ext/stubs.py` + `riko/modules/__init__.pyi` | P9 | generated `.pyi` fluent stubs from the registry |
 | `riko/ext/pubsub.py` | P11 | `Publisher`/`Subscription` protocols + in-process impl over today's `send`/`receive` |
@@ -105,13 +105,13 @@ per integration**.
 
 - `riko/exceptions.py` (P12) — `RikoError` base; re-home `UnsupportedModuleError` under
   `ModuleDefinitionError(RikoError, ImportError)`; add `ConfigurationError`,
-  `ModuleExecutionError` (carries module/stage/correlation-id/original), `PollTimeoutError(TimeoutError)`,
+  `ModuleExecutionError` (carries module/pipe/correlation-id/original), `PollTimeoutError(TimeoutError)`,
   `PublishError`, `SubscriptionError`; `PipelineStateError` already exists (P5).
-- `riko/compile.py` (P8) — replace `_resolve_module` internals with `StageResolver`; keep `output`
+- `riko/compile.py` (P8) — replace `_resolve_module` internals with `PipeResolver`; keep `output`
   local; drop `compile_missing` polymorphism; stop mutating `pipeline.__name__` (use `bind_embedded`);
   preserve transitive `ModuleNotFoundError`; SHIM-forward `_resolve_module` one cycle.
-- `riko/collections.py` (P8/P12) — use `StageResolver` (stop importing the compiler private); wrap
-  per-stage failures in `ModuleExecutionError` + emit `stage.*` events.
+- `riko/collections.py` (P8/P12) — use `PipeResolver` (stop importing the compiler private); wrap
+  per-pipe failures in `ModuleExecutionError` + emit `pipe.*` events.
 - `riko/context.py` (P11/P12) — add `resources` + `events`/`event_sink` fields.
 - pub/sub (`riko/_pubsub/`, `modules/{receive,send}.py`) (P11) — re-express over
   `Publisher`/`Subscription`; keep the global compat adapter + conftest resets.
@@ -134,7 +134,7 @@ context/resources, events. **No core change per integration** is the DoD.
 
 ### Sequencing (dependency order)
 
-1. **P8 first** — the resolution seam (`StageResolver`/`ModuleRegistry`); removes the runtime→compiler
+1. **P8 first** — the resolution seam (`PipeResolver`/`ModuleRegistry`); removes the runtime→compiler
    dependency P10/P11 would otherwise inherit.
 2. **P12 early-ish** — the `RikoError` tree + `EventSink` are cross-cutting; land them before P10/P11
    raise/emit the stable types (avoids a later sweep). `PipelineStateError` already exists.
@@ -161,7 +161,7 @@ context/resources, events. **No core change per integration** is the DoD.
   global compat adapter; idempotent close), `public/test_poll.py` (interval/event/hybrid;
   `PollTimeoutError`; adapter-agnostic over a fake `Subscription`).
 - **P12** — `public/test_errors.py` (hierarchy + back-compat bases; `ModuleExecutionError` context),
-  `public/test_events.py` (lifecycle/stage/poll/publish events; no-op default sink).
+  `public/test_events.py` (lifecycle/pipe/poll/publish events; no-op default sink).
 - **P13** — `public/test_imports.py` (extended public/EXT `__all__`; no accidental internal exports),
   `tests/typing/`.
 

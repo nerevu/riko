@@ -8,9 +8,7 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.types.modules import DateFormatRawConf, InputRawConf, ItemBuilderRawConf
 
 
-def pipe_4f26297843f4952fad920af5990ddc50(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         output = [
             ("1", "format_input", "enter date format", "text", "%B %d, %Y"),
@@ -86,5 +84,5 @@ def pipe_4f26297843f4952fad920af5990ddc50(
 
 
 if __name__ == "__main__":
-    for i in pipe_4f26297843f4952fad920af5990ddc50():
+    for i in pipe():
         print(i)

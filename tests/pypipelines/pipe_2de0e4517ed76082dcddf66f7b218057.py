@@ -8,9 +8,7 @@ from riko.modules.fetch import pipe as fetch
 from riko.types.modules import FetchRawConf
 
 
-def pipe_2de0e4517ed76082dcddf66f7b218057(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -33,9 +31,9 @@ def pipe_2de0e4517ed76082dcddf66f7b218057(
     return _OUTPUT
 
 
-mark_subpipe(pipe_2de0e4517ed76082dcddf66f7b218057, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_2de0e4517ed76082dcddf66f7b218057():
+    for i in pipe():
         print(i)

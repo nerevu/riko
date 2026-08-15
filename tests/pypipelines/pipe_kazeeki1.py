@@ -5,7 +5,7 @@ from riko.collections import SyncPipe
 from tests.pypipelines._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
 
-def pipe_kazeeki1(context: Context | None = None, **_):
+def pipe(context: Context | None = None, **_):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:
@@ -18,7 +18,7 @@ def pipe_kazeeki1(context: Context | None = None, **_):
 
 
 if __name__ == "__main__":
-    pipeline = pipe_kazeeki1(context=Context())
+    pipeline = pipe(context=Context())
 
     for i in pipeline:
         print(i)

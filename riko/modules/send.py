@@ -39,6 +39,28 @@ DEFAULTS: Defaults = {"max_wait": 5}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
+async def async_parser(
+    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: str
+) -> Stream:
+    """
+    Publishes each stream item to every target's AnyIO channel, then completes
+    (closes the channel) so receivers terminate. Publishing rendezvouses with
+    the receiver, so no startup ordering is needed; a target that is never
+    subscribed is bounded by ``objconf.max_wait`` and raises
+    ``ReceiverUnavailableError``. Returns the original items (passthrough).
+    """
+    others = kwargs["others"]
+    timeout = objconf.max_wait
+    sent = []
+
+    for item in stream:
+        await async_hub.publish(others, item, timeout=timeout)
+        sent.append(item)
+
+    await async_hub.complete(others)
+    return iter(sent)
+
+
 def parser(
     stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
@@ -97,6 +119,23 @@ def parser(
         yield item
 
 
+@operator(DEFAULTS, isasync=True, **OPTS)
+async def async_pipe(*args: Any, **kwargs: str) -> Stream:
+    """
+    An async operator that pushes stream items to receiver targets over AnyIO
+    channels.
+
+    Kwargs:
+        others Iter[(str)]: Target names to receive each stream item.
+        conf (dict): The pipe configuration. May contain 'name' and 'max_wait'.
+
+    Yields:
+        dict: an item
+
+    """
+    return await async_parser(*args, **kwargs)
+
+
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: str) -> Stream:
     """
@@ -132,42 +171,3 @@ def pipe(*args: Any, **kwargs: str) -> Stream:
 
     """
     return parser(*args, **kwargs)
-
-
-async def async_parser(
-    stream: Stream, objconf: SendObjconf, tuples: PipeTuples, **kwargs: str
-) -> Stream:
-    """
-    Publishes each stream item to every target's AnyIO channel, then completes
-    (closes the channel) so receivers terminate. Publishing rendezvouses with
-    the receiver, so no startup ordering is needed; a target that is never
-    subscribed is bounded by ``objconf.max_wait`` and raises
-    ``ReceiverUnavailableError``. Returns the original items (passthrough).
-    """
-    others = kwargs["others"]
-    timeout = objconf.max_wait
-    sent = []
-
-    for item in stream:
-        await async_hub.publish(others, item, timeout=timeout)
-        sent.append(item)
-
-    await async_hub.complete(others)
-    return iter(sent)
-
-
-@operator(DEFAULTS, isasync=True, **OPTS)
-async def async_pipe(*args: Any, **kwargs: str) -> Stream:
-    """
-    An async operator that pushes stream items to receiver targets over AnyIO
-    channels.
-
-    Kwargs:
-        others Iter[(str)]: Target names to receive each stream item.
-        conf (dict): The pipe configuration. May contain 'name' and 'max_wait'.
-
-    Yields:
-        dict: an item
-
-    """
-    return await async_parser(*args, **kwargs)

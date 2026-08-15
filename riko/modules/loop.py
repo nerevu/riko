@@ -111,6 +111,18 @@ def parser(
     yield from stream
 
 
+@operator(DEFAULTS, isasync=True, **OPTS)
+def async_pipe(*args: Any, **kwargs: object) -> Stream:
+    """
+    Async counterpart of ``pipe`` — creates submodules from existing pipes,
+    running the embed once per parent *lazily and sequentially* (parent order
+    preserved, source advanced only as the consumer pulls, ``count="first"``
+    stopping after the first result) and applying the same per-parent
+    ``count``/``emit``/``assign`` fold. See ``pipe`` for kwargs.
+    """
+    return parser(*args, **kwargs)
+
+
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
@@ -139,17 +151,5 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             ``is_mapping`` (emit when the output is a mapping, i.e. effectively
             True for a normal item stream).
 
-    """
-    return parser(*args, **kwargs)
-
-
-@operator(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Stream:
-    """
-    Async counterpart of ``pipe`` — creates submodules from existing pipes,
-    running the embed once per parent *lazily and sequentially* (parent order
-    preserved, source advanced only as the consumer pulls, ``count="first"``
-    stopping after the first result) and applying the same per-parent
-    ``count``/``emit``/``assign`` fold. See ``pipe`` for kwargs.
     """
     return parser(*args, **kwargs)

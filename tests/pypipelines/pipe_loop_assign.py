@@ -10,7 +10,7 @@ from riko.modules.tokenizer import pipe as tokenizer
 from riko.types.modules import ItemBuilderRawConf, TokenizerRawConf
 
 
-def pipe_loop_assign(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -45,9 +45,9 @@ def pipe_loop_assign(item=None, context: Context | None = None, **_):
     return _OUTPUT
 
 
-mark_subpipe(pipe_loop_assign, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_loop_assign():
+    for i in pipe():
         print(i)

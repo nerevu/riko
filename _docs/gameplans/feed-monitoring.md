@@ -454,7 +454,7 @@ monitor={
 }
 ```
 
-The underlying source/stage uses the normal `RetryPolicy`; this plan does not introduce a
+The underlying source/pipe uses the normal `RetryPolicy`; this plan does not introduce a
 second `retry={...}` schema.
 
 Cancellation interrupts both retries (through execution semantics) and recurrence delays.

@@ -16,6 +16,7 @@ from riko._pubsub import async_hub, close, sync_hub
 from riko.bado import gather_results, issync, run
 from riko.collections import AsyncPipe, Executor, SyncCollection, SyncPipe
 from riko.exceptions import ReceiverUnavailableError
+from riko.ext.names import ModuleName, normalize_module_name
 from riko.types.general import Item, Items
 from riko.types.modules import (
     ItemBuilderConf,
@@ -92,6 +93,11 @@ class _CollectionTest:
     def udf(self, item: Item) -> Item:
         self.runs += 1
         return item
+
+
+class _Mod(ModuleName):
+    HASH = "hash"
+    TRUNCATE = "truncate"
 
 
 class TestSyncCollections(_CollectionTest):
@@ -562,3 +568,130 @@ class TestPoolLifecycle:
 
         assert coll.pool is None
         assert coll._pool_handle.owned
+
+
+class TestSyncPipeChaining:
+    """positional ``.pipe(name)`` and the ``|`` operators."""
+
+    def test_pipe_accepts_positional_name(self):
+        flow = SyncPipe("hash", source=SRC)
+        chained = flow.pipe("hash")
+        assert chained.name == "hash"
+        assert chained.source is flow
+        assert len(list(chained)) == 3
+
+    def test_pipe_method_matches_operator(self):
+        flow = SyncPipe("hash", source=SRC)
+        chained = flow.pipe("truncate", conf={"count": 1})
+        assert chained.name == "truncate"
+        assert chained.conf == {"count": 1}
+        assert len(list(chained)) == 1
+
+    def test_or_string_matches_attribute_chaining(self):
+        via_or = list(SyncPipe("hash", source=SRC) | "hash")
+        via_attr = list(SyncPipe("hash", source=SRC).hash())
+        assert via_or == via_attr
+        assert len(via_or) == 3
+
+    def test_or_string_sets_source_to_lhs(self):
+        flow = SyncPipe("hash", source=SRC)
+        piped = flow | "hash"
+        assert piped.name == "hash"
+        assert piped.source is flow
+
+    def test_or_tuple_applies_conf(self):
+        piped = SyncPipe("hash", source=SRC) | ("truncate", {"count": 1})
+        assert piped.name == "truncate"
+        assert piped.conf == {"count": 1}
+        assert len(list(piped)) == 1
+
+    def test_or_template_rebinds_onto_lhs(self):
+        flow = SyncPipe("hash", source=SRC)
+        piped = flow | SyncPipe("truncate", conf={"count": 1})
+        assert piped.name == "truncate"
+        assert piped.conf == {"count": 1}
+        assert piped.source is flow
+        assert len(list(piped)) == 1
+
+    def test_ror_seeds_source_from_stream(self):
+        primed = SRC | SyncPipe("hash")
+        assert primed.name == "hash"
+        assert list(primed.source) == SRC
+        assert len(list(primed)) == 3
+
+    def test_ror_preserves_definitional_kwargs(self):
+        primed = SRC | SyncPipe("tokenizer", conf={"delimiter": " "}, emit=False)
+        assert primed.name == "tokenizer"
+        assert not primed.kwargs["emit"]
+
+    def test_or_unsupported_rhs_raises_type_error(self):
+        with pytest.raises(TypeError):
+            _ = SyncPipe("hash", source=SRC) | 5
+
+    def test_ror_rejects_non_template_target(self):
+        # a source-bound pipe is not a rebind target
+        with pytest.raises(TypeError):
+            _ = SRC | SyncPipe("hash", source=SRC)
+
+
+@pytest.mark.skipif(issync, reason="async support not available")
+class TestAsyncPipeChaining:
+    """The ``|`` operators wire AsyncPipe pipes (construction is loop-free)."""
+
+    def test_async_pipe_accepts_positional_name(self):
+        flow = AsyncPipe("hash", source=SRC)
+        chained = flow.async_pipe("hash")
+        assert chained.name == "hash"
+        assert chained.source is flow
+
+    def test_or_string_and_tuple(self):
+        flow = AsyncPipe("hash", source=SRC)
+        assert (flow | "hash").name == "hash"
+        spec = AsyncPipe("hash", source=SRC) | ("truncate", {"count": 1})
+        assert spec.name == "truncate"
+        assert spec.conf == {"count": 1}
+
+    def test_or_template_rebinds_onto_lhs(self):
+        flow = AsyncPipe("hash", source=SRC)
+        piped = flow | AsyncPipe("truncate", conf={"count": 1})
+        assert piped.name == "truncate"
+        assert piped.conf == {"count": 1}
+        assert piped.source is flow
+
+    def test_ror_seeds_source_from_stream(self):
+        primed = SRC | AsyncPipe("hash")
+        assert primed.name == "hash"
+        assert primed.source is not None
+
+    def test_or_unsupported_rhs_raises_type_error(self):
+        with pytest.raises(TypeError):
+            _ = AsyncPipe("hash", source=SRC) | 5
+
+
+class TestModuleNameEnum:
+    """A ``ModuleName`` enum is accepted anywhere a name string is."""
+
+    def test_normalize_module_name(self):
+        assert normalize_module_name(_Mod.HASH) == "hash"
+        assert normalize_module_name("hash") == "hash"
+        assert normalize_module_name(None) is None
+
+    def test_constructor_stores_plain_string(self):
+        pipe = SyncPipe(_Mod.HASH, source=SRC)
+        assert pipe.name == "hash"
+        assert type(pipe.name) is str
+        assert len(list(pipe)) == 3
+
+    def test_enum_and_string_resolve_identically(self):
+        via_enum = list(SyncPipe(_Mod.HASH, source=SRC))
+        via_str = list(SyncPipe("hash", source=SRC))
+        assert via_enum == via_str
+
+    def test_enum_through_operator_and_method(self):
+        via_or = SyncPipe(_Mod.HASH, source=SRC) | _Mod.TRUNCATE
+        via_method = SyncPipe(_Mod.HASH, source=SRC).pipe(
+            _Mod.TRUNCATE, conf={"count": 1}
+        )
+        assert via_or.name == "truncate"
+        assert via_method.name == "truncate"
+        assert len(list(via_method)) == 1

@@ -18,6 +18,7 @@ from typing import (
     Protocol,
     TypedDict,
     TypeVar,
+    overload,
 )
 
 from riko.types.modules import ModuleSubtype, ModuleSubtypes, ModuleType
@@ -35,11 +36,11 @@ from riko.types.values import (
 
 if TYPE_CHECKING:
     from riko._io import Fetch
-    from riko._objectify import DynamicConf
     from riko.bado.io import NamedTextIOWrapper
     from riko.cast import BasicCastType
     from riko.context import Context
     from riko.dotdict import DotDict
+    from riko.types.configs import DynamicConf
     from riko.types.modules import (
         AnyConfRule,
         AnyModuleConf,
@@ -354,6 +355,7 @@ class AsyncSplitterWrapper(ModuleWrapper):
 
 
 # Both
+type Interface = Literal["pipe", "async_pipe"]
 type ProcessorParser = SyncProcessorParser | AsyncProcessorParser
 type ProcessorWrapper = SyncProcessorWrapper | AsyncProcessorWrapper
 type SubPipe = SyncSubPipe | AsyncSubPipe
@@ -361,9 +363,37 @@ type OperatorParser = SyncOperatorParser | AsyncOperatorParser
 type OperatorWrapper = SyncOperatorWrapper | AsyncOperatorWrapper
 type SplitterParser = SyncSplitterParser | AsyncSplitterParser
 type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
+type SyncModuleWrapper = (
+    SyncProcessorWrapper | SyncOperatorWrapper | SyncSplitterWrapper
+)
+type AsyncModuleWrapper = (
+    AsyncProcessorWrapper | AsyncOperatorWrapper | AsyncSplitterWrapper
+)
+type SyncPipeCallable = SyncPipeParser | SyncModuleWrapper
+type AsyncPipeCallable = AsyncPipeParser | AsyncModuleWrapper
 type Pipeline = SyncPipeParser | AsyncPipeParser
+type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
 type StepValue = ParserOutput | Pipeline | AsyncPipeItems
 type Step = tuple[str, StepValue]
 type Steps = dict[str, StepValue]
 type PyInput = SyncPyInput | AsyncPyInput
+
+
+class Resolver(Protocol):
+    """
+    Resolves a pipe name + interface to its callable — a ``ModuleRegistry``
+    (leaf modules) or a ``PipelineResolver`` (``pipe`` sub-pipelines).
+    """
+
+    @overload
+    def resolve(  # noqa: E704
+        self, name: str, interface: Literal["pipe"]
+    ) -> SyncPipeParser: ...
+    @overload  # noqa: E301
+    def resolve(  # noqa: E704
+        self, name: str, interface: Literal["async_pipe"]
+    ) -> AsyncPipeParser: ...
+    def resolve(  # noqa: E301, E704
+        self, name: str, interface: Interface
+    ) -> Pipeline: ...

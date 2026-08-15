@@ -25,9 +25,9 @@ Word Count
     >>> replace_kwargs = {'conf': replace_conf, 'assign': 'content'}
     >>> token_kwargs = {'conf': {'delimiter': ' '}, 'emit': True}
     >>>
-    >>> ### Create a workflow ###
+    >>> ### Create a pipeline ###
     >>> #
-    >>> # The following workflow will:
+    >>> # The following pipeline will:
     >>> #   1. fetch the url and return the content between the body tags
     >>> #   2. replace newlines with spaces
     >>> #   3. tokenize (split) the content by spaces, i.e., yield words
@@ -46,9 +46,9 @@ Word Count
     >>> next(counts)
     {'$Revision:': 1}
 
-    >>> ### Alternatively, create a SyncPipe workflow ###
+    >>> ### Alternatively, create a SyncPipe flow ###
     >>> #
-    >>> # `SyncPipe` is a workflow convenience class that enables method
+    >>> # `SyncPipe` is a pipeline convenience class that enables method
     >>> # chaining and parallel processing
     >>> from riko.collections import SyncPipe
     >>>
@@ -153,9 +153,9 @@ Synchronous processing
     >>> regex_conf = {'rule': regex_rule}
     >>> sort_conf = {'rule': {'field': 'content', 'dir': 'desc'}}
     >>>
-    >>> ### Create a workflow ###
+    >>> ### Create a pipeline ###
     >>> #
-    >>> # The following workflow will:
+    >>> # The following pipeline will:
     >>> #   1. fetch the rss feed
     >>> #   2. filter for items published before 2/5/2009
     >>> #   3. extract the path `content.value` from each feed item
@@ -174,9 +174,9 @@ Synchronous processing
     >>> next(sorted_match)
     {'content': 'mailto:mail@writetoreply.org'}
 
-    >>> ### Alternatively, create a SyncPipe workflow ###
+    >>> ### Alternatively, create a SyncPipe flow ###
     >>> #
-    >>> # `SyncPipe` is a workflow convenience class that enables method
+    >>> # `SyncPipe` is a pipeline convenience class that enables method
     >>> # chaining, parallel processing, and eliminates the manual `map` and
     >>> # `chain` steps
     >>> from riko.collections import SyncPipe
@@ -207,9 +207,9 @@ Parallel processing
     >>> filter_rule = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
-    >>> ### Create a parallel SyncPipe workflow ###
+    >>> ### Create a parallel SyncPipe flow ###
     >>> #
-    >>> # The following workflow will:
+    >>> # The following pipeline will:
     >>> #   1. fetch the rss feed
     >>> #   3. extract the path `content.value` from each feed item
     >>> #   4. replace the extracted text with the last href url contained
@@ -254,7 +254,7 @@ Asynchronous processing
     >>> filter_rule = {'field': 'content', 'op': 'contains', 'value': 'file'}
     >>> strtransform_conf = {'rule': {'transform': 'rstrip', 'args': '/'}}
     >>>
-    >>> ### Create an AsyncPipe workflow ###
+    >>> ### Create an AsyncPipe flow ###
     >>> #
     >>> # See `Parallel processing` above for the steps this performs
     ... def run(reactor):

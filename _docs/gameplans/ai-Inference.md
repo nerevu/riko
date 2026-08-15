@@ -31,7 +31,7 @@ Tool definitions    Rewrite as native callable wrappers
 Structured output   Retain using JSON Schema
 Bounded graph/agent execution   Rewrite as a small agent loop
 Scenario-based evaluation   Retain as offline evaluation fixtures
-Model performance history   Retain for stage-level model selection
+Model performance history   Retain for pipe-level model selection
 RAG workflow patterns   Rebuild using Riko pipelines
 Multi-agent supervisor  Defer
 LangChain runnables Drop
@@ -690,7 +690,7 @@ supervisor configurations.
 Split it into:
 
 @dataclass(frozen=True, slots=True)
-class AIStageSpec:
+class AIPipeSpec:
     id: str
     prompt: str
     response_schema: dict[str, JsonValue] | None = None
@@ -699,7 +699,7 @@ class AIStageSpec:
 
 @dataclass(frozen=True, slots=True)
 class EvaluationCase:
-    stage_id: str
+    pipe_id: str
     input: JsonValue
     expected: JsonValue | None
     evaluator: str
@@ -708,7 +708,7 @@ Evaluation results:
 
 @dataclass(frozen=True, slots=True)
 class ModelEvaluation:
-    stage_id: str
+    pipe_id: str
     model_id: str
     prompt_hash: str
     schema_hash: str
@@ -881,7 +881,7 @@ Phase 3: evaluation and optimization
 
 Add:
 
-stage specifications;
+pipe specifications;
 evaluation cases;
 persisted result store;
 cost/performance/balanced selectors;
@@ -933,6 +933,13 @@ AgentExecutor                    bounded Riko agent operator
 checkpointer                     explicit state-store interface
 
 Riko already provides the main sequence abstraction through dynamic SyncPipe and AsyncPipe chaining. Each attribute access constructs another pipe whose source is the preceding pipe.
+
+> **`a | b` is literal, not just attribute chaining.** Native `__or__`/`__ror__` on
+> `SyncPipe`/`AsyncPipe` (planned in [module-enums.md § P9A.4](module-enums.md#p9a4-value-taking-chaining-pipe--__or__),
+> alongside a value-taking `.pipe("filter", …)`) makes `pipe | Module.Transforms.FILTER` and
+> `data | pipe` the direct `RunnableSequence` equivalent for LCEL migrants. This lives **on the pipe
+> itself** — it does **not** reintroduce the forbidden `RikoRunnable` wrapper below; it is sugar over
+> `_chain`, adding no second object model.
 
 It also already provides per-item parallel processing for processor modules and asynchronous concurrency through AsyncPipe.
 
@@ -1276,7 +1283,7 @@ Langly uses LangChain’s configurable alternatives to swap models dynamically.
 This should be replaced with a native selector before provider invocation:
 
 model = model_registry.select(
-    stage="ticket_classification",
+    pipe="ticket_classification",
     policy=ModelPolicy(
         optimization=Optimization.BALANCED,
         required_capabilities={
@@ -1503,7 +1510,7 @@ Provider adapters
 The architecture should therefore have no runnable abstraction at all. Langly’s runnable chains become either:
 
 internal implementation details inside one Riko module;
-ordinary Riko pipeline stages;
+ordinary Riko pipes;
 Riko DAG branches;
 a bounded loop inside the agent module.
 how would branch differ from split and can it just be a conf option in split

@@ -74,9 +74,9 @@ class AsyncPubSubHub:
             try:
                 with fail_after(timeout):
                     await slot.send_stream.send(item)
-            except TimeoutError as exc:
+            except TimeoutError as e:
                 self._discard(name, slot)
-                raise ReceiverUnavailableError(name) from exc
+                raise ReceiverUnavailableError(name) from e
 
     async def complete(self, targets: Iterable[str]) -> None:
         for name in targets:

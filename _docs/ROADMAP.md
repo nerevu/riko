@@ -17,7 +17,7 @@ One doc owns each kind of information — go straight there:
 | What **actually ships today** / where a shipped piece lives | [IMPLEMENTED.md](IMPLEMENTED.md) |
 | **Live phase status** — what's done / next / suite count, and the decisions that survived | [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md) (the tracker) |
 | **How to build a pending phase** — files to create/edit, exit tests, dependency order (`PN`) | [MILESTONES.md](MILESTONES.md) |
-| The **detailed plan for a topic** — HigherGov/Feed, extensibility E0–E8, connectors, CLI, MCP, RDP/Connect, callable stages, execution semantics, … | the matching [gameplan](#gameplans) below |
+| The **detailed plan for a topic** — HigherGov/Feed, extensibility E0–E8, connectors, CLI, MCP, RDP/Connect, callable pipes, execution semantics, … | the matching [gameplan](#gameplans) below |
 | The public / EXT / private **import surface** | [API_SURFACE.md](API_SURFACE.md) |
 | **Why** a design choice was made (prior-art comparison) | [extensibility.md § E8 / Prior-art sources](gameplans/extensibility.md#e8-prior-art-research-conclusions) |
 | User **migration** (legacy → current) · **changelog** | [MIGRATION.rst](MIGRATION.rst) · [CHANGES.rst](CHANGES.rst) |
@@ -39,7 +39,7 @@ any of them is in [IMPLEMENTED.md](IMPLEMENTED.md).
 | 1 | Product layers | [contract](RUNTIME_CONTRACT.md#1-product-layers) (Core) · [rdp-connect](gameplans/rdp-connect.md) (Connect) |
 | 2 | Core item & stream types | [contract](RUNTIME_CONTRACT.md#2-core-item-and-stream-types) |
 | 3 | Pipe behavior | [contract](RUNTIME_CONTRACT.md#3-pipe-behavior) |
-| 4 | Callable stages | [callable-stages](gameplans/callable-stages.md#4-callable-stages) |
+| 4 | Callable pipes | [callable-pipes](gameplans/callable-pipes.md#4-callable-pipes) |
 | 5 | Execution characteristics | [execution-semantics](gameplans/execution-semantics.md#5-execution-characteristics) |
 | 6 | Async execution & backpressure | [contract](RUNTIME_CONTRACT.md#6-async-execution-and-backpressure) · [execution-semantics](gameplans/execution-semantics.md#6-async-execution-and-backpressure) |
 | 7 | Timeout | [contract](RUNTIME_CONTRACT.md#7-timeout) · [execution-semantics](gameplans/execution-semantics.md#7-timeout) |
@@ -75,7 +75,7 @@ Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is t
 | [agents.md](gameplans/agents.md) | Agent workflows — agent loop, tools. |
 | [ai-Inference.md](gameplans/ai-Inference.md) | AI inference — provider `infer` modules, embedding/retrieval adapters. |
 | [azure-automation.md](gameplans/azure-automation.md) | Azure automation — ARM/PowerShell, Service Bus / Event Grid, desired-state. |
-| [callable-stages.md](gameplans/callable-stages.md) | **§4 callable stages** — `map`/`flat_map`, `Opts` fields, decorator model, strict mode, thread/process execution (+ impl plan). |
+| [callable-pipes.md](gameplans/callable-pipes.md) | **§4 callable pipes** — `map`/`flat_map`, `Opts` fields, decorator model, strict mode, thread/process execution (+ impl plan). |
 | [cli.md](gameplans/cli.md) | CLI architecture, command-plugin system, config precedence. |
 | [connectors.md](gameplans/connectors.md) | Source/sink connectors (HTTP, files, mail, brokers, CKAN/Prometheus/tabular, Singer). |
 | [database-transforms.md](gameplans/database-transforms.md) | `riko-sql` / `riko-dbt` (Ibis-backed reads, dbt coordination); owns **§25** (conversion & dataframe). |
@@ -83,7 +83,7 @@ Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is t
 | [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules (coalesce, transforms, near-duplicate, contact extraction). |
 | [execution-semantics.md](gameplans/execution-semantics.md) | **§5, §11, §12, §15, §16, §22** and the *planned* parts of **§6–§8, §13** — execution characteristics, retry, dispositions, stateful operators, batch model, memory limits, backpressure/timeout/merge/filter internals; + the async primitive reference (§ Appendix A). |
 | [extensibility.md](gameplans/extensibility.md) | **Extensibility & ecosystem (E0–E8)** — module contract, plugins, workflow spec, observability, adapters, drivers, GUI + 1.0 readiness; owns **§24** (module registry). Prior-art sources. |
-| [highergov-feed.md](gameplans/highergov-feed.md) | **HigherGov-first critical path** (HG-0…HG-9) + **async `Feed` integration** — riko's first production use: schema contracts, `SyncPipe`/`AsyncPipe` callable stages, bounded async I/O. |
+| [highergov-feed.md](gameplans/highergov-feed.md) | **HigherGov-first critical path** (HG-0…HG-9) + **async `Feed` integration** — riko's first production use: schema contracts, `SyncPipe`/`AsyncPipe` callable pipes, bounded async I/O. |
 | [mcp.md](gameplans/mcp.md) | MCP server implementation. |
 | [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
 | [orchestration.md](gameplans/orchestration.md) | Orchestrator adapters (cron, webhook, Airflow/Prefect/Dagster, dbt). |

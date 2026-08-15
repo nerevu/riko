@@ -166,7 +166,7 @@ mapping={
 ```
 
 Allow constants and approved transformations, but do not load arbitrary Python lambdas from
-serialized workflow definitions. Python callers can still use callable stages before the
+serialized workflow definitions. Python callers can still use callable pipes before the
 serializer.
 
 ## 10. vCard/contact output

@@ -7,9 +7,7 @@ from riko.modules.strreplace import pipe as strreplace
 from riko.types.modules import ItemBuilderRawConf, StrReplaceRawConf, StrReplaceRawRule
 
 
-def pipe_679e2c544332e978b15b6b163767975f(
-    item=None, context: Context | None = None, **kwargs
-):
+def pipe(item=None, context: Context | None = None, **kwargs):
     if context and context.describe_input:
         output = []
     elif context and context.describe_dependencies:
@@ -61,5 +59,5 @@ def pipe_679e2c544332e978b15b6b163767975f(
 
 
 if __name__ == "__main__":
-    for i in pipe_679e2c544332e978b15b6b163767975f():
+    for i in pipe():
         print(i)

@@ -1065,7 +1065,7 @@ output:
 
 ```text
 pipeline
-    deterministic Riko stage definition
+    deterministic Riko pipe definition
 
 workflow
     may include AI selection, discovery,

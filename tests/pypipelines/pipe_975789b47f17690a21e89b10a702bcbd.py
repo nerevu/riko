@@ -20,9 +20,7 @@ from riko.types.modules import (
 )
 
 
-def pipe_975789b47f17690a21e89b10a702bcbd(
-    item=None, context: Context | None = None, **_
-):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = [
             ("", "q", "Status update", "text", "Here's #: some #hashtags to play #with")
@@ -151,9 +149,9 @@ def pipe_975789b47f17690a21e89b10a702bcbd(
     return _OUTPUT
 
 
-mark_subpipe(pipe_975789b47f17690a21e89b10a702bcbd, subtype="transformer")
+mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":
-    for i in pipe_975789b47f17690a21e89b10a702bcbd():
+    for i in pipe():
         print(i)

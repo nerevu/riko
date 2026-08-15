@@ -9,7 +9,7 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.types.modules import InputRawConf, ItemBuilderRawConf
 
 
-def pipe_1LNyRuNS3BGdkTKaAsqenA(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -49,9 +49,9 @@ def pipe_1LNyRuNS3BGdkTKaAsqenA(item=None, context: Context | None = None, **_):
     return _OUTPUT
 
 
-mark_subpipe(pipe_1LNyRuNS3BGdkTKaAsqenA, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_1LNyRuNS3BGdkTKaAsqenA():
+    for i in pipe():
         print(i)

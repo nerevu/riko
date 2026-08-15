@@ -11,7 +11,7 @@ from riko.modules.strconcat import pipe as strconcat
 from riko.types.modules import FetchDataRawConf, RenameRawConf, StrconcatRawConf
 
 
-def pipe_dAI_R_FS3BG6fTKsAsqenA(item=None, context: Context | None = None, **_):
+def pipe(item=None, context: Context | None = None, **_):
     if context and context.describe_input:
         _OUTPUT = []
     elif context and context.describe_dependencies:
@@ -71,9 +71,9 @@ def pipe_dAI_R_FS3BG6fTKsAsqenA(item=None, context: Context | None = None, **_):
     return _OUTPUT
 
 
-mark_subpipe(pipe_dAI_R_FS3BG6fTKsAsqenA, subtype="source")
+mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":
-    for i in pipe_dAI_R_FS3BG6fTKsAsqenA():
+    for i in pipe():
         print(i)

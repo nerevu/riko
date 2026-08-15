@@ -49,7 +49,11 @@ EXTENSION = {
     "AsyncProcessorWrapper",
     "AsyncSplitterWrapper",
     "DynamicConf",
+    "ModuleDefinition",
     "ModuleMetadata",
+    "ModuleName",
+    "ModuleNameLike",
+    "ModuleRegistry",
     "ModuleSubtype",
     "ModuleType",
     "ModuleWrapper",
@@ -57,8 +61,10 @@ EXTENSION = {
     "SyncProcessorWrapper",
     "SyncSplitterWrapper",
     "get_conf_type",
+    "normalize_module_name",
     "operator",
     "processor",
+    "register",
     "splitter",
 }
 

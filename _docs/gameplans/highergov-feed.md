@@ -10,8 +10,8 @@
 Ship riko's first production use — the HigherGov ingestion pipeline — by implementing a
 reusable **vertical slice** of the eventual RDP architecture rather than the whole protocol.
 Two coupled workstreams: (A) a HigherGov-first critical path that front-loads schema
-contracts and synchronous callable stages, and (B) an async `Feed` I/O layer that HigherGov
-needs near-term for bounded concurrent I/O between DataFrame-oriented stages.
+contracts and synchronous callable pipes, and (B) an async `Feed` I/O layer that HigherGov
+needs near-term for bounded concurrent I/O between DataFrame-oriented pipes.
 
 ## HigherGov critical path
 
@@ -41,7 +41,7 @@ Revised critical path:
 
 ```text
 HigherGov acceptance fixtures
-→ synchronous callable stages
+→ synchronous callable pipes
 → schema contracts and drift detection
 → HigherGov concurrency integration
 → Riko sync-runtime hardening
@@ -55,7 +55,7 @@ RDP remains the eventual architecture, but it no longer blocks Riko's first prod
 ## Changes to the draft integration plan
 
 The draft correctly identifies HigherGov's manual concurrency and repeated ingestion
-transformations, but it attempts too much in the first migration (callable-stage
+transformations, but it attempts too much in the first migration (callable-pipe
 development, executor replacement, Selenium lifecycle redesign, CSV streaming, and a broad
 rewrite of pandas transformations). The changes:
 
@@ -63,7 +63,7 @@ rewrite of pandas transformations). The changes:
 
 `SyncPipe` dynamically resolves named Riko modules through `__getattr__`; it does not
 provide a callable `.pipe(processor)` or `.output` interface. It already holds a direct
-`source`, so callable stages build on that. The target API:
+`source`, so callable pipes build on that. The target API:
 
 ```python
 flow = SyncPipe(
@@ -165,7 +165,7 @@ external IDs when available, and representative payloads. Also capture before/af
 fixtures for the functions being parallelized. This separates execution regression from
 upstream schema drift.
 
-### Milestone HG-1 — Minimal synchronous callable stages
+### Milestone HG-1 — Minimal synchronous callable pipes
 
 Implement only the synchronous callable functionality HigherGov needs.
 
@@ -378,7 +378,7 @@ The first production Riko milestone is complete when:
 
 ## Async Feed integration
 
-HigherGov uses `Feed` as the **asynchronous I/O layer between DataFrame-oriented stages**,
+HigherGov uses `Feed` as the **asynchronous I/O layer between DataFrame-oriented pipes**,
 not as a replacement for pandas or for the script-level pipeline.
 
 ## Feed as the async I/O layer
@@ -711,7 +711,7 @@ result. This directly supports issue #176's empty-versus-removed distinction.
 `combine_first` and DataFrame joins, global duplicate detection, mask calculations
 depending on the entire dataset, vectorized date and string transformations,
 source-specific CSV transformations, schema reports requiring the complete column set, and
-Airtable batch payload formatting. For these stages, `Feed → collect into DataFrame →
+Airtable batch payload formatting. For these pipes, `Feed → collect into DataFrame →
 pandas transformation → optionally return to Feed` is valid.
 
 **Keep SQL as a durable script boundary** — Feed initially operates **inside** each script.
@@ -727,7 +727,7 @@ results, cancellation and `aclose()`. Migrate OpenAI document summarization, Ope
 analysis, Finder webpage content, and Opportunity webpage content.
 
 **Slice 2: HigherGov APIs** — add async/thread callable retries, `flat_map`, structured
-errors, per-stage counters. Migrate opportunity API calls, document API calls, document
+errors, per-pipe counters. Migrate opportunity API calls, document API calls, document
 content extraction.
 
 **Slice 3: blocking stateful resources** — migrate Selenium scrape chunks and redirect
@@ -769,7 +769,7 @@ Context:
 ```
 
 It does not initially require manifests, checkpoint lineage, CDC, RDP messages, Arrow
-batches, merge dependency groups, process execution, or persistent stage state.
+batches, merge dependency groups, process execution, or persistent pipe state.
 
 The practical HigherGov architecture is therefore:
 
