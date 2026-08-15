@@ -48,13 +48,13 @@ from riko.types.general import (
     Item,
     ItemDispatch,
     ItemOrValue,
+    ModuleParser,
     OperatorParser,
     OperatorParserOutput,
     OperatorWrapper,
     OperatorWrapperInput,
     OperatorWrapperOutput,
     Opts,
-    Pipeline,
     PipeTuples,
     ProcessorParser,
     ProcessorParserOutput,
@@ -151,9 +151,7 @@ class Module[B: (Literal[True], Literal[False])]:
         return isasync
 
     def _set_wrapper_metadata(
-        self,
-        wrapper: wraps,
-        pipe: Pipeline | ProcessorParser | OperatorParser | SplitterParser,
+        self, wrapper: wraps, pipe: ModuleParser, isasync: bool
     ) -> None:
         module_type = cast(ModuleType, type(self).__name__)
 

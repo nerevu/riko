@@ -372,6 +372,7 @@ type AsyncModuleWrapper = (
 type SyncPipeCallable = SyncPipeParser | SyncModuleWrapper
 type AsyncPipeCallable = AsyncPipeParser | AsyncModuleWrapper
 type Pipeline = SyncPipeParser | AsyncPipeParser
+type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 type PipelineDependencies = SyncPipelineDependencies | AsyncPipelineDependencies
 type StepValue = ParserOutput | Pipeline | AsyncPipeItems
 type Step = tuple[str, StepValue]

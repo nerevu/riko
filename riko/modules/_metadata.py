@@ -18,11 +18,8 @@ from riko._iterutils import broadcast
 from riko.cast import BasicCastType
 from riko.modules._inference import gen_operator_return_kinds
 from riko.types.general import (
+    ModuleParser,
     ModuleWrapper,
-    OperatorParser,
-    Pipeline,
-    ProcessorParser,
-    SplitterParser,
 )
 from riko.types.modules import (
     ModuleMetadata,
@@ -44,7 +41,7 @@ SUBTYPES: dict[ModuleSubtype, ModuleType] = {
 
 
 def _derive_operator_subtypes(
-    pipe: Pipeline | ProcessorParser | OperatorParser | SplitterParser,
+    pipe: ModuleParser,
 ) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
     subtype: ModuleSubtype | None = None
     subtypes: ModuleSubtypes = set()
@@ -73,7 +70,7 @@ def derive_loopable(name: str, module_type: ModuleType | str) -> bool:
 
 
 def derive_subtypes(
-    pipe: Pipeline | ProcessorParser | OperatorParser | SplitterParser,
+    pipe: ModuleParser,
     module_type: ModuleType | str,
     ftype: BasicCastType | None = None,
     **kwargs: object,
