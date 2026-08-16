@@ -105,7 +105,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from multiprocessing.pool import Pool as CPUPoolType
 from multiprocessing.pool import ThreadPool as ThreadPoolType
 from operator import length_hint
-from typing import Any, Literal, Protocol, Self, TypeGuard, cast, overload
+from typing import Any, Literal, Protocol, Self, TextIO, TypeGuard, cast, overload
 
 import pygogo as gogo
 
@@ -134,7 +134,7 @@ from riko.bado.itertools import (
 )
 from riko.context import Context, ExecutionMode, parse_context
 from riko.exceptions import PipelineStateError
-from riko.ext.names import ModuleNameLike, normalize_module_name
+from riko.ext.names import normalize_module_name
 from riko.ext.resolver import pipe_resolver
 from riko.types.general import (
     AsyncPipeParser,
@@ -152,7 +152,7 @@ from riko.types.general import (
     Stream,
     SyncPipeParser,
 )
-from riko.types.values import BasicValue, Inputs
+from riko.types.values import BasicValue, Inputs, ModuleNameLike, TargetLike, TargetName
 
 type AnyPool = ThreadPoolType | CPUPoolType
 type PoolFactory = Callable[..., AnyPool]
@@ -165,6 +165,7 @@ __all__ = [
     "Executor",
     "SyncCollection",
     "SyncPipe",
+    "Targets",
     "export",
     "list_targets",
 ]
@@ -201,6 +202,18 @@ def _is_template(obj: object) -> TypeGuard[TemplatePipe]:
         and obj.source is None
         and obj._state is PipeState.NEW
     )
+
+
+class Targets(TargetName):
+    """A type-safe ``export`` target."""
+
+    CSV = "csv"
+    GEOJSON = "geojson"
+    JSON = "json"
+    LIST = "list"
+    OFX = "ofx"
+    QIF = "qif"
+    TUPLE = "tuple"
 
 
 class PoolScope(StrEnum):
@@ -344,25 +357,25 @@ def records2qif(items: Items, **_: object) -> Iterable[str]:
     return chain(qif.gen_body(data), qif.footer())
 
 
-CONVERSION_FUNCS: dict[str, ConversionFunc] = {
+CONVERSION_FUNCS: dict[TargetLike, ConversionFunc] = {
     # "array": cv.records2array,
-    "csv": cv.records2csv,
+    Targets.CSV: cv.records2csv,
     # "dataframe": cv.records2df,
-    "geojson": cv.records2geojson,
+    Targets.GEOJSON: cv.records2geojson,
     # 'ical': cv.records2ical,
-    "json": cv.records2json,
+    Targets.JSON: cv.records2json,
     # 'kml': cv.records2kml,
-    "list": lambda items, **_: list(items),
-    "tuple": lambda items, **_: tuple(items),
+    Targets.LIST: lambda items, **_: list(items),
+    Targets.TUPLE: lambda items, **_: tuple(items),
 }
 
 if OFX is not None:
-    CONVERSION_FUNCS["ofx"] = cast(ConversionFunc, records2ofx)
-    CONVERSION_FUNCS["qif"] = cast(ConversionFunc, records2qif)
+    CONVERSION_FUNCS[Targets.OFX] = cast(ConversionFunc, records2ofx)
+    CONVERSION_FUNCS[Targets.QIF] = cast(ConversionFunc, records2qif)
 
 
-def list_targets() -> tuple[str, ...]:
-    return tuple(sorted(CONVERSION_FUNCS))
+def list_targets() -> list[str]:
+    return sorted(map(str, CONVERSION_FUNCS))
 
 
 @overload
@@ -371,34 +384,49 @@ def export(items: Items) -> list[Item]: ...  # noqa: E704
 def export(items: Items, **kwargs: Any) -> list[Item]: ...  # noqa: E704
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["list"], **kwargs: Any
+    items: Items, type_: Literal["list", Targets.LIST], **kwargs: Any
 ) -> list[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["tuple"], **kwargs: Any
+    items: Items, type_: Literal["tuple", Targets.TUPLE], **kwargs: Any
 ) -> tuple[Item]: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: Any
+    items: Items,
+    type_: Literal[
+        "csv", "json", "geojson", Targets.CSV, Targets.JSON, Targets.GEOJSON
+    ],
+    f: str,
+    **kwargs: Any,
 ) -> int: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
     items: Items,
-    _type: Literal["csv", "json", "geojson"],
+    type_: Literal[
+        "csv", "json", "geojson", Targets.CSV, Targets.JSON, Targets.GEOJSON
+    ],
     f: None = ...,
     **kwargs: Any,
 ) -> StringIO: ...
 @overload  # noqa: E302
 def export(  # noqa: E704
-    items: Items, _type: str = ..., **kwargs: Any
+    items: Items, type_: TargetLike = ..., **kwargs: Any
 ) -> StringIO | Items | None: ...
 def export(  # noqa: E302
-    items: Items, _type: str = "list", f: str | None = None, **kwargs: Any
+    items: Items,
+    type_: TargetLike = Targets.LIST,
+    f: str | TextIO | None = None,
+    **kwargs: Any,
 ) -> int | StringIO | Items | None:
     result = None
 
-    if converter := CONVERSION_FUNCS.get(_type):
-        _result = converter(items, **kwargs)
+    if converter := CONVERSION_FUNCS.get(type_):
+        if type_ in {Targets.LIST, Targets.TUPLE}:
+            records = list(items)
+        else:
+            records = [dict(item) for item in items]
+
+        _result = converter(records, **kwargs)
 
         if f:
             result = cast(int, io.write(f, _result, **kwargs))
@@ -406,7 +434,7 @@ def export(  # noqa: E302
             result = _result
     else:
         valid = ", ".join(CONVERSION_FUNCS)
-        raise ValueError(f"Invalid export type {_type!r}. Must be one of: {valid}.")
+        raise ValueError(f"Invalid export type {type_!r}. Must be one of: {valid}.")
 
     return result
 
@@ -445,7 +473,7 @@ class PyPipe(_Lifecycle):
     ):
 
         self._state = PipeState.NEW
-        self.name: str | None = normalize_module_name(name)
+        self.name: str = normalize_module_name(name)
         self.source = source
         self.parallel = parallel
         self.conf: Conf = conf or {}
@@ -897,18 +925,18 @@ class SyncPipe(PyPipe):
     def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
+        self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | StringIO | Items | None:
+    ) -> int | str | Items | None:
         try:
             result = export(self, *args, **kwargs)
         except AttributeError as e:
             # Reraise as TypeError to avoid confusion with missing SyncPipe attributes
             raise TypeError(f"Erred while exporting: {e}") from e
 
-        return result
+        return result.getvalue() if isinstance(result, StringIO) else result
 
 
 class PyCollection(_Lifecycle):
@@ -1103,12 +1131,13 @@ class SyncCollection(PyCollection):
     def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
+        self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | StringIO | Items | None:
-        return export(self, *args, **kwargs)
+    ) -> int | str | Items | None:
+        result = export(self, *args, **kwargs)
+        return result.getvalue() if isinstance(result, StringIO) else result
 
 
 class AsyncPipe(PyPipe):
@@ -1309,11 +1338,11 @@ class AsyncPipe(PyPipe):
     async def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     async def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
+        self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     async def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | StringIO | Items | None:
+    ) -> int | str | Items | None:
         items = [item async for item in self]
 
         try:
@@ -1322,7 +1351,7 @@ class AsyncPipe(PyPipe):
             # Reraise as TypeError to avoid confusion with missing AsyncPipe attributes
             raise TypeError(f"Erred while exporting: {e}") from e
 
-        return result
+        return result.getvalue() if isinstance(result, StringIO) else result
 
     def _chain(self, name: ModuleNameLike, **kwargs: object) -> "AsyncPipe":
         """
@@ -1506,13 +1535,14 @@ class AsyncCollection(PyCollection):
     async def export(self) -> list[Item]: ...  # noqa: E704
     @overload  # noqa: E301
     async def export(  # noqa: E704
-        self, _type: Literal["csv", "json", "geojson"], f: str, **kwargs: object
+        self, type_: Literal["csv", "json", "geojson"], f: str, **kwargs: object
     ) -> int: ...
     async def export(  # noqa: E301
         self, *args: Any, **kwargs: object
-    ) -> int | StringIO | Items | None:
+    ) -> int | str | Items | None:
         items = [item async for item in self]
-        return export(items, *args, **kwargs)
+        result = export(items, *args, **kwargs)
+        return result.getvalue() if isinstance(result, StringIO) else result
 
     async def _stream(self) -> AsyncGenerator[Item, None]:
         """Fetch all source urls"""

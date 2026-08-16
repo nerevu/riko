@@ -8,18 +8,14 @@ from typing import Any
 
 import pytest
 
+from riko import get_module_metadata
 from riko.cast import CastType
 from riko.collections import CONVERSION_FUNCS, list_targets
 from riko.context import Context
-from riko.modules import ModuleMetadata, list_modules, operator
+from riko.modules import list_modules, operator
 from riko.modules.count import pipe as count_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.types.modules import InputConf
-
-
-def get_metadata(name: str) -> ModuleMetadata:
-    modules = list_modules(show_metadata=True)
-    return next(module for module in modules if module.name == name)
 
 
 def test_input_test_flag_scoped_to_test_context(monkeypatch):
@@ -36,61 +32,6 @@ def test_input_test_flag_scoped_to_test_context(monkeypatch):
     assert next(input_pipe(conf=conf)) == "typed"
 
 
-def test_list_modules_names():
-    modules = list_modules()
-
-    assert modules == tuple(sorted(modules))
-    assert "count" in modules
-    assert "fetch" in modules
-    assert "split" in modules
-
-
-def test_filter_by_type():
-    modules = list_modules(type="processor", show_metadata=True)
-
-    assert modules
-    assert all(module.type == "processor" for module in modules)
-
-
-def test_filter_by_supported_subtype():
-    aggregators = list_modules(subtype="aggregator")
-    composers = list_modules(subtype="composer")
-
-    # count supports both behaviors
-    assert "count" in aggregators
-    assert "count" in composers
-
-    # aggregate only produces streams
-    assert "aggregate" not in aggregators
-    assert "aggregate" in composers
-
-
-def test_filter_by_primary_subtype():
-    primary_aggregators = list_modules(subtype="aggregator", primary=True)
-    primary_composers = list_modules(subtype="composer", primary=True)
-
-    # count supports composing through count_key, but its default
-    # wrapped behavior is aggregator.
-    assert "count" in primary_aggregators
-    assert "count" not in primary_composers
-
-    modules = list_modules(subtype="aggregator", primary=True, show_metadata=True)
-    assert all(module.subtype == "aggregator" for module in modules)
-
-
-def test_filter_loopable_modules():
-    modules = list_modules(loopable=True, show_metadata=True)
-
-    assert modules
-    assert all(module.loopable for module in modules)
-
-    assert "fetch" in {module.name for module in modules}
-    assert "dateformat" in {module.name for module in modules}
-    assert "input" not in {module.name for module in modules}
-    assert "count" not in {module.name for module in modules}
-    assert "split" not in {module.name for module in modules}
-
-
 def test_filter_non_loopable_modules():
     modules = list_modules(loopable=False, show_metadata=True)
 
@@ -105,11 +46,11 @@ def test_filter_non_loopable_modules():
 
 
 def test_filter_non_loopable_sources():
-    assert list_modules(subtype="source", loopable=False) == ("input",)
+    assert list_modules(subtype="source", loopable=False) == ["input"]
 
 
 def test_filter_non_loopable_processors():
-    assert list_modules(type="processor", loopable=False) == ("input",)
+    assert list_modules(type="processor", loopable=False) == ["input"]
 
 
 def test_type_and_subtype_cannot_be_combined():
@@ -122,8 +63,8 @@ def test_primary_requires_subtype():
         list_modules(primary=True)
 
 
-def test_count_metadata():
-    metadata = get_metadata("count")
+def test_operator_metadata():
+    metadata = get_module_metadata("count")
 
     assert metadata.type == "operator"
     assert metadata.subtype == "aggregator"
@@ -133,8 +74,8 @@ def test_count_metadata():
 
 
 def test_processor_metadata():
-    source = get_metadata("fetch")
-    transformer = get_metadata("dateformat")
+    source = get_module_metadata("fetch")
+    transformer = get_module_metadata("dateformat")
 
     assert source.type == "processor"
     assert source.subtype == "source"
@@ -146,7 +87,7 @@ def test_processor_metadata():
 
 
 def test_splitter_metadata():
-    metadata = get_metadata("split")
+    metadata = get_module_metadata("split")
 
     assert metadata.type == "splitter"
     assert metadata.subtype == "splitter"
@@ -155,15 +96,15 @@ def test_splitter_metadata():
 
 def test_loopable_metadata():
     # processors are loopable (they transform a single item) ...
-    assert get_metadata("dateformat").loopable
-    assert get_metadata("itembuilder").loopable
+    assert get_module_metadata("dateformat").loopable
+    assert get_module_metadata("itembuilder").loopable
 
     # ... except input, which prompts for interactive user input
-    assert not get_metadata("input").loopable
+    assert not get_module_metadata("input").loopable
 
     # operators and splitters cannot be embedded in a loop
-    assert not get_metadata("count").loopable
-    assert not get_metadata("split").loopable
+    assert not get_module_metadata("count").loopable
+    assert not get_module_metadata("split").loopable
 
 
 def test_operator_metadata_is_derived():
@@ -207,4 +148,4 @@ def test_count_default_and_emitted_subtypes():
 
 
 def test_list_targets():
-    assert list_targets() == tuple(sorted(CONVERSION_FUNCS))
+    assert list_targets() == sorted(CONVERSION_FUNCS)

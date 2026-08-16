@@ -16,35 +16,26 @@ Edit those objects (not this file), then regenerate with ``gen-config``.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-from riko._objectify import Objectify
+from riko.types.base import DynamicConf
 
 if TYPE_CHECKING:
     from riko.cast import CastType, LocationType
     from riko.types.modules import (
-        CountValues,
         FilterConfRule,
         FindConfRule,
         Function,
         ParsedParam,
-        PipeModule,
         RegexConfRule,
         RenameConfRule,
         SortConfRule,
         StrReplaceConfRule,
         StrTransformConfRule,
         Subkey,
+        TargetLike,
         Terminal,
     )
-
-
-class DynamicConf(Objectify[Any]):
-    """
-    A parsed configuration bag with case-insensitive attribute and mapping
-    access. The base type every parsed module config is, and the fallback
-    config type for modules without a precise config.
-    """
 
 
 class SortObjconf(DynamicConf):
@@ -86,13 +77,6 @@ class RssItemBuilderObjconf(DynamicConf):
     mediaThumbWidth: str  # noqa: N815
     pubDate: str  # noqa: N815
     title: str
-
-
-class LoopObjconf(DynamicConf):
-    embed: PipeModule
-    count: CountValues
-    assign: str
-    field: str
 
 
 class AggregateObjconf(DynamicConf):
@@ -298,6 +282,12 @@ class UrlBuilderObjconf(DynamicConf):
 
 class UrlParseObjconf(DynamicConf):
     parse_key: str
+
+
+class WriteObjconf(DynamicConf):
+    url: str
+    target: TargetLike
+    mode: str
 
 
 class XpathFetchPageObjconf(DynamicConf):

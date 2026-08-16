@@ -16,9 +16,10 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
     from riko.cast import CastType, LocationType, SortableCastType
+    from riko.types._module_ids import LoopableModuleId, ModuleId
     from riko.types.compile import PipeModule
     from riko.types.general import Function
-    from riko.types.values import BasicValue
+    from riko.types.values import BasicValue, TargetLike
 
 
 # Shared
@@ -28,13 +29,11 @@ type NodeList[T: (str | int)] = list[T]
 type SCC[T: (str | int)] = list[tuple[T, ...]]
 
 type ModuleType = Literal["operator", "processor", "splitter"]
+type ModuleCategory = Literal["sink", "source", "transform"]
+type ModuleClass = Literal["Sinks", "Sources", "Transforms"]
 
 type ModuleSubtype = Literal[
-    "aggregator",
-    "composer",
-    "source",
-    "transformer",
-    "splitter",
+    "aggregator", "composer", "source", "transformer", "splitter"
 ]
 
 type ModuleSubtypes = set[ModuleSubtype]
@@ -79,40 +78,12 @@ class ModuleMetadata:
 
 PipeId = NewType("PipeId", str)
 
-
-ModuleId = (
-    Literal[
-        "fetch",
-        "fetchdata",
-        "fetchpage",
-        "forever",
-        "input",
-        "itembuilder",
-        "loop",
-        "output",
-        "regex",
-        "rename",
-        "sort",
-        "strconcat",
-        "tail",
-        "tokenizer",
-        "truncate",
-        "urlbuilder",
-    ]
-    | PipeId
-)
-
 CountValues = Literal["first", "all"]
 
 
 class ConfArg(TypedDict):
     type: str
     value: int | str | bool
-
-
-class CountArg(TypedDict):
-    type: Literal["text"]
-    value: CountValues
 
 
 class Terminal(TypedDict):
@@ -212,18 +183,6 @@ class RssItemBuilderRawConf(TypedDict, total=False):
     mediaThumbWidth: Value
     pubdate: Value
     title: Value
-
-
-class Embed(TypedDict):
-    type: Literal["module"]
-    value: "EmbeddedModule"
-
-
-class LoopRawConf(TypedDict, total=False):
-    embed: Required[Embed]
-    count: CountArg
-    assign: ConfArg
-    field: ConfArg
 
 
 class CountRawConf(TypedDict, total=False):
@@ -501,7 +460,6 @@ type AnyModuleRawConf = (
     | InputRawConf
     | ItemBuilderRawConf
     | JoinRawConf
-    | LoopRawConf
     | ReceiveRawConf
     | RefindRawConf
     | RegexRawConf
@@ -535,11 +493,20 @@ type AnyModuleRawConf = (
 
 class EmbedRef(TypedDict):
     id: str
-    type: ModuleId
+    type: Union["ModuleId", "PipeId", Literal["output"]]
+
+
+class LoopableEmbedRef(TypedDict):
+    id: str
+    type: "LoopableModuleId | PipeId"
 
 
 class EmbeddedModule(EmbedRef, total=False):
-    """The legacy nested submodule descriptor (``conf.embed.value``)."""
+    """
+    A loop's embedded submodule hoisted to a standalone ``{id, type, conf}``
+    descriptor for code generation. Built by ``compile.gen_modules(embedded=True)``
+    from the loop's compact top-level ``embed`` plus its ``conf``.
+    """
 
     conf: Required[AnyModuleRawConf]
     emit: ConfArg
@@ -671,13 +638,6 @@ class RssItemBuilderConf(TypedDict, total=False):
     mediaThumbWidth: str
     pubDate: str
     title: str
-
-
-class LoopConf(TypedDict, total=False):
-    embed: Required["PipeModule"]
-    count: CountValues
-    assign: str
-    field: str
 
 
 class AggregateConf(TypedDict):
@@ -885,6 +845,12 @@ class UrlParseConf(TypedDict, total=False):
     parse_key: str = "content"
 
 
+class WriteConf(TypedDict, total=False):
+    url: Required[str]
+    target: "TargetLike" = "json"
+    mode: str = "wb+"
+
+
 class XpathFetchPageConf(TypedDict, total=False):
     url: Required[str]
     xpath: str
@@ -938,7 +904,6 @@ type AnyModuleConf = (
     | InputConf
     | ItemBuilderConf
     | JoinConf
-    | LoopConf
     | ReceiveConf
     | RefindConf
     | RegexConf

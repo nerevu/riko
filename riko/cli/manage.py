@@ -15,9 +15,11 @@ from sys import exit
 from typing import Any
 
 import click
+from click import Choice
 
 from riko._logging import exception_hook
 from riko.cli.gen_config import main as gen_config_main
+from riko.cli.gen_names import main as gen_names_main
 from riko.paths import ROOT_DIR
 
 try:
@@ -65,6 +67,30 @@ def manager(verbose: int = 0, quiet: bool = False) -> None:
 def hello():
     """Says hello"""
     print("Hello world")
+
+
+@manager.command()
+@click.option(
+    "-m",
+    "--mode",
+    help="Which file to generate",
+    type=Choice(["config", "names"], case_sensitive=False),
+    default="config",
+)
+def codegen(mode="config"):
+    """Regenerate configuration or riko/modules/_names.py files"""
+    gen_config = mode == "config"
+    gen_names = mode == "names"
+    return_code = gen_config_main() if gen_config else gen_names_main()
+
+    if gen_config and return_code:
+        raise RuntimeError("Error updating configuration file!")
+    if gen_names and return_code:
+        raise RuntimeError("Error regenerating module names!")
+    elif gen_config:
+        print("Successfully updated configuration file.")
+    elif gen_names:
+        print("Successfully regenerated module names.")
 
 
 @manager.command()
@@ -337,9 +363,6 @@ def lint(
 
 @manager.command()
 @click.option("-w", "--where", help="Modules to check", default=None)
-@click.option(
-    "-g", "--gen-config", help="Generate the configuration file", is_flag=True
-)
 @click.option("-s", "--sort/--no-sort", help="Sort module imports", default=True)
 @click.option("-F", "--unsafe-fixes", help="Applies unsafe fixes", is_flag=True)
 def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
@@ -347,9 +370,7 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
     where = where or ""
     return_code = 0
 
-    if gen_config:
-        return_code = gen_config_main()
-    elif sort and ruff:
+    if sort and ruff:
         sort_cmd = [ruff, "check", "--select", "I", "--fix"]
         style_cmd = [ruff, "check", "--fix"]
 
@@ -370,11 +391,7 @@ def prettify(where=None, sort=True, gen_config=False, unsafe_fixes=False):
     elif sort:
         raise RuntimeError("ruff not found")
 
-    if gen_config and return_code:
-        raise RuntimeError("Error updating configuration file!")
-    elif gen_config:
-        print("Successfully updated configuration file.")
-    elif ruff and not return_code:
+    if ruff and not return_code:
         cmd = [ruff, "format"]
 
         if where:

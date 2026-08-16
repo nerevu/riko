@@ -1,6 +1,16 @@
 # Gameplan: Module Registry (P8) + Enum Discoverability (P9A)
 
-> **Status (2026-08):** prerequisites **shipped** — P8 registry/resolver, P9A.4 value-taking chaining (`|`/`.pipe()`), P9A.1 `ModuleName` base, and decorator `isasync` inference; see [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) § P8 and [IMPLEMENTED.md](../IMPLEMENTED.md). Remaining P9A = the generated `Module` tree + introspection/stubs. (Grounding notes below predate this.)
+> **Status (2026-08):** **P9A landed** — P9A.1–P9A.6 all shipped (v0.76.0): the
+> `ModuleName` base + `normalize_module_name`, `derive_category` taxonomy, the
+> `riko.ext.codegen` generator + committed `riko/modules/_names.py` (the flat `Modules`
+> namespace + `Sources`/`Transforms`/`Sinks` buckets), value-taking `|`/`.pipe()` chaining,
+> `list_modules`/`describe_module` introspection, and the `gen-names` CLI + drift guard. The
+> discovery tree is re-exported from the **stable `riko`/`riko.api`** surface (not `riko.modules`,
+> whose `Module` already names the decorator base — the wrapper was named **`Modules`** (plural)
+> to sidestep that collision). Remaining P9 (non-P9A): the aggregate `riko.generated.Modules`
+> covering the *installed* environment + `.pyi` fluent stubs. See
+> [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) § P9A and [IMPLEMENTED.md](../IMPLEMENTED.md).
+> (Grounding notes below predate this.)
 
 Actionable plan derived from `_docs/current_implementation.md` (the "generated module enums"
 design), scoped to **core riko only**. The `riko-microsoft` / Autopilot half of that doc is a
@@ -14,18 +24,18 @@ appears here only as the fake in-repo example extension that proves the seam.
 - **Strings stay canonical.** Enums are a typed *discovery* layer over string identifiers. JSON
   pipelines, entry points, configs, and the CLI keep using strings. Every enum member's `.value`
   **is** the canonical id; serialization always emits the value, never the member name.
-- **Taxonomy is derived, not declared.** The user-facing tree category (`user_type`:
+- **Taxonomy is derived, not declared.** The user-facing tree category (`category`:
   `Sources`/`Transforms`/`Sinks`, plus provider namespaces) is computed **deterministically from
   metadata that already exists** (`ModuleMetadata.type`/`subtype`/`ftype` + provider). Built-in
   authors declare nothing new. Extensions may *override* via an explicit field. This resolves the
   conflict between the doc's `type=sources/transforms/sinks` and the shipped execution-role `type`
   (`operator`/`processor`/`splitter`) — the two are **different axes** and both are kept: runtime
-  `type` unchanged; `user_type` added for codegen only.
+  `type` unchanged; `category` added for codegen only.
 - **No `.then()` — decision: Option C + `__or__`.** `.then()` is **rejected** (avoids a second
   chaining idiom and the `then`-means-callable semantic collision with §4 callable pipes). Instead:
   (a) **extend the existing `.pipe()`** to accept a positional `ModuleNameLike`
   (`pipe.pipe("filter", conf=...)`), and (b) add a native **`__or__`/`__ror__`** so
-  `pipe | "filter"` / `pipe | Module.Transforms.FILTER` / `data | pipe` compose. Both are thin sugar
+  `pipe | "filter"` / `pipe | Transforms.FILTER` / `data | pipe` compose. Both are thin sugar
   over `_chain`, not a new object model. See [§ P9A.4](#p9a4-value-taking-chaining-pipe--__or__).
   This is the literal **`RunnableSequence (a | b)`** equivalent that
   [ai-Inference.md](ai-Inference.md) (the LangChain-replacement gameplan) maps at line 922 — and it
@@ -67,19 +77,19 @@ them into P8 so the definition contract isn't reopened later.
       description: str | None = None
       # discoverability / codegen (all optional — derived when absent)
       enum_name: str | None = None       # override for the leaf member name
-      user_type: str | None = None       # override for the tree category
+      category: str | None = None       # override for the tree category
       docs_url: str | None = None
   ```
   Canonical source of the id is always `definition.name`; generated enum values are never stored.
 - [ ] **P8-Δ2 — registry is the single discovery source.** `list_modules`/`gen_module_catalog`
   read `ModuleRegistry` (built-ins + entry points), not pkgutil-only. (Already in the M2 file map;
-  called out because P9A depends on it — codegen and `available_modules()` must see entry-point
+  called out because P9A depends on it — codegen and `list_modules()` must see entry-point
   extensions, not just `riko/modules/*`.)
 - [ ] **P8-Δ3 — provider inference for built-ins.** Built-ins register with `provider="riko"`;
   entry-point definitions supply their own `provider`. Codegen groups by provider.
 
 **Exit (in addition to M2's P8 exit tests):** a `ModuleDefinition` round-trips its `provider` and
-optional `enum_name`/`user_type`/`docs_url`; the in-repo fake example extension registers through an
+optional `enum_name`/`category`/`docs_url`; the in-repo fake example extension registers through an
 entry point and appears in `list_modules()`.
 
 ---
@@ -102,44 +112,59 @@ depends on it and it stress-tests whether P8's metadata is rich enough for tooli
   `str | Enum` (that would admit `Color.RED`). NB: the old `ModuleName` **Literal** in
   `types/modules.py` was renamed `ModuleId` to free the name.
 
-### P9A.2 — deterministic `user_type` derivation
-- [ ] `derive_user_type(md: ModuleMetadata, *, provider: str, override: str | None) -> str`, pure
-  and total. **`user_type` categorizes by data-flow role only — the execution role
+### P9A.2 — deterministic `category` derivation (LANDED)
+- [x] `derive_category(md: ModuleMetadata, *, provider: str, override: str | None) -> str`, pure
+  and total. **`category` categorizes by data-flow role only — the execution role
   (`operator`/`processor`/`splitter`) and its subtype vocabulary
   (`aggregator`/`composer`/`transformer`/…) are internal and MUST NOT appear in or drive the
   user-facing tree.** The user cares about "does this bring data in, change it, or send it out",
   not how the engine executes it. Precedence: explicit `override` → provider (non-`riko` → provider
   namespace) → data-flow derivation. Baseline for `provider="riko"`, using only capability signals:
-  | data-flow signal (capability, not role) | `user_type` |
+  | data-flow signal (capability, not role) | `category` |
   |---|---|
   | produces items with no upstream input (`ftype is NONE`) | `Sources` |
-  | writes/emits data outward — terminal sink (seed name-set: `output`, future `write`) | `Sinks` |
+  | writes/emits data outward — terminal sink (seed name-set: `output`, `write`) | `Sinks` |
   | otherwise (consumes a stream, yields a stream) | `Transforms` |
 
   Notes: the three buckets are defined by **input/output behavior**, deliberately independent of the
-  runtime `type`/`subtype`. `Sinks` is likely **near-empty** in core today (only the compiler-local
-  `output` passthrough) — expected, not a gap. Keep the sink seed set in one named constant so it is
-  auditable, and comment that the bucket is intentionally sparse.
-- [ ] Unit-test the mapping against the **full** current catalog so a new module can't silently
-  land in the wrong bucket (golden test over `gen_module_catalog()`).
+  runtime `type`/`subtype`. Keep the sink seed set in one named constant so it is auditable.
+  > **As-built:** `derive_category`/`SINK_NAMES` (`frozenset({"output", "write"})`) live in
+  > `riko/ext/names.py`; a source is `md.subtype == "source"` (≡ `ftype is NONE`). **The return type
+  > is `ModuleCategory = Literal["source", "transform", "sink"]` — lowercase singular** (this is the
+  > `list_modules(category=…)` filter vocabulary), which `codegen._CATEGORY_CLASS` pluralizes to the
+  > bucket **class** names `Sources`/`Transforms`/`Sinks`. `Sinks` is **no longer empty**: the shipped
+  > `write` module (`riko/modules/write.py`) is the one built-in sink; `output` stays unmatched
+  > (compiler-local passthrough, not in the catalog).
+- [x] Unit-test the mapping against the **full** current catalog so a new module can't silently
+  land in the wrong bucket (golden test over `gen_module_catalog()` in `test_codegen_names.py`).
 
-### P9A.3 — deterministic generator
-- [ ] `riko/ext/codegen.py`:
+### P9A.3 — deterministic generator (LANDED)
+- [x] `riko/ext/codegen.py`:
   - `enum_member_name(name: str, *, override: str | None) -> str` — uppercase; `. - /` +
     separators → `_`; collapse repeats; prefix leading digits; honor `override`.
   - **Collisions fail generation with a diagnostic** naming the two ids and telling the author to
     supply `enum_name` — never silently disambiguate.
-  - `generate_module_names(defs: Iterable[ModuleDefinition]) -> str` — emits:
-    - leaf `StrEnum` classes grouped by `user_type`/provider namespace (members = `NAME = "id"`),
-    - namespace wrapper classes (`class Module: Sources = Sources; Transforms = Transforms; …`) so
-      `Module.Sources.FETCH` **is** the same member object as `Sources.FETCH` (no duplicate defs),
+  - `generate_module_names(*defs: Iterable[ModuleDefinition]) -> str` — emits:
+    - leaf `StrEnum` bucket classes grouped by `category`/provider namespace (members = `NAME = "id"`),
+    - **a single flat wrapper class `Modules`** aliasing every bucket member (`FILTER = Transforms.FILTER;
+      FETCH = Sources.FETCH; …`) so `Modules.FILTER` **is** the same member object as `Transforms.FILTER`
+      (no duplicate defs). Flat, not nested — ids are globally unique, so `Modules.<NAME>` never collides
+      and needs no category segment (`Modules.FILTER`, not `Modules.Transforms.FILTER`).
     - sorted by `definition.name` (not discovery order) → byte-stable output.
   - Fixed header `# Generated by riko codegen.\n# Do not edit manually.`; **no** timestamps, paths,
     or hashes (checkable into VCS).
-- [ ] Generated built-in surface written to `riko/modules/names.py`, re-exported from
-  `riko/modules/__init__.py`: `Module`, `ModuleName`, `Sources`, `Transforms`, `Sinks`.
-- [ ] Replace the stale `ModuleName` Literal in `riko/types/modules.py` (rename to avoid clashing
-  with the new `ModuleName` StrEnum base, or delete if unused after the switch).
+  > **As-built delta:** the shipped wrapper is the **flat `Modules`** above, not the originally-designed
+  > nested `class Module: Sources = Sources; …`. Renamed `Module`→`Modules` (plural) because
+  > `riko.modules.Module` already names the decorator base, and flattened because the discovery axis
+  > (`Sources`/`Transforms`/`Sinks`) is the bucket enums themselves — the wrapper only needs to offer
+  > every pipe in one namespace.
+- [x] Generated built-in surface written to `riko/modules/_names.py`. **Re-exported from the stable
+  `riko`/`riko.api` surface** (`Modules`, `Sources`, `Transforms`, `Sinks`), **not** `riko.modules`:
+  its `Module` already names the decorator base (`_decorators.Module`) — the collision the gameplan
+  hadn't flagged, resolved by naming the wrapper `Modules`. `ModuleName` stays an `riko.ext` symbol;
+  canonical import is `riko.modules._names`.
+- [x] Replace the stale `ModuleName` Literal in `riko/types/modules.py` — renamed to `ModuleId`
+  (done at P9A.1) to free the name for the new `ModuleName` StrEnum base.
 
 ### P9A.4 — value-taking chaining: `.pipe(...)` + `__or__`
 
@@ -150,7 +175,7 @@ is explicitly not added (second idiom + `then`-vs-callable semantic clash).
 
 - [ ] **Constructor/`_chain` normalization (foundation).** Normalize at every public boundary that
   already accepts a name string — `SyncPipe.__init__`, `AsyncPipe.__init__`, `_chain` — via
-  `normalize_module_name`. After this, `SyncPipe(Module.Sources.FETCH)` ≡ `SyncPipe("fetch")`.
+  `normalize_module_name`. After this, `SyncPipe(Sources.FETCH)` ≡ `SyncPipe("fetch")`.
   Normalize **once** at the boundary; no `isinstance(x, Enum)` in the resolver.
 - [x] **Option C — `.pipe(name, …)` chaining method (LANDED).** Subtlety discovered in
   implementation: `.pipe()`/`.async_pipe()` were **`SyncCollection`/`AsyncCollection`** primers, not
@@ -179,43 +204,52 @@ is explicitly not added (second idiom + `then`-vs-callable semantic clash).
   > `pipe2` is itself a chain) needs a recursive head-rebind — walk `pipe2.source` to its head and
   > reattach. Feasible (nodes retain `name`/`conf`/`kwargs`) but out of the MVP; LCEL applies one
   > runnable per `|`, so single-pipe RHS covers the motivating case.
-- [ ] `describe_module`/`available_modules` (P9A.5) accept `ModuleNameLike`.
+- [x] `describe_module`/`list_modules` (P9A.5) accept `ModuleNameLike` / taxonomy strings.
 
-### P9A.5 — registry-backed introspection (complements, not replaces, the enum)
-- [ ] `available_modules(*, type=None, subtype=None, user_type=None) -> tuple[...]` — runtime truth
-  from the registry; filters accept the string *or* the taxonomy enum.
-- [ ] `describe_module(name: ModuleNameLike) -> ModuleDefinition`.
-- [ ] Optional taxonomy enums (`ModuleType`, per-provider subtype enums) if `available_modules`
-  filtering benefits — low priority, additive.
+### P9A.5 — registry-backed introspection (LANDED; complements, not replaces, the enum)
+- [x] `list_modules(*, type=None, subtype=None, category=None) -> tuple[str, ...]` — runtime
+  truth from `list_modules` (built-in + registry catalogs). **As-built the three filter axes are
+  lowercase `Literal` strings, not enums** (`ModuleType`/`ModuleSubtype`/`ModuleCategory`; the
+  optional taxonomy enums below stayed deferred), e.g. `category="sink"`. This is a **separate axis**
+  from the discovery-tree identifier enums (`Sources`/`Transforms`/`Sinks`, value = module id) — those
+  are for `SyncPipe(...)`/`|`, not for filtering. In `riko/modules/_metadata.py`.
+- [x] `describe_module(name: ModuleNameLike) -> ModuleDefinition | None` — registry definition, or a
+  synthesized built-in `ModuleDefinition`; `None` for unknown. Graceful (no raise).
+- [ ] Optional taxonomy enums (`ModuleType`, per-provider subtype enums) if `list_modules`
+  filtering benefits — low priority, additive. (Deferred — string/`StrEnum` filters suffice today.)
 
-### P9A.6 — `codegen` CLI
-- [ ] `riko modules codegen` (subcommand of the `manage`/`riko` click app) → regenerates
-  `riko/modules/names.py` from **built-ins + installed entry points** (excludes ephemeral runtime
-  registrations by default; `--include-runtime` opt-in). Idempotent; deterministic; parallels
-  `gen-config`. Add a `tests/internal` drift guard like `test_gen_config.py`.
-- [ ] (Later, not P9A) aggregate `riko.generated.Module` covering the *installed environment* incl.
+### P9A.6 — `codegen` CLI (LANDED)
+- [x] `manage codegen` + the `gen-names` `[project.scripts]` entry (`riko.cli.gen_names:main`) →
+  regenerates `riko/modules/_names.py` from the **built-in** catalog. Idempotent; deterministic;
+  parallels `gen-config`. Drift guard `test_generated_names_match` in `test_codegen_names.py`.
+  (Folding installed entry points into the committed file is the non-P9A "installed environment"
+  aggregate below — the committed surface is built-ins only, keeping the drift guard env-stable.)
+- [ ] (Later, not P9A) aggregate `riko.generated.Modules` covering the *installed environment* incl.
   extensions; `.pyi` fluent stubs — these are the rest of P9, not P9A.
 
 ---
 
 ## Exit tests (P9A)
 
-Extend the P9 test phase (`tests/public/test_fluent_discovery.py` +
-`tests/internal/test_codegen_names.py`), mirroring the doc's list:
+Coverage (as-built, consolidated — the standalone `test_fluent_discovery.py` was dropped as
+redundant): `tests/internal/test_codegen_names.py` (generation/taxonomy/drift) +
+`tests/public/test_collections.py` (`TestModuleNameEnum`/`TestExportTargets`) +
+`tests/public/test_modules.py` (`list_modules` filters) + `tests/public/test_imports.py` (surface
+exports), mirroring the doc's list:
 
-- **generation** — built-in registry generates `Module`; deterministic ordering (by `name`);
+- **generation** — built-in registry generates `Modules`; deterministic ordering (by `name`);
   dotted + hyphenated names normalize; explicit `enum_name` honored; collision fails with
   diagnostic; output byte-stable across runs.
-- **taxonomy** — `Module.Sources.FETCH is Sources.FETCH`; `user_type` derivation matches the golden
+- **taxonomy** — `Modules.FETCH is Sources.FETCH`; `category` derivation matches the golden
   map over the full catalog; provider namespace nests for the fake extension.
-- **runtime** — `SyncPipe("fetch")` and `SyncPipe(Module.Sources.FETCH)` resolve identically;
+- **runtime** — `SyncPipe("fetch")` and `SyncPipe(Sources.FETCH)` resolve identically;
   `AsyncPipe` accepts enums; the resolver only ever receives strings.
 - **typing** (`tests/typing/`, P13-style) — `SyncPipe` accepts `Sources.FETCH`; rejects an
   unrelated `Enum`; plain `str` still accepted.
-- **serialization** — `Module.Sources.FETCH` → `"fetch"`; pipeline JSON contains the string, never
+- **serialization** — `Sources.FETCH` → `"fetch"`; pipeline JSON contains the string, never
   the member name.
 - **compatibility** — every existing string-based test unchanged; raw JSON pipelines unchanged.
-- **chaining** — `pipe.pipe("filter")` and `pipe | Module.Transforms.FILTER` resolve identically to
+- **chaining** — `pipe.pipe("filter")` and `pipe | Transforms.FILTER` resolve identically to
   `pipe.filter()`; `data | pipe` seeds the source; RHS type dispatch covers str/enum/tuple/template;
   a `CLOSED`/`FAILED` operand raises `PipelineStateError`; `pipe | 5` returns `NotImplemented`.
 

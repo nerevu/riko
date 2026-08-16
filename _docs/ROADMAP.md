@@ -86,6 +86,7 @@ Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is t
 | [highergov-feed.md](gameplans/highergov-feed.md) | **HigherGov-first critical path** (HG-0…HG-9) + **async `Feed` integration** — riko's first production use: schema contracts, `SyncPipe`/`AsyncPipe` callable pipes, bounded async I/O. |
 | [mcp.md](gameplans/mcp.md) | MCP server implementation. |
 | [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
+| [module-enums.md](gameplans/module-enums.md) | **P8 registry + P9A enum discoverability** — generated `Modules` tree, `derive_category` taxonomy, `codegen`/`gen-names` (P9A done; installed-env aggregate + `.pyi` stubs remain). |
 | [orchestration.md](gameplans/orchestration.md) | Orchestrator adapters (cron, webhook, Airflow/Prefect/Dagster, dbt). |
 | [rdp-connect.md](gameplans/rdp-connect.md) | **§14, §17–§21, §26, §27** + **Riko Connect** (§1) — RDP/Connect end-state: lineage, Riko Data Protocol, state, schema, batch transports, manifests, implementation milestones, non-goals. |
 | [riko-site.md](gameplans/riko-site.md) | riko site pipeline. |

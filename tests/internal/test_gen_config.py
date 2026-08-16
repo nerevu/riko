@@ -1,18 +1,14 @@
 # vim: sw=4:ts=4:expandtab
 """
-Guard that riko/types/configs.py stays in sync with the nonraw Conf contracts.
+Tests that generated Objconf types match their Conf definitions.
 
-The ``<Name>Objconf`` types are generated from the ``<Name>Conf`` TypedDicts in
-``riko.types.modules`` (see ``riko.cli.gen_config``). This asserts the committed
-``configs.py`` matches what the generator would produce — structurally, so quoting
-and formatting differences from ``ruff format`` don't cause false failures. Run
-``gen-config`` to fix a real drift.
+Run ``gen-config`` to update generated configs.
 """
 
 import ast
 import pathlib
 
-from riko.cli.gen_config import objconf_structure, own_fields
+from riko.cli.gen_config import objconf_structure, own_fields, render
 
 _CONFIGS = pathlib.Path("riko/types/configs.py")
 
@@ -31,6 +27,10 @@ def _committed_structure() -> dict[str, tuple[str, dict[str, str]]]:
 
 
 def test_configs_match_generated():
+    assert _CONFIGS.read_text() == render()
+
+
+def test_configs_structure_matches_generated():
     assert _committed_structure() == objconf_structure()
 
 

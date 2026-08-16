@@ -11,7 +11,7 @@ falls back to sync-only stubs when it is absent. ``run`` is the entry point
 from collections.abc import Awaitable, Callable, Iterable
 from functools import partial
 from inspect import isawaitable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 try:
     import anyio
@@ -29,6 +29,21 @@ async def async_get(url: str, **kwargs: Any) -> "Response":
 
     async with httpx.AsyncClient(follow_redirects=True) as client:
         return await client.get(url, **kwargs)
+
+
+@overload
+async def async_read(  # noqa: E704
+    url: str, binary: Literal[True], encoding: str | None = ...
+) -> bytes: ...
+@overload  # noqa: E302
+async def async_read(  # noqa: E704
+    url: str, binary: Literal[False] = ..., encoding: str | None = ...
+) -> str: ...
+async def async_read(  # noqa: E302
+    url: str, binary: bool = False, encoding: str | None = None
+) -> bytes | str:
+    path = anyio.Path(url.replace("file://", ""))
+    return await (path.read_bytes() if binary else path.read_text(encoding))
 
 
 async def async_json(response: "Response") -> dict[str, Any]:

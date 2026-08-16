@@ -37,10 +37,12 @@ or consumes a ``stream``.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'alpha'}, {'title': 'beta'}]
-    >>> flow = SyncPipe('hash', source=items, field='title', assign='title_hash')
+    >>> flow = SyncPipe(
+    ...     Transforms.HASH, source=items, field='title', assign='title_hash'
+    ... )
     >>> len(list(flow))
     2
 
@@ -68,16 +70,17 @@ Which imports are public?
 
 ``riko`` organizes its public interface into three import tiers:
 
-- **Stable** — the top-level ``riko`` package (mirrored by ``riko.api``) holds the
+- **Stable**: the top-level ``riko`` package (mirrored by ``riko.api``) holds the
   SemVer-guaranteed API: the ``SyncPipe``/``AsyncPipe``/``SyncCollection``/
   ``AsyncCollection`` classes, ``Context``, ``ExecutionMode``, ``PipeState``,
   ``backend``, ``build_pipeline``, ``compile_pipe``, ``convert_dag``, ``export``,
   ``extract_dependencies``, ``get_module_metadata``, ``get_path``, ``isasync``,
-  ``issync``, ``list_modules``, ``list_targets``, ``parse_pipe_def``, ``run``, and the
-  pipeline exceptions.
-- **Extension** — ``riko.ext`` holds the symbols for authoring custom ``pipes``:
+  ``issync``, ``list_modules``, ``describe_module``, ``list_targets``,
+  ``parse_pipe_def``, ``run``, the typed discovery surface (``Modules``/``Sources``/
+  ``Transforms``/``Sinks``/``Targets`` bucket enums), and the pipeline exceptions.
+- **Extension**: ``riko.ext`` holds the symbols for authoring custom ``pipes``:
   the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
-- **Private** — all import paths outside ``riko``, ``riko.api``, and ``riko.ext``,
+- **Private**: all import paths outside ``riko``, ``riko.api``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
   modules.
 
@@ -90,8 +93,14 @@ Application code should import from ``riko`` or ``riko.api``.
     ...     AsyncPipe,
     ...     Context,
     ...     ExecutionMode,
+    ...     Modules,
+    ...     Sinks,
+    ...     Sources,
     ...     SyncCollection,
     ...     SyncPipe,
+    ...     Targets,
+    ...     Transforms,
+    ...     describe_module,
     ...     export,
     ...     get_path,
     ...     list_modules,
@@ -114,7 +123,7 @@ What pipes are available?
 Overview
 ^^^^^^^^
 
-``riko`` ships 51 built-in ``pipes``, outlined below [#]_. Runtime discovery is
+``riko`` ships 52 built-in ``pipes``, outlined below [#]_. Runtime discovery is
 the authoritative source for a ``pipe``'s type, subtype, sync/async
 availability, and loopability.
 
@@ -221,6 +230,8 @@ availability, and loopability.
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 | `urlparse`_          | processor | transformer      | parses a URL into its six components                                                         |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
+| `write`_             | operator  | composer         | writes the stream to a file; passes items through unchanged (in-pipeline sink)               |
++----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 | `xpathfetchpage`_    | processor | source           | fetches the content of a given website as DOM nodes or a string                              |
 +----------------------+-----------+------------------+----------------------------------------------------------------------------------------------+
 
@@ -233,10 +244,10 @@ Args
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> next(SyncPipe('reverse', stream))
+    >>> next(SyncPipe(Transforms.REVERSE, stream))
     {'title': 'riko pt. 2'}
 
 A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed``,
@@ -244,10 +255,10 @@ A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> result = next(SyncPipe('hash', items, field='title'))
+    >>> result = next(SyncPipe(Transforms.HASH, items, field='title'))
     >>> sorted(result)
     ['hash', 'title']
     >>> result['hash']
@@ -293,33 +304,37 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
 
 .. code-block:: python
 
-    >>> from riko import list_modules, list_targets
+    >>> from riko import list_modules, list_targets, Modules
     >>>
-    >>> # filter by decorator type (`operator`, `processor`, `splitter`)
     >>> list_modules()[0]
     'aggregate'
     >>> len(list_modules())
-    51
+    52
+    >>> # filter by decorator type (`operator`, `processor`, `splitter`)
     >>> list_modules(type='operator')[0]
     'aggregate'
     >>> len(list_modules(type='operator'))
-    15
+    16
     >>> # filter by ``loopable``
     >>> list_modules(loopable=True)[0]
     'csv'
     >>> len(list_modules(loopable=True))
     34
-    >>> # filter by ``supported_subtypes``
+    >>> # filter by ``subtype``
     >>> list_modules(subtype='aggregator')[0]
     'count'
     >>> len(list_modules(subtype='aggregator'))
     2
-    >>> # Only modules whose default behavior is aggregation
-    >>> # (``primary=True`` requires ``subtype``)
-    >>> list_modules(subtype='aggregator', primary=True)[0]
-    'count'
-    >>> len(list_modules(subtype='aggregator', primary=True))
-    2
+    >>> # filter by modules whose default behavior
+    >>> list_modules(subtype='composer', primary=True)[0]
+    'aggregate'
+    >>> len(list_modules(subtype='composer', primary=True))
+    14
+    >>> # filter by ``category``
+    >>> list_modules(category='source')[0]
+    'csv'
+    >>> len(list_modules(category='source'))
+    12
     >>> # Full module metadata
     >>> metadata = list_modules(show_metadata=True)[0]
     >>> metadata.name, metadata.type, metadata.subtype
@@ -331,24 +346,63 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     >>> len(list_targets()) >= 5
     True
 
+``describe_module`` returns a ``ModuleDefinition`` (or ``None`` for an unknown name).
+Both accept a plain ``str`` or a ``StrEnum`` member.
+
+.. code-block:: python
+
+    >>> write = describe_module(Sinks.WRITE)
+    >>> write.name, write.module
+    ('write', <module 'riko.modules.write' from .../write.py'>)
+    >>> fetch = describe_module(Sources.FETCH)
+    >>> fetch.name, fetch.module
+    ('fetch', <module 'riko.modules.fetch' from .../fetch.py'>)
+    >>> describe_module('does-not-exist')
+
 Notes:
 
 - ``type`` accepts ``processor``, ``operator``, or ``splitter``.
 - ``subtype`` accepts ``source``, ``transformer``, ``composer``, ``aggregator``, and
   ``splitter``
 - ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
-- ``supported_subtypes`` includes behaviors reachable through options such as
-  ``emit=True``.
 - Module authors do not declare these metadata attributes; they are derived from the
   decorator type, options, and return annotations.
 - The catalog overlays registry entries: modules added via ``riko.ext.register`` or a
   ``[project.entry-points."riko.modules"]`` entry point appear alongside the packaged
   built-ins (see `Can I create custom modules`_).
-- A module name may be given as a plain ``str`` or a ``riko.ext.ModuleName`` member;
-  ``normalize_module_name`` coerces either to the canonical string accepted
-  everywhere a module name is. Generated, ready-to-use enums grouped by taxonomy
-  (``Sources``/``Transforms``/``Sinks``) are planned; today ``ModuleName`` is the
-  base they will build on.
+- ``category`` (``source``/``transform``/``sink``) is a data-flow axis,
+  independent of the runtime ``type``/``subtype``.
+
+Typed module discovery
+^^^^^^^^^^^^^^^^^^^^^^^
+
+For editor autocompletion and static checks, ``riko`` ships a generated, typed discovery
+surface. ``Modules`` is a ``StrEnum`` of **every** built-in ``pipe``, while
+``Sources``/``Transforms``/``Sinks``/``Targets`` are a ``StrEnum`` that group by
+data-flow role. Each ``StrEnum`` is interchangeable with a module name.
+
+.. code-block:: python
+
+    >>> from riko import Modules, Sources, Transforms, Sinks, Targets
+    >>>
+    >>> Sources.FETCH.value
+    'fetch'
+    >>> Sources.FETCH == 'fetch'
+    True
+    >>> Modules.FETCH is Sources.FETCH
+    True
+    >>> Modules.FILTER is Transforms.FILTER
+    True
+    >>> Modules.WRITE is Sinks.WRITE
+    True
+
+Notes:
+
+- ``Sinks`` classifies *sink pipes* (data-flow role ``output``/``write``). The one
+  built-in is ``write``, which serializes the stream to a file and passes items through
+  the remaining pipeline.
+- ``write`` takes a ``target`` option which can be a string or ``Targets`` enum. See
+  `exporting results`_ for examples.
 
 What do processor, operator, and splitter mean?
 -----------------------------------------------
@@ -361,8 +415,7 @@ local sync pools or bounded async concurrency.
 An ``operator`` works on a whole ``stream``. A ``composer`` returns a
 ``stream``, while an ``aggregator`` reduces a ``stream`` to a non-stream result
 that the wrapper emits as one or more ``items``. Some ``operators`` support both
-behaviors depending on options, so use ``supported_subtypes`` metadata when
-classification matters.
+behaviors depending on options, so use ``subtype`` metadata when classification matters.
 
 A ``splitter`` returns multiple ``streams``. The built-in ``split`` module
 eagerly materializes its ``source`` before creating copies.
@@ -474,9 +527,9 @@ returns an empty ``stream`` rather than silently rerunning work.
 
 .. code-block:: python
 
-    >>> from riko import SyncPipe
+    >>> from riko import SyncPipe, Transforms
     >>>
-    >>> flow = SyncPipe('hash', source=[{'content': 'a'}])
+    >>> flow = SyncPipe(Transforms.HASH, source=[{'content': 'a'}])
     >>> len(list(flow))
     1
     >>> list(flow)
@@ -676,6 +729,7 @@ documentation workflow.
 
 .. _README: ../README.rst
 .. _Cookbook: COOKBOOK.rst
+.. _exporting results: COOKBOOK.rst#exporting-results
 .. _installation guide: INSTALLATION.rst
 .. _contributing guide: ../CONTRIBUTING.rst
 .. _issue tracker: https://github.com/nerevu/riko/issues
@@ -733,4 +787,5 @@ documentation workflow.
 .. _uniq: ../riko/modules/uniq.py
 .. _urlbuilder: ../riko/modules/urlbuilder.py
 .. _urlparse: ../riko/modules/urlparse.py
+.. _write: ../riko/modules/write.py
 .. _xpathfetchpage: ../riko/modules/xpathfetchpage.py

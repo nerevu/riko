@@ -94,6 +94,7 @@ benchmark = "riko.cli.benchmark:main"
 compile-pipe = "riko.cli.compile:run"
 convert-dag = "riko.cli.convert_dag:run"
 gen-config = "riko.cli.gen_config:main"
+gen-names = "riko.cli.gen_names:main"
 
 [tool.uv]
 # Rebuild the local `riko` install when any source file changes, not just when
