@@ -70,7 +70,7 @@ from typing import Any
 
 import pygogo as gogo
 
-from riko.types.configs import LoopObjconf
+from riko.types.configs import DynamicConf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
 from . import operator
@@ -81,7 +81,7 @@ logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
 def parser(
-    stream: Stream, objconf: LoopObjconf, tuples: PipeTuples, **kwargs: object
+    stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Parses the pipe content

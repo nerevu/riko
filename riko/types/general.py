@@ -47,6 +47,7 @@ if TYPE_CHECKING:
         AnyModuleRawConf,
         CountValues,
         Skip,
+        TargetLike,
     )
 
 T = TypeVar("T")
@@ -144,6 +145,7 @@ class Defaults(TypedDict, total=False):
     lower: bool
     max_wait: int
     memoize: bool
+    mode: str
     multi: bool
     name: str
     prompt: str
@@ -162,6 +164,7 @@ class Defaults(TypedDict, total=False):
     start: int
     strict: bool
     sum_key: str
+    target: TargetLike
     test: bool
     token_key: str
     type: str

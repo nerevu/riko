@@ -2,9 +2,20 @@
 """
 riko.modules._decorators
 ~~~~~~~~~~~~~~~~~~~~~~~~~
-Pipe-authoring decorators: the ``Module`` base and the ``processor`` /
-``operator`` / ``splitter`` decorators that wrap a pipe function into the
-sync/async module callables the framework executes.
+
+Provides decorators for creating processor, operator, and splitter pipes.
+
+Examples:
+    Basic usage::
+
+        >>> from riko.modules import processor
+        >>>
+        >>> @processor(isasync=False)
+        ... def pipe(content, objconf, skip=False, **kwargs):
+        ...     return content * objconf.times
+        >>> list(pipe({"x": 3}, conf={"times": 2}, field="x", assign="doubled"))
+        [{'x': 3, 'doubled': 6}]
+
 """
 
 from collections.abc import Awaitable, Callable, Iterator
@@ -22,8 +33,8 @@ from riko.cast import BasicCastType
 from riko.context import Context, ExecutionMode, parse_context
 from riko.dotdict import DotDict, is_mapping
 from riko.modules._assignment import gen_assignments, get_assignment
+from riko.modules._derive import derive_loopable, derive_subtypes
 from riko.modules._loop import loop_embed_async, loop_embed_sync
-from riko.modules._metadata import derive_loopable, derive_subtypes
 from riko.modules._prepare import (
     PreparedModule,
     get_casters,

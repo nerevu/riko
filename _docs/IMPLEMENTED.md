@@ -220,6 +220,29 @@ decorator-set wrapper attributes (`type`, `subtype`, `subtypes`, `pollable`); su
 (runtime-registered + entry-point) modules via `gen_registry_catalog`, so extension modules are
 discoverable too. Unqualified names are reserved for built-ins; dotted namespaces for extensions.
 
+**Typed discovery (P9A, shipped).** `list_modules(*, type, subtype, category)` and
+`describe_module(name) -> ModuleDefinition | None` (`riko/modules/_metadata.py`, on the stable
+`riko`/`riko.api` surface) give filtered runtime truth. **The three filter axes are all lowercase
+`Literal` strings, not enums** — `ModuleType = Literal["operator","processor","splitter"]`,
+`ModuleSubtype`, and `ModuleCategory = Literal["source","transform","sink"]` (the `derive_category`
+return value) — so `list_modules(category="sink")` → `["write"]`. These are a **separate axis** from
+the discovery-tree identifier enums (`Modules`/`Sources`/`Transforms`/`Sinks`, whose member `.value`
+is the module id, for `SyncPipe(...)`/`|` chaining): don't confuse them. In particular
+`category="Sinks"` (the bucket class name) returns `[]` — the value is `"sink"`, lowercase singular.
+(The codegen maps the three category strings to the plural bucket **class** names via `_CATEGORY_CLASS`
+= `{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
+`derive_category` (`riko/ext/names.py`) buckets each module by **data-flow capability only**.
+`SINK_NAMES` (`{"output","write"}`) is the *criterion*, not the
+membership: a module is a `Sink` iff its name is in that set. The one built-in match is `write`
+(`riko/modules/write.py`) — a pass-through operator that serializes the stream to `conf['url']` via a
+`Targets` converter and yields items unchanged (`Modules.WRITE`/`Sinks.WRITE`). `output` stays
+unmatched (compiler-local passthrough node, not a `riko/modules/*.py` pipe). `write` is the
+in-pipeline counterpart of the one-shot `Targets`/`export` surface (see §25). `riko.ext.codegen` generates the byte-stable
+`riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing bucket members so
+`Modules.FILTER is Transforms.FILTER`) + `Sources`/`Transforms`/`Sinks` bucket enums (member
+`.value` = canonical id; collisions raise). Regenerate with `gen-names`/`manage codegen` (drift guard
+`test_generated_names_match`). Re-exported from `riko`/`riko.api`, **not** `riko.modules`.
+
 ## Module registry & pipe resolution (P8, shipped)
 
 The runtime→compiler resolution coupling is inverted behind three **compiler-free** layers sharing
@@ -231,8 +254,9 @@ no locations), and the `PipeResolver` façade (`riko/ext/resolver.py`) doing one
 `riko/collections.py` resolves through the façade; `compile.resolve_module` delegates to it.
 Generated pipelines expose a stable `pipe`/`async_pipe` entry, so a sub-pipeline resolves exactly
 like a built-in. External packages add modules with **no core edit** (`examples/riko-example-ext/`).
-Remaining P9A discoverability (generated `Module` tree, `available_modules`/`describe_module`,
-`.pyi` stubs) → [module-enums.md](gameplans/module-enums.md).
+P9A discoverability (generated `Modules` tree, `list_modules`/`describe_module`) shipped — see
+§24 above. Remaining P9 (non-P9A): the installed-env aggregate `riko.generated.Modules` + `.pyi`
+stubs → [module-enums.md](gameplans/module-enums.md).
 
 **Pipe authoring:** the `processor`/`operator`/`splitter` decorators infer `isasync`
 (`riko/modules/_decorators.py::_resolve_isasync`) — from an `async def` or the conventional
@@ -247,13 +271,18 @@ async). Tests: `tests/internal/test_decorators.py`.
 `pipe | ("name", conf)`, `pipe | SyncPipe(...)`, `items | SyncPipe(...)`, and `.pipe()`/`.async_pipe()`
 — plus the `ModuleName` `StrEnum` base and `normalize_module_name` (`riko/ext/names.py`); a name may
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
-generated `Module` tree is P9A.
+generated `Modules` tree (P9A) shipped — `pipe | Transforms.FILTER` resolves identically to
+`pipe.filter()`; see §24.
 
 ## 25. Conversion — export converters (shipped)
 
 > **Partial.** Batch/dataframe path (Arrow/Polars/SQL) → [database-transforms.md §25](gameplans/database-transforms.md#25-conversion-and-dataframe-integration).
 
 Meza-backed export converters ship: `csv` / `json` / `geojson` / `ofx` / `qif` / `list` /
-`tuple` (`riko/collections.py`; `list_targets()` lists registered export converters). Meza
-owns conversion work. The Batch/dataframe path (Arrow/Narwhals/Polars/SQL execution
+`tuple` (`riko/collections.py`; `list_targets()` lists registered export converters). The typed
+`Targets` `StrEnum` (stable `riko`/`riko.api` surface) is the export-format layer over that
+registry — `export(items, Targets.JSON)` or the plain string; `CONVERSION_FUNCS` is keyed by
+`Targets` members, drift-guarded by `TestExportTargets`. This is riko's terminal-output surface,
+distinct from the discovery tree's `Sinks` bucket (sink *pipes*, empty for built-ins — see §24).
+Meza owns conversion work. The Batch/dataframe path (Arrow/Narwhals/Polars/SQL execution
 representations selected by capability) is deferred.

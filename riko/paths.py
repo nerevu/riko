@@ -8,6 +8,8 @@ normalizing file/http URLs to absolute form (``get_abspath``).
 
 from os import path
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from typing import IO, Literal, overload
 
 PACKAGE_DIR = Path(__file__).parent.absolute()
 ROOT_DIR = PACKAGE_DIR.parent
@@ -20,6 +22,18 @@ def get_path(name: str) -> str:
         url = f"file://{path.join(PACKAGE_DIR, 'data', name)}"
 
     return url
+
+
+@overload
+def get_temp_file(as_path: Literal[True]) -> str: ...  # noqa: E704
+@overload
+def get_temp_file(as_path: Literal[False] = ...) -> IO[bytes]: ...  # noqa: E704
+def get_temp_file(as_path: bool = False) -> str | IO[bytes]:  # noqa: E302
+    if as_path:
+        with NamedTemporaryFile(delete=False) as fp:
+            return fp.name
+    else:
+        return NamedTemporaryFile(delete=True, delete_on_close=False)
 
 
 def get_abspath(url: str, offline: bool = False) -> str:

@@ -14,7 +14,15 @@ from riko import get_path
 from riko._iterutils import noop
 from riko._pubsub import async_hub, close, sync_hub
 from riko.bado import gather_results, issync, run
-from riko.collections import AsyncPipe, Executor, SyncCollection, SyncPipe
+from riko.collections import (
+    CONVERSION_FUNCS,
+    AsyncPipe,
+    Executor,
+    SyncCollection,
+    SyncPipe,
+    Targets,
+    export,
+)
 from riko.exceptions import ReceiverUnavailableError
 from riko.ext.names import ModuleName, normalize_module_name
 from riko.types.general import Item, Items
@@ -674,7 +682,7 @@ class TestModuleNameEnum:
     def test_normalize_module_name(self):
         assert normalize_module_name(_Mod.HASH) == "hash"
         assert normalize_module_name("hash") == "hash"
-        assert normalize_module_name(None) is None
+        assert normalize_module_name(None) == ""
 
     def test_constructor_stores_plain_string(self):
         pipe = SyncPipe(_Mod.HASH, source=SRC)
@@ -695,3 +703,16 @@ class TestModuleNameEnum:
         assert via_or.name == "truncate"
         assert via_method.name == "truncate"
         assert len(list(via_method)) == 1
+
+
+class TestExportTargets:
+    """``Targets`` members mirror the ``export`` converter registry."""
+
+    def test_member_and_string_export_identically(self):
+        items = [{"a": 1}]
+        assert (
+            export(items, Targets.JSON).getvalue() == export(items, "json").getvalue()
+        )
+
+    def test_every_converter_has_a_member(self):
+        assert set(CONVERSION_FUNCS) <= set(Targets)

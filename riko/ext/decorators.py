@@ -7,6 +7,6 @@ lives in :mod:`riko.modules`; this module is a stable re-export point that
 survives the planned relocation to ``riko.modules._decorators`` (Phase 3).
 """
 
-from riko.modules import operator, processor, splitter
+from riko.modules._decorators import operator, processor, splitter
 
 __all__ = ["operator", "processor", "splitter"]

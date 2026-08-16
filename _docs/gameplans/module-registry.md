@@ -43,7 +43,7 @@ Tests that must stay green:
   Populated from built-ins + entry points + runtime registrations. **Never loads JSON, never invokes
   the compiler.** Carries the discovery fields already agreed in
   [module-enums.md § P8-Δ1](module-enums.md#phase-p8--registry--resolution-seam-prerequisite)
-  (`provider`/`enum_name`/`user_type`/`docs_url`) so P9A is pure read.
+  (`provider`/`enum_name`/`category`/`docs_url`) so P9A is pure read.
 - **`PipelineResolver`** (`riko/ext/pipelines.py`) — resolves named **composed pipelines** (`pipe_*`,
   JSON defs, generated py) via an injected `PipelineStore(Protocol).load`, with
   `Directory`/`Package`/`Mapping`/`Composite` stores. **Replaces the hardcoded `tests.*` paths** — the

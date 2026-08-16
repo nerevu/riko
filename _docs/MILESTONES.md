@@ -64,7 +64,7 @@ resolution no longer imports the compiler.
 
 **P9 — fluent discoverability.** Keep dynamic `pipe.tokenizer(...)`; add explicit
 `pipe.then("tokenizer", ...)`; generate dev-time `.pyi` stubs from the registry; add
-`available_modules()`, `describe_module(name)`, `__dir__`, and did-you-mean suggestions. **DoD:**
+`list_modules()`, `describe_module(name)`, `__dir__`, and did-you-mean suggestions. **DoD:**
 IDE/Pyright see built-in fluent methods without losing runtime extensibility.
 
 **P11 — pub/sub + poll protocols.** `Publisher`/`Subscription` protocols over the current
@@ -153,8 +153,11 @@ context/resources, events. **No core change per integration** is the DoD.
   `tests.*` paths in `riko/`), `public/test_registry.py` (`output` stays compiler-local; resolved
   callables unmutated; raw JSON unchanged), `public/test_module_extension.py` (entry-point module
   resolves + metadata inferred + missing-extra message — **no core edit**).
-- **P9** — `public/test_fluent_discovery.py` (`.then`, `available_modules`, `describe_module`,
-  `__dir__`, did-you-mean), generated-stub typing.
+- **P9** — **P9A landed** across `internal/test_codegen_names.py` (codegen/taxonomy/drift),
+  `public/test_collections.py` (`TestModuleNameEnum`/`TestExportTargets`), `public/test_modules.py`
+  (`list_modules` filters), `public/test_imports.py` (surface exports) — the standalone
+  `test_fluent_discovery.py` was dropped as redundant. **Remaining (non-P9A):** `describe_module`
+  edges, `__dir__`/did-you-mean, generated-stub typing.
 - **P10** — `public/test_parallel.py`, `public/test_backpressure.py`,
   `internal/test_concurrency.py`, `internal/test_streams.py`.
 - **P11** — `public/test_pubsub_protocols.py` (protocol conformance; resources hold subscriptions;

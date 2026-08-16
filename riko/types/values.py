@@ -2,7 +2,7 @@ import ast
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from enum import Enum, auto
+from enum import Enum, StrEnum, auto
 from time import struct_time
 from typing import TYPE_CHECKING, NotRequired, Required, TypedDict
 
@@ -17,6 +17,14 @@ if TYPE_CHECKING:
 class StreamState(Enum):
     PENDING = auto()
     DONE = auto()
+
+
+class ModuleName(StrEnum):
+    """A type-safe module name."""
+
+
+class TargetName(StrEnum):
+    """A type-safe target name."""
 
 
 class EntryContent(TypedDict, total=False):
@@ -107,6 +115,8 @@ type Temporal = datetime | date | struct_time
 type DateLike = str | int | datetime | date | struct_time
 type SortableValue = Scalar | Temporal
 type PrimitiveValue = SortableValue | None
+type ModuleNameLike = str | ModuleName
+type TargetLike = str | TargetName
 
 # Geo/currency
 type IPAddress = dict[str, str]

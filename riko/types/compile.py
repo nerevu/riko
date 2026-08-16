@@ -1,12 +1,14 @@
 from collections.abc import Sequence
 from typing import NotRequired, Required, TypedDict
 
+from riko.types._module_ids import ModuleId
 from riko.types.general import Conf, PyInput
 from riko.types.modules import (
     AnyModuleRawConf,
     CountValues,
     EmbedRef,
-    ModuleId,
+    LoopableEmbedRef,
+    PipeId,
 )
 
 
@@ -29,7 +31,7 @@ class PipeModule(EmbedRef, total=False):
 
 
 class LoopModule(PipeModule, total=False):
-    embed: Required[EmbedRef]
+    embed: Required[LoopableEmbedRef]
 
 
 class EmbedKwargs(TypedDict, total=False):
@@ -167,7 +169,7 @@ class PipelineDescription(TypedDict):
 
 class DagModule(TypedDict):
     id: NotRequired[str]
-    type: ModuleId
+    type: ModuleId | PipeId
     conf: AnyModuleRawConf
 
 

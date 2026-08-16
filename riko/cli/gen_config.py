@@ -15,9 +15,8 @@ file) and ``tests`` (to assert no drift) build on.
 from __future__ import annotations
 
 import ast
-import shutil
-import subprocess
 
+from riko.ext.codegen import ruff_format
 from riko.paths import PACKAGE_DIR
 
 _TYPES_DIR = PACKAGE_DIR / "types"
@@ -140,7 +139,7 @@ def _import_block(structure) -> str:
     lines += [
         f"from typing import {', '.join(typing)}",
         "",
-        "from riko.types.configs import DynamicConf",
+        "from riko.types.base import DynamicConf",
     ]
     guarded = ["", "if TYPE_CHECKING:"]
     guarded += [f"    from riko.cast import {', '.join(cast)}"] if cast else []
@@ -170,16 +169,11 @@ def render() -> str:
         _class_block(name, base, fields) for name, (base, fields) in structure.items()
     ]
     parts = [_DOCSTRING, "", _import_block(structure), "", "", "\n\n\n".join(blocks)]
-    return "\n".join(parts) + "\n"
+    return ruff_format("\n".join(parts) + "\n")
 
 
 def main() -> int:
-    _CONFIGS.write_text(render())
-    ruff = shutil.which("ruff")
-    formatted = ruff and subprocess.run(
-        [ruff, "format", str(_CONFIGS)], capture_output=True, text=True, check=False
-    )
-    return formatted.returncode if formatted else 0
+    return 0 if _CONFIGS.write_text(render()) else 1
 
 
 if __name__ == "__main__":

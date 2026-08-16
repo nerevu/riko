@@ -2,30 +2,12 @@
 """
 riko
 ~~~~
-Provides functions for analyzing and processing streams of structured data
 
-Examples:
-    basic usage::
+Public entry point for riko.
 
-        >>> from riko import SyncPipe
-        >>>
-        >>> ib_conf = {
-        ...     'attrs': [
-        ...         {'key': 'link', 'value': 'www.google.com'},
-        ...         {'key': 'title', 'value': 'google'},
-        ...         {'key': 'author', 'value': 'Tommy'}
-        ...      ]
-        ... }
-        >>>
-        >>> sr_conf = {
-        ...     'rule': [{'find': 'Tom', 'param': 'first', 'replace': 'Tim'}]
-        ... }
-        >>>
-        >>> flow = SyncPipe('itembuilder', conf=ib_conf).strreplace(
-        ...     conf=sr_conf, field='author')
-        >>> next(flow)['strreplace']
-        'Timmy'
-
+Application code imports stable APIs from ``riko`` or ``riko.api``; extension
+authors import from ``riko.ext``. See ``README.rst`` and the cookbook for
+worked examples.
 """
 
 from importlib import metadata
@@ -63,22 +45,31 @@ ENCODING = "utf-8"
 from riko.api import (  # noqa: E402
     AsyncCollection,
     AsyncPipe,
+    Modules,
     PipelineStateError,
     PipeState,
+    Sinks,
+    Sources,
     SyncCollection,
     SyncPipe,
+    Targets,
+    Transforms,
     UnsupportedModuleError,
     UnsupportedPipelineError,
+    async_read,
     async_return,
     async_sleep,
     backend,
     build_pipeline,
     compile_pipe,
     convert_dag,
+    describe_module,
     export,
     extract_dependencies,
+    get_async_temp_file,
     get_module_metadata,
     get_path,
+    get_temp_file,
     isasync,
     issync,
     list_modules,
@@ -92,22 +83,31 @@ __all__ = [
     "AsyncPipe",
     "Context",
     "ExecutionMode",
+    "Modules",
     "PipeState",
     "PipelineStateError",
+    "Sinks",
+    "Sources",
     "SyncCollection",
     "SyncPipe",
+    "Targets",
+    "Transforms",
     "UnsupportedModuleError",
     "UnsupportedPipelineError",
+    "async_read",
     "async_return",
     "async_sleep",
     "backend",
     "build_pipeline",
     "compile_pipe",
     "convert_dag",
+    "describe_module",
     "export",
     "extract_dependencies",
+    "get_async_temp_file",
     "get_module_metadata",
     "get_path",
+    "get_temp_file",
     "isasync",
     "issync",
     "list_modules",
