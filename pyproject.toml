@@ -312,3 +312,13 @@ meza = { git = "https://github.com/reubano/meza.git", rev = "aa584e56edcd20e038b
 [build-system]
 requires = ["uv_build>=0.11.3,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.coverage.run]
+source = ["riko"]
+omit = ["riko/cli/*", "riko/bado/mock.py"]
+
+[tool.coverage.report]
+skip_covered = false
+
+[tool.coverage.xml]
+output = "coverage.xml"
