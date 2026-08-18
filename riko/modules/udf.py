@@ -15,6 +15,7 @@ Examples:
 """
 
 from collections.abc import Callable
+from inspect import iscoroutinefunction
 from logging import Logger
 from typing import Any, cast
 
@@ -31,6 +32,41 @@ DEFAULTS: Defaults = {}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
 
+async def async_parser(
+    item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
+) -> Item:
+    """
+    Parsers the pipe content asynchronously
+
+    Args:
+        item: The entry to process (a DotDict instance)
+        objconf: The pipe configuration (an Objectify instance)
+        kwargs: Keyword arguments
+
+    Kwargs:
+        stream: The original item
+
+    Returns:
+        dict: The item
+
+    Examples:
+        >>> from riko.dotdict import DotDict
+        >>> from itertools import repeat
+        >>> from riko import run
+        >>>
+        >>> async def main():
+        ...     func = lambda item: {'y': item['x'] + 3}
+        ...     item = DotDict({'x': 0})
+        ...     print(await async_parser(item, None, None, stream=item, func=func))
+        >>>
+        >>> run(main)
+        {'y': 3}
+
+    """
+    func = cast(Callable[[Item], Item], kwargs["func"])
+    return await func(item) if iscoroutinefunction(func) else func(item)
+
+
 def parser(
     item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
 ) -> Item:
@@ -38,12 +74,12 @@ def parser(
     Parsers the pipe content
 
     Args:
-        item (obj): The entry to process (a DotDict instance)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
+        item: The entry to process (a DotDict instance)
+        objconf: The pipe configuration (an Objectify instance)
+        kwargs: Keyword arguments
 
     Kwargs:
-        stream (dict): The original item
+        stream: The original item
 
     Returns:
         dict: The item
@@ -64,14 +100,14 @@ def parser(
 
 # TODO: add support for async functions
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> Item:
+async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     A processor that asynchronously performs an arbitrary (user-defined)
     function on an item.
 
     Args:
         item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        kwargs: The keyword arguments passed to the wrapper
 
     Kwargs:
         func (callable): User defined function to apply to each stream item.
@@ -91,7 +127,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Item:
         {'y': 3}
 
     """
-    return parser(*args, **kwargs)
+    return await async_parser(*args, **kwargs)
 
 
 @processor(DEFAULTS, **OPTS)
@@ -102,7 +138,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
     Args:
         item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        kwargs: The keyword arguments passed to the wrapper
 
     Kwargs:
         func (callable): User defined function to apply to each stream item.
