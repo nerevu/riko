@@ -212,6 +212,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Examples:
         >>> from riko import get_path
+        >>>
         >>> url = get_path('spreadsheet.csv')
         >>> next(pipe(conf={'url': url}))['mileage']
         '7213'

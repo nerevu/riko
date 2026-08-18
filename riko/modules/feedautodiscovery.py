@@ -186,6 +186,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Examples:
         >>> from riko import get_path
+        >>>
         >>> conf = {'url': get_path('bbc.html')}
         >>> next(pipe(conf=conf))['link']
         'file://riko/data/bbci.co.uk.xml'

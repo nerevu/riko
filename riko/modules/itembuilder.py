@@ -68,6 +68,7 @@ def parser(
 
     Examples:
         >>> from riko.dotdict import DotDict
+        >>>
         >>> attrs = [
         ...     {'key': 'title', 'value': 'the title'},
         ...     {'key': 'desc', 'value': 'the desc'}]

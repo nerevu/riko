@@ -16,6 +16,7 @@ Examples:
     {'content': 'HI'}
     >>> async def main():
     ...     print(next(await async_pipe(iter([{'content': 'hi'}]))))
+    >>>
     >>> run(main)
     {'content': 'HI'}
 

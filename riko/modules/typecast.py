@@ -124,6 +124,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 
     Examples:
         >>> from datetime import datetime as dt
+        >>>
         >>> next(pipe({'content': '1.0'}, conf={'type': 'int'}))['typecast']
         1
         >>> item = {'content': '5/4/82'}

@@ -5,6 +5,7 @@ A full pipe definition (modules + verbose ``src``/``tgt`` wires) compiles to a
 runnable module exposing a ``pipe`` (or ``async_pipe``) entry point:
 
 >>> from riko.compile import compile_pipe
+>>>
 >>> pipe_def = {
 ...     "modules": [
 ...         {"id": "sw-1", "type": "forever", "conf": {}},

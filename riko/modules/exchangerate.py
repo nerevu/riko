@@ -288,6 +288,7 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
 
     Examples:
         >>> from riko import get_path
+        >>>
         >>> url = get_path('quote.json')
         >>> conf = {'url': url}
         >>> rate = next(pipe({'content': 'GBP'}, conf=conf))['exchangerate']

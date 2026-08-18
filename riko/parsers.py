@@ -262,6 +262,7 @@ def extract_namespace(tree: AnyElementTree | AnyElement) -> str | None:
 
     Examples:
         >>> from xml.etree.ElementTree import fromstring
+        >>>
         >>> tree = fromstring('<root xmlns="http://example.com/ns"/>')
         >>> extract_namespace(tree)
         'http://example.com/ns'
@@ -299,6 +300,7 @@ def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
 
     Examples:
         >>> from xml.etree.ElementTree import fromstring
+        >>>
         >>> rss = fromstring('<rss/>')
         >>> verify_pos(rss, 0, 'rss', 'channel', 'item')
         1
@@ -361,6 +363,7 @@ def xpath(
 
     Examples:
         >>> from xml.etree.ElementTree import fromstring
+        >>>
         >>> xml = '<rss><channel><item>a</item><item>b</item></channel></rss>'
         >>> tree = fromstring(xml)
 
@@ -427,6 +430,7 @@ def xml2etree(  # noqa: E302
 
     Examples:
         >>> from io import StringIO
+        >>>
         >>> xxe = (
         ...     '<?xml version="1.0"?>'
         ...     '<!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>'
