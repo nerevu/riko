@@ -143,6 +143,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
     Examples:
         >>> from datetime import date
+        >>>
         >>> item = {'date': date(2015, 5, 4)}
         >>> next(pipe(item))['dateformat']
         '05/04/2015 00:00:00'

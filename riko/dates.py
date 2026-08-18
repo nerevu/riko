@@ -58,6 +58,7 @@ def parse_date_string(value: str) -> dt:
     Examples:
         >>> _parse_date_cached.cache_clear()
         >>> from datetime import datetime
+        >>>
         >>> isinstance(parse_date_string('2021-01-01'), datetime)
         True
         >>> _ = parse_date_string('2021-01-01')
@@ -157,6 +158,7 @@ def get_date(unit: str, count: int, op: Callable) -> date | dt:
         >>> from datetime import datetime
         >>> from operator import add, sub
         >>> from dateutil.relativedelta import relativedelta
+        >>>
         >>> today = datetime.now(UTC).date()
         >>> get_date('months', 1, add) == today + relativedelta(months=1)
         True

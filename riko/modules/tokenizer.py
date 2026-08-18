@@ -59,6 +59,7 @@ def parser(
 
     Examples:
         >>> from meza.fntools import Objectify
+        >>>
         >>> objconf = Objectify({'delimiter': '//', 'token_key': 'token'})
         >>> content = 'Once//twice//thrice//no more'
         >>> result = parser(content, None, objconf)

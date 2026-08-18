@@ -6,6 +6,7 @@ Examples:
 
         >>> from riko.compile import build_pipeline, compile_pipe
         >>> from riko.compile import convert_dag, parse_pipe_def
+        >>>
         >>> dag = {
         ...     "modules": [
         ...         {

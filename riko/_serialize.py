@@ -76,6 +76,7 @@ def fromdict(
     """
     Examples:
         >>> from dataclasses import dataclass
+        >>>
         >>> @dataclass
         ... class Inner:
         ...     n: int = 0

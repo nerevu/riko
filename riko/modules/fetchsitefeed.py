@@ -177,6 +177,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
     Examples:
         >>> from riko import get_path
+        >>>
         >>> next(pipe(conf={'url': get_path('bbc.html')}))['title']
         "EU sets out 'phased' Brexit strategy"
 

@@ -72,6 +72,7 @@ def parser(
 
     Examples:
         >>> from meza.fntools import Objectify
+        >>>
         >>> conf = {'op': 'divide', 'other': 4}
         >>> objconf = Objectify(conf)
         >>> parser(10, None, objconf)
@@ -152,6 +153,7 @@ def pipe(*args: Any, **kwargs: object) -> NumLike:
 
     Examples:
         >>> from decimal import Decimal
+        >>>
         >>> conf = {'op': 'divide', 'other': '5'}
         >>> next(pipe({'content': '10'}, conf=conf))['simplemath']
         Decimal('2')
