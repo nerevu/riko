@@ -27,13 +27,13 @@ from collections.abc import (
 )
 from functools import partial, wraps
 from inspect import isawaitable, iscoroutinefunction
-from itertools import chain, islice
+from itertools import chain
 from logging import Logger
 from typing import Literal, cast, overload
 
 import pygogo as gogo
 
-from riko._iterutils import dispatch
+from riko._iterutils import dispatch, is_listlike
 from riko.bado.itertools import async_map
 from riko.cast import BasicCastType
 from riko.context import Context, ExecutionMode, parse_context
@@ -98,7 +98,12 @@ from riko.types.general import (
     ValueStream,
 )
 from riko.types.modules import CountValues, ModuleType
-from riko.types.values import Inputs, PrimitiveValue, RikoValue, StatefulItem
+from riko.types.values import (
+    Inputs,
+    PrimitiveValue,
+    RikoValue,
+    StatefulItem,
+)
 
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 
@@ -389,21 +394,8 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         """
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
-    def parse(
-        self, item: ProcessorWrapperInput | ItemOrValue, module_name: str
-    ) -> DotDict[RikoValue]:
-        if isinstance(item, Iterator):
-            items = list(islice(item, 2))
-
-            if len(items) > 1:
-                msg = f"{module_name} received an Iterator of more than 1 item. "
-                msg += "Did you forget to use a loop? Processing only the first "
-                msg += "item."
-                logger.error(msg)
-
-            _parsed = self.parse(items[0], module_name) if items else DotDict()
-            parsed = _parsed
-        elif item is None:
+    def parse(self, item: ItemOrValue, module_name: str) -> DotDict[RikoValue]:
+        if item is None:
             parsed: DotDict[RikoValue] = DotDict()
         elif is_mapping(item):
             parsed = DotDict(item)
@@ -587,7 +579,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             inputs: Inputs | None = None,
             **kwargs: bool,
         ) -> ProcessorWrapperOutput:
-            if isinstance(item, Iterator):
+            if is_listlike(item):
                 _wrapper = partial(
                     async_wrapper,
                     conf=conf,
@@ -603,7 +595,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 mapped = await async_map(_wrapper, item)
                 processed = chain.from_iterable(mapped)
             else:
-                _input = self.parse(item, module_name)
+                _input = self.parse(cast(ItemOrValue, item), module_name)
                 prepared = self.prepare(
                     module_name, conf=conf, assign=assign, count=count, **kwargs
                 )
@@ -657,7 +649,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             inputs: Inputs | None = None,
             **kwargs: bool,
         ) -> ProcessorWrapperOutput:
-            if isinstance(item, Iterator):
+            if is_listlike(item):
                 _wrapper = partial(
                     sync_wrapper,
                     conf=conf,
@@ -672,7 +664,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
                 processed = chain.from_iterable(map(_wrapper, item))
             else:
-                _input = self.parse(item, module_name)
+                _input = self.parse(cast(ItemOrValue, item), module_name)
                 prepared = self.prepare(
                     module_name, conf=conf, assign=assign, count=count, **kwargs
                 )

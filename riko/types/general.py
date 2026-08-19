@@ -84,9 +84,9 @@ type WrapperOutput = (
 )
 
 type ProcessorWrapperInput = (
-    ProcessorWrapperOutput | OperatorWrapperOutput | ItemOrValue
+    Items | ProcessorWrapperOutput | OperatorWrapperOutput | ItemOrValue
 )
-type OperatorWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
+type OperatorWrapperInput = Items | ProcessorWrapperOutput | OperatorWrapperOutput
 type SplitterWrapperInput = ProcessorWrapperOutput | OperatorWrapperOutput
 type WrapperInput = ProcessorWrapperInput | OperatorWrapperInput | SplitterWrapperInput
 

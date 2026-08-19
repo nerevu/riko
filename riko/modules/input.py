@@ -122,7 +122,7 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     Asynchronously prompts for text and casts it into another type.
 
     Args:
-        item (Item | Stream): The entry, or stream of entries. Unused.
+        item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
 
@@ -183,7 +183,7 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     Prompts for text and casts it into another type.
 
     Args:
-        item (Item | Stream): The entry, or stream of entries. Unused.
+        item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
 

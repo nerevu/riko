@@ -13,7 +13,7 @@ Index
 - `What pipes are available`_
 - `How do I discover installed modules`_
 - `What do processor, operator, and splitter mean`_
-- `Why does my processor not map over a list`_
+- `How does a processor map over items`_
 - `What file types are supported`_
 - `What protocols are supported`_
 - `Which optional dependencies are available`_
@@ -421,14 +421,14 @@ behaviors depending on options, so use ``subtype`` metadata when classification 
 A ``splitter`` returns multiple ``streams``. The built-in ``split`` module
 eagerly materializes its ``source`` before creating copies.
 
-Why does my processor not map over a list?
-------------------------------------------
+How does a processor map over items?
+------------------------------------
 
-A ``processor`` only maps over an **iterator**, not a plan iterable. A ``list`` or
-``tuple`` pass through to the ``pipe`` as a single ``item``. This is forced rather than
-arbitrary. A ``processor``'s first argument is normally one ``item``, but may be a
-``stream``. And the only way to differentiate a single ``item`` from a ``stream`` is to
-check if it is an iterator:
+A ``processor``'s first argument is normally one ``item``, but it may also be a
+``stream`` of items. ``riko`` normalizes at the stream boundary the same way
+``listize`` does: a ``list``, ``tuple``, ``range``, generator, or iterator maps
+over each element, while a mapping (one record), primitive, string, or ``None``
+is a single ``item``. So the following all behave predictably:
 
 .. code-block:: python
 
@@ -441,11 +441,18 @@ check if it is an iterator:
     >>> next(pipe(iter(source), func=func))
     {'y': 3}
     >>> next(pipe(source, func=func))
-    Traceback (most recent call last):
-        ...
-    KeyError: 'x'
+    {'y': 3}
+    >>> next(pipe(tuple(source), func=func))
+    {'y': 3}
 
-Use the supported ``SyncPipe``/``AsyncPipe`` objects to avoid this footgun.
+Only the outermost argument is interpreted as one-or-many, so a list-valued
+*field* inside a record stays a single value:
+
+    >>> item = {"x": 0, "tags": ["a", "b"]}
+    >>> next(pipe(item, func=lambda i: {"tags": i["tags"]}))
+    {'tags': ['a', 'b']}
+
+The supported ``SyncPipe``/``AsyncPipe`` objects behave identically.
 
     >>> from riko import SyncPipe, Modules
     >>>
@@ -768,7 +775,7 @@ documentation workflow.
 .. _What pipes are available: #what-pipes-are-available
 .. _How do I discover installed modules: #how-do-i-discover-installed-modules
 .. _What do processor, operator, and splitter mean: #what-do-processor-operator-and-splitter-mean
-.. _Why does my processor not map over a list: #why-does-my-processor-not-map-over-a-list
+.. _How does a processor map over items: #how-does-a-processor-map-over-items
 .. _What file types are supported: #what-file-types-are-supported
 .. _What protocols are supported: #what-protocols-are-supported
 .. _Which optional dependencies are available: #which-optional-dependencies-are-available

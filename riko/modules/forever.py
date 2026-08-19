@@ -73,7 +73,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     downstream with ``truncate`` or ``timeout``.
 
     Args:
-        item (Item | Stream): The entry, or stream of entries. Unused.
+        item (Item | Items): The entry, or stream of entries. Unused.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
@@ -118,7 +118,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     downstream with ``truncate`` or ``timeout``.
 
     Args:
-        item (Item | Stream): The entry, or stream of entries. Unused.
+        item (Item | Items): The entry, or stream of entries. Unused.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 

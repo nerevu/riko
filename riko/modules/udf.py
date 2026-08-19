@@ -113,11 +113,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     Asynchronously applies an arbitrary (user-defined) function to each item.
 
-    ``func`` is called once per item. Only an iterator source is mapped over. See the
-    FAQ's "Why does my processor not map over a list?".
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (Item | Stream): The entry, or stream of entries, to process.
+        item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 
@@ -164,11 +164,11 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     """
     Applies an arbitrary (user-defined) function to each item.
 
-    ``func`` is called once per item. Only an iterator source is mapped over. See the
-    FAQ's "Why does my processor not map over a list?".
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (Item | Stream): The entry, or stream of entries, to process.
+        item (Item | Items): The entry, or stream of entries, to process.
         conf (dict): The pipe configuration. Unused.
         context (Context): the execution context
 

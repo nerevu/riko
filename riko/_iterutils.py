@@ -24,7 +24,7 @@ from itertools import chain, dropwhile, repeat, takewhile
 from logging import Logger
 from math import isnan
 from time import struct_time
-from typing import Any, Literal, TypeVar, cast, overload
+from typing import Any, Literal, TypeGuard, TypeVar, cast, overload
 
 import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
@@ -364,6 +364,47 @@ def select_by_id[T](
     return result
 
 
+def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
+    """
+    Reports whether a value is listlike (a multi-item iterable).
+
+    A listlike value is any iterable that is not a mapping, primitive, or ``None``.
+
+    Args:
+        value: The object to classify
+
+    Returns:
+        True when value maps over items, False when it is one item
+
+    Examples:
+    >>> is_listlike([1, 2])
+    True
+    >>> is_listlike((1, 2))
+    True
+    >>> is_listlike(iter([1, 2]))
+    True
+    >>> is_listlike(range(3))
+    True
+    >>> is_listlike({"a": 1})
+    False
+    >>> is_listlike("ab")
+    False
+    >>> is_listlike(0)
+    False
+    >>> is_listlike(None)
+    False
+
+    """
+    if value is None or isinstance(
+        value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)
+    ):
+        result = False
+    else:
+        result = isinstance(value, (Iterable, Sequence))
+
+    return result
+
+
 # TODO: move back to meza
 @overload
 def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
@@ -387,7 +428,7 @@ def listize[T](value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
 def listize[T](value: T) -> list[T]: ...  # noqa: E704
 def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     """
-    Create a listlike object from any value
+    Creates a listlike object from any value.
 
     Args:
         value: The object to convert
@@ -416,9 +457,7 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
     """
     if value is None:
         result = []
-    elif isinstance(value, (PrimitiveValueType, dict, CaseInsensitiveDict, Mapping)):
-        result = [value]
-    elif isinstance(value, (Iterable, Sequence)):
+    elif is_listlike(value):
         result = value
     else:
         result = [value]

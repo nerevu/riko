@@ -135,7 +135,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Asynchronously fetches a csv file and yields one item per row.
 
     Args:
-        item (Item | Stream): The entry, or stream of entries. Unused.
+        item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
 
@@ -200,7 +200,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Fetches a csv file and yields one item per row.
 
     Args:
-        item (Item | Stream): The entry, or stream of entries. Unused.
+        item (Item | Items): The entry, or stream of entries. Unused.
 
         conf (dict): The pipe configuration.
 
