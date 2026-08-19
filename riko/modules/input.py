@@ -1,13 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for obtaining and parsing user input.
+Obtains and parses user input.
 
 Use this module any time you need to obtain and parse user input to wire into
-another pipe. Supported parsers are 'text', 'int', 'float', 'bool', 'url', and
-'date'. Not loopable.
+another pipe. Not loopable.
 
-http://pipes.yahoo.com/pipes/docs?doc=user_inputs#Number
-http://pipes.yahoo.com/pipes/docs?doc=user_inputs#URL
+The value is read from ``inputs`` when given, falls back to ``conf["default"]``
+under ``test``, and otherwise prompts on stdin.
 
 Valid Date Values
 
@@ -33,20 +32,20 @@ Note: Relative date/time calculations reference the current UTC time. Timezones
 are not currently supported.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.input import pipe
         >>>
-        >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-        >>> next(pipe(conf=conf, inputs={'content': '30'}))
+        >>> conf = {"prompt": "How old are you?", "type": "int"}
+        >>> next(pipe(conf=conf, inputs={"content": "30"}))
         30
-        >>> conf['test'] = True
+        >>> conf["test"] = True
         >>> next(pipe(conf=conf))
         0
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -81,22 +80,26 @@ def parser(
     **kwargs: object,
 ) -> PrimitiveValue:
     """
-    Obtains the user input
+    Obtains one user input value and casts it.
+
+    Reads ``inputs[input_key]`` when ``inputs`` is given, falls back to
+    ``default`` when skipping, and otherwise prompts on stdin.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        skip (bool): Don't prompt for input
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `prompt`, `default`, `type`
+            and `input_key`.
+        skip: Whether to use ``default`` instead of prompting.
 
     Returns:
-        dict: The casted user input
+        The value cast to ``objconf.type``.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> inputs = {'age': '30'}
-        >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'input_key': 'age'}
+        >>> inputs = {"age": "30"}
+        >>> conf = {"prompt": "How old are you?", "type": "int", "input_key": "age"}
         >>> objconf = Objectify(conf)
         >>> parser(None, None, objconf, inputs=inputs)
         30
@@ -116,39 +119,55 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
-    A processor module that asynchronously prompts for text and parses it
-    into a variety of different types, e.g., int, bool, date, etc.
+    Asynchronously prompts for text and casts it into another type.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            prompt (str): Command line prompt shown when reading from stdin
+                (default: "Enter text").
+
+            default (scalar): Value used when the input is missing or skipped
+                (default: "").
+
+            type (str): Type to cast the value to, one of "bool", "date",
+                "datetime", "decimal", "float", "int", "location", "none",
+                "pass", "text", "url" (default: "text").
+
+            input_key (str): Key read from ``inputs`` to find the value — not
+                the field it is assigned to (default: "content").
+
+            test (bool): Whether to use ``default`` instead of prompting
+                (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'prompt',
-            'default', or 'type'.
+        inputs (dict): Values used in place of prompting, keyed by
+            ``input_key``, e.g. ``{"content": "30"}``.
 
-            prompt (str): User command line prompt
-            default (scalar): Default value
-            type (str): Expected value type. Must be one of 'text', 'int',
-                'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
+        test (bool): Whether to use ``default`` instead of prompting. Same
+            effect as ``conf["test"]``.
 
-            input_key (str): Attribute to assign parsed content (default: content)
+        assign (str): Field the value is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-        inputs (dict): values to be used in place of prompting the user e.g.
-            {'name': 'value1'}
+        emit (bool): Whether to emit the value directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-        test (bool): Take input values from default (skip the console prompt)
-        verbose (bool): Show debug messages when running pipe
-
-    Returns:
-       Awaitable: iterator of items of user input
+    Yields:
+        - ``<value>`` when ``emit`` is True (default)
+        - ``{<assign>: <value>}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item is given
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     conf = {'prompt': 'How old are you?', 'type': 'int'}
-        ...     result = await async_pipe(conf=conf, inputs={'content': '30'})
+        ...     conf = {"prompt": "How old are you?", "type": "int"}
+        ...     result = await async_pipe(conf=conf, inputs={"content": "30"})
         ...     print(next(result))
         >>>
         >>> run(main)
@@ -161,68 +180,84 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
-    A processor module that prompts for text and parses it into a variety of
-    different types, e.g., int, bool, date, etc.
+    Prompts for text and casts it into another type.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            prompt (str): Command line prompt shown when reading from stdin
+                (default: "Enter text").
+
+            default (scalar): Value used when the input is missing or skipped
+                (default: "").
+
+            type (str): Type to cast the value to, one of "bool", "date",
+                "datetime", "decimal", "float", "int", "location", "none",
+                "pass", "text", "url" (default: "text").
+
+            input_key (str): Key read from ``inputs`` to find the value — not
+                the field it is assigned to (default: "content").
+
+            test (bool): Whether to use ``default`` instead of prompting
+                (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'prompt',
-            'default', 'type', 'input_key'.
+        inputs (dict): Values used in place of prompting, keyed by
+            ``input_key``, e.g. ``{"content": "30"}``.
 
-            prompt (str): User command line prompt
-            default (scalar): Default value
-            type (str): Expected value type. Must be one of 'text', 'int',
-                'float', 'bool', 'url', 'location', or 'date'. Default: 'text'.
+        test (bool): Whether to use ``default`` instead of prompting. Same
+            effect as ``conf["test"]``.
 
-            input_key (str): Attribute to assign parsed content (default: content)
+        assign (str): Field the value is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-        inputs (dict): values to be used in place of prompting the user e.g.
-            {'name': 'value1'}
-
-        test (bool): Take input values from default (skip the console prompt)
-        verbose (bool): Show debug messages when running pipe
+        emit (bool): Whether to emit the value directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-       dict: item of user input
+        - ``<value>`` when ``emit`` is True (default)
+        - ``{<assign>: <value>}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: <value>}`` when ``emit`` is False and item is given
 
     Examples:
         >>> import datetime
         >>> from datetime import datetime as dt, UTC
         >>>
-        >>> conf = {'prompt': 'How old are you?', 'type': 'int'}
-        >>> next(pipe(conf=conf, inputs={'content': '30'}))
+        >>> conf = {"prompt": "How old are you?", "type": "int"}
+        >>> next(pipe(conf=conf, inputs={"content": "30"}))
         30
-        >>> next(pipe(conf=conf, inputs={'content': '30'}, emit=False))
+        >>> next(pipe(conf=conf, inputs={"content": "30"}, emit=False))
         {'content': 30}
         >>> now = dt.now(UTC)
-        >>> conf = {'prompt': 'When were you born?', 'type': 'date'}
-        >>> next(pipe(conf=conf, inputs={'content': '5/4/82'})).year
+        >>> conf = {"prompt": "When were you born?", "type": "date"}
+        >>> next(pipe(conf=conf, inputs={"content": "5/4/82"})).year
         1982
-        >>> stream = pipe(conf={'type': 'date'}, inputs={'content': 'tomorrow'})
+        >>> stream = pipe(conf={"type": "date"}, inputs={"content": "tomorrow"})
         >>> next(stream) > now.date()
         True
         >>> matrix = [
-        ...     ('float', '1', 1.0),
-        ...     ('bool', 'true', True),
-        ...     ('text', 'hello', 'hello')]
+        ...     ("float", "1", 1.0),
+        ...     ("bool", "true", True),
+        ...     ("text", "hello", "hello")]
         >>>
         >>> for t, c, r in matrix:
-        ...     kwargs = {'conf': {'type': t}, 'inputs': {'content': c}}
+        ...     kwargs = {"conf": {"type": t}, "inputs": {"content": c}}
         ...     next(pipe(**kwargs))
         1.0
         True
         'hello'
-        >>> inputs = {'content': 'google.com'}
-        >>> next(pipe(conf={'type': 'url'}, inputs=inputs))
+        >>> inputs = {"content": "google.com"}
+        >>> next(pipe(conf={"type": "url"}, inputs=inputs))
         'http://google.com'
-        >>> inputs = {'content': 'palo alto, ca'}
-        >>> result = next(pipe(conf={'type': 'location'}, inputs=inputs))
+        >>> inputs = {"content": "palo alto, ca"}
+        >>> result = next(pipe(conf={"type": "location"}, inputs=inputs))
         >>> sorted(result)[:5]
         ['admin1', 'admin2', 'admin3', 'city', 'country']
-        >>> result['city']
+        >>> result["city"]
         'city'
 
     """
