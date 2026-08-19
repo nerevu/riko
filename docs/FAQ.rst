@@ -13,6 +13,7 @@ Index
 - `What pipes are available`_
 - `How do I discover installed modules`_
 - `What do processor, operator, and splitter mean`_
+- `Why does my processor not map over a list`_
 - `What file types are supported`_
 - `What protocols are supported`_
 - `Which optional dependencies are available`_
@@ -420,6 +421,40 @@ behaviors depending on options, so use ``subtype`` metadata when classification 
 A ``splitter`` returns multiple ``streams``. The built-in ``split`` module
 eagerly materializes its ``source`` before creating copies.
 
+Why does my processor not map over a list?
+------------------------------------------
+
+A ``processor`` only maps over an **iterator**, not a plan iterable. A ``list`` or
+``tuple`` pass through to the ``pipe`` as a single ``item``. This is forced rather than
+arbitrary. A ``processor``'s first argument is normally one ``item``, but may be a
+``stream``. And the only way to differentiate a single ``item`` from a ``stream`` is to
+check if it is an iterator:
+
+.. code-block:: python
+
+    >>> from riko.modules.udf import pipe
+    >>>
+    >>> func = lambda item: {"y": item["x"] + 3}
+    >>> source = [{"x": 0}, {"x": 1}]
+    >>> next(pipe(source[0], func=func))
+    {'y': 3}
+    >>> next(pipe(iter(source), func=func))
+    {'y': 3}
+    >>> next(pipe(source, func=func))
+    Traceback (most recent call last):
+        ...
+    KeyError: 'x'
+
+Use the supported ``SyncPipe``/``AsyncPipe`` objects to avoid this footgun.
+
+    >>> from riko import SyncPipe, Modules
+    >>>
+    >>> source = [{"x": 0}, {"x": 1}]
+    >>> next(SyncPipe(Modules.UDF, iter(source), func=func))
+    {'y': 3}
+    >>> next(SyncPipe(Modules.UDF, source, func=func))
+    {'y': 3}
+
 What file types are supported?
 ------------------------------
 
@@ -542,19 +577,41 @@ failure raises ``PipelineStateError``.
 Which operations materialize or retain input?
 ---------------------------------------------
 
-Don't assume every ``pipe`` is fully streaming. Plan for full or partial
-materialization when using:
+Don't assume every ``pipe`` is fully streaming. Some read the whole ``stream`` in
+memory, so they cannot be used on an unbounded source. The table below records what each
+retains.
 
-- ``sort``, ``reverse``, and ``tail``;
-- ``split``;
-- aggregators such as ``count``, ``sum``, and ``join``;
-- ``export()`` or serialized exports;
-- awaiting an ``AsyncPipe``; or
-- sync pool mapping with ``parallel=True``.
+===========  ================  =======================================================
+pipe         retains           why
+===========  ================  =======================================================
+``write``    whole ``stream``  Serializing needs every ``item``, so the source is
+                               materialized before the write; the items it passes
+                               through are replayed from that list.
+``split``    whole ``stream``  Copies a materialized finite ``stream`` to each branch.
+``sort``     whole ``stream``  ``sorted()`` cannot rank a partial ``stream``.
+``reverse``  whole ``stream``  The last ``item`` must be known before the first is
+                               emitted.
+``count``    whole ``stream``  Counts the materialized ``stream``, and groups every
+                               ``item`` when ``count_key`` is set.
+``sum``      group only        Streams in O(1) memory without ``group_key``; retains
+                               every ``item`` when grouping.
+``join``     the ``other``     The right-hand side is replayed against each left
+                               ``item``.
+``tail``     last N            Bounded by ``conf['count']``.
+``uniq``     last N keys       Bounded by ``conf['limit']``.
+===========  ================  =======================================================
 
-``AsyncPipe(parallel=True)`` uses bounded concurrency instead of materializing
-an entire ``source``, but it still keeps in-flight and optionally prefetched
-work. See the `Cookbook`_'s performance and memory section for practical guidance.
+``export()`` and serialized exports materialize by the same reasoning as ``write``.
+Awaiting an ``AsyncPipe`` materializes all remaining ``items``, and
+``SyncPipe(parallel=True)``/``SyncCollection(parallel=True)`` materialize the source
+before submission.
+
+``AsyncPipe(parallel=True)`` uses bounded concurrency instead of materializing the
+source, though it still keeps in-flight and optionally prefetched work. Without
+``parallel`` it buffers the source instead. ``AsyncCollection`` ignores ``parallel``.
+It bounds by ``connections``, and streams incrementally (unless ``ordered=True``,
+in which case it fetches each source whole). See the `Cookbook`_'s performance and
+memory section for practical guidance.
 
 How do I send one stream to multiple consumers?
 -----------------------------------------------
@@ -711,6 +768,7 @@ documentation workflow.
 .. _What pipes are available: #what-pipes-are-available
 .. _How do I discover installed modules: #how-do-i-discover-installed-modules
 .. _What do processor, operator, and splitter mean: #what-do-processor-operator-and-splitter-mean
+.. _Why does my processor not map over a list: #why-does-my-processor-not-map-over-a-list
 .. _What file types are supported: #what-file-types-are-supported
 .. _What protocols are supported: #what-protocols-are-supported
 .. _Which optional dependencies are available: #which-optional-dependencies-are-available

@@ -457,6 +457,9 @@ unchanged. This allows you can persist an intermediate result and continue proce
     {'count': 3}
     b'[{"content": "a"}, {"content": "bb"}, {"content": "ccc"}]'
 
+Note that both ``export`` and ``write`` are **eager**: they serialize the complete
+source stream into memory. Don't use them on an unbounded ``stream``.
+
 Asynchronous pipelines
 ----------------------
 
@@ -915,8 +918,10 @@ Performance and memory
 Keep the following execution boundaries explicit:
 
 - A pipeline instance is single-use. Rebuild it for another run.
-- Most item ``transformers`` are iterator-oriented, but ``sort``, ``reverse``,
-  ``tail``, ``split``, aggregators, and exports consume or retain input.
+- Most item ``transformers`` are iterator-oriented, but ``write``, ``split``,
+  ``sort``, ``reverse``, ``count``, and a grouping ``sum`` hold the whole
+  ``stream`` in memory, so none of them can run on an unbounded source. See the
+  `FAQ`_ for the full table of what each retains.
 - ``SyncPipe(parallel=True)`` currently materializes the ``pipe`` ``source`` before
   local thread or process mapping. Don't use it for an unbounded ``stream``.
 - ``AsyncPipe(parallel=True)`` uses bounded concurrency and backpressure for
