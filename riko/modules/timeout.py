@@ -1,13 +1,18 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for returning items from a stream until a certain amount of
-time has passed.
+Returns items from a stream until a certain amount of time has passed.
 
 Contrast this with the truncate module, which also limits the number of items,
 but returns items based on a count.
 
+The sync pipe is lazy: items pass through as they arrive and the source is
+abandoned once the deadline is reached. The async pipe accepts either a sync
+stream or an async ``Feed`` (e.g. an async generator) and is eager — awaiting it
+collects items until the deadline, so it returns only once the timeout expires
+(bounding even an unbounded source) and holds every collected item in memory.
+
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from itertools import count
         >>> from time import sleep
@@ -16,14 +21,14 @@ Examples:
         >>> def gen_stream():
         ...     for x in count():
         ...         sleep(0.1)
-        ...         yield {'x': x}
+        ...         yield {"x": x}
         >>>
-        >>> len(list(pipe(gen_stream(), conf={'milliseconds': '250'})))
+        >>> len(list(pipe(gen_stream(), conf={"milliseconds": "250"})))
         2
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -129,37 +134,36 @@ async def async_parser(
     stream: Stream | Feed, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Asynchronously parses the pipe content
+    Asynchronously collects items until the configured duration elapses.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so consuming it
+            will consume `tuples` as well.
 
-        objconf (obj): the item independent configuration (an Objectify
-            instance).
+        objconf: The pipe configuration, containing any ``timedelta`` unit.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
-
-        kwargs (dict): Keyword arguments.
+        tuples: Iterable of tuples of (item, objconf) `item` is an element in the
+            source stream and `objconf` is the item configuration. Note: this shares
+            the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
-        Iter(dict): The output stream
+        A sync iterator over the items collected before the deadline. Awaiting
+        collects items until the timeout expires or the source ends. So an
+        unbounded ``Feed`` is bounded by the deadline, and every collected item
+        is held in memory. A total of 0 means no timeout.
 
     Examples:
         >>> from itertools import count
         >>> from riko import async_sleep, run
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'milliseconds': 250})
+        >>> objconf = Objectify({"milliseconds": 250})
         >>>
         >>> async def paginated_api():
         ...     # Paginated API feed — collect records until timeout:
         ...     for page in count():
         ...         await async_sleep(0.1)
-        ...         yield {'page': page, 'data': f'result_{page}'}
+        ...         yield {"page": page, "data": f"result_{page}"}
         >>>
         >>> async def main():
         ...     result = await async_parser(paginated_api(), objconf, iter(()))
@@ -178,36 +182,33 @@ def parser(
     stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Yields items until the configured duration elapses.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so consuming
+            it will consume `tuples` as well.
 
-        objconf (obj): the item independent configuration (an Objectify
-            instance).
+        objconf: The pipe configuration, containing any ``timedelta`` unit.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
-
-        kwargs (dict): Keyword arguments.
+        tuples: Iterable of tuples of (item, objconf) `item` is an element in the
+            source stream and `objconf` is the item configuration. Note: this shares
+            the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
-        Iter(dict): The output stream
+        A lazy iterator that stops once the deadline passes. A total of 0 means
+        no timeout.
 
     Examples:
         >>> from time import sleep
         >>> from meza.fntools import Objectify
         >>> from itertools import count
         >>>
-        >>> objconf = Objectify({'milliseconds': 250})
+        >>> objconf = Objectify({"milliseconds": 250})
         >>>
         >>> def gen_stream():
         ...     for x in count():
         ...         sleep(0.1)
-        ...         yield {'x': x}
+        ...         yield {"x": x}
         >>>
         >>> len(list(parser(gen_stream(), objconf, iter(()))))
         2
@@ -222,47 +223,54 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that asynchronously returns items from a stream until a
-        certain amount of time has passed.
+    Asynchronously returns items from a stream until a certain amount of time has
+    passed.
+
+    Not lazy: awaiting collects items until the timeout expires and holds every
+    collected item in memory. Accepts either a sync stream or an async ``Feed``
+    (e.g. an async generator); an unbounded ``Feed`` is bounded by the deadline.
+    Units are additive, so ``seconds`` and ``milliseconds`` together give their
+    sum.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items | Feed): The source stream.
+
+        conf (dict): The pipe configuration. Each key is cast to an int, so a
+            numeric string is accepted. A total of 0 means no timeout and the
+            whole source is returned.
+
+            days (int): Days to wait (default: 0).
+            seconds (int): Seconds to wait (default: 0).
+            microseconds (int): Microseconds to wait (default: 0).
+            milliseconds (int): Milliseconds to wait (default: 0).
+            minutes (int): Minutes to wait (default: 0).
+            hours (int): Hours to wait (default: 0).
+            weeks (int): Weeks to wait (default: 0).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain any of the following
-            keys: 'days', 'seconds', 'microseconds', 'milliseconds', 'minutes',
-            'hours', 'weeks'.
+        assign (str): Field each item is nested under. Ignored when ``emit`` is True
+            (default: "timeout").
 
-            days (int): Number of days before signaling a timeout (default: 0)
-            seconds (int): Number of seconds before signaling a timeout
-                (default: 0)
-            microseconds (int): Number of microseconds before signaling a
-                timeout (default: 0)
-            milliseconds (int): Number of milliseconds before signaling a
-                timeout (default: 0)
-            minutes (int): Number of minutes before signaling a timeout
-                (default: 0)
-            hours (int): Number of hours before signaling a timeout
-                (default: 0)
-            weeks (int): Number of weeks before signaling a timeout
-                (default: 0)
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-    Returns:
-        Awaitable: stream
+    Yields:
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
         >>> from itertools import count
-        >>> from time import sleep
-        >>> from riko import run
+        >>> from riko import async_sleep, run
         >>>
-        >>> def gen_stream():
-        ...     for x in count():
-        ...         sleep(0.1)
-        ...         yield {'x': x}
+        >>> async def paginated_api():
+        ...     for page in count():
+        ...         await async_sleep(0.1)
+        ...         yield {"page": page}
         >>>
         >>> async def main():
-        ...     result = await async_pipe(gen_stream(), conf={'milliseconds': 250})
+        ...     result = await async_pipe(paginated_api(), conf={"milliseconds": 250})
         ...     print(len(list(result)))
         >>>
         >>> run(main)
@@ -275,34 +283,39 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that returns items from a stream until a certain amount of
-        time has passed.
+    Yields items from a stream until a certain amount of time has passed.
+
+    Lazy: items pass through as they arrive and the source is abandoned once the
+    deadline is reached. Units are additive, so ``seconds`` and ``milliseconds``
+    together give their sum.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration. Each key is cast to an int, so a
+            numeric string is accepted. A total of 0 means no timeout and the
+            whole source is returned.
+
+            days (int): Days to wait (default: 0).
+            seconds (int): Seconds to wait (default: 0).
+            microseconds (int): Microseconds to wait (default: 0).
+            milliseconds (int): Milliseconds to wait (default: 0).
+            minutes (int): Minutes to wait (default: 0).
+            hours (int): Hours to wait (default: 0).
+            weeks (int): Weeks to wait (default: 0).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain any of the following
-            keys: 'days', 'seconds', 'microseconds', 'milliseconds', 'minutes',
-            'hours', 'weeks'.
+        assign (str): Field each item is nested under. Ignored when ``emit`` is True
+            (default: "timeout").
 
-            days (int): Number of days before signaling a timeout (default: 0)
-            seconds (int): Number of seconds before signaling a timeout
-                (default: 0)
-            microseconds (int): Number of microseconds before signaling a
-                timeout (default: 0)
-            milliseconds (int): Number of milliseconds before signaling a
-                timeout (default: 0)
-            minutes (int): Number of minutes before signaling a timeout
-                (default: 0)
-            hours (int): Number of hours before signaling a timeout
-                (default: 0)
-            weeks (int): Number of weeks before signaling a timeout
-                (default: 0)
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: an item
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
         >>> from itertools import count
@@ -311,9 +324,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> def gen_stream():
         ...     for x in count():
         ...         sleep(0.1)
-        ...         yield {'x': x}
+        ...         yield {"x": x}
         >>>
-        >>> len(list(pipe(gen_stream(), conf={'milliseconds': '250'})))
+        >>> len(list(pipe(gen_stream(), conf={"milliseconds": "250"})))
         2
 
     """

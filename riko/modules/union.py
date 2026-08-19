@@ -1,21 +1,23 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for merging separate sources into a single stream of items.
+Merges separate sources into a single stream of items.
+
+Lazy: the source and every ``others`` stream are chained, not materialized.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.union import pipe
         >>>
-        >>> items = ({'x': x} for x in range(5))
-        >>> other1 = ({'x': x + 5} for x in range(5))
-        >>> other2 = ({'x': x + 10} for x in range(5))
+        >>> items = ({"x": x} for x in range(5))
+        >>> other1 = ({"x": x + 5} for x in range(5))
+        >>> other2 = ({"x": x + 10} for x in range(5))
         >>> len(list(pipe(items, others=[other1, other2])))
         15
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -41,35 +43,30 @@ def parser(
     stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Chains the source and every ``others`` stream into one stream.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so consuming
+            it will consume `tuples` as well.
 
-        objconf (obj): the item independent configuration (an Objectify
-            instance).
+        objconf: The pipe configuration. Unused.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
+        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+            Note: this shares the `stream` iterator, so consuming it will consume
+            `stream` as well.
 
-        kwargs (dict): Keyword arguments.
-
-    Kwargs:
-        others (List[Iter(dict)]): List of streams to join
+        others: Streams to append after the source. Defaults to no streams.
 
     Returns:
-        Iter(dict): The output stream
+        A lazy chain of the source followed by each stream in ``others``.
 
     Examples:
         >>> from itertools import repeat
         >>>
-        >>> stream = ({'x': x} for x in range(5))
-        >>> other1 = ({'x': x + 5} for x in range(5))
-        >>> other2 = ({'x': x + 10} for x in range(5))
-        >>> kwargs = {'others': [other1, other2]}
+        >>> stream = ({"x": x} for x in range(5))
+        >>> other1 = ({"x": x + 5} for x in range(5))
+        >>> other2 = ({"x": x + 10} for x in range(5))
+        >>> kwargs = {"others": [other1, other2]}
         >>> tuples = zip(stream, repeat(None))
         >>> len(list(parser(stream, None, tuples, **kwargs)))
         15
@@ -83,25 +80,35 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that asynchronously merges multiple source streams together.
+    Asynchronously merges multiple source streams together.
+
+    Lazy: streams are chained, not materialized.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+        conf (dict): The pipe configuration. Unused.
+        context (Context): the execution context
 
     Kwargs:
-        others (List[Iter(dict)]): List of streams to join
+        others (list[Items]): Streams appended after ``items`` (default: none).
 
-    Returns:
-        Awaitable: iterator of the merged streams
+        assign (str): Field each item is nested under. Ignored when ``emit`` is
+            True (default: "union").
+
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
+
+    Yields:
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     items = ({'x': x} for x in range(5))
-        ...     other1 = ({'x': x + 5} for x in range(5))
-        ...     other2 = ({'x': x + 10} for x in range(5))
+        ...     items = ({"x": x} for x in range(5))
+        ...     other1 = ({"x": x + 5} for x in range(5))
+        ...     other2 = ({"x": x + 10} for x in range(5))
         ...     result = await async_pipe(items, others=[other1, other2])
         ...     print(len(list(result)))
         >>>
@@ -115,22 +122,32 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that merges multiple streams together.
+    Merges multiple source streams together.
+
+    Lazy: streams are chained, not materialized.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+        conf (dict): The pipe configuration. Unused.
+        context (Context): the execution context
 
     Kwargs:
-        others (List[Iter(dict)]): List of streams to join
+        others (list[Items]): Streams appended after ``items`` (default: none).
+
+        assign (str): Field each item is nested under. Ignored when ``emit`` is
+            True (default: "union").
+
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: a merged stream item
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
 
     Examples:
-        >>> items = ({'x': x} for x in range(5))
-        >>> other1 = ({'x': x + 5} for x in range(5))
-        >>> other2 = ({'x': x + 10} for x in range(5))
+        >>> items = ({"x": x} for x in range(5))
+        >>> other1 = ({"x": x + 5} for x in range(5))
+        >>> other2 = ({"x": x + 10} for x in range(5))
         >>> len(list(pipe(items, others=[other1, other2])))
         15
 

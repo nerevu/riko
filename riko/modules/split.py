@@ -1,23 +1,28 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for splitting a stream into identical copies
+Splits a stream into identical copies.
 
 Use split when you want to perform different operations on data from the same
-stream. The Union module is the reverse of Split, it merges multiple input
+stream. The union module is the reverse of split, it merges multiple input
 streams into a single combined stream.
 
+Not lazy: handing out independent copies requires the whole stream up front, so
+the source is materialized and each branch replays it. For lazy fan-out use
+named ``send``/``receive`` channels instead. Each branch deep copies its items,
+so mutating one branch never affects another.
+
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.split import pipe
         >>>
-        >>> stream1, stream2 = pipe({'x': x} for x in range(5))
+        >>> stream1, stream2 = pipe({"x": x} for x in range(5))
         >>> next(stream1)
         {'x': 0}
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Splitter wrapper options.
+    DEFAULTS: Default splitter configuration.
 
 """
 
@@ -42,32 +47,29 @@ def parser(
     stream: Stream, splits: int, tuples: PipeTuples, **kwargs: object
 ) -> Iterator[Stream]:
     """
-    Parses the pipe content
+    Yields ``splits`` independent copies of the source stream.
 
     Args:
-        stream (Iter[dict]): The source stream. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source stream. Note: this shares the `tuples` iterator, so consuming
+            it will consume `tuples` as well.
 
-        splits (int): the number of copies to create.
+        splits: The number of copies to create.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, splits)
-            `item` is an element in the source stream (a DotDict instance)
-            and `splits` is an int. Note: this shares the `stream` iterator,
-            so consuming it will consume `stream` as well.
-
-        kwargs (dict): Keyword arguments.
+        tuples: Iterable of tuples of (item, splits) `item` is an element in the source
+            stream. Note: this shares the `stream` iterator, so consuming it will
+            consume `stream` as well.
 
     Yields:
-        Iter(dict): a stream of items
+        One stream per split. Each stream replays a deep copy of every source item.
 
     Examples:
         >>> from itertools import repeat
         >>>
-        >>> conf = {'splits': 3}
-        >>> kwargs = {'conf': conf}
-        >>> stream = (({'x': x}) for x in range(5))
+        >>> conf = {"splits": 3}
+        >>> kwargs = {"conf": conf}
+        >>> stream = (({"x": x}) for x in range(5))
         >>> tuples = zip(stream, repeat(conf))
-        >>> stream1, stream2, stream3 = parser(stream, conf['splits'], tuples, **kwargs)
+        >>> stream1, stream2, stream3 = parser(stream, conf["splits"], tuples, **kwargs)
         >>> next(stream1)
         {'x': 0}
 
@@ -81,26 +83,29 @@ def parser(
 @splitter(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
     """
-    An operator that asynchronously and eagerly splits a stream into identical
-    copies. Note that this pipe is not lazy.
+    Asynchronously splits a stream into identical copies.
+
+    Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
-        items (Iter[dict]): The source stream.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
 
-    Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'splits'.
+        conf (dict): The pipe configuration.
 
-            splits (int): the number of copies to create (default: 2).
+            splits (int): The number of copies to create. Cast to an int, so a
+                numeric string is accepted (default: 2).
 
-    Returns:
-        Awaitable: iterable of streams
+        context (Context): the execution context
+
+    Yields:
+        One stream per split. Each stream yields a deep copy of every source item, so
+        the branches can be consumed independently and in any order.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     result = await async_pipe({'x': x} for x in range(5))
+        ...     result = await async_pipe({"x": x} for x in range(5))
         ...     print(next(next(result)))
         >>>
         >>> run(main)
@@ -113,29 +118,32 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
 @splitter(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[Stream]:
     """
-    An operator that eagerly splits a stream into identical copies.
-    Note that this pipe is not lazy.
+    Splits a stream into identical copies.
+
+    Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
-        items (Iter[dict]): The source stream.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
 
-    Kwargs:
-        conf (dict): The pipe configuration. May contain the key 'splits'.
+        conf (dict): The pipe configuration.
 
-            splits (int): the number of copies to create (default: 2).
+            splits (int): The number of copies to create. Cast to an int, so a
+                numeric string is accepted (default: 2).
+
+        context (Context): the execution context
 
     Yields:
-        Iter(dict): a stream of items
+        One stream per split. Each stream yields a deep copy of every source item, so
+        the branches can be consumed independently and in any order.
 
     Examples:
-        >>> items = [{'x': x} for x in range(5)]
+        >>> items = [{"x": x} for x in range(5)]
         >>> stream1, stream2 = pipe(items)
         >>> next(stream1)
         {'x': 0}
         >>> next(stream2)
         {'x': 0}
-        >>> len(list(pipe(items, conf={'splits': '3'})))
+        >>> len(list(pipe(items, conf={"splits": "3"})))
         3
 
     """

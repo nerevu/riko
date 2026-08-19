@@ -1,23 +1,23 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for concatenating strings (aka stringbuilder).
+Concatenates strings (aka stringbuilder).
 
 Useful when you need to build a string from multiple substrings, some coded
 into the pipe, other parts supplied when the pipe is run.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.strconcat import pipe
         >>>
-        >>> item = {'word': 'hello'}
-        >>> part = [{'subkey': 'word', 'type': 'text'}, ' world']
-        >>> next(pipe(item, conf={'part': part}))['strconcat']
+        >>> item = {"word": "hello"}
+        >>> part = [{"subkey": "word", "type": "text"}, " world"]
+        >>> next(pipe(item, conf={"part": part}))["strconcat"]
         'hello world'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -40,21 +40,21 @@ def parser(
     _: Item, extraction: Extraction, objconf: StrconcatObjconf, **kwargs: object
 ) -> str:
     """
-    Parses the pipe content
+    Joins the resolved parts into one string.
+
+    Unresolved parts are skipped, so a ``subkey`` that finds nothing adds
+    nothing.
 
     Args:
-        _ (dict): The item (ignored)
-        parts (List[str]): The content to concatenate
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused; the parts arrive already resolved.
+        extraction: The resolved parts.
+        objconf: The pipe configuration. Unused.
 
     Returns:
-        str: The concatenated string
+        The concatenated string.
 
     Examples:
-        >>> parser(None, ['one', 'two'], None)
+        >>> parser(None, ["one", "two"], None)
         'onetwo'
 
     """
@@ -64,37 +64,52 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor module that asynchronously concatenates strings.
+    Asynchronously concatenates strings into an item field.
+
+    Only an iterator source is mapped over; see the FAQ's "Why does my processor not map
+    over a list?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            part (str | dict | list): The pieces to join, in order. A single
+                piece is wrapped in a list. A str is used verbatim; a dict
+                resolves to a value and must hold one of:
+
+                    subkey (str): Item attribute supplying the piece. Dotted keys
+                    read nested values, e.g. ``"img.src"``.
+
+                    terminal (str): Id of a wired pipe supplying the piece.
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'part'.
+        assign (str): Field the result is assigned to. Ignored when ``emit`` is
+            True (default: "strconcat").
 
-            part (dict): can be either a str/dict or list of strs/dicts. If dict, Must
-                contain one of the following keys: 'subkey' or 'terminal'.
+        emit (bool): Whether to emit the string in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-                subkey (str): The item attribute from which to obtain a
-                    substring
+    Yields:
+        - merged ``{Item, <assign>: <string>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <string>}`` when ``emit`` is False and no item given
+        - ``<string>`` when ``emit`` is True
 
-                terminal (str): The id of a pipe from which to obtain a
-                    substring
-
-        assign (str): Attribute to assign parsed content (default: strconcat)
-
-    Returns:
-       Awaitable: item with concatenated content
+    Notes:
+        Only ``None`` is dropped. So a ``subkey`` that finds nothing adds nothing, while
+        other falsy values are kept.
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     item = {'title': 'Hello world'}
-        ...     part = [{'subkey': 'title', 'type': 'text'}, 's']
-        ...     result = await async_pipe(item, conf={'part': part})
-        ...     print(next(result)['strconcat'])
+        ...     item = {"title": "Hello world"}
+        ...     part = [{"subkey": "title", "type": "text"}, "s"]
+        ...     result = await async_pipe(item, conf={"part": part})
+        ...     print(next(result)["strconcat"])
         >>>
         >>> run(main)
         Hello worlds
@@ -106,36 +121,51 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor that concatenates strings.
+    Concatenates strings into an item field.
+
+    Only an iterator source is mapped over; see the FAQ's "Why does my processor not map
+    over a list?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            part (str | dict | list): The pieces to join, in order. A single
+                piece is wrapped in a list. A str is used verbatim; a dict
+                resolves to a value and must hold one of:
+
+                    subkey (str): Item attribute supplying the piece. Dotted keys
+                    read nested values, e.g. ``"img.src"``.
+
+                    terminal (str): Id of a wired pipe supplying the piece.
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'part'.
+        assign (str): Field the result is assigned to. Ignored when ``emit`` is
+            True (default: "strconcat").
 
-            part (dict): can be either a str/dict or list of strs/dicts. If dict, Must
-                contain one of the following keys: 'subkey' or 'terminal'.
-
-                subkey (str): The item attribute from which to obtain a
-                    substring
-
-                terminal (str): The id of a pipe from which to obtain a
-                    substring
-
-        assign (str): Attribute to assign parsed content (default: strconcat)
+        emit (bool): Whether to emit the string in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
     Yields:
-        dict: an item with concatenated content
+        - merged ``{Item, <assign>: <string>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <string>}`` when ``emit`` is False and no item given
+        - ``<string>`` when ``emit`` is True
+
+    Notes:
+        Only ``None`` is dropped. So a ``subkey`` that finds nothing adds nothing, while
+        other falsy values are kept.
 
     Examples:
-        >>> item = {'img': {'src': 'http://www.site.com'}}
-        >>> part = ['<img src="', {'subkey': 'img.src', 'type': 'text'}, '">']
-        >>> conf = {'part': part}
-        >>> next(pipe(item, conf=conf))['strconcat']
+        >>> item = {"img": {"src": "http://www.site.com"}}
+        >>> part = ['<img src="', {"subkey": "img.src", "type": "text"}, '">']
+        >>> conf = {"part": part}
+        >>> next(pipe(item, conf=conf))["strconcat"]
         '<img src="http://www.site.com">'
-        >>> next(pipe(item, conf=conf, assign='result'))['result']
+        >>> next(pipe(item, conf=conf, assign="result"))["result"]
         '<img src="http://www.site.com">'
 
     """

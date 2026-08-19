@@ -1,16 +1,22 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for performing an arbitrary (user-defined) function on an
-item.
+Applies an arbitrary (user-defined) function to each item.
+
+``func`` receives one item at a time. Contrast this with the aggregate module,
+which hands the whole stream to a single call.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.udf import pipe
         >>>
-        >>> func = lambda item: {'y': item['x'] + 3}
-        >>> next(pipe({'x': 0}, func=func))
+        >>> func = lambda item: {"y": item["x"] + 3}
+        >>> next(pipe({"x": 0}, func=func))
         {'y': 3}
+
+Attributes:
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -37,31 +43,30 @@ async def async_parser(
     item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
 ) -> Item:
     """
-    Parsers the pipe content asynchronously
+    Asynchronously applies ``func`` to one item.
 
     Args:
-        item: The entry to process (a DotDict instance)
-        objconf: The pipe configuration (an Objectify instance)
-        kwargs: Keyword arguments
+        item: The entry to process.
+        extraction: The extracted ``field`` value. Unused.
+        objconf: The pipe configuration. Unused.
 
     Kwargs:
-        stream: The original item
+        func (callable): The function to apply to the item. Awaited when it is an async
+            function. Required.
 
     Returns:
-        dict: The item
+        Whatever ``func`` returns.
 
     Raises:
         TypeError: If ``func`` is not given.
 
     Examples:
-        >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     func = lambda item: {'y': item['x'] + 3}
-        ...     item = DotDict({'x': 0})
-        ...     print(await async_parser(item, None, None, stream=item, func=func))
+        ...     func = lambda item: {"y": item["x"] + 3}
+        ...     print(await async_parser({"x": 0}, None, None, func=func))
         >>>
         >>> run(main)
         {'y': 3}
@@ -75,29 +80,27 @@ def parser(
     item: Item, extraction: Extraction, objconf: UdfObjconf, **kwargs: object
 ) -> Item:
     """
-    Parsers the pipe content
+    Applies ``func`` to one item.
 
     Args:
-        item: The entry to process (a DotDict instance)
-        objconf: The pipe configuration (an Objectify instance)
-        kwargs: Keyword arguments
+        item: The entry to process.
+        extraction: The extracted ``field`` value. Unused.
+        objconf: The pipe configuration. Unused.
 
     Kwargs:
-        stream: The original item
+        func (callable): The function to apply to the item. Required.
 
     Returns:
-        dict: The item
+        Whatever ``func`` returns.
 
     Raises:
         TypeError: If ``func`` is not given.
 
     Examples:
-        >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
         >>>
-        >>> func = lambda item: {'y': item['x'] + 3}
-        >>> item = DotDict({'x': 0})
-        >>> parser(item, None, None, stream=item, func=func)
+        >>> func = lambda item: {"y": item["x"] + 3}
+        >>> parser({"x": 0}, None, None, func=func)
         {'y': 3}
 
     """
@@ -105,22 +108,38 @@ def parser(
     return func(item)
 
 
-# TODO: add support for async functions
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
-    A processor that asynchronously performs an arbitrary (user-defined)
-    function on an item.
+    Asynchronously applies an arbitrary (user-defined) function to each item.
+
+    ``func`` is called once per item. Only an iterator source is mapped over. See the
+    FAQ's "Why does my processor not map over a list?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs: The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries, to process.
+        conf (dict): The pipe configuration. Unused.
+        context (Context): the execution context
 
     Kwargs:
-        func (callable): User defined function to apply to each stream item.
+        func (callable): The function to apply to each item. Receives the whole item, or
+            the ``field`` value when ``field`` is set. Can be either a sync or async
+            function. Required.
 
-    Returns:
-        Awaitable: truncated stream
+        field (str): Field whose value is passed to ``func`` in place of the
+            item (default: None).
+
+        assign (str): Field the result is merged into the item under. Ignored
+            when ``emit`` is True (default: "udf").
+
+        emit (bool): Whether to emit the result in place of the item rather than
+            assign it. Overrides ``assign`` (default: True).
+
+    Yields:
+        - ``<result>`` when ``emit`` is True (default)
+        - ``{<assign>: <result>}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: <result>}`` when ``emit`` is False and
+          item is given
 
     Raises:
         TypeError: If ``func`` is not given.
@@ -129,8 +148,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     func = lambda item: {'y': item['x'] + 3}
-        ...     result = await async_pipe({'x': 0}, func=func)
+        ...     func = lambda item: {"y": item["x"] + 3}
+        ...     result = await async_pipe({"x": 0}, func=func)
         ...     print(next(result))
         >>>
         >>> run(main)
@@ -143,25 +162,41 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Item:
     """
-    A processor that performs an arbitrary (user-defined) function
-    on an item.
+    Applies an arbitrary (user-defined) function to each item.
+
+    ``func`` is called once per item. Only an iterator source is mapped over. See the
+    FAQ's "Why does my processor not map over a list?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs: The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries, to process.
+        conf (dict): The pipe configuration. Unused.
+        context (Context): the execution context
 
     Kwargs:
-        func (callable): User defined function to apply to each stream item.
+        func (callable): The function to apply to each item. Receives the whole
+            item, or the ``field`` value when ``field`` is set. Required.
+
+        field (str): Field whose value is passed to ``func`` in place of the
+            item (default: None).
+
+        assign (str): Field the result is merged into the item under. Ignored
+            when ``emit`` is True (default: "udf").
+
+        emit (bool): Whether to emit the result in place of the item rather than
+            assign it. Overrides ``assign`` (default: True).
 
     Yields:
-        dict: an item
+        - ``<result>`` when ``emit`` is True (default)
+        - ``{<assign>: <result>}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: <result>}`` when ``emit`` is False and
+          item is given
 
     Raises:
         TypeError: If ``func`` is not given.
 
     Examples:
-        >>> func = lambda item: {'y': item['x'] + 3}
-        >>> next(pipe({'x': 0}, func=func))
+        >>> func = lambda item: {"y": item["x"] + 3}
+        >>> next(pipe({"x": 0}, func=func))
         {'y': 3}
 
     """

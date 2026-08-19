@@ -1,19 +1,19 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for summing the items in a stream.
+Sums fields of the items in a stream.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.sum import pipe
         >>>
-        >>> stream = pipe({'content': x} for x in range(5))
-        >>> next(stream)['sum']
+        >>> stream = pipe({"content": x} for x in range(5))
+        >>> next(stream)["sum"]
         Decimal('10')
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -39,42 +39,41 @@ def parser(
     stream: Stream, objconf: SumObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Decimal | Iterator[dict[str, Decimal]]:
     """
-    Parses the pipe content
+    Sums the ``sum_key`` field, optionally grouping by ``group_key``.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so consuming
+            it will consume `tuples` as well.
 
-        objconf (obj): The pipe configuration (an Objectify instance)
+        objconf: the item independent configuration.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
-
-        kwargs (dict): Keyword arguments.
-
-    Kwargs:
-        conf (dict): The pipe configuration.
+        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+            Note: this shares the `stream` iterator, so consuming it will consume
+            `stream` as well.
 
     Returns:
-        mixed: The output either a dict or iterable of dicts
+        ``{value: sum}`` per group when ``group_key`` is given, otherwise the total
+        sum
+
+    Returns:
+        - ``Iterator[{<group>: <sum>}]`` when ``group_key`` is set
+        - ``<sum>`` when ``group_key`` is unset
 
     Examples:
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
         >>>
-        >>> stream = ({'content': x} for x in range(5))
-        >>> objconf = Objectify({'sum_key': 'content'})
+        >>> stream = ({"content": x} for x in range(5))
+        >>> objconf = Objectify({"sum_key": "content"})
         >>> tuples = zip(stream, repeat(objconf))
-        >>> args = (stream, objconf, tuples)
-        >>> parser(*args, assign='content')
+        >>> parser(stream, objconf, tuples)
         Decimal('10')
-        >>> objconf = Objectify({'sum_key': 'amount', 'group_key': 'x'})
+        >>> objconf = Objectify({"sum_key": "amount", "group_key": "x"})
         >>> stream = [
-        ...     {'amount': 2, 'x': 'one'},
-        ...     {'amount': 1, 'x': 'one'},
-        ...     {'amount': 2, 'x': 'two'}]
+        ...     {"amount": 2, "x": "one"},
+        ...     {"amount": 1, "x": "one"},
+        ...     {"amount": 2, "x": "two"},
+        ... ]
         >>> tuples = zip(stream, repeat(objconf))
         >>> summed = parser(stream, objconf, tuples)
         >>> next(summed)
@@ -97,37 +96,43 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Decimal]]:
     """
-    An operator that asynchronously and eagerly sums fields of items
-    in a stream. Note that this pipe is not lazy if `group_key` is specified.
+    Asynchronously sums fields of the items in a stream.
+
+    Not lazy when ``group_key`` is set: grouping holds every item in memory.
+    Without it the sum streams in constant memory, but still consumes the
+    whole source before returning.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            sum_key (str): Field to sum (default: "content").
+
+            group_key (str): Field to sum by. Groups items in the stream by
+                the given key and reports a sum for each group (default: None).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'sum_key' or
-            'group_key'.
+        assign (str): Field the sum is assigned to. Ignored when ``group_key`` is set
+            (the group keys are used instead) or ``emit`` is True (default: "sum").
 
-            sum_key (str): Item attribute to sum. (default: 'content').
+        emit (bool): Whether to emit the sum directly rather than assign it. Ignored
+            when ``group_key`` is set. Overrides ``assign`` (default: False).
 
-            group_key (str): Item attribute to sum by. This will group items
-                in the stream by the given key and report a sum for each
-                group (default: None).
-
-        assign (str): Attribute to assign parsed content. If `sum_key` is set,
-            this is ignored and the group keys are used instead. (default:
-            content)
-
-    Returns:
-        Awaitable: iterator of the summed items
+    Yields:
+        - ``{<group>: <sum>}`` when ``group_key`` is set
+        - ``{<assign>: <sum>}`` when ``emit`` is False and ``group_key`` is unset
+        - ``<sum>`` when ``emit`` is True and ``group_key`` is unset
 
     Examples:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     items = ({'content': x} for x in range(5))
+        ...     items = ({"content": x} for x in range(5))
         ...     result = await async_pipe(items)
-        ...     print(next(result)['sum'])
+        ...     print(next(result)["sum"])
         >>>
         >>> run(main)
         10
@@ -139,39 +144,47 @@ def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Dec
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Decimal]]:
     """
-    An operator that eagerly sums fields of items in a stream.
-    Note that this pipe is not lazy if `group_key` is specified.
+    Sums fields of the items in a stream.
+
+    Not lazy when ``group_key`` is set: grouping holds every item in memory.
+    Without it the sum streams in constant memory, but still consumes the
+    whole source before returning.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            sum_key (str): Field to sum (default: "content").
+
+            group_key (str): Field to sum by. Groups items in the stream by
+                the given key and reports a sum for each group (default: None).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'sum_key' or
-            'group_key'.
+        assign (str): Field the sum is assigned to. Ignored when ``group_key`` is set
+            (the group keys are used instead) or ``emit`` is True (default: "sum").
 
-            sum_key (str): Item attribute to sum. (default: 'content').
-
-            group_key (str): Item attribute to sum by. This will group items
-                in the stream by the given key and report a sum for each
-                group (default: None).
-
-        assign (str): Attribute to assign parsed content. If `sum_key` is set,
-            this is ignored and the group keys are used instead. (default:
-            content)
+        emit (bool): Whether to emit the sum directly rather than assign it. Ignored
+            when ``group_key`` is set. Overrides ``assign`` (default: False).
 
     Yields:
-        dict: the summed items
+        - ``{<group>: <sum>}`` when ``group_key`` is set
+        - ``{<assign>: <sum>}`` when ``emit`` is False and ``group_key`` is unset
+        - ``<sum>`` when ``emit`` is True and ``group_key`` is unset
 
     Examples:
-        >>> stream = ({'content': x} for x in range(5))
-        >>> next(pipe(stream))['sum'    ]
+        >>> stream = ({"content": x} for x in range(5))
+        >>> next(pipe(stream))["sum"]
         Decimal('10')
+        >>> # Sum by group:
         >>> stream = [
-        ...     {'amount': 2, 'x': 'one'},
-        ...     {'amount': 1, 'x': 'one'},
-        ...     {'amount': 2, 'x': 'two'}]
-        >>> summed = pipe(stream, conf={'sum_key': 'amount', 'group_key': 'x'})
+        ...     {"amount": 2, "x": "one"},
+        ...     {"amount": 1, "x": "one"},
+        ...     {"amount": 2, "x": "two"},
+        ... ]
+        >>> summed = pipe(stream, conf={"sum_key": "amount", "group_key": "x"})
         >>> next(summed)
         {'one': Decimal('3')}
         >>> next(summed)
