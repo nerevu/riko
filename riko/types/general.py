@@ -62,8 +62,9 @@ type Stream = Iterator[Item]
 type StreamOrValueStream = Iterator[ItemOrValue]
 type Streams = Iterator[Stream]
 
-type AsyncStream = AsyncIterator[Item]
 type AsyncItems = AsyncIterable[Item]
+type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
+type AsyncStream = AsyncIterator[Item]
 type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
 
 type Feed = AsyncItems
@@ -162,6 +163,7 @@ class Defaults(TypedDict, total=False):
     sort: bool
     splits: int
     start: int
+    stop: bool
     strict: bool
     sum_key: str
     target: TargetLike
@@ -336,7 +338,7 @@ class AsyncSubPipe(ModuleWrapper):
 class AsyncOperatorWrapper(ModuleWrapper):
     async def __call__(  # noqa: E704
         self,
-        items: OperatorWrapperInput | None = None,
+        items: OperatorWrapperInput | Feed | None = None,
         conf: Conf | None = None,
         embed: AsyncProcessorWrapper | AsyncSubPipe | None = None,
         context: Context | None = None,

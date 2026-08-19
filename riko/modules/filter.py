@@ -48,7 +48,7 @@ from riko.types.modules import FilterConfRule
 from . import operator
 
 OPTS: Opts = {"listize": True, "extract": "rule"}
-DEFAULTS: Defaults = {"combine": "and", "permit": True}
+DEFAULTS: Defaults = {"combine": "and", "permit": True, "stop": False}
 COMBINE_BOOLEAN = {"and": all, "or": any}
 
 SWITCH: dict[str, Callable[..., bool]] = {

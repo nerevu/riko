@@ -16,10 +16,13 @@ The inference is ``explicit isasync`` OR ``async def`` OR name == ``async_pipe``
 The combination tables below exercise every input to that expression.
 """
 
+from collections.abc import AsyncIterator
+
 import pytest
 
 from riko import isasync, run
-from riko.ext import processor
+from riko.ext import operator, processor
+from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.types.general import Item, ProcessorWrapper
 
 
@@ -111,3 +114,40 @@ class TestInvalidCombinations:
     def test_error_reason_reflects_explicit_flag(self):
         with pytest.raises(TypeError, match="marked isasync=True"):
             _create_wrapper("pipe", iscoro=False, isasync=True)
+
+
+class TestAsyncGeneratorSource:
+    """An async-generator (Feed) source flows through an async operator wrapper."""
+
+    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    def test_feed_source_through_timeout(self):
+        async def feed():
+            for x in range(3):
+                yield {"x": x}
+
+        async def main():
+            result = await timeout_async_pipe(feed(), conf={})
+            return list(result)
+
+        assert run(main) == [{"x": 0}, {"x": 1}, {"x": 2}]
+
+    @pytest.mark.skipif(not isasync, reason="anyio not installed")
+    def test_feed_delivered_lazily_to_parser(self):
+        received = {}
+
+        @operator(isasync=True)
+        async def async_pipe(stream, objconf, tuples, **kwargs):
+            received["is_async"] = isinstance(stream, AsyncIterator)
+            collected = [item async for item in stream]
+            return iter(collected)
+
+        async def feed():
+            for x in range(3):
+                yield {"content": x}
+
+        async def main():
+            result = await async_pipe(feed())
+            return list(result)
+
+        assert run(main) == [{"content": 0}, {"content": 1}, {"content": 2}]
+        assert received["is_async"] is True

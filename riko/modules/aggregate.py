@@ -22,6 +22,7 @@ from typing import Any, cast
 import pygogo as gogo
 
 from riko._iterutils import listize
+from riko.modules._prepare import require_kwarg
 from riko.types.configs import AggregateObjconf
 from riko.types.general import Defaults, Item, PipeTuples, Stream
 
@@ -54,6 +55,9 @@ async def async_parser(
     Returns:
         Iter(dict): The output stream
 
+    Raises:
+        TypeError: If ``func`` is not given.
+
     Examples:
         >>> from itertools import repeat
         >>> from riko import run
@@ -69,7 +73,7 @@ async def async_parser(
         {'y': 3}
 
     """
-    func = cast(Callable[[Stream], Item], kwargs["func"])
+    func: Callable[[Stream], Item] = require_kwarg(kwargs, "func", "aggregate")
     result = await func(stream) if iscoroutinefunction(func) else func(stream)
     listed = listize(result)
     return iter(cast(list[Item], listed))
@@ -98,6 +102,9 @@ def parser(
     Returns:
         Iter(dict): The output stream
 
+    Raises:
+        TypeError: If ``func`` is not given.
+
     Examples:
         >>> from itertools import repeat
         >>>
@@ -108,7 +115,7 @@ def parser(
         {'y': 3}
 
     """
-    func = cast(Callable[[Stream], Item], kwargs["func"])
+    func: Callable[[Stream], Item] = require_kwarg(kwargs, "func", "aggregate")
     result = func(stream)
     listed = listize(result)
     return iter(cast(list[Item], listed))
@@ -126,6 +133,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Kwargs:
         func: User defined function to apply to the stream.
+
+    Raises:
+        TypeError: If ``func`` is not given.
 
     Examples:
         >>> from riko import run
@@ -154,6 +164,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Kwargs:
         func: User defined function to apply to the stream.
+
+    Raises:
+        TypeError: If ``func`` is not given.
 
     Examples:
         >>> items = [{'x': x} for x in range(5)]

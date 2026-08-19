@@ -7,7 +7,7 @@ conf merging/extraction, and the parser/caster construction that turns opts and
 conf into the callables a wrapper applies to each item.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
 from typing import cast, overload
@@ -48,6 +48,38 @@ from riko.types.modules import AnyModuleConf
 from riko.types.values import BasicReturn, PrimitiveValue, RikoDict, RikoList, RikoValue
 
 logger = gogo.Gogo(__name__, monolog=True).logger
+
+
+def require_kwarg[T](  # noqa: E704
+    kwargs: Mapping[str, object], name: str, pipe: str
+) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
+    """
+    Returns a required pipe argument, or reports which one is missing.
+
+    Args:
+        kwargs: The keyword arguments the pipe was called with.
+        name: The argument that must be present.
+        pipe: The pipe name, used in the error message.
+
+    Returns:
+        The value bound to ``name``.
+
+    Raises:
+        TypeError: If ``name`` is absent.
+
+    Examples:
+        >>> require_kwarg({"func": len}, "func", "udf")
+        <built-in function len>
+        >>> require_kwarg({}, "func", "udf")
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'udf' pipe requires the 'func' keyword argument
+
+    """
+    if name not in kwargs:
+        raise TypeError(f"the {pipe!r} pipe requires the {name!r} keyword argument")
+
+    return cast(T, kwargs[name])
 
 
 def get_pieces_or_conf(

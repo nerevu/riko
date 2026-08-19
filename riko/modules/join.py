@@ -31,6 +31,7 @@ import pygogo as gogo
 from meza.process import join, merge
 
 from riko.dotdict import is_mapping
+from riko.modules._prepare import require_kwarg
 from riko.types.configs import JoinObjconf
 from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
 
@@ -67,6 +68,9 @@ def parser(
     Returns:
         Iter(dict): The output stream
 
+    Raises:
+        TypeError: If ``other`` is not given.
+
     Examples:
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
@@ -91,7 +95,7 @@ def parser(
         4
 
     """
-    other = cast(Stream, kwargs["other"])
+    other: Stream = require_kwarg(kwargs, "other", "join")
 
     def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
         if isinstance(x, Mapping) and isinstance(y, Mapping):
@@ -149,6 +153,9 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Returns:
         Awaitable: iterator of the merged streams
 
+    Raises:
+        TypeError: If ``other`` is not given.
+
     Examples:
         >>> from riko import run
         >>>
@@ -188,6 +195,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Yields:
         dict: a merged stream item
+
+    Raises:
+        TypeError: If ``other`` is not given.
 
     Examples:
         >>> items = [{'x': f'foo-{x}', 'sum': x} for x in range(5)]
