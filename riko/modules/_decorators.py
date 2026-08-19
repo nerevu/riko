@@ -257,7 +257,7 @@ class Module[B: (Literal[True], Literal[False])]:
 
         if casters and not is_dynamic:
             parsed_conf = parsers.conf_parser({})
-            args = (parsed_conf, self.defaults, opts)
+            args = (parsed_conf, self.defaults, opts, module_name)
             parsed = get_pieces_or_conf(*args)
             casted = dispatch(parsed, casters[1], casters[2])
             static_casted = (casters[0], casted[0], cast(DynamicConf, casted[1]))
@@ -436,6 +436,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 casters=prepared.casters,
                 defaults=self.defaults,
                 field=field,
+                pipe=prepared.name,
                 **kwargs,
             )
 
@@ -890,6 +891,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 casters=prepared.casters,
                 defaults=self.defaults,
                 field=field,
+                pipe=prepared.name,
             )
             # Parses conf that can vary per item. Can't handle terminal input
             dispatcher = cast(Callable[[Item, Opts], ItemDispatch], _dispatcher)

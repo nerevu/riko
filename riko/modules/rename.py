@@ -154,6 +154,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     Returns:
        Awaitable: item with renamed content
 
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
+
     Examples:
         >>> from riko import run
         >>>
@@ -193,6 +196,9 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
     Yields:
         dict: an item with renamed content
+
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
 
     Examples:
         >>> rule = {'field': 'content', 'newval': 'greeting'}

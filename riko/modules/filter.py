@@ -292,6 +292,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
         ValueError: If a rule names an unsupported ``op``.
 
     Examples:
@@ -355,6 +356,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
         ValueError: If a rule names an unsupported ``op``.
 
     Examples:
