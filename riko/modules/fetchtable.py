@@ -28,7 +28,7 @@ import pygogo as gogo
 from meza.io import read
 
 from riko import ENCODING
-from riko._io import Fetch, auto_close
+from riko._io import Fetch, auto_close, seekable
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.types.configs import FetchTableObjconf
@@ -90,10 +90,10 @@ async def async_parser(
     r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
+    source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(objconf.url)[1]
-    stream = auto_close(read(r, ext, **rkwargs), r)
-    return stream
+    return auto_close(read(source, ext, **rkwargs), source)
 
 
 def parser(
@@ -127,10 +127,10 @@ def parser(
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     f = Fetch(objconf.url, encoding=objconf.encoding)
+    source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(objconf.url)[1]
-    stream = auto_close(read(f, ext, **rkwargs), f)
-    return stream
+    return auto_close(read(source, ext, **rkwargs), source)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
