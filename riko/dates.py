@@ -48,9 +48,11 @@ def _parse_date_cached(value: str) -> dt | BaseException:
     # cache doesn't work with exceptions, so we return the exception and raise it in the
     # caller
     try:
-        return parser.parse(value, tzinfos=TZINFOS)
+        result = cast(dt, parser.parse(value, tzinfos=TZINFOS))
     except Exception as e:  # noqa: BLE001
-        return e
+        result = e
+
+    return result
 
 
 def parse_date_string(value: str) -> dt:
@@ -82,7 +84,7 @@ def parse_date_string(value: str) -> dt:
     if isinstance(result, BaseException):
         raise result
 
-    return cast(dt, result)
+    return result
 
 
 def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
