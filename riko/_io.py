@@ -100,14 +100,19 @@ def buffer(  # noqa: E704
 def buffer(  # noqa: E704
     f: BinaryFileTypes, binary: bool = ..., *, encoding: str
 ) -> SpooledTemporaryFile[str]: ...
+@overload  # noqa: E302
+def buffer(  # noqa: E704
+    f: FileTypes, binary: bool | None = ..., encoding: str | None = ...
+) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]: ...
 def buffer(  # noqa: E302
     f: FileTypes, binary: bool | None = None, encoding: str | None = None
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
     """
-    Materialize *f* into a bounded, re-readable spool (in-memory then disk).
+    Returns a buffered, re-readable copy of ``f``.
 
-    Decodes to text when *encoding* is given for a byte source. *binary* is
-    auto-detected from the first chunk when not supplied.
+    The spool stays in memory until it exceeds the streaming threshold, then
+    spills to disk. Byte streams are decoded when ``encoding`` is set; ``binary``
+    is auto-detected from the first chunk when not supplied.
     """
     chunks = iter(f)
     first = None
@@ -119,7 +124,9 @@ def buffer(  # noqa: E302
     decode = binary and encoding
     encoding = encoding or ""
     mode = "w+b" if binary and not decode else "w+"
-    spool = SpooledTemporaryFile(max_size=STREAMING_THRESHOLD, mode=mode)  # noqa: SIM115
+    spool = SpooledTemporaryFile(  # noqa: SIM115
+        max_size=STREAMING_THRESHOLD, mode=mode
+    )
 
     if first is not None:
         spool.write(cast(bytes, first).decode(encoding) if decode else first)
@@ -129,6 +136,39 @@ def buffer(  # noqa: E302
 
     spool.seek(0)
     return spool
+
+
+def seekable(
+    f: FileTypes, binary: bool | None = None, encoding: str | None = None
+) -> FileTypes | SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
+    """
+    Returns ``f`` rewound, or a buffered copy when it cannot be rewound.
+
+    A fetched stream is forward-only, so readers that need a second pass (e.g.
+    a headerless csv) get a spooled copy instead. ``f`` is consumed when it is
+    buffered, so close it separately.
+
+    Args:
+        f: The file to rewind or copy.
+        binary: Whether the chunks are bytes. Auto-detected when omitted.
+        encoding: Encoding used to decode byte chunks while buffering.
+
+    Returns:
+        ``f`` itself when it rewound, otherwise a rewound spooled copy.
+
+    """
+    seek = getattr(f, "seek", None)
+    rewound = False
+
+    if callable(seek):
+        try:
+            seek(0)
+        except (OSError, ValueError, AttributeError):
+            pass
+        else:
+            rewound = True
+
+    return f if rewound else buffer(f, binary=binary, encoding=encoding)
 
 
 @overload

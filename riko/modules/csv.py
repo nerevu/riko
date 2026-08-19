@@ -25,7 +25,7 @@ import pygogo as gogo
 from meza.io import read_csv
 
 from riko import ENCODING
-from riko._io import Fetch, auto_close
+from riko._io import Fetch, auto_close, seekable
 from riko.bado import io
 from riko.cast import SourceOpts
 from riko.types.configs import CsvObjconf
@@ -87,10 +87,10 @@ async def async_parser(
     r = await io.async_url_open(objconf.url, encoding=objconf.encoding)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
+    source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    content = cast(Stream, read_csv(r, **rkwargs))
-    stream = auto_close(content, r)
-    return stream
+    content = cast(Stream, read_csv(source, **rkwargs))
+    return auto_close(content, source)
 
 
 def parser(
@@ -125,10 +125,10 @@ def parser(
     renamed = {"first_row": first_row, "custom_header": custom_header}
 
     f = Fetch(objconf.url, encoding=objconf.encoding)
+    source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
-    content = cast(Stream, read_csv(f, **rkwargs))
-    stream = auto_close(content, f)
-    return stream
+    content = cast(Stream, read_csv(source, **rkwargs))
+    return auto_close(content, source)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
