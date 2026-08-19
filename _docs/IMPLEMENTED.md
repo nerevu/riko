@@ -94,8 +94,12 @@ type AsyncSource = (
 ```
 
 Each asynchronous execution resolves the source once and normalizes it to
-`AsyncIterator[Item]`. The implementation currently accepts `Awaitable[Items]`, awaits it,
-and passes synchronous iterables to module parsers.
+`AsyncIterator[Item]`. `Awaitable[Items]` sources are awaited. A `Feed`
+(`AsyncIterable[Item]`) passed directly to an async operator now flows through the wrapper
+as an `AsyncIterator[Item]` (via `operator.aparse` + async-aware `operator.setup`), so
+composer operators (e.g. `timeout`) consume it lazily via `async for` and can bound an
+infinite `Feed`; the `AsyncPipe` collection path still buffers non-Feed-native parsers at
+the `_materialize_legacy_source` seam.
 
 ## 3. Pipe behavior (shipped)
 
@@ -235,7 +239,9 @@ is the module id, for `SyncPipe(...)`/`|` chaining): don't confuse them. In part
 `SINK_NAMES` (`{"output","write"}`) is the *criterion*, not the
 membership: a module is a `Sink` iff its name is in that set. The one built-in match is `write`
 (`riko/modules/write.py`) — a pass-through operator that serializes the stream to `conf['url']` via a
-`Targets` converter and yields items unchanged (`Modules.WRITE`/`Sinks.WRITE`). `output` stays
+`Targets` converter and yields items unchanged (`Modules.WRITE`/`Sinks.WRITE`). It is **not lazy** —
+serializing needs the whole stream, so `parser`/`async_parser` do `items = list(stream)` and the
+pass-through replays that list (contract §2/§3 streaming does not hold through a `write`). `output` stays
 unmatched (compiler-local passthrough node, not a `riko/modules/*.py` pipe). `write` is the
 in-pipeline counterpart of the one-shot `Targets`/`export` surface (see §25). `riko.ext.codegen` generates the byte-stable
 `riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing bucket members so

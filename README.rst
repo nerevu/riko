@@ -506,9 +506,9 @@ Built-in pipes
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
 | Control & extension         | ``loop``, ``udf``, ``send``, ``receive``                 | run submodules, call funcs, fan out items        |
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
-| Feed & location helpers     | ``fetchsitefeed``, ``exchangerate``, ``geolocate``       | feeds and network-backed transformations         |
+| Feed & location helpers     | ``fetchsitefeed``, ``exchangerate``, ``geolocate``       | feed and network-backed transformations          |
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
-| Sinks & writers             | ``write``                                                | serialize a stream to a file in-pipeline         |
+| Sinks & writers             | ``write``                                                | serialize a stream to a file (materializes it)   |
 +-----------------------------+----------------------------------------------------------+--------------------------------------------------+
 
 Pipeline lifecycle
