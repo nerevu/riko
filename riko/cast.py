@@ -310,61 +310,61 @@ def cast_value(content: object) -> str: ...  # noqa: E704
 @overload  # noqa: E302
 def cast_value[T](  # noqa: E704
     content: T,
-    _type: Literal[CastType.PASS],
+    type_: Literal[CastType.PASS],
     **kwargs: object,
 ) -> T: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
     content: object,
-    _type: Literal[CastType.NONE],
+    type_: Literal[CastType.NONE],
     **kwargs: object,
 ) -> None: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
     content: object,
-    _type: Literal[CastType.TEXT],
+    type_: Literal[CastType.TEXT],
     **kwargs: object,
 ) -> str: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
     content: object,
-    _type: Literal[CastType.FLOAT],
+    type_: Literal[CastType.FLOAT],
     **kwargs: object,
 ) -> float: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.DECIMAL], **kwargs: object
+    content: object, type_: Literal[CastType.DECIMAL], **kwargs: object
 ) -> Decimal: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.INT], **kwargs: object
+    content: object, type_: Literal[CastType.INT], **kwargs: object
 ) -> int: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.DATETIME], **kwargs: object
+    content: object, type_: Literal[CastType.DATETIME], **kwargs: object
 ) -> dt: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.DATE], **kwargs: object
+    content: object, type_: Literal[CastType.DATE], **kwargs: object
 ) -> date: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.URL], **kwargs: object
+    content: object, type_: Literal[CastType.URL], **kwargs: object
 ) -> str: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.LOCATION], **kwargs: object
+    content: object, type_: Literal[CastType.LOCATION], **kwargs: object
 ) -> AnyLocation: ...
 @overload  # noqa: E302
 def cast_value(  # noqa: E704
-    content: object, _type: Literal[CastType.BOOL], **kwargs: object
+    content: object, type_: Literal[CastType.BOOL], **kwargs: object
 ) -> bool: ...
 @overload  # noqa: E302
 def cast_value[T](  # noqa: E704
-    content: T, _type: CastType, **kwargs: object
+    content: T, type_: CastType, **kwargs: object
 ) -> T | PrimitiveValue: ...
 def cast_value[T](  # noqa: E302
-    content: T, _type: CastType = CastType.TEXT, **kwargs: object
+    content: T, type_: CastType = CastType.TEXT, **kwargs: object
 ) -> T | PrimitiveValue | AnyLocation:
     """
     Convert content from one type to another
@@ -406,24 +406,24 @@ def cast_value[T](  # noqa: E302
         ''
 
     """
-    if _type and _type in CAST_SWITCH:
-        precaster = CAST_SWITCH[_type]
+    if type_ and type_ in CAST_SWITCH:
+        precaster = CAST_SWITCH[type_]
     else:
-        if _type:
-            logger.warning(f"Invalid cast {_type=}. Returning content as is.")
+        if type_:
+            logger.warning(f"Invalid cast {type_=}. Returning content as is.")
 
         precaster = CAST_SWITCH[CastType.PASS]
 
     caster = precaster["func"]
     default = precaster["default"]
 
-    if content is None and _type != CastType.NONE:
+    if content is None and type_ != CastType.NONE:
         value = default
-    elif content is None or _type == CastType.NONE:
+    elif content is None or type_ == CastType.NONE:
         value = None
-    elif _type == CastType.PASS:
+    elif type_ == CastType.PASS:
         value = content
-    elif _type in KWARG_TYPES:
+    elif type_ in KWARG_TYPES:
         try:
             value = caster(content, **kwargs)  # pyright: ignore[reportArgumentType]
         except (TypeError, InvalidOperation, ValueError):
@@ -437,5 +437,5 @@ def cast_value[T](  # noqa: E302
     return value
 
 
-cast_none: Callable[..., None] = partial(cast_value, _type=CastType.NONE)
-cast_pass: Callable[[T], T] = partial(cast_value, _type=CastType.PASS)
+cast_none: Callable[..., None] = partial(cast_value, type_=CastType.NONE)
+cast_pass: Callable[[T], T] = partial(cast_value, type_=CastType.PASS)

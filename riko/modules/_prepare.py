@@ -202,7 +202,7 @@ def get_casters(opts: Opts) -> CastFuncs:
     extract = opts.get("extract")
 
     if ftype in CAST_SWITCH:
-        _field_func = partial(cast_value, _type=CastType(ftype))
+        _field_func = partial(cast_value, type_=CastType(ftype))
     else:
         if ftype:
             logger.warning(f"Invalid cast {ftype=}. Ignoring.")
@@ -212,7 +212,7 @@ def get_casters(opts: Opts) -> CastFuncs:
     field_func = cast(SyncArgFunc, _field_func)
 
     if ptype in CAST_SWITCH:
-        _caster = partial(cast_value, _type=CastType(ptype))
+        _caster = partial(cast_value, type_=CastType(ptype))
     else:
         if ptype:
             logger.warning(f"Invalid cast {ptype=}. Ignoring.")
