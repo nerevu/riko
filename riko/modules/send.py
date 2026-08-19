@@ -29,6 +29,7 @@ from typing import Any, cast
 import pygogo as gogo
 
 from riko._pubsub import async_hub, send
+from riko.modules._prepare import require_kwarg
 from riko.types.configs import SendObjconf
 from riko.types.general import Defaults, Opts, PipeTuples, Stream
 
@@ -48,8 +49,14 @@ async def async_parser(
     the receiver, so no startup ordering is needed; a target that is never
     subscribed is bounded by ``objconf.max_wait`` and raises
     ``ReceiverUnavailableError``. Returns the original items (passthrough).
+
+    Raises:
+        TypeError: If ``others`` is not given.
+        ReceiverUnavailableError: If a target is never subscribed within
+            ``objconf.max_wait``.
+
     """
-    others = kwargs["others"]
+    others: list[str] = require_kwarg(kwargs, "others", "send")
     timeout = objconf.max_wait
     sent = []
 
@@ -88,6 +95,9 @@ def parser(
     Returns:
         Iter(dict): The output stream
 
+    Raises:
+        TypeError: If ``others`` is not given.
+
     Examples:
         >>> from itertools import repeat
         >>> from riko.modules.receive import pipe as receiver
@@ -106,7 +116,7 @@ def parser(
         {'x': 0}
 
     """
-    others = cast(list[str], kwargs["others"])
+    others: list[str] = require_kwarg(kwargs, "others", "send")
     ids = cast(dict[str, int] | None, kwargs.get("ids"))
 
     for item in stream:
@@ -132,6 +142,9 @@ async def async_pipe(*args: Any, **kwargs: str) -> Stream:
     Yields:
         dict: an item
 
+    Raises:
+        TypeError: If ``others`` is not given.
+
     """
     return await async_parser(*args, **kwargs)
 
@@ -154,6 +167,9 @@ def pipe(*args: Any, **kwargs: str) -> Stream:
 
     Yields:
         dict: an item
+
+    Raises:
+        TypeError: If ``others`` is not given.
 
     Examples:
         >>> from riko.modules.receive import pipe as receiver

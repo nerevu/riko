@@ -58,7 +58,7 @@ def parser(
         'onetwo'
 
     """
-    return "".join(str(p) for p in extraction if p)
+    return "".join(str(p) for p in extraction if p is not None)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

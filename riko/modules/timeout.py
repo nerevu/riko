@@ -44,7 +44,7 @@ import pygogo as gogo
 from riko.bado.itertools import async_iter
 from riko.cast import BasicCastType
 from riko.types.configs import TimeoutObjconf
-from riko.types.general import Defaults, Opts, PipeTuples, Stream
+from riko.types.general import Defaults, Feed, Opts, PipeTuples, Stream
 
 from . import operator
 
@@ -126,7 +126,7 @@ class TimeoutIterator[T](Iterator[T]):
 
 
 async def async_parser(
-    stream: Stream, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
+    stream: Stream | Feed, objconf: TimeoutObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Asynchronously parses the pipe content

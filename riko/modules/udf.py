@@ -17,10 +17,11 @@ Examples:
 from collections.abc import Callable
 from inspect import iscoroutinefunction
 from logging import Logger
-from typing import Any, cast
+from typing import Any
 
 import pygogo as gogo
 
+from riko.modules._prepare import require_kwarg
 from riko.types.configs import UdfObjconf
 from riko.types.general import Defaults, Extraction, Item, Opts
 
@@ -49,6 +50,9 @@ async def async_parser(
     Returns:
         dict: The item
 
+    Raises:
+        TypeError: If ``func`` is not given.
+
     Examples:
         >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
@@ -63,7 +67,7 @@ async def async_parser(
         {'y': 3}
 
     """
-    func = cast(Callable[[Item], Item], kwargs["func"])
+    func: Callable[[Item], Item] = require_kwarg(kwargs, "func", "udf")
     return await func(item) if iscoroutinefunction(func) else func(item)
 
 
@@ -84,6 +88,9 @@ def parser(
     Returns:
         dict: The item
 
+    Raises:
+        TypeError: If ``func`` is not given.
+
     Examples:
         >>> from riko.dotdict import DotDict
         >>> from itertools import repeat
@@ -94,7 +101,7 @@ def parser(
         {'y': 3}
 
     """
-    func = cast(Callable[[Item], Item], kwargs["func"])
+    func: Callable[[Item], Item] = require_kwarg(kwargs, "func", "udf")
     return func(item)
 
 
@@ -114,6 +121,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
     Returns:
         Awaitable: truncated stream
+
+    Raises:
+        TypeError: If ``func`` is not given.
 
     Examples:
         >>> from riko import run
@@ -145,6 +155,9 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
     Yields:
         dict: an item
+
+    Raises:
+        TypeError: If ``func`` is not given.
 
     Examples:
         >>> func = lambda item: {'y': item['x'] + 3}
