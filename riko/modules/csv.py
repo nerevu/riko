@@ -1,20 +1,23 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for fetching csv files.
+Fetches a csv file and yields rows.
+
+The url may be local or remote; rows are read lazily and the source is closed
+when the stream is exhausted.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_path
         >>> from riko.modules.csv import pipe
         >>>
-        >>> url = get_path('spreadsheet.csv')
-        >>> next(pipe(conf={'url': url}))['mileage']
+        >>> url = get_path("spreadsheet.csv")
+        >>> next(pipe(conf={"url": url}))["mileage"]
         '7213'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -52,33 +55,28 @@ async def async_parser(
     _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs: object
 ) -> Stream:
     """
-    Asynchronously parses the pipe content
+    Asynchronously reads the csv file into a stream of rows.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url` and the csv options.
 
     Returns:
-        Iter[dict]: The stream of items
+        Rows keyed by column name. The source closes when the stream is exhausted.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     url = get_path('spreadsheet.csv')
+        ...     url = get_path("spreadsheet.csv")
         ...     conf = {
-        ...         'url': url, 'sanitize': True, 'skip_rows': 0,
-        ...         'encoding': ENCODING}
+        ...         "url": url, "sanitize": True, "skip_rows": 0,
+        ...         "encoding": ENCODING}
         ...     objconf = Objectify(conf)
         ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)['mileage'])
+        ...     print(next(result)["mileage"])
         >>>
         >>> run(main)
         7213
@@ -97,27 +95,27 @@ def parser(
     _: Item, extraction: Extraction, objconf: CsvObjconf, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Reads the csv file into a stream of rows.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url` and the csv options.
 
     Returns:
-        Iter[dict]: The stream of items
+        Rows keyed by column name. The source closes when the stream is exhausted.
 
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> url = get_path('spreadsheet.csv')
+        >>> url = get_path("spreadsheet.csv")
         >>> conf = {
-        ...     'url': url, 'sanitize': True, 'skip_rows': 0,
-        ...     'encoding': ENCODING}
+        ...     "url": url, "sanitize": True, "skip_rows": 0,
+        ...     "encoding": ENCODING}
         >>> objconf = Objectify(conf)
         >>> result = parser(None, None, objconf)
-        >>> next(result)['mileage']
+        >>> next(result)["mileage"]
         '7213'
 
     """
@@ -134,42 +132,60 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that asynchronously fetches the content of a given web site as
-    a string.
+    Asynchronously fetches a csv file and yields one item per row.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The csv file to fetch, local or remote. Required.
+            delimiter (str): Field delimiter (default: ",").
+            quotechar (str): Quote character (default: '"').
+            encoding (str): File encoding (default: "utf-8").
+
+            has_header (bool): Whether the first row names the columns. When
+                False the source is buffered so it can be read twice, and
+                columns are named ``column_1``, ``column_2``, ... unless
+                ``col_names`` is given (default: True).
+
+            skip_rows (int): Number of rows to drop before the header, zero
+                based (default: 0).
+
+            sanitize (bool): Whether to underscorify and lowercase the column
+                names (default: False).
+
+            dedupe (bool): Whether to deduplicate repeated column names
+                (default: True).
+
+            col_names (list): Column names to use in place of the header row
+                (default: None).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'delimiter', 'quotechar', 'encoding', 'skip_rows',
-            'sanitize', 'dedupe', 'col_names', or 'has_header'.
+        assign (str): Field each row is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The csv file to fetch
-            delimiter (str): Field delimiter (default: ',').
-            quotechar (str): Quote character (default: '"').
-            encoding (str): File encoding (default: 'utf-8').
-            has_header (bool): Has header row (default: True).
-            skip_rows (int): Number of initial rows to skip (zero based,
-                default: 0).
+        emit (bool): Whether to emit each row directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-            sanitize (bool): Underscorify and lowercase field names
-                (default: False).
+    Yields:
+        - ``<row>`` when ``emit`` is True (default)
+        - ``{<assign>: <row>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and item
+          is given
 
-            dedupe (bool): Deduplicate column names (default: False).
-            col_names (List[str]): Custom column names (default: None).
-
-    Returns:
-        Awaitable: item
+    Notes:
+        ``has_header=False`` buffers content into memory/disk. Every other option
+        streams.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={'url': get_path('spreadsheet.csv')})
-        ...     print(next(result)['mileage'])
+        ...     result = await async_pipe(conf={"url": get_path("spreadsheet.csv")})
+        ...     print(next(result)["mileage"])
         >>>
         >>> run(main)
         7213
@@ -181,39 +197,59 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that fetches and parses a csv file to yield items.
+    Fetches a csv file and yields one item per row.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The csv file to fetch, local or remote. Required.
+            delimiter (str): Field delimiter (default: ",").
+            quotechar (str): Quote character (default: '"').
+            encoding (str): File encoding (default: "utf-8").
+
+            has_header (bool): Whether the first row names the columns. When
+                False the source is buffered so it can be read twice, and
+                columns are named ``column_1``, ``column_2``, ... unless
+                ``col_names`` is given (default: True).
+
+            skip_rows (int): Number of rows to drop before the header, zero
+                based (default: 0).
+
+            sanitize (bool): Whether to underscorify and lowercase the column
+                names (default: False).
+
+            dedupe (bool): Whether to deduplicate repeated column names
+                (default: True).
+
+            col_names (list): Column names to use in place of the header row
+                (default: None).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the keys 'delimiter', 'quotechar', 'encoding', 'skip_rows',
-            'sanitize', 'dedupe', 'col_names', or 'has_header'.
+        assign (str): Field each row is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The csv file to fetch
-            delimiter (str): Field delimiter (default: ',').
-            quotechar (str): Quote character (default: '"').
-            encoding (str): File encoding (default: 'utf-8').
-            has_header (bool): Has header row (default: True).
-            skip_rows (int): Number of initial rows to skip (zero based,
-                default: 0).
-
-            sanitize (bool): Underscorify and lowercase field names
-                (default: False).
-
-            dedupe (bool): Deduplicate column names (default: False).
-            col_names (List[str]): Custom column names (default: None).
+        emit (bool): Whether to emit each row directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: item
+        - ``<row>`` when ``emit`` is True (default)
+        - ``{<assign>: <row>}`` when ``emit`` is False and no item given
+        - one merged ``{Item, <assign>: [<row>, ...]}`` when ``emit`` is False and item
+          is given
+
+    Notes:
+        ``has_header=False`` buffers content into memory/disk. Every other option
+        streams.
 
     Examples:
         >>> from riko import get_path
         >>>
-        >>> url = get_path('spreadsheet.csv')
-        >>> next(pipe(conf={'url': url}))['mileage']
+        >>> url = get_path("spreadsheet.csv")
+        >>> next(pipe(conf={"url": url}))["mileage"]
         '7213'
 
     """

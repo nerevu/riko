@@ -1,11 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides methods for mocking an input source. This enables other modules,
-e.g. date builder, to be called so they can continue to consume values from
-indirect terminal inputs. Loopable.
+Yields a placeholder item endlessly.
+
+Mocks an input source so other modules, e.g. datebuilder, can be called and keep
+consuming values from indirect terminal inputs.
+
+The stream never ends, so bound it downstream with ``truncate`` or ``timeout``.
+Pipes that must reach the end of the source, such as ``tail`` or ``sort``, will
+hang.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.forever import pipe
         >>>
@@ -13,8 +18,8 @@ Examples:
         {'forever': True}
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -40,20 +45,15 @@ def parser(
     _: Item, extraction: Extraction, objconf: DynamicConf, **kwargs: object
 ) -> Iterator[dict[str, bool]]:
     """
-    Parses the pipe content
+    Returns an endless iterator of ``{"forever": True}``.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
-        conf (dict): The pipe configuration
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration. Unused.
 
     Returns:
-        Iter[dict]: The stream of items
+        An endless iterator, one placeholder item at a time.
 
     Examples:
         >>> result = parser(None, None, None)
@@ -67,24 +67,33 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     """
-    A source that asynchronously fetches and parses a feed to return the
-    entries.
+    Asynchronously yields a placeholder item endlessly.
+
+    Takes no input and reads no configuration. The stream never ends, so bound it
+    downstream with ``truncate`` or ``timeout``.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries. Unused.
+        conf (dict): The pipe configuration. Unused.
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'delay'.
+        assign (str): Field each placeholder is nested under. Ignored when
+            ``emit`` is True (default: "content").
 
-            url (str): The web site to fetch.
-            delay (flt): Amount of time to sleep (in secs) before fetching the
-                url. Useful for simulating network latency. Default: 0.
+        emit (bool): Whether to emit each placeholder directly rather than assign
+            it. Overrides ``assign`` (default: True).
 
+    Yields:
+        - ``{"forever": True}`` when ``emit`` is True (default)
+        - ``{<assign>: {"forever": True}}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: [...]}`` when ``emit`` is False and an item
+          is given — see the note below
 
-    Returns:
-        Awaitable: iterator of items
+    Notes:
+        Assigning into an existing item collects every value into one list, so
+        ``emit=False`` with an input item never returns. Leave ``emit`` at its
+        default, or bound the stream before assigning.
 
     Examples:
         >>> from riko import run
@@ -103,26 +112,35 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     """
-    A source that fetches and parses a feed to return the entries.
+    Yields a placeholder item endlessly.
+
+    Takes no input and reads no configuration. The stream never ends, so bound it
+    downstream with ``truncate`` or ``timeout``.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Stream): The entry, or stream of entries. Unused.
+        conf (dict): The pipe configuration. Unused.
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'. May
-            contain the key 'delay'.
+        assign (str): Field each placeholder is nested under. Ignored when
+            ``emit`` is True (default: "content").
 
-            url (str): The web site to fetch.
-            delay (flt): Amount of time to sleep (in secs) before fetching the
-                url. Useful for simulating network latency. Default: 0.
+        emit (bool): Whether to emit each placeholder directly rather than assign
+            it. Overrides ``assign`` (default: True).
 
-    Returns:
-        dict: an iterator of items
+    Yields:
+        - ``{"forever": True}`` when ``emit`` is True (default)
+        - ``{<assign>: {"forever": True}}`` when ``emit`` is False and no item given
+        - merged ``{Item, <assign>: [...]}`` when ``emit`` is False and an item
+          is given (see the note below)
+
+    Notes:
+        Assigning into an existing item collects every value into one list. So
+        ``emit=False`` with an input item hangs indefinitely. Leave ``emit`` at its
+        default, or bound the stream before assigning.
 
     Examples:
-        >>> from riko import get_path
-        >>>
         >>> next(pipe())
         {'forever': True}
 

@@ -36,7 +36,7 @@ from meza.process import join, merge
 from riko.dotdict import is_mapping
 from riko.modules._prepare import require_kwarg
 from riko.types.configs import JoinObjconf
-from riko.types.general import Defaults, Item, Opts, PipeTuples, Stream
+from riko.types.general import Defaults, Item, Items, Opts, PipeTuples, Stream
 
 from . import operator
 
@@ -65,10 +65,11 @@ def parser(
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
-        other: The stream to join against.
+    Kwargs:
+        other (Items): The stream to join against.
 
     Returns:
-        A stream of merged items, one per matching pair.
+        Merged item matches.
 
     Raises:
         TypeError: If ``other`` is not given.
@@ -97,7 +98,7 @@ def parser(
         4
 
     """
-    other: Stream = require_kwarg(kwargs, "other", "join")
+    other: Items = require_kwarg(kwargs, "other", "join")
 
     def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
         if isinstance(x, Mapping) and isinstance(y, Mapping):
@@ -163,7 +164,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
-        - ``Item`` when ``emit`` is True (default) — one merged item per match
+        - merged ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Notes:
@@ -222,7 +223,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             Overrides ``assign`` (default: True).
 
     Yields:
-        - ``Item`` when ``emit`` is True (default) — one merged item per match
+        - merged ``Item`` when ``emit`` is True (default)
         - ``{<assign>: Item}`` when ``emit`` is False
 
     Notes:
