@@ -213,6 +213,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     Yields:
         Awaitable: item with replaced content
 
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
+
     Examples:
         >>> from riko import run
         >>>
@@ -269,6 +272,9 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
     Yields:
         dict: an item with replaced content
+
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
 
     Examples:
         >>> # default matching

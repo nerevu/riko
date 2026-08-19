@@ -101,6 +101,9 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
     Returns:
         Awaitable: an iterator of items
 
+    Raises:
+        TypeError: If ``conf`` has no ``attrs`` key.
+
     Examples:
         >>> from riko import run
         >>>
@@ -139,6 +142,9 @@ def pipe(*args: Any, **kwargs: object) -> RikoDict:
 
     Yields:
         dict: an item
+
+    Raises:
+        TypeError: If ``conf`` has no ``attrs`` key.
 
     Examples:
         >>> attrs = [

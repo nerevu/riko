@@ -98,6 +98,9 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         - ``{<assign>: <string>}`` when ``emit`` is False and no item given
         - ``<string>`` when ``emit`` is True
 
+    Raises:
+        TypeError: If ``conf`` has no ``part`` key.
+
     Notes:
         Only ``None`` is dropped. So a ``subkey`` that finds nothing adds nothing, while
         other falsy values are kept.
@@ -154,6 +157,9 @@ def pipe(*args: Any, **kwargs: object) -> str:
           is given (default)
         - ``{<assign>: <string>}`` when ``emit`` is False and no item given
         - ``<string>`` when ``emit`` is True
+
+    Raises:
+        TypeError: If ``conf`` has no ``part`` key.
 
     Notes:
         Only ``None`` is dropped. So a ``subkey`` that finds nothing adds nothing, while

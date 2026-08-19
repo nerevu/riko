@@ -83,7 +83,10 @@ def require_kwarg[T](  # noqa: E704
 
 
 def get_pieces_or_conf(
-    parsed_conf: AnyModuleConf | None, defaults: Defaults, opts: Opts
+    parsed_conf: AnyModuleConf | None,
+    defaults: Defaults,
+    opts: Opts,
+    pipe: str = "",
 ) -> tuple[BasicReturn | AnyModuleConf | list[BasicReturn] | None, AnyModuleConf]:
     if is_mapping(parsed_conf):
         merged_conf = cast(AnyModuleConf, {**defaults, **parsed_conf})
@@ -94,8 +97,8 @@ def get_pieces_or_conf(
         try:
             pieces = next(v for k, v in merged_conf.items() if k.lower() == extract)
         except StopIteration:
-            logger.error(f"{extract=} not found in conf {merged_conf}")
-            pieces = None
+            label = f"the {pipe!r} pipe" if pipe else "this pipe"
+            raise TypeError(f"{label} requires the {extract!r} conf key") from None
         else:
             pieces = cast(BasicReturn, pieces)
 
@@ -131,6 +134,7 @@ def parse_and_cast(  # noqa: E704
     casters: CastFuncs | None = ...,
     defaults: Defaults | None = ...,
     field: str | None = ...,
+    pipe: str = ...,
     **kwargs: object,
 ) -> ItemDispatch: ...
 @overload  # noqa: E302
@@ -142,6 +146,7 @@ def parse_and_cast(  # noqa: E704
     casters: CastFuncs | None = ...,
     defaults: Defaults | None = ...,
     field: str | None = ...,
+    pipe: str = ...,
     **kwargs: object,
 ) -> ValueDispatch: ...
 def parse_and_cast(  # noqa: E302
@@ -152,6 +157,7 @@ def parse_and_cast(  # noqa: E302
     casters: CastFuncs | None = None,
     defaults: Defaults | None = None,
     field: str | None = None,
+    pipe: str = "",
     **kwargs: object,
 ) -> ItemOrValueDispatch:
     defaults = defaults or Defaults({})
@@ -163,7 +169,7 @@ def parse_and_cast(  # noqa: E302
         parsed_field, _parsed_conf = item, conf
 
     parsed_conf = cast(AnyModuleConf, _parsed_conf)
-    pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts)
+    pieces_or_conf, merged_conf = get_pieces_or_conf(parsed_conf, defaults, opts, pipe)
     parsed = (parsed_field, pieces_or_conf, merged_conf)
     casted = dispatch(parsed, *casters) if casters else parsed
     _conf = cast(DynamicConf, casted[2])

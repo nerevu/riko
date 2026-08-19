@@ -182,6 +182,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
     Returns:
        Awaitable: item with transformed content
 
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
+
     Examples:
         >>> from riko import run
         >>>
@@ -225,6 +228,9 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
     Yields:
         dict: an item with transformed content
+
+    Raises:
+        TypeError: If ``conf`` has no ``rule`` key.
 
     Examples:
         >>> conf = {'rule': {'find': '[aiou]'}}
