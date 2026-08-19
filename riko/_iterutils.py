@@ -130,14 +130,14 @@ def _warn_and_default(type_name: str, default: SortableValue) -> SortableValue:
 
 
 def _resolve_default(
-    _type: str | None, invalid_type: bool | None, default: PrimitiveValue | None
+    type_: str | None, invalid_type: bool | None, default: PrimitiveValue | None
 ) -> SortableValue:
     resolved = ""
 
     if invalid_type and default is None:
-        logger.warning(f"Invalid cast type={_type}. Setting default to empty string.")
-    elif _type and default is None:
-        _default = CAST_SWITCH[_type].get("default")
+        logger.warning(f"Invalid cast type={type_}. Setting default to empty string.")
+    elif type_ and default is None:
+        _default = CAST_SWITCH[type_].get("default")
         resolved = cast(SortableValue, _default) if _default is not None else ""
     elif isinstance(default, Mapping):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
@@ -148,25 +148,25 @@ def _resolve_default(
 
 
 def def_itemgetter(
-    attr: str, default: PrimitiveValue | None = None, _type: str | None = None
+    attr: str, default: PrimitiveValue | None = None, type_: str | None = None
 ) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
     """
     Like operator.itemgetter but fills in missing keys with a typed default.
 
     Examples:
-        >>> keyfunc = def_itemgetter('n', _type='int')
+        >>> keyfunc = def_itemgetter('n', type_='int')
         >>> keyfunc({'n': 5})
         5
         >>> keyfunc({})
         0
 
     """
-    _invalid_type = _type in {CastType.LOCATION, CastType.NONE}
-    invalid_type = bool(_invalid_type or (_type and _type not in CAST_SWITCH))
-    default = _resolve_default(_type, invalid_type, default)
+    _invalid_def_type = type_ in {CastType.LOCATION, CastType.NONE}
+    invalid_def_type = bool(_invalid_def_type or (type_ and type_ not in CAST_SWITCH))
+    default = _resolve_default(type_, invalid_def_type, default)
 
-    _invalid_type = _type in {CastType.LOCATION, CastType.PASS, CastType.NONE}
-    invalid_type = _invalid_type or (_type and _type not in CAST_SWITCH)
+    _invalid_type = type_ in {CastType.LOCATION, CastType.PASS, CastType.NONE}
+    invalid_type = _invalid_type or (type_ and type_ not in CAST_SWITCH)
 
     def keyfunc(item: Mapping | PrimitiveValue) -> SortableValue:
         if isinstance(item, (dict, CaseInsensitiveDict, Mapping)):
@@ -174,12 +174,12 @@ def def_itemgetter(
         else:
             value = item
 
-        msg = f"Invalid cast type={_type} for key '{attr}'."
+        msg = f"Invalid cast type={type_} for key '{attr}'."
 
         if invalid_type:
             casted = _resolve_uncastable(value, msg, default)
-        elif _type:
-            _casted = cast_value(value, CastType(_type))
+        elif type_:
+            _casted = cast_value(value, CastType(type_))
             casted = cast(PrimitiveValue, _casted)
         elif isinstance(value, (str, int, struct_time)):
             casted = value

@@ -1044,8 +1044,8 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             {'content': 4}
 
         """
-        op_module_name = pipe.__module__.split(".")[-1]
-        is_loop = op_module_name == "loop"
+        module_name = pipe.__module__.split(".")[-1]
+        is_loop = module_name == "loop"
 
         async def async_wrapper(
             items: OperatorWrapperInput | Feed | None = None,
@@ -1066,7 +1066,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 _input = self.parse(items)
 
             prepared = self.prepare(
-                op_module_name, conf=conf, assign=assign, count=count, **kwargs
+                module_name, conf=conf, assign=assign, count=count, **kwargs
             )
             assign = prepared.assign
 
@@ -1085,7 +1085,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 embedded_kwargs,
                 context,
                 cast(Stream, _input),
-                op_module_name,
+                module_name,
                 field=field,
                 assign=assign,
                 emit=bool(prepared.emit),
@@ -1132,7 +1132,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         ) -> OperatorWrapperOutput:
             _input = self.parse(items)
             prepared = self.prepare(
-                op_module_name, conf=conf, assign=assign, count=count, **kwargs
+                module_name, conf=conf, assign=assign, count=count, **kwargs
             )
             assign = prepared.assign
 
@@ -1152,7 +1152,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
                 embedded_kwargs,
                 context,
                 _input,
-                op_module_name,
+                module_name,
                 field=field,
                 assign=assign,
                 emit=bool(prepared.emit),

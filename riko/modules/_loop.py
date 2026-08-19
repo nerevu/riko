@@ -153,7 +153,7 @@ def loop_embed_sync(
     embedded_kwargs: EmbedKwargs | None,
     context: Context,
     source: Stream,
-    op_module_name: str,
+    module_name: str,
     *,
     field: str | None = None,
     assign: str | None = None,
@@ -187,7 +187,7 @@ def loop_embed_sync(
         logger.error(f"{embed.name} is not loopable and can't be embedded.")
     elif embed and callable(embed):
         logger.error("Custom embedded pipes are not currently supported.")
-    elif op_module_name == "loop":
+    elif module_name == "loop":
         logger.error("No embedded pipe provided!")
     else:
         handled = False

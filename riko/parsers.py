@@ -160,8 +160,8 @@ class LinkParser(HTMLParser):
     ) -> None:
         entry = dict(attrs)
         link = entry.get("href")
-        _type = entry.get("type", "")
-        type_match = any(_type.endswith(t) for t in self.link_type)
+        type_ = entry.get("type", "")
+        type_match = any(type_.endswith(t) for t in self.link_type)
 
         if link and not self.strict:
             type_match = type_match or any(link.endswith(t) for t in self.link_type)
