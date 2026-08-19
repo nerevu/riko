@@ -55,17 +55,21 @@ reader to call `pipe(stream, count_key="word")`, which is not the signature.
             it. Overrides ``assign`` (default: False).
 ```
 
-The source parameter differs by wrapper type, and the label is what tells the
-reader whether a plain `list` works:
+The source parameter differs by wrapper type:
 
 | Wrapper | Label | Because |
 |---|---|---|
-| `operator` / `splitter` | `items (Items)` | input *is* the stream; any iterable works |
-| `processor` | `item (Item \| Stream)` | maps over an **iterator** only; a `list`/`tuple` is one item |
+| `operator` / `splitter` | `items (Items)` | the input *is* the stream |
+| `processor` | `item (Item \| Items)` | one item, or an iterable mapped element-by-element |
 
-`Items` is `Iterable[Item]` and `Stream` is `Iterator[Item]`, so writing
-`Items` on a processor advertises exactly the list-passing that fails. Explain
-it once — the FAQ's *"Why does my processor not map over a list?"* — and have
+A processor's first argument is overloaded — one item, or many — and the wrapper
+decides via `is_listlike(item)`, mirroring `listize`'s boundary: a `list`,
+`tuple`, `range`, generator or iterator maps over each element, while a mapping,
+primitive, string or `None` is a single item (so `None` still invokes source
+pipes). Only the outermost argument is interpreted that way, so a list-valued
+*field* inside a record stays one value.
+
+Explain it once — the FAQ's *"How does a processor map over items?"* — and have
 the module keep a one-liner pointing there rather than repeating the rationale
 in all ~30 processors.
 

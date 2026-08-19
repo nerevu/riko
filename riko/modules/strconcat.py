@@ -66,11 +66,11 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     Asynchronously concatenates strings into an item field.
 
-    Only an iterator source is mapped over; see the FAQ's "Why does my processor not map
-    over a list?".
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (Item | Stream): The entry, or stream of entries, to process.
+        item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
 
@@ -126,11 +126,11 @@ def pipe(*args: Any, **kwargs: object) -> str:
     """
     Concatenates strings into an item field.
 
-    Only an iterator source is mapped over; see the FAQ's "Why does my processor not map
-    over a list?".
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (Item | Stream): The entry, or stream of entries, to process.
+        item (Item | Items): The entry, or stream of entries, to process.
 
         conf (dict): The pipe configuration.
 

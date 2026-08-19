@@ -33,7 +33,7 @@ from typing import Literal, cast, overload
 
 import pygogo as gogo
 
-from riko._iterutils import dispatch
+from riko._iterutils import dispatch, is_listlike
 from riko.bado.itertools import async_map
 from riko.cast import BasicCastType
 from riko.context import Context, ExecutionMode, parse_context
@@ -587,7 +587,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             inputs: Inputs | None = None,
             **kwargs: bool,
         ) -> ProcessorWrapperOutput:
-            if isinstance(item, Iterator):
+            if is_listlike(item):
                 _wrapper = partial(
                     async_wrapper,
                     conf=conf,
@@ -657,7 +657,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             inputs: Inputs | None = None,
             **kwargs: bool,
         ) -> ProcessorWrapperOutput:
-            if isinstance(item, Iterator):
+            if is_listlike(item):
                 _wrapper = partial(
                     sync_wrapper,
                     conf=conf,

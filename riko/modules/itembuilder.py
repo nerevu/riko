@@ -83,7 +83,7 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
     Asynchronously builds a single item from assigned attributes.
 
     Args:
-        item (Item | Stream): The entry, or stream of entries, supplying values.
+        item (Item | Items): The entry, or stream of entries, supplying values.
         conf (dict): The pipe configuration.
 
             attrs (dict | list): The attributes to assign, either one dict or a
@@ -135,7 +135,7 @@ def pipe(*args: Any, **kwargs: object) -> RikoDict:
     Builds a single item from assigned attributes.
 
     Args:
-        item (Item | Stream): The entry, or stream of entries, supplying values.
+        item (Item | Items): The entry, or stream of entries, supplying values.
         conf (dict): The pipe configuration.
 
             attrs (dict | list): The attributes to assign, either one dict or a
