@@ -168,6 +168,10 @@ Code and API conventions
 
 Please mimic the coding style/conventions used in this repo. If you add new
 classes or functions, please add the appropriate docstrings with examples.
+Docstrings, doctests, and ``__init__.py`` files follow the repository
+documentation standard (``_docs/DOCUMENTATION_STANDARD.md``): annotations own
+types, documentation audience follows the STABLE/EXTENSION/PRIVATE tiers, and
+doctests show real returned values.
 
 - Import application APIs from ``riko`` or ``riko.api``.
 - Import supported module-authoring decorators and protocols from ``riko.ext``.

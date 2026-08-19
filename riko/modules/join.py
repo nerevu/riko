@@ -1,24 +1,27 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for performing SQL like joins on separate sources.
+Performs SQL like joins on separate sources.
+
+Not lazy: the ``other`` stream is retained so it can be matched against every
+source item, so it cannot be unbounded. With a join key the comparison is a
+cartesian product, so cost grows as ``len(items) * len(other)``.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.join import pipe
         >>>
-        >>> items = ({'x': 'foo', 'sum': x} for x in range(5))
-        >>> other = ({'x': 'foo', 'count': x + 5} for x in range(5))
+        >>> items = ({"x": "foo", "sum": x} for x in range(5))
+        >>> other = ({"x": "foo", "count": x + 5} for x in range(5))
         >>> joined = pipe(items, other=other)
         >>> next(joined)
         {'x': 'foo', 'sum': 0, 'count': 5}
         >>> len(list(joined))
         24
 
-
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -47,26 +50,25 @@ def parser(
     stream: Stream, objconf: JoinObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Joins the source against ``other`` by merging each matching pair.
+
+    Falls back to a natural join when neither join key is set.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so consuming it
+            will consume `tuples` as well.
 
-        objconf (obj): The pipe configuration (an Objectify instance)
+        objconf: The pipe configuration, containing `join_key`, `other_join_key`
+            and `lower`.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
+        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+            Note: this shares the `stream` iterator, so consuming it will consume
+            `stream` as well.
 
-        kwargs (dict): Keyword arguments.
-
-    Kwargs:
-        other (Iter[dict]): stream to join
+        other: The stream to join against.
 
     Returns:
-        Iter(dict): The output stream
+        A stream of merged items, one per matching pair.
 
     Raises:
         TypeError: If ``other`` is not given.
@@ -75,8 +77,8 @@ def parser(
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
         >>>
-        >>> stream = ({'x': 'foo', 'sum': x} for x in range(5))
-        >>> other = ({'x': 'foo', 'count': x + 5} for x in range(5))
+        >>> stream = ({"x": "foo", "sum": x} for x in range(5))
+        >>> other = ({"x": "foo", "count": x + 5} for x in range(5))
         >>> objconf = Objectify({})
         >>> tuples = zip(stream, repeat(objconf))
         >>> joined = parser(stream, objconf, tuples, other=other)
@@ -84,9 +86,9 @@ def parser(
         {'x': 'foo', 'sum': 0, 'count': 5}
         >>> len(list(joined))
         24
-        >>> objconf = Objectify({'join_key': 'x', 'other_join_key': 'y'})
-        >>> stream = ({'x': f'foo-{x}', 'sum': x} for x in range(5))
-        >>> other = ({'y': f'foo-{x}', 'count': x + 5} for x in range(5))
+        >>> objconf = Objectify({"join_key": "x", "other_join_key": "y"})
+        >>> stream = ({"x": f"foo-{x}", "sum": x} for x in range(5))
+        >>> other = ({"y": f"foo-{x}", "count": x + 5} for x in range(5))
         >>> tuples = zip(stream, repeat(objconf))
         >>> joined = parser(stream, objconf, tuples, other=other)
         >>> next(joined)
@@ -131,27 +133,42 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that asynchronously merges multiple source streams together.
+    Asynchronously joins a source stream against another stream.
+
+    Not lazy: ``other`` is retained and replayed against every source item.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            join_key (str): Field to join ``items`` on (default: the value of
+                ``other_join_key``).
+
+            other_join_key (str): Field to join ``other`` on (default: the value
+                of ``join_key``).
+
+            lower (bool): Whether to compare string values case-insensitively
+                (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'join_key' or
-            'other_join_key'.
-            join_key (str): Item attribute to join `items` on.
-                (default: value of `other_join_key`).
-            other_join_key (str): Item attribute to join `other` on.
-                (default: value of `join_key`).
-            lower (str): Transform values to lower case before comparing
-                (for joining purposes, default: False)
+        other (Items): The stream to join against. Required.
 
+        assign (str): Field each item is nested under. Ignored when ``emit`` is
+            True (default: "join").
 
-        other (Iter[dict]): stream to join
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-    Returns:
-        Awaitable: iterator of the merged streams
+    Yields:
+        - ``Item`` when ``emit`` is True (default) — one merged item per match
+        - ``{<assign>: Item}`` when ``emit`` is False
+
+    Notes:
+        A natural join is used when neither join key is set. Items missing the
+        join field never match.
 
     Raises:
         TypeError: If ``other`` is not given.
@@ -160,9 +177,9 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     items = ({'x': 'foo', 'sum': x} for x in range(5))
-        ...     other = ({'x': 'foo', 'count': x + 5} for x in range(5))
-        ...     result = await async_pipe(items, conf={'join_key': 'x'}, other=other)
+        ...     items = ({"x": "foo", "sum": x} for x in range(5))
+        ...     other = ({"x": "foo", "count": x + 5} for x in range(5))
+        ...     result = await async_pipe(items, conf={"join_key": "x"}, other=other)
         ...     print(next(result))
         >>>
         >>> run(main)
@@ -175,50 +192,66 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that merges multiple streams together.
+    Joins a source stream against another stream.
+
+    Not lazy: ``other`` is retained and replayed against every source item.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+
+        conf (dict): The pipe configuration.
+
+            join_key (str): Field to join ``items`` on (default: the value of
+                ``other_join_key``).
+
+            other_join_key (str): Field to join ``other`` on (default: the value
+                of ``join_key``).
+
+            lower (bool): Whether to compare string values case-insensitively
+                (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'join_key' or
-            'other_join_key'.
-            join_key (str): Item attribute to join `items` on.
-                (default: value of `other_join_key`).
-            other_join_key (str): Item attribute to join `other` on.
-                (default: value of `join_key`).
-            lower (str): Transform values to lower case before comparing
-                (for joining purposes, default: False)
+        other (Items): The stream to join against. Required.
 
-        other (Iter[dict]): stream to join
+        assign (str): Field each item is nested under. Ignored when ``emit`` is
+            True (default: "join").
+
+        emit (bool): Whether to emit each item directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: a merged stream item
+        - ``Item`` when ``emit`` is True (default) — one merged item per match
+        - ``{<assign>: Item}`` when ``emit`` is False
+
+    Notes:
+        A natural join is used when neither join key is set. Items missing the
+        join field never match.
 
     Raises:
         TypeError: If ``other`` is not given.
 
     Examples:
-        >>> items = [{'x': f'foo-{x}', 'sum': x} for x in range(5)]
-        >>> other = ({'y': f'foo-{x}', 'count': x + 5} for x in range(5))
-        >>> conf = {'join_key': 'x', 'other_join_key': 'y'}
+        >>> items = [{"x": f"foo-{x}", "sum": x} for x in range(5)]
+        >>> other = ({"y": f"foo-{x}", "count": x + 5} for x in range(5))
+        >>> conf = {"join_key": "x", "other_join_key": "y"}
         >>> joined = pipe(items, conf=conf, other=other)
         >>> next(joined)
         {'x': 'foo-0', 'sum': 0, 'y': 'foo-0', 'count': 5}
         >>> next(joined)
         {'x': 'foo-1', 'sum': 1, 'y': 'foo-1', 'count': 6}
-        >>> other = ({'y': f'FOO-{x}', 'count': x + 5} for x in range(5))
-        >>> conf = {'join_key': 'x', 'other_join_key': 'y', 'lower': True}
+        >>> other = ({"y": f"FOO-{x}", "count": x + 5} for x in range(5))
+        >>> conf = {"join_key": "x", "other_join_key": "y", "lower": True}
         >>> joined = pipe(items, conf=conf, other=other)
         >>> next(joined)
         {'x': 'foo-0', 'sum': 0, 'y': 'FOO-0', 'count': 5}
         >>> next(joined)
         {'x': 'foo-1', 'sum': 1, 'y': 'FOO-1', 'count': 6}
-        >>> items = [{'x': 'foo', 'sum': 0}, {'sum': 1}]
-        >>> other = [{'y': 'foo', 'count': 5}, {'count': 6}]
-        >>> conf = {'join_key': 'x', 'other_join_key': 'y'}
-        >>> [i['sum'] for i in pipe(items, conf=conf, other=other)]
+        >>> items = [{"x": "foo", "sum": 0}, {"sum": 1}]
+        >>> other = [{"y": "foo", "count": 5}, {"count": 6}]
+        >>> conf = {"join_key": "x", "other_join_key": "y"}
+        >>> [i["sum"] for i in pipe(items, conf=conf, other=other)]
         [0]
 
     """

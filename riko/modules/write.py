@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for writing a stream to a file as a terminal sink.
+Writes a stream to a file as a terminal sink.
 
 ``write`` is the in-pipeline counterpart of the top-level ``export`` converter:
 it serializes the stream with a ``Targets`` converter and writes the result to
@@ -8,8 +8,15 @@ it serializes the stream with a ``Targets`` converter and writes the result to
 (fan-out: write here, keep processing). Because it emits data outward it is
 bucketed as a ``Sink`` in the discovery tree.
 
+``write`` is **not lazy**. Serializing requires the complete stream, so the
+source is materialized into memory before anything is written, and the
+pass-through it yields replays that list rather than the original iterator. An
+infinite source never reaches the write; a large one is held in full. Place it
+after the pipes that shrink the stream (``filter``, ``truncate``, ``tail``),
+not before.
+
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_temp_file
         >>> from riko.modules.write import pipe
@@ -24,8 +31,8 @@ Examples:
         b'[{"x": 0}, {"x": 1}]'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS (Opts): The default pipe options
+    DEFAULTS (Defaults): The default parser options
 
 """
 
@@ -51,24 +58,21 @@ async def async_parser(
     stream: Stream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Asynchronously parses the pipe content
+    Asynchronously serializes the stream and writes it to ``objconf.url``.
 
     Args:
-        stream: The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the ``tuples`` iterator, so
+            consuming it will consume ``tuples`` as well.
 
-        objconf: the item independent configuration (an Objectify
-            instance).
+        objconf: The item independent configuration, containing ``url``,
+            ``target``, and ``mode``.
 
-        tuples: Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
-
-        kwargs: Keyword arguments.
+        tuples: Iterable of ``(item, objconf)`` pairs, where ``item`` is an
+            element in the source stream. Note: this shares the ``stream``
+            iterator, so consuming it will consume ``stream`` as well.
 
     Returns:
-        Iter(dict): The output stream (the source items, unchanged)
+        The original stream.
 
     Examples:
         >>> from itertools import repeat
@@ -98,11 +102,12 @@ async def async_parser(
         logger.warning("The url is not set, skipping writing")
     elif objconf.target in {"list", "tuple"}:
         logger.warning(f"The target {objconf.target} is not supported for writing")
-    elif convert := CONVERSION_FUNCS.get(objconf.target):
-        content = convert([dict(item) for item in items])
-
-        if content is not None:
-            await async_write(objconf.url, cast(StringIO, content), mode=objconf.mode)
+    elif (convert := CONVERSION_FUNCS.get(objconf.target)) is None:
+        logger.warning(f"The target {objconf.target} is not a known converter")
+    elif (content := convert([dict(item) for item in items])) is None:
+        logger.warning(f"The {objconf.target} converter produced no content")
+    else:
+        await async_write(objconf.url, cast(StringIO, content), mode=objconf.mode)
 
     return iter(items)
 
@@ -111,24 +116,21 @@ def parser(
     stream: Stream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Serializes the stream and writes it to ``objconf.url``.
 
     Args:
-        stream: The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the ``tuples`` iterator, so
+            consuming it will consume ``tuples`` as well.
 
-        objconf: the item independent configuration (an Objectify
-            instance).
+        objconf: The item independent configuration, containing ``url``,
+            ``target``, and ``mode``.
 
-        tuples: Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
-
-        kwargs: Keyword arguments.
+        tuples: Iterable of ``(item, objconf)`` pairs, where ``item`` is an
+            element in the source stream. Note: this shares the ``stream``
+            iterator, so consuming it will consume ``stream`` as well.
 
     Returns:
-        Iter(dict): The output stream (the source items, unchanged)
+        The original stream.
 
     Examples:
         >>> from itertools import repeat
@@ -153,11 +155,12 @@ def parser(
         logger.warning("The url is not set, skipping writing")
     elif objconf.target in {"list", "tuple"}:
         logger.warning(f"The target {objconf.target} is not supported for writing")
-    elif convert := CONVERSION_FUNCS.get(objconf.target):
-        content = convert([dict(item) for item in items])
-
-        if content is not None:
-            io.write(objconf.url, content, mode=objconf.mode)
+    elif (convert := CONVERSION_FUNCS.get(objconf.target)) is None:
+        logger.warning(f"The target {objconf.target} is not a known converter")
+    elif (content := convert([dict(item) for item in items])) is None:
+        logger.warning(f"The {objconf.target} converter produced no content")
+    else:
+        io.write(objconf.url, content, mode=objconf.mode)
 
     return iter(items)
 
@@ -168,19 +171,33 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     An operator that asynchronously writes a stream to a file and passes the
     source items through unchanged.
 
-    Args:
-        items: The source.
-        kwargs: The keyword arguments passed to the wrapper
+    Not lazy: materializes the source and cannot be used on an unbounded stream.
 
-    Kwargs:
+    Args:
+        items (Items): The source stream.
         conf (dict): The pipe configuration. Must contain the key 'url'.
 
             url (str): the destination file path
             target (str): the export format (default: 'json')
             mode (str): the file open mode (default: 'wb+')
 
-    Returns:
-        Awaitable: the source stream, unchanged
+        context (Context): the execution context
+
+    Kwargs:
+        assign (str): Field the output stream is assigned to. Ignored when ``emit`` is
+            True (default: "write").
+
+        emit (bool): Whether to emit the output stream directly rather than assigning
+            it. Overrides ``assign`` (default: True).
+
+    Yields:
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
+
+    Notes:
+        Nothing is written and a warning is logged when ``url`` is unset,
+        ``target`` is ``'list'``/``'tuple'``, ``target`` is invalid, or the converter
+        produces no content. The stream still passes through unchanged in every case.
 
     Examples:
         >>> from riko import get_async_temp_file, run
@@ -205,19 +222,33 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     An operator that writes a stream to a file and passes the source items
     through unchanged.
 
-    Args:
-        items: The source.
-        kwargs: The keyword arguments passed to the wrapper
+    Not lazy: materializes the source and cannot be used on an unbounded stream.
 
-    Kwargs:
+    Args:
+        items (Items): The source stream.
         conf (dict): The pipe configuration. Must contain the key 'url'.
 
             url (str): the destination file path
             target (str): the export format (default: 'json')
             mode (str): the file open mode (default: 'wb+')
 
+        context (Context): the execution context
+
+    Kwargs:
+        assign (str): Field the output stream is assigned to. Ignored when ``emit`` is
+            True (default: "write").
+
+        emit (bool): Whether to emit the output stream directly rather than assigning
+            it. Overrides ``assign`` (default: True).
+
     Yields:
-        dict: an item
+        - ``Item`` when ``emit`` is True (default)
+        - ``{<assign>: Item}`` when ``emit`` is False
+
+    Notes:
+        Nothing is written and a warning is logged when ``url`` is unset,
+        ``target`` is ``'list'``/``'tuple'``, ``target`` is invalid, or the converter
+        produces no content. The stream still passes through unchanged in every case.
 
     Examples:
         >>> from riko import get_temp_file

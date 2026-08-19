@@ -80,7 +80,7 @@ def parser(
 
     """
     operation = OPS[objconf.op]
-    other = cast_value(objconf.other, _type=CastType.DECIMAL)
+    other = cast_value(objconf.other, type_=CastType.DECIMAL)
     return operation(num, other)
 
 
