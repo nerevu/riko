@@ -422,14 +422,14 @@ runtime (``ofx``/``qif`` require the optional ``csv2ofx`` dependency).
     >>> from riko import Targets, list_targets
     >>>
     >>> source= [{"title": "a"}, {"title": "b"}]
-    >>> flow = SyncPipe(Transforms.HASH, source=source)
+    >>> flow = SyncPipe(Transforms.HASH, source=source, field="title")
     >>> {"csv", "geojson", "json", "list", "tuple"}.issubset(list_targets())
     True
     >>> flow.export("tuple")
-    ({'title': 'a', 'hash': 4238894112}, {'title': 'b', 'hash': 4238894112})
-    >>> flow = SyncPipe(Transforms.HASH, source=source)
+    ({'title': 'a', 'hash': 1267964084}, {'title': 'b', 'hash': 2297772648})
+    >>> flow = SyncPipe(Transforms.HASH, source=source, field="title")
     >>> flow.export(Targets.JSON)
-    '[{"hash": 4238894112, "title": "a"}, {"hash": 4238894112, "title": "b"}]'
+    '[{"hash": 1267964084, "title": "a"}, {"hash": 2297772648, "title": "b"}]'
 
 
 For serialized output, you can pass a file path or file like object as the second
