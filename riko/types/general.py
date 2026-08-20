@@ -133,7 +133,6 @@ class Defaults(TypedDict, total=False):
     currency: str  # TODO this should be an enum/literal
     dedupe: bool
     default: BasicArg
-    delay: int
     delimiter: str
     detag: bool
     encoding: str

@@ -214,7 +214,6 @@ class ExchangeRateRawConf(TypedDict, total=False):
     url: Value | list[Value]
     param: Value
     currency: Value
-    delay: Value
     memoize: Value
     precision: Value
 
@@ -613,7 +612,6 @@ class InputConf(TypedDict, total=False):
 
 class FetchConf(TypedDict, total=False):
     url: str
-    delay: float
     encoding: str = "utf-8"
 
 
@@ -673,7 +671,6 @@ class ExchangeRateConf(TypedDict, total=False):
     url: str
     param: dict[str, str]
     currency: str = "USD"
-    delay: int = 0
     encoding: str = "utf-8"
     memoize: bool = True
     precision: int = 6

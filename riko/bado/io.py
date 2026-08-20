@@ -21,7 +21,7 @@ import pygogo as gogo
 from meza.fntools import chunk as _chunk
 
 from riko import ENCODING, bado
-from riko.bado import async_get, async_read, async_sleep, open_file
+from riko.bado import async_get, async_read, open_file
 from riko.paths import get_abspath
 
 if TYPE_CHECKING:
@@ -113,12 +113,8 @@ async def async_url_read(
     url: str,
     timeout: float = 0,
     encoding: str = ENCODING,
-    delay: float = 0,
     **kwargs: object,
 ) -> str:
-    if delay:
-        await async_sleep(delay)
-
     url = get_abspath(url, offline=True)
 
     if url.startswith("http"):

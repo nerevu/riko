@@ -175,7 +175,6 @@ def seekable(
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[True],
-    delay: int = ...,
     encoding: str = ...,
     params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
@@ -188,7 +187,6 @@ def opener(  # noqa: E704
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[False] = ...,
-    delay: int = ...,
     encoding: str = ...,
     params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
@@ -201,7 +199,6 @@ def opener(  # noqa: E704
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[True],
-    delay: int = ...,
     encoding: str = ...,
     params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
@@ -213,7 +210,6 @@ def opener(  # noqa: E704
 def opener(  # noqa: E704
     url: str,
     memoize: Literal[False] = ...,
-    delay: int = ...,
     encoding: str = ...,
     params: Mapping[str, str | bytes | int | float] | None = ...,
     offline: bool = ...,
@@ -224,7 +220,6 @@ def opener(  # noqa: E704
 def opener(  # noqa: E302
     url: str,
     memoize: bool = False,
-    delay: int = 0,
     encoding: str = ENCODING,
     params: Mapping[str, str | bytes | int | float] | None = None,
     offline: bool = True,
@@ -258,9 +253,6 @@ def opener(  # noqa: E302
             response = cast(StreamReader, reencoded)
     else:
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
-
-        if delay:
-            logger.debug("Request delaying not currently implemented.")
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
             response = buffer(r, binary=True) if memoize else cast(RawIOBase, r)

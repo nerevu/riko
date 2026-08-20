@@ -40,7 +40,7 @@ from riko.types.values import RSSEntry
 from . import processor
 
 OPTS: Opts = SourceOpts
-DEFAULTS: Defaults = {"encoding": ENCODING, "delay": 0}
+DEFAULTS: Defaults = {"encoding": ENCODING}
 logger: Logger = gogo.Gogo(__name__, monolog=True).logger
 keys: set[str] = {
     "author",
@@ -81,7 +81,7 @@ async def async_parser(
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
+        ...     objconf = Objectify({"url": get_path("feed.xml")})
         ...     result = await async_parser(None, None, objconf)
         ...     print(next(result)['title'])
         >>>
@@ -90,7 +90,7 @@ async def async_parser(
 
     """
     url: str = require_conf(objconf, "url", "fetch")
-    content: str = await io.async_url_read(url, delay=objconf.delay)
+    content: str = await io.async_url_read(url, encoding=objconf.encoding)
     return augment_entries(parse_rss(content=content))
 
 
@@ -120,7 +120,7 @@ def parser(
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({'url': get_path('feed.xml'), 'delay': 0})
+        >>> objconf = Objectify({"url": get_path("feed.xml")})
         >>> result = parser(None, None, objconf)
         >>> next(result)['title']
         'Donations'
@@ -146,8 +146,6 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
             contain the key 'delay'.
 
             url (str): The web site to fetch.
-            delay (flt): Amount of time to sleep (in secs) before fetching the
-                url. Useful for simulating network latency. Default: 0.
 
 
     Returns:
@@ -186,8 +184,6 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
             contain the key 'delay'.
 
             url (str): The web site to fetch.
-            delay (flt): Amount of time to sleep (in secs) before fetching the
-                url. Useful for simulating network latency. Default: 0.
 
     Returns:
         dict: an iterator of items

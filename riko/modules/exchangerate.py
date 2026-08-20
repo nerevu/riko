@@ -42,7 +42,6 @@ PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
 OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {
     "currency": "USD",
-    "delay": 0,
     "memoize": True,
     "precision": 6,
     "url": EXCHANGE_API,
@@ -118,7 +117,7 @@ async def async_parser(
         >>>
         >>> async def main():
         ...     url = get_path('quote.json')
-        ...     conf = {'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
+        ...     conf = {'url': url, 'currency': 'USD', 'precision': 6}
         ...     item = {'content': 'GBP'}
         ...     objconf = Objectify(conf)
         ...     kwargs = {'stream': item, 'assign': 'content'}
@@ -139,7 +138,7 @@ async def async_parser(
         r = await async_get(objconf.url, params=objconf.param)
         rates = await async_json(r)
     else:
-        content = await io.async_url_read(objconf.url, delay=objconf.delay)
+        content = await io.async_url_read(objconf.url)
         rates = cast(dict[str, Any], loads(content).get("rates", {}))
 
     if rates and not same_currency:
@@ -173,7 +172,7 @@ def parser(
         >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path('quote.json')
-        >>> conf = {'url': url, 'currency': 'USD', 'delay': 0, 'precision': 6}
+        >>> conf = {'url': url, 'currency': 'USD', 'precision': 6}
         >>> item = {'content': 'GBP'}
         >>> objconf = Objectify(conf)
         >>> kwargs = {'stream': item, 'assign': 'content'}
@@ -210,7 +209,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'param', 'currency', 'delay', 'memoize', or 'field'.
+            'param', 'currency', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
@@ -218,9 +217,6 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
             param (dict): The API url parameters (default: {'format': 'json'})
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
-
-            delay (flt): Amount of time to sleep (in secs) before fetching the
-                url. Useful for simulating network latency. Default: 0.
 
             memoize (bool): Cache the exchange rate API response (default:
                 True).
@@ -262,7 +258,7 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
 
     Kwargs:
         conf (dict): The pipe configuration. May contain the keys 'url',
-            'param', 'currency', 'delay', 'memoize', or 'field'.
+            'param', 'currency', 'memoize', or 'field'.
 
             url (str): The exchange rate API url (default:
                 http://finance.yahoo.com...)
@@ -270,9 +266,6 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
             param (dict): The API url parameters (default: {'format': 'json'})
             currency: The (exchanging to) currency ISO abbreviation (default:
                 USD).
-
-            delay (flt): Amount of time to sleep (in secs) before fetching the
-                url. Useful for simulating network latency. Default: 0.
 
             memoize (bool): Cache the exchange rate API response (default:
                 True).
