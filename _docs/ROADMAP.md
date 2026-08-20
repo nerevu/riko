@@ -82,7 +82,7 @@ Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is t
 | [connectors.md](gameplans/connectors.md) | Source/sink connectors (HTTP, files, mail, brokers, CKAN/Prometheus/tabular, Singer). |
 | [database-transforms.md](gameplans/database-transforms.md) | `riko-sql` / `riko-dbt` (Ibis-backed reads, dbt coordination); owns **§25** (conversion & dataframe). |
 | [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict parsing — business-data key handling. |
-| [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules (coalesce, transforms, near-duplicate, contact extraction). |
+| [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules (coalesce, transforms, near-duplicate, contact extraction); **retiring `geolocate`'s stub lookups** (§6b). |
 | [execution-semantics.md](gameplans/execution-semantics.md) | **§5, §11, §12, §15, §16, §22** and the *planned* parts of **§6–§8, §13** — execution characteristics, retry, dispositions, stateful operators, batch model, memory limits, backpressure/timeout/merge/filter internals; + the async primitive reference (§ Appendix A). |
 | [extensibility.md](gameplans/extensibility.md) | **Extensibility & ecosystem (E0–E8)** — module contract, plugins, workflow spec, observability, adapters, drivers, GUI + 1.0 readiness; owns **§24** (module registry). Prior-art sources. |
 | [feed-native-streaming.md](gameplans/feed-native-streaming.md) | **Feed-native pipe migration & streaming memory model** — per-pipe audit, `batch_feed`/`BatchPolicy` batching, streaming `write` (`StreamEncoder`), bounded `split`, sync/async parity, unified stream-boundary source normalization (§7.1); discharges the P7 streaming-export carryover. |

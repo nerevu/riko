@@ -1,25 +1,25 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for string search-and-replace.
+Replaces a literal substring in an item field.
 
-You provide the module with the text string to search for, and what to replace
-it with. Multiple search-and-replace pairs can be added. You can specify to
-replace all occurrences of the search string, just the first occurrence, or the
-last occurrence.
+Give it the text to search for and what to replace it with. Several rules can
+be listed; each runs on the previous one's result. ``param`` selects whether to
+replace every occurrence, just the first, or just the last.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko.modules.strreplace import pipe
         >>>
-        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['strreplace']
+        >>> conf = {"rule": {"find": "hello", "replace": "bye"}}
+        >>> item = {"content": "hello world"}
+        >>> next(pipe(item, conf=conf))["strreplace"]
         'bye world'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPS: Replacement strategies, keyed by ``param``.
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -65,29 +65,25 @@ async def async_parser(
     **kwargs: object,
 ) -> str:
     """
-    Asynchronously parses the pipe content
+    Asynchronously applies each replacement rule to ``word``.
 
     Args:
-        word (str): The string to transform
-        rules (List[obj]): the parsed rules (Objectify instances).
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: strreplace)
-        stream (dict): The original item
+        word: The string to transform.
+        rules: The parsed replacement rules.
+        objconf: The pipe configuration. Unused.
 
     Returns:
-        Awaitable: item
+        The transformed string, unchanged where nothing matched.
 
     Examples:
         >>> from riko import run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     item = {'content': 'hello world'}
-        ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        ...     rule = Objectify(conf['rule'])
-        ...     result = await async_parser(item['content'], [rule], None, stream=item)
+        ...     item = {"content": "hello world"}
+        ...     conf = {"rule": {"find": "hello", "replace": "bye"}}
+        ...     rule = Objectify(conf["rule"])
+        ...     result = await async_parser(item["content"], [rule], None, stream=item)
         ...     print(result)
         >>>
         >>> run(main)
@@ -104,27 +100,23 @@ def parser(
     **kwargs: object,
 ) -> str:
     """
-    Parses the pipe content
+    Applies each replacement rule to ``word``.
 
     Args:
-        word (str): The string to transform
-        rules (List[obj]): the parsed rules (Objectify instances).
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: strtransform)
-        stream (dict): The original item
+        word: The string to transform.
+        rules: The parsed replacement rules.
+        objconf: The pipe configuration. Unused.
 
     Returns:
-        dict: The item
+        The transformed string, unchanged where nothing matched.
 
     Examples:
         >>> from meza.fntools import Objectify
         >>>
-        >>> item = {'content': 'hello world'}
-        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        >>> rule = Objectify(conf['rule'])
-        >>> parser(item['content'], [rule], None, stream=item)
+        >>> item = {"content": "hello world"}
+        >>> conf = {"rule": {"find": "hello", "replace": "bye"}}
+        >>> rule = Objectify(conf["rule"])
+        >>> parser(item["content"], [rule], None, stream=item)
         'bye world'
 
     """
@@ -134,29 +126,40 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor module that asynchronously replaces the text of a field of
-    an item.
+    Asynchronously replaces a literal substring in an item field.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+        conf (dict): The pipe configuration.
+
+            rule (dict | list): The replacement criteria. Required.
+
+                find (str): Literal substring to replace.
+                replace (str): Text to put in its place.
+
+                param (str): Which occurrences to replace, one of "every",
+                    "first", "last". An unrecognized value replaces every
+                    occurrence (default: "every").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'rule'.
+        field (str): Item attribute to search (default: "content").
 
-            rule (dict): can be either a dict or list of dicts. Must contain
-                the keys 'find' and 'replace'. May contain the key 'param'.
+        assign (str): Field the result is assigned to. Ignored when ``emit`` is
+            True (default: "strreplace").
 
-                find (str): The string to find.
-                replace (str): The string replacement.
-                param (str): The type of replacement. Must be one of: 'first',
-                    'last', or 'every' (default: 'every').
+        emit (bool): Whether to emit the result in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-        assign (str): Attribute to assign parsed content (default: strreplace)
-        field (str): Item attribute to operate on (default: 'content')
-
-    Returns:
-       Awaitable: item with replaced content
+    Yields:
+        - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <text>}`` when ``emit`` is False and no item given
+        - ``<text>`` when ``emit`` is True
 
     Raises:
         TypeError: If ``conf`` has no ``rule`` key.
@@ -165,9 +168,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
         >>> from riko import run
         >>>
         >>> async def main():
-        ...     conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        ...     result = await async_pipe({'content': 'hello world'}, conf=conf)
-        ...     print(next(result)['strreplace'])
+        ...     conf = {"rule": {"find": "hello", "replace": "bye"}}
+        ...     result = await async_pipe({"content": "hello world"}, conf=conf)
+        ...     print(next(result)["strreplace"])
         >>>
         >>> run(main)
         bye world
@@ -179,44 +182,56 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> str:
     """
-    A processor that replaces the text of a field of an item.
+    Replaces a literal substring in an item field.
+
+    Both iterator and iterable sources are mapped over. See the FAQ's "How does a
+    processor map over items?".
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+        conf (dict): The pipe configuration.
+
+            rule (dict | list): The replacement criteria. Required.
+
+                find (str): Literal substring to replace.
+                replace (str): Text to put in its place.
+
+                param (str): Which occurrences to replace, one of "every",
+                    "first", "last". An unrecognized value replaces every
+                    occurrence (default: "every").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'rule'.
+        field (str): Item attribute to search (default: "content").
 
-            rule (dict): can be either a dict or list of dicts. Must contain
-                the keys 'find' and 'replace'. May contain the key 'param'.
+        assign (str): Field the result is assigned to. Ignored when ``emit`` is
+            True (default: "strreplace").
 
-                find (str): The string to find.
-                replace (str): The string replacement.
-                param (str): The type of replacement. Must be one of: 'first',
-                    'last', or 'every' (default: 'every').
-
-        assign (str): Attribute to assign parsed content (default: strreplace)
-        field (str): Item attribute to operate on (default: 'content')
+        emit (bool): Whether to emit the result in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
     Yields:
-        dict: an item with replaced content
+        - merged ``{Item, <assign>: <text>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <text>}`` when ``emit`` is False and no item given
+        - ``<text>`` when ``emit`` is True
 
     Raises:
         TypeError: If ``conf`` has no ``rule`` key.
 
     Examples:
-        >>> conf = {'rule': {'find': 'hello', 'replace': 'bye'}}
-        >>> item = {'content': 'hello world'}
-        >>> next(pipe(item, conf=conf))['strreplace']
+        >>> conf = {"rule": {"find": "hello", "replace": "bye"}}
+        >>> item = {"content": "hello world"}
+        >>> next(pipe(item, conf=conf))["strreplace"]
         'bye world'
         >>> rules = [
-        ...     {'find': 'Gr', 'replace': 'M'},
-        ...     {'find': 'e', 'replace': 'a', 'param': 'last'}]
-        >>> conf = {'rule': rules}
-        >>> kwargs = {'conf': conf, 'field': 'title', 'assign': 'result'}
-        >>> item = {'title': 'Greetings'}
-        >>> next(pipe(item, **kwargs))['result']
+        ...     {"find": "Gr", "replace": "M"},
+        ...     {"find": "e", "replace": "a", "param": "last"}]
+        >>> conf = {"rule": rules}
+        >>> kwargs = {"conf": conf, "field": "title", "assign": "result"}
+        >>> item = {"title": "Greetings"}
+        >>> next(pipe(item, **kwargs))["result"]
         'Meatings'
 
     """

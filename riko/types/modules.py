@@ -594,7 +594,7 @@ class StrTransformConfRule:
         "count",
         "find",
     ]
-    args: str = ""
+    args: "BasicValue | Sequence[BasicValue]" = ""
 
 
 # Confs
