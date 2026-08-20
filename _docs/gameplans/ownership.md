@@ -42,6 +42,11 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | orchestration, external scheduling, durable run boundaries | `orchestration.md` | in-process finite primitive semantics |
 | callable pipe contract | `callable-pipes.md` | domain examples only |
 | extension/plugin registration | `extensibility.md` | package-specific registrations |
+| test-layer ownership (doctest/public/internal/functional) + suite consolidation | `testing.md` | phase-specific typing-split mechanics (`tests/typing/`) in MILESTONES P13 |
+| `bado` ↔ AnyIO version-alignment audit (remove/replace/keep helpers) + async benchmarking/profiling | `bado-anyio-alignment.md` | the async-primitive *runtime semantics* (owned by `execution-semantics.md` Appendix A) |
+| Feed-native pipe migration, streaming-memory model, streaming `write`/`STREAM_ENCODERS`, bounded `split`, sync/async streaming parity | `feed-native-streaming.md` | the `parser_mode` mechanism (`callable-pipes.md`), `BatchPolicy` (`execution-semantics.md` §16), serialized codecs (`artifact-conversion.md`), AnyIO floor (`bado-anyio-alignment.md`) |
+| Windows Autopilot new-device provisioning scenario (input model, canonical tags, state machine, workflow) | `autopilot-provisioning.md` | generic Microsoft adapters (`azure-automation.md`), desired-state/ChangePlan/verify (`microsoft-administration.md`), `OperationHandle` waiting (`provider-integrations.md`), module-enum codegen (`module-enums.md`) |
+| Pre-1.0 DX/API-shape polish + release/package fidelity gate (config strictness, Pipeline/Execution split, Collection→`from_sources`, `executor=`, optional-dep UX, wheel/PyPI CI, release triage) | `release-readiness.md` | *ecosystem* 1.0 conformance/deprecation windows (`extensibility.md` E7), pub/sub phases (`fanout-topology.md` F1/F4/F5), errors (P12), discoverability (`module-enums.md`), unified CLI (`cli.md`) |
 
 ## 4. Important boundaries
 

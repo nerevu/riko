@@ -17,13 +17,13 @@ Suite: **742 passed** (pyright/ruff clean). Branch: `features` (the user commits
 | **P4** inference diagnostics | ✅ done | § P4; `ReturnInference` |
 | **P5** one-shot lifecycle | ✅ done | § P5; `PipeState` |
 | **P6** `ExecutionMode` | ✅ done | § P6 |
-| **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export*. |
+| **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export* → design in [gameplans/feed-native-streaming.md](gameplans/feed-native-streaming.md). |
 | **P8** module registry + entry points | ✅ done | § P8; `ext/{registry,pipelines,resolver}.py`, `Resolver` protocol, symmetric dispatch |
 | **P9** fluent discoverability | ⏳ in progress | **P9A done** (§ P9A): generated flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket tree (`riko/modules/_names.py`), `derive_category` taxonomy, `riko.ext.codegen` + `gen-names` CLI/drift guard, `list_modules`/`describe_module`, value-taking `.pipe`/`\|`. **Remaining (non-P9A):** installed-env aggregate `riko.generated.Modules` + `.pyi` stubs → [gameplans/module-enums.md](gameplans/module-enums.md) |
 | **P10** bounded parallelism + backpressure | ✅ done | § P10. **Carryover:** pipe-level budget via `Context` → P14. |
 | **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll` |
 | **P12** stable errors + events | ⬜ pending | `RikoError` tree, `EventSink` |
-| **P13** public/typing/internal test split | ⬜ pending | `tests/typing/` |
+| **P13** public/typing/internal test split | ⬜ pending | `tests/typing/`; test-layering audit + fix/remove/consolidate plan → [gameplans/testing.md](gameplans/testing.md) |
 | **P14** extensions outside core | ⬜ pending | `riko-microsoft`, `riko-ai` |
 
 **Milestone 1 (P1–P7): complete** (P10 landed early, out of sequence, at the user's request). **P8
@@ -42,6 +42,13 @@ consumption** (eager-concurrent async vs lazy-sequential sync — see the `Async
 
 **Done phases** below carry a full summary (what landed / decisions / carryovers). Guiding &
 resolved decisions are at the bottom.
+
+> **Pre-1.0 release gate.** The cross-cutting DX/API-shape polish that *sequences* items across
+> P9/P11/P12/P13 (pub/sub 1.0 contract, config-validation strictness, Pipeline/Execution split,
+> `Collection`→`from_sources`, `executor=` cleanup, wheel/PyPI release fidelity) plus its
+> Must-land/Preferred/Can-wait triage lives in
+> [gameplans/release-readiness.md](gameplans/release-readiness.md). Phase *status* still lives only
+> in this tracker.
 
 > **Landing a phase → update (single-source-of-truth checklist):** (1) this tracker row +
 > suite count; (2) add a done-phase summary section below (migrate the design out of

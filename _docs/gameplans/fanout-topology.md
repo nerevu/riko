@@ -115,6 +115,11 @@ those topologies.
 
 ## 5. Phase F1 — make async `receive` truly streaming
 
+> **Release-gate consumer:** the pre-1.0 "minimum pub/sub contract" (eager sync subscriptions, no
+> `PENDING` records, lossless-by-default buffers, execution-scoped hubs, sync/async observable
+> parity, subscription handles) is collected in [release-readiness.md](release-readiness.md) § 2 and
+> maps directly onto F1/F4/F5 here — this plan remains the owner of the phase mechanics.
+
 The async receiver must yield items as they arrive from the AnyIO receive channel rather
 than collecting all items until channel closure.
 

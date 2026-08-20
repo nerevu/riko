@@ -81,7 +81,11 @@ ImportError)`, `PipelineStateError`, `PollTimeoutError`, `PublishError`, `Subscr
 
 **P13 — public/typing/internal test split.** `tests/public/`, `tests/typing/{valid,invalid}/`,
 `tests/internal/`; pin exact public imports; assert no accidental internal exports. **DoD:** public
-API compat evaluated independently of refactors.
+API compat evaluated independently of refactors. The pytest/doctest **layering** half — the
+ownership rule (doctests own happy paths, public tests own API edges, internal tests own generator
+mechanics/drift, functional tests own cross-layer/CLI) plus the file-by-file fix/remove/consolidate
+audit — lives in [gameplans/testing.md](gameplans/testing.md); this milestone owns the
+`tests/typing/{valid,invalid}/` type-check split.
 
 **P14 — extensions outside core.** Only after P8/P11/P12. Core provides registration, typed parsed
 config, execution, polling, pub/sub protocols, retry, context/resources, events; **no core change
@@ -126,7 +130,7 @@ per integration**.
 
 | Package | Contents (EXT) |
 |---|---|
-| `riko-microsoft` | `graph`/`arm`/`powershell` modules; auth; Service Bus / Event Grid `Subscription` impls; desired-state tools |
+| `riko-microsoft` | `graph`/`arm`/`powershell` modules; auth; Service Bus / Event Grid `Subscription` impls; desired-state tools. First concrete scenario = Windows Autopilot new-device provisioning ([gameplans/autopilot-provisioning.md](gameplans/autopilot-provisioning.md)), the end-to-end P8/P14 proof. |
 | `riko-ai` | `infer` provider modules; tools; agent loop; embedding/retrieval adapters |
 
 Core provides only registration, typed parsed config, execution, polling, pub/sub protocols, retry,
@@ -166,7 +170,8 @@ context/resources, events. **No core change per integration** is the DoD.
 - **P12** — `public/test_errors.py` (hierarchy + back-compat bases; `ModuleExecutionError` context),
   `public/test_events.py` (lifecycle/pipe/poll/publish events; no-op default sink).
 - **P13** — `public/test_imports.py` (extended public/EXT `__all__`; no accidental internal exports),
-  `tests/typing/`.
+  `tests/typing/`; the layer-ownership fixes/removals/consolidations are itemized in
+  [gameplans/testing.md](gameplans/testing.md) (§2 high-priority test bugs, §3 file-by-file, §5 first-pass patch).
 
 **M2 exit** = all of the above green **plus** the M1 suite unregressed, `pyright` clean on the public
 surface, and one **external example extension** proving P8/P14 end-to-end.

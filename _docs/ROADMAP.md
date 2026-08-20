@@ -74,7 +74,9 @@ Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is t
 |---|---|
 | [agents.md](gameplans/agents.md) | Agent workflows — agent loop, tools. |
 | [ai-Inference.md](gameplans/ai-Inference.md) | AI inference — provider `infer` modules, embedding/retrieval adapters. |
+| [autopilot-provisioning.md](gameplans/autopilot-provisioning.md) | **Windows Autopilot new-device provisioning** — the first `riko-microsoft` (P14) scenario: CSV→auth→discover→plan→import→sync→profile-fallback→verify; specializes the Microsoft adapter/admin/operation-wait plans. |
 | [azure-automation.md](gameplans/azure-automation.md) | Azure automation — ARM/PowerShell, Service Bus / Event Grid, desired-state. |
+| [bado-anyio-alignment.md](gameplans/bado-anyio-alignment.md) | **`bado` ↔ AnyIO 4.14 alignment** — remove/replace/keep audit of the async helpers, **missing async helpers** (`async_memoize`, `throttle`) + async benchmarking/profiling methodology (execution-semantics owns the primitive *semantics*). |
 | [callable-pipes.md](gameplans/callable-pipes.md) | **§4 callable pipes** — `map`/`flat_map`, `Opts` fields, decorator model, strict mode, thread/process execution (+ impl plan). |
 | [cli.md](gameplans/cli.md) | CLI architecture, command-plugin system, config precedence. |
 | [connectors.md](gameplans/connectors.md) | Source/sink connectors (HTTP, files, mail, brokers, CKAN/Prometheus/tabular, Singer). |
@@ -83,13 +85,16 @@ Every detailed plan lives under [gameplans/](gameplans/). The per-`§N` map is t
 | [enrichment-modules.md](gameplans/enrichment-modules.md) | Record/enrichment modules (coalesce, transforms, near-duplicate, contact extraction). |
 | [execution-semantics.md](gameplans/execution-semantics.md) | **§5, §11, §12, §15, §16, §22** and the *planned* parts of **§6–§8, §13** — execution characteristics, retry, dispositions, stateful operators, batch model, memory limits, backpressure/timeout/merge/filter internals; + the async primitive reference (§ Appendix A). |
 | [extensibility.md](gameplans/extensibility.md) | **Extensibility & ecosystem (E0–E8)** — module contract, plugins, workflow spec, observability, adapters, drivers, GUI + 1.0 readiness; owns **§24** (module registry). Prior-art sources. |
+| [feed-native-streaming.md](gameplans/feed-native-streaming.md) | **Feed-native pipe migration & streaming memory model** — per-pipe audit, `batch_feed`/`BatchPolicy` batching, streaming `write` (`StreamEncoder`), bounded `split`, sync/async parity, unified stream-boundary source normalization (§7.1); discharges the P7 streaming-export carryover. |
 | [highergov-feed.md](gameplans/highergov-feed.md) | **HigherGov-first critical path** (HG-0…HG-9) + **async `Feed` integration** — riko's first production use: schema contracts, `SyncPipe`/`AsyncPipe` callable pipes, bounded async I/O. |
 | [mcp.md](gameplans/mcp.md) | MCP server implementation. |
 | [module-documentation.md](gameplans/module-documentation.md) | Yahoo! Pipes module reference documentation. |
 | [module-enums.md](gameplans/module-enums.md) | **P8 registry + P9A enum discoverability** — generated `Modules` tree, `derive_category` taxonomy, `codegen`/`gen-names` (P9A done; installed-env aggregate + `.pyi` stubs remain). |
 | [orchestration.md](gameplans/orchestration.md) | Orchestrator adapters (cron, webhook, Airflow/Prefect/Dagster, dbt). |
 | [rdp-connect.md](gameplans/rdp-connect.md) | **§14, §17–§21, §26, §27** + **Riko Connect** (§1) — RDP/Connect end-state: lineage, Riko Data Protocol, state, schema, batch transports, manifests, implementation milestones, non-goals. |
+| [release-readiness.md](gameplans/release-readiness.md) | **Pre-1.0 DX polish & release gate** — pub/sub 1.0 contract, config-validation strictness, API-shape compression (Pipeline/Execution split, `from_sources`, `executor=`), optional-dep UX, wheel/PyPI release fidelity, the Must-land/Preferred/Can-wait triage. |
 | [riko-site.md](gameplans/riko-site.md) | riko site pipeline. |
+| [testing.md](gameplans/testing.md) | **P13 test-suite layering** — doctest/public/internal/functional ownership rule, the high-priority test-bug fixes, and the file-by-file fix/remove/consolidate plan. |
 | [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md) | Server-side Twisted protocols via `asyncioreactor` + the **§23** protocol-adapter design (the §23 *current runtime* is in the contract). |
 
 **Implementation status & sequence** for the runtime contract live in the authoritative
