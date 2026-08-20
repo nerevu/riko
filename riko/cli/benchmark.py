@@ -51,7 +51,7 @@ files: list[str] = [
 ]
 
 urls: list[str] = [get_path(f) for f in files]
-confs: list[FetchConf] = [FetchConf({"url": url, "delay": DELAY}) for url in urls]
+confs: list[FetchConf] = [FetchConf({"url": url}) for url in urls]
 sources: list[dict[str, str]] = [{"url": url} for url in urls]
 length: int = len(files)
 iterable: list[float] = [DELAY for _ in files]

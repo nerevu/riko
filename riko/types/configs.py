@@ -52,7 +52,6 @@ class InputObjconf(DynamicConf):
 
 class FetchObjconf(DynamicConf):
     url: str
-    delay: float
     encoding: str
 
 
@@ -112,7 +111,6 @@ class ExchangeRateObjconf(DynamicConf):
     url: str
     param: dict[str, str]
     currency: str
-    delay: int
     encoding: str
     memoize: bool
     precision: int
