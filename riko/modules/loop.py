@@ -1,34 +1,12 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for creating submodules from existing pipes
+Runs a submodule once per item.
 
-    http://pipes.yahoo.com/pipes/docs?doc=operators#Loop
+A loop runs a processor or compiled sub-pipeline (``embed`` submodule)
+once per source item, and folds its output back into the stream. All processors
+except ``*input`` are loopable and may be embedded.
 
-A ``loop`` runs a processor or sub-pipeline *submodule* (``embed``) once per
-source item and folds the submodule's output back into the stream. Any loopable
-processor (everything except ``*input``) or a compiled sub-pipeline may be
-embedded. The loop is configured entirely with **top-level kwargs** (the compact
-form):
-
-``embed`` -- the submodule callable.
-``conf``  -- the submodule's own configuration.
-``field`` -- the source field fed to the submodule.
-``count`` -- how many submodule results to keep per source item: ``"all"``
-    (default) or ``"first"``.
-``emit`` / ``assign`` -- how each kept result folds back onto the parent item:
-
-* ``emit=True``                -- replace each source item with the submodule
-  output.
-* ``emit=False, assign="foo"`` -- store each result at ``item["foo"]`` (one
-  preserved-parent copy per result).
-
-Rule of thumb: if the submodule yields exactly **one** value per item (``rename``,
-``strconcat``, ``urlbuilder``, ``regex``), ``emit=True`` replaces the item and
-``count`` is irrelevant. If it yields **many** (``tokenizer``, ``fetchdata``) and
-you want them folded into a subkey, use ``emit=False`` + ``assign`` (with
-``count="first"`` to keep only the first).
-
-Scenarios:
+Examples:
     1. Transform a field in place -- ``emit=True`` yields the submodule's
        transformed items (each source item is replaced)::
 
@@ -60,8 +38,8 @@ Scenarios:
         [{'title': 'a b c', 'first': {'content': 'a'}}]
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Operator wrapper options.
+    DEFAULTS: Default operator configuration.
 
 """
 
@@ -84,28 +62,23 @@ def parser(
     stream: Stream, objconf: DynamicConf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Returns the source unchanged.
+
+    The looping happens around this parser, not inside it: ``embed`` is run per
+    item and its results folded back before the stream reaches a consumer.
 
     Args:
-        stream (Iter[dict]): The source. Note: this shares the `tuples`
-            iterator, so consuming it will consume `tuples` as well.
+        stream: The source. Note: this shares the `tuples` iterator, so
+            consuming it will consume `tuples` as well.
 
-        objconf (obj): The pipe configuration (an Objectify instance)
+        objconf: The pipe configuration. Unused.
 
-        tuples (Iter[(dict, obj)]): Iterable of tuples of (item, objconf)
-            `item` is an element in the source stream and `objconf` is the item
-            configuration (an Objectify instance). Note: this shares the
-            `stream` iterator, so consuming it will consume `stream` as well.
+        tuples: Iterable of (item, objconf). `item` is an element in the source
+            stream. Note: this shares the `stream` iterator, so consuming it
+            will consume `stream` as well.
 
-        kwargs (dict): Keyword arguments.
-
-    Kwargs:
-        conf (dict): The pipe configuration.
-        embed : the submodule. processor modules, with the exception of *input can be
-            sub-modules.
-
-    Returns:
-        List(dict): The output stream
+    Yields:
+        Each source item, untouched.
 
     """
     yield from stream
@@ -114,11 +87,49 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Async counterpart of ``pipe`` — creates submodules from existing pipes,
-    running the embed once per parent *lazily and sequentially* (parent order
-    preserved, source advanced only as the consumer pulls, ``count="first"``
-    stopping after the first result) and applying the same per-parent
-    ``count``/``emit``/``assign`` fold. See ``pipe`` for kwargs.
+    Asynchronously creates submodules from existing pipes.
+
+    Runs the submodule once per parent lazily and sequentially — parent order
+    is preserved, the source advances only as the consumer pulls, and
+    ``count="first"`` stops after the first result.
+
+    Args:
+        items (Items): The source stream.
+        context (Context): the execution context
+
+    Kwargs:
+        embed (callable): The submodule to run once per item. Any loopable
+            processor (everything except ``*input``) or a compiled sub-pipeline.
+            Required.
+
+        conf (dict): The **submodule's** configuration, not this pipe's.
+
+        field (str): Source field fed to the submodule (default: None).
+
+        count (str): How many submodule results to keep per source item, either
+            "all" or "first" (default: "all").
+
+        assign (str): Subkey each kept result folds into. Ignored when ``emit``
+            is True (default: "loop").
+
+        emit (bool): Whether to replace each source item with the submodule
+            output rather than fold it under ``assign`` (default: True for a
+            normal item stream).
+
+    Yields:
+        - the submodule output per item when ``emit`` is True (default)
+        - merged ``{Item, <assign>: <result>}`` once per kept result when
+          ``emit`` is False
+
+    Notes:
+        A submodule that yields one value per item (``rename``, ``strconcat``,
+        ``urlbuilder``, ``regex``) suits ``emit=True``, which replaces the item
+        and makes ``count`` irrelevant. One that yields many (``tokenizer``,
+        ``fetchdata``) suits ``emit=False`` with ``assign``.
+
+        A missing ``embed`` logs a warning and passes the source through
+        unchanged.
+
     """
     return parser(*args, **kwargs)
 
@@ -126,30 +137,47 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    An operator that creates submodules from existing pipes.
+    Creates submodules from existing pipes.
+
+    Runs the submodule once per source item and folds its output back into the
+    stream.
 
     Args:
-        items (Iter[dict]): The source.
-        kwargs (dict): The keyword arguments passed to the wrapper
+        items (Items): The source stream.
+        context (Context): the execution context
 
     Kwargs:
-        embed: the submodule. Any loopable processor (everything except
-            ``*input``) or a compiled sub-pipeline can be a submodule.
+        embed (callable): The submodule to run once per item. Any loopable
+            processor (everything except ``*input``) or a compiled sub-pipeline.
+            Required.
 
-        conf (dict): The submodule's own configuration.
+        conf (dict): The **submodule's** configuration, not this pipe's.
 
-        field (str): The source field fed to the submodule.
+        field (str): Source field fed to the submodule (default: None).
 
-        count (str): How many submodule results to keep per source item —
-            ``"all"`` (default) or ``"first"``.
+        count (str): How many submodule results to keep per source item, either
+            "all" or "first" (default: "all").
 
-        assign (str): Subkey to fold each kept result into (when ``emit`` is
-            False).
+        assign (str): Subkey each kept result folds into. Ignored when ``emit``
+            is True (default: "loop").
 
-        emit (bool): Fold mode. True replaces each source item with the submodule
-            output; False stores each result under ``assign``. Default:
-            ``is_mapping`` (emit when the output is a mapping, i.e. effectively
-            True for a normal item stream).
+        emit (bool): Whether to replace each source item with the submodule
+            output rather than fold it under ``assign`` (default: True for a
+            normal item stream).
+
+    Yields:
+        - the submodule output per item when ``emit`` is True (default)
+        - merged ``{Item, <assign>: <result>}`` once per kept result when
+          ``emit`` is False
+
+    Notes:
+        A submodule that yields one value per item (``rename``, ``strconcat``,
+        ``urlbuilder``, ``regex``) suits ``emit=True``, which replaces the item
+        and makes ``count`` irrelevant. One that yields many (``tokenizer``,
+        ``fetchdata``) suits ``emit=False`` with ``assign``.
+
+        A missing ``embed`` logs a warning and passes the source through
+        unchanged.
 
     """
     return parser(*args, **kwargs)

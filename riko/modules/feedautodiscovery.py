@@ -2,41 +2,38 @@
 """
 Discovers RSS/Atom feed links on a page.
 
-Lets you enter a url and then examines that page for information (like link
-rel tags) about available feeds. If information about more than one feed is
-found, then multiple items are returned. This module discovers the feed links
-(href, rel, type, etc.); its output is typically piped into ``fetch`` to
-retrieve and parse the feeds themselves.
+Examines a page for information about the feeds it advertises, e.g., ``link rel`` tags.
+It yields found feeds. The output is typically piped into ``fetch`` to retrieve and
+parse the feeds.
 
-Also note that not all sites provide auto-discovery links on their web site's
-home page. For a simpler alternative, try the Fetch Site Feed Module. It
-returns the content from the first discovered feed.
+Since not every site advertises auto-discovery links, the fetchsitefeed module can be
+used instead to return the content of the first discovered feed.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_path
         >>> from riko.modules.feedautodiscovery import pipe
         >>>
-        >>> url = get_path('bbc.html')
-        >>> entry = next(pipe(conf={'url': url}))
-        >>> entry['link']
+        >>> url = get_path("bbc.html")
+        >>> entry = next(pipe(conf={"url": url}))
+        >>> entry["link"]
         'file://riko/data/bbci.co.uk.xml'
         >>> sorted(entry)
         ['href', 'link', 'rel', 'tag', 'title', 'type']
-        >>> entry['type']
+        >>> entry["type"]
         'application/rss+xml'
-        >>> entry = next(pipe(conf={'url': url, 'strict': False}))
-        >>> entry['link']
+        >>> entry = next(pipe(conf={"url": url, "strict": False}))
+        >>> entry["link"]
         'greenhughes.xml'
         >>> sorted(entry)
         ['href', 'hreflang', 'link', 'rel', 'tag']
-        >>> next(pipe(conf={'url': url, 'strict': False, 'sort': True}))['link']
+        >>> next(pipe(conf={"url": url, "strict": False, "sort": True}))["link"]
         'file://riko/data/bbci.co.uk.xml'
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -62,32 +59,27 @@ async def async_parser(
     _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
 ) -> Stream:
     """
-    Asynchronously parses the pipe content
+    Asynchronously discovers the feed links advertised by a page.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`, `strict` and `sort`.
 
     Returns:
-        Iter[dict]: Deferred stream
+        One item per discovered feed link.
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     objconf = Objectify({'url': get_path('bbc.html'), 'strict': True})
+        ...     objconf = Objectify({"url": get_path("bbc.html"), "strict": True})
         ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)['link'])
+        ...     print(next(result)["link"])
         >>>
         >>> run(main)
         file://riko/data/bbci.co.uk.xml
@@ -103,19 +95,15 @@ def parser(
     _: Item, extraction: Extraction, objconf: FeedAutoDiscoveryObjconf, **kwargs: object
 ) -> Stream:
     """
-    Parses the pipe content
+    Discovers the feed links advertised by a page.
 
     Args:
-        _ (Item): The item (Ignored)
-        extraction: Field values extracted from the item (Ignored)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        stream (dict): The original item
+        _: The item. Unused.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`, `strict` and `sort`.
 
     Returns:
-        Iter[dict]: The stream of items
+        One item per discovered feed link.
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
@@ -124,15 +112,15 @@ def parser(
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> url = get_path('bbc.html')
-        >>> objconf = Objectify({'url': url, 'strict': True})
-        >>> next(parser(None, None, objconf))['link']
+        >>> url = get_path("bbc.html")
+        >>> objconf = Objectify({"url": url, "strict": True})
+        >>> next(parser(None, None, objconf))["link"]
         'file://riko/data/bbci.co.uk.xml'
-        >>> objconf = Objectify({'url': url, 'strict': False})
-        >>> next(parser(None, None, objconf))['link']
+        >>> objconf = Objectify({"url": url, "strict": False})
+        >>> next(parser(None, None, objconf))["link"]
         'greenhughes.xml'
-        >>> objconf = Objectify({'url': url, 'strict': False, 'sort': True})
-        >>> next(parser(None, None, objconf))['link']
+        >>> objconf = Objectify({"url": url, "strict": False, "sort": True})
+        >>> next(parser(None, None, objconf))["link"]
         'file://riko/data/bbci.co.uk.xml'
 
     """
@@ -145,30 +133,46 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that discovers RSS/Atom feed links on a page.
+    Asynchronously discovers RSS/Atom feed links on a page.
 
     Args:
-        item (dict): The entry to process (not used)
-        kwargs (dict): The keyword arguments passed to the wrapper.
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The page to examine, local or remote. Required.
+
+            strict (bool): Whether to return only links that declare a feed
+                type. Loosening this finds more links but they carry fewer
+                fields (default: True).
+
+            sort (bool): Whether to order links by how likely each is to be a
+                feed, rather than document order (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'.
+        assign (str): Field each link is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch]
+        emit (bool): Whether to emit each link directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
-    Returns:
-        Awaitable: an iterator of items
+    Yields:
+        - ``<link>`` per discovered feed when ``emit`` is True (default)
+        - ``{<assign>: <link>}`` per feed when ``emit`` is False, no item given
+        - one merged ``{Item, <assign>: [<link>, ...]}`` when ``emit`` is False and
+          item is given
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     result = await async_pipe(conf={'url': get_path('bbc.html')})
-        ...     print(next(result)['link'])
+        ...     result = await async_pipe(conf={"url": get_path("bbc.html")})
+        ...     print(next(result)["link"])
         >>>
         >>> run(main)
         file://riko/data/bbci.co.uk.xml
@@ -180,21 +184,36 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    A source that discovers RSS/Atom feed links on a page.
+    Discovers RSS/Atom feed links on a page.
 
     Args:
-        item (dict): The entry to process (not used)
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries. Unused.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The page to examine, local or remote. Required.
+
+            strict (bool): Whether to return only links that declare a feed
+                type. Loosening this finds more links but they carry fewer
+                fields (default: True).
+
+            sort (bool): Whether to order links by how likely each is to be a
+                feed, rather than document order (default: False).
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. Must contain the key 'url'.
+        assign (str): Field each link is nested under. Ignored when ``emit`` is
+            True (default: "content").
 
-            url (str): The web site to fetch
-            strict (bool): Only return feeds with a declared types (default: True)
-            sort (bool): Sort links according to likelyhood of being an rss feed (default: False)
+        emit (bool): Whether to emit each link directly rather than assign it.
+            Overrides ``assign`` (default: True).
 
     Yields:
-        dict: item
+        - ``<link>`` per discovered feed when ``emit`` is True (default)
+        - ``{<assign>: <link>}`` per feed when ``emit`` is False, no item given
+        - one merged ``{Item, <assign>: [<link>, ...]}`` when ``emit`` is False and
+          item is given
 
     Raises:
         TypeError: If ``conf`` has no ``url`` key.
@@ -202,8 +221,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
     Examples:
         >>> from riko import get_path
         >>>
-        >>> conf = {'url': get_path('bbc.html')}
-        >>> next(pipe(conf=conf))['link']
+        >>> conf = {"url": get_path("bbc.html")}
+        >>> next(pipe(conf=conf))["link"]
         'file://riko/data/bbci.co.uk.xml'
 
     """

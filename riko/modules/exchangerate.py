@@ -1,20 +1,27 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides functions for querying currency exchange rates
+Converts a currency field into an exchange rate.
+
+Looks up the rate from the source currency named in the field to ``currency``,
+via the Open Exchange Rates API. Live use needs an app id in the
+``OPEN_EXCHANGE_RATES_ID`` environment variable; pointing ``url`` at a local
+json file works without one.
 
 Examples:
-    basic usage::
+    Basic usage::
 
         >>> from riko import get_path
         >>> from riko.modules.exchangerate import pipe
         >>>
-        >>> url = get_path('quote.json')
-        >>> next(pipe({'content': 'GBP'}, conf={'url': url}))['exchangerate']
+        >>> url = get_path("quote.json")
+        >>> next(pipe({"content": "GBP"}, conf={"url": url}))["exchangerate"]
         Decimal('1.275201')
 
 Attributes:
-    OPTS (dict): The default pipe options
-    DEFAULTS (dict): The default parser options
+    EXCHANGE_API: Default rates endpoint.
+    PARAMS: Query parameters carrying the ``OPEN_EXCHANGE_RATES_ID`` app id.
+    OPTS: Processor wrapper options.
+    DEFAULTS: Default processor configuration.
 
 """
 
@@ -60,7 +67,6 @@ def parse_response(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
     if rates:
         resp = {k: Decimal(v) for k, v in rates.items() if v}
     else:
-        # TODO: make sure this log shows up in console
         logger.warning("invalid json response:")
         logger.warning(rates)
         resp = {}
@@ -96,32 +102,29 @@ async def async_parser(
     base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs: object
 ) -> Decimal:
     """
-    Asynchronously parses the pipe content
+    Asynchronously looks up the rate from ``base`` to the target currency.
 
     Args:
-        base (str): The base currency (exchanging from)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: exchangerate)
-        stream (dict): The original item
+        base: The currency being exchanged from.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`, `param`, `currency`
+            and `precision`.
 
     Returns:
-        Awaitable: item
+        The rate, ``1`` when both currencies match, or ``Decimal("NaN")`` when
+        the target is absent from the response.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
-        ...     url = get_path('quote.json')
-        ...     conf = {'url': url, 'currency': 'USD', 'precision': 6}
-        ...     item = {'content': 'GBP'}
+        ...     url = get_path("quote.json")
+        ...     conf = {"url": url, "currency": "USD", "precision": 6}
+        ...     item = {"content": "GBP"}
         ...     objconf = Objectify(conf)
-        ...     kwargs = {'stream': item, 'assign': 'content'}
-        ...     result = await async_parser(item['content'], None, objconf, **kwargs)
+        ...     kwargs = {"stream": item, "assign": "content"}
+        ...     result = await async_parser(item["content"], None, objconf, **kwargs)
         ...     print(result)
         >>>
         >>> run(main)
@@ -153,30 +156,28 @@ def parser(
     base: str, extraction: Extraction, objconf: ExchangeRateObjconf, **kwargs: object
 ) -> Decimal:
     """
-    Parses the pipe content
+    Looks up the rate from ``base`` to the target currency.
 
     Args:
-        base (str): The base currency (exchanging from)
-        objconf (obj): The pipe configuration (an Objectify instance)
-        kwargs (dict): Keyword arguments
-
-    Kwargs:
-        assign (str): Attribute to assign parsed content (default: exchangerate)
-        stream (dict): The original item
+        base: The currency being exchanged from.
+        extraction: The extracted conf value. Unused.
+        objconf: The pipe configuration, containing `url`, `param`, `currency`
+            and `precision`.
 
     Returns:
-        dict: The item
+        The rate, ``1`` when both currencies match, or ``Decimal("NaN")`` when
+        the target is absent from the response.
 
     Examples:
         >>> from riko import get_path
         >>> from meza.fntools import Objectify
         >>>
-        >>> url = get_path('quote.json')
-        >>> conf = {'url': url, 'currency': 'USD', 'precision': 6}
-        >>> item = {'content': 'GBP'}
+        >>> url = get_path("quote.json")
+        >>> conf = {"url": url, "currency": "USD", "precision": 6}
+        >>> item = {"content": "GBP"}
         >>> objconf = Objectify(conf)
-        >>> kwargs = {'stream': item, 'assign': 'content'}
-        >>> parser(item['content'], None, objconf, **kwargs)
+        >>> kwargs = {"stream": item, "assign": "content"}
+        >>> parser(item["content"], None, objconf, **kwargs)
         Decimal('1.275201')
 
     """
@@ -200,44 +201,55 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
     """
-    A processor that asynchronously retrieves the current exchange rate
-    for a given currency pair.
+    Asynchronously retrieves the exchange rate for a currency pair.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The rates endpoint, or a local json file
+                (default: the Open Exchange Rates latest.json endpoint).
+
+            param (dict): Query parameters for the endpoint (default: the
+                ``OPEN_EXCHANGE_RATES_ID`` app id).
+
+            currency (str): ISO code of the currency being exchanged *to*
+                (default: "USD").
+
+            precision (int): Decimal places to round the rate to (default: 6).
+            memoize (bool): Whether to cache the API response (default: True).
+            encoding (str): Response encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'url',
-            'param', 'currency', 'memoize', or 'field'.
+        field (str): Item attribute holding the ISO code of the currency being
+            exchanged *from* (default: "content").
 
-            url (str): The exchange rate API url (default:
-                http://finance.yahoo.com...)
+        assign (str): Field the rate is assigned to. Ignored when ``emit`` is
+            True (default: "exchangerate").
 
-            param (dict): The API url parameters (default: {'format': 'json'})
-            currency: The (exchanging to) currency ISO abbreviation (default:
-                USD).
+        emit (bool): Whether to emit the rate in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
-            memoize (bool): Cache the exchange rate API response (default:
-                True).
+    Yields:
+        - merged ``{Item, <assign>: <rate>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <rate>}`` when ``emit`` is False and no item given
+        - ``<rate>`` when ``emit`` is True
 
-        field (str): Item attribute from which to obtain the string to be
-            formatted (default: 'content')
-
-        assign (str): Attribute to assign parsed content (default:
-            exchangerate)
-
-    Returns:
-        Awaitable: stream of items
+    Notes:
+        A currency missing from the response logs a warning and yields
+        ``Decimal("NaN")`` rather than raising.
 
     Examples:
-        >>> from riko import get_path
-        >>> from riko import run
+        >>> from riko import get_path, run
         >>>
         >>> async def main():
-        ...     url = get_path('quote.json')
-        ...     result = await async_pipe({'content': 'GBP'}, conf={'url': url})
-        ...     print(next(result)['exchangerate'])
+        ...     url = get_path("quote.json")
+        ...     result = await async_pipe({"content": "GBP"}, conf={"url": url})
+        ...     print(next(result)["exchangerate"])
         >>>
         >>> run(main)
         1.275201
@@ -249,51 +261,63 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Decimal:
     """
-    A processor that retrieves the current exchange rate for a given
-    currency pair.
+    Retrieves the exchange rate for a currency pair.
 
     Args:
-        item (dict or Iter[dict]): The entry, or stream of entries, to process
-        kwargs (dict): The keyword arguments passed to the wrapper
+        item (Item | Items): The entry, or stream of entries, to process.
+
+        conf (dict): The pipe configuration.
+
+            url (str): The rates endpoint, or a local json file
+                (default: the Open Exchange Rates latest.json endpoint).
+
+            param (dict): Query parameters for the endpoint (default: the
+                ``OPEN_EXCHANGE_RATES_ID`` app id).
+
+            currency (str): ISO code of the currency being exchanged *to*
+                (default: "USD").
+
+            precision (int): Decimal places to round the rate to (default: 6).
+            memoize (bool): Whether to cache the API response (default: True).
+            encoding (str): Response encoding (default: "utf-8").
+
+        context (Context): the execution context
 
     Kwargs:
-        conf (dict): The pipe configuration. May contain the keys 'url',
-            'param', 'currency', 'memoize', or 'field'.
+        field (str): Item attribute holding the ISO code of the currency being
+            exchanged *from* (default: "content").
 
-            url (str): The exchange rate API url (default:
-                http://finance.yahoo.com...)
+        assign (str): Field the rate is assigned to. Ignored when ``emit`` is
+            True (default: "exchangerate").
 
-            param (dict): The API url parameters (default: {'format': 'json'})
-            currency: The (exchanging to) currency ISO abbreviation (default:
-                USD).
-
-            memoize (bool): Cache the exchange rate API response (default:
-                True).
-
-        field (str): Item attribute from which to obtain the string to be
-            formatted (default: 'content')
-
-        assign (str): Attribute to assign parsed content (default:
-            exchangerate)
+        emit (bool): Whether to emit the rate in place of the item rather than
+            assign it. Overrides ``assign`` (default: False).
 
     Yields:
-        dict: an item of the result
+        - merged ``{Item, <assign>: <rate>}`` when ``emit`` is False and item
+          is given (default)
+        - ``{<assign>: <rate>}`` when ``emit`` is False and no item given
+        - ``<rate>`` when ``emit`` is True
+
+    Notes:
+        A currency missing from the response logs a warning and yields
+        ``Decimal("NaN")`` rather than raising.
 
     Examples:
         >>> from riko import get_path
         >>>
-        >>> url = get_path('quote.json')
-        >>> conf = {'url': url}
-        >>> rate = next(pipe({'content': 'GBP'}, conf=conf))['exchangerate']
+        >>> url = get_path("quote.json")
+        >>> conf = {"url": url}
+        >>> rate = next(pipe({"content": "GBP"}, conf=conf))["exchangerate"]
         >>> rate
         Decimal('1.275201')
         >>> f'There are {rate:#.2f} GBPs per USD'
         'There are 1.28 GBPs per USD'
-        >>> conf = {'url': url, 'currency': 'TZS', 'precision': 3}
-        >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
+        >>> conf = {"url": url, "currency": "TZS", "precision": 3}
+        >>> next(pipe({"content": "USD"}, conf=conf))["exchangerate"]
         Decimal('2282.466')
-        >>> conf = {'url': url, 'currency': 'XYZ'}
-        >>> next(pipe({'content': 'USD'}, conf=conf))['exchangerate']
+        >>> conf = {"url": url, "currency": "XYZ"}
+        >>> next(pipe({"content": "USD"}, conf=conf))["exchangerate"]
         Decimal('NaN')
 
     """
